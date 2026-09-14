@@ -1,0 +1,5 @@
+# Phrases the scanner removes before matching: policy text that names a category the lists cover.
+no sexual content, nudity or suggestive themes
+no drugs, alcohol or tobacco
+sexual and drug vocabulary
+drug, alcohol or tobacco vocabulary

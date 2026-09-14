@@ -1,0 +1,8 @@
+packages:
+  - platform/site
+  - platform/dispatcher
+  - platform/gate
+  - platform/supabase
+  - seed-1
+allowBuilds:
+  esbuild: true

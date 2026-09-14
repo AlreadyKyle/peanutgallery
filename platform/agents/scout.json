@@ -1,0 +1,12 @@
+{
+  "name": "Scout",
+  "title": "Scout",
+  "species_note": "A slim teal creature with long legs and two tall, narrow eyes.",
+  "model": "MODEL_BUILDER",
+  "budget_share": 0.025,
+  "voice": "curious",
+  "prompt_path": "platform/agents/prompts/scout.md",
+  "tools": [],
+  "metrics": ["first_pass_rate", "cost_per_ship"],
+  "write_access": false
+}

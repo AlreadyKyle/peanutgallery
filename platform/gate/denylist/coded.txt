@@ -1,0 +1,69 @@
+# Coded spellings: leetspeak, spaced and dotted variants, masked forms and euphemisms. One term per line; normalization maps each to the form the scanner compares.
+$hit
+@ss
+@sshole
+a s s
+a55
+a55hole
+azz
+b i t c h
+b!tch
+b*tch
+b1tch
+beyotch
+biatch
+biotch
+c u n t
+c*nt
+cvnt
+d1ck
+devils lettuce
+effin
+effing
+f u c k
+f*ck
+f.u.c.k
+f@ck
+fck
+fcking
+fcuk
+fkn
+fuk
+fukc
+fuq
+fuqin
+fux
+fvck
+gtfo
+kunt
+lmfao
+mofo
+mofos
+n00ds
+nose candy
+nudez
+omfg
+p0rn
+pen1s
+phuck
+phuk
+pr0n
+pron
+pussi
+s h i t
+s.h.i.t
+s3x
+secks
+seks
+sexx
+sexxx
+sh!t
+sh*t
+sh1t
+shite
+shyt
+stfu
+t1ts
+tiddies
+wacky tobacky
+wtf

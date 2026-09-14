@@ -1,0 +1,17 @@
+# Build-context filter for Dockerfile.dispatcher. BuildKit reads <Dockerfile name>.dockerignore
+# from the Dockerfile's directory, so this applies without a root .dockerignore.
+# Secrets and local state: never part of the image.
+.env
+.env.*
+KEYS.md
+.worktrees
+.claude/settings.local.json
+# Installed and built output: pnpm install rebuilds it inside the image.
+**/node_modules
+**/dist
+**/.netlify
+**/.DS_Store
+platform/supabase/.temp
+coverage
+test-results
+playwright-report

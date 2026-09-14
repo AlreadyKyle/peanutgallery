@@ -1,0 +1,264 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { describe, expect, it } from 'vitest';
+import { createSupabaseSource, DEPLOY_LIMIT, EVENT_LIMIT, REALTIME_LISTENERS } from './source';
+
+type Query = {
+  table: string;
+  select: string;
+  filters: string[];
+  orders: { column: string; ascending: boolean }[];
+  limit: number | null;
+  terminal: string;
+};
+
+type Listener = { table: string; filter: string | null };
+type Channel = { topic: string; listeners: Listener[]; subscribed: number };
+
+type Rows = Record<string, unknown>;
+
+function rowsFor(query: Query): unknown {
+  switch (query.table) {
+    case 'pool':
+      return {
+        balance_usd: '48.5600',
+        reserve_usd: '7.1000',
+        incident_reserve_usd: '2.5600',
+        daily_spent_usd: '0.0000',
+        day: '2026-09-14',
+      };
+    case 'cards':
+      if (query.filters.some((f) => f.startsWith('in id'))) {
+        return [{ id: 'c1', title: 'Week 1: the loop' }];
+      }
+      return [
+        {
+          id: 'c1',
+          title: 'Week 1: the loop',
+          stage: 'voted',
+          funding_target_usd: '100.0000',
+          funded_usd: '25.0000',
+          created_at: '2026-09-14T00:00:00Z',
+        },
+      ];
+    case 'public_ledger_totals':
+      return {
+        usd_total: '1.2500',
+        input_tokens: '12000',
+        cached_tokens: '3000',
+        output_tokens: '800',
+        row_count: '3',
+      };
+    case 'public_agent_events':
+      return [
+        { id: 'e1', card_id: 'c1', role_id: 'r1', type: 'start', created_at: '2026-09-14T01:00:00Z' },
+        { id: 'e2', card_id: 'c1', role_id: null, type: 'ship', created_at: '2026-09-14T01:05:00Z' },
+        { id: 'e3', card_id: null, role_id: 'r1', type: 'error', created_at: '2026-09-14T01:06:00Z' },
+      ];
+    case 'deploys':
+      return [];
+    case 'roles':
+      return [{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }];
+    default:
+      throw new Error(`Unexpected table ${query.table}`);
+  }
+}
+
+function fakeClient(options: { events?: unknown[]; failTable?: string } = {}) {
+  const queries: Query[] = [];
+  const channels: Channel[] = [];
+  const removed: string[] = [];
+
+  function from(table: string) {
+    const query: Query = { table, select: '', filters: [], orders: [], limit: null, terminal: '' };
+    queries.push(query);
+    const resolve = () => {
+      if (table === options.failTable) {
+        return Promise.resolve({ data: null, error: { message: `${table} is unavailable` } });
+      }
+      const data =
+        table === 'public_agent_events' && options.events !== undefined
+          ? options.events
+          : rowsFor(query);
+      return Promise.resolve({ data, error: null });
+    };
+    const builder = {
+      select(columns: string) {
+        query.select = columns;
+        return builder;
+      },
+      eq(column: string, value: unknown) {
+        query.filters.push(`eq ${column} ${String(value)}`);
+        return builder;
+      },
+      in(column: string, values: string[]) {
+        query.filters.push(`in ${column} ${values.join(',')}`);
+        return builder;
+      },
+      order(column: string, opts: { ascending: boolean }) {
+        query.orders.push({ column, ascending: opts.ascending });
+        return builder;
+      },
+      limit(count: number) {
+        query.limit = count;
+        return builder;
+      },
+      maybeSingle() {
+        query.terminal = 'maybeSingle';
+        return resolve();
+      },
+      returns() {
+        query.terminal = 'returns';
+        return resolve();
+      },
+    };
+    return builder;
+  }
+
+  function channel(topic: string) {
+    const record: Channel = { topic, listeners: [], subscribed: 0 };
+    channels.push(record);
+    const chan = {
+      topic,
+      on(_type: string, spec: Rows, _callback: () => void) {
+        record.listeners.push({
+          table: String(spec.table),
+          filter: typeof spec.filter === 'string' ? spec.filter : null,
+        });
+        return chan;
+      },
+      subscribe() {
+        record.subscribed += 1;
+        return chan;
+      },
+    };
+    return chan;
+  }
+
+  const client = {
+    from,
+    channel,
+    removeChannel(chan: { topic: string }) {
+      removed.push(chan.topic);
+      return Promise.resolve('ok');
+    },
+  };
+
+  return { client: client as unknown as SupabaseClient, queries, channels, removed };
+}
+
+function query(queries: Query[], table: string, index = 0): Query {
+  const match = queries.filter((q) => q.table === table)[index];
+  if (match === undefined) throw new Error(`No query ${index} on ${table}`);
+  return match;
+}
+
+describe('createSupabaseSource.load', () => {
+  it('reads the contract tables and views with the contract shapes', async () => {
+    const fake = fakeClient();
+    const snapshot = await createSupabaseSource(fake.client).load();
+
+    const pool = query(fake.queries, 'pool');
+    expect(pool.select).toBe('balance_usd,reserve_usd,incident_reserve_usd,daily_spent_usd,day');
+    expect(pool.filters).toEqual(['eq id 1']);
+    expect(pool.terminal).toBe('maybeSingle');
+
+    const goals = query(fake.queries, 'cards');
+    expect(goals.select).toBe('id,title,stage,funding_target_usd,funded_usd,created_at');
+    expect(goals.filters).toEqual(['eq shape goal']);
+    expect(goals.orders).toEqual([{ column: 'created_at', ascending: true }]);
+
+    expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
+
+    const events = query(fake.queries, 'public_agent_events');
+    expect(events.select).toBe('id,card_id,role_id,type,created_at');
+    expect(events.orders).toEqual([{ column: 'created_at', ascending: false }]);
+    expect(events.limit).toBe(EVENT_LIMIT);
+
+    const deploys = query(fake.queries, 'deploys');
+    expect(deploys.select).toBe('id,folder,sha,is_green,smoke_result,created_at');
+    expect(deploys.orders).toEqual([{ column: 'created_at', ascending: false }]);
+    expect(deploys.limit).toBe(DEPLOY_LIMIT);
+
+    const roles = query(fake.queries, 'roles');
+    expect(roles.select).toBe('id,title,write_access,state');
+    expect(roles.orders).toEqual([
+      { column: 'hired_at', ascending: true },
+      { column: 'title', ascending: true },
+    ]);
+
+    expect(snapshot.pool).toEqual({
+      balance_usd: 48.56,
+      reserve_usd: 7.1,
+      incident_reserve_usd: 2.56,
+      daily_spent_usd: 0,
+      day: '2026-09-14',
+    });
+    expect(snapshot.goals).toEqual([
+      {
+        id: 'c1',
+        title: 'Week 1: the loop',
+        stage: 'voted',
+        funding_target_usd: 100,
+        funded_usd: 25,
+        created_at: '2026-09-14T00:00:00Z',
+      },
+    ]);
+    expect(snapshot.totals).toEqual({
+      usd_total: 1.25,
+      input_tokens: 12000,
+      cached_tokens: 3000,
+      output_tokens: 800,
+      row_count: 3,
+    });
+    expect(snapshot.events).toHaveLength(3);
+    expect(snapshot.roles).toEqual([{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }]);
+  });
+
+  it('fetches titles only for the distinct card ids in the loaded events', async () => {
+    const fake = fakeClient();
+    const snapshot = await createSupabaseSource(fake.client).load();
+    const titles = query(fake.queries, 'cards', 1);
+    expect(titles.select).toBe('id,title');
+    expect(titles.filters).toEqual(['in id c1']);
+    expect(snapshot.cardTitles).toEqual({ c1: 'Week 1: the loop' });
+  });
+
+  it('skips the title query when no event names a card', async () => {
+    const fake = fakeClient({ events: [] });
+    const snapshot = await createSupabaseSource(fake.client).load();
+    expect(fake.queries.filter((q) => q.table === 'cards')).toHaveLength(1);
+    expect(snapshot.cardTitles).toEqual({});
+  });
+
+  it('rejects with the database error message', async () => {
+    const fake = fakeClient({ failTable: 'pool' });
+    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('pool is unavailable');
+  });
+});
+
+describe('createSupabaseSource.subscribe', () => {
+  it('joins a fresh channel on every subscription and listens to the published tables', () => {
+    const expected: Listener[] = [
+      { table: 'pool', filter: null },
+      { table: 'cards', filter: 'shape=eq.goal' },
+      { table: 'deploys', filter: null },
+    ];
+    expect(REALTIME_LISTENERS.map((l) => l.table)).toEqual(expected.map((l) => l.table));
+    const fake = fakeClient();
+    const source = createSupabaseSource(fake.client);
+    const onChange = () => {};
+
+    const first = source.subscribe(onChange);
+    first();
+    source.subscribe(onChange);
+
+    expect(fake.channels).toHaveLength(2);
+    const [a, b] = fake.channels;
+    expect(a?.topic).not.toBe(b?.topic);
+    expect(a?.subscribed).toBe(1);
+    expect(b?.subscribed).toBe(1);
+    expect(a?.listeners).toEqual(expected);
+    expect(b?.listeners).toEqual(expected);
+    expect(fake.removed).toEqual([a?.topic]);
+  });
+});

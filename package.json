@@ -1,0 +1,17 @@
+{
+  "name": "backseat",
+  "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "test:functions": "deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions",
+    "gate:dry-run": "bash platform/gate/ship-gate.sh --dry-run --folder seed-1 --lane code && bash platform/gate/ship-gate.sh --dry-run --folder platform --lane code",
+    "secret-scan": "bash platform/gate/secret-scan.sh --tracked",
+    "verify": "pnpm typecheck && pnpm test && pnpm test:agents && pnpm test:functions && pnpm gate:dry-run && pnpm secret-scan",
+    "test:agents": "node --test platform/agents/specs.test.mjs"
+  }
+}

@@ -3,3 +3,11 @@ node_modules/
 .env.*
 dist/
 .DS_Store
+KEYS.md
+.worktrees/
+.netlify/
+.claude/settings.local.json
+coverage/
+platform/supabase/.temp/
+test-results/
+playwright-report/

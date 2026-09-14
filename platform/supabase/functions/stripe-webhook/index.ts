@@ -1,0 +1,84 @@
+// Stripe webhook: checkout.session.completed → apply_contribution RPC.
+// Deployed with verify_jwt = false (config.toml); the Stripe signature is the
+// authentication. The request handling lives in ../_shared/handler.ts with
+// these three functions injected; a dry run (service-role bearer plus
+// x-dry-run: 1) verifies, parses and looks the fee up but never calls the RPC.
+
+import Stripe from "npm:stripe@^19";
+import type { Amounts } from "../_shared/split.ts";
+import { feeFromSession, type Parsed } from "../_shared/session.ts";
+import { createHandler } from "../_shared/handler.ts";
+import { STRIPE_API_VERSION } from "../_shared/stripe_api_version.ts";
+
+const STRIPE_SECRET_KEY = requireEnv("STRIPE_SECRET_KEY");
+const STRIPE_WEBHOOK_SECRET = requireEnv("STRIPE_WEBHOOK_SECRET");
+const SUPABASE_URL = requireEnv("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+const SIGNATURE_TOLERANCE_SECONDS = 300;
+
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: STRIPE_API_VERSION,
+  httpClient: Stripe.createFetchHttpClient(),
+});
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
+
+function requireEnv(name: string): string {
+  const value = Deno.env.get(name);
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
+
+function constructEvent(
+  body: string,
+  signature: string,
+): Promise<Stripe.Event> {
+  return stripe.webhooks.constructEventAsync(
+    body,
+    signature,
+    STRIPE_WEBHOOK_SECRET,
+    SIGNATURE_TOLERANCE_SECONDS,
+    cryptoProvider,
+  );
+}
+
+async function lookupFee(sessionId: string): Promise<number | null> {
+  const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    expand: ["payment_intent.latest_charge.balance_transaction"],
+  });
+  return feeFromSession(session);
+}
+
+async function applyContribution(
+  parsed: Parsed,
+  amounts: Amounts,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/apply_contribution`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({
+      p_stripe_event_id: parsed.event_id,
+      p_contributor_id: parsed.contributor_id,
+      p_display_name: parsed.display_name,
+      p_amount_usd: amounts.amount_usd,
+      p_net_usd: amounts.net_usd,
+      p_studio_pct: parsed.studio_pct,
+      p_goal_card_id: parsed.goal_card_id,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`apply_contribution returned ${res.status}: ${text}`);
+  }
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
+Deno.serve(createHandler({
+  constructEvent,
+  lookupFee,
+  applyContribution,
+  serviceKey: SUPABASE_SERVICE_ROLE_KEY,
+}));

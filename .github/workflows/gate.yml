@@ -1,0 +1,164 @@
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      seed: ${{ steps.paths.outputs.seed }}
+      platform: ${{ steps.paths.outputs.platform }}
+      lane: ${{ steps.paths.outputs.lane }}
+      base: ${{ steps.refs.outputs.base }}
+      head: ${{ steps.refs.outputs.head }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the compared commits
+        id: refs
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          PUSH_HEAD: ${{ github.sha }}
+        run: |
+          if [ -n "$PR_HEAD" ]; then
+            echo "base=$PR_BASE" >> "$GITHUB_OUTPUT"
+            echo "head=$PR_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=$PUSH_BASE" >> "$GITHUB_OUTPUT"
+            echo "head=$PUSH_HEAD" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Detect folders and lane
+        id: paths
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+          HEAD: ${{ steps.refs.outputs.head }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          result=$(bash platform/gate/changed-paths.sh "$BASE" "$HEAD")
+          echo "$result"
+          seed=$(echo "$result" | sed -E 's/.*seed=([a-z]+).*/\1/')
+          platform=$(echo "$result" | sed -E 's/.*platform=([a-z]+).*/\1/')
+          lane=$(echo "$result" | sed -E 's/.*lane=([a-z]+).*/\1/')
+          case "$BRANCH" in
+            *-code) lane=code ;;
+            *-config) [ "$lane" = config ] || echo "branch name says config but the change touches code; lane stays code" ;;
+          esac
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
+          echo "seed=$seed platform=$platform lane=$lane branch=$BRANCH"
+
+  seed-config:
+    name: seed-config
+    needs: detect
+    if: needs.detect.outputs.seed == 'true' && needs.detect.outputs.lane == 'config'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write the commit message and changed files
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+          HEAD: ${{ needs.detect.outputs.head }}
+        run: |
+          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
+          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Ship gate
+        run: bash platform/gate/ship-gate.sh --folder seed-1 --lane config --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+
+  seed-code:
+    name: seed-code
+    needs: detect
+    if: needs.detect.outputs.seed == 'true' && needs.detect.outputs.lane == 'code'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write the commit message and changed files
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+          HEAD: ${{ needs.detect.outputs.head }}
+        run: |
+          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
+          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Ship gate
+        run: bash platform/gate/ship-gate.sh --folder seed-1 --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+
+  platform:
+    name: platform
+    needs: detect
+    if: needs.detect.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Write the commit message and changed files
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+          HEAD: ${{ needs.detect.outputs.head }}
+        run: |
+          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
+          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Ship gate
+        run: bash platform/gate/ship-gate.sh --folder platform --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
+      - name: Site end-to-end
+        run: pnpm --filter @backseat/site e2e
+
+  gate:
+    name: gate
+    needs: [detect, seed-config, seed-code, platform]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every needed job to pass or be skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"result": *"(failure|cancelled)"'; then
+            echo "a needed job failed or was cancelled"
+            exit 1
+          fi
+          echo "gate passed"
