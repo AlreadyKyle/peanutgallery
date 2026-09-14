@@ -1,0 +1,25 @@
+# systemd unit for the dispatcher container.
+# Install: copy to /etc/systemd/system/dispatcher.service, write the Appendix A environment to
+# /etc/backseat/dispatcher.env (mode 0600), then `systemctl enable --now dispatcher`.
+# Written for the week-2 VPS; not deployed in build 1.
+[Unit]
+Description=Backseat dispatcher
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStopSec=60
+EnvironmentFile=/etc/backseat/dispatcher.env
+ExecStartPre=-/usr/bin/docker stop backseat-dispatcher
+ExecStartPre=-/usr/bin/docker rm backseat-dispatcher
+ExecStart=/usr/bin/docker run --rm --name backseat-dispatcher \
+  --env-file /etc/backseat/dispatcher.env \
+  --volume /var/lib/backseat/worktrees:/app/.worktrees \
+  backseat/dispatcher:latest
+ExecStop=/usr/bin/docker stop backseat-dispatcher
+
+[Install]
+WantedBy=multi-user.target

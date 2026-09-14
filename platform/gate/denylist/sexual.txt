@@ -1,0 +1,159 @@
+# Sexual vocabulary that fails the all-ages gate. One term per line, matched as whole words after normalization.
+anal
+anus
+bdsm
+bestiality
+blow job
+blowjob
+blowjobs
+boner
+boners
+boob
+boobies
+boobs
+booty call
+butt plug
+buttplug
+camgirl
+camgirls
+clit
+clitoris
+cock
+cocks
+condom
+condoms
+cum
+cumming
+cums
+cumshot
+cunnilingus
+cunt
+cunts
+date rape
+deep throat
+deepthroat
+dick
+dickhead
+dickheads
+dicks
+dildo
+dildos
+dominatrix
+ejaculate
+ejaculation
+erection
+erections
+erotic
+erotica
+fap
+fapping
+fellatio
+fetish
+fetishes
+foreplay
+friends with benefits
+gang bang
+gangbang
+genitalia
+genitals
+hand job
+handjob
+handjobs
+hentai
+hooker
+hookers
+horny
+incest
+intercourse
+jerk off
+jerkoff
+jizz
+kinky
+lap dance
+lapdance
+lingerie
+masturbate
+masturbation
+milf
+milfs
+molest
+molested
+molester
+naked
+nipple
+nipples
+nsfw
+nude
+nudes
+nudity
+one night stand
+onlyfans
+orgasm
+orgasms
+orgies
+orgy
+paedophile
+paedophiles
+pedo
+pedophile
+pedophiles
+pedos
+penis
+penises
+porn
+porno
+pornographic
+pornography
+prostitute
+prostitutes
+prostitution
+pubic
+pussies
+pussy
+rape
+raped
+rapes
+raping
+rapist
+rapists
+rimjob
+scrotum
+semen
+sex
+sexting
+sexts
+sexy
+skank
+skanks
+slut
+sluts
+slutty
+sodomy
+sperm
+strip club
+stripper
+strippers
+striptease
+sugar baby
+sugar daddy
+testicle
+testicles
+thong
+thongs
+threesome
+tit
+tits
+titties
+titty
+vagina
+vaginal
+vaginas
+viagra
+vibrator
+virgin
+virginity
+vulva
+wet dream
+whore
+whores
+xxx

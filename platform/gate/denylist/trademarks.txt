@@ -1,0 +1,118 @@
+# Game, studio and console trademarks that must not appear in names. One term per line, matched as whole words after normalization; applies to seed content, filenames and commit messages.
+activision
+adventure capitalist
+among us
+angry birds
+animal crossing
+apex legends
+assassins creed
+atari
+bandai namco
+bethesda
+bowser
+bungie
+call of duty
+candy crush
+capcom
+cd projekt
+cdprojekt
+clash of clans
+clash royale
+clicker heroes
+cookie clicker
+counter strike
+counterstrike
+cuphead
+dark souls
+diablo
+donkey kong
+dota
+dragon quest
+dreamcast
+ea sports
+egg inc
+elden ring
+elder scrolls
+electronic arts
+epic games
+fall guys
+final fantasy
+flappy bird
+fortnite
+from software
+fromsoftware
+game boy
+game pass
+gameboy
+gamecube
+genshin
+genshin impact
+geometry dash
+grand theft auto
+gta
+half life
+hearthstone
+hollow knight
+idle miner tycoon
+kingdom hearts
+kirby
+konami
+league of legends
+luigi
+mario
+mario kart
+metroid
+minecraft
+mojang
+monster hunter
+mortal kombat
+naughty dog
+nintendo
+nintendo switch
+overwatch
+pac man
+pacman
+pikachu
+plants vs zombies
+playstation
+pokemon
+pokemon go
+pubg
+red dead redemption
+resident evil
+riot games
+roblox
+rocket league
+rockstar games
+sega
+skyrim
+smash bros
+snes
+sony interactive
+splatoon
+square enix
+starcraft
+stardew valley
+steam deck
+street fighter
+subway surfers
+super mario
+super smash bros
+supercell
+team fortress
+tekken
+temple run
+terraria
+tetris
+the sims
+ubisoft
+undertale
+valorant
+warcraft
+wario
+wii
+world of warcraft
+xbox
+xbox live
+yoshi
+zelda

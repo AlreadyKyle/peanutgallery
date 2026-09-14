@@ -1,0 +1,27 @@
+{
+  "title": "Dust",
+  "labels": {
+    "dust": "Dust",
+    "perSecond": "per second",
+    "strike": "Strike",
+    "buy": "Buy",
+    "owned": "owned",
+    "units": "Units",
+    "unlocks": "Unlocks",
+    "unlockedCount": "{unlocked} of {total} unlocked",
+    "nextUnlock": "Next: {name} at {amount} dust",
+    "allUnlocked": "Every unlock is open."
+  },
+  "strikeDescription": "Each strike adds one to two seconds of dust.",
+  "unitDescriptions": {
+    "gatherer": "Picks up dust by hand.",
+    "cart": "Hauls dust in from the yard.",
+    "mill": "Grinds stone into dust all day.",
+    "forge": "Runs hot and never stops.",
+    "foundry": "Pours dust out by the ton."
+  },
+  "effects": {
+    "unit": "Opens the {unit}.",
+    "multiplier": "Production up {percent}."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "QA",
+  "title": "QA",
+  "species_note": "A thin yellow creature with six small eyes arranged in a ring.",
+  "model": "MODEL_BUILDER",
+  "budget_share": 0.15,
+  "voice": "exact",
+  "prompt_path": "platform/agents/prompts/qa.md",
+  "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
+  "metrics": ["first_pass_rate", "reopen_rate"],
+  "write_access": true
+}

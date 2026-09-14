@@ -1,0 +1,123 @@
+# Slurs and hate terms that fail the all-ages gate. One term per line, matched as whole words after normalization.
+abo
+abos
+beaner
+beaners
+boong
+boongs
+camel jockey
+chinaman
+chinamen
+ching chang chong
+ching chong
+chink
+chinks
+christ killer
+coolie
+coolies
+coon
+coons
+curry muncher
+dago
+dagos
+darkie
+darkies
+darky
+dyke
+dykes
+fag
+faggot
+faggots
+faggy
+fags
+gook
+gooks
+gyp
+gypped
+gyppo
+gyppos
+gypsies
+gypsy
+half breed
+halfbreed
+heeb
+heil hitler
+hitler
+honkey
+honkies
+honky
+hymie
+injun
+injuns
+jap
+japs
+jigaboo
+jigaboos
+jungle bunny
+kike
+kikes
+kkk
+kraut
+krauts
+ku klux klan
+ladyboy
+ladyboys
+midget
+midgets
+mongoloid
+nazi
+nazis
+neo nazi
+nigga
+niggah
+niggas
+nigger
+niggers
+paki
+pakis
+polack
+polacks
+porch monkey
+raghead
+ragheads
+redskin
+redskins
+retard
+retarded
+retards
+sambo
+sandnigger
+sandniggers
+shemale
+shemales
+shylock
+sieg heil
+slant eye
+slanteye
+spastic
+spaz
+spic
+spick
+spics
+spik
+squaw
+swastika
+tar baby
+tard
+tards
+towelhead
+towelheads
+trannies
+tranny
+uncle tom
+wetback
+wetbacks
+white power
+wigga
+wigger
+wop
+wops
+yid
+yids
+zipperhead
+zipperheads
