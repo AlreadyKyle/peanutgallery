@@ -4,7 +4,6 @@ import { LedgerSummary } from '../components/LedgerSummary';
 import { Meter } from '../components/Meter';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
-import { launchLine } from '../lib/launch';
 import { useStudio } from '../lib/studio';
 
 export function Landing() {
@@ -15,7 +14,6 @@ export function Landing() {
       <div className="masthead">
         <h1 className="sr-only">{copy.studioName}</h1>
         <p className="pitch">{copy.pitch}</p>
-        <p className="launch">{launchLine(env.launchAt)}</p>
       </div>
 
       <section className="lead" aria-label="Contribute">
@@ -54,7 +52,12 @@ export function Landing() {
         <h2 className="label">{copy.policies}</h2>
         <p>{copy.artPolicy}</p>
         <p>{copy.allAges}</p>
-        <p>{copy.kernel}</p>
+        <p>{copy.fixedRulesIntro}</p>
+        <ul className="rules">
+          {copy.fixedRules.map((rule) => (
+            <li key={rule}>{rule}</li>
+          ))}
+        </ul>
       </section>
     </main>
   );
