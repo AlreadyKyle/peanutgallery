@@ -39,7 +39,6 @@ function nav(): HTMLElement {
 beforeEach(() => {
   vi.stubEnv('VITE_DISCORD_INVITE', '');
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
-  vi.stubEnv('VITE_LAUNCH_AT', '');
 });
 
 afterEach(() => {

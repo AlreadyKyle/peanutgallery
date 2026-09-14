@@ -20,20 +20,19 @@ test('landing loads at 375 px with every element visible and no horizontal overf
     ),
   ).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Peanut Gallery' })).toBeAttached();
-  await expect(page.getByText(/^(The studio goes live when the board announces the date\.|Launch: )/)).toBeVisible();
-  await expect(page.getByText('The default is 80/20.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2, name: 'Meter' })).toBeVisible();
+  await expect(page.getByText('The default is 80% agents, 20% studio.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Funding' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Ledger' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2, name: 'Build 1' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2, name: 'Policies' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Goals' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Fixed rules' })).toBeVisible();
   await expect(main.getByRole('link', { name: 'Full ledger' })).toBeVisible();
-  await expect(page.getByText('The $500 total is the pool at launch.')).toBeVisible();
-  await expect(page.getByText('Contributions before launch pre-load the pool', { exact: false })).toBeVisible();
-  await expect(page.getByText('In-game art is procedural or vector', { exact: false })).toBeVisible();
-  await expect(page.getByText('All ages.')).toBeVisible();
-  await expect(page.getByText('Not editable by any card, vote, regime or org change', { exact: false })).toBeVisible();
+  await expect(page.getByText('These three goals fund the first three weeks of building.')).toBeVisible();
+  await expect(page.getByText('Contribute before launch', { exact: false })).toBeVisible();
+  await expect(page.getByText('Art inside the games is made by code', { exact: false })).toBeVisible();
+  await expect(page.getByText('Everything here is made for all ages.')).toBeVisible();
+  await expect(page.getByText('Some rules are fixed and no vote can change them.', { exact: false })).toBeVisible();
   await expect(
-    footer.getByText('Free games, playable in a browser. Built by AI agents, directed by a human board.'),
+    footer.getByText('Free games, playable in a browser. Built by AI agents, directed by the players.'),
   ).toBeVisible();
   if ((process.env.VITE_STRIPE_PAYMENT_LINK_URL ?? '').trim() !== '') {
     await expect(nav.getByRole('link', { name: 'Contribute' })).toBeVisible();

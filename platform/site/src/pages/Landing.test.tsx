@@ -67,7 +67,6 @@ function renderLanding(source: StudioSource | null) {
 beforeEach(() => {
   vi.stubEnv('VITE_DISCORD_INVITE', '');
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
-  vi.stubEnv('VITE_LAUNCH_AT', '');
 });
 
 afterEach(() => {
@@ -81,7 +80,6 @@ describe('Landing', () => {
     renderLanding(fakeSource());
 
     expect(screen.getByRole('heading', { level: 1, name: copy.studioName })).toBeTruthy();
-    expect(screen.getByText(copy.launchDefault)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe(
       'https://buy.stripe.com/test-link',
     );
@@ -90,7 +88,8 @@ describe('Landing', () => {
     expect(screen.getByText(copy.preLaunch)).toBeTruthy();
     expect(screen.getByText(copy.artPolicy)).toBeTruthy();
     expect(screen.getByText(copy.allAges)).toBeTruthy();
-    expect(screen.getByText(copy.kernel)).toBeTruthy();
+    expect(screen.getByText(copy.fixedRulesIntro)).toBeTruthy();
+    for (const rule of copy.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
     ).toEqual([copy.meter, copy.ledger, copy.build, copy.policies]);
@@ -131,9 +130,4 @@ describe('Landing', () => {
     expect(screen.queryByText(copy.meterUnavailable)).toBeNull();
   });
 
-  it('shows the launch date when set', () => {
-    vi.stubEnv('VITE_LAUNCH_AT', '2026-10-05T14:00:00Z');
-    renderLanding(fakeSource());
-    expect(screen.getByText('Launch: Monday 5 October 2026, 10:00 ET')).toBeTruthy();
-  });
 });
