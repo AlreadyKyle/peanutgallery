@@ -1,7 +1,7 @@
 // Scripted adapter for session and pipeline tests: the script emits events (and may edit the
 // worktree) and stops when the session aborts, the way the real child is killed.
 import { refusedTools } from '../../src/adapters/attended.js';
-import type { AgentAdapter, AgentEvent, EventSink, SessionResult, SessionSpec } from '../../src/adapters/types.js';
+import type { AgentAdapter, AgentEvent, AgentMode, EventSink, SessionResult, SessionSpec } from '../../src/adapters/types.js';
 import type { TurnUsage } from '../../src/pricing.js';
 
 export type Emit = (event: AgentEvent) => Promise<void>;
@@ -13,15 +13,20 @@ export interface FakeEnd {
   exitCode?: number;
 }
 
+export interface FakeOptions extends FakeEnd {
+  mode?: AgentMode;
+}
+
 export class FakeAdapter implements AgentAdapter {
-  readonly mode = 'attended' as const;
+  readonly mode: AgentMode;
   readonly specs: SessionSpec[] = [];
   private readonly script: FakeScript;
   private readonly end: FakeEnd;
 
-  constructor(script: FakeScript, end: FakeEnd = {}) {
+  constructor(script: FakeScript, options: FakeOptions = {}) {
     this.script = script;
-    this.end = end;
+    this.end = options;
+    this.mode = options.mode ?? 'attended';
   }
 
   async preflight(spec: SessionSpec): Promise<void> {
@@ -48,8 +53,10 @@ export class FakeAdapter implements AgentAdapter {
   }
 }
 
-export function startEvent(tools: string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash']): AgentEvent {
-  return { type: 'start', sessionId: 'session-1', model: 'builder-class', tools };
+// Claude Code reports apiKeySource 'none' for a subscription sign-in, which is what an attended
+// session must show; an unattended session must show 'ANTHROPIC_API_KEY'.
+export function startEvent(tools: string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'], apiKeySource: string | null = 'none'): AgentEvent {
+  return { type: 'start', sessionId: 'session-1', model: 'builder-class', tools, apiKeySource };
 }
 
 export function usageEvent(turn: number, outputTokens: number, model = 'builder-class', extra: Partial<TurnUsage> = {}): AgentEvent {

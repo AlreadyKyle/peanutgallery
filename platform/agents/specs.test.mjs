@@ -114,13 +114,17 @@ test('budget shares across the nine files sum to 1', () => {
 
 // Prompt content the README promises: the kernel line and the gate section in every prompt,
 // the no-write-tools statement for roles without tools, the check-line grammar and the stop
-// rule for the roles that build seed cards, and the pillars copied verbatim from the plan.
+// rule for the roles that build seed cards, the working method for the four write roles that
+// build cards, and the pillars copied verbatim from the plan.
 const PROMPT_KERNEL_LINE = 'No agent with write access';
 const PROMPT_GATE_HEADING = '## How the gate works';
 const PROMPT_NO_WRITE_TOOLS = 'You have no write tools';
 const CHECK_LINE_GRAMMAR = 'check: config <file> <path> == <json>';
 const STOP_RULE = 'Stop when the acceptance check holds';
 const CHECK_LINE_ROLES = ['builder-a', 'builder-b', 'qa'];
+const WORKING_METHOD_HEADING = '## Working method';
+const WORKING_METHOD_STEPS = ['Understand:', 'Plan:', 'Implement:', 'Verify:', 'Report:'];
+const WORKING_METHOD_ROLES = ['builder-a', 'builder-b', 'qa', 'platform-builder'];
 
 function readPrompt(spec) {
   return readFileSync(join(repoRoot, spec.prompt_path), 'utf8');
@@ -153,6 +157,16 @@ for (const { file, spec } of specs) {
       const prompt = readPrompt(spec);
       assert.ok(prompt.includes(CHECK_LINE_GRAMMAR), `${spec.prompt_path} contains "${CHECK_LINE_GRAMMAR}"`);
       assert.ok(prompt.includes(STOP_RULE), `${spec.prompt_path} contains "${STOP_RULE}"`);
+    });
+  }
+
+  if (WORKING_METHOD_ROLES.includes(role)) {
+    test(`${file} prompt carries the working method with its five steps`, () => {
+      const prompt = readPrompt(spec);
+      assert.ok(prompt.includes(WORKING_METHOD_HEADING), `${spec.prompt_path} contains "${WORKING_METHOD_HEADING}"`);
+      for (const step of WORKING_METHOD_STEPS) {
+        assert.ok(prompt.includes(step), `${spec.prompt_path} contains "${step}"`);
+      }
     });
   }
 }

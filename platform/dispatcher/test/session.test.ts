@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
 import { ceilingUsd, runAgentSession, sessionPrompt, type SessionDeps } from '../src/session.js';
-import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
+import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeOptions, type FakeScript } from './helpers/fake-adapter.js';
 import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
 
 // USD per million tokens; 1000 input + N output tokens cost 0.003 + N × 0.000015.
@@ -26,10 +26,10 @@ function deps(db: FakeDb, adapter: FakeAdapter, overrides: Partial<SessionDeps> 
   };
 }
 
-async function run(db: FakeDb, script: FakeScript, overrides: Partial<SessionDeps> = {}, cardOverrides = {}) {
+async function run(db: FakeDb, script: FakeScript, overrides: Partial<SessionDeps> = {}, cardOverrides = {}, adapterOptions: FakeOptions = {}) {
   const c = card(cardOverrides);
   db.cards = [c];
-  const adapter = new FakeAdapter(script);
+  const adapter = new FakeAdapter(script, adapterOptions);
   const result = await runAgentSession(c, role(), '/worktree', db.studio, deps(db, adapter, overrides));
   return { result, adapter };
 }
@@ -43,16 +43,36 @@ describe('ceilingUsd', () => {
 });
 
 describe('sessionPrompt', () => {
-  it('carries the card, the allowed paths and the stop rule, and nothing else', () => {
-    const prompt = sessionPrompt(card(), ['seed-1/config', 'seed-1/content']);
+  it('carries the card, its money, the allowed paths, the definition of done and the stop rule, and nothing else', () => {
+    const prompt = sessionPrompt(card(), ['seed-1/config', 'seed-1/content'], 3);
     expect(prompt).toContain('Card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11');
     expect(prompt).toContain('Bucket: game. Lane: config. Folder: seed-1.');
+    expect(prompt).toContain('Estimate: $2.00. Ceiling: $3.00 (the session stops there).');
     expect(prompt).toContain('Raise the gatherer base cost by one.');
     expect(prompt).toContain('check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11');
     expect(prompt).toContain('Allowed paths: seed-1/config, seed-1/content.');
+    expect(prompt).toContain('Definition of done:');
+    expect(prompt).toContain('- every check: line in the acceptance test is true in this working tree');
+    expect(prompt).toContain('- the invariants pass: the commands your role prompt names all exit 0');
+    expect(prompt).toContain('- only files under the allowed paths changed');
+    expect(prompt).toContain('- no git, gh or network; the dispatcher commits and pushes');
     expect(prompt).toContain('Do not run git.');
     expect(prompt).toContain('Stop as soon as the acceptance check holds');
+    expect(prompt).not.toContain('Design spec');
     expect(prompt).not.toMatch(/board|note|community/i);
+  });
+
+  it('names the design spec, between the acceptance test and the allowed paths, only when the card has one', () => {
+    const url = 'https://peanutgallery.games/specs/gatherer-cost';
+    const prompt = sessionPrompt(card({ design_spec_url: url }), ['seed-1/config', 'seed-1/content'], 3);
+    expect(prompt).toContain(`\n\nDesign spec: ${url}\n\nAllowed paths:`);
+    expect(prompt.indexOf('Acceptance test:')).toBeLessThan(prompt.indexOf('Design spec:'));
+    expect(sessionPrompt(card({ design_spec_url: '   ' }), ['seed-1/config'], 3)).not.toContain('Design spec');
+  });
+
+  it('rounds the estimate and the ceiling to cents', () => {
+    const prompt = sessionPrompt(card({ estimate_usd: 1.2345 }), ['seed-1/config'], ceilingUsd(1.2345, 25));
+    expect(prompt).toContain('Estimate: $1.23. Ceiling: $1.85 (the session stops there).');
   });
 });
 
@@ -127,6 +147,44 @@ describe('runAgentSession metering', () => {
     expect(db.ledger).toHaveLength(0);
   });
 
+  it('refuses an attended session that bills an API key', async () => {
+    const db = new FakeDb();
+    const { result } = await run(db, async (_spec, emit) => {
+      await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+      await emit(usageEvent(1, 10));
+    });
+    expect(result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (ANTHROPIC_API_KEY)' });
+    expect(db.ledger).toHaveLength(0);
+    expect(db.events[0]?.payload).toMatchObject({ mode: 'attended', api_key_source: 'ANTHROPIC_API_KEY' });
+  });
+
+  it('refuses an unattended session that bills anything but the studio key', async () => {
+    const db = new FakeDb();
+    const { result } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent(undefined, 'none'));
+        await emit(usageEvent(1, 10));
+      },
+      {},
+      {},
+      { mode: 'unattended' },
+    );
+    expect(result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (none)' });
+    expect(db.ledger).toHaveLength(0);
+
+    const unreported = await run(
+      new FakeDb(),
+      async (_spec, emit) => {
+        await emit(startEvent(undefined, null));
+      },
+      {},
+      {},
+      { mode: 'unattended' },
+    );
+    expect(unreported.result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (unreported)' });
+  });
+
   it('refuses before starting when the role names an excluded tool', async () => {
     const db = new FakeDb();
     const adapter = new FakeAdapter(async () => undefined);
@@ -154,6 +212,26 @@ describe('runAgentSession watch', () => {
       await untilAborted(signal, 2000);
     }, { watchIntervalMs: 5 });
     expect(result).toMatchObject({ outcome: 'board_session_lapsed' });
+  });
+
+  it('lets an unattended session run on when no board member is signed in', async () => {
+    const db = new FakeDb();
+    db.boardActive = false;
+    const { result } = await run(
+      db,
+      async (_spec, emit, signal) => {
+        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+        // Long enough for the watch to fire several times at the 5 ms interval below.
+        await untilAborted(signal, 50);
+        await emit(usageEvent(1, 100));
+      },
+      { watchIntervalMs: 5 },
+      {},
+      { mode: 'unattended' },
+    );
+    expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 1 turns', turns: 1 });
+    expect(db.ledger).toHaveLength(1);
+    expect(db.events[0]?.payload).toMatchObject({ mode: 'unattended', api_key_source: 'ANTHROPIC_API_KEY' });
   });
 
   it('aborts when the board pauses the studio', async () => {

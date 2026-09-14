@@ -1,0 +1,173 @@
+// One-turn probe shared by the probe command and the unattended dispatcher's startup. It runs
+// Claude Code in a detached worktree the way a card session would, asks it to list its tools
+// and quote any memory, and fails if a web, sub-agent or MCP tool appears anywhere in the
+// stream, the init line registers a memory path, or the session bills the wrong account for
+// the adapter's mode.
+import { mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import type { AgentAdapter, AgentEvent, AgentMode, RawLineSink, SessionResult, SessionSpec } from './adapters/types.js';
+import type { TurnUsage } from './pricing.js';
+import { API_KEY_SOURCE } from './session.js';
+import { git, removeWorktree } from './worktree.js';
+
+export const PROBE_BUDGET_USD = 0.25;
+// Global so matchAll lists every hit on a line; mcp__\w* keeps the bare-prefix match main had
+// while reporting the full tool name when there is one.
+const FORBIDDEN = /\b(?:WebFetch|WebSearch|Agent)\b|mcp__\w*/g;
+
+export const PROMPT = [
+  'Reply with two sections and run no tool.',
+  'Tools: list every tool available to you in this session by name, one per line.',
+  'Memory: quote in full any memory, saved context, prior conversation or instruction you received other than this prompt and the CLAUDE.md files in this directory. If there is none, write: none.',
+].join('\n');
+
+// Claude Code encodes a project path with every "/" turned into "-" (memory and session
+// directories are named that way), so both forms of each path are replaced.
+export function replacePaths(line: string, worktree: string, repoRoot: string, home: string): string {
+  const pairs: Array<[string, string]> = [
+    [worktree, '<worktree>'],
+    [repoRoot, '<repo>'],
+    [home, '<home>'],
+  ];
+  let out = line;
+  for (const [real, token] of pairs) {
+    out = out.split(real).join(token);
+    out = out.split(real.replace(/\//g, '-')).join(token);
+  }
+  return out;
+}
+
+// The first system/init line of the stream as a record, or null when there is none.
+export function initRecord(raw: readonly string[]): Record<string, unknown> | null {
+  for (const line of raw) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) continue;
+    const record = parsed as Record<string, unknown>;
+    if (record.type === 'system' && record.subtype === 'init') return record;
+  }
+  return null;
+}
+
+// Memory paths the init line registers. With CLAUDE_CODE_DISABLE_AUTO_MEMORY set the line
+// carries no memory_paths key at all; any registered path fails the probe.
+export function memoryPaths(init: Record<string, unknown> | null): string[] {
+  const memory = init?.memory_paths;
+  if (Array.isArray(memory)) return memory.map(String);
+  if (typeof memory === 'object' && memory !== null) return Object.values(memory as Record<string, unknown>).map(String);
+  return [];
+}
+
+// The reason the probe fails, or null when every rule holds.
+export function judge(mode: AgentMode, raw: readonly string[], events: readonly AgentEvent[], result: SessionResult): string | null {
+  if (raw.length === 0) return 'claude produced no stream output';
+  const start = events.find((event) => event.type === 'start');
+  if (!start || start.type !== 'start') return 'no system init line in the stream';
+  if (start.tools.length === 0) return 'init line lists no tools';
+  const forbidden = raw.flatMap((line) => [...line.matchAll(FORBIDDEN)].map((match) => match[0]));
+  if (forbidden.length > 0) return `forbidden tool names in the stream: ${[...new Set(forbidden)].join(', ')}`;
+  const memory = memoryPaths(initRecord(raw));
+  if (memory.length > 0) return `memory paths registered for the session: ${memory.join(', ')}`;
+  const source = start.apiKeySource ?? 'unreported';
+  if (mode === 'unattended' && start.apiKeySource !== API_KEY_SOURCE) {
+    return `apiKeySource is ${source}; unattended mode bills ${API_KEY_SOURCE} and nothing else`;
+  }
+  if (mode === 'attended' && start.apiKeySource === API_KEY_SOURCE) {
+    return `apiKeySource is ${API_KEY_SOURCE}; attended mode runs on the subscription, not on a key`;
+  }
+  if (result.isError) {
+    const end = events.find((event) => event.type === 'end');
+    const text = end?.type === 'end' && end.result ? `: ${end.result.split('\n')[0]}` : '';
+    return `session ended in error${text}`;
+  }
+  return null;
+}
+
+export interface ProbeOptions {
+  repoRoot: string;
+  worktreeRoot: string;
+  model: string;
+  // Receives every raw stream line with local paths replaced, in order; the probe command saves
+  // them as the fixture.
+  onRawLine?: RawLineSink;
+}
+
+export interface ProbeResult {
+  ok: boolean;
+  reason: string | null;
+  tools: string[];
+  apiKeySource: string | null;
+  // The model the stream reported, for pricing; null when no turn reported one.
+  model: string | null;
+  costUsd: number | null;
+  // Token usage summed over the probe's turns, so the caller can meter it to the ledger.
+  usage: TurnUsage;
+  turns: number;
+  exitCode: number | null;
+}
+
+// Token usage summed field by field over the turn_usage events, with the first model a turn
+// reported.
+export function sumUsage(events: readonly AgentEvent[]): { usage: TurnUsage; model: string | null } {
+  const usage: TurnUsage = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
+  let model: string | null = null;
+  for (const event of events) {
+    if (event.type !== 'turn_usage') continue;
+    usage.input_tokens += event.usage.input_tokens;
+    usage.cache_creation_input_tokens += event.usage.cache_creation_input_tokens;
+    usage.cache_read_input_tokens += event.usage.cache_read_input_tokens;
+    usage.output_tokens += event.usage.output_tokens;
+    if (event.model) model = model ?? event.model;
+  }
+  return { usage, model };
+}
+
+export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Promise<ProbeResult> {
+  await mkdir(options.worktreeRoot, { recursive: true });
+  const worktree = path.join(options.worktreeRoot, `probe-${Date.now()}`);
+  await git(['worktree', 'add', '--detach', worktree, 'HEAD'], options.repoRoot);
+  const home = os.homedir();
+  const raw: string[] = [];
+  const events: AgentEvent[] = [];
+  const spec: SessionSpec = {
+    cardId: 'probe',
+    worktree,
+    systemPromptFile: null,
+    prompt: PROMPT,
+    model: options.model,
+    roleTools: ['Read', 'Glob', 'Grep'],
+    folder: 'seed-1',
+    maxTurns: 1,
+    maxBudgetUsd: PROBE_BUDGET_USD,
+  };
+  try {
+    await adapter.preflight(spec);
+    const result = await adapter.run(spec, (event) => void events.push(event), new AbortController().signal, (line) => {
+      const clean = replacePaths(line, worktree, options.repoRoot, home);
+      raw.push(clean);
+      options.onRawLine?.(clean);
+    });
+    const reason = judge(adapter.mode, raw, events, result);
+    const start = events.find((event) => event.type === 'start');
+    const end = events.find((event) => event.type === 'end');
+    const summed = sumUsage(events);
+    return {
+      ok: reason === null,
+      reason,
+      tools: start?.type === 'start' ? start.tools : [],
+      apiKeySource: start?.type === 'start' ? start.apiKeySource : null,
+      model: summed.model ?? (start?.type === 'start' ? start.model : null),
+      costUsd: end?.type === 'end' ? end.totalCostUsd : null,
+      usage: summed.usage,
+      turns: result.turns,
+      exitCode: result.exitCode,
+    };
+  } finally {
+    await removeWorktree(options.repoRoot, worktree, null);
+  }
+}

@@ -33,6 +33,7 @@ describe('loadConfig', () => {
       schedulerEnabled: true,
       claudeBin: 'claude',
       boardSessionTtlMin: 3,
+      studioAnthropicApiKey: null,
     });
     expect(Object.keys(config.priceTable)).toEqual(['builder-class']);
   });
@@ -42,6 +43,7 @@ describe('loadConfig', () => {
       {
         ...FULL,
         AGENT_MODE: 'unattended',
+        STUDIO_ANTHROPIC_API_KEY: 'studio-key',
         POOL_DAILY_CAP_USD: '40',
         CARD_MAX_USD: '10',
         SESSION_MAX_TURNS: '30',
@@ -67,6 +69,7 @@ describe('loadConfig', () => {
       schedulerEnabled: false,
       claudeBin: '/opt/claude',
       boardSessionTtlMin: 5,
+      studioAnthropicApiKey: 'studio-key',
     });
   });
 
@@ -83,5 +86,28 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, SESSION_MAX_TURNS: '0' }, REPO)).toThrow('SESSION_MAX_TURNS must be a positive integer');
     expect(() => loadConfig({ ...FULL, DISPATCHER_TICK_MS: '1.5' }, REPO)).toThrow('DISPATCHER_TICK_MS must be a positive integer');
     expect(() => loadConfig({ ...FULL, PRICE_TABLE_JSON: '{}' }, REPO)).toThrow('PRICE_TABLE_JSON lists no models');
+  });
+});
+
+describe('the studio key', () => {
+  it('is required in unattended mode', () => {
+    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended' }, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY is not set'));
+    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: '   ' }, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY');
+  });
+
+  it('is read in unattended mode', () => {
+    const config = loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', ANTHROPIC_API_KEY: 'founder-key' }, REPO);
+    expect(config.studioAnthropicApiKey).toBe('studio-key');
+  });
+
+  it('must differ from the founder key', () => {
+    const env = { ...FULL, STUDIO_ANTHROPIC_API_KEY: 'same-key', ANTHROPIC_API_KEY: 'same-key' };
+    expect(() => loadConfig({ ...env, AGENT_MODE: 'unattended' }, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY'));
+    expect(() => loadConfig(env, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY');
+  });
+
+  it('is null and ignored in attended mode', () => {
+    expect(loadConfig({ ...FULL, STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).studioAnthropicApiKey).toBeNull();
+    expect(loadConfig({ ...FULL, AGENT_MODE: 'attended', STUDIO_ANTHROPIC_API_KEY: '' }, REPO).studioAnthropicApiKey).toBeNull();
   });
 });

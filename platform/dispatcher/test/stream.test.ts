@@ -30,6 +30,7 @@ describe('parseStream against the recorded sample', () => {
       sessionId: '7d2c1f0e-3b7a-4c58-9a1e-2f6d8b4c9e10',
       model: 'claude-sonnet-5',
       tools: ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'Write'],
+      apiKeySource: 'none',
     });
   });
 
@@ -112,6 +113,15 @@ describe('StreamParser', () => {
       },
     ]);
     expect(parser.finish()).toEqual([]);
+  });
+
+  it('reads apiKeySource from the init line and reports null when the line has none', () => {
+    const init = (extra: Record<string, unknown>) => JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', tools: ['Read'], model: 'claude-sonnet-5', ...extra });
+    expect(new StreamParser().push(init({ apiKeySource: 'ANTHROPIC_API_KEY' }))).toEqual([
+      { type: 'start', sessionId: 's', model: 'claude-sonnet-5', tools: ['Read'], apiKeySource: 'ANTHROPIC_API_KEY' },
+    ]);
+    expect(new StreamParser().push(init({}))[0]).toMatchObject({ type: 'start', apiKeySource: null });
+    expect(new StreamParser().push(init({ apiKeySource: 7 }))[0]).toMatchObject({ type: 'start', apiKeySource: null });
   });
 
   it('counts a message without an id as its own turn', () => {

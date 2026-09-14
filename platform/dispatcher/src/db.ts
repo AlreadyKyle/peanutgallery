@@ -34,6 +34,7 @@ export interface Card {
   title: string;
   intent: string | null;
   acceptance_test: string | null;
+  design_spec_url: string | null;
   estimate_usd: number;
   actual_usd: number;
   severity: string | null;
@@ -65,9 +66,10 @@ export interface Deploy {
   created_at: string;
 }
 
+// card_id and role_id are null for spend that belongs to no card: the startup probe.
 export interface UsageInput {
-  card_id: string;
-  role_id: string;
+  card_id: string | null;
+  role_id: string | null;
   model: string;
   input_tokens: number;
   cached_tokens: number;
@@ -105,6 +107,9 @@ export interface DeployInput {
 
 export interface Db {
   getStudioState(): Promise<StudioState>;
+  // Every tick writes studio_state.dispatcher_seen_at so /board can show how long ago the
+  // dispatcher was alive.
+  dispatcherHeartbeat(now: Date): Promise<void>;
   getPool(): Promise<Pool>;
   boardSessionActive(ttlMinutes: number, now: Date): Promise<boolean>;
   listFundedCards(): Promise<Card[]>;
@@ -153,6 +158,7 @@ export function toCard(row: Row): Card {
     title: text(row, 'title'),
     intent: optionalText(row, 'intent'),
     acceptance_test: optionalText(row, 'acceptance_test'),
+    design_spec_url: optionalText(row, 'design_spec_url'),
     estimate_usd: num(row, 'estimate_usd'),
     actual_usd: num(row, 'actual_usd'),
     severity: optionalText(row, 'severity'),
@@ -210,6 +216,11 @@ export function createSupabaseDb(url: string, serviceRoleKey: string): Db {
         agent_hourly_rate_usd: num(row, 'agent_hourly_rate_usd'),
         studio_reserve_usd: num(row, 'studio_reserve_usd'),
       };
+    },
+
+    async dispatcherHeartbeat(now) {
+      const { error } = await client.from('studio_state').update({ dispatcher_seen_at: now.toISOString() }).eq('id', 1);
+      if (error) fail('studio_state heartbeat', error);
     },
 
     async getPool() {

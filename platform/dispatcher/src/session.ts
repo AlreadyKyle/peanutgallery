@@ -1,7 +1,7 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
 // record_usage, enforces the cost and turn ceilings, and aborts when the board session lapses
 // or the board pauses the studio.
-import type { AgentAdapter, AgentEvent, SessionSpec } from './adapters/types.js';
+import type { AgentAdapter, AgentEvent, AgentMode, SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
 import type { Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
@@ -40,6 +40,7 @@ export interface SessionDeps {
 }
 
 const PAYLOAD_LIMIT = 8000;
+export const API_KEY_SOURCE = 'ANTHROPIC_API_KEY';
 
 export function ceilingUsd(estimateUsd: number, cardMaxUsd: number): number {
   return round4(Math.min(1.5 * estimateUsd, cardMaxUsd));
@@ -49,12 +50,15 @@ export function roleTools(role: Role): string[] {
   return Array.isArray(role.tools_json) ? role.tools_json.filter((tool): tool is string => typeof tool === 'string') : [];
 }
 
-// The -p prompt is the card and the stop rule. The role prompt file is appended to the system
-// prompt by the adapter, and the CLAUDE.md files are read by Claude Code from the worktree.
-export function sessionPrompt(card: Card, allowedPaths: readonly string[]): string {
+// The -p prompt is the card, its money, its design spec when it has one, and the definition of
+// done. The role prompt file is appended to the system prompt by the adapter, and the CLAUDE.md
+// files are read by Claude Code from the worktree.
+export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceilingUsd: number): string {
+  const designSpec = card.design_spec_url?.trim();
   const lines = [
     `Card ${card.id.replace(/-/g, '').slice(0, 8)}: ${card.title}`,
     `Bucket: ${card.bucket}. Lane: ${card.lane}. Folder: ${card.folder}.`,
+    `Estimate: $${card.estimate_usd.toFixed(2)}. Ceiling: $${ceilingUsd.toFixed(2)} (the session stops there).`,
     '',
     'Intent:',
     card.intent ?? '',
@@ -62,7 +66,13 @@ export function sessionPrompt(card: Card, allowedPaths: readonly string[]): stri
     'Acceptance test:',
     card.acceptance_test ?? '',
     '',
+    ...(designSpec ? [`Design spec: ${designSpec}`, ''] : []),
     `Allowed paths: ${allowedPaths.join(', ')}.`,
+    'Definition of done:',
+    '- every check: line in the acceptance test is true in this working tree',
+    '- the invariants pass: the commands your role prompt names all exit 0',
+    '- only files under the allowed paths changed',
+    '- no git, gh or network; the dispatcher commits and pushes',
     'Edit only files under the allowed paths. Do not run git.',
     'Stop as soon as the acceptance check holds in this working tree and the invariants pass.',
   ];
@@ -86,6 +96,13 @@ function trimPayload(value: unknown): unknown {
   return { truncated: true, chars: json.length, head: json.slice(0, PAYLOAD_LIMIT) };
 }
 
+// An unattended session must bill the studio key and nothing else; an attended session must
+// not bill a key at all, since the founder's subscription is the account it runs on.
+export function billedToWrongAccount(mode: AgentMode, apiKeySource: string | null): boolean {
+  if (mode === 'unattended') return apiKeySource !== API_KEY_SOURCE;
+  return apiKeySource === API_KEY_SOURCE;
+}
+
 function zeroUsage(usage: { input_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; output_tokens: number }): boolean {
   return usage.input_tokens === 0 && usage.cache_creation_input_tokens === 0 && usage.cache_read_input_tokens === 0 && usage.output_tokens === 0;
 }
@@ -99,7 +116,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const spec: SessionSpec = {
     cardId: card.id,
     worktree,
-    prompt: sessionPrompt(card, lanePaths(card.folder, card.lane)),
+    prompt: sessionPrompt(card, lanePaths(card.folder, card.lane), ceiling),
     systemPromptFile: rolePromptFile(role, worktree),
     model: role.model || deps.fallbackModel,
     roleTools: roleTools(role),
@@ -141,9 +158,18 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const onEvent = async (event: AgentEvent) => {
     switch (event.type) {
       case 'start': {
-        await deps.db.insertEvent(card.id, role.id, 'start', { session_id: event.sessionId, model: event.model, tools: event.tools, mode: deps.adapter.mode });
+        await deps.db.insertEvent(card.id, role.id, 'start', {
+          session_id: event.sessionId,
+          model: event.model,
+          tools: event.tools,
+          mode: deps.adapter.mode,
+          api_key_source: event.apiKeySource,
+        });
         const refused = refusedTools(event.tools);
         if (refused.length > 0) abort('refused', `session exposes excluded tools: ${refused.join(', ')}`);
+        if (billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
+          abort('refused', `session is billed to the wrong account (${event.apiKeySource ?? 'unreported'})`);
+        }
         return;
       }
       case 'turn_usage': {

@@ -72,6 +72,31 @@ describe('tick', () => {
     expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'mode_mismatch' });
   });
 
+  it('starts a funded card in unattended mode with no board session', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    db.studio.agent_mode = 'unattended';
+    db.boardActive = false;
+    const started: string[] = [];
+    expect(await tick(deps(db, started, { mode: 'unattended' }))).toEqual({ action: 'started', cardId: card().id });
+    expect(db.cards[0]?.stage).toBe('building');
+    await Promise.resolve();
+    expect(started).toEqual([card().id]);
+  });
+
+  it('writes the heartbeat once per tick, before anything else, and goes on when the write fails', async () => {
+    const db = new FakeDb();
+    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    expect(db.heartbeats).toEqual([NOW]);
+    db.studio.paused = true;
+    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'paused' });
+    expect(db.heartbeats).toHaveLength(2);
+    db.studio.paused = false;
+    db.heartbeatError = new Error('column "dispatcher_seen_at" of relation "studio_state" does not exist');
+    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    expect(db.heartbeats).toHaveLength(2);
+  });
+
   it('skips vetoed cards, community cards and cards without an executor', async () => {
     const db = new FakeDb();
     db.cards = [card({ id: 'v', director_stance: 'vetoed' }), card({ id: 'n', executor_role_id: null }), card({ id: 'c', source: 'community' })];
