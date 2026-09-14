@@ -34,6 +34,8 @@ function check<T>(label: string, result: Result<T>): T {
 function parseArgs(argv: string[]): { apply: boolean } {
   let apply = false;
   for (const arg of argv) {
+    // pnpm passes the "--" separator through to the script.
+    if (arg === "--") continue;
     if (arg === "--apply") {
       apply = true;
     } else {
