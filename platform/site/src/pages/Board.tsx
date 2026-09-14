@@ -1,8 +1,14 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { PageHeader } from '../components/PageHeader';
 import {
+  agentModes,
+  boardStudioState,
   buckets,
+  cardStages,
+  dispatcherSeenAgoMs,
   fetchBoardRole,
+  fileCard,
   fileDirective,
   fileNote,
   folders,
@@ -11,16 +17,23 @@ import {
   lanes,
   sendMagicLink,
   sessionExpiry,
+  setAgentMode,
+  setLaunched,
   setPaused,
+  STUDIO_STATE_POLL_MS,
+  type AgentMode,
   type BoardRole,
+  type BoardStudioState,
+  type NextCardStage,
 } from '../lib/board';
-import { formatClock } from '../lib/format';
+import { formatClock, formatDateTime, formatUsd } from '../lib/format';
 import type { Role } from '../lib/source';
 import { useStudio } from '../lib/studio';
 import { errorMessage, getClient } from '../lib/supabase';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
+export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
 
 export function Board() {
   const client = getClient();
@@ -35,9 +48,10 @@ export function Board() {
 
   return (
     <main>
-      <div className="masthead">
-        <h1 className="display">Board</h1>
-      </div>
+      <PageHeader
+        title="Board"
+        lede="Private controls for the board. Sign-in is limited to board accounts."
+      />
       {client === null || session === null ? (
         <SignIn client={client} />
       ) : (
@@ -71,7 +85,6 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 
   return (
     <form className="stack" onSubmit={submit} aria-label="Sign in">
-      <p>Sign-in is limited to board accounts.</p>
       <label>
         Email
         <input
@@ -131,14 +144,150 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
         </p>
       ) : null}
       {role === 'board' || role === 'moderator' ? <PauseControls client={client} /> : null}
-      {role === 'board' ? (
-        <>
-          <SessionStatus client={client} />
-          <DirectiveForm client={client} />
-          <NoteForm client={client} />
-        </>
-      ) : null}
+      {role === 'board' ? <BoardControls client={client} /> : null}
     </>
+  );
+}
+
+type StudioLoad = {
+  state: BoardStudioState | null;
+  loadError: string;
+  refresh: () => Promise<void>;
+};
+
+// One load and one poll of board_studio_state for every board control.
+function useBoardStudioState(client: SupabaseClient): StudioLoad {
+  const [state, setState] = useState<BoardStudioState | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      setState(await boardStudioState(client));
+      setLoadError('');
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    let live = true;
+    const load = () => {
+      if (live) void refresh();
+    };
+    load();
+    const timer = setInterval(load, STUDIO_STATE_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [refresh]);
+
+  return { state, loadError, refresh };
+}
+
+// Board members only; moderators never mount this, so they never load the studio state.
+function BoardControls({ client }: { client: SupabaseClient }) {
+  const studio = useBoardStudioState(client);
+  return (
+    <>
+      <StudioStatus client={client} studio={studio} />
+      <SessionStatus client={client} />
+      <NextCardForm client={client} cardMaxUsd={studio.state?.card_max_usd ?? null} />
+      <DirectiveForm client={client} />
+      <NoteForm client={client} />
+    </>
+  );
+}
+
+function StudioStatus({ client, studio }: { client: SupabaseClient; studio: StudioLoad }) {
+  const { state, loadError, refresh } = studio;
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), CLOCK_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function goLive() {
+    if (!window.confirm(GO_LIVE_CONFIRM)) return;
+    setBusy(true);
+    try {
+      const at = await setLaunched(client);
+      setMessage(`The studio went live at ${formatDateTime(at.toISOString())}.`);
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeMode(mode: AgentMode) {
+    setBusy(true);
+    try {
+      await setAgentMode(client, mode);
+      setMessage(`Agent mode set to ${mode}. Restart the dispatcher in the same mode.`);
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const seenAgo = state === null ? null : dispatcherSeenAgoMs(state.dispatcher_seen_at, now);
+
+  return (
+    <section aria-label="Studio status">
+      <h2>Studio</h2>
+      {state === null ? (
+        <p role="status">{loadError === '' ? 'Loading the studio state.' : loadError}</p>
+      ) : (
+        <>
+          <p>Agents: {state.paused ? 'paused' : 'running'}.</p>
+          <p>Agent mode: {state.agent_mode}.</p>
+          <p>
+            Dispatcher:{' '}
+            {seenAgo === null ? 'not running' : `seen ${Math.round(seenAgo / 1000)} s ago`}.
+          </p>
+          <p>
+            {state.launched_at === null
+              ? 'Not live yet.'
+              : `Live since ${formatDateTime(state.launched_at)}.`}
+          </p>
+          <p>
+            Daily cap {formatUsd(state.daily_cap_usd)}. Card maximum {formatUsd(state.card_max_usd)}.
+          </p>
+          {state.launched_at === null ? (
+            <button type="button" disabled={busy} onClick={() => void goLive()}>
+              Go live
+            </button>
+          ) : null}
+          <fieldset disabled={busy}>
+            <legend>Agent mode</legend>
+            <div className="row">
+              {agentModes.map((mode) => (
+                <label key={mode} className="choice">
+                  <input
+                    type="radio"
+                    name="agent-mode"
+                    value={mode}
+                    checked={state.agent_mode === mode}
+                    onChange={() => void changeMode(mode)}
+                  />
+                  {mode}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <p>Restart the dispatcher in the same mode.</p>
+          {loadError === '' ? null : <p className="error">{loadError}</p>}
+        </>
+      )}
+      {message === '' ? null : <p role="status">{message}</p>}
+    </section>
   );
 }
 
@@ -227,6 +376,196 @@ function PauseControls({ client }: { client: SupabaseClient }) {
 
 function executors(roles: Role[]): Role[] {
   return roles.filter((role) => role.write_access && role.state === 'active');
+}
+
+const emptyCard = {
+  bucket: buckets[0] as string,
+  lane: lanes[0] as string,
+  folder: folders[0] as string,
+  title: '',
+  intent: '',
+  acceptance_test: '',
+  funding_target_usd: '',
+  stage: 'proposed' as NextCardStage,
+  board_reason: '',
+  executor_role_id: '',
+};
+
+function NextCardForm({
+  client,
+  cardMaxUsd,
+}: {
+  client: SupabaseClient;
+  // From board_studio_state; null until loaded, and file_card still enforces the cap.
+  cardMaxUsd: number | null;
+}) {
+  const studio = useStudio();
+  const roles = studio.state === 'ready' ? executors(studio.snapshot.roles) : [];
+  const hintId = useId();
+  const [form, setForm] = useState({ ...emptyCard });
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const executor = form.executor_role_id === '' ? (roles[0]?.id ?? '') : form.executor_role_id;
+
+  function update<K extends keyof typeof emptyCard>(key: K, value: (typeof emptyCard)[K]) {
+    setForm((previous) => ({ ...previous, [key]: value }));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const target = Number(form.funding_target_usd);
+    const tooHigh = cardMaxUsd !== null && target > cardMaxUsd;
+    if (!Number.isFinite(target) || target < 0.01 || tooHigh) {
+      setMessage(
+        cardMaxUsd === null
+          ? 'Funding target must be at least $0.01.'
+          : `Funding target must be between $0.01 and ${formatUsd(cardMaxUsd)}.`,
+      );
+      return;
+    }
+    if (executor === '') {
+      setMessage('Choose an executor role.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const id = await fileCard(client, {
+        bucket: form.bucket,
+        lane: form.lane,
+        folder: form.folder,
+        title: form.title.trim(),
+        intent: form.intent.trim(),
+        acceptance_test: form.acceptance_test.trim(),
+        funding_target_usd: target,
+        stage: form.stage,
+        executor_role_id: executor,
+        board_reason: form.board_reason.trim(),
+      });
+      setMessage(`Next card filed as card ${id.slice(0, 8)}.`);
+      setForm({ ...emptyCard });
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} aria-label="File a Next card">
+      <h2>File a Next card</h2>
+      <p>
+        A Next card shows on the site under Next. Supporters fund it to vote for it; when its bar
+        reaches the target the agents build it.
+      </p>
+      <label>
+        Bucket
+        <select value={form.bucket} onChange={(event) => update('bucket', event.target.value)}>
+          {buckets.map((bucket) => (
+            <option key={bucket} value={bucket}>
+              {bucket}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Lane
+        <select value={form.lane} onChange={(event) => update('lane', event.target.value)}>
+          {lanes.map((lane) => (
+            <option key={lane} value={lane}>
+              {lane}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Folder
+        <select value={form.folder} onChange={(event) => update('folder', event.target.value)}>
+          {folders.map((folder) => (
+            <option key={folder} value={folder}>
+              {folder}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Title
+        <input required value={form.title} onChange={(event) => update('title', event.target.value)} />
+      </label>
+      <label>
+        Intent
+        <textarea
+          required
+          rows={3}
+          value={form.intent}
+          onChange={(event) => update('intent', event.target.value)}
+        />
+      </label>
+      <label>
+        Acceptance test
+        <textarea
+          required
+          rows={3}
+          aria-describedby={hintId}
+          value={form.acceptance_test}
+          onChange={(event) => update('acceptance_test', event.target.value)}
+        />
+      </label>
+      <p id={hintId}>Config-lane cards need a check: line.</p>
+      <label>
+        Funding target (USD)
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0.01"
+          max={cardMaxUsd ?? undefined}
+          step="0.01"
+          required
+          value={form.funding_target_usd}
+          onChange={(event) => update('funding_target_usd', event.target.value)}
+        />
+      </label>
+      <fieldset>
+        <legend>Stage</legend>
+        <div className="row">
+          {cardStages.map((stage) => (
+            <label key={stage.value} className="choice">
+              <input
+                type="radio"
+                name="card-stage"
+                value={stage.value}
+                checked={form.stage === stage.value}
+                onChange={() => update('stage', stage.value)}
+              />
+              {stage.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <label>
+        Reason (optional)
+        <input
+          value={form.board_reason}
+          onChange={(event) => update('board_reason', event.target.value)}
+        />
+      </label>
+      <label>
+        Executor
+        <select value={executor} onChange={(event) => update('executor_role_id', event.target.value)}>
+          {roles.map((role) => (
+            <option key={role.id} value={role.id}>
+              {role.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      {roles.length === 0 ? <p>No active roles with write access are loaded.</p> : null}
+      <button type="submit" disabled={busy || roles.length === 0}>
+        File Next card
+      </button>
+      {message === '' ? null : <p role="status">{message}</p>}
+    </form>
+  );
 }
 
 const emptyDirective = {

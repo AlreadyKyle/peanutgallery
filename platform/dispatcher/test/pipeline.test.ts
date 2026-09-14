@@ -68,6 +68,7 @@ beforeAll(async () => {
     schedulerEnabled: false,
     claudeBin: 'claude',
     boardSessionTtlMin: 3,
+    studioAnthropicApiKey: null,
   };
 });
 

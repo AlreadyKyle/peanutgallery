@@ -10,7 +10,7 @@ describe("parseSeedArgs", () => {
 
   it("accepts --week1-test with --run N or --run=N", () => {
     expect(parseSeedArgs(["--week1-test"]).run.unit).toBe("gatherer");
-    expect(parseSeedArgs(["--week1-test", "--run", "2"]).run.unit).toBe("cart");
+    expect(parseSeedArgs(["--week1-test", "--run", "2"]).run.unit).toBe("forge");
     expect(parseSeedArgs(["--run=3", "--week1-test"]).run.unit).toBe("mill");
   });
 

@@ -36,7 +36,9 @@ async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const env = loadRepoEnv();
   const secret = requireEnv(env, "STRIPE_WEBHOOK_SECRET");
-  const serviceKey = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
+  // The function runtime supplies SUPABASE_SERVICE_ROLE_KEY in the new sb_secret_ format, so a dry
+  // run must present that key; the legacy service-role JWT is treated as a live request.
+  const serviceKey = env.SUPABASE_SECRET_KEY?.trim() || requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
   const url = options.url ?? functionUrl(env, "stripe-webhook");
 
   const now = Math.floor(Date.now() / 1000);

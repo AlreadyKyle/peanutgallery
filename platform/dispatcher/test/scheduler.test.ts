@@ -36,14 +36,14 @@ describe('scheduler', () => {
   it('schedules nothing when the off switch is set', () => {
     const { log, lines } = capture();
     expect(startScheduler(false, log)).toEqual([]);
-    expect(lines).toEqual(['2026-09-14T15:00:00.000Z INFO scheduler: disabled by DISPATCHER_SCHEDULER=off']);
+    expect(lines.map((line) => JSON.parse(line))).toEqual([{ ts: '2026-09-14T15:00:00.000Z', level: 'info', scope: 'scheduler', msg: 'disabled by DISPATCHER_SCHEDULER=off' }]);
   });
 
   it('schedules one task per job and stops them all', async () => {
     const { log, lines } = capture();
     const tasks = startScheduler(true, log);
     expect(tasks).toHaveLength(JOBS.length);
-    expect(lines.at(-1)).toBe(`2026-09-14T15:00:00.000Z INFO scheduler: ${JOBS.length} jobs scheduled in America/New_York`);
+    expect(JSON.parse(lines.at(-1) ?? '')).toEqual({ ts: '2026-09-14T15:00:00.000Z', level: 'info', scope: 'scheduler', msg: `${JOBS.length} jobs scheduled in America/New_York` });
     await stopScheduler(tasks);
   });
 });

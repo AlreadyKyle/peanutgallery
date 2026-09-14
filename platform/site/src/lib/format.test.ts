@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDateTime, formatInteger, formatUsd, percent, shortSha, toNumber } from './format';
+import {
+  formatClock,
+  formatDate,
+  formatDateTime,
+  formatInteger,
+  formatUsd,
+  percent,
+  shortSha,
+  toNumber,
+} from './format';
 
 describe('formatUsd', () => {
   it('renders two decimals with a dollar sign and grouping', () => {
@@ -54,6 +63,17 @@ describe('formatDateTime', () => {
 
   it('returns the input when it is not a date', () => {
     expect(formatDateTime('yesterday')).toBe('yesterday');
+  });
+});
+
+describe('formatDate', () => {
+  it('renders day, short month and year without a clock', () => {
+    expect(formatDate('2026-03-05T14:07:00Z')).toBe('5 Mar 2026');
+    expect(formatDate('2026-12-25T00:05:00Z')).toBe('25 Dec 2026');
+  });
+
+  it('returns the input when it is not a date', () => {
+    expect(formatDate('soon')).toBe('soon');
   });
 });
 

@@ -104,6 +104,7 @@ export class StreamParser {
         sessionId: typeof line.session_id === 'string' ? line.session_id : null,
         model: typeof line.model === 'string' ? line.model : null,
         tools,
+        apiKeySource: typeof line.apiKeySource === 'string' ? line.apiKeySource : null,
       },
     ];
   }

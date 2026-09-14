@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
-import { createSupabaseSource, DEPLOY_LIMIT, EVENT_LIMIT, REALTIME_LISTENERS } from './source';
+import {
+  CARD_STAGES,
+  createSupabaseSource,
+  DEPLOY_LIMIT,
+  EVENT_LIMIT,
+  REALTIME_LISTENERS,
+} from './source';
 
 type Query = {
   table: string;
@@ -34,12 +40,20 @@ function rowsFor(query: Query): unknown {
         {
           id: 'c1',
           title: 'Week 1: the loop',
+          intent: 'Build the core loop.',
+          source: 'board',
           stage: 'voted',
+          shape: 'goal',
           funding_target_usd: '100.0000',
           funded_usd: '25.0000',
+          actual_usd: '0.0000',
           created_at: '2026-09-14T00:00:00Z',
         },
       ];
+    case 'public_card_funding':
+      return [{ card_id: 'c1', contributors: '3', credited_usd: '18.5000' }];
+    case 'public_studio':
+      return { launched_at: '2026-09-20T00:00:00Z' };
     case 'public_ledger_totals':
       return {
         usd_total: '1.2500',
@@ -162,10 +176,20 @@ describe('createSupabaseSource.load', () => {
     expect(pool.filters).toEqual(['eq id 1']);
     expect(pool.terminal).toBe('maybeSingle');
 
-    const goals = query(fake.queries, 'cards');
-    expect(goals.select).toBe('id,title,stage,funding_target_usd,funded_usd,created_at');
-    expect(goals.filters).toEqual(['eq shape goal']);
-    expect(goals.orders).toEqual([{ column: 'created_at', ascending: true }]);
+    const cards = query(fake.queries, 'cards');
+    expect(cards.select).toBe(
+      'id,title,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+    );
+    expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
+    expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
+
+    const funding = query(fake.queries, 'public_card_funding');
+    expect(funding.select).toBe('card_id,contributors,credited_usd');
+    expect(funding.terminal).toBe('returns');
+
+    const studio = query(fake.queries, 'public_studio');
+    expect(studio.select).toBe('launched_at');
+    expect(studio.terminal).toBe('maybeSingle');
 
     expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
 
@@ -193,16 +217,22 @@ describe('createSupabaseSource.load', () => {
       daily_spent_usd: 0,
       day: '2026-09-14',
     });
-    expect(snapshot.goals).toEqual([
+    expect(snapshot.cards).toEqual([
       {
         id: 'c1',
         title: 'Week 1: the loop',
+        intent: 'Build the core loop.',
+        source: 'board',
         stage: 'voted',
+        shape: 'goal',
         funding_target_usd: 100,
         funded_usd: 25,
+        actual_usd: 0,
         created_at: '2026-09-14T00:00:00Z',
       },
     ]);
+    expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });
+    expect(snapshot.launchedAt).toBe('2026-09-20T00:00:00Z');
     expect(snapshot.totals).toEqual({
       usd_total: 1.25,
       input_tokens: 12000,
@@ -240,7 +270,7 @@ describe('createSupabaseSource.subscribe', () => {
   it('joins a fresh channel on every subscription and listens to the published tables', () => {
     const expected: Listener[] = [
       { table: 'pool', filter: null },
-      { table: 'cards', filter: 'shape=eq.goal' },
+      { table: 'cards', filter: null },
       { table: 'deploys', filter: null },
     ];
     expect(REALTIME_LISTENERS.map((l) => l.table)).toEqual(expected.map((l) => l.table));

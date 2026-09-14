@@ -24,6 +24,10 @@ Every change reaches `main` only through the gate. The dispatcher commits your w
 
 Platform cards run the stricter gate: typecheck, the dispatcher, Supabase and site unit tests, the scans, the site build and the Playwright end-to-end suite. A new dispatcher or host version that fails to heartbeat within 60 seconds of deploy auto-reverts.
 
+## Working method
+
+Understand: restate the acceptance test in one line, quoting each `check:` line verbatim. Plan: one short message naming the files you will touch and the verification commands you will run. Implement: the smallest change that makes the acceptance test true. Verify: run the named commands; if any is red, fix it or stop and report why. Report: end with pass or fail against the acceptance test verbatim and the files changed.
+
 ## When to stop
 
 Stop when the card's acceptance test holds and the gate's local checks pass. From the worktree run `pnpm --filter <package> typecheck` and `pnpm --filter <package> test` for each of `@backseat/site`, `@backseat/dispatcher` and `@backseat/supabase` that you touched, and `pnpm --filter @backseat/gate test` when the gate package changed (it has no typecheck script); the site build runs in the gate after the push. When every command exits 0, end the session with one short statement of what changed. Do not make further edits, do not run `git` or `gh`, and do not open network connections; the dispatcher commits, pushes and opens the pull request.

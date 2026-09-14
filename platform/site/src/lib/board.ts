@@ -1,9 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { toNumber } from './format';
 
 // Mirrors the dispatcher default for BOARD_SESSION_TTL_MIN (platform/dispatcher/src/config.ts).
 // The dispatcher judges the session from board_members.last_seen_at with this window; change both together.
 export const BOARD_SESSION_TTL_MIN = 3;
 export const HEARTBEAT_MS = 60_000;
+export const STUDIO_STATE_POLL_MS = 15_000;
+// A dispatcher heartbeat older than this counts as not running.
+export const DISPATCHER_STALE_MS = 3 * 60_000;
 
 export type BoardRole = 'board' | 'moderator';
 
@@ -19,9 +23,41 @@ export type Directive = {
   executor_role_id: string;
 };
 
+export type NextCardStage = 'proposed' | 'voted';
+
+export type NextCard = {
+  bucket: string;
+  lane: string;
+  folder: string;
+  title: string;
+  intent: string;
+  acceptance_test: string;
+  funding_target_usd: number;
+  stage: NextCardStage;
+  executor_role_id: string;
+  board_reason: string;
+};
+
+export type BoardStudioState = {
+  paused: boolean;
+  paused_by: string | null;
+  paused_at: string | null;
+  agent_mode: string;
+  launched_at: string | null;
+  dispatcher_seen_at: string | null;
+  daily_cap_usd: number;
+  card_max_usd: number;
+};
+
 export const buckets = ['game', 'platform', 'qa', 'studio', 'budget', 'agents'] as const;
 export const lanes = ['config', 'code'] as const;
 export const folders = ['seed-1', 'platform'] as const;
+export const cardStages = [
+  { value: 'proposed', label: 'Open' },
+  { value: 'voted', label: 'Decided' },
+] as const satisfies readonly { value: NextCardStage; label: string }[];
+export const agentModes = ['attended', 'unattended'] as const;
+export type AgentMode = (typeof agentModes)[number];
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T | null {
   if (result.error) throw new Error(result.error.message);
@@ -72,10 +108,84 @@ export async function fileDirective(client: SupabaseClient, d: Directive): Promi
   return id;
 }
 
+export async function fileCard(client: SupabaseClient, card: NextCard): Promise<string> {
+  const id = unwrap<string>(
+    await client.rpc('file_card', {
+      p_bucket: card.bucket,
+      p_lane: card.lane,
+      p_folder: card.folder,
+      p_title: card.title,
+      p_intent: card.intent,
+      p_acceptance_test: card.acceptance_test,
+      p_funding_target_usd: card.funding_target_usd,
+      p_stage: card.stage,
+      p_executor_role_id: card.executor_role_id,
+      p_board_reason: card.board_reason,
+    }),
+  );
+  if (id === null) throw new Error('file_card returned no card id');
+  return id;
+}
+
 export async function fileNote(client: SupabaseClient, text: string): Promise<string> {
   const id = unwrap<string>(await client.rpc('file_note', { p_text: text }));
   if (id === null) throw new Error('file_note returned no note id');
   return id;
+}
+
+function textOrNull(row: Record<string, unknown>, key: string): string | null {
+  const value = row[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function amount(row: Record<string, unknown>, key: string): number {
+  const value = row[key];
+  const n = typeof value === 'number' || typeof value === 'string' ? toNumber(value) : null;
+  if (n === null) throw new Error(`board_studio_state returned no ${key}`);
+  return n;
+}
+
+export function studioStateFrom(raw: unknown): BoardStudioState {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('board_studio_state returned no state');
+  }
+  const row = raw as Record<string, unknown>;
+  return {
+    paused: row.paused === true,
+    paused_by: textOrNull(row, 'paused_by'),
+    paused_at: textOrNull(row, 'paused_at'),
+    agent_mode: textOrNull(row, 'agent_mode') ?? '',
+    launched_at: textOrNull(row, 'launched_at'),
+    dispatcher_seen_at: textOrNull(row, 'dispatcher_seen_at'),
+    daily_cap_usd: amount(row, 'daily_cap_usd'),
+    card_max_usd: amount(row, 'card_max_usd'),
+  };
+}
+
+export async function boardStudioState(client: SupabaseClient): Promise<BoardStudioState> {
+  return studioStateFrom(unwrap<unknown>(await client.rpc('board_studio_state')));
+}
+
+export async function setLaunched(client: SupabaseClient): Promise<Date> {
+  const at = unwrap<string>(await client.rpc('set_launched'));
+  const date = at === null ? null : new Date(at);
+  if (date === null || !Number.isFinite(date.getTime())) {
+    throw new Error('set_launched returned no timestamp');
+  }
+  return date;
+}
+
+export async function setAgentMode(client: SupabaseClient, mode: AgentMode): Promise<void> {
+  unwrap(await client.rpc('set_agent_mode', { p_mode: mode }));
+}
+
+/** The dispatcher counts as running while its last heartbeat is within DISPATCHER_STALE_MS. */
+export function dispatcherSeenAgoMs(seenAt: string | null, now: Date): number | null {
+  if (seenAt === null) return null;
+  const seen = new Date(seenAt);
+  if (!Number.isFinite(seen.getTime())) return null;
+  const ago = now.getTime() - seen.getTime();
+  return ago > DISPATCHER_STALE_MS ? null : Math.max(0, ago);
 }
 
 export function sessionExpiry(lastSeen: Date): Date {

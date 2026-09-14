@@ -31,6 +31,7 @@ export function card(overrides: Partial<Card> = {}): Card {
     title: 'spawn table row gatherer: baseCost changes from 10 to 11',
     intent: 'Raise the gatherer base cost by one.',
     acceptance_test: 'check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11',
+    design_spec_url: null,
     estimate_usd: 2,
     actual_usd: 0,
     severity: null,
@@ -79,9 +80,15 @@ export class FakeDb implements Db {
   deploys: Deploy[] = [];
   claims = 0;
   pausedBy: string | null = null;
+  heartbeats: Date[] = [];
+  heartbeatError: Error | null = null;
 
   async getStudioState() {
     return { ...this.studio };
+  }
+  async dispatcherHeartbeat(now: Date) {
+    if (this.heartbeatError) throw this.heartbeatError;
+    this.heartbeats.push(now);
   }
   async getPool() {
     return { ...this.pool };
@@ -116,7 +123,7 @@ export class FakeDb implements Db {
     this.ledger.push({ id, ...input });
     this.pool.balance_usd = round4(this.pool.balance_usd - input.usd);
     this.pool.daily_spent_usd = round4(this.pool.daily_spent_usd + input.usd);
-    const found = this.cards.find((c) => c.id === input.card_id);
+    const found = input.card_id === null ? undefined : this.cards.find((c) => c.id === input.card_id);
     if (found) found.actual_usd = round4(found.actual_usd + input.usd);
     return { ledger_id: id, balance_usd: this.pool.balance_usd, daily_spent_usd: this.pool.daily_spent_usd, actual_usd: found?.actual_usd ?? 0 };
   }

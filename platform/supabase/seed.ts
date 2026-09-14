@@ -1,4 +1,6 @@
-// Week-1 seed. Idempotent; service role; reads .env at the repo root.
+// Seed: roles, studio_state, pool, stream_state and board_members. Idempotent;
+// service role; reads .env at the repo root. Next cards are filed separately
+// by scripts/file-next-cards.ts.
 //   pnpm --filter @backseat/supabase seed
 //   pnpm --filter @backseat/supabase seed -- --week1-test [--run 1|2|3]
 
@@ -9,7 +11,7 @@ import { parseBoardMembers, requireEnv, requireUsd, todayInNewYork, type Env } f
 import { readRoleSpecs } from "./lib/role-files.js";
 import { resolveModel } from "./lib/roles.js";
 import { parseSeedArgs, UsageError } from "./lib/seed-args.js";
-import { GOAL_CARDS, week1Card, WEEK1_EXECUTOR_ROLE, WEEK1_POOL_BALANCE_USD, type Week1Run } from "./lib/week1.js";
+import { week1Card, WEEK1_EXECUTOR_ROLE, WEEK1_POOL_BALANCE_USD, type Week1Run } from "./lib/week1.js";
 
 const AGENTS_DIR = resolve(REPO_ROOT, "platform", "agents");
 /** A week-1 card in one of these stages is still in flight or shipped; a rejected or paused one is superseded by a fresh insert. */
@@ -72,20 +74,6 @@ async function seedBoardMembers(db: SupabaseClient, env: Env): Promise<void> {
   console.log(`board_members: ${members.map((m) => `${m.email} (${m.role})`).join(", ")}`);
 }
 
-async function seedGoalCards(db: SupabaseClient): Promise<void> {
-  const titles = GOAL_CARDS.map((c) => c.title);
-  const existing = check(
-    "goal cards read",
-    await db.from("cards").select("title").eq("shape", "goal").in("title", titles).returns<{ title: string }[]>(),
-  );
-  const present = new Set(existing.map((c) => c.title));
-  const missing = GOAL_CARDS.filter((c) => !present.has(c.title));
-  if (missing.length > 0) {
-    check("goal cards insert", await db.from("cards").insert(missing));
-  }
-  console.log(`goal cards: ${missing.length} inserted, ${present.size} already present`);
-}
-
 async function topUpBalance(db: SupabaseClient): Promise<void> {
   const pool = check("pool read", await db.from("pool").select("balance_usd").eq("id", 1).single<{ balance_usd: string }>());
   const balance = Number(pool.balance_usd);
@@ -143,7 +131,6 @@ async function main(): Promise<void> {
   await seedPool(db);
   await seedStreamState(db);
   await seedBoardMembers(db, env);
-  await seedGoalCards(db);
 
   if (options.week1Test) {
     await topUpBalance(db);

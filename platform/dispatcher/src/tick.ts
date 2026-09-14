@@ -1,5 +1,6 @@
-// The Appendix A loop, one tick: read studio_state, check the board session, read the pool,
-// apply the throttle, select the card, claim it, and start its pipeline in the background.
+// The Appendix A loop, one tick: write the heartbeat, read studio_state, check the board
+// session, read the pool, apply the throttle, select the card, claim it, and start its pipeline
+// in the background.
 import type { AgentMode } from './adapters/types.js';
 import type { Card, Db } from './db.js';
 import { errorMessage, type Logger } from './log.js';
@@ -23,6 +24,7 @@ export type TickOutcome =
   | { action: 'claim_lost'; cardId: string };
 
 export async function tick(deps: TickDeps): Promise<TickOutcome> {
+  await heartbeat(deps);
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
   if (studio.agent_mode !== deps.mode) {
@@ -53,6 +55,16 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   if (!claimed) return { action: 'claim_lost', cardId: card.id };
   startCard(deps, claimed);
   return { action: 'started', cardId: claimed.id };
+}
+
+// The heartbeat is a liveness signal for /board, not a precondition: a failed write is logged
+// and the tick goes on.
+async function heartbeat(deps: TickDeps): Promise<void> {
+  try {
+    await deps.db.dispatcherHeartbeat(deps.now());
+  } catch (error) {
+    deps.log.warn('tick', 'heartbeat write failed', { error: errorMessage(error) });
+  }
 }
 
 async function checkBoardSession(deps: TickDeps): Promise<boolean> {

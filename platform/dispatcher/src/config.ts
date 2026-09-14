@@ -26,6 +26,9 @@ export interface DispatcherConfig {
   schedulerEnabled: boolean;
   claudeBin: string;
   boardSessionTtlMin: number;
+  // The studio organisation's key for unattended sessions; null in attended mode, where the
+  // value is ignored. Never the founder's ANTHROPIC_API_KEY, which the dispatcher does not read.
+  studioAnthropicApiKey: string | null;
 }
 
 export class ConfigError extends Error {
@@ -69,15 +72,28 @@ export function agentModeEnv(env: Env): AgentMode {
 }
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const STUDIO_KEY = 'STUDIO_ANTHROPIC_API_KEY';
+const FOUNDER_KEY = 'ANTHROPIC_API_KEY';
+
+// Required in unattended mode, null in attended mode. A studio key equal to the founder's key
+// is refused in either mode: the whole point of the second name is that they differ.
+export function studioApiKeyEnv(env: Env, mode: AgentMode): string | null {
+  const studio = env[STUDIO_KEY]?.trim();
+  const founder = env[FOUNDER_KEY]?.trim();
+  if (studio && founder && studio === founder) throw new ConfigError(`${STUDIO_KEY} must differ from ${FOUNDER_KEY}`);
+  if (mode !== 'unattended') return null;
+  return requireEnv(env, STUDIO_KEY);
+}
 
 export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
   const scheduler = optionalEnv(env, 'DISPATCHER_SCHEDULER', 'on');
   if (scheduler !== 'on' && scheduler !== 'off') throw new ConfigError('DISPATCHER_SCHEDULER must be on or off');
+  const agentMode = agentModeEnv(env);
   return {
     repoRoot,
-    agentMode: agentModeEnv(env),
+    agentMode,
     supabaseUrl: requireEnv(env, 'SUPABASE_URL'),
     supabaseServiceRoleKey: requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     githubToken: requireEnv(env, 'GITHUB_TOKEN'),
@@ -97,5 +113,6 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
     schedulerEnabled: scheduler === 'on',
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
     boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
+    studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),
   };
 }
