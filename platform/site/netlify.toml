@@ -9,6 +9,8 @@
   # Public values only. Secrets never go here.
   VITE_STRIPE_PAYMENT_LINK_URL = "https://buy.stripe.com/dRm28s4ie0zp6BU0qEafS01"
   VITE_DISCORD_INVITE = "https://discord.gg/rwkbWhMk8r"
+  VITE_SUPABASE_URL = "https://lyxndueoeisyqzewflpu.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_-i-BKWMS4TmEfSldTE9b7g_UMBRV2wh"
 
 [[redirects]]
   from = "/*"
