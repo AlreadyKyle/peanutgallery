@@ -9,13 +9,22 @@ export type Pool = {
   day: string;
 };
 
-export type GoalCard = {
+export type Card = {
   id: string;
   title: string;
+  intent: string | null;
+  source: string;
   stage: string;
+  shape: string;
   funding_target_usd: number;
   funded_usd: number;
+  actual_usd: number;
   created_at: string;
+};
+
+export type CardFunding = {
+  contributors: number;
+  credited_usd: number;
 };
 
 export type LedgerTotals = {
@@ -52,7 +61,9 @@ export type Role = {
 
 export type Snapshot = {
   pool: Pool | null;
-  goals: GoalCard[];
+  cards: Card[];
+  funding: Record<string, CardFunding>;
+  launchedAt: string | null;
   totals: LedgerTotals;
   events: AgentEvent[];
   deploys: Deploy[];
@@ -73,13 +84,27 @@ type PoolRow = {
   day: string;
 };
 
-type GoalRow = {
+type CardRow = {
   id: string;
   title: string;
+  intent: string | null;
+  source: string;
   stage: string;
+  shape: string;
   funding_target_usd: Numeric;
   funded_usd: Numeric;
+  actual_usd: Numeric;
   created_at: string;
+};
+
+type FundingRow = {
+  card_id: string;
+  contributors: Numeric;
+  credited_usd: Numeric;
+};
+
+type StudioRow = {
+  launched_at: string | null;
 };
 
 type TitleRow = {
@@ -97,9 +122,11 @@ type TotalsRow = {
 
 export const EVENT_LIMIT = 20;
 export const DEPLOY_LIMIT = 10;
+/** The stages the site lists: Now (building, gated) and Next (the rest). */
+export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated'] as const;
 export const REALTIME_LISTENERS = [
   { table: 'pool' },
-  { table: 'cards', filter: 'shape=eq.goal' },
+  { table: 'cards' },
   { table: 'deploys' },
 ] as const;
 
@@ -135,15 +162,30 @@ function poolFrom(row: PoolRow | null): Pool | null {
   };
 }
 
-function goalFrom(row: GoalRow): GoalCard {
+function cardFrom(row: CardRow): Card {
   return {
     id: row.id,
     title: row.title,
+    intent: row.intent,
+    source: row.source,
     stage: row.stage,
+    shape: row.shape,
     funding_target_usd: money(row.funding_target_usd),
     funded_usd: money(row.funded_usd),
+    actual_usd: money(row.actual_usd),
     created_at: row.created_at,
   };
+}
+
+function fundingFrom(rows: FundingRow[]): Record<string, CardFunding> {
+  const funding: Record<string, CardFunding> = {};
+  for (const row of rows) {
+    funding[row.card_id] = {
+      contributors: money(row.contributors),
+      credited_usd: money(row.credited_usd),
+    };
+  }
+  return funding;
 }
 
 function totalsFrom(row: TotalsRow | null): LedgerTotals {
@@ -179,7 +221,7 @@ async function loadCardTitles(
 export function createSupabaseSource(client: SupabaseClient): StudioSource {
   return {
     async load() {
-      const [pool, goals, totals, events, deploys, roles] = await Promise.all([
+      const [pool, cards, funding, studio, totals, events, deploys, roles] = await Promise.all([
         client
           .from('pool')
           .select('balance_usd,reserve_usd,incident_reserve_usd,daily_spent_usd,day')
@@ -187,10 +229,17 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
           .maybeSingle<PoolRow>(),
         client
           .from('cards')
-          .select('id,title,stage,funding_target_usd,funded_usd,created_at')
-          .eq('shape', 'goal')
+          .select(
+            'id,title,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+          )
+          .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })
-          .returns<GoalRow[]>(),
+          .returns<CardRow[]>(),
+        client
+          .from('public_card_funding')
+          .select('card_id,contributors,credited_usd')
+          .returns<FundingRow[]>(),
+        client.from('public_studio').select('launched_at').maybeSingle<StudioRow>(),
         client.from('public_ledger_totals').select('*').maybeSingle<TotalsRow>(),
         client
           .from('public_agent_events')
@@ -214,7 +263,9 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
       const eventRows = unwrap(events) ?? [];
       return {
         pool: poolFrom(unwrap(pool)),
-        goals: (unwrap(goals) ?? []).map(goalFrom),
+        cards: (unwrap(cards) ?? []).map(cardFrom),
+        funding: fundingFrom(unwrap(funding) ?? []),
+        launchedAt: unwrap(studio)?.launched_at ?? null,
         totals: totalsFrom(unwrap(totals)),
         events: eventRows,
         deploys: unwrap(deploys) ?? [],

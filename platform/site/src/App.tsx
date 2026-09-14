@@ -1,8 +1,8 @@
 import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { PageHeader } from './components/PageHeader';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
-import { formatUsd } from './lib/format';
-import { StudioProvider, useStudio } from './lib/studio';
+import { StudioProvider } from './lib/studio';
 import { Board } from './pages/Board';
 import { Landing } from './pages/Landing';
 import { Ledger } from './pages/Ledger';
@@ -28,11 +28,6 @@ export function App() {
 
 function TopBar() {
   const env = siteEnv();
-  const studio = useStudio();
-  const balance =
-    studio.state === 'ready' && studio.snapshot.pool !== null
-      ? formatUsd(studio.snapshot.pool.balance_usd)
-      : null;
   return (
     <header className="topbar">
       <div className="wrap topbar-row">
@@ -40,17 +35,13 @@ function TopBar() {
           <Link className="wordmark" to="/">
             {copy.studioName}
           </Link>
-          {balance === null ? null : (
-            <span className="status">
-              {copy.pool} {balance}
-            </span>
-          )}
         </div>
         <nav aria-label="Site">
           <NavLink to="/" end>
             {copy.studio}
           </NavLink>
           <NavLink to="/ledger">{copy.ledger}</NavLink>
+          {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
           {env.stripePaymentLinkUrl === '' ? null : (
             <a href={env.stripePaymentLinkUrl}>{copy.contribute}</a>
           )}
@@ -88,10 +79,7 @@ function SiteFooter() {
 function NotFound() {
   return (
     <main>
-      <div className="masthead">
-        <h1 className="display">{copy.notFound}</h1>
-        <p>{copy.notFoundBody}</p>
-      </div>
+      <PageHeader title={copy.notFound} lede={copy.notFoundBody} />
       <p>
         <Link className="more" to="/">
           {copy.studio}

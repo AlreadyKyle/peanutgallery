@@ -1,7 +1,7 @@
 export const copy = {
   studioName: 'Peanut Gallery',
   pitch:
-    'Watch AI agents build a free game. Vote on what they do next. See it ship on stream within minutes.',
+    'Watch AI agents build a game studio and free games. Vote on what they do next by contributing to their compute.',
   contribute: 'Contribute',
   contributeUnavailable: 'Contributions are not open yet.',
   split:
@@ -9,8 +9,6 @@ export const copy = {
   meterUnavailable: 'Live figures are not available yet.',
   ledgerEmpty: 'No agent work recorded yet.',
   deploysEmpty: 'No deploys yet.',
-  goalsEmpty: 'Funding goals appear here once they are set.',
-  poolTotal: 'These three goals fund the first three weeks of building.',
   preLaunch:
     'Contribute before launch and you get a founding badge and first pick when player decisions open.',
   artPolicy:
@@ -33,8 +31,8 @@ export const copy = {
   createdByUrl: 'https://clayhouse.studio',
   studio: 'Studio',
   ledger: 'Ledger',
+  play: 'Play',
   meter: 'Funding',
-  build: 'Goals',
   policies: 'Fixed rules',
   pool: 'Pool',
   agentWork: 'Agent work',
@@ -50,10 +48,46 @@ export const copy = {
   footer: 'Free games, playable in a browser. Built by AI agents, directed by the players.',
   loadingFigures: 'Loading live figures.',
   loadingLedger: 'Loading the ledger.',
-  loadingGoals: 'Loading the goals.',
   loadingDeploys: 'Loading deploys.',
   deployGreen: 'green',
   deployNotGreen: 'not green',
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
+  notLiveYet: 'The studio is not live yet. Contributions made now count as founding contributions.',
+  liveSince: 'Live since',
+  howItWorks: 'How it works',
+  steps: [
+    'Choose an amount. At checkout you set how it splits between the agents and the studio.',
+    'Within a minute it shows on the meter: 10% held in reserve, the rest split the way you chose.',
+    'Fund a card under Next to vote for it. When its bar fills, the agents build it. Money with no card funds whatever is next in line.',
+    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live in the game, and the card shows how many people funded it.',
+  ],
+  now: 'Now',
+  next: 'Next',
+  nowEmpty: 'Nothing is building. The agents start on the next funded card.',
+  nextEmpty: 'Nothing is queued yet.',
+  loadingCards: 'Loading the cards.',
+  statusBuilding: 'Building',
+  statusGated: 'In the gate',
+  statusDecided: 'Decided',
+  statusOpen: 'Open',
+  spentSoFar: 'spent so far',
+  fundThis: 'Fund this',
+  contributorsOne: '1 contributor',
+  contributorsMany: '{n} contributors',
+  sources: { board: 'Board', community: 'Community', agent: 'Agent', decision: 'Player decision' },
+  about: 'About',
+  infoAvailable: 'Money the agents can spend now. Every turn is priced at list rates and deducted here.',
+  infoReserve:
+    '10% of every contribution, held back to cover card disputes and refunds. It is never spent on agents.',
+  infoIncidentReserve:
+    "5% of the agents' share of each contribution, up to $500, spent only on urgent bug fixes that cannot wait for a vote.",
+  infoAgentSpend: 'Everything the agents have spent on model usage, priced at list rates.',
+  infoCachedTokens: 'Input the model reused from earlier turns at a lower price.',
+  infoDecided: 'Picked by the board or a vote. It builds once its bar is full.',
+  infoOpen: 'Being voted on. It builds if enough people fund it.',
+  infoBar:
+    'The bar counts what reaches the agents: your contribution after the card fee, the 10% reserve, your studio share and the emergency set-aside. At the default split, $5 moves it about $3.10.',
+  ledgerLede:
+    'Every contribution in, every agent turn spent and every deploy, as it happens. Nothing here is edited by hand.',
 } as const;

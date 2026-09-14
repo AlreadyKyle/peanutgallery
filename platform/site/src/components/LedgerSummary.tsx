@@ -2,6 +2,7 @@ import { copy } from '../lib/copy';
 import { formatInteger, formatUsd } from '../lib/format';
 import type { StudioState } from '../lib/studio';
 import { EventList } from './EventList';
+import { Info } from './Info';
 
 export function LedgerSummary({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
@@ -15,7 +16,9 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
     <>
       <dl className="figures figures-small">
         <div className="figure">
-          <dt>{copy.agentSpend}</dt>
+          <dt>
+            {copy.agentSpend} <Info term={copy.agentSpend} text={copy.infoAgentSpend} />
+          </dt>
           <dd>{formatUsd(totals.usd_total)}</dd>
         </div>
         <div className="figure">
@@ -23,7 +26,9 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
           <dd>{formatInteger(totals.input_tokens)}</dd>
         </div>
         <div className="figure">
-          <dt>{copy.cachedTokens}</dt>
+          <dt>
+            {copy.cachedTokens} <Info term={copy.cachedTokens} text={copy.infoCachedTokens} />
+          </dt>
           <dd>{formatInteger(totals.cached_tokens)}</dd>
         </div>
         <div className="figure">

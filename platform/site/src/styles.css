@@ -205,16 +205,6 @@ code {
   white-space: nowrap;
 }
 
-.status {
-  font-size: var(--step--1);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 nav {
   display: flex;
   flex-wrap: wrap;
@@ -262,6 +252,12 @@ nav a.active {
   margin-bottom: var(--space-2);
 }
 
+/* One sentence under a page title. */
+.lede {
+  font-size: var(--step-1);
+  margin: var(--space-2) 0 0;
+}
+
 .rules {
   list-style: disc outside;
   margin: 0 0 var(--space-2);
@@ -271,6 +267,24 @@ nav a.active {
 
 .rules li {
   margin-bottom: 0.4em;
+}
+
+/* How it works: a numbered list with heavy italic numerals. */
+.steps {
+  list-style: decimal outside;
+  margin: 0 0 var(--space-2);
+  padding-left: 1.6em;
+  max-width: var(--measure);
+}
+
+.steps li {
+  margin-bottom: var(--space-2);
+  padding-left: 0.3em;
+}
+
+.steps li::marker {
+  font-weight: var(--weight-display);
+  font-style: italic;
 }
 
 .lead {
@@ -316,6 +330,7 @@ nav a.active {
 }
 
 .figure {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -354,7 +369,69 @@ nav a.active {
   font-weight: var(--weight-bold);
 }
 
-/* Goal bars: thin outlined track, near-black fill, amount beside -------- */
+/* Info: a round "i" button and the tooltip it opens ---------------------- */
+
+/* The wrapper is not positioned: the tooltip anchors to the nearest positioned
+   ancestor (.figure, .card-meta, .card-track) and spans its width, so it never
+   runs past the viewport. */
+.info {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.info .info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: var(--rule);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--step--1);
+  font-weight: var(--weight-bold);
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.info .info-button:hover,
+.info .info-button:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.tooltip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + var(--space-1));
+  z-index: 1;
+  display: block;
+  padding: var(--space-1) var(--space-2);
+  border: var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--step--1);
+  font-weight: var(--weight-body);
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: var(--leading-body);
+  text-align: left;
+}
+
+.tooltip[hidden] {
+  display: none;
+}
+
+/* Cards: Now and Next, one column, a rule between each --------------------- */
 
 ul {
   list-style: none;
@@ -362,26 +439,69 @@ ul {
   padding: 0;
 }
 
-.goals {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-3);
+.cards {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-2);
 }
 
-.goal {
-  min-width: 0;
+.card {
+  padding-block: var(--space-3);
+  border-top: var(--rule);
 }
 
-.goal-title {
+.card:last-child {
+  border-bottom: var(--rule);
+}
+
+.card > :last-child {
+  margin-bottom: 0;
+}
+
+.card-title {
   margin-bottom: var(--space-1);
 }
 
-.goal-track {
+.card-meta {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--step--1);
+}
+
+.tag,
+.card-status {
+  font-weight: var(--weight-bold);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  line-height: 1.2;
+}
+
+.tag {
+  padding: 0.1em 0.4em;
+  border: var(--rule);
+}
+
+.card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.card-intent {
+  margin-bottom: var(--space-2);
+}
+
+.card-track {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .bar {
@@ -398,7 +518,7 @@ ul {
   background: var(--accent);
 }
 
-.goal-amount {
+.card-amount {
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -505,6 +625,27 @@ label {
   font-weight: var(--weight-bold);
 }
 
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+  font-weight: var(--weight-bold);
+}
+
+/* A radio or checkbox with its text beside it. */
+label.choice {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: var(--weight-body);
+}
+
 input,
 select,
 textarea,
@@ -523,6 +664,13 @@ textarea {
   background: var(--paper);
   color: var(--ink);
   font-weight: var(--weight-body);
+}
+
+input[type='radio'] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--ink);
 }
 
 button {
@@ -574,8 +722,7 @@ button.link {
 
 @media (max-width: 47.99rem) {
   .figures,
-  .figures-small,
-  .goals {
+  .figures-small {
     grid-template-columns: minmax(0, 1fr);
   }
 

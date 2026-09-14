@@ -14,7 +14,9 @@ const snapshot: Snapshot = {
     daily_spent_usd: 0,
     day: '2026-09-14',
   },
-  goals: [],
+  cards: [],
+  funding: {},
+  launchedAt: null,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [],
   deploys: [],
@@ -39,6 +41,7 @@ function nav(): HTMLElement {
 beforeEach(() => {
   vi.stubEnv('VITE_DISCORD_INVITE', '');
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
+  vi.stubEnv('VITE_PLAY_URL', '');
 });
 
 afterEach(() => {
@@ -52,9 +55,10 @@ describe('App routes', () => {
     expect(screen.getByRole('heading', { level: 1, name: copy.studioName })).toBeTruthy();
   });
 
-  it('renders the ledger page', () => {
+  it('renders the ledger page with its lede', () => {
     renderAt('/ledger');
     expect(screen.getByRole('heading', { level: 1, name: 'Ledger' })).toBeTruthy();
+    expect(screen.getByText(copy.ledgerLede)).toBeTruthy();
   });
 
   it('reports an unknown address with a link back to the studio page', () => {
@@ -111,14 +115,18 @@ describe('Site chrome', () => {
     expect(screen.queryByRole('link', { name: 'Board' })).toBeNull();
   });
 
-  it('shows the pool balance in the top bar once figures load and nothing before', async () => {
-    renderAt('/', { load: () => Promise.resolve(snapshot), subscribe: () => () => {} });
-    expect(screen.queryByText(`${copy.pool} $48.56`)).toBeNull();
-    await waitFor(() => expect(screen.getByText(`${copy.pool} $48.56`)).toBeTruthy());
-    expect(screen.getByText('$48.56')).toBeTruthy();
+  it('links Play in the nav only when the play URL is set', () => {
+    renderAt('/');
+    expect(screen.queryByRole('link', { name: copy.play })).toBeNull();
+    cleanup();
+    vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
+    renderAt('/');
+    expect(within(nav()).getByRole('link', { name: copy.play }).getAttribute('href')).toBe(
+      'https://play.example',
+    );
   });
 
-  it('loads the snapshot once for the top bar and the page together', async () => {
+  it('loads the snapshot once for the whole page tree', async () => {
     let loads = 0;
     renderAt('/', {
       load: () => {
@@ -127,13 +135,13 @@ describe('Site chrome', () => {
       },
       subscribe: () => () => {},
     });
-    await waitFor(() => expect(screen.getByText(`${copy.pool} $48.56`)).toBeTruthy());
-    expect(screen.getByText('$48.56')).toBeTruthy();
+    // The StudioProvider loads once; the meter and every card read the shared snapshot.
+    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
     expect(loads).toBe(1);
   });
 
-  it('shows no pool status without a database', () => {
-    renderAt('/');
-    expect(screen.queryByText(new RegExp(`^${copy.pool} `))).toBeNull();
+  it('shows no pool figure in the top bar', () => {
+    renderAt('/', { load: () => Promise.resolve(snapshot), subscribe: () => () => {} });
+    expect(within(screen.getByRole('banner')).queryByText('$48.56')).toBeNull();
   });
 });

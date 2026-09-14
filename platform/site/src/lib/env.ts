@@ -3,6 +3,7 @@ export type SiteEnv = {
   supabaseAnonKey: string;
   stripePaymentLinkUrl: string;
   discordInvite: string;
+  playUrl: string;
 };
 
 function read(value: string | null = null): string {
@@ -16,5 +17,6 @@ export function siteEnv(): SiteEnv {
     supabaseAnonKey: read(env.VITE_SUPABASE_ANON_KEY),
     stripePaymentLinkUrl: read(env.VITE_STRIPE_PAYMENT_LINK_URL),
     discordInvite: read(env.VITE_DISCORD_INVITE),
+    playUrl: read(env.VITE_PLAY_URL),
   };
 }

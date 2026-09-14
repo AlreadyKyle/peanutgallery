@@ -19,7 +19,9 @@ const snapshot: Snapshot = {
     daily_spent_usd: 0,
     day: '2026-09-14',
   },
-  goals: [],
+  cards: [],
+  funding: {},
+  launchedAt: null,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [
     { id: 'e1', card_id: cardId, role_id: builderId, type: 'start', created_at: '2026-09-14T01:00:00Z' },

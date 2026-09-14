@@ -1,6 +1,7 @@
 import { copy } from '../lib/copy';
 import { formatUsd } from '../lib/format';
 import type { StudioState } from '../lib/studio';
+import { Info } from './Info';
 
 export function Meter({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
@@ -13,15 +14,22 @@ export function Meter({ studio }: { studio: StudioState }) {
   return (
     <dl className="figures">
       <div className="figure">
-        <dt>{copy.poolBalance}</dt>
+        <dt>
+          {copy.poolBalance} <Info term={copy.poolBalance} text={copy.infoAvailable} />
+        </dt>
         <dd>{formatUsd(pool.balance_usd)}</dd>
       </div>
       <div className="figure">
-        <dt>{copy.reserve}</dt>
+        <dt>
+          {copy.reserve} <Info term={copy.reserve} text={copy.infoReserve} />
+        </dt>
         <dd>{formatUsd(pool.reserve_usd)}</dd>
       </div>
       <div className="figure">
-        <dt>{copy.incidentReserve}</dt>
+        <dt>
+          {copy.incidentReserve}{' '}
+          <Info term={copy.incidentReserve} text={copy.infoIncidentReserve} />
+        </dt>
         <dd>{formatUsd(pool.incident_reserve_usd)}</dd>
       </div>
     </dl>
