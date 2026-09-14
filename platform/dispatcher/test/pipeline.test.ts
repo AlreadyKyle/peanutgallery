@@ -114,7 +114,7 @@ const platformCard = () => card({ folder: 'platform', lane: 'code', acceptance_t
 
 const editSite: FakeScript = async (spec, emit) => {
   await emit(startEvent());
-  await writeFile(path.join(spec.worktree, 'platform', 'site', 'index.html'), '<title>Untitled Game Studio</title>\n', 'utf8');
+  await writeFile(path.join(spec.worktree, 'platform', 'site', 'index.html'), '<title>Peanut Gallery</title>\n', 'utf8');
   await emit(usageEvent(1, 100));
 };
 

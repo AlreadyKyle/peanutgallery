@@ -5,7 +5,7 @@ import { EventList } from './EventList';
 
 export function LedgerSummary({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
-    return <p>Loading the ledger.</p>;
+    return <p>{copy.loadingLedger}</p>;
   }
   if (studio.state !== 'ready') {
     return <p>{copy.meterUnavailable}</p>;
@@ -13,21 +13,21 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
   const { totals } = studio.snapshot;
   return (
     <>
-      <dl className="totals">
-        <div>
-          <dt>Agent spend</dt>
+      <dl className="figures figures-small">
+        <div className="figure">
+          <dt>{copy.agentSpend}</dt>
           <dd>{formatUsd(totals.usd_total)}</dd>
         </div>
-        <div>
-          <dt>Input tokens</dt>
+        <div className="figure">
+          <dt>{copy.inputTokens}</dt>
           <dd>{formatInteger(totals.input_tokens)}</dd>
         </div>
-        <div>
-          <dt>Cached tokens</dt>
+        <div className="figure">
+          <dt>{copy.cachedTokens}</dt>
           <dd>{formatInteger(totals.cached_tokens)}</dd>
         </div>
-        <div>
-          <dt>Output tokens</dt>
+        <div className="figure">
+          <dt>{copy.outputTokens}</dt>
           <dd>{formatInteger(totals.output_tokens)}</dd>
         </div>
       </dl>

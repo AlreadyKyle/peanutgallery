@@ -8,4 +8,4 @@ This is a monorepo: `platform/` (site, dispatcher, host, agents, gate, ops) and 
 
 Rules that never change (the kernel, §4): the ledger, spend caps, the default 80/20 split and 10% reserve, the incident reserve, the gate, rollback, the content filter and all-ages rating, the art policy, the broadcast delay and kill switch, and the read/write separation. No agent with write access reads free text from the public.
 
-Nothing in this repo references the founder's other companies or projects.
+Nothing in this repo references the founder's other companies or projects, with one exception: the public site's footer carries a single "Created by Clayhouse" credit linking to clayhouse.studio.

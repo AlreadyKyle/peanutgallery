@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import type { Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -56,7 +57,9 @@ function fakeSource(): StudioSource {
 function renderLanding(source: StudioSource | null) {
   return render(
     <SourceProvider source={source}>
-      <Landing />
+      <MemoryRouter>
+        <Landing />
+      </MemoryRouter>
     </SourceProvider>,
   );
 }
@@ -78,7 +81,6 @@ describe('Landing', () => {
     renderLanding(fakeSource());
 
     expect(screen.getByRole('heading', { level: 1, name: copy.studioName })).toBeTruthy();
-    expect(screen.getByText(copy.pitch)).toBeTruthy();
     expect(screen.getByText(copy.launchDefault)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe(
       'https://buy.stripe.com/test-link',
@@ -89,7 +91,10 @@ describe('Landing', () => {
     expect(screen.getByText(copy.artPolicy)).toBeTruthy();
     expect(screen.getByText(copy.allAges)).toBeTruthy();
     expect(screen.getByText(copy.kernel)).toBeTruthy();
-    expect(screen.getByText(copy.footer)).toBeTruthy();
+    expect(
+      screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
+    ).toEqual([copy.meter, copy.ledger, copy.build, copy.policies]);
+    expect(screen.getByRole('link', { name: copy.fullLedger }).getAttribute('href')).toBe('/ledger');
 
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
     expect(screen.getByText('$7.10')).toBeTruthy();
@@ -106,19 +111,9 @@ describe('Landing', () => {
     ]);
     expect(bars[0]?.getAttribute('aria-valuenow')).toBe('25');
     expect(screen.getByText('$25.00 of $100.00')).toBeTruthy();
-  });
-
-  it('omits the Discord link when the invite is unset', () => {
-    renderLanding(fakeSource());
-    expect(screen.queryByRole('link', { name: copy.discord })).toBeNull();
-  });
-
-  it('shows the Discord link when the invite is set', () => {
-    vi.stubEnv('VITE_DISCORD_INVITE', 'https://discord.gg/invite-code');
-    renderLanding(fakeSource());
-    expect(screen.getByRole('link', { name: copy.discord }).getAttribute('href')).toBe(
-      'https://discord.gg/invite-code',
-    );
+    expect(
+      screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual(['Week 1: the loop', 'Week 2: the show', 'Week 3: money and public']);
   });
 
   it('shows the unavailable line and no figures without a database', () => {

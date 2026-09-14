@@ -8,21 +8,23 @@ export function Ledger() {
   const studio = useStudio();
   return (
     <main>
-      <h1>Ledger</h1>
-      <section aria-label="Pool">
-        <h2>Pool</h2>
+      <div className="masthead">
+        <h1 className="display">{copy.ledger}</h1>
+      </div>
+      <section className="section" aria-label="Pool">
+        <h2 className="label">{copy.pool}</h2>
         <Meter studio={studio} />
       </section>
-      <section aria-label="Agent work">
-        <h2>Agent work</h2>
+      <section className="section" aria-label="Agent work">
+        <h2 className="label">{copy.agentWork}</h2>
         <LedgerSummary studio={studio} />
       </section>
-      <section aria-label="Deploys">
-        <h2>Deploys</h2>
+      <section className="section" aria-label="Deploys">
+        <h2 className="label">{copy.deploys}</h2>
         {studio.state === 'ready' ? (
           <DeployList snapshot={studio.snapshot} />
         ) : (
-          <p>{studio.state === 'loading' ? 'Loading deploys.' : copy.meterUnavailable}</p>
+          <p>{studio.state === 'loading' ? copy.loadingDeploys : copy.meterUnavailable}</p>
         )}
       </section>
     </main>

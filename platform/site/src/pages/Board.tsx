@@ -35,7 +35,9 @@ export function Board() {
 
   return (
     <main>
-      <h1>Board</h1>
+      <div className="masthead">
+        <h1 className="display">Board</h1>
+      </div>
       {client === null || session === null ? (
         <SignIn client={client} />
       ) : (
