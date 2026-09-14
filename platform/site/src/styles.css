@@ -23,10 +23,10 @@
   --step--1: 0.9375rem;
   --step-0: 1.0625rem;
   --step-1: 1.25rem;
-  --step-2: clamp(1.25rem, 1.75vw, 1.5rem);
-  --step-3: clamp(1.75rem, 4.5vw, 3.5rem);
-  --step-4: clamp(2.75rem, 5.5vw, 4.5rem);
-  --step-5: clamp(3rem, 10vw, 8rem);
+  --step-2: 1.125rem;
+  --step-3: 1.25rem;
+  --step-4: 1.75rem;
+  --step-5: 1.5rem;
 
   /* Space */
   --space-1: 0.5rem;
@@ -106,11 +106,11 @@ h1,
 }
 
 h2 {
-  font-size: var(--step-3);
+  font-size: var(--step-0);
 }
 
 h3 {
-  font-size: var(--step-2);
+  font-size: var(--step-0);
 }
 
 p {
@@ -223,7 +223,7 @@ nav {
 }
 
 nav a {
-  font-size: var(--step-2);
+  font-size: var(--step-0);
   font-weight: var(--weight-display);
   font-style: italic;
   text-transform: uppercase;
@@ -237,29 +237,6 @@ nav a.active {
   text-decoration: underline;
   text-decoration-thickness: 0.12em;
   text-underline-offset: 0.18em;
-}
-
-/* Band ------------------------------------------------------------------ */
-
-.band {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.band-line {
-  max-width: var(--wrap);
-  margin: 0 auto;
-  padding-block: var(--space-4);
-  font-size: var(--step-3);
-  font-weight: var(--weight-display);
-  font-style: italic;
-  text-transform: uppercase;
-  line-height: var(--leading-display);
-  letter-spacing: var(--tracking-display);
-}
-
-.band :focus-visible {
-  outline-color: var(--paper);
 }
 
 /* Masthead and sections ------------------------------------------------- */
@@ -278,6 +255,11 @@ nav a.active {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+.pitch {
+  font-size: var(--step-1);
+  margin-bottom: var(--space-2);
 }
 
 .launch {
@@ -596,6 +578,6 @@ button.link {
   }
 
   nav a {
-    font-size: var(--step-1);
+    font-size: var(--step-0);
   }
 }

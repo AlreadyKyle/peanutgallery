@@ -69,7 +69,7 @@ describe('App routes', () => {
 });
 
 describe('Site chrome', () => {
-  it('shows the wordmark, the Studio and Ledger links, the pitch band and the footer line', () => {
+  it('shows the wordmark, the Studio and Ledger links, the pitch line and the footer line', () => {
     renderAt('/');
     const banner = screen.getByRole('banner');
     expect(within(banner).getByRole('link', { name: copy.studioName }).getAttribute('href')).toBe('/');
@@ -80,9 +80,9 @@ describe('Site chrome', () => {
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);
   });
 
-  it('carries the pitch band on the ledger page and leaves it off the board page', () => {
+  it('shows the pitch line on the landing only', () => {
     renderAt('/ledger');
-    expect(screen.getByText(copy.pitch)).toBeTruthy();
+    expect(screen.queryByText(copy.pitch)).toBeNull();
     cleanup();
     renderAt('/board');
     expect(screen.queryByText(copy.pitch)).toBeNull();

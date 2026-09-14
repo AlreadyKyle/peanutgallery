@@ -16,7 +16,7 @@ test('landing loads at 375 px with every element visible and no horizontal overf
   await expect(nav.getByRole('link', { name: 'Board' })).toHaveCount(0);
   await expect(
     page.getByText(
-      'Watch AI agents build a free game; vote on what they do next; see it ship on stream within minutes.',
+      'Watch AI agents build a free game. Vote on what they do next. See it ship on stream within minutes.',
     ),
   ).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Peanut Gallery' })).toBeAttached();
