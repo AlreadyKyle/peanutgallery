@@ -1,6 +1,6 @@
 # Backseat — Kick-off plan
 
-Version 3, 13 September 2026. Supersedes v2. Built from five research and design passes, a source check, a consistency audit, and the board's review notes. External figures carry a source in §9; figures without a source are the plan's own numbers.
+Version 3.1, 14 September 2026. Supersedes v3; the 14 September amendments are recorded in §10 (defaults 10–13) and specified under `docs/specs/`. Built from five research and design passes, a source check, a consistency audit, and the board's review notes. External figures carry a source in §9; figures without a source are the plan's own numbers.
 
 ## 1. Decision
 
@@ -12,7 +12,7 @@ A public game studio run by AI agents, directed by its audience, funded by the h
 
 Prior art. Multiverse Studios runs AI agents as a dev team on nine MIT-licensed games with a live view of the agents; it has no voting, no funding-throttled throughput, no seasons, and no show. Neuro-sama was the most-subscribed active channel on Twitch in January 2026. Twitch Plays Pokémon drew 1.16 million participants in 2014. Polsia runs whole companies on agents that work while the owner sleeps and re-engage the owner with a daily report. This plan combines the four and adds the funding meter.
 
-Pitch line: "Watch AI agents build a free game; vote on what they do next; see it ship on stream within minutes."
+Pitch line: "Watch AI agents build a game studio and free games. Vote on what they do next by contributing to their compute."
 
 ## 3. Day-one scope
 
@@ -38,7 +38,7 @@ Two lanes. Config-lane cards touch data, not code: tuning values, names, palette
 
 ### Card shapes and progress bars
 
-One-off: paid by a single personal decision or a single vote's allocation, ships when done. Goal: a larger item (a new scene, a new role, a platform system, a large feature) with a funding target and a progress bar; contributions pool against it, the funder list sits under the bar, and it starts building the moment the target is met. Standing: a cost that runs rather than ships (the host 24/7, a role's weekly salary, the VPS), shown as a monthly bar that refills; "sponsor a role" funds that role's bar.
+One-off: paid by a single personal decision or a single vote's allocation, ships when done. Goal: a larger item (a new scene, a new role, a platform system, a large feature) with a funding target and a progress bar; contributions pool against it, the funder list sits under the bar, and it starts building the moment the target is met. Standing: a cost that runs rather than ships (the host 24/7, a role's weekly salary, the VPS), shown as a monthly bar that refills; "sponsor a role" funds that role's bar. A goal bar is credited with the agents' net amount of each contribution made toward it (after the processor fee, the reserve, the supporter's studio share and the incident carve-out), so a full bar means the pool holds the card's estimate; the card then moves to `funded`.
 
 Goal cards have a design stage. Before a goal's funding target is set, a small design card (capped at $10) produces a public spec and a mock: what it does, what it touches, the acceptance test, and the cost estimate. The design is votable; the funding target comes from it. Platform systems and any Game feature above $25 go through design; smaller items skip it.
 
@@ -194,7 +194,7 @@ Viewer payments to a for-profit are business income and consideration for a supp
 
 ### Build 1 — must be live before launch
 
-Days 1–3, the public site. Landing page at a neutral holding domain (redirected after the name vote): the pitch line, the launch date, the Stripe contribution link with the split dropdown, the meter and ledger, a Discord link, the art policy line, and the sprint itself as three goal cards with progress bars (Week 1 the loop, target $100; Week 2 the show, $150; Week 3 money and public, $250; the $500 total is the pool at launch and the first hype-train milestone). Contributions before launch pre-load the pool and earn a founding badge and first position in the personal-decision queue. The board posts the day the page is live; the build streams on the Twitch channel from the same day. Bar: a real $1 Stripe contribution appears on the meter and the ledger within 60 seconds with its chosen split recorded; the page loads on a phone.
+Days 1–3, the public site. Landing page at a neutral holding domain (redirected after the name vote): the pitch line, the launch date, the Stripe contribution link with the split dropdown, the meter and ledger, a Discord link, the art policy line, and the Now and Next sections (what is building; what is decided or open to fund). Amended 14 September 2026: the live cut is specified in `docs/specs/live-cut.md`; the week framing below is history, the site shows Now and Next, a supporter votes by funding a Next card, and the fleet runs unattended through the same Claude Code command with the studio organisation's key. Contributions before launch pre-load the pool and earn a founding badge and first position in the personal-decision queue. The board posts the day the page is live; the build streams on the Twitch channel from the same day. Bar: a real $1 Stripe contribution appears on the meter and the ledger within 60 seconds with its chosen split recorded; the page loads on a phone.
 
 Week 1, the loop. Platform and seed repo skeletons, Supabase schema, dispatcher with throttle and scheduler stub, gate package with the deny-list, seed with Phaser skeleton and sim core, Netlify deploy with `last_green` rollback, minimal `/board` (sign-in, pause/resume, file a directive, file a note). Bar: a card inserted in stage `funded` with a $2 estimate, against a pool seeded with $50, becomes a deployed change within 15 minutes, with ledger rows and an updated `last_green`, three runs in a row.
 
@@ -289,6 +289,10 @@ Twitch Plays Pokémon — https://en.wikipedia.org/wiki/Twitch_Plays_Pok%C3%A9mo
 7. Founding budget: $200 seeded at launch.
 8. Payments: Stripe Payment Links; Twitch Bits when Affiliate; no Ko-fi.
 9. Images: OpenAI gpt-image first, Gemini second, free credit before paid, studio imagery only.
+10. Site sections (14 September 2026): Now and Next replace the three sprint goal cards, which were retired from the database the same day. No season framing on the site until the first season is declared.
+11. Vote at live (14 September 2026): funding a Next card is the vote. Targets sit at or below the per-card maximum; the bar credits the agents' net amount; a full bar moves the card to `funded`.
+12. Unattended mode (14 September 2026): the same Claude Code command with `STUDIO_ANTHROPIC_API_KEY` from the studio organisation, never the founder's key; a session billed to the wrong account is refused.
+13. Observability (14 September 2026): `agent_events` and `ledger` are the record; the dispatcher logs JSON lines and writes a heartbeat to `studio_state`; Langfuse-class tooling stays the Scout's first trial after launch and is never fed from the agent child.
 
 ## 11. Kick-off
 
