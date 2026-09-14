@@ -20,7 +20,7 @@ test('landing loads at 375 px with every element visible and no horizontal overf
     ),
   ).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Peanut Gallery' })).toBeAttached();
-  await expect(page.getByText('The default is 80/20.', { exact: false })).toBeVisible();
+  await expect(page.getByText('The default is 80% agents, 20% studio.', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Funding' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Ledger' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Goals' })).toBeVisible();
