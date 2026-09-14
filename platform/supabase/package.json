@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "seed": "tsx seed.ts",
+    "file-next-cards": "tsx scripts/file-next-cards.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

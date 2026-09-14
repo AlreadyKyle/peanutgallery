@@ -19,7 +19,18 @@ const PRIVATE_TABLES = [
   "board_members",
 ];
 
-const PUBLIC_RELATIONS = ["pool", "cards", "ledger", "deploys", "roles", "last_green", "public_agent_events", "public_ledger_totals"];
+const PUBLIC_RELATIONS = [
+  "pool",
+  "cards",
+  "ledger",
+  "deploys",
+  "roles",
+  "last_green",
+  "public_agent_events",
+  "public_ledger_totals",
+  "public_studio",
+  "public_card_funding",
+];
 
 interface Outcome {
   relation: string;

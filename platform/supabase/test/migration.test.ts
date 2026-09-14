@@ -3,8 +3,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const MIGRATION = resolve(dirname(fileURLToPath(import.meta.url)), "..", "migrations", "20260914000000_week1_schema.sql");
-const sql = readFileSync(MIGRATION, "utf8");
+const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
+const WEEK1_FILE = "20260914000000_week1_schema.sql";
+const LIVE_CUT_FILE = "20260915000000_live_cut.sql";
+const sql = readFileSync(resolve(MIGRATIONS_DIR, WEEK1_FILE), "utf8");
+const liveCut = readFileSync(resolve(MIGRATIONS_DIR, LIVE_CUT_FILE), "utf8");
 
 const TABLES = [
   "cards",
@@ -68,13 +71,17 @@ function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** The body of one `create or replace function public.<name>` block. */
-function functionBlock(name: string): string {
-  const start = sql.indexOf(`create or replace function public.${name}(`);
+/** The body of one `create or replace function public.<name>` block in a migration. */
+function functionBlockIn(text: string, name: string): string {
+  const start = text.indexOf(`create or replace function public.${name}(`);
   expect(start, `function ${name}`).toBeGreaterThanOrEqual(0);
-  const end = sql.indexOf("\n$$;", start);
+  const end = text.indexOf("\n$$;", start);
   expect(end, `end of function ${name}`).toBeGreaterThan(start);
-  return sql.slice(start, end);
+  return text.slice(start, end);
+}
+
+function functionBlock(name: string): string {
+  return functionBlockIn(sql, name);
 }
 
 describe("week-1 migration", () => {
@@ -203,5 +210,124 @@ describe("week-1 migration", () => {
 
   it("adds pool, cards and deploys to the realtime publication", () => {
     expect(sql).toContain("alter publication supabase_realtime add table public.pool, public.cards, public.deploys;");
+  });
+});
+
+const FILE_CARD_SIGNATURE =
+  "(\n  p_bucket public.card_bucket,\n  p_lane public.card_lane,\n  p_folder public.card_folder,\n  p_title text,\n  p_intent text,\n  p_acceptance_test text,\n  p_funding_target_usd numeric,\n  p_stage public.card_stage,\n  p_executor_role_id uuid,\n  p_board_reason text\n)";
+
+const FILE_CARD_RAISES = [
+  "Board membership is required",
+  "A title is required",
+  "A Next card starts at proposed or voted",
+  "The funding target must be above zero",
+  "The funding target must not exceed the per-card maximum of %",
+  "The config lane exists only for seed-1",
+  "A config-lane card needs a check: line in its acceptance test",
+  "An executor role is required",
+  "The executor must be an active role",
+];
+
+const LIVE_CUT_RPCS: Record<string, string> = {
+  file_card: FILE_CARD_SIGNATURE,
+  set_launched: "()",
+  set_agent_mode: "(p_mode text)",
+  board_studio_state: "()",
+};
+
+const LIVE_CUT_VIEWS = ["public_studio", "public_card_funding"];
+
+describe("live-cut migration", () => {
+  it("carries a 14-digit stamp that sorts after the week-1 file", () => {
+    expect(LIVE_CUT_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(LIVE_CUT_FILE > WEEK1_FILE).toBe(true);
+  });
+
+  it("keeps the apply_contribution signature and locks the goal card before the pool", () => {
+    const block = functionBlockIn(liveCut, "apply_contribution");
+    expect(block).toContain(`public.apply_contribution${RPCS.apply_contribution} returns jsonb`);
+    expect(block).toContain("language plpgsql");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    const goalLock = block.indexOf("select id into v_goal from public.cards where id = p_goal_card_id and shape = 'goal' for update;");
+    const poolLock = block.indexOf("from public.pool where id = 1 for update");
+    expect(goalLock).toBeGreaterThanOrEqual(0);
+    expect(poolLock).toBeGreaterThan(goalLock);
+  });
+
+  it("credits the bar with the net amount, seeds the estimate and moves proposed or voted to funded", () => {
+    const block = functionBlockIn(liveCut, "apply_contribution");
+    expect(block).toContain("funded_usd + (v_agents - v_incident)");
+    expect(block).toContain("when estimate_usd = 0 then funding_target_usd");
+    expect(block).toContain("stage in ('proposed', 'voted')");
+    expect(block).toContain("funded_usd >= funding_target_usd");
+    expect(block).not.toContain("funded_usd + v_amount");
+    expect(block).toContain("select stage, funded_usd into v_goal_stage, v_goal_funded from public.cards where id = v_goal;");
+    expect(block.match(/'goal_card_id', v_goal,\n\s+'goal_stage', v_goal_stage,\n\s+'goal_funded_usd', v_goal_funded/g)).toHaveLength(2);
+    // The week-1 arithmetic and the decision assignment are unchanged.
+    expect(block).toContain("v_incident := least(round(v_agents * v_incident_pct / 100.0, 4), v_room);");
+    expect(block).toContain("set balance_usd = balance_usd + (v_agents - v_incident)");
+    expect(block).toContain("for update skip locked;");
+    expect(block).toContain("set state = 'assigned'");
+  });
+
+  it("defines file_card with the contract signature, every refusal and the goal-card insert", () => {
+    const block = functionBlockIn(liveCut, "file_card");
+    expect(block).toContain(`public.file_card${FILE_CARD_SIGNATURE} returns uuid`);
+    for (const message of FILE_CARD_RAISES) {
+      expect(block, message).toContain(`raise exception '${message}'`);
+    }
+    expect(block).toContain("select card_max_usd into v_card_max from public.studio_state where id = 1;");
+    expect(block).toContain(String.raw`coalesce(p_acceptance_test, '') !~ '(^|\n)\s*check:\s'`);
+    expect(block).toContain("p_bucket, 'board', 'goal', p_lane, 100, nullif(btrim(p_board_reason), ''), p_folder, p_executor_role_id,");
+    expect(block).toContain("btrim(p_title), p_intent, p_acceptance_test, round(p_funding_target_usd, 4), 0, round(p_funding_target_usd, 4),");
+    expect(block).toContain("'low', null, p_stage");
+  });
+
+  it("adds launched_at and dispatcher_seen_at to studio_state", () => {
+    expect(liveCut).toContain("alter table public.studio_state add column if not exists launched_at timestamptz;");
+    expect(liveCut).toContain("alter table public.studio_state add column if not exists dispatcher_seen_at timestamptz;");
+  });
+
+  it("defines the four board RPCs as security definer plpgsql granted to authenticated and service_role, not anon", () => {
+    for (const [name, signature] of Object.entries(LIVE_CUT_RPCS)) {
+      const block = functionBlockIn(liveCut, name);
+      expect(block, `${name} signature`).toContain(`public.${name}${signature} returns`);
+      expect(block, `${name} language`).toContain("language plpgsql");
+      expect(block, `${name} definer`).toContain("security definer");
+      expect(block, `${name} search_path`).toContain("set search_path = public");
+      expect(liveCut, name).toMatch(new RegExp(`revoke all on function public\\.${escape(name)}\\([^)]*\\) from public, anon;`));
+      expect(liveCut, name).toMatch(new RegExp(`grant execute on function public\\.${escape(name)}\\([^)]*\\) to authenticated, service_role;`));
+    }
+    expect(functionBlockIn(liveCut, "set_launched")).toContain("where id = 1 and launched_at is null;");
+    expect(functionBlockIn(liveCut, "set_agent_mode")).toContain("raise exception 'agent_mode must be attended or unattended';");
+    expect(functionBlockIn(liveCut, "set_agent_mode")).toContain("update public.studio_state set agent_mode = p_mode where id = 1;");
+    expect(functionBlockIn(liveCut, "board_studio_state")).toContain("if not public.is_board_member() then");
+    for (const key of ["paused", "paused_by", "paused_at", "agent_mode", "launched_at", "dispatcher_seen_at", "daily_cap_usd", "card_max_usd"]) {
+      expect(functionBlockIn(liveCut, "board_studio_state"), key).toContain(`'${key}', ${key}`);
+    }
+  });
+
+  it("defines the two public views with owner rights and grants only select on them", () => {
+    for (const view of LIVE_CUT_VIEWS) {
+      expect(liveCut, view).toMatch(new RegExp(`^create or replace view public\\.${view} with \\(security_invoker = false\\) as$`, "m"));
+      expect(liveCut, `grant ${view}`).toContain(`grant select on public.${view} to anon, authenticated;`);
+    }
+    expect(liveCut).toContain(`revoke all on table ${LIVE_CUT_VIEWS.map((v) => `public.${v}`).join(", ")} from anon, authenticated;`);
+    expect(liveCut).toContain("select launched_at from public.studio_state where id = 1;");
+    expect(liveCut).toContain("goal_card_id as card_id,");
+    expect(liveCut).toContain("count(distinct contributor_id)::integer as contributors,");
+    expect(liveCut).toContain("sum(agents_usd - incident_usd)::numeric(12,4) as credited_usd");
+    expect(liveCut).toContain("where goal_card_id is not null");
+  });
+
+  it("creates no table, type or policy, leaves the publication alone and uses only repeatable statements", () => {
+    expect(liveCut).not.toMatch(/create table/i);
+    expect(liveCut).not.toMatch(/create type/i);
+    expect(liveCut).not.toMatch(/create policy/i);
+    expect(liveCut).not.toMatch(/alter publication/i);
+    expect(liveCut).not.toMatch(/^create (?!or replace )/m);
+    expect(liveCut).not.toMatch(/^alter table (?!public\.studio_state add column if not exists )/m);
+    expect(liveCut).not.toMatch(/^drop /m);
   });
 });
