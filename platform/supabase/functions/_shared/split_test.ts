@@ -17,15 +17,19 @@ const SHA256_EMPTY =
 const SHA256_ABC =
   "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
-Deno.test("mapSplit maps all seven dropdown values", () => {
+Deno.test("mapSplit maps all eleven dropdown values", () => {
   assertEquals(mapSplit("1000"), 0);
   assertEquals(mapSplit("9010"), 10);
   assertEquals(mapSplit("8020"), 20);
   assertEquals(mapSplit("7030"), 30);
   assertEquals(mapSplit("6040"), 40);
   assertEquals(mapSplit("5050"), 50);
+  assertEquals(mapSplit("4060"), 60);
+  assertEquals(mapSplit("3070"), 70);
+  assertEquals(mapSplit("2080"), 80);
+  assertEquals(mapSplit("1090"), 90);
   assertEquals(mapSplit("0100"), 100);
-  assertEquals(Object.keys(SPLIT_MAP).length, 7);
+  assertEquals(Object.keys(SPLIT_MAP).length, 11);
 });
 
 Deno.test("mapSplit defaults a missing value to 20 and rejects unknown values", () => {
