@@ -1,7 +1,8 @@
 [build]
   command = "pnpm --filter @backseat/seed-1 build"
   publish = "dist"
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../pnpm-lock.yaml ../package.json"
+  # Skip the build only when a previous successful build exists, differs, and touched nothing here.
+  ignore = 'test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../pnpm-lock.yaml ../package.json'
 
 [build.environment]
   NODE_VERSION = "22"
