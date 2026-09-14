@@ -13,7 +13,7 @@ export function Landing() {
   return (
     <main>
       <div className="masthead">
-        <h1 className="display">{copy.studioName}</h1>
+        <h1 className="sr-only">{copy.studioName}</h1>
         <p className="launch">{launchLine(env.launchAt)}</p>
       </div>
 
