@@ -14,7 +14,7 @@ export function DeployList({ snapshot }: { snapshot: Snapshot }) {
           <span>{deploy.folder}</span>
           <code>{shortSha(deploy.sha)}</code>
           <span className={deploy.is_green ? 'green' : 'red'}>
-            {deploy.is_green ? 'green' : 'not green'}
+            {deploy.is_green ? copy.deployGreen : copy.deployNotGreen}
           </span>
           {deploy.smoke_result === null ? null : <span>{deploy.smoke_result}</span>}
         </li>

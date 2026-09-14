@@ -23,8 +23,26 @@ export function SourceProvider({
   return <SourceContext.Provider value={source}>{children}</SourceContext.Provider>;
 }
 
+const StudioContext = createContext<StudioState | null>(null);
+
+/**
+ * Loads the snapshot once for everything beneath it. A component under this provider that calls
+ * useStudio() reads the shared state instead of starting its own load and poll.
+ */
+export function StudioProvider({ children }: { children: ReactNode }) {
+  const state = useStudioLoad(true);
+  return <StudioContext.Provider value={state}>{children}</StudioContext.Provider>;
+}
+
 export function useStudio(): StudioState {
-  const source = useContext(SourceContext);
+  const shared = useContext(StudioContext);
+  const own = useStudioLoad(shared === null);
+  return shared ?? own;
+}
+
+function useStudioLoad(active: boolean): StudioState {
+  const provided = useContext(SourceContext);
+  const source = active ? provided : null;
   const [state, setState] = useState<StudioState>(
     source === null ? { state: 'unconfigured' } : { state: 'loading' },
   );

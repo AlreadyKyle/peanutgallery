@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { GoalBars } from '../components/GoalBars';
 import { LedgerSummary } from '../components/LedgerSummary';
 import { Meter } from '../components/Meter';
@@ -11,11 +12,12 @@ export function Landing() {
   const studio = useStudio();
   return (
     <main>
-      <h1>{copy.studioName}</h1>
-      <p className="pitch">{copy.pitch}</p>
-      <p className="launch">{launchLine(env.launchAt)}</p>
+      <div className="masthead">
+        <h1 className="display">{copy.studioName}</h1>
+        <p className="launch">{launchLine(env.launchAt)}</p>
+      </div>
 
-      <section aria-label="Contribute">
+      <section className="lead" aria-label="Contribute">
         {env.stripePaymentLinkUrl === '' ? (
           <p>{copy.contributeUnavailable}</p>
         ) : (
@@ -26,37 +28,33 @@ export function Landing() {
         <p>{copy.split}</p>
       </section>
 
-      <section aria-label="Meter">
-        <h2>Meter</h2>
+      <section className="section" aria-label="Meter">
+        <h2 className="label">{copy.meter}</h2>
         <Meter studio={studio} />
       </section>
 
-      <section aria-label="Ledger">
-        <h2>Ledger</h2>
+      <section className="section" aria-label="Ledger">
+        <h2 className="label">{copy.ledger}</h2>
         <LedgerSummary studio={studio} />
+        <p>
+          <Link className="more" to="/ledger">
+            {copy.fullLedger}
+          </Link>
+        </p>
       </section>
 
-      <section aria-label="Sprint goals">
-        <h2>Build 1</h2>
+      <section className="section" aria-label="Sprint goals">
+        <h2 className="label">{copy.build}</h2>
         <GoalBars studio={studio} />
         <p>{copy.preLaunch}</p>
       </section>
 
-      <section aria-label="Policies">
+      <section className="section" aria-label="Policies">
+        <h2 className="label">{copy.policies}</h2>
         <p>{copy.artPolicy}</p>
         <p>{copy.allAges}</p>
         <p>{copy.kernel}</p>
       </section>
-
-      {env.discordInvite === '' ? null : (
-        <p>
-          <a href={env.discordInvite}>{copy.discord}</a>
-        </p>
-      )}
-
-      <footer>
-        <p>{copy.footer}</p>
-      </footer>
     </main>
   );
 }
