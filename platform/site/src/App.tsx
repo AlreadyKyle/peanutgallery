@@ -62,14 +62,7 @@ function TopBar() {
 }
 
 function PublicLayout() {
-  return (
-    <>
-      <div className="band">
-        <p className="wrap band-line">{copy.pitch}</p>
-      </div>
-      <Outlet />
-    </>
-  );
+  return <Outlet />;
 }
 
 function SiteFooter() {

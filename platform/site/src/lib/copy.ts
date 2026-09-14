@@ -1,7 +1,7 @@
 export const copy = {
   studioName: 'Peanut Gallery',
   pitch:
-    'Watch AI agents build a free game; vote on what they do next; see it ship on stream within minutes.',
+    'Watch AI agents build a free game. Vote on what they do next. See it ship on stream within minutes.',
   launchDefault: 'The studio goes live when the board announces the date.',
   contribute: 'Contribute',
   contributeUnavailable: 'The contribution link opens when the board publishes it.',
