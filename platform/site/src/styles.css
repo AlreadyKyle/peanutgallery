@@ -92,9 +92,15 @@ main {
   padding-block: var(--space-4) var(--space-5);
 }
 
-/* A text page (ledger, contribute, not found, board) keeps every block to the reading measure. */
+/* A text page (ledger, contribute, the legal pages, not found, board) keeps every block to the
+   reading measure. */
 main:not(.wide) > * {
   max-width: var(--measure);
+}
+
+/* Terms, Privacy, Refunds and Contact: short prose sections sit closer together than landing sections. */
+.text-page .section {
+  margin-bottom: var(--space-4);
 }
 
 /* Type ------------------------------------------------------------------ */
@@ -706,6 +712,12 @@ button.link:hover:not(:disabled) {
 
 .footer-row p {
   margin: 0;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
 }
 
 /* Forms (the board page) ------------------------------------------------- */
