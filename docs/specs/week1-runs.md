@@ -59,6 +59,25 @@ Every directive's acceptance test names the commands the gate runs. The dispatch
 - Browser pane on the live game: reload keeps dust; a screenshot at 375px.
 - The dispatcher JSON log lines for each card from `claimed` to `is live`.
 
+## Evidence
+
+**Run 1** (card cd6fb0a7, gatherer baseCost 10 to 11, 15 September 2026). The card was inserted at 02:10:31 UTC. The board session began at 04:24:11.
+
+- Dispatcher log, claim to live:
+  - `04:24:48.848Z card cd6fb0a7 claimed` (lane config, estimate 2)
+  - `04:25:03.239Z session ... ended` (outcome completed, 4 turns)
+  - `04:25:06.342Z pull request #18 open` (sha 75d28051)
+  - `04:25:54.941Z card cd6fb0a7 merged` (sha 6394a99b)
+  - `04:26:18.371Z card cd6fb0a7 is live`
+- Claim to live took 1 min 30 s.
+- `select stage, actual_usd from cards where id = 'cd6fb0a7-…'` returned `live, 0.0585`.
+- `select billed_to, count(*), sum(usd) from ledger where card_id = 'cd6fb0a7-…' group by 1` returned `founder, 4, 0.0585`.
+- `select sha, is_green, smoke_result from deploys order by created_at desc limit 1` returned `6394a99b5d6d1c96e955136d97a785aa9a1e55b3, true, pass: build 6394a99b served; 1 config check(s) hold; bot: 36000 simulated seconds, 13 unlocks, budget 60 s`.
+- `curl -s https://peanutgallery-seed-1.netlify.app/config/spawn-table.json` returned `{ "id": "gatherer", "name": "Gatherer", "baseCost": 11, "rate": 0.2 }`, and `version.json` serves `6394a99b…`.
+- `select balance_usd from pool` returned `0.5019` before and after.
+
+**Still to run:** runs 2 and 3 (run 2's card 6372e266, forge, was inserted at 04:27 UTC and waits for a board session), D1–D3, the live game checks and a real contribution.
+
 ## Decisions
 
 - 2026-09-14: runs are attended and billed to the founder; the pool is not seeded (`launch-hardening.md`).
