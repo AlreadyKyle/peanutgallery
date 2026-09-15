@@ -331,3 +331,81 @@ describe("live-cut migration", () => {
     expect(liveCut).not.toMatch(/^drop /m);
   });
 });
+
+const CARD_SUMMARY_FILE = "20260916000000_card_summary.sql";
+const cardSummary = readFileSync(resolve(MIGRATIONS_DIR, CARD_SUMMARY_FILE), "utf8");
+
+const FILE_CARD_SUMMARY_SIGNATURE =
+  "(\n  p_bucket public.card_bucket,\n  p_lane public.card_lane,\n  p_folder public.card_folder,\n  p_title text,\n  p_summary text,\n  p_intent text,\n  p_acceptance_test text,\n  p_funding_target_usd numeric,\n  p_stage public.card_stage,\n  p_executor_role_id uuid,\n  p_board_reason text\n)";
+
+const OLD_FILE_CARD_TYPES =
+  "public.card_bucket, public.card_lane, public.card_folder, text, text, text, numeric, public.card_stage, uuid, text";
+const NEW_FILE_CARD_TYPES =
+  "public.card_bucket, public.card_lane, public.card_folder, text, text, text, text, numeric, public.card_stage, uuid, text";
+
+describe("card-summary migration", () => {
+  it("carries a 14-digit stamp that sorts after the live-cut file", () => {
+    expect(CARD_SUMMARY_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(CARD_SUMMARY_FILE > LIVE_CUT_FILE).toBe(true);
+  });
+
+  it("adds the summary column with its 200-character check", () => {
+    expect(cardSummary).toContain(
+      "alter table public.cards add column if not exists summary text check (summary is null or char_length(summary) <= 200);",
+    );
+  });
+
+  it("drops the exact ten-argument file_card before creating the new one", () => {
+    const drop = cardSummary.indexOf(`drop function if exists public.file_card(${OLD_FILE_CARD_TYPES});`);
+    const create = cardSummary.indexOf("create or replace function public.file_card(");
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(create).toBeGreaterThan(drop);
+  });
+
+  it("defines file_card with p_summary after p_title, every refusal in order and a trimmed summary insert", () => {
+    const block = functionBlockIn(cardSummary, "file_card");
+    expect(block).toContain(`public.file_card${FILE_CARD_SUMMARY_SIGNATURE} returns uuid`);
+    expect(block).toContain("language plpgsql");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    const raises = [
+      FILE_CARD_RAISES[0]!,
+      FILE_CARD_RAISES[1]!,
+      "A public summary is required",
+      "The public summary must be 200 characters or fewer",
+      ...FILE_CARD_RAISES.slice(2),
+    ];
+    let last = -1;
+    for (const message of raises) {
+      const at = block.indexOf(`raise exception '${message}'`);
+      expect(at, message).toBeGreaterThan(last);
+      last = at;
+    }
+    expect(block).toContain("if p_summary is null or btrim(p_summary) = '' then");
+    expect(block).toContain("btrim(p_title), btrim(p_summary), p_intent, p_acceptance_test,");
+    expect(block).toContain("title, summary, intent, acceptance_test,");
+  });
+
+  it("revokes file_card from public and anon and grants it to authenticated and service_role", () => {
+    expect(cardSummary).toContain(`revoke all on function public.file_card(${NEW_FILE_CARD_TYPES}) from public, anon;`);
+    expect(cardSummary).toContain(`grant execute on function public.file_card(${NEW_FILE_CARD_TYPES}) to authenticated, service_role;`);
+    expect(cardSummary.match(/^grant /gm)).toHaveLength(1);
+    expect(cardSummary.match(/^revoke /gm)).toHaveLength(1);
+  });
+
+  it("creates no table, type or policy and changes nothing else", () => {
+    expect(cardSummary).not.toMatch(/create table/i);
+    expect(cardSummary).not.toMatch(/create type/i);
+    expect(cardSummary).not.toMatch(/create policy/i);
+    expect(cardSummary).not.toMatch(/alter publication/i);
+    expect(cardSummary).not.toMatch(/create (or replace )?view/i);
+    expect(cardSummary.match(/^create /gm)).toHaveLength(1);
+    expect(cardSummary.match(/^alter /gm)).toHaveLength(1);
+    expect(cardSummary.match(/^drop /gm)).toHaveLength(1);
+  });
+
+  it("relies on the week-1 table-level select on cards and the whole-table publication", () => {
+    expect(sql).toContain("grant select on table public.pool, public.cards, public.ledger, public.deploys, public.roles to anon, authenticated;");
+    expect(sql).toContain("alter publication supabase_realtime add table public.pool, public.cards, public.deploys;");
+  });
+});

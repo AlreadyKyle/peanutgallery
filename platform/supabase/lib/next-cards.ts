@@ -17,6 +17,9 @@ export interface NextCard {
   lane: NextCardLane;
   stage: NextCardStage;
   title: string;
+  /** Public line for supporters, at most 200 characters; file_card requires it. */
+  summary: string;
+  /** The brief for the builder agents. */
   intent: string;
   acceptance_test: string;
   funding_target_usd: number;
@@ -48,6 +51,7 @@ export const NEXT_CARDS: readonly NextCard[] = [
     executor_role_name: "Builder A",
     funding_target_usd: 3,
     title: "A fourteenth unlock: Quiet rooms at 300M dust",
+    summary: "Add one more unlock after the last one, so players always have a next goal on screen.",
     intent:
       "After Polished rails at 185,000,000 lifetime dust the screen says 'Every unlock is open.' Add one multiplier unlock, Quiet rooms, at 300,000,000 lifetime dust with a 5% production bonus, so a next goal stays on screen. The greedy bot ends ten simulated hours near 217,000,000 dust, so the ten-hour invariants do not move. Run the bot; stop and report if any hour loses its unlock.",
     acceptance_test: [
@@ -62,6 +66,7 @@ export const NEXT_CARDS: readonly NextCard[] = [
     executor_role_name: "Builder B",
     funding_target_usd: 2,
     title: "Rename the Gatherer to Sweeper",
+    summary: "Rename the first unit from Gatherer to Sweeper, with a new one-line description.",
     intent:
       "The first unit is the Gatherer, described as 'Picks up dust by hand.' Rename it Sweeper with the line 'Sweeps dust into a pile.' Display only: the id stays gatherer, so costs, rates and unlocks are untouched. Run the bot; stop and report if any hour loses its unlock.",
     acceptance_test: [
@@ -76,6 +81,7 @@ export const NEXT_CARDS: readonly NextCard[] = [
     executor_role_name: "Builder A",
     funding_target_usd: 3,
     title: "Cheaper Cart: baseCost 120",
+    summary: "Lower the Cart's cost so new players can buy one soon after it appears.",
     intent:
       "The Cart opens at 100 lifetime dust, but its cost sits above that, so its row stays unaffordable after it appears. Set baseCost to 120 so a new player can buy one soon after it opens. Early game only. Run the bot; stop and report if any hour loses its unlock.",
     acceptance_test: [
@@ -89,6 +95,7 @@ export const NEXT_CARDS: readonly NextCard[] = [
     executor_role_name: "Builder B",
     funding_target_usd: 12,
     title: "Save the game and resume on reload",
+    summary: "Save progress in the browser, so a reload picks up where you left off.",
     intent:
       "Nothing persists; a reload starts at zero. Add a pure sim/save.ts with serializeState(state) and parseSavedState(raw) that returns a SimState only when the shape is right and every number is finite. The render layer saves to the localStorage key dust.save.v1 every 5 seconds and on page hide, and restores on create. Restoring across a config change is safe by construction: unknown unit ids are ignored by ratePerSecond, missing ids read as 0, unknown unlock ids are skipped by findUnlock. The sim stays clock-free; the render layer owns storage. Offline progress is a later card once this exists. Run typecheck, test and the bot; stop and report if any is red.",
     acceptance_test:
