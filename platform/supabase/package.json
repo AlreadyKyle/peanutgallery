@@ -5,6 +5,7 @@
   "scripts": {
     "seed": "tsx seed.ts",
     "file-next-cards": "tsx scripts/file-next-cards.ts",
+    "file-directives": "tsx scripts/file-directives.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
