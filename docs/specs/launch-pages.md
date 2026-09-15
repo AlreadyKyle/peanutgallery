@@ -1,6 +1,6 @@
 # Launch pages: Shipped, legal and contact, link previews, two-factor board
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -74,20 +74,20 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - The art policy keeps the PLAN.md §4 line and states generated imagery as a rule, without claiming episode thumbnails or lore cards exist.
 - The board's Next card form names the current heading, Fund what's next.
 
-**Live check.** `platform/site/scripts/live-check.mjs [baseUrl]` checks every public route and /board at 375px and 1440px for status, one h1, no horizontal overflow and no console errors, including the four new pages. It also checks the landing h2 order read from the page, `og:image` as an absolute URL, and `/og.png` as a 200 `image/png` of 1200×630. The data checks run when the site has data. The first output line is PASS or FAIL, and it exits non-zero on failure. `platform/site/scripts` is added to `platform/gate/kernel-paths.txt` and the dispatcher's copy.
+**Live check.** `platform/site/scripts/live-check.mjs [baseUrl]` checks every public route and /board at 375px and 1440px for status, one h1, no horizontal overflow and no console errors, including the four new pages. It also checks the landing h2 order read from the page, `og:image` as an absolute URL, and `/og.png` as a 200 `image/png` of 1200×630. The data checks fail when the site has no data, unless `--allow-no-data` turns them into skips. The first output line is PASS or FAIL, and it exits non-zero on failure. `platform/site/scripts` is added to `platform/gate/kernel-paths.txt` and the dispatcher's copy.
 
 ## Acceptance criteria
 
-- [ ] `groupCards` puts live cards in `shipped`, newest `updated_at` first, and in no other group; `/contribute` offers no live card.
-- [ ] The site's card select includes `live` and reads `updated_at`.
-- [ ] The landing shows Shipped after Queued. Each row has category, title, summary, cost, contributors and ship date, plus Play the game for a Dust card when the play URL is set. There is no Shipped heading without a shipped card, and Right now names the latest shipped card.
-- [ ] `/terms`, `/privacy`, `/refunds` and `/contact` each render one h1 at 375px with no horizontal scroll, and every page's footer links to all four.
-- [ ] `index.html` carries the description and preview tags with an absolute `og:image`. The description matches the pitch in `copy.ts`, and `public/og.png` is a 1200×630 PNG.
-- [ ] In the PGlite migration test, each of the five RPCs and a board `set_paused` refuse `aal1` and succeed at `aal2`. A moderator pauses at `aal1`, and the heartbeat, `board_role` and `board_studio_state` work at `aal1`.
-- [ ] In `Board.test.tsx`, /board walks through enrolment and the challenge, and hides the `aal2` controls at `aal1` while the heartbeat runs. The moderator pauses at `aal1`.
-- [ ] The copy no longer promises a one-minute meter for every amount, names episode thumbnails or lore cards, or points at a Next heading. The read/write rule reads as a rule.
-- [ ] `live-check.mjs` prints PASS or FAIL first and exits non-zero on failure, and `platform/site/scripts` is on both kernel lists.
-- [ ] `BRAND.md` documents the Shipped section, the text-page layout and the footer links.
+- [x] `groupCards` puts live cards in `shipped`, newest `updated_at` first, and in no other group; `/contribute` offers no live card.
+- [x] The site's card select includes `live` and reads `updated_at`.
+- [x] The landing shows Shipped after Queued. Each row has category, title, summary, cost, contributors and ship date, plus Play the game for a Dust card when the play URL is set. There is no Shipped heading without a shipped card, and Right now names the latest shipped card.
+- [x] `/terms`, `/privacy`, `/refunds` and `/contact` each render one h1 at 375px with no horizontal scroll, and every page's footer links to all four.
+- [x] `index.html` carries the description and preview tags with an absolute `og:image`. The description matches the pitch in `copy.ts`, and `public/og.png` is a 1200×630 PNG.
+- [x] In the PGlite migration test, each of the five RPCs and a board `set_paused` refuse `aal1` and succeed at `aal2`. A moderator pauses at `aal1`, and the heartbeat, `board_role` and `board_studio_state` work at `aal1`.
+- [x] In `Board.test.tsx`, /board walks through enrolment and the challenge, and hides the `aal2` controls at `aal1` while the heartbeat runs. The moderator pauses at `aal1`.
+- [x] The copy no longer promises a one-minute meter for every amount, names episode thumbnails or lore cards, or points at a Next heading. The read/write rule reads as a rule.
+- [x] `live-check.mjs` prints PASS or FAIL first and exits non-zero on failure, and `platform/site/scripts` is on both kernel lists.
+- [x] `BRAND.md` documents the Shipped section, the text-page layout and the footer links.
 - [ ] Live: `curl -s https://peanutgallery.games | grep og:image` shows an absolute URL that returns 200 with a 1200×630 PNG.
 - [ ] Live: the migration is applied, and the board enrols TOTP on /board and files a test note. A note is refused without the second factor.
 
@@ -103,6 +103,50 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
   - The board enrols TOTP on the live /board and files a test note.
   - `node platform/site/scripts/live-check.mjs` passes against https://peanutgallery.games.
 
+## Evidence
+
+2026-09-15, branch `launch-pages`, not merged. The live steps are pending: apply the migration, enrol TOTP on the live /board and file a test note, and run the live check against production.
+
+- **Shipped.**
+  - `cards.test.ts`: "sends building and gated cards to now, funded cards to queued, live cards to shipped and the rest to fund", and `shippedOrder`.
+  - `source.test.ts`: the select ends `created_at,updated_at`, and `CARD_STAGES` ends `live`.
+  - `Cards.test.tsx` `ShippedList`: the row contents, "Board" for an unfunded card, Play the game only on Dust with a play URL, and nothing without a shipped card.
+  - `Landing.test.tsx`: h2 order Right now, Building now, Fund what's next, Queued, Shipped, How it works, Funding, Ledger, Fixed rules. Right now reads "Latest shipped: The unlock list", and the filter still counts All 3 with two live cards present.
+  - `Contribute.test.tsx`: a live goal with room on its bar is not offered.
+- **Text pages.**
+  - `App.test.tsx` "Terms, Privacy, Refunds and Contact": one h1, the lede, every section, no unreplaced token, no "draft", the mailto link, the operator line, the Refunds page link, and Discord only with the invite.
+  - "links Terms, Privacy, Refunds and Contact in the footer of every page".
+  - `e2e/text-pages.spec.ts`: one h1 and no overflow at 375px for each page, and the footer links open the pages.
+- **Link previews.** `src/index-html.test.ts`: the description equals the `copy.ts` pitch, the tags, and `public/og.png` IHDR 1200×630. `e2e/previews.spec.ts`: `/og.png` served 200 `image/png` at 1200×630. `node platform/site/scripts/og-image.mjs` printed `wrote platform/site/public/og.png 1200x630 45954 bytes`, and a second run from the package wrote the same size.
+- **Two-factor.**
+  - `migration_test.ts` step "a board session without the second factor is refused every state-changing RPC and keeps the aal1 ones": the five RPCs and a board `set_paused`, at `aal1` and with no aal claim, then each succeeds at `aal2`.
+  - Step "a moderator can pause, heartbeat and read studio_state at aal1 but not file or launch".
+  - Step "an outsider is refused by every board RPC, even at aal2".
+  - Privileges: authenticated holds the eleven board RPCs.
+  - `migration.test.ts` "board-two-factor migration": each redefined function minus the refusal equals its previous definition character for character, the grants are repeated, and the file is repeatable.
+  - `Board.test.tsx` "Board two-factor sign-in": enrolment (the abandoned factor removed, the QR image, the secret, a wrong code refused, then the controls), the challenge, skipped at `aal2`, and the heartbeat and status at `aal1` with no state-changing RPC called. "Board signed in as the moderator": pauses and resumes at `aal1` with no MFA call.
+- **Copy audit.** The grep of `copy.ts` and `Board.tsx` before the change found:
+  - `copy.ts:14` "agent avatars, episode thumbnails and lore cards".
+  - `copy.ts:56` "It shows on the meter within a minute."
+  - The fixed rule "Agents that write code never read messages from the public. Only notes from the board reach them."
+  - `Board.tsx:470` "shows on the site under Next".
+  - `Board.tsx` "Notes are private advisory text to the Studio Head.", although note triage only logs that it is due (`platform/dispatcher/src/scheduler.ts`).
+
+  After the change, `git grep -n -i -E "founding|decision|stream|episode|lore|badge|thumbnail|avatar|minute|Studio Head"` over the two files returns only:
+  - `copy.ts:14`, the art policy rule.
+  - `copy.ts:51` "Contributions made now count as founding contributions." It is recorded by time before `launched_at`, and no badge is promised.
+  - `copy.ts:56` and `:162`, the $50 rule.
+  - `copy.ts:96` `decision: 'Player decision'`, a source label shown only for a card with that source.
+  - `Board.tsx:937`, the note line.
+- **Kernel paths.** `worktree.test.ts` "keeps the kernel list equal to the gate file", and `platform/site/scripts/live-check.mjs` refused in the platform code lane.
+- **Live check.** Run against `pnpm --filter @backseat/site preview` on http://127.0.0.1:4173:
+  - A build without the public values, no flag: `FAIL live-check http://127.0.0.1:4173 passed=81 failed=3 skipped=4`, the three data checks, exit 1.
+  - The same build with `--allow-no-data`: `PASS live-check http://127.0.0.1:4173 passed=81 failed=0 skipped=7`.
+  - A build with the Netlify public values: `PASS live-check http://127.0.0.1:4173 passed=94 failed=0 skipped=2`, landing h2 `["Right now","Fund what's next","Queued","Shipped","How it works","Funding","Ledger","Fixed rules"]` and "Latest shipped: Spawn table: gatherer baseCost 10 to 11".
+- **Suites.**
+  - `pnpm verify` exit 0: supabase 92, site 117, dispatcher 193, seed-1 69, gate 157, Deno 45 passed (28 steps), `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`.
+  - Site e2e 11 passed, both without and with the public values.
+
 ## Decisions
 
 - 2026-09-14: legal pages are drafted by Claude for board review, not legal advice.
@@ -114,3 +158,14 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - 2026-09-15: the copy audit fixes the meter line, the read/write rule, the art policy wording and the Next card form's heading reference (board).
 - 2026-09-15: the live check script moves into `platform/site/scripts` and becomes a kernel path (board).
 - 2026-09-15: BRAND.md documents the Shipped section, the text-page layout and the footer links (board).
+- 2026-09-15: Shipped renders as rows, not boxes, and is not rendered until a card ships. A shipped card is a record whose one action, Play the game, is the same for every Dust card; Building now and Queued already render nothing when empty.
+- 2026-09-15: a shipped card with no goal and no funding shows its source ("Board") in place of "0 contributors". A board directive was never open to fund, so a zero count would misread.
+- 2026-09-15: the ship date is `updated_at`, as agreed. It also moves if a live card is updated later, for example a contribution to a live goal. Accepted for launch.
+- 2026-09-15: enrolment starts from a "Set up an authenticator app" button, not on page load, and first removes unverified TOTP factors from an abandoned attempt. Enrolling on load would create a factor on every visit.
+- 2026-09-15: the two-factor step shows for board members only. The moderator's only control, pause, stays at `aal1`.
+- 2026-09-15: Privacy says the public pages show totals and contributor counts, not "amounts and splits". The site shows no split aggregate or per-contribution amount, and ROADMAP.md forbids describing what does not exist.
+- 2026-09-15: Privacy names Stripe's reference for the payment, which the studio stores (`stripe_event_id`, `stripe_session_id`). It also says payment records the law requires are kept, so a deletion request is not promised beyond the law.
+- 2026-09-15: the Refunds page states the reversal of a contribution's credit as the rule, like the daily hold. Phase 4 builds both, and it must ship before launch.
+- 2026-09-15: How it works step 4 now points at Shipped, and the /board note form says note triage is not built. The audit found both claims.
+- 2026-09-15: text-page sections sit `--space-4` apart, closer than landing sections, because each holds a sentence or two.
+- 2026-09-15: the live check fails when the site has no data unless `--allow-no-data` is passed, so a production run can never pass on an outage.
