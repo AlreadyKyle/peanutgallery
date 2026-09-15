@@ -64,6 +64,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/netlify.toml',
   'platform/site/package.json',
   'platform/site/playwright.config.ts',
+  'platform/site/scripts',
   'platform/site/vite.config.ts',
   'seed-1/CLAUDE.md',
   'seed-1/bots',

@@ -57,6 +57,7 @@ describe('pure helpers', () => {
   it('refuses kernel files in every lane and names the ones inside a lane', () => {
     expect(outsideLane(['seed-1/sim/invariants.ts', 'seed-1/sim/sim.ts', 'seed-1/bots/greedy.ts'], lanePaths('seed-1', 'code'))).toEqual(['seed-1/sim/invariants.ts', 'seed-1/bots/greedy.ts']);
     expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml']);
+    expect(outsideLane(['platform/site/scripts/live-check.mjs', 'platform/site/scripts-notes.md'], lanePaths('platform', 'code'))).toEqual(['platform/site/scripts/live-check.mjs']);
     expect(outsideLane(['seed-1/sim/invariants.tsx'], lanePaths('seed-1', 'code'))).toEqual([]);
     expect(protectedPaths(lanePaths('seed-1', 'config'))).toEqual([]);
     expect(protectedPaths(lanePaths('seed-1', 'code'))).toContain('seed-1/sim/invariants.ts');
