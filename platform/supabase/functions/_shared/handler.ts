@@ -1,12 +1,19 @@
 // The stripe-webhook request handler with its I/O injected: signature
-// verification, the fee lookup and the apply_contribution RPC arrive as
-// functions, so every status path and the dry-run rule are testable without
-// Stripe or the database. index.ts wires the real implementations in.
+// verification, the session and fee lookups and the apply_contribution RPC
+// arrive as functions, so every status path and the dry-run rule are testable
+// without Stripe or the database. index.ts wires the real implementations in.
+//
+// Stripe can attach a charge's balance transaction after
+// checkout.session.completed fires (docs/specs/stripe-late-fee.md). A paid
+// session is credited by whichever arrives with the fee: the completed event,
+// or the charge.updated that attaches the balance transaction. The RPC is keyed
+// by the Checkout session, so the pool moves once.
 
 import { type Amounts, computeAmounts } from "./split.ts";
 import { type Parsed, parseSession, type SessionLike } from "./session.ts";
+import { CHARGE_UPDATED_EVENT, COMPLETED_EVENT } from "./webhook_events.ts";
 
-export const COMPLETED_EVENT = "checkout.session.completed";
+export { CHARGE_UPDATED_EVENT, COMPLETED_EVENT } from "./webhook_events.ts";
 
 export interface WebhookEvent {
   id: string;
@@ -17,11 +24,19 @@ export interface WebhookEvent {
 /** The checkout session fields the handler reads on top of SessionLike. */
 export type CheckoutSession = SessionLike & { payment_status: string };
 
+/** The charge fields the handler reads from a charge.updated event. */
+export interface ChargeObject {
+  payment_intent: string | { id: string } | null;
+  balance_transaction: string | { id: string } | null;
+}
+
 export interface HandlerDeps {
   /** Verifies the Stripe signature over the raw body; throws when it does not match. */
   constructEvent(body: string, signature: string): Promise<WebhookEvent>;
   /** Fee in USD from the session's balance transaction; null while it is not available. */
   lookupFee(sessionId: string): Promise<number | null>;
+  /** The Checkout session paid by this payment intent; null when the payment did not come through Checkout. */
+  findSession(paymentIntentId: string): Promise<CheckoutSession | null>;
   /** The apply_contribution RPC; resolves to its jsonb result. */
   applyContribution(
     parsed: Parsed,
@@ -82,65 +97,124 @@ export function createHandler(
       });
     }
 
-    if (event.type !== COMPLETED_EVENT) {
-      return json(200, { ignored: true, reason: `event type ${event.type}` });
-    }
-    const session = event.data.object as CheckoutSession;
-    if (session.payment_status !== "paid") {
-      return json(200, {
-        ignored: true,
-        reason: `payment_status ${session.payment_status}`,
-      });
-    }
+    const dryRun = isDryRun(req, deps.serviceKey);
 
-    let parsed: Parsed;
-    try {
-      parsed = await parseSession(event.id, session);
-    } catch (err) {
-      return json(500, {
-        error: "Unusable checkout session",
-        detail: errorMessage(err),
-      });
-    }
-
-    if (isDryRun(req, deps.serviceKey)) {
-      let feeUsd: number | null = null;
-      try {
-        feeUsd = await deps.lookupFee(parsed.session_id);
-      } catch (_err) {
-        feeUsd = null;
+    if (event.type === COMPLETED_EVENT) {
+      const session = event.data.object as CheckoutSession;
+      if (session.payment_status !== "paid") {
+        return json(200, {
+          ignored: true,
+          reason: `payment_status ${session.payment_status}`,
+        });
       }
-      const amounts = computeAmounts(parsed.amount_total, feeUsd ?? 0);
-      return json(200, {
-        dry_run: true,
-        parsed,
-        fee_lookup: feeUsd === null ? "failed" : "ok",
-        amounts: { ...amounts, studio_pct: parsed.studio_pct },
-      });
+      return credit(deps, event.id, session, dryRun, "defer");
     }
 
-    let feeUsd: number | null;
+    if (event.type === CHARGE_UPDATED_EVENT) {
+      const charge = event.data.object as ChargeObject;
+      if (!charge.balance_transaction) {
+        return json(200, {
+          ignored: true,
+          reason: "charge has no balance transaction",
+        });
+      }
+      const intent = typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id ?? null;
+      if (!intent) {
+        return json(200, { ignored: true, reason: "charge has no payment intent" });
+      }
+      let session: CheckoutSession | null;
+      try {
+        session = await deps.findSession(intent);
+      } catch (err) {
+        return json(500, {
+          error: "Session lookup failed",
+          detail: errorMessage(err),
+        });
+      }
+      if (!session) {
+        return json(200, { ignored: true, reason: "no checkout session" });
+      }
+      if (session.payment_status !== "paid") {
+        return json(200, {
+          ignored: true,
+          reason: `payment_status ${session.payment_status}`,
+        });
+      }
+      return credit(deps, event.id, session, dryRun, "retry");
+    }
+
+    return json(200, { ignored: true, reason: `event type ${event.type}` });
+  };
+}
+
+/**
+ * Parses a paid session, looks its fee up and calls the RPC. When the fee is
+ * not there yet, "defer" acknowledges (a charge.updated will credit) and
+ * "retry" answers 500 so Stripe sends the event again.
+ */
+async function credit(
+  deps: HandlerDeps,
+  eventId: string,
+  session: CheckoutSession,
+  dryRun: boolean,
+  missingFee: "defer" | "retry",
+): Promise<Response> {
+  let parsed: Parsed;
+  try {
+    parsed = await parseSession(eventId, session);
+  } catch (err) {
+    return json(500, {
+      error: "Unusable checkout session",
+      detail: errorMessage(err),
+    });
+  }
+
+  if (dryRun) {
+    let feeUsd: number | null = null;
     try {
       feeUsd = await deps.lookupFee(parsed.session_id);
-    } catch (err) {
-      return json(500, {
-        error: "Fee lookup failed",
-        detail: errorMessage(err),
-      });
+    } catch (_err) {
+      feeUsd = null;
     }
-    if (feeUsd === null) {
-      return json(500, { error: "Balance transaction is not available yet" });
-    }
+    const amounts = computeAmounts(parsed.amount_total, feeUsd ?? 0);
+    return json(200, {
+      dry_run: true,
+      parsed,
+      fee_lookup: feeUsd === null ? "failed" : "ok",
+      amounts: { ...amounts, studio_pct: parsed.studio_pct },
+    });
+  }
 
-    try {
-      const amounts = computeAmounts(parsed.amount_total, feeUsd);
-      const result = await deps.applyContribution(parsed, amounts);
-      return json(200, { ...result, event_id: parsed.event_id });
-    } catch (err) {
-      return json(500, {
-        error: "apply_contribution failed",
-        detail: errorMessage(err),
+  let feeUsd: number | null;
+  try {
+    feeUsd = await deps.lookupFee(parsed.session_id);
+  } catch (err) {
+    return json(500, {
+      error: "Fee lookup failed",
+      detail: errorMessage(err),
+    });
+  }
+  if (feeUsd === null) {
+    if (missingFee === "defer") {
+      return json(200, {
+        deferred: true,
+        reason: "Balance transaction is not available yet",
+        event_id: parsed.event_id,
       });
     }
-  };
+    return json(500, { error: "Balance transaction is not available yet" });
+  }
+
+  try {
+    const amounts = computeAmounts(parsed.amount_total, feeUsd);
+    const result = await deps.applyContribution(parsed, amounts);
+    return json(200, { ...result, event_id: parsed.event_id });
+  } catch (err) {
+    return json(500, {
+      error: "apply_contribution failed",
+      detail: errorMessage(err),
+    });
+  }
 }

@@ -43,7 +43,7 @@ Five sizes on a 1.2 ratio from the 17px body. Every text role uses exactly one o
 
 ## Patterns
 
-**Top bar.** `header.topbar` holds `.wrap.topbar-row`: `.brand` with the wordmark (a link home, `--size-lead` display) and `nav` with Studio, Ledger, Play (external, only when `VITE_PLAY_URL` is set), Contribute (external, only when the Stripe link is set) and Discord (external, only when the invite is set). Under 48rem the row stacks. There is no Board link and no live figure in the bar.
+**Top bar.** `header.topbar` holds `.wrap.topbar-row`: `.brand` with the wordmark (a link home, `--size-lead` display, led by the decorative peanut mark `img.mark` at 1.5em from `public/peanut.png`) and `nav` with Studio, Ledger, Play (external, only when `VITE_PLAY_URL` is set), Contribute (external, only when the Stripe link is set) and Discord (external, only when the invite is set). Under 48rem the row stacks. There is no Board link and no live figure in the bar.
 
 **Masthead and pitch.** The landing `.masthead` carries a visually hidden `h1.sr-only` (the studio name), `.pitch` (`copy.pitch`) and the launch line `p.launch`, both at `--size-lead` because they read as one intro, showing `copy.notLiveYet` before launch or `copy.liveSince` plus a formatted date after.
 

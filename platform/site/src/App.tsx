@@ -33,6 +33,7 @@ function TopBar() {
       <div className="wrap topbar-row">
         <div className="brand">
           <Link className="wordmark" to="/">
+            <img className="mark" src="/peanut.png" alt="" width={256} height={256} />
             {copy.studioName}
           </Link>
         </div>

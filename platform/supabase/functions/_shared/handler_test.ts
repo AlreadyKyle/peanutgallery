@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import {
+  type CheckoutSession,
   createHandler,
   type HandlerDeps,
   type WebhookEvent,
@@ -38,18 +39,43 @@ function completedEvent(
   };
 }
 
+/** A charge.updated event for the $1 charge; the balance transaction is attached unless overridden. */
+function chargeUpdatedEvent(charge: Record<string, unknown> = {}): WebhookEvent {
+  return {
+    id: "evt_handler_charge",
+    type: "charge.updated",
+    data: {
+      object: {
+        id: "ch_handler_1",
+        payment_intent: "pi_handler_1",
+        balance_transaction: "txn_handler_1",
+        ...charge,
+      },
+    },
+  };
+}
+
+/** The paid session findSession returns for pi_handler_1. */
+function paidSession(session: Record<string, unknown> = {}): CheckoutSession {
+  return completedEvent(session).data.object as CheckoutSession;
+}
+
 interface Fake {
   deps: HandlerDeps;
   applied: { parsed: Parsed; amounts: Amounts }[];
   feeLookups: string[];
+  sessionLookups: string[];
 }
 
 function fake(
-  overrides: Partial<Pick<HandlerDeps, "lookupFee" | "applyContribution">> = {},
+  overrides: Partial<
+    Pick<HandlerDeps, "lookupFee" | "findSession" | "applyContribution">
+  > = {},
   event: WebhookEvent = completedEvent(),
 ): Fake {
   const applied: Fake["applied"] = [];
   const feeLookups: string[] = [];
+  const sessionLookups: string[] = [];
   const deps: HandlerDeps = {
     constructEvent: (_body, signature) => {
       if (signature !== GOOD_SIGNATURE) {
@@ -65,6 +91,10 @@ function fake(
       feeLookups.push(sessionId);
       return Promise.resolve(0.29);
     },
+    findSession: (paymentIntentId) => {
+      sessionLookups.push(paymentIntentId);
+      return Promise.resolve(paidSession());
+    },
     applyContribution: (parsed, amounts) => {
       applied.push({ parsed, amounts });
       return Promise.resolve({ inserted: true, contribution_id: "c1" });
@@ -72,7 +102,7 @@ function fake(
     serviceKey: SERVICE_KEY,
     ...overrides,
   };
-  return { deps, applied, feeLookups };
+  return { deps, applied, feeLookups, sessionLookups };
 }
 
 function post(headers: Record<string, string> = {}, method = "POST"): Request {
@@ -182,11 +212,134 @@ Deno.test("handler credits a paid session through apply_contribution", async () 
   assertEquals(applied[0]!.parsed.studio_pct, 20);
 });
 
-Deno.test("handler answers 500 while the balance transaction is missing so Stripe retries", async () => {
+Deno.test("handler defers a completed session whose fee is not available yet", async () => {
   const { deps, applied } = fake({ lookupFee: () => Promise.resolve(null) });
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, {
+    deferred: true,
+    reason: "Balance transaction is not available yet",
+    event_id: "evt_handler_1",
+  });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated with a balance transaction credits the paid checkout session", async () => {
+  const { deps, applied, feeLookups, sessionLookups } = fake(
+    {},
+    chargeUpdatedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, {
+    inserted: true,
+    contribution_id: "c1",
+    event_id: "evt_handler_charge",
+  });
+  assertEquals(sessionLookups, ["pi_handler_1"]);
+  assertEquals(feeLookups, ["cs_handler_1"]);
+  assertEquals(applied.length, 1);
+  assertEquals(applied[0]!.parsed.session_id, "cs_handler_1");
+  assertEquals(applied[0]!.parsed.event_id, "evt_handler_charge");
+  assertEquals(applied[0]!.amounts, {
+    amount_usd: 1,
+    fee_usd: 0.29,
+    net_usd: 0.71,
+  });
+});
+
+Deno.test("charge.updated reads an expanded payment intent id", async () => {
+  const { deps, applied, sessionLookups } = fake(
+    {},
+    chargeUpdatedEvent({ payment_intent: { id: "pi_handler_1" } }),
+  );
+  const { status } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(sessionLookups, ["pi_handler_1"]);
+  assertEquals(applied.length, 1);
+});
+
+Deno.test("charge.updated without a balance transaction is ignored", async () => {
+  const { deps, applied, sessionLookups } = fake(
+    {},
+    chargeUpdatedEvent({ balance_transaction: null }),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, {
+    ignored: true,
+    reason: "charge has no balance transaction",
+  });
+  assertEquals(sessionLookups.length, 0);
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated without a payment intent is ignored", async () => {
+  const { deps, applied } = fake(
+    {},
+    chargeUpdatedEvent({ payment_intent: null }),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, { ignored: true, reason: "charge has no payment intent" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated for a payment outside Checkout is ignored", async () => {
+  const { deps, applied } = fake(
+    { findSession: () => Promise.resolve(null) },
+    chargeUpdatedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, { ignored: true, reason: "no checkout session" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated for an unpaid session is ignored", async () => {
+  const { deps, applied } = fake(
+    {
+      findSession: () =>
+        Promise.resolve(paidSession({ payment_status: "unpaid" })),
+    },
+    chargeUpdatedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, { ignored: true, reason: "payment_status unpaid" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated answers 500 when the session lookup throws", async () => {
+  const { deps, applied } = fake(
+    { findSession: () => Promise.reject(new Error("Stripe is down")) },
+    chargeUpdatedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 500);
+  assertEquals(body, { error: "Session lookup failed", detail: "Stripe is down" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("charge.updated answers 500 when the fee is still missing so Stripe retries", async () => {
+  const { deps, applied } = fake(
+    { lookupFee: () => Promise.resolve(null) },
+    chargeUpdatedEvent(),
+  );
   const { status, body } = await call(deps, post());
   assertEquals(status, 500);
   assertEquals(body, { error: "Balance transaction is not available yet" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("dry run on charge.updated finds the session and never calls the RPC", async () => {
+  const { deps, applied, sessionLookups } = fake({}, chargeUpdatedEvent());
+  const { status, body } = await call(deps, post(DRY_RUN_HEADERS));
+  assertEquals(status, 200);
+  assertEquals(body.dry_run, true);
+  assertEquals(body.fee_lookup, "ok");
+  assertEquals((body.parsed as Parsed).event_id, "evt_handler_charge");
+  assertEquals(sessionLookups, ["pi_handler_1"]);
   assertEquals(applied.length, 0);
 });
 

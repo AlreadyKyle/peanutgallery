@@ -13,6 +13,13 @@
   VITE_SUPABASE_URL = "https://lyxndueoeisyqzewflpu.supabase.co"
   VITE_SUPABASE_ANON_KEY = "sb_publishable_-i-BKWMS4TmEfSldTE9b7g_UMBRV2wh"
 
+# The netlify.app address always forwards to the studio's own domain.
+[[redirects]]
+  from = "https://peanutgallerygames.netlify.app/*"
+  to = "https://peanutgallery.games/:splat"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
