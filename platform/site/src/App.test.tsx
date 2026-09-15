@@ -75,7 +75,11 @@ describe('Site chrome', () => {
   it('shows the wordmark, the Studio and Ledger links, the pitch line and the footer line', () => {
     renderAt('/');
     const banner = screen.getByRole('banner');
-    expect(within(banner).getByRole('link', { name: copy.studioName }).getAttribute('href')).toBe('/');
+    const wordmark = within(banner).getByRole('link', { name: copy.studioName });
+    expect(wordmark.getAttribute('href')).toBe('/');
+    const mark = wordmark.querySelector('img.mark');
+    expect(mark?.getAttribute('src')).toBe('/peanut.png');
+    expect(mark?.getAttribute('alt')).toBe('');
     expect(within(nav()).getByRole('link', { name: 'Studio' }).getAttribute('href')).toBe('/');
     expect(within(nav()).getByRole('link', { name: 'Ledger' }).getAttribute('href')).toBe('/ledger');
     expect(screen.getByText(copy.pitch)).toBeTruthy();

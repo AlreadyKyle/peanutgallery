@@ -194,6 +194,9 @@ code {
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--size-lead);
   font-weight: var(--weight-display);
   font-style: italic;
@@ -202,6 +205,13 @@ code {
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* The peanut mark: decorative, black on transparent, a little taller than the wordmark's caps. */
+.mark {
+  display: block;
+  width: auto;
+  height: 1.5em;
 }
 
 nav {
