@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { copy } from '../lib/copy';
@@ -24,6 +24,8 @@ const snapshot: Snapshot = {
       source: 'board',
       stage: 'building',
       shape: 'goal',
+      bucket: 'game',
+      folder: 'seed-1',
       funding_target_usd: 100,
       funded_usd: 100,
       actual_usd: 3.2,
@@ -37,6 +39,8 @@ const snapshot: Snapshot = {
       source: 'community',
       stage: 'voted',
       shape: 'goal',
+      bucket: 'game',
+      folder: 'seed-1',
       funding_target_usd: 100,
       funded_usd: 25,
       actual_usd: 0,
@@ -50,10 +54,42 @@ const snapshot: Snapshot = {
       source: 'agent',
       stage: 'proposed',
       shape: 'goal',
+      bucket: 'game',
+      folder: 'seed-1',
       funding_target_usd: 50,
       funded_usd: 0,
       actual_usd: 0,
       created_at: '2026-09-14T00:00:02Z',
+    },
+    {
+      id: 'studio1',
+      title: 'A clearer ledger page',
+      summary: null,
+      intent: null,
+      source: 'board',
+      stage: 'proposed',
+      shape: 'goal',
+      bucket: 'platform',
+      folder: 'platform',
+      funding_target_usd: 10,
+      funded_usd: 0,
+      actual_usd: 0,
+      created_at: '2026-09-14T00:00:03Z',
+    },
+    {
+      id: 'queued1',
+      title: 'Gatherer costs 11',
+      summary: null,
+      intent: null,
+      source: 'board',
+      stage: 'funded',
+      shape: 'oneoff',
+      bucket: 'game',
+      folder: 'seed-1',
+      funding_target_usd: 0,
+      funded_usd: 0,
+      actual_usd: 0,
+      created_at: '2026-09-14T00:00:04Z',
     },
   ],
   funding: { next1: { contributors: 3, credited_usd: 18.5 } },
@@ -68,6 +104,10 @@ const snapshot: Snapshot = {
 /** A paragraph whose whole text, across its inline elements, is exactly this. */
 function paragraph(text: string): HTMLElement {
   return screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === text);
+}
+
+function paragraphIn(container: HTMLElement, text: string): HTMLElement {
+  return within(container).getByText((_, el) => el?.tagName === 'P' && el.textContent === text);
 }
 
 function fakeSource(): StudioSource {
@@ -104,58 +144,59 @@ describe('Landing', () => {
 
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([copy.pitchTitle]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
-    expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe(
-      'https://buy.stripe.com/test-link',
-    );
+    // Contribute goes to the chooser first, not straight to checkout.
+    expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
     expect(screen.getByText(copy.split)).toBeTruthy();
-    expect(screen.getByText(copy.nextIntro)).toBeTruthy();
+    expect(screen.getByText(copy.fundIntro)).toBeTruthy();
 
     for (const step of copy.steps) expect(screen.getByText(step)).toBeTruthy();
-
     expect(screen.getByText(copy.artPolicy)).toBeTruthy();
     expect(screen.getByText(copy.allAges)).toBeTruthy();
     expect(screen.getByText(copy.fixedRulesIntro)).toBeTruthy();
     for (const rule of copy.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
 
+    await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([copy.now, copy.next, copy.howItWorks, copy.meter, copy.ledger, copy.policies]);
-    expect(screen.getByRole('link', { name: copy.fullLedger }).getAttribute('href')).toBe('/ledger');
+    ).toEqual([copy.rightNow, copy.now, copy.fund, copy.queued, copy.howItWorks, copy.meter, copy.ledger, copy.policies]);
+    expect(screen.getAllByRole('link', { name: copy.fullLedger }).map((link) => link.getAttribute('href'))).toEqual(['/ledger', '/ledger']);
 
-    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
+    // Right now: money available, what is building and the latest agent work.
+    const panel = screen.getByRole('complementary', { name: copy.rightNow });
+    expect(within(panel).getByText('$48.56')).toBeTruthy();
+    expect(paragraphIn(panel, `${copy.buildingLine} The core loop`)).toBeTruthy();
+    expect(within(panel).getByText(copy.ledgerEmpty)).toBeTruthy();
+
     expect(screen.getByText('$7.10')).toBeTruthy();
     expect(screen.getByText('$2.56')).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
     expect(screen.getByText('12,000 in · 3,000 cached · 800 out tokens')).toBeTruthy();
-    // Every figure explains itself in a visible line.
-    expect(screen.getByText(copy.describeAvailable)).toBeTruthy();
+    expect(screen.getAllByText(copy.describeAvailable)).toHaveLength(2);
     expect(screen.getByText(copy.describeReserve)).toBeTruthy();
     expect(screen.getByText(copy.describeIncidentReserve)).toBeTruthy();
     expect(screen.getByText(copy.describeAgentSpend)).toBeTruthy();
     expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
-    expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy();
-
-    // Not launched yet, so the not-live line shows and no live-since date.
     expect(screen.getByText(copy.notLiveYet)).toBeTruthy();
 
-    // Now shows the building card and what it has spent; Next shows the queued cards.
-    expect(screen.getByText('The core loop')).toBeTruthy();
-    expect(screen.getByText(`$3.20 ${copy.spentSoFar}`)).toBeTruthy();
+    // Building now shows the card and what it has spent; the fund board lists open cards.
+    expect(paragraph(`$3.20 ${copy.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
     expect(paragraph('$25.00 of $100.00 · 3 contributors')).toBeTruthy();
-
-    const bars = screen.getAllByRole('progressbar');
-    expect(bars.map((bar) => bar.getAttribute('aria-label'))).toEqual([
+    expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual([
       'A second level',
       'A music track',
+      'A clearer ledger page',
     ]);
-    expect(bars[0]?.getAttribute('aria-valuenow')).toBe('25');
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
-    ).toEqual(['The core loop', 'A second level', 'A music track']);
+    ).toEqual([copy.recentWork, 'The core loop', 'A second level', 'A music track', 'A clearer ledger page']);
+
+    // Queued lists the funded card as a row, not a box.
+    const queued = screen.getByRole('region', { name: copy.queued });
+    expect(within(queued).getByText('Gatherer costs 11')).toBeTruthy();
+    expect(within(queued).queryByRole('progressbar')).toBeNull();
 
     // Summaries show; the agent briefs sit in closed disclosures.
     expect(screen.getByText('Walk, jump and land in the first level.')).toBeTruthy();
-    expect(screen.getByText('A second level to play after the first.')).toBeTruthy();
     const briefs = [...document.querySelectorAll('details.brief')] as HTMLDetailsElement[];
     expect(briefs.map((d) => [d.open, d.querySelector('p')?.textContent])).toEqual([
       [false, 'Move, jump, land.'],
@@ -163,26 +204,49 @@ describe('Landing', () => {
     ]);
   });
 
+  it('filters the fund board by category and explains the next game', async () => {
+    renderLanding(fakeSource());
+    await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(3));
+    const filters = screen.getByRole('group', { name: copy.filterLabel });
+    const pressed = () =>
+      within(filters)
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-pressed') === 'true')
+        .map((b) => b.textContent);
+    expect(pressed()).toEqual([`${copy.categories.all} 3`]);
+
+    fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.studio} 1` }));
+    expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(['A clearer ledger page']);
+    expect(screen.getByText(copy.categoryNotes.studio)).toBeTruthy();
+
+    fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.game} 2` }));
+    expect(screen.getAllByRole('progressbar')).toHaveLength(2);
+
+    fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.next} 0` }));
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByText(copy.categoryNotes.next)).toBeTruthy();
+    expect(screen.queryByText(copy.fundEmpty)).toBeNull();
+  });
+
   it('shows the unavailable line and no figures without a database', () => {
     renderLanding(null);
     expect(screen.getAllByText(copy.meterUnavailable).length).toBeGreaterThan(0);
     expect(screen.queryByText('$0.00')).toBeNull();
-    expect(screen.queryByText(copy.nowEmpty)).toBeNull();
-    expect(screen.queryByText(copy.nextEmpty)).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
     expect(screen.getByText(copy.contributeUnavailable)).toBeTruthy();
-    // Launch state is unknown without a database, so no launch line shows.
     expect(screen.queryByText(copy.notLiveYet)).toBeNull();
   });
 
-  it('shows the empty Now and Next lines when the database holds no cards', async () => {
+  it('says nothing is building and nothing needs funding when the database holds no cards', async () => {
     renderLanding({
       load: () => Promise.resolve({ ...snapshot, cards: [], funding: {} }),
       subscribe: () => () => {},
     });
     await waitFor(() => expect(screen.getByText(copy.nowEmpty)).toBeTruthy());
-    expect(screen.getByText(copy.nextEmpty)).toBeTruthy();
-    expect(screen.queryByText(copy.meterUnavailable)).toBeNull();
+    expect(screen.getByText(copy.fundEmpty)).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: copy.queued })).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 

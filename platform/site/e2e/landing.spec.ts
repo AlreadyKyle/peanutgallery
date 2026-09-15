@@ -18,15 +18,11 @@ test('landing loads at 375 px with every element visible and no horizontal overf
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
   await expect(page.getByText('Vote on what they do next by contributing to their compute.')).toBeVisible();
   await expect(page.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
-  await expect(main.getByRole('heading', { level: 2 })).toHaveText([
-    'Building now',
-    'Up next',
-    'How it works',
-    'Funding',
-    'Ledger',
-    'Fixed rules',
-  ]);
-  await expect(main.getByRole('link', { name: 'Full ledger' })).toBeVisible();
+  // Building now and Queued appear only when cards are in those stages, so only the fixed headings are listed.
+  for (const name of ['Right now', "Fund what's next", 'How it works', 'Funding', 'Ledger', 'Fixed rules']) {
+    await expect(main.getByRole('heading', { level: 2, name, exact: true })).toBeVisible();
+  }
+  await expect(main.getByRole('link', { name: 'Full ledger' }).first()).toBeVisible();
   await expect(page.getByText('Funding a card is your vote.', { exact: false })).toBeVisible();
   await expect(page.getByText('Art inside the games is made by code', { exact: false })).toBeVisible();
   await expect(page.getByText('Everything here is made for all ages.')).toBeVisible();
@@ -37,14 +33,25 @@ test('landing loads at 375 px with every element visible and no horizontal overf
     footer.getByText('Free games, playable in a browser. Built by AI agents, directed by the players.'),
   ).toBeVisible();
   if ((process.env.VITE_STRIPE_PAYMENT_LINK_URL ?? '').trim() !== '') {
-    await expect(nav.getByRole('link', { name: 'Contribute' })).toBeVisible();
-    await expect(main.getByRole('link', { name: 'Contribute' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
+    await expect(main.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
     const box = await main.getByRole('link', { name: 'Contribute' }).boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   }
   if ((process.env.VITE_DISCORD_INVITE ?? '').trim() !== '') {
     await expect(nav.getByRole('link', { name: 'Discord' })).toBeVisible();
     await expect(footer.getByRole('link', { name: 'Discord' })).toBeVisible();
+  }
+  expect(await overflowsHorizontally(page)).toBe(false);
+});
+
+test('contribute page puts Pick for me first at 375 px without horizontal overflow', async ({ page }) => {
+  await page.goto('/contribute');
+  await expect(page.getByRole('heading', { level: 1, name: 'Where should your contribution go?' })).toBeVisible();
+  if ((process.env.VITE_STRIPE_PAYMENT_LINK_URL ?? '').trim() !== '') {
+    const first = page.getByRole('main').getByRole('link').first();
+    await expect(first).toContainText('Pick for me');
+    await expect(first).toHaveAttribute('href', process.env.VITE_STRIPE_PAYMENT_LINK_URL!.trim());
   }
   expect(await overflowsHorizontally(page)).toBe(false);
 });

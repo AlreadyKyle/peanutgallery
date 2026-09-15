@@ -4,7 +4,8 @@ import type { StudioState } from '../lib/studio';
 import { EventList } from './EventList';
 import { Stat } from './Stat';
 
-export function LedgerSummary({ studio }: { studio: StudioState }) {
+// The landing shows the totals only; the Ledger page adds the agent work list.
+export function LedgerSummary({ studio, events = true }: { studio: StudioState; events?: boolean }) {
   if (studio.state === 'loading') {
     return <p className="muted">{copy.loadingLedger}</p>;
   }
@@ -22,7 +23,7 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
         <Stat label={copy.agentSpend} description={copy.describeAgentSpend} value={formatUsd(totals.usd_total)} />
       </dl>
       <p className="muted small">{tokens}</p>
-      <EventList snapshot={studio.snapshot} />
+      {events ? <EventList snapshot={studio.snapshot} /> : null}
     </>
   );
 }

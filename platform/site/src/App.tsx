@@ -4,6 +4,7 @@ import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
 import { StudioProvider } from './lib/studio';
 import { Board } from './pages/Board';
+import { Contribute } from './pages/Contribute';
 import { Landing } from './pages/Landing';
 import { Ledger } from './pages/Ledger';
 
@@ -16,6 +17,7 @@ export function App() {
           <Route element={<PublicLayout />}>
             <Route path="/" element={<Landing />} />
             <Route path="/ledger" element={<Ledger />} />
+            <Route path="/contribute" element={<Contribute />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="/board" element={<Board />} />
@@ -42,9 +44,9 @@ function TopBar() {
           {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
           {env.discordInvite === '' ? null : <a href={env.discordInvite}>{copy.discord}</a>}
           {env.stripePaymentLinkUrl === '' ? null : (
-            <a className="nav-primary" href={env.stripePaymentLinkUrl}>
+            <NavLink className="nav-primary" to="/contribute">
               {copy.contribute}
-            </a>
+            </NavLink>
           )}
         </nav>
       </div>

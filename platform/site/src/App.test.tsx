@@ -107,9 +107,7 @@ describe('Site chrome', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     vi.stubEnv('VITE_DISCORD_INVITE', 'https://discord.gg/invite-code');
     renderAt('/');
-    expect(within(nav()).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe(
-      'https://buy.stripe.com/test-link',
-    );
+    expect(within(nav()).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
     expect(within(nav()).getByRole('link', { name: copy.discord }).getAttribute('href')).toBe(
       'https://discord.gg/invite-code',
     );
@@ -140,7 +138,7 @@ describe('Site chrome', () => {
       subscribe: () => () => {},
     });
     // The StudioProvider loads once; the meter and every card read the shared snapshot.
-    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('$48.56').length).toBeGreaterThan(0));
     expect(loads).toBe(1);
   });
 
