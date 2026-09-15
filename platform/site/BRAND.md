@@ -33,7 +33,7 @@ Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the ru
 | `--leading-heading` | 1.25 | Headings |
 | `--space-1` … `--space-5` | 0.5 / 1 / 1.5 / 2.5 / 4rem | All spacing |
 | `--wrap` | 72rem | Page width: top bar, main, footer |
-| `--measure` | 44rem | Maximum width of any text block; the whole content of text pages (ledger, contribute, board) |
+| `--measure` | 44rem | Maximum width of any text block; the whole content of text pages (ledger, contribute, terms, privacy, refunds, contact, board) |
 | `--gutter` | 1.25rem | Side padding at every width |
 | `--radius` | 0.375rem | Buttons and fields |
 | `--radius-box` | 0.625rem | Cards, choices, the Right now panel |
@@ -48,7 +48,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 | Token | Size | Roles |
 | --- | --- | --- |
-| `--size-small` | 14px | Meta lines, figure descriptions, event and deploy rows, the split line, the brief disclosure, the footer |
+| `--size-small` | 14px | Meta lines, figure descriptions, event and deploy rows, the split line, the brief disclosure, the last-updated line, the footer |
 | `--size-body` | 17px | Paragraphs, card titles (`h3`), nav, buttons, the wordmark |
 | `--size-lead` | 20px | The lede under a page heading, figure amounts |
 | `--size-large` | 24px | Section headings (`h2`) |
@@ -60,16 +60,17 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Landing intro.** `.intro` holds the hero and the Right now panel: side by side (3:2) from 64rem, stacked below.
 - **Hero:** one `h1` (the first pitch sentence), a `.lede` (the second), the muted launch line, the Contribute button and the muted split line.
-- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), the last three agent actions, and a Full ledger link.
+- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, the last three agent actions, and a Full ledger link.
 
 **Landing order.**
 1. Intro.
 2. Building now, only when a card is building.
 3. Fund what's next.
 4. Queued, only when a card is funded and waiting.
-5. How it works.
-6. Funding and Ledger, side by side from 64rem.
-7. Fixed rules.
+5. Shipped, only when a card is live.
+6. How it works.
+7. Funding and Ledger, side by side from 64rem.
+8. Fixed rules.
 
 **Section.** `section.section` opens with an `h2` and nothing above it but space. Paragraphs directly inside a section stop at `--measure`.
 
@@ -84,6 +85,15 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 - Building now: stages building and gated.
 - Fund what's next: proposed, designing and voted, picked ones first.
 - Queued: funded, shown as compact rows rather than boxes, because there is nothing to do with them.
+- Shipped: live, newest `updated_at` first, shown as rows. A live card is never in Fund what's next or on `/contribute`.
+
+**Shipped list.** `ul.shipped` holds one row per live card at the reading measure, with hairlines between rows like a list. A row has:
+- the category (`.shipped-category`: muted, small, 600);
+- the `h3` title and the summary;
+- a `.card-meta` line: "$1.23 spent · 3 contributors · shipped 15 Sep 2026". A card with no goal and no funding names its source instead of a count ("Board");
+- "Play the game" on a Dust card when the play URL is set, described by the card title.
+
+Rows, not boxes, because a shipped card is a record: the one action, playing the game, is the same for every Dust card. Like Building now and Queued, the section is not rendered until a card ships.
 
 **Funding bar.** `.bar` is 0.5rem tall with rounded ends: `--track` behind, `--accent` fill sized by the percentage. It carries `role="progressbar"` and the card title as its label. The amount is always written under it, never only drawn.
 
@@ -92,6 +102,13 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 - Then "Or pick a card", with fundable cards grouped by category, each a `.choice` block linking to the Payment Link with the card id.
 - The split line comes last.
 - Every choice is one large link at least 44px tall.
+
+**Text pages** (`/terms`, `/privacy`, `/refunds`, `/contact`, through `TextPage`). A `main.text-page`, never `.wide`, so every block stops at `--measure`.
+- `PageHeader` gives the one `h1` and the lede.
+- Each section is a `section.section` that opens with an `h2`, followed by plain paragraphs. Sections sit `--space-4` apart, closer than landing sections, because each holds only a sentence or two.
+- In the copy, `{email}` becomes the contact address as a mailto link, `{refunds}` a link to the Refunds page, and `{discord}` the Discord invite.
+- The legal pages end with the muted small "Last updated" line. Contact adds a Discord section only when the invite is set.
+- The strings live in `copy.ts` like every public string. The pages never say draft.
 
 **Figure row.** `Stat` renders a `div.stat` inside `dl.stats`: the label (600) and a muted description on the left, the amount on the right in tabular numerals at `--size-lead`. Every figure has a description.
 
@@ -103,9 +120,13 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Lists.** How it works is an `ol.steps` grid: one column on phones, two from 48rem, four from 64rem. The fixed rules are a `ul.rules` with discs, at the reading measure.
 
-**Footer.** Muted small text on one hairline: the footer line, Discord, and the "Created by Clayhouse" credit.
+**Footer.** Muted small text on one hairline: the footer line, then `ul.footer-links` with Terms, Privacy, Refunds, Contact and Discord (when the invite is set), then the "Created by Clayhouse" credit. The links are underlined like every body link and wrap onto their own line on a phone.
+
+**Link preview image.** `public/og.png` is 1200×630 and typographic: the wordmark with the peanut mark, the pitch line as the heading and lede, and the address in muted small text on `--paper`. `scripts/og-image.mjs` draws it from `styles.css` at a 175% root size, so the tokens scale together. Run it again and commit the PNG when the pitch, the tokens or the mark change.
 
 **Forms (/board).** Labels at weight 600 above the fields. Fields are `--target` tall with a `--field` border and `--radius` corners. Buttons use `.button` styling.
+
+**Two-factor step (/board).** A board member's first section until the session has a verified second factor. It says what stays hidden. With no authenticator app, it shows a "Set up an authenticator app" button, then the QR code (`img.qr`, 12.5rem), the secret in `code` and a 6-digit code form. With an app, it shows the code form only.
 
 ## Breakpoints
 
@@ -127,5 +148,5 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 - Text contrast is at least 4.5:1, and control borders at least 3:1.
 - Every interactive element is reachable by keyboard and shows the focus ring.
 - Touch targets are at least 44px tall.
-- No horizontal scroll at 375px (Playwright checks the landing, ledger and board pages).
+- No horizontal scroll at 375px (Playwright checks the landing, contribute, ledger, terms, privacy, refunds, contact and board pages).
 - Information is never carried by colour alone or hidden behind hover.
