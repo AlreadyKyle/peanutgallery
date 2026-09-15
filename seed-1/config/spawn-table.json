@@ -1,6 +1,6 @@
 {
   "rows": [
-    { "id": "gatherer", "name": "Gatherer", "baseCost": 10, "rate": 0.2 },
+    { "id": "gatherer", "name": "Gatherer", "baseCost": 11, "rate": 0.2 },
     { "id": "cart", "name": "Cart", "baseCost": 150, "rate": 1.5 },
     { "id": "mill", "name": "Mill", "baseCost": 2500, "rate": 12 },
     { "id": "forge", "name": "Forge", "baseCost": 40000, "rate": 90 },
