@@ -601,3 +601,21 @@ describe("board-two-factor migration", () => {
     expect(boardTwoFactor.match(/^create or replace function /gm)).toHaveLength(7);
   });
 });
+
+const CARD_SPEND_FILE = "20260919000100_card_spend.sql";
+const cardSpend = readFileSync(resolve(MIGRATIONS_DIR, CARD_SPEND_FILE), "utf8");
+
+describe("card-spend migration", () => {
+  it("carries a 14-digit stamp that sorts after the board-two-factor file", () => {
+    expect(CARD_SPEND_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(CARD_SPEND_FILE > BOARD_TWO_FACTOR_FILE).toBe(true);
+  });
+
+  it("sums studio-billed ledger rows per card only, so founder-billed turns stay private", () => {
+    expect(cardSpend).toContain("create or replace view public.public_card_spend with (security_invoker = false) as");
+    expect(cardSpend).toContain("where billed_to = 'studio' and card_id is not null");
+    expect(cardSpend).not.toContain("actual_usd\n");
+    expect(cardSpend).toContain("revoke all on table public.public_card_spend from anon, authenticated;");
+    expect(cardSpend).toContain("grant select on public.public_card_spend to anon, authenticated;");
+  });
+});

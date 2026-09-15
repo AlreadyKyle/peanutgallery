@@ -145,7 +145,7 @@ try {
       check(latest === `Latest shipped: ${titles[0]}`, `Right now names the latest shipped card: ${latest}`);
       const metas = await shipped.locator('li .card-meta').allTextContents();
       check(
-        metas.length === titles.length && metas.every((line) => /^\$[\d,]+\.\d\d spent · .+ · shipped .+$/.test(line)),
+        metas.length === titles.length && metas.every((line) => /^(\$[\d,]+\.\d\d spent · )?.+ · shipped .+$/.test(line)),
         `${titles.length} shipped rows carry cost, contributors and date`,
       );
     }

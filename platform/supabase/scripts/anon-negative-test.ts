@@ -30,6 +30,7 @@ const PUBLIC_RELATIONS = [
   "public_ledger_totals",
   "public_studio",
   "public_card_funding",
+  "public_card_spend",
 ];
 
 interface Outcome {

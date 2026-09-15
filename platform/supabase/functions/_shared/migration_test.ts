@@ -133,6 +133,7 @@ Deno.test("migrations on PGlite", {
         "20260917000000_contribution_session.sql",
         "20260918000000_founder_billing.sql",
         "20260919000000_board_two_factor.sql",
+        "20260919000100_card_spend.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -179,6 +180,7 @@ Deno.test("migrations on PGlite", {
         "last_green",
         "public_agent_events",
         "public_card_funding",
+        "public_card_spend",
         "public_ledger_totals",
         "public_studio",
       ]);
@@ -1336,7 +1338,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on the five public tables and the five views and nothing else",
+      "anon holds select on the five public tables and the six views and nothing else",
       async () => {
         const expected = [
           "cards",
@@ -1346,6 +1348,7 @@ Deno.test("migrations on PGlite", {
           "pool",
           "public_agent_events",
           "public_card_funding",
+          "public_card_spend",
           "public_ledger_totals",
           "public_studio",
           "roles",
@@ -1504,6 +1507,33 @@ Deno.test("migrations on PGlite", {
           assertEquals(funding, [
             { card_id: card.id, contributors: 1, credited_usd: credited },
           ]);
+        } finally {
+          await db.exec(`reset role`);
+        }
+      },
+    );
+
+    await t.step(
+      "public_card_spend publishes studio-billed spend per card and never founder-billed turns",
+      async () => {
+        const founderCards = await rows<{ card_id: string }>(
+          `select distinct card_id from public.ledger where billed_to = 'founder' and card_id is not null`,
+        );
+        assert(founderCards.length > 0, "an earlier step billed a card's turns to the founder");
+        const expected = await rows<{ card_id: string; spent_usd: string }>(
+          `select card_id, sum(usd)::numeric(12,4)::text as spent_usd from public.ledger where billed_to = 'studio' and card_id is not null group by card_id order by card_id`,
+        );
+        await db.exec(`set role anon`);
+        try {
+          const published = await rows<{ card_id: string; spent_usd: string }>(
+            `select card_id, spent_usd::text as spent_usd from public.public_card_spend order by card_id`,
+          );
+          assertEquals(published, expected);
+          for (const { card_id } of founderCards) {
+            const seen = published.find((p) => p.card_id === card_id);
+            const studioOnly = expected.find((e) => e.card_id === card_id);
+            assertEquals(seen, studioOnly, `card ${card_id} shows only its studio-billed rows`);
+          }
         } finally {
           await db.exec(`reset role`);
         }

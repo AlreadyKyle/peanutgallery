@@ -21,7 +21,7 @@ function card(overrides: Partial<Card> = {}): Card {
     folder: 'seed-1',
     funding_target_usd: 10,
     funded_usd: 0,
-    actual_usd: 0,
+    spent_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
     updated_at: '2026-09-14T00:00:00Z',
     ...overrides,
@@ -166,13 +166,16 @@ describe('BuildingNow and QueuedList', () => {
     render(
       <BuildingNow
         snapshot={snapshot([
-          card({ id: 'a', title: 'Building one', stage: 'building', actual_usd: 0.42 }),
+          card({ id: 'a', title: 'Building one', stage: 'building', spent_usd: 0.42 }),
           card({ id: 'b', title: 'Gated one', stage: 'gated', source: 'agent' }),
         ])}
       />,
     );
     expect(paragraph(`$0.42 ${copy.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
     expect(within(boxFor('Gated one')).getByText(copy.statusGated)).toBeTruthy();
+    // No studio-billed spend yet (or founder-billed work, which is never published): no cost shown.
+    expect(within(boxFor('Gated one')).getByText(copy.sources.agent).textContent).toBe(copy.sources.agent);
+    expect(within(boxFor('Gated one')).queryByText(new RegExp(copy.spentSoFar))).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     cleanup();
     const { container } = render(<BuildingNow snapshot={snapshot([card()])} />);
@@ -200,7 +203,7 @@ describe('ShippedList', () => {
       shape: 'goal',
       funding_target_usd: 3,
       funded_usd: 3,
-      actual_usd: 1.234,
+      spent_usd: 1.234,
       updated_at: '2026-09-15T09:00:00Z',
     }),
     card({
@@ -212,7 +215,7 @@ describe('ShippedList', () => {
       folder: 'platform',
       bucket: 'platform',
       funding_target_usd: 0,
-      actual_usd: 0.5,
+      spent_usd: 0.5,
       updated_at: '2026-09-16T18:30:00Z',
     }),
     card({ id: 'open', title: 'Still open', stage: 'proposed' }),
@@ -246,6 +249,12 @@ describe('ShippedList', () => {
     expect(play.getAttribute('href')).toBe(PLAY);
     expect(play.getAttribute('aria-describedby')).toBe(within(game).getByRole('heading', { level: 3 }).id);
     expect(within(section).queryByRole('progressbar')).toBeNull();
+  });
+
+  it('shows no cost for a card whose turns were all billed to the founder', () => {
+    render(<ShippedList snapshot={snapshot([card({ id: 'f', title: 'Founder built', stage: 'live', shape: 'oneoff', spent_usd: 0, updated_at: '2026-09-15T04:26:18Z' })])} />);
+    expect(screen.getByText(`${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-15T04:26:18Z')}`)).toBeTruthy();
+    expect(screen.queryByText(/\$/)).toBeNull();
   });
 
   it('shows no Play the game link without a play URL, and nothing at all without a shipped card', () => {

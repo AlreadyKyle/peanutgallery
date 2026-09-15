@@ -24,7 +24,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 **Shipped.**
 - The site's card select adds `live` to its stages and `updated_at` to its columns.
 - `groupCards` returns a `shipped` group: cards in `live`, newest `updated_at` first. A live card is never in Fund what's next and never offered on `/contribute`.
-- A Shipped section after Queued lists each shipped card with its category, title, summary, cost (`actual_usd` as `$0.00`), contributors (from `public_card_funding`) and ship date (`updated_at`). A Dust card also links "Play the game" to `VITE_PLAY_URL` when it is set.
+- A Shipped section after Queued lists each shipped card with its category, title, summary, cost (studio-billed spend from `public_card_spend` as `$0.00`, left out when there is none), contributors (from `public_card_funding`) and ship date (`updated_at`). A Dust card also links "Play the game" to `VITE_PLAY_URL` when it is set.
 - With no shipped card the section is not rendered, like Building now and Queued.
 - The Right now panel reads "Latest shipped: <title>" when a card has shipped.
 
@@ -169,3 +169,4 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - 2026-09-15: How it works step 4 now points at Shipped, and the /board note form says note triage is not built. The audit found both claims.
 - 2026-09-15: text-page sections sit `--space-4` apart, closer than landing sections, because each holds a sentence or two.
 - 2026-09-15: the live check fails when the site has no data unless `--allow-no-data` is passed, so a production run can never pass on an outage.
+- 2026-09-15: a card's public cost is its studio-billed spend from the view `public_card_spend`, never `cards.actual_usd`. `actual_usd` counts founder-billed turns, and PLAN.md §4 keeps the founder's tokens private. A card built only on the founder's time shows no cost. Building now uses the same figure. Anon can still select `cards.actual_usd` through the API; closing that needs column grants on `cards` and is left to a follow-up for the board (found in review, 15 September 2026).

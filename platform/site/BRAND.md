@@ -79,7 +79,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 **Card grid.** `ul.card-grid` has one column on phones, two from 48rem and three from 64rem. Each `li.card` is a box:
 - a top line with the category (muted, 600) and the status. "Open for funding" is plain; "Picked by the board", "Building" and "In the gate" are `.badge` pills.
 - the `h3` title and the summary.
-- `.card-bottom`, pushed to the bottom so bars and buttons line up across a row. It holds the funding bar, its caption ("$0.00 of $3.00 · 0 contributors"), a full-width outlined "Fund this card" button and the brief disclosure. A building card shows "$x spent so far · source" there instead.
+- `.card-bottom`, pushed to the bottom so bars and buttons line up across a row. It holds the funding bar, its caption ("$0.00 of $3.00 · 0 contributors"), a full-width outlined "Fund this card" button and the brief disclosure. A building card shows "$x spent so far · source" there instead; the amount is studio-billed spend and is left out when there is none.
 
 **Card groups** (`groupCards`):
 - Building now: stages building and gated.
@@ -90,7 +90,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 **Shipped list.** `ul.shipped` holds one row per live card at the reading measure, with hairlines between rows like a list. A row has:
 - the category (`.shipped-category`: muted, small, 600);
 - the `h3` title and the summary;
-- a `.card-meta` line: "$1.23 spent · 3 contributors · shipped 15 Sep 2026". A card with no goal and no funding names its source instead of a count ("Board");
+- a `.card-meta` line: "$1.23 spent · 3 contributors · shipped 15 Sep 2026". The amount is studio-billed spend and is left out when there is none, so founder-billed work never shows a cost. A card with no goal and no funding names its source instead of a count ("Board");
 - "Play the game" on a Dust card when the play URL is set, described by the card title.
 
 Rows, not boxes, because a shipped card is a record: the one action, playing the game, is the same for every Dust card. Like Building now and Queued, the section is not rendered until a card ships.

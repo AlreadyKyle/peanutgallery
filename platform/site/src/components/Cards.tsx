@@ -103,7 +103,8 @@ function CardBox({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
       <div className="card-bottom">
         {building ? (
           <p className="card-meta">
-            {formatUsd(card.actual_usd)} {copy.spentSoFar} · {sourceLabel(card.source)}
+            {card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spentSoFar} · ` : ''}
+            {sourceLabel(card.source)}
           </p>
         ) : null}
         {!building && caption !== null ? (
@@ -187,14 +188,18 @@ export function FundBoard({ studio }: { studio: StudioState }) {
   );
 }
 
-/** "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source instead. */
+/**
+ * "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source
+ * instead. Only studio-billed spend is public, so a card built on the founder's time shows none.
+ */
 export function shippedCaption(card: Card, snapshot: Snapshot): string {
   const funding = snapshot.funding[card.id];
   const who =
     card.shape === 'goal' || funding !== undefined
       ? contributorsLine(funding?.contributors ?? 0)
       : sourceLabel(card.source);
-  return `${formatUsd(card.actual_usd)} ${copy.spent} · ${who} · ${copy.shippedOn} ${formatDate(card.updated_at)}`;
+  const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spent} · ` : '';
+  return `${cost}${who} · ${copy.shippedOn} ${formatDate(card.updated_at)}`;
 }
 
 /** Live cards, newest first, as rows: what each change cost, who funded it and when it shipped. */

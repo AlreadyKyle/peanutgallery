@@ -27,7 +27,7 @@ function card(overrides: Partial<Card> = {}): Card {
     folder: 'seed-1',
     funding_target_usd: 0,
     funded_usd: 0,
-    actual_usd: 0,
+    spent_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
     updated_at: '2026-09-14T00:00:00Z',
     ...overrides,
