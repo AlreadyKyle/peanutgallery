@@ -29,6 +29,7 @@ function rowsFor(query: Query): unknown {
         balance_usd: '48.5600',
         reserve_usd: '7.1000',
         incident_reserve_usd: '2.5600',
+        held_usd: '0.0000',
         daily_spent_usd: '0.0000',
         day: '2026-09-14',
       };
@@ -175,7 +176,7 @@ describe('createSupabaseSource.load', () => {
     const snapshot = await createSupabaseSource(fake.client).load();
 
     const pool = query(fake.queries, 'pool');
-    expect(pool.select).toBe('balance_usd,reserve_usd,incident_reserve_usd,daily_spent_usd,day');
+    expect(pool.select).toBe('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day');
     expect(pool.filters).toEqual(['eq id 1']);
     expect(pool.terminal).toBe('maybeSingle');
 
@@ -217,6 +218,7 @@ describe('createSupabaseSource.load', () => {
       balance_usd: 48.56,
       reserve_usd: 7.1,
       incident_reserve_usd: 2.56,
+      held_usd: 0,
       daily_spent_usd: 0,
       day: '2026-09-14',
     });
