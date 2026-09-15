@@ -1,11 +1,13 @@
 // Startup rules for the dispatcher: the database must agree on the agent mode, and in unattended
 // mode the one-turn probe must pass and be metered before any card runs. The probe runner is
-// passed in so tests can run these rules without git, a network or a real adapter.
+// passed in so tests can run these rules without git, a network or a real adapter. A failure that
+// cannot change on retry is a fatal StartupError, which main.ts turns into exit 78.
 import type { AgentAdapter } from './adapters/types.js';
 import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
+import { StartupError } from './exit-code.js';
 import type { Logger } from './log.js';
-import { priceUsage } from './pricing.js';
+import { priceUsage, UnknownModelError } from './pricing.js';
 import { billingFor } from './throttle.js';
 import type { ProbeOptions, ProbeResult } from './probe-core.js';
 
@@ -21,12 +23,14 @@ export interface StartupDeps {
 
 // The board sets the mode from /board and the process reads its own from AGENT_MODE; when they
 // disagree nothing should run, because the sessions would be billed to the wrong account or
-// gated on the wrong rule.
+// gated on the wrong rule. Not fatal: the board fixes it from /board and the next restart, which
+// runs no probe until the modes agree, costs nothing.
 export async function checkMode(db: Db, config: DispatcherConfig): Promise<void> {
   const studio = await db.getStudioState();
   if (studio.agent_mode !== config.agentMode) {
-    throw new Error(
+    throw new StartupError(
       `studio_state.agent_mode is ${studio.agent_mode || 'unset'} but AGENT_MODE is ${config.agentMode}; set the mode from /board or start the dispatcher in the matching mode`,
+      false,
     );
   }
 }
@@ -50,8 +54,15 @@ export async function startupProbe(deps: StartupDeps): Promise<void> {
   const { db, adapter, config, log } = deps;
   log.info('probe', 'running the startup probe', { mode: adapter.mode, model: config.modelBuilder });
   const probe = await deps.runProbe(adapter, { repoRoot: config.repoRoot, worktreeRoot: config.worktreeRoot, model: config.modelBuilder });
-  await meterProbe(db, config, probe, log);
-  if (!probe.ok) throw new Error(`startup probe failed: ${probe.reason}`);
+  try {
+    await meterProbe(db, config, probe, log);
+  } catch (error) {
+    // A model missing from PRICE_TABLE_JSON is missing on every start, and each start would spend
+    // on a probe it cannot meter.
+    if (error instanceof UnknownModelError) throw new StartupError(error.message, true);
+    throw error;
+  }
+  if (!probe.ok) throw new StartupError(`startup probe failed: ${probe.reason}`, probe.fatal);
   log.info('probe', 'startup probe passed', { apiKeySource: probe.apiKeySource, tools: probe.tools, turns: probe.turns, costUsd: probe.costUsd });
 }
 

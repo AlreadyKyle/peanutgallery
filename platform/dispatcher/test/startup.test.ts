@@ -1,6 +1,7 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
+import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable, priceUsage, type TurnUsage } from '../src/pricing.js';
 import type { ProbeOptions, ProbeResult } from '../src/probe-core.js';
@@ -44,6 +45,7 @@ function probeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
   return {
     ok: true,
     reason: null,
+    fatal: false,
     tools: ['Glob', 'Grep', 'Read'],
     apiKeySource: 'ANTHROPIC_API_KEY',
     model: 'builder-class',
@@ -88,6 +90,12 @@ describe('checkMode', () => {
     await expect(checkMode(db, config)).rejects.toThrow('studio_state.agent_mode is unset but AGENT_MODE is unattended');
   });
 
+  it('is a startup error that exits 1, so the process retries once the board fixes the mode', async () => {
+    const error = await checkMode(new FakeDb(), config).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(StartupError);
+    expect(exitCodeFor(error)).toBe(1);
+  });
+
   it('resolves when the modes agree', async () => {
     await expect(checkMode(unattendedDb(), config)).resolves.toBeUndefined();
   });
@@ -129,12 +137,35 @@ describe('startupProbe metering', () => {
 
   it('writes the ledger row for a failing probe and then rejects', async () => {
     const db = unattendedDb();
-    const failing = probeResult({ ok: false, reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', apiKeySource: 'none' });
+    const failing = probeResult({ ok: false, fatal: true, reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', apiKeySource: 'none' });
     await expect(startupProbe(deps(db, failing).deps)).rejects.toThrow(
       'startup probe failed: apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else',
     );
     expect(db.ledger).toHaveLength(1);
     expect(db.ledger[0]).toMatchObject({ card_id: null, role_id: null, usd: priceUsage(PRICE_TABLE, 'builder-class', USAGE).usd });
+  });
+
+  it('exits 78 for a probe failure that cannot change on retry and 1 for one that can', async () => {
+    const wrongAccount = probeResult({ ok: false, fatal: true, reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', apiKeySource: 'none' });
+    const fatalError = await startupProbe(deps(unattendedDb(), wrongAccount).deps).catch((caught: unknown) => caught);
+    expect(fatalError).toEqual(new StartupError('startup probe failed: apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', true));
+    expect(exitCodeFor(fatalError)).toBe(78);
+
+    const noStream = probeResult({ ok: false, fatal: false, reason: 'claude produced no stream output', usage: ZERO });
+    const transientError = await startupProbe(deps(unattendedDb(), noStream).deps).catch((caught: unknown) => caught);
+    expect(transientError).toEqual(new StartupError('startup probe failed: claude produced no stream output', false));
+    expect(exitCodeFor(transientError)).toBe(1);
+  });
+
+  it('exits 1 when claude cannot be spawned', async () => {
+    const db = unattendedDb();
+    const failingRunner = async () => {
+      throw new Error('claude could not start: spawn claude ENOENT');
+    };
+    const error = await startupChecks(deps(db, probeResult(), { runProbe: failingRunner }).deps).catch((caught: unknown) => caught);
+    expect(error).toEqual(new Error('claude could not start: spawn claude ENOENT'));
+    expect(exitCodeFor(error)).toBe(1);
+    expect(db.ledger).toHaveLength(0);
   });
 
   it('writes no ledger row when the probe reported no usage', async () => {
@@ -145,7 +176,10 @@ describe('startupProbe metering', () => {
 
   it('refuses an unknown model the way a card turn does: no ledger row at zero, and it stops', async () => {
     const db = unattendedDb();
-    await expect(startupProbe(deps(db, probeResult({ model: 'mystery-model' })).deps)).rejects.toThrow('no price for model mystery-model');
+    const error = await startupProbe(deps(db, probeResult({ model: 'mystery-model' })).deps).catch((caught: unknown) => caught);
+    expect(error).toEqual(new StartupError('no price for model mystery-model', true));
+    // The model is missing from the price table on every start, and every start spends on a probe.
+    expect(exitCodeFor(error)).toBe(78);
     expect(db.ledger).toHaveLength(0);
     expect(db.pool.balance_usd).toBe(50);
   });

@@ -2,12 +2,14 @@
 // the database agrees on the agent mode, probes the account in unattended mode, recovers cards
 // left mid-flight by a previous process, starts the scheduler, and runs the tick loop until
 // SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a restart resumes work.
+// A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
 import { loadConfig, type DispatcherConfig } from './config.js';
 import { createSupabaseDb, type Card, type Db } from './db.js';
+import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
 import { createLogger, errorMessage, type Logger } from './log.js';
 import { runCardPipeline } from './pipeline.js';
 import { runProbe } from './probe-core.js';
@@ -101,6 +103,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  log.error('main', 'dispatcher exited with an error', { error: errorMessage(error) });
-  process.exit(1);
+  const exitCode = exitCodeFor(error);
+  log.error('main', 'dispatcher exited with an error', { error: errorMessage(error), exitCode, restart: exitCode !== EXIT_FATAL });
+  process.exit(exitCode);
 });

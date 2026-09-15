@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,8 +13,10 @@ import {
   commitTitle,
   commitTrailers,
   git,
+  gitArgs,
   gitAuthArgs,
   KERNEL_PATHS,
+  NO_HOOKS,
   lanePaths,
   outsideLane,
   protectedPaths,
@@ -150,5 +153,71 @@ describe('commitLane in a temporary repository', () => {
     expect(committed).toContain('seed-1/config/spawn-table.json');
     expect(committed).not.toContain('seed-1/sim/index.ts');
     expect(await changedFiles(repo)).toEqual(['seed-1/sim/index.ts']);
+  });
+});
+
+describe('git hooks', () => {
+  let dir: string;
+  let repo: string;
+  let marker: string;
+  const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
+  const savedNoSystem = process.env.GIT_CONFIG_NOSYSTEM;
+  const HOOKS = ['pre-commit', 'commit-msg', 'post-commit', 'post-checkout', 'reference-transaction'];
+
+  // Each planted hook records that it ran and exits 1, so a hook that runs also fails the command.
+  async function plantHooks(hooksDir: string): Promise<void> {
+    await mkdir(hooksDir, { recursive: true });
+    for (const hook of HOOKS) {
+      await writeFile(path.join(hooksDir, hook), `#!/bin/sh\necho "${hook}" >> "${marker}"\nexit 1\n`, { encoding: 'utf8', mode: 0o755 });
+    }
+  }
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-hooks-'));
+    marker = path.join(dir, 'hooks-ran.txt');
+    process.env.GIT_CONFIG_GLOBAL = path.join(dir, 'gitconfig');
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+    await writeFile(process.env.GIT_CONFIG_GLOBAL, `[user]\n\tname = Dispatcher test\n\temail = ${AGENT_EMAIL}\n`, 'utf8');
+    repo = path.join(dir, 'repo');
+    await mkdir(path.join(repo, 'seed-1', 'config'), { recursive: true });
+    await git(['init', '-q', '--initial-branch=main', repo], dir);
+    await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":10}]}\n', 'utf8');
+    await git(['add', '-A'], repo);
+    await git(['commit', '-q', '-m', 'initial'], repo);
+    // Both places a hook can come from: the default hooks folder, and a hooks path the
+    // repository's own config names.
+    await plantHooks(path.join(repo, '.git', 'hooks'));
+    await plantHooks(path.join(dir, 'planted-hooks'));
+    await git(['config', 'core.hooksPath', path.join(dir, 'planted-hooks')], repo);
+  });
+
+  afterAll(async () => {
+    if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
+    if (savedNoSystem === undefined) delete process.env.GIT_CONFIG_NOSYSTEM;
+    else process.env.GIT_CONFIG_NOSYSTEM = savedNoSystem;
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('puts the hooks switch before every subcommand', () => {
+    expect(NO_HOOKS).toEqual(['-c', 'core.hooksPath=/dev/null']);
+    expect(gitArgs(['status', '--porcelain'])).toEqual(['-c', 'core.hooksPath=/dev/null', 'status', '--porcelain']);
+    expect(gitArgs([...gitAuthArgs('token'), 'push', 'origin'])).toEqual(['-c', 'core.hooksPath=/dev/null', ...gitAuthArgs('token'), 'push', 'origin']);
+  });
+
+  it('runs a planted hook when git is called without the switch, so the test can see one', () => {
+    expect(() => execFileSync('git', ['commit', '--allow-empty', '-q', '-m', 'control'], { cwd: repo, stdio: 'pipe' })).toThrow();
+    expect(readFileSync(marker, 'utf8')).toContain('pre-commit');
+  });
+
+  it('runs no hook on add, diff, commit, rev-parse, status or worktree add', async () => {
+    await rm(marker, { force: true });
+    await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":11}]}\n', 'utf8');
+    expect(await changedFiles(repo)).toEqual(['seed-1/config/spawn-table.json']);
+    const result = await commitLane(repo, ['seed-1/config'], input);
+    expect(result.committed).toBe(true);
+    await git(['worktree', 'add', '--detach', path.join(dir, 'probe'), 'HEAD'], repo);
+    expect(existsSync(path.join(dir, 'probe', 'seed-1', 'config', 'spawn-table.json'))).toBe(true);
+    expect(existsSync(marker)).toBe(false);
   });
 });

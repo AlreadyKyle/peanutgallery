@@ -16,8 +16,18 @@ const TITLE_LIMIT = 72;
 const SPACE = 32;
 const DELETE = 127;
 
+// Every git command runs with hooks off. Hooks run with the environment of the git process, which
+// is the dispatcher's, secrets included, and agent-written code shares the dispatcher's OS user,
+// so a hook it planted in the repository must never run. The command-line setting overrides any
+// core.hooksPath in the repository's own config.
+export const NO_HOOKS: readonly string[] = ['-c', 'core.hooksPath=/dev/null'];
+
+export function gitArgs(args: readonly string[]): string[] {
+  return [...NO_HOOKS, ...args];
+}
+
 async function gitRaw(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, { cwd, env: { ...process.env, ...env }, maxBuffer: 16 * 1024 * 1024 });
+  const { stdout } = await execFileAsync('git', gitArgs(args), { cwd, env: { ...process.env, ...env }, maxBuffer: 16 * 1024 * 1024 });
   return stdout;
 }
 

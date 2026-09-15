@@ -34,7 +34,10 @@ export interface DispatcherConfig {
   ntfyTopicUrl: string | null;
 }
 
+// A missing or malformed value cannot fix itself on a restart, so it is fatal: the process exits
+// 78 and systemd does not restart it (exit-code.ts).
 export class ConfigError extends Error {
+  readonly fatal = true;
   constructor(message: string) {
     super(message);
     this.name = 'ConfigError';
@@ -102,6 +105,17 @@ export function studioApiKeyEnv(env: Env, mode: AgentMode): string | null {
   return requireEnv(env, STUDIO_KEY);
 }
 
+// parsePriceTable is shared with code that is not configuration, so its plain errors are
+// rethrown here as ConfigError with the same message.
+export function priceTableEnv(env: Env): PriceTable {
+  const raw = requireEnv(env, 'PRICE_TABLE_JSON');
+  try {
+    return parsePriceTable(raw);
+  } catch (error) {
+    throw new ConfigError(error instanceof Error ? error.message : String(error));
+  }
+}
+
 export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
@@ -119,7 +133,7 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
     netlifySiteIdSeed: requireEnv(env, 'NETLIFY_SITE_ID_SEED'),
     netlifySiteIdPlatform: requireEnv(env, 'NETLIFY_SITE_ID_PLATFORM'),
     modelBuilder: requireEnv(env, 'MODEL_BUILDER'),
-    priceTable: parsePriceTable(requireEnv(env, 'PRICE_TABLE_JSON')),
+    priceTable: priceTableEnv(env),
     poolDailyCapUsd: numberEnv(env, 'POOL_DAILY_CAP_USD', 100),
     cardMaxUsd: numberEnv(env, 'CARD_MAX_USD', 25),
     sessionMaxTurns: positiveIntegerEnv(env, 'SESSION_MAX_TURNS', 60),
