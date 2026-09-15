@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
+import { BuildingNow, FundBoard, QueuedList } from '../components/Cards';
 import { LedgerSummary } from '../components/LedgerSummary';
 import { Meter } from '../components/Meter';
-import { NextList, NowList } from '../components/NowNext';
+import { RightNow } from '../components/RightNow';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate } from '../lib/format';
@@ -13,40 +14,42 @@ function launchLine(studio: StudioState): string | null {
   return at === null ? copy.notLiveYet : `${copy.liveSince} ${formatDate(at)}`;
 }
 
-// Order: what the studio is and how to take part, then what is building and what is next (the
-// reasons to visit), then how it works, the money and the rules.
+// Order: what the studio is and its state right now, then what is building and what to fund (the
+// reasons to visit), then what is queued, how it works, the money and the rules.
 export function Landing() {
   const env = siteEnv();
   const studio = useStudio();
   const launch = launchLine(studio);
   return (
-    <main>
-      <div className="hero">
-        <h1>{copy.pitchTitle}</h1>
-        <p className="lede">{copy.pitchBody}</p>
-        {launch === null ? null : <p className="muted">{launch}</p>}
-        {env.stripePaymentLinkUrl === '' ? (
-          <p>{copy.contributeUnavailable}</p>
-        ) : (
-          <p>
-            <a className="button" href={env.stripePaymentLinkUrl}>
-              {copy.contribute}
-            </a>
-          </p>
-        )}
-        <p className="muted small">{copy.split}</p>
+    <main className="wide">
+      <div className="intro">
+        <div className="hero">
+          <h1>{copy.pitchTitle}</h1>
+          <p className="lede">{copy.pitchBody}</p>
+          {launch === null ? null : <p className="muted">{launch}</p>}
+          {env.stripePaymentLinkUrl === '' ? (
+            <p>{copy.contributeUnavailable}</p>
+          ) : (
+            <p>
+              <Link className="button" to="/contribute">
+                {copy.contribute}
+              </Link>
+            </p>
+          )}
+          <p className="muted small">{copy.split}</p>
+        </div>
+        <RightNow studio={studio} />
       </div>
 
-      <section className="section" aria-labelledby="now">
-        <h2 id="now">{copy.now}</h2>
-        <NowList studio={studio} />
+      {studio.state === 'ready' ? <BuildingNow snapshot={studio.snapshot} /> : null}
+
+      <section className="section" aria-labelledby="fund">
+        <h2 id="fund">{copy.fund}</h2>
+        <p className="muted">{copy.fundIntro}</p>
+        <FundBoard studio={studio} />
       </section>
 
-      <section className="section" aria-labelledby="next">
-        <h2 id="next">{copy.next}</h2>
-        <p className="muted">{copy.nextIntro}</p>
-        <NextList studio={studio} />
-      </section>
+      {studio.state === 'ready' ? <QueuedList snapshot={studio.snapshot} /> : null}
 
       <section className="section" aria-labelledby="how">
         <h2 id="how">{copy.howItWorks}</h2>
@@ -57,29 +60,33 @@ export function Landing() {
         </ol>
       </section>
 
-      <section className="section" aria-labelledby="funding">
-        <h2 id="funding">{copy.meter}</h2>
-        <Meter studio={studio} />
-      </section>
+      <div className="columns">
+        <section className="section" aria-labelledby="funding">
+          <h2 id="funding">{copy.meter}</h2>
+          <Meter studio={studio} />
+        </section>
 
-      <section className="section" aria-labelledby="ledger">
-        <h2 id="ledger">{copy.ledger}</h2>
-        <LedgerSummary studio={studio} />
-        <p>
-          <Link to="/ledger">{copy.fullLedger}</Link>
-        </p>
-      </section>
+        <section className="section" aria-labelledby="ledger">
+          <h2 id="ledger">{copy.ledger}</h2>
+          <LedgerSummary studio={studio} events={false} />
+          <p>
+            <Link to="/ledger">{copy.fullLedger}</Link>
+          </p>
+        </section>
+      </div>
 
       <section className="section" aria-labelledby="rules">
         <h2 id="rules">{copy.policies}</h2>
-        <p>{copy.artPolicy}</p>
-        <p>{copy.allAges}</p>
-        <p>{copy.fixedRulesIntro}</p>
-        <ul className="rules">
-          {copy.fixedRules.map((rule) => (
-            <li key={rule}>{rule}</li>
-          ))}
-        </ul>
+        <div className="prose">
+          <p>{copy.artPolicy}</p>
+          <p>{copy.allAges}</p>
+          <p>{copy.fixedRulesIntro}</p>
+          <ul className="rules">
+            {copy.fixedRules.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
       </section>
     </main>
   );

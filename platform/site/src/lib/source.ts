@@ -17,6 +17,8 @@ export type Card = {
   source: string;
   stage: string;
   shape: string;
+  bucket: string;
+  folder: string;
   funding_target_usd: number;
   funded_usd: number;
   actual_usd: number;
@@ -93,6 +95,8 @@ type CardRow = {
   source: string;
   stage: string;
   shape: string;
+  bucket: string;
+  folder: string;
   funding_target_usd: Numeric;
   funded_usd: Numeric;
   actual_usd: Numeric;
@@ -173,6 +177,8 @@ function cardFrom(row: CardRow): Card {
     source: row.source,
     stage: row.stage,
     shape: row.shape,
+    bucket: row.bucket,
+    folder: row.folder,
     funding_target_usd: money(row.funding_target_usd),
     funded_usd: money(row.funded_usd),
     actual_usd: money(row.actual_usd),
@@ -233,7 +239,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
         client
           .from('cards')
           .select(
-            'id,title,summary,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at',
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })

@@ -38,10 +38,13 @@
   --space-4: 2.5rem;
   --space-5: 4rem;
 
-  /* Layout: one column for the bar, the page and the footer, so every left edge lines up. */
-  --wrap: 44rem;
+  /* Layout: one width for the bar, the page and the footer, so every left edge lines up. Text
+     inside it stops at --measure so lines stay readable on a wide screen. */
+  --wrap: 72rem;
+  --measure: 44rem;
   --gutter: 1.25rem;
   --radius: 0.375rem;
+  --radius-box: 0.625rem;
   --target: 2.75rem; /* 44px minimum touch target */
   --focus: 3px solid var(--ink);
 }
@@ -87,6 +90,11 @@ main {
 main {
   flex: 1 0 auto;
   padding-block: var(--space-4) var(--space-5);
+}
+
+/* A text page (ledger, contribute, not found, board) keeps every block to the reading measure. */
+main:not(.wide) > * {
+  max-width: var(--measure);
 }
 
 /* Type ------------------------------------------------------------------ */
@@ -223,6 +231,55 @@ nav a.nav-primary {
   margin-bottom: var(--space-5);
 }
 
+.hero p,
+.section > p,
+.prose {
+  max-width: var(--measure);
+}
+
+/* Landing intro: the pitch beside the Right now panel on a wide screen, stacked on a narrow one. */
+.intro {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.intro .hero {
+  margin-bottom: 0;
+}
+
+.panel {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  align-self: start;
+}
+
+.panel h2 {
+  font-size: var(--size-body);
+  margin-bottom: var(--space-1);
+}
+
+.panel .stats {
+  margin-bottom: var(--space-2);
+}
+
+.panel-heading {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--size-small);
+  color: var(--muted);
+}
+
+.row-strong {
+  font-weight: var(--weight-strong);
+}
+
+/* Two sections side by side on a wide screen. */
+.columns {
+  display: grid;
+  gap: 0 var(--space-5);
+}
+
 .hero h1 {
   margin-bottom: var(--space-2);
 }
@@ -247,6 +304,8 @@ nav a.nav-primary {
 
 .steps {
   list-style: decimal outside;
+  display: grid;
+  gap: var(--space-2) var(--space-4);
 }
 
 .rules {
@@ -294,6 +353,11 @@ button:hover:not(:disabled) {
 .button-secondary {
   background: var(--paper);
   color: var(--ink);
+}
+
+.button-block {
+  display: flex;
+  width: 100%;
 }
 
 .button-secondary:hover {
@@ -362,41 +426,70 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 
-/* Cards: Building now and Up next, separated by hairlines --------------- */
+/* Cards: boxes in a grid, the money and the action pinned to the bottom ---- */
 
-.cards {
+.card-grid {
+  display: grid;
+  gap: var(--space-2);
   margin: 0 0 var(--space-2);
 }
 
 .card {
-  padding-block: var(--space-3);
-  border-top: 1px solid var(--line);
-}
-
-.card:last-child {
-  border-bottom: 1px solid var(--line);
-}
-
-.card > :last-child {
-  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  background: var(--paper);
 }
 
 .card h3 {
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-1);
 }
 
-.card-meta {
+.card-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-1);
   margin-bottom: var(--space-1);
-  color: var(--muted);
   font-size: var(--size-small);
+}
+
+.card-category {
+  color: var(--muted);
+  font-weight: var(--weight-strong);
+}
+
+.card-status {
+  color: var(--muted);
+}
+
+.badge {
+  padding: 0.125rem var(--space-1);
+  border-radius: 999px;
+  background: var(--track);
+  color: var(--ink);
 }
 
 .card-summary {
   margin-bottom: var(--space-2);
 }
 
-.card-track {
-  margin-bottom: var(--space-2);
+/* Pushed to the bottom so bars and buttons line up across a row of cards. */
+.card-bottom {
+  margin-top: auto;
+}
+
+.card-bottom > .button {
+  margin-top: var(--space-2);
+}
+
+.card-meta {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: var(--size-small);
 }
 
 .bar {
@@ -413,10 +506,112 @@ button.link:hover:not(:disabled) {
   background: var(--accent);
 }
 
-.card-amount {
+/* Category filter: a row of pressable chips. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.filters .filter {
+  min-height: var(--target);
+  padding: 0.25em 1em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
   color: var(--ink);
-  font-weight: var(--weight-strong);
-  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+}
+
+.filters .filter:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--paper);
+}
+
+.filters .filter[aria-pressed='true'],
+.filters .filter[aria-pressed='true']:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.filter-count {
+  margin-left: 0.25em;
+  opacity: 0.7;
+}
+
+/* Contribute chooser: each choice is one large link. */
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: var(--target);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-box);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.choice:hover {
+  border-color: var(--ink);
+}
+
+.choice .bar {
+  margin: var(--space-1) 0 0;
+}
+
+.choice-title {
+  font-weight: var(--weight-bold);
+}
+
+.choice-body,
+.choice-meta {
+  color: var(--muted);
+}
+
+.choice-meta {
+  font-size: var(--size-small);
+}
+
+.choice-primary {
+  margin-bottom: var(--space-4);
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.choice-primary .choice-title {
+  font-size: var(--size-lead);
+}
+
+.choice-primary .choice-body {
+  color: var(--paper);
+}
+
+.choice-primary:hover {
+  border-color: var(--ink-hover);
+  background: var(--ink-hover);
+}
+
+.choices-heading {
+  font-size: var(--size-large);
+}
+
+.choice-group {
+  margin-bottom: var(--space-3);
+}
+
+.choice-group h3 {
+  margin-bottom: var(--space-1);
+  color: var(--muted);
+  font-size: var(--size-small);
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-2);
 }
 
 /* The agent brief: a native disclosure, closed by default. */
@@ -566,6 +761,37 @@ input[type='radio'] {
 
 .error {
   font-weight: var(--weight-bold);
+}
+
+/* Wider screens ------------------------------------------------------------ */
+
+@media (min-width: 48rem) {
+  .card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .intro {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Narrow screens ----------------------------------------------------------- */

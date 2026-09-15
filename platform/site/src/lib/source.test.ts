@@ -45,6 +45,8 @@ function rowsFor(query: Query): unknown {
           source: 'board',
           stage: 'voted',
           shape: 'goal',
+          bucket: 'game',
+          folder: 'seed-1',
           funding_target_usd: '100.0000',
           funded_usd: '25.0000',
           actual_usd: '0.0000',
@@ -179,7 +181,7 @@ describe('createSupabaseSource.load', () => {
 
     const cards = query(fake.queries, 'cards');
     expect(cards.select).toBe(
-      'id,title,summary,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at',
     );
     expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
     expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
@@ -227,6 +229,8 @@ describe('createSupabaseSource.load', () => {
         source: 'board',
         stage: 'voted',
         shape: 'goal',
+        bucket: 'game',
+        folder: 'seed-1',
         funding_target_usd: 100,
         funded_usd: 25,
         actual_usd: 0,
