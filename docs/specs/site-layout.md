@@ -1,6 +1,6 @@
 # Site layout: use the screen, separate what to fund, choose before checkout
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -36,14 +36,14 @@ Out: funding a next game (no folder or card exists; the next game is picked by a
 
 ## Acceptance criteria
 
-- [ ] The top bar, main and footer share `--wrap` 72rem; no paragraph on the landing page is wider than `--measure`.
-- [ ] From 64rem the intro shows the hero and the Right now panel side by side, and the card grid has three columns; at 375px everything stacks with no horizontal scroll.
-- [ ] `groupCards` sends building and gated cards to now, funded cards to queued, and the rest to fund, in `fundOrder`.
-- [ ] The filter shows All, Dust, The studio and Next game with counts. Selecting one shows only that category's cards; Next game shows its note and no empty line.
-- [ ] Each card box shows category, status, title, summary, and a bar with its caption. A fundable card also has a full-width Fund this card button linking to the Payment Link with its id.
-- [ ] Contribute links in the nav and on the landing page point to `/contribute`.
-- [ ] On `/contribute`, the first link is Pick for me to the bare Payment Link, and fundable cards follow grouped by category, each with its card id. Cards that are full, not goals or already building are not offered.
-- [ ] The site's card select includes `bucket` and `folder`.
+- [x] The top bar, main and footer share `--wrap` 72rem; no paragraph on the landing page is wider than `--measure`.
+- [x] From 64rem the intro shows the hero and the Right now panel side by side, and the card grid has three columns; at 375px everything stacks with no horizontal scroll.
+- [x] `groupCards` sends building and gated cards to now, funded cards to queued, and the rest to fund, in `fundOrder`.
+- [x] The filter shows All, Dust, The studio and Next game with counts. Selecting one shows only that category's cards; Next game shows its note and no empty line.
+- [x] Each card box shows category, status, title, summary, and a bar with its caption. A fundable card also has a full-width Fund this card button linking to the Payment Link with its id.
+- [x] Contribute links in the nav and on the landing page point to `/contribute`.
+- [x] On `/contribute`, the first link is Pick for me to the bare Payment Link, and fundable cards follow grouped by category, each with its card id. Cards that are full, not goals or already building are not offered.
+- [x] The site's card select includes `bucket` and `folder`.
 
 ## Verification
 
@@ -58,3 +58,15 @@ Out: funding a next game (no folder or card exists; the next game is picked by a
 - 2026-09-14: Contribute opens a chooser page before checkout, with Pick for me first (board). A page can be linked from Discord or a stream and works on a phone.
 - 2026-09-14: funded cards move out of the grid into a Queued list. There is nothing to do with them, and mixing them with fundable cards made the grid read as one undifferentiated list.
 - 2026-09-14: the landing page widens to 72rem while text stays at 44rem. This supersedes the single 44rem column in `site-design.md`, which suited prose but left most of a wide screen empty for a page of short repeated items.
+
+## Evidence
+
+2026-09-14, PR 15 merged as b2c6360 and served live (`version.json` sha b2c6360):
+- Tests: `pnpm verify` exit 0; site 97 unit tests; e2e 5/5 with and without the public values.
+- Live Playwright check:
+  - landing h2 `["Right now","Fund what's next","Queued","How it works","Funding","Ledger","Fixed rules"]`
+  - hero Contribute → `/contribute`
+  - filters Dust 4 / The studio 0 / Next game 0 / All 4
+  - Fund button 44px tall
+  - Pick for me first → the bare Payment Link; 4 card choices carry card ids
+  - no horizontal overflow at 375 and 1440 on `/`, `/contribute`, `/ledger`, `/board` and a 404

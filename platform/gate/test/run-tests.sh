@@ -415,7 +415,9 @@ done
 assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-config, seed-code, platform\]$'
 assert "workflow: the gate job always runs" workflow_has '^    if: always\(\)$'
 assert "workflow: the gate job fails on a failed or cancelled job" workflow_has '\(failure\|cancelled\)'
-assert "workflow: card branches run the kernel guard from the base commit's gate" workflow_has 'git checkout "\$BASE" -- platform/gate && bash platform/gate/kernel-guard.sh'
+assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -c 'run: git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 4
+assert "workflow: the gate is restored before the changed-files list is written" awk '/Use the base commit.s gate on a card branch/{r=NR} /Write the commit message and changed files/{if (!r || r > NR) bad=1; r=0} END{exit bad}' "$WORKFLOW"
+assert "workflow: card branches run the kernel guard" workflow_has 'run: bash platform/gate/kernel-guard.sh "\$RUNNER_TEMP/changed-files.txt"'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 
 # ---------------------------------------------------------------- summary

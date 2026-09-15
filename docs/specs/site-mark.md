@@ -1,6 +1,6 @@
 # Peanut mark and favicon
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -17,10 +17,10 @@ The top bar's wordmark link shows the black peanut mark before "Peanut Gallery".
 
 ## Acceptance criteria
 
-- [ ] `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png` and `/peanut.png` are served from the site root.
-- [ ] `index.html` links the icon, the 32px PNG icon and the apple touch icon.
-- [ ] The wordmark link contains `img.mark` with an empty alt and keeps the accessible name "Peanut Gallery".
-- [ ] At 375px the top bar has no horizontal scroll.
+- [x] `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png` and `/peanut.png` are served from the site root.
+- [x] `index.html` links the icon, the 32px PNG icon and the apple touch icon.
+- [x] The wordmark link contains `img.mark` with an empty alt and keeps the accessible name "Peanut Gallery".
+- [x] At 375px the top bar has no horizontal scroll.
 
 ## Verification
 
@@ -30,3 +30,7 @@ The top bar's wordmark link shows the black peanut mark before "Peanut Gallery".
 ## Decisions
 
 - 2026-09-15: PNG and ICO generated from the supplied PNG rather than a traced SVG; no tracer is installed and a hand-drawn SVG would not be the supplied mark.
+
+## Evidence
+
+2026-09-14 on https://peanutgallery.games (build b2c6360): `/favicon.ico 200`, `/favicon-32.png 200`, `/apple-touch-icon.png 200`, `/peanut.png 200`. `App.test.tsx` checks `img.mark` with an empty alt inside the "Peanut Gallery" link. The Playwright live check reported no horizontal overflow at 375px on every route.

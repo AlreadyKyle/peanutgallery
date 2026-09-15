@@ -4,7 +4,7 @@
 # BuildKit filters the build context with Dockerfile.dispatcher.dockerignore beside this file,
 # so .env, KEYS.md, worktrees, node_modules and build output never enter the image. Secrets
 # reach the container only through the systemd unit's environment file.
-# Written for the week-2 VPS; not deployed in build 1.
+# Not deployed yet: the VPS, the claude CLI in this image and the alert settings are specified in docs/specs/vps.md.
 FROM node:22-slim
 
 RUN apt-get update \

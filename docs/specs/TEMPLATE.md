@@ -1,6 +1,8 @@
 # <Title>
 
-Status: draft | agreed | done. Card: <id or none>. Owner: <board or role>.
+Status: draft | agreed | built | done. Card: <id or none>. Owner: <board or role>.
+
+Draft: written, not yet agreed by the board. Agreed: the contract for the work. Built: merged, and every criterion a test can prove is ticked; live verification is still to run. Done: every Verification line has been run and its output quoted. A criterion replaced by a later spec is struck through and names that spec.
 
 ## Problem
 
@@ -24,6 +26,10 @@ What the change does, as the user or the system sees it. Plain sentences, no imp
 The exact commands or checks that prove it. The change is done only when each has been run and its output quoted here or in the session report.
 
 - `pnpm verify`
+
+## Evidence
+
+Added when the status moves to built or done: for each criterion, the test that proves it or the quoted live output.
 
 ## Decisions
 

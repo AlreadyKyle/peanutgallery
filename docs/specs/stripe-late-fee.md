@@ -1,6 +1,6 @@
 # Credit a contribution when Stripe's fee arrives
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -17,12 +17,12 @@ A paid Checkout session is credited exactly once, as soon as its fee is known. W
 
 ## Acceptance criteria
 
-- [ ] `checkout.session.completed` for a paid session whose fee is not yet available answers 200 with `deferred: true` and does not call `apply_contribution`.
-- [ ] `charge.updated` with a balance transaction credits the matching paid Checkout session through `apply_contribution`.
-- [ ] `charge.updated` with no matching session, an unpaid session, or a null balance transaction answers 200 ignored.
-- [ ] `apply_contribution` called twice for the same Checkout session under two event ids inserts one row and moves the pool once.
-- [ ] The live endpoint listens to `checkout.session.completed` and `charge.updated`.
-- [ ] The 15 Sep $1 is credited: one contributions row with `studio_pct_chosen` 20 and the pool increased by agents minus incident.
+- [x] `checkout.session.completed` for a paid session whose fee is not yet available answers 200 with `deferred: true` and does not call `apply_contribution`.
+- [x] `charge.updated` with a balance transaction credits the matching paid Checkout session through `apply_contribution`.
+- [x] `charge.updated` with no matching session, an unpaid session, or a null balance transaction answers 200 ignored.
+- [x] `apply_contribution` called twice for the same Checkout session under two event ids inserts one row and moves the pool once.
+- [x] The live endpoint listens to `checkout.session.completed` and `charge.updated`.
+- [x] The 15 Sep $1 is credited: one contributions row with `studio_pct_chosen` 20 and the pool increased by agents minus incident.
 
 ## Verification
 
@@ -38,3 +38,11 @@ A paid Checkout session is credited exactly once, as soon as its fee is known. W
 - 2026-09-15: `p_stripe_session_id` is the last argument with a null default, so founder-style and existing calls keep working; the webhook always sends it.
 - 2026-09-15: the endpoint stays on the account default API version (2026-08-26.dahlia). Stripe cannot change `api_version` on an existing endpoint, so pinning would mean a new endpoint and a rotated signing secret. The handler reads only fields that are the same in both versions, and every lookup goes through the SDK pinned to `2025-10-29.clover`.
 - 2026-09-15: answer 200 `deferred` rather than 500 when the fee is late. The `charge.updated` path is the credit, so a 500 would only add failed deliveries.
+
+## Evidence
+
+2026-09-14:
+- `platform/supabase/functions/_shared/handler_test.ts` covers the deferred 200, the `charge.updated` credit and the ignored cases. `migration_test.ts` step "one checkout session credits once across two event ids" covers the idempotency.
+- Live endpoint `we_1UFd0XICmyTP81VUCeACUWhc`: `enabled ['checkout.session.completed', 'charge.updated']`.
+- Live contribution: `amount_usd 1.0000, studio_pct_chosen 20, agents_usd 0.5283, incident_usd 0.0264, has_session true`. Ledger identity drift `0.0000`.
+- Still unproven: `charge.updated` crediting a fresh payment end to end. The next real contribution checks it (`docs/specs/week1-runs.md`).

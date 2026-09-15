@@ -20,7 +20,11 @@ Production per second is `1 + sum(rate x owned)` times every unlocked multiplier
 
 ## Lanes
 
-A config-lane card changes values inside `config/` or `content/` and nothing else: costs, rates, thresholds, names, descriptions, unlock order. It runs the bot and the build, not the test suite. A card that needs a new function, a new field, a new file or any change under `sim/`, `render/`, `bots/` or `scripts/` is a code-lane card and runs the full gate.
+A config-lane card changes values inside `config/` or `content/` and nothing else: costs, rates, thresholds, names, descriptions, unlock order. It runs the bot and the build, not the test suite. A card that needs a new function, a new field, a new file or any change under `sim/`, `render/` or the tests is a code-lane card and runs the full gate.
+
+## Protected paths
+
+No agent may change these, in any lane; the dispatcher rejects the card and the gate fails a card branch that touches one (`platform/gate/kernel-paths.txt` is the list): this `CLAUDE.md`, `bots/`, `scripts/`, `package.json`, `netlify.toml`, `vite.config.ts`, `tsconfig.json`, `sim/invariants.ts`, `tests/bot.test.ts` and `tests/invariants.test.ts`. They are the gate's harness for this game: the board changes them.
 
 ## Commands
 

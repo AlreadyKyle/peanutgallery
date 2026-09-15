@@ -54,8 +54,8 @@ export const buckets = ['game', 'platform', 'qa', 'studio', 'budget', 'agents'] 
 export const lanes = ['config', 'code'] as const;
 export const folders = ['seed-1', 'platform'] as const;
 export const cardStages = [
-  { value: 'proposed', label: 'Open' },
-  { value: 'voted', label: 'Decided' },
+  { value: 'proposed', label: 'Open for funding' },
+  { value: 'voted', label: 'Picked by the board' },
 ] as const satisfies readonly { value: NextCardStage; label: string }[];
 export const agentModes = ['attended', 'unattended'] as const;
 export type AgentMode = (typeof agentModes)[number];

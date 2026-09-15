@@ -1,6 +1,6 @@
 # Card summaries
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -17,12 +17,12 @@ A card carries `summary`, at most 200 characters, written for supporters: what c
 
 ## Acceptance criteria
 
-- [ ] `cards.summary` exists, is readable by anon, and rejects text longer than 200 characters.
-- [ ] `file_card` takes `p_summary` and refuses a blank or over-long summary; the old ten-argument signature no longer exists.
-- [ ] On the public site a Next or Now card shows its summary and does not show the intent until the disclosure is opened.
-- [ ] The disclosure is a native `details` element, keyboard operable, closed by default, and shows the intent verbatim when opened.
-- [ ] The board form sends `p_summary` and refuses a blank summary before calling the database.
-- [ ] The four live Next cards have these summaries:
+- [x] `cards.summary` exists, is readable by anon, and rejects text longer than 200 characters.
+- [x] `file_card` takes `p_summary` and refuses a blank or over-long summary; the old ten-argument signature no longer exists.
+- [x] On the public site a Next or Now card shows its summary and does not show the intent until the disclosure is opened.
+- [x] The disclosure is a native `details` element, keyboard operable, closed by default, and shows the intent verbatim when opened.
+- [x] The board form sends `p_summary` and refuses a blank summary before calling the database.
+- [x] The four live Next cards have these summaries:
   - A fourteenth unlock: Quiet rooms at 300M dust: "Add one more unlock after the last one, so players always have a next goal on screen."
   - Rename the Gatherer to Sweeper: "Rename the first unit from Gatherer to Sweeper, with a new one-line description."
   - Cheaper Cart: baseCost 120: "Lower the Cart's cost so new players can buy one soon after it appears."
@@ -39,3 +39,10 @@ A card carries `summary`, at most 200 characters, written for supporters: what c
 
 - 2026-09-14: keep the agent brief public but collapsed. Every card stays fully visible, which the ledger promise relies on, while the default view reads for supporters.
 - 2026-09-14: a separate column rather than rewriting `intent`. The intent is the agents' spec and changing it for readability would change what the agents build.
+
+## Evidence
+
+2026-09-14:
+- `platform/supabase/test/migration.test.ts` (card-summary describe) and the PGlite migration test cover the column, the 200-character limit and the `file_card` signature.
+- `platform/site/src/components/Cards.test.tsx` covers the summary and the closed disclosure; `platform/site/src/pages/Board.test.tsx` covers `p_summary` and the blank refusal.
+- Live: `select left(title,30), left(summary,40) from cards where shape='goal'` returned four rows, each with its summary (Quiet rooms, Gatherer rename, Cheaper Cart, Save the game).
