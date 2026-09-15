@@ -751,6 +751,15 @@ form + form {
   gap: var(--space-2);
 }
 
+/* The QR code shown while a board member sets up an authenticator app. */
+.qr {
+  display: block;
+  width: 12.5rem;
+  max-width: 100%;
+  height: auto;
+  margin-block: var(--space-2);
+}
+
 label {
   display: flex;
   flex-direction: column;

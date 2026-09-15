@@ -14,6 +14,8 @@ import { Board, GO_LIVE_CONFIRM } from './Board';
 
 type RpcCall = { name: string; args: Record<string, unknown> | undefined };
 
+type FakeFactor = { id: string; factor_type: 'totp'; status: 'verified' | 'unverified' };
+
 type FakeStudio = {
   paused: boolean;
   agent_mode: string;
@@ -32,6 +34,11 @@ const fake = vi.hoisted(() => ({
   launchedAt: '2026-09-14T12:00:00Z',
   studio: {} as FakeStudio,
   calls: [] as { name: string; args: Record<string, unknown> | undefined }[],
+  // Supabase Auth MFA: the session's assurance level, the account's factors and every MFA call.
+  aal: 'aal2' as 'aal1' | 'aal2',
+  factors: [] as FakeFactor[],
+  goodCode: '123456',
+  mfaCalls: [] as { name: string; args: Record<string, unknown> | undefined }[],
 }));
 
 vi.mock('../lib/supabase', async (importOriginal) => {
@@ -42,6 +49,53 @@ vi.mock('../lib/supabase', async (importOriginal) => {
       getSession: () => Promise.resolve({ data: { session } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       signOut: () => Promise.resolve({ error: null }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: () => {
+          fake.mfaCalls.push({ name: 'getAuthenticatorAssuranceLevel', args: undefined });
+          const verified = fake.factors.some((f) => f.status === 'verified');
+          return Promise.resolve({
+            data: { currentLevel: fake.aal, nextLevel: verified ? 'aal2' : 'aal1', currentAuthenticationMethods: [] },
+            error: null,
+          });
+        },
+        listFactors: () => {
+          fake.mfaCalls.push({ name: 'listFactors', args: undefined });
+          return Promise.resolve({
+            data: { all: [...fake.factors], totp: fake.factors.filter((f) => f.status === 'verified'), phone: [], webauthn: [] },
+            error: null,
+          });
+        },
+        unenroll: (args: { factorId: string }) => {
+          fake.mfaCalls.push({ name: 'unenroll', args });
+          fake.factors = fake.factors.filter((f) => f.id !== args.factorId);
+          return Promise.resolve({ data: { id: args.factorId }, error: null });
+        },
+        enroll: (args: Record<string, unknown>) => {
+          fake.mfaCalls.push({ name: 'enroll', args });
+          fake.factors.push({ id: 'f-new', factor_type: 'totp', status: 'unverified' });
+          return Promise.resolve({
+            data: {
+              id: 'f-new',
+              type: 'totp',
+              totp: { qr_code: 'data:image/svg+xml;utf-8,<svg></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' },
+            },
+            error: null,
+          });
+        },
+        challenge: (args: { factorId: string }) => {
+          fake.mfaCalls.push({ name: 'challenge', args });
+          return Promise.resolve({ data: { id: 'challenge-' + args.factorId, type: 'totp', expires_at: 0 }, error: null });
+        },
+        verify: (args: { factorId: string; challengeId: string; code: string }) => {
+          fake.mfaCalls.push({ name: 'verify', args });
+          if (args.code !== fake.goodCode) {
+            return Promise.resolve({ data: null, error: { message: 'Invalid TOTP code entered' } });
+          }
+          fake.aal = 'aal2';
+          fake.factors = fake.factors.map((f) => (f.id === args.factorId ? { ...f, status: 'verified' } : f));
+          return Promise.resolve({ data: { access_token: 'aal2-token' }, error: null });
+        },
+      },
     },
     rpc: (name: string, args?: Record<string, unknown>) => {
       fake.calls.push({ name, args });
@@ -110,11 +164,47 @@ async function renderBoard() {
       <Board />
     </SourceProvider>,
   );
+  // The session, the role and the two-factor state resolve in turn.
+  await flush();
   await flush();
 }
 
 function callsNamed(name: string): RpcCall[] {
   return fake.calls.filter((call) => call.name === name);
+}
+
+function mfaCallsNamed(name: string): RpcCall[] {
+  return fake.mfaCalls.filter((call) => call.name === name);
+}
+
+const STATE_CHANGING_RPCS = ['set_paused', 'set_launched', 'set_agent_mode', 'file_card', 'file_directive', 'file_note'];
+
+/** Every control that needs aal2 is absent. */
+function expectNoSecondFactorControls() {
+  expect(screen.queryByRole('button', { name: 'Pause agents' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Resume agents' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'File a Next card' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'File a directive' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'File a note' })).toBeNull();
+}
+
+function expectSecondFactorControls() {
+  expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Go live' })).toBeTruthy();
+  expect(screen.getByRole('group', { name: 'Agent mode' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'File a Next card' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'File a directive' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'File a note' })).toBeTruthy();
+  expect(screen.queryByRole('region', { name: 'Two-factor sign-in' })).toBeNull();
+}
+
+async function enterCode(code: string) {
+  fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: code } });
+  fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
+  await flush();
+  await flush();
 }
 
 function activeLine(at: Date): string {
@@ -139,6 +229,9 @@ beforeEach(() => {
     card_max_usd: 25,
   };
   fake.calls.length = 0;
+  fake.aal = 'aal2';
+  fake.factors = [{ id: 'f-1', factor_type: 'totp', status: 'verified' }];
+  fake.mfaCalls.length = 0;
   visibility = 'visible';
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -421,7 +514,100 @@ describe('Board studio status', () => {
   });
 });
 
+describe('Board two-factor sign-in', () => {
+  it('enrols an authenticator app on an account without one, then shows the board controls', async () => {
+    fake.aal = 'aal1';
+    fake.factors = [{ id: 'f-abandoned', factor_type: 'totp', status: 'unverified' }];
+    await renderBoard();
+    const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
+    expect(
+      within(step).getByText(
+        'A second factor is needed before you can pause agents, go live, change the agent mode, or file cards, directives and notes.',
+      ),
+    ).toBeTruthy();
+    expectNoSecondFactorControls();
+    expect(within(step).queryByRole('form', { name: 'Verify a code' })).toBeNull();
+
+    fireEvent.click(within(step).getByRole('button', { name: 'Set up an authenticator app' }));
+    await flush();
+    await flush();
+    // The abandoned unverified factor is removed before a new one is enrolled.
+    expect(mfaCallsNamed('unenroll').map((call) => call.args)).toEqual([{ factorId: 'f-abandoned' }]);
+    expect(mfaCallsNamed('enroll').map((call) => call.args)).toEqual([{ factorType: 'totp' }]);
+    const qr = within(step).getByRole('img', { name: 'QR code for your authenticator app' });
+    expect(qr.getAttribute('src')).toBe('data:image/svg+xml;utf-8,<svg></svg>');
+    expect(within(step).getByText('JBSWY3DPEHPK3PXP').tagName).toBe('CODE');
+    expectNoSecondFactorControls();
+
+    await enterCode('000000');
+    expect(screen.getByText('Invalid TOTP code entered')).toBeTruthy();
+    expectNoSecondFactorControls();
+
+    await enterCode('123456');
+    expect(mfaCallsNamed('challenge').map((call) => call.args)).toEqual([{ factorId: 'f-new' }, { factorId: 'f-new' }]);
+    expect(mfaCallsNamed('verify').at(-1)?.args).toEqual({ factorId: 'f-new', challengeId: 'challenge-f-new', code: '123456' });
+    expectSecondFactorControls();
+  });
+
+  it('challenges a verified factor on a new aal1 session and never enrols', async () => {
+    fake.aal = 'aal1';
+    await renderBoard();
+    const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
+    expect(within(step).queryByRole('button', { name: 'Set up an authenticator app' })).toBeNull();
+    expect(within(step).queryByRole('img')).toBeNull();
+    expectNoSecondFactorControls();
+
+    await enterCode('12 34');
+    expect(screen.getByText('Enter the 6-digit code from your authenticator app.')).toBeTruthy();
+    expect(mfaCallsNamed('verify')).toHaveLength(0);
+
+    await enterCode('123456');
+    expect(mfaCallsNamed('verify').map((call) => call.args)).toEqual([
+      { factorId: 'f-1', challengeId: 'challenge-f-1', code: '123456' },
+    ]);
+    expect(mfaCallsNamed('enroll')).toHaveLength(0);
+    expectSecondFactorControls();
+  });
+
+  it('skips the step when the session is already aal2', async () => {
+    await renderBoard();
+    expectSecondFactorControls();
+    expect(mfaCallsNamed('challenge')).toHaveLength(0);
+  });
+
+  it('keeps the studio status and the heartbeat running at aal1 while every state-changing control stays hidden', async () => {
+    fake.aal = 'aal1';
+    await renderBoard();
+    expectNoSecondFactorControls();
+    expect(screen.getByText('Agents: running.')).toBeTruthy();
+    expect(screen.getByText('Agent mode: attended.')).toBeTruthy();
+    expect(screen.getByText(activeLine(startedAt))).toBeTruthy();
+    expect(callsNamed('board_heartbeat')).toHaveLength(1);
+    expect(callsNamed('board_studio_state')).toHaveLength(1);
+
+    await flush(HEARTBEAT_MS);
+    expect(callsNamed('board_heartbeat')).toHaveLength(2);
+    expect(callsNamed('board_studio_state').length).toBeGreaterThanOrEqual(2);
+    expect(fake.calls.filter((call) => STATE_CHANGING_RPCS.includes(call.name))).toEqual([]);
+  });
+});
+
 describe('Board signed in as the moderator', () => {
+  it('pauses and resumes at aal1 with no two-factor step', async () => {
+    fake.role = 'moderator';
+    fake.aal = 'aal1';
+    fake.factors = [];
+    await renderBoard();
+    expect(screen.queryByRole('region', { name: 'Two-factor sign-in' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
+    await flush();
+    expect(callsNamed('set_paused').map((call) => call.args)).toEqual([{ p_paused: true }, { p_paused: false }]);
+    expect(screen.getByText('Agents resumed.')).toBeTruthy();
+    expect(fake.mfaCalls).toEqual([]);
+  });
+
   it('shows only pause and resume and never heartbeats', async () => {
     fake.role = 'moderator';
     await renderBoard();
