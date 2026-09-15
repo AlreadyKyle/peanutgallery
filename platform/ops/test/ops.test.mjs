@@ -267,6 +267,41 @@ describe('deploy.sh check_quiet', () => {
   });
 });
 
+describe('deploy.sh supabase_get', () => {
+  // A curl stand-in on PATH that prints its arguments and the header file it was handed.
+  const bin = path.join(scratch, 'fake-bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    path.join(bin, 'curl'),
+    '#!/bin/sh\nfor arg in "$@"; do case "$arg" in @*) echo "headers:"; cat "${arg#@}" ;; *) echo "arg: $arg" ;; esac; done\n',
+    { mode: 0o755 },
+  );
+  const get = (serviceKey) => {
+    const envFile = path.join(scratch, `deploy-${runs++}.env`);
+    writeFileSync(envFile, `SUPABASE_URL=https://fixture.supabase.local/\nSUPABASE_SERVICE_ROLE_KEY=${serviceKey}\n`);
+    return callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'ENV_FILE="$FIXTURE_ENV"; WORK=$(mktemp -d); supabase_get "studio_state?id=eq.1&select=paused"', {
+      FIXTURE_ENV: envFile,
+      PATH: `${bin}:${process.env.PATH}`,
+    });
+  };
+
+  test('sends a new-format secret key in apikey only, and never on the command line', () => {
+    const run = get('sb_secret_fixture');
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /^arg: https:\/\/fixture\.supabase\.local\/rest\/v1\/studio_state\?id=eq\.1&select=paused$/m);
+    assert.match(run.stdout, /^apikey: sb_secret_fixture$/m);
+    assert.doesNotMatch(run.stdout, /Authorization/);
+    assert.doesNotMatch(run.stdout.split('headers:')[0], /sb_secret_fixture/);
+  });
+
+  test('sends a legacy service role key as apikey and bearer, as supabase-js does', () => {
+    const run = get('legacy-service-role-fixture');
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /^apikey: legacy-service-role-fixture$/m);
+    assert.match(run.stdout, /^Authorization: Bearer legacy-service-role-fixture$/m);
+  });
+});
+
 const SHELL_SCRIPTS = readdirSync(OPS_DIR).filter((name) => name.endsWith('.sh'));
 
 describe('shell scripts', () => {

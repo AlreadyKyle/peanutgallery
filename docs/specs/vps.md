@@ -1,6 +1,6 @@
 # The dispatcher on a VPS, unattended, with alerts
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -48,7 +48,7 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 - the Supabase URL and service key (the secret key when the Mac's `.env` has one)
 - `PRICE_TABLE_JSON`, `MODEL_BUILDER`
 - `HEALTHCHECK_URL`, `NTFY_TOPIC_URL`
-- any optional dispatcher setting the Mac's `.env` sets
+- any optional dispatcher setting the Mac's `.env` sets, except the two paths that exist only on the Mac (`CLAUDE_BIN`, `DISPATCHER_WORKTREE_ROOT`)
 
 It never carries `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN` or `ANTHROPIC_API_KEY`. `platform/ops/make-dispatcher-env.sh` writes it on the Mac from the repository `.env` and the operator's `VPS_GITHUB_TOKEN`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`, and never prints a secret.
 
@@ -89,15 +89,15 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 ## Acceptance criteria
 
-- [ ] A `ConfigError` exits 78; a probe failure for forbidden tools, memory paths, the wrong `apiKeySource` or no tools exits 78; a probe with no stream, no init line or an error result, a spawn failure and a mode mismatch exit 1.
-- [ ] The smoke bot's environment is the allowlisted child environment, and `GITHUB_TOKEN` and the Supabase keys are absent from it.
-- [ ] Every git command in `worktree.ts` passes `core.hooksPath=/dev/null`, and a hook planted in a repository does not run on commit.
-- [ ] `seed.ts` inserts `studio_state` with ignore-duplicates, never updates it, and warns without writing when `.env`'s mode or caps differ from the live row.
-- [ ] `make-dispatcher-env.sh` writes exactly the dispatcher's keys at mode 0600, with `AGENT_MODE=unattended`, the VPS token, the secret key preferred and one-line `PRICE_TABLE_JSON`; it prints no secret value and refuses when an operator variable is missing or the VPS token equals the Mac's.
-- [ ] The new shell scripts pass `bash -n`, and `shellcheck` where it is installed.
-- [ ] `provision.sh`'s required keys equal the keys `config.ts` requires plus the studio key and both alert URLs.
-- [ ] Every file under `platform/ops` is under a kernel path.
-- [ ] `platform/ops/README.md` covers provision, cutover, deploy an update, rotate a key, read logs, pause from /board, roll back, the money guardrail and the known risk.
+- [x] A `ConfigError` exits 78; a probe failure for forbidden tools, memory paths, the wrong `apiKeySource` or no tools exits 78; a probe with no stream, no init line or an error result, a spawn failure and a mode mismatch exit 1.
+- [x] The smoke bot's environment is the allowlisted child environment, and `GITHUB_TOKEN` and the Supabase keys are absent from it.
+- [x] Every git command in `worktree.ts` passes `core.hooksPath=/dev/null`, and a hook planted in a repository does not run on commit.
+- [x] `seed.ts` inserts `studio_state` with ignore-duplicates, never updates it, and warns without writing when `.env`'s mode or caps differ from the live row.
+- [x] `make-dispatcher-env.sh` writes exactly the dispatcher's keys at mode 0600, with `AGENT_MODE=unattended`, the VPS token, the secret key preferred and one-line `PRICE_TABLE_JSON`; it prints no secret value and refuses when an operator variable is missing or the VPS token equals the Mac's.
+- [x] The new shell scripts pass `bash -n`, and `shellcheck` where it is installed.
+- [x] `provision.sh`'s required keys equal the keys `config.ts` requires plus the studio key and both alert URLs.
+- [x] Every file under `platform/ops` is under a kernel path.
+- [x] `platform/ops/README.md` covers provision, cutover, deploy an update, rotate a key, read logs, pause from /board, roll back, the money guardrail and the known risk.
 - [ ] On the VPS, `provision.sh` runs twice and the second run changes nothing, and `systemd-analyze verify` passes on both units.
 - [ ] The /board heartbeat shows under 3 minutes after cutover, and the healthchecks.io check is green.
 - [ ] `systemctl restart dispatcher` leaves `studio_state.paused` false and the heartbeat resumes within 2 minutes; a reboot does the same.
@@ -111,12 +111,26 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 - `pnpm verify` at the repository root exits 0.
 - `pnpm --filter @backseat/dispatcher test` (exit-code, probe-core, startup, smoke and worktree tests) and `pnpm --filter @backseat/supabase test` (studio-state tests).
-- `node --test platform/ops/test/*.test.mjs` through the root verify: the env file transform, `bash -n` on every script, the required key list and kernel coverage.
+- `pnpm test:ops` (`node --test platform/ops/test/ops.test.mjs`, part of the root verify): the env file transform, provision.sh's env file checks, deploy.sh's refusal rule and request headers, `bash -n` on every script, the required key list and kernel coverage.
 - On the VPS: `provision.sh` output from two runs, `systemd-analyze verify /etc/systemd/system/dispatcher.service /etc/systemd/system/dispatcher-alert.service`, quoted.
 - `journalctl -u dispatcher -n 50`, quoted, showing `startup probe passed` with `apiKeySource` `ANTHROPIC_API_KEY`.
 - The restart and reboot checks, with `select paused, dispatcher_seen_at from studio_state` quoted.
 - The healthchecks.io alert email and the ntfy messages, screenshotted.
 - The first unattended card's ledger rows quoted.
+
+## Evidence
+
+2026-09-15, built on branch `vps` (not yet deployed; no VPS exists):
+- Exit codes: `exit-code.test.ts` (the mapping; `main.ts` spawned the way the entrypoint runs it exits 78 on a configuration error and logs `restart: false`), `probe-core.test.ts` (`verdict` marks no tools, forbidden tools, memory paths and the wrong `apiKeySource` fatal, and no stream, no init line and an error result not), `startup.test.ts` (a fatal probe failure and an unpriced model exit 78; a transient probe failure, a spawn failure and a mode mismatch exit 1).
+- Smoke bot: `smoke.test.ts` "runs the bot with the agent session's allowlisted environment and none of the dispatcher's secrets".
+- Hooks: `worktree.test.ts` "git hooks" (a planted hook runs without the switch, and none runs on add, diff, commit, rev-parse, status or worktree add with it, from `.git/hooks` or a configured hooks path).
+- Seed: `studio-state.test.ts` drives supabase-js against a PostgREST stand-in: one POST with `resolution=ignore-duplicates` and one GET, a live unattended row stays unattended, and each difference prints a warning.
+- Env file: `platform/ops/test/ops.test.mjs` "make-dispatcher-env.sh" (exact keys and order, mode 0600, the secret key preferred, one-line JSON, no value in the output, the refusals).
+- Shell scripts: `ops.test.mjs` "parse with bash -n" (all four scripts; the entrypoint with `sh -n` and `dash -n` too). `shellcheck` is not installed on the machine that built this, so that test skipped.
+- Required keys: `ops.test.mjs` "require the keys config.ts requires, plus the studio key and both alert URLs"; provision.sh's checks accept the generator's output and refuse ten bad variants.
+- Kernel paths: `ops.test.mjs` "every file under platform/ops is under a kernel path"; `worktree.test.ts` keeps the dispatcher's list equal to `platform/gate/kernel-paths.txt`.
+- Runbook: `platform/ops/README.md` has Provision, Cutover, Deploy an update, Roll back, Rotate a key, Read logs, Pause from /board, Exit codes and restarts, The money guardrail and Known risk.
+- Pending live, on the VPS: the image build, both provision runs and `systemd-analyze verify`, the cutover probe, restart and reboot, both alerts, the exit-78 check, the first studio-billed card, the rejected-card message and the 24-hour soak.
 
 ## Decisions
 
@@ -131,6 +145,14 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-15: the smoke bot runs with the child allowlist and git runs with hooks off (board). Both run agent-written code or files next to the dispatcher's secrets.
 - 2026-09-15: the seed inserts `studio_state` only when missing (board). The board sets the mode from /board; a stale `.env` on the Mac must not undo it.
 - 2026-09-15: the separate uid for agent sessions is a follow-up, specified before any card source other than the board opens (board). Today every card comes from the board.
+- 2026-09-15: the image sets `pnpm_config_store_dir`, not `npm_config_store_dir`. pnpm 11.0.9 ignores the npm name: with it set, `pnpm store path` still printed the default store; with `pnpm_config_store_dir` it printed the override.
+- 2026-09-15: a model missing from `PRICE_TABLE_JSON` at the startup probe exits 78, and a malformed `PRICE_TABLE_JSON` is a `ConfigError`. Both are the same on every start, and each start spends on a probe it cannot meter.
+- 2026-09-15: the entrypoint's own checks (the claude CLI version, the clone, the https origin) exit 78; a failed `pnpm install` exits non-zero otherwise and is retried.
+- 2026-09-15: the unit runs `docker run --pull never` and its `ExecStop` ignores a container already gone. A same-named image is never fetched from a registry, and a stop after the container exited on its own does not fail the unit.
+- 2026-09-15: the env file generator copies no `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac (paths on the Mac do not exist on the VPS), and refuses a `MODEL_BUILDER` with no price row. provision.sh also refuses duplicate keys, CRLF lines, a `GITHUB_REPO` other than the clone's, non-https URLs and an unpriced `MODEL_BUILDER`.
+- 2026-09-15: the one-off GitHub header reaches git through `GIT_CONFIG_COUNT` variables, not `-c` on the command line, in provision.sh and deploy.sh, so the token is in no process list. provision.sh clones with the env file's `GITHUB_TOKEN` when none is passed, so the operator never types it on an ssh command line.
+- 2026-09-15: deploy.sh also refuses while the unit is stopped (before the cutover a start would run a second dispatcher beside the Mac's) and while the clone is off `main` (after a rollback).
+- 2026-09-15: the dispatcher's git commands keep the dispatcher's environment; only hooks are turned off. With hooks off git runs no program the repository supplies, and an allowlisted environment would drop the variables git needs on the Mac and in the tests.
 
 ## Needs the board
 

@@ -59,7 +59,8 @@ check_quiet() {
 }
 
 # supabase_get <path and query>: a PostgREST read with the service key. The key goes to curl in a
-# header file, never on a command line.
+# header file, never on a command line. A new-format secret key (sb_secret_) is not a JWT and goes in
+# apikey only; a legacy service role JWT also goes as the bearer, as supabase-js sends it.
 supabase_get() {
   local url key
   url=$(env_value SUPABASE_URL)
@@ -67,7 +68,11 @@ supabase_get() {
   if [ -z "$url" ] || [ -z "$key" ]; then
     die "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from $ENV_FILE"
   fi
-  printf 'apikey: %s\nAuthorization: Bearer %s\n' "$key" "$key" > "$WORK/supabase-headers"
+  printf 'apikey: %s\n' "$key" > "$WORK/supabase-headers"
+  case "$key" in
+    sb_secret_* | sb_publishable_*) ;;
+    *) printf 'Authorization: Bearer %s\n' "$key" >> "$WORK/supabase-headers" ;;
+  esac
   curl -fsS -g --max-time 20 -H @"$WORK/supabase-headers" "${url%/}/rest/v1/$1"
 }
 
