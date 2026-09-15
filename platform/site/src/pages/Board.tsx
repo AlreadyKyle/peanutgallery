@@ -467,8 +467,8 @@ function NextCardForm({
     <form className="stack" onSubmit={submit} aria-label="File a Next card">
       <h2>File a Next card</h2>
       <p>
-        A Next card shows on the site under Next. Supporters fund it to vote for it; when its bar
-        reaches the target the agents build it.
+        A Next card shows on the site under Fund what's next. Supporters fund it to vote for it;
+        when its bar reaches the target the agents build it.
       </p>
       <label>
         Bucket
@@ -769,7 +769,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
   return (
     <form className="stack" onSubmit={submit} aria-label="File a note">
       <h2>File a note</h2>
-      <p>Notes are private advisory text to the Studio Head.</p>
+      <p>Notes are private advice for the Studio Head. Nothing reads them until note triage is built.</p>
       <label>
         Note
         <textarea required rows={4} value={text} onChange={(event) => setText(event.target.value)} />

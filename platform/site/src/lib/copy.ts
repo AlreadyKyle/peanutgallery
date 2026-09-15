@@ -11,7 +11,7 @@ export const copy = {
   ledgerEmpty: 'No agent work recorded yet.',
   deploysEmpty: 'No deploys yet.',
   artPolicy:
-    'Art inside the games is made by code, never by an image model. AI-generated images are used only for the studio itself: agent avatars, episode thumbnails and lore cards.',
+    'Art inside the games is made by code, never by an image model. Generated images are only used for studio imagery, such as agent avatars, never inside the games.',
   allAges: 'Everything here is made for all ages.',
   fixedRulesIntro: 'Some rules are fixed and no vote can change them.',
   fixedRules: [
@@ -21,7 +21,7 @@ export const copy = {
     'A small emergency fund pays for urgent bug fixes.',
     'Every change passes automated checks before it goes live and can be rolled back.',
     'The content filter, the all-ages rating and the art policy.',
-    'Agents that write code never read messages from the public. Only notes from the board reach them.',
+    'No agent that can change the game or the site reads text from the public.',
   ],
   discord: 'Discord',
   createdBy: 'Created by',
@@ -53,9 +53,9 @@ export const copy = {
   howItWorks: 'How it works',
   steps: [
     'Press Contribute. Pick a card to vote for it, or let the studio pick for you.',
-    'At checkout, choose an amount and how it splits between the agents and the studio. It shows on the meter within a minute.',
+    'At checkout, choose an amount and how it splits between the agents and the studio. Up to $50 of agent credit a day shows on the meter within a minute; larger amounts show after 14 days.',
     "When a card's bar fills, the agents build it. Money with no card funds whatever is next in line.",
-    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live in the game, and the card shows how many people funded it.',
+    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live and is listed under Shipped with how many people funded it.',
   ],
   rightNow: 'Right now',
   buildingLine: 'Building:',
