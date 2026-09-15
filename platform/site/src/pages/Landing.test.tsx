@@ -19,6 +19,7 @@ const snapshot: Snapshot = {
     {
       id: 'now1',
       title: 'The core loop',
+      summary: 'Walk, jump and land in the first level.',
       intent: 'Move, jump, land.',
       source: 'board',
       stage: 'building',
@@ -31,6 +32,7 @@ const snapshot: Snapshot = {
     {
       id: 'next1',
       title: 'A second level',
+      summary: 'A second level to play after the first.',
       intent: 'Add a second stage.',
       source: 'community',
       stage: 'voted',
@@ -43,6 +45,7 @@ const snapshot: Snapshot = {
     {
       id: 'next2',
       title: 'A music track',
+      summary: null,
       intent: '',
       source: 'agent',
       stage: 'proposed',
@@ -140,6 +143,15 @@ describe('Landing', () => {
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
     ).toEqual(['The core loop', 'A second level', 'A music track']);
+
+    // Summaries show; the agent briefs sit in closed disclosures.
+    expect(screen.getByText('Walk, jump and land in the first level.')).toBeTruthy();
+    expect(screen.getByText('A second level to play after the first.')).toBeTruthy();
+    const briefs = [...document.querySelectorAll('details.brief')] as HTMLDetailsElement[];
+    expect(briefs.map((d) => [d.open, d.querySelector('p')?.textContent])).toEqual([
+      [false, 'Move, jump, land.'],
+      [false, 'Add a second stage.'],
+    ]);
   });
 
   it('shows the unavailable line and no figures without a database', () => {

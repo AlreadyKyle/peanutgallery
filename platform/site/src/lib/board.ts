@@ -30,6 +30,7 @@ export type NextCard = {
   lane: string;
   folder: string;
   title: string;
+  summary: string;
   intent: string;
   acceptance_test: string;
   funding_target_usd: number;
@@ -115,6 +116,7 @@ export async function fileCard(client: SupabaseClient, card: NextCard): Promise<
       p_lane: card.lane,
       p_folder: card.folder,
       p_title: card.title,
+      p_summary: card.summary,
       p_intent: card.intent,
       p_acceptance_test: card.acceptance_test,
       p_funding_target_usd: card.funding_target_usd,

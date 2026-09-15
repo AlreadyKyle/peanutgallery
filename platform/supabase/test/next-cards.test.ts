@@ -51,6 +51,22 @@ describe("NEXT_CARDS", () => {
     expect(new Set(NEXT_CARDS.map((c) => c.title)).size).toBe(NEXT_CARDS.length);
   });
 
+  it("gives every card the spec's plain public summary, at most 200 characters, with no file names", () => {
+    expect(NEXT_CARDS.map((c) => [c.title, c.summary])).toEqual([
+      ["A fourteenth unlock: Quiet rooms at 300M dust", "Add one more unlock after the last one, so players always have a next goal on screen."],
+      ["Rename the Gatherer to Sweeper", "Rename the first unit from Gatherer to Sweeper, with a new one-line description."],
+      ["Cheaper Cart: baseCost 120", "Lower the Cart's cost so new players can buy one soon after it appears."],
+      ["Save the game and resume on reload", "Save progress in the browser, so a reload picks up where you left off."],
+    ]);
+    for (const card of NEXT_CARDS) {
+      expect(card.summary.trim().length, card.title).toBeGreaterThan(0);
+      expect(card.summary.length, card.title).toBeLessThanOrEqual(200);
+      expect(card.summary, card.title).not.toContain("/");
+      expect(card.summary, card.title).not.toContain(".ts");
+      expect(card.summary.toLowerCase(), card.title).not.toContain("bot");
+    }
+  });
+
   it("gives every config-lane card a check: line that file_card accepts, and the code-lane card none", () => {
     for (const card of NEXT_CARDS) {
       const lines = checkLines(card.acceptance_test);

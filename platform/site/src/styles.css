@@ -19,14 +19,13 @@
   --tracking-display: -0.03em;
   --tracking-label: 0.04em;
 
-  /* Scale */
-  --step--1: 0.9375rem;
-  --step-0: 1.0625rem;
-  --step-1: 1.25rem;
-  --step-2: 1.125rem;
-  --step-3: 1.25rem;
-  --step-4: 1.75rem;
-  --step-5: 1.5rem;
+  /* Type scale: five sizes, a 1.2 ratio from the 17px body. Every text role uses exactly one of
+     them; inside a size, weight, style and case carry the difference, never a new size. */
+  --size-small: 0.875rem; /* 14px: labels, tags, status words, tooltips, footer */
+  --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, links, card titles */
+  --size-lead: 1.25rem; /* 20px: wordmark, pitch and launch line, ledes, small figures */
+  --size-large: 1.5rem; /* 24px: meter figures */
+  --size-display: 1.875rem; /* 30px: page titles */
 
   /* Space */
   --space-1: 0.5rem;
@@ -54,7 +53,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: var(--step-0);
+  font-size: var(--size-body);
   font-weight: var(--weight-body);
   line-height: var(--leading-body);
   color: var(--ink);
@@ -102,15 +101,15 @@ h3 {
 
 h1,
 .display {
-  font-size: var(--step-5);
+  font-size: var(--size-display);
 }
 
 h2 {
-  font-size: var(--step-0);
+  font-size: var(--size-body);
 }
 
 h3 {
-  font-size: var(--step-0);
+  font-size: var(--size-body);
 }
 
 p {
@@ -139,7 +138,7 @@ code {
   display: flex;
   align-items: center;
   gap: 0.6em;
-  font-size: var(--step--1);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-style: italic;
   text-transform: uppercase;
@@ -195,7 +194,7 @@ code {
 }
 
 .wordmark {
-  font-size: var(--step-2);
+  font-size: var(--size-lead);
   font-weight: var(--weight-display);
   font-style: italic;
   text-transform: uppercase;
@@ -213,7 +212,7 @@ nav {
 }
 
 nav a {
-  font-size: var(--step-0);
+  font-size: var(--size-body);
   font-weight: var(--weight-display);
   font-style: italic;
   text-transform: uppercase;
@@ -247,14 +246,19 @@ nav a.active {
   border: 0;
 }
 
+/* The pitch and its launch line are one intro and share the lead size. */
+.pitch,
+.launch {
+  font-size: var(--size-lead);
+}
+
 .pitch {
-  font-size: var(--step-1);
   margin-bottom: var(--space-2);
 }
 
 /* One sentence under a page title. */
 .lede {
-  font-size: var(--step-1);
+  font-size: var(--size-lead);
   margin: var(--space-2) 0 0;
 }
 
@@ -341,7 +345,7 @@ nav a.active {
 .figure dd {
   order: -1;
   margin: 0;
-  font-size: var(--step-4);
+  font-size: var(--size-large);
   font-weight: var(--weight-display);
   line-height: 1;
   letter-spacing: var(--tracking-display);
@@ -349,7 +353,7 @@ nav a.active {
 }
 
 .figure dt {
-  font-size: var(--step--1);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-style: italic;
   text-transform: uppercase;
@@ -362,7 +366,7 @@ nav a.active {
 }
 
 .figures-small .figure dd {
-  font-size: var(--step-3);
+  font-size: var(--size-lead);
 }
 
 .meter-status {
@@ -391,7 +395,7 @@ nav a.active {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: var(--step--1);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-style: normal;
   text-transform: none;
@@ -418,7 +422,7 @@ nav a.active {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: var(--step--1);
+  font-size: var(--size-small);
   font-weight: var(--weight-body);
   font-style: normal;
   text-transform: none;
@@ -468,7 +472,7 @@ ul {
   align-items: center;
   gap: var(--space-1) var(--space-2);
   margin-bottom: var(--space-2);
-  font-size: var(--step--1);
+  font-size: var(--size-small);
 }
 
 .tag,
@@ -491,8 +495,50 @@ ul {
   gap: 0.4em;
 }
 
-.card-intent {
+/* The public summary: plain body text under the card's meta row. */
+.card-summary {
   margin-bottom: var(--space-2);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  line-height: var(--leading-body);
+}
+
+/* The agent brief: a native disclosure, closed by default. */
+.brief {
+  max-width: var(--measure);
+  margin-top: var(--space-2);
+}
+
+.brief summary {
+  display: list-item;
+  cursor: pointer;
+  width: fit-content;
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  line-height: 1.2;
+}
+
+.brief summary::marker {
+  font-style: normal;
+}
+
+.brief summary:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+.brief p {
+  max-width: var(--measure);
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-2);
+  border-left: var(--rule);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  font-style: normal;
+  line-height: var(--leading-body);
 }
 
 .card-track {
@@ -549,7 +595,7 @@ ul {
   font-style: italic;
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
-  font-size: var(--step--1);
+  font-size: var(--size-small);
 }
 
 .green {
@@ -575,7 +621,7 @@ ul {
   align-items: baseline;
   gap: var(--space-1) var(--space-4);
   padding-block: var(--space-3);
-  font-size: var(--step--1);
+  font-size: var(--size-small);
 }
 
 .footer-row p {
@@ -732,6 +778,6 @@ button.link {
   }
 
   nav a {
-    font-size: var(--step-0);
+    font-size: var(--size-body);
   }
 }

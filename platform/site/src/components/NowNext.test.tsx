@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
 import type { Card, Snapshot } from '../lib/source';
@@ -11,6 +11,7 @@ function card(overrides: Partial<Card> = {}): Card {
   return {
     id: 'c',
     title: 'A card',
+    summary: null,
     intent: null,
     source: 'board',
     stage: 'proposed',
@@ -104,8 +105,85 @@ describe('NowList card', () => {
   });
 });
 
+/** The closed or open brief disclosure inside the list item that holds a title. */
+function briefFor(title: string): HTMLDetailsElement | null {
+  const item = screen.getByRole('heading', { level: 3, name: title }).closest('li');
+  return item?.querySelector('details.brief') ?? null;
+}
+
+describe('card summary and agent brief', () => {
+  it('shows a Next card summary and keeps the intent inside a closed disclosure until opened', () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    const intent = 'Edit seed-1/config/unlocks.json. Run the bot; stop and report.';
+    const studio = ready([
+      card({
+        id: 'n1',
+        title: 'A fourteenth unlock',
+        summary: 'Add one more unlock, so players always have a next goal.',
+        intent,
+        stage: 'voted',
+        funding_target_usd: 3,
+      }),
+    ]);
+    render(<NextList studio={studio} />);
+
+    const summary = screen.getByText('Add one more unlock, so players always have a next goal.');
+    expect(summary.tagName).toBe('P');
+    expect(summary.classList.contains('card-summary')).toBe(true);
+
+    const details = briefFor('A fourteenth unlock');
+    expect(details).not.toBeNull();
+    expect(details!.open).toBe(false);
+    const toggle = details!.querySelector('summary')!;
+    expect(toggle.textContent).toBe(copy.agentBrief);
+    // The intent lives only inside the disclosure, verbatim.
+    const briefText = screen.getByText(intent);
+    expect(details!.contains(briefText)).toBe(true);
+    expect(briefText.closest('details')).toBe(details);
+    expect(document.querySelectorAll('p.card-intent')).toHaveLength(0);
+
+    // The brief sits after the fund link.
+    const link = screen.getByRole('link', { name: copy.fundThis });
+    expect(link.compareDocumentPosition(details!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(details!.open).toBe(true);
+    expect(briefText.textContent).toBe(intent);
+  });
+
+  it('shows no summary paragraph for a card without one, and still offers the brief', () => {
+    const studio = ready([
+      card({ id: 'a', title: 'No summary', summary: null, intent: 'Brief only.' }),
+      card({ id: 'b', title: 'Blank summary', summary: '  ', intent: null }),
+    ]);
+    render(<NextList studio={studio} />);
+    expect(document.querySelectorAll('p.card-summary')).toHaveLength(0);
+    expect(briefFor('No summary')?.open).toBe(false);
+    expect(briefFor('Blank summary')).toBeNull();
+  });
+
+  it('shows a Now card summary and the same closed disclosure', () => {
+    const studio = ready([
+      card({
+        id: 'w',
+        title: 'Rename the Gatherer',
+        summary: 'Rename the first unit to Sweeper.',
+        intent: 'Change spawn-table.json.',
+        stage: 'building',
+      }),
+    ]);
+    render(<NowList studio={studio} />);
+    const summary = screen.getByText('Rename the first unit to Sweeper.');
+    expect(summary.classList.contains('card-summary')).toBe(true);
+    const details = briefFor('Rename the Gatherer');
+    expect(details?.open).toBe(false);
+    expect(details?.querySelector('summary')?.textContent).toBe(copy.agentBrief);
+    expect(details?.contains(screen.getByText('Change spawn-table.json.'))).toBe(true);
+  });
+});
+
 describe('NextList card', () => {
-  it('shows the intent, the decided status with an info button, the bar and the contributors line', () => {
+  it('shows the intent in the brief, the decided status with an info button, the bar and the contributors line', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const studio = ready(
       [
@@ -123,7 +201,7 @@ describe('NextList card', () => {
     );
     render(<NextList studio={studio} />);
 
-    expect(screen.getByText('Add a second stage.')).toBeTruthy();
+    expect(screen.getByText('Add a second stage.').closest('details.brief')).toBeTruthy();
     expect(screen.getByText(copy.statusDecided)).toBeTruthy();
     expect(screen.getByRole('button', { name: `${copy.about} ${copy.statusDecided}` })).toBeTruthy();
     expect(screen.getByRole('button', { name: `${copy.about} ${copy.fundThis}` })).toBeTruthy();

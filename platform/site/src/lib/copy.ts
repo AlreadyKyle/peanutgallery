@@ -73,6 +73,7 @@ export const copy = {
   statusOpen: 'Open',
   spentSoFar: 'spent so far',
   fundThis: 'Fund this',
+  agentBrief: 'What the agents are told',
   contributorsOne: '1 contributor',
   contributorsMany: '{n} contributors',
   sources: { board: 'Board', community: 'Community', agent: 'Agent', decision: 'Player decision' },

@@ -15,6 +15,7 @@ function card(overrides: Partial<Card> = {}): Card {
   return {
     id: 'c',
     title: 'A card',
+    summary: null,
     intent: null,
     source: 'board',
     stage: 'proposed',

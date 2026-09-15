@@ -80,6 +80,8 @@ async function readCardMax(db: SupabaseClient): Promise<number> {
 /** The refusals of file_card, in its order, so a dry run reports them before anything is inserted. */
 function refusal(card: NextCard, cardMax: number): string | null {
   if (card.title.trim() === "") return "A title is required";
+  if (card.summary.trim() === "") return "A public summary is required";
+  if (card.summary.trim().length > 200) return "The public summary must be 200 characters or fewer";
   if (card.stage !== "proposed" && card.stage !== "voted") return "A Next card starts at proposed or voted";
   if (!(card.funding_target_usd > 0)) return "The funding target must be above zero";
   if (card.funding_target_usd > cardMax) return `The funding target must not exceed the per-card maximum of ${cardMax.toFixed(4)}`;
@@ -100,6 +102,7 @@ function cardRow(card: NextCard, executorRoleId: string) {
     folder: card.folder,
     executor_role_id: executorRoleId,
     title: card.title.trim(),
+    summary: card.summary.trim(),
     intent: card.intent,
     acceptance_test: card.acceptance_test,
     funding_target_usd: card.funding_target_usd,

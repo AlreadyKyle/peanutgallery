@@ -217,7 +217,10 @@ describe('Board signed in as a board member', () => {
     fireEvent.change(form.getByLabelText('Lane'), { target: { value: 'code' } });
     fireEvent.change(form.getByLabelText('Folder'), { target: { value: 'seed-1' } });
     fireEvent.change(form.getByLabelText('Title'), { target: { value: ' A second level ' } });
-    fireEvent.change(form.getByLabelText('Intent'), { target: { value: 'Add a second stage.' } });
+    fireEvent.change(form.getByLabelText('Public summary'), {
+      target: { value: ' A second level to play once the first is done. ' },
+    });
+    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Add a second stage.' } });
     fireEvent.change(form.getByLabelText('Acceptance test'), {
       target: { value: 'The second level loads.' },
     });
@@ -232,6 +235,7 @@ describe('Board signed in as a board member', () => {
         p_lane: 'code',
         p_folder: 'seed-1',
         p_title: 'A second level',
+        p_summary: 'A second level to play once the first is done.',
         p_intent: 'Add a second stage.',
         p_acceptance_test: 'The second level loads.',
         p_funding_target_usd: 10,
@@ -298,7 +302,8 @@ describe('Board signed in as a board member', () => {
     expect(target.getAttribute('max')).toBe('10');
 
     fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Too big' } });
-    fireEvent.change(form.getByLabelText('Intent'), { target: { value: 'Costs too much.' } });
+    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: 'A big change.' } });
+    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Costs too much.' } });
     fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'It loads.' } });
     fireEvent.change(target, { target: { value: '12' } });
     fireEvent.submit(formElement);
@@ -307,6 +312,37 @@ describe('Board signed in as a board member', () => {
     expect(form.getByText('Funding target must be between $0.01 and $10.00.')).toBeTruthy();
     expect(screen.getByText('Daily cap $100.00. Card maximum $10.00.')).toBeTruthy();
     expect(callsNamed('file_card')).toHaveLength(0);
+  });
+
+  it('refuses a blank public summary before calling the database', async () => {
+    await renderBoard();
+    const formElement = screen.getByRole('form', { name: 'File a Next card' });
+    const form = within(formElement);
+    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'No summary' } });
+    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: '   ' } });
+    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Do a thing.' } });
+    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'It loads.' } });
+    fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '5' } });
+    fireEvent.submit(formElement);
+    await flush();
+
+    expect(form.getByText('A public summary is required.')).toBeTruthy();
+    expect(callsNamed('file_card')).toHaveLength(0);
+  });
+
+  it('caps the public summary at 200 characters, explains it and counts as you type', async () => {
+    await renderBoard();
+    const form = within(screen.getByRole('form', { name: 'File a Next card' }));
+    const summary = form.getByLabelText('Public summary') as HTMLInputElement;
+    expect(summary.required).toBe(true);
+    expect(summary.maxLength).toBe(200);
+    const hint = form.getByText('One or two plain sentences for supporters. 200 characters at most.');
+    const count = form.getByText('0 / 200');
+    expect(summary.getAttribute('aria-describedby')).toBe(`${hint.id} ${count.id}`);
+
+    fireEvent.change(summary, { target: { value: 'Twelve chars' } });
+    expect(form.getByText('12 / 200')).toBeTruthy();
+    expect(form.queryByText('0 / 200')).toBeNull();
   });
 });
 

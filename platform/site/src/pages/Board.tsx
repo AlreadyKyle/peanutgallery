@@ -378,11 +378,15 @@ function executors(roles: Role[]): Role[] {
   return roles.filter((role) => role.write_access && role.state === 'active');
 }
 
+// file_card and the cards.summary column both cap the summary at 200 characters.
+const SUMMARY_MAX = 200;
+
 const emptyCard = {
   bucket: buckets[0] as string,
   lane: lanes[0] as string,
   folder: folders[0] as string,
   title: '',
+  summary: '',
   intent: '',
   acceptance_test: '',
   funding_target_usd: '',
@@ -402,6 +406,8 @@ function NextCardForm({
   const studio = useStudio();
   const roles = studio.state === 'ready' ? executors(studio.snapshot.roles) : [];
   const hintId = useId();
+  const summaryHintId = useId();
+  const summaryCountId = useId();
   const [form, setForm] = useState({ ...emptyCard });
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -414,6 +420,11 @@ function NextCardForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    // Refuse a blank summary here so the database is never called with one.
+    if (form.summary.trim() === '') {
+      setMessage('A public summary is required.');
+      return;
+    }
     const target = Number(form.funding_target_usd);
     const tooHigh = cardMaxUsd !== null && target > cardMaxUsd;
     if (!Number.isFinite(target) || target < 0.01 || tooHigh) {
@@ -435,6 +446,7 @@ function NextCardForm({
         lane: form.lane,
         folder: form.folder,
         title: form.title.trim(),
+        summary: form.summary.trim(),
         intent: form.intent.trim(),
         acceptance_test: form.acceptance_test.trim(),
         funding_target_usd: target,
@@ -493,7 +505,21 @@ function NextCardForm({
         <input required value={form.title} onChange={(event) => update('title', event.target.value)} />
       </label>
       <label>
-        Intent
+        Public summary
+        <input
+          required
+          maxLength={SUMMARY_MAX}
+          aria-describedby={`${summaryHintId} ${summaryCountId}`}
+          value={form.summary}
+          onChange={(event) => update('summary', event.target.value)}
+        />
+      </label>
+      <p id={summaryHintId}>One or two plain sentences for supporters. 200 characters at most.</p>
+      <p id={summaryCountId} aria-live="polite">
+        {form.summary.length} / {SUMMARY_MAX}
+      </p>
+      <label>
+        Intent (for the agents)
         <textarea
           required
           rows={3}

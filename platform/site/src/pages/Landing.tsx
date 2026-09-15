@@ -27,7 +27,7 @@ export function Landing() {
       <div className="masthead">
         <h1 className="sr-only">{copy.studioName}</h1>
         <p className="pitch">{copy.pitch}</p>
-        {launch === null ? null : <p>{launch}</p>}
+        {launch === null ? null : <p className="launch">{launch}</p>}
       </div>
 
       <section className="lead" aria-label="Contribute">

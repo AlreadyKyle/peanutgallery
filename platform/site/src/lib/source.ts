@@ -12,6 +12,7 @@ export type Pool = {
 export type Card = {
   id: string;
   title: string;
+  summary: string | null;
   intent: string | null;
   source: string;
   stage: string;
@@ -87,6 +88,7 @@ type PoolRow = {
 type CardRow = {
   id: string;
   title: string;
+  summary: string | null;
   intent: string | null;
   source: string;
   stage: string;
@@ -166,6 +168,7 @@ function cardFrom(row: CardRow): Card {
   return {
     id: row.id,
     title: row.title,
+    summary: row.summary,
     intent: row.intent,
     source: row.source,
     stage: row.stage,
@@ -230,7 +233,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
         client
           .from('cards')
           .select(
-            'id,title,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+            'id,title,summary,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })

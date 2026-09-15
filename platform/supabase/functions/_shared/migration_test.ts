@@ -112,6 +112,7 @@ Deno.test("migrations on PGlite", {
       assertEquals(migrations.map((m) => m.name), [
         "20260914000000_week1_schema.sql",
         "20260915000000_live_cut.sql",
+        "20260916000000_card_summary.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -168,6 +169,10 @@ Deno.test("migrations on PGlite", {
         "dispatcher_seen_at",
         "launched_at",
       ]);
+      const summary = await row<{ data_type: string; is_nullable: string }>(
+        `select data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'cards' and column_name = 'summary'`,
+      );
+      assertEquals(summary, { data_type: "text", is_nullable: "YES" });
       const withoutRls = await rows(
         `select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`,
       );
@@ -722,7 +727,7 @@ Deno.test("migrations on PGlite", {
         );
 
         const configCard = await row<{ id: string }>(
-          `select public.file_card('game', 'config', 'seed-1', '  Rename the Gatherer to Sweeper ', 'Display only.', $2, 2, 'proposed', $1, '  ') as id`,
+          `select public.file_card('game', 'config', 'seed-1', '  Rename the Gatherer to Sweeper ', '  Rename the first unit to Sweeper. ', 'Display only.', $2, 2, 'proposed', $1, '  ') as id`,
           [
             roleId,
             'spawn-table row gatherer: name changes from Gatherer to Sweeper.\n  check: config seed-1/config/spawn-table.json rows[id=gatherer].name == "Sweeper"',
@@ -730,7 +735,7 @@ Deno.test("migrations on PGlite", {
         );
         assertEquals(
           await row(
-            `select bucket::text as bucket, source::text as source, shape::text as shape, lane::text as lane, folder::text as folder, stage::text as stage, priority, confidence::text as confidence, title, intent, board_reason, funding_target_usd, funded_usd, estimate_usd, proposer_role_id, executor_role_id = $2 as executor from public.cards where id = $1`,
+            `select bucket::text as bucket, source::text as source, shape::text as shape, lane::text as lane, folder::text as folder, stage::text as stage, priority, confidence::text as confidence, title, summary, intent, board_reason, funding_target_usd, funded_usd, estimate_usd, proposer_role_id, executor_role_id = $2 as executor from public.cards where id = $1`,
             [configCard.id, roleId],
           ),
           {
@@ -743,6 +748,8 @@ Deno.test("migrations on PGlite", {
             priority: 100,
             confidence: "low",
             title: "Rename the Gatherer to Sweeper",
+            // The summary is stored trimmed.
+            summary: "Rename the first unit to Sweeper.",
             intent: "Display only.",
             board_reason: null,
             funding_target_usd: "2.0000",
@@ -753,7 +760,7 @@ Deno.test("migrations on PGlite", {
           },
         );
         const codeCard = await row<{ id: string }>(
-          `select public.file_card('platform', 'code', 'platform', 'A platform code card', null, 'No check line is needed on the code lane.', 25, 'voted', $1, ' Board reason ') as id`,
+          `select public.file_card('platform', 'code', 'platform', 'A platform code card', 'Summary.', null, 'No check line is needed on the code lane.', 25, 'voted', $1, ' Board reason ') as id`,
           [roleId],
         );
         assertEquals(
@@ -775,59 +782,115 @@ Deno.test("migrations on PGlite", {
         const CHECK =
           `'check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120'`;
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 0, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 0, 'proposed', $1, null)`,
           "The funding target must be above zero",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, null, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, null, 'proposed', $1, null)`,
           "The funding target must be above zero",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 26, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 26, 'proposed', $1, null)`,
           "The funding target must not exceed the per-card maximum of 25.0000",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'funded', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'funded', $1, null)`,
           "A Next card starts at proposed or voted",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'designing', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'designing', $1, null)`,
           "A Next card starts at proposed or voted",
           [roleId],
         );
         await refuses(
-          `select public.file_card('platform', 'config', 'platform', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          `select public.file_card('platform', 'config', 'platform', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
           "The config lane exists only for seed-1",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', 'Run the bot; see check: below.', 3, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', 'Run the bot; see check: below.', 3, 'proposed', $1, null)`,
           "A config-lane card needs a check: line in its acceptance test",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', null, 3, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', null, 3, 'proposed', $1, null)`,
           "A config-lane card needs a check: line in its acceptance test",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', ' ', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', ' ', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
           "A title is required",
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', null, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', null, null)`,
           "An executor role is required",
+        );
+        // The summary refusals come right after the title check.
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', '   ', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          "A public summary is required",
+          [roleId],
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', null, 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          "A public summary is required",
+          [roleId],
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', $2, 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          "The public summary must be 200 characters or fewer",
+          [roleId, "a".repeat(201)],
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', ' ', ' ', 'Intent', ${CHECK}, 0, 'funded', null, null)`,
+          "A title is required",
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', ' ', 'Intent', ${CHECK}, 0, 'funded', null, null)`,
+          "A public summary is required",
+        );
+        const fullLength = await row<{ id: string }>(
+          `select public.file_card('game', 'code', 'seed-1', 'Two hundred characters', $2, null, 'Acceptance.', 2, 'proposed', $1, null) as id`,
+          [roleId, "b".repeat(200)],
+        );
+        assertEquals(
+          (await row<{ n: number }>(
+            `select char_length(summary)::int as n from public.cards where id = $1`,
+            [fullLength.id],
+          )).n,
+          200,
+        );
+        // The column check refuses a long summary written without file_card.
+        await refuses(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'Direct insert', $1, 5, 'proposed')`,
+          "cards_summary_check",
+          ["c".repeat(201)],
+        );
+        // The ten-argument live-cut signature no longer exists.
+        assertEquals(
+          await rows<{ args: string }>(
+            `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'file_card'`,
+          ),
+          [{
+            args:
+              "p_bucket card_bucket, p_lane card_lane, p_folder card_folder, p_title text, p_summary text, p_intent text, p_acceptance_test text, p_funding_target_usd numeric, p_stage card_stage, p_executor_role_id uuid, p_board_reason text",
+          }],
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          "does not exist",
+          [roleId],
         );
         await db.exec(
           `update public.roles set state = 'retired' where id = '${roleId}'`,
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
           "The executor must be an active role",
           [roleId],
         );
@@ -926,7 +989,7 @@ Deno.test("migrations on PGlite", {
           "Board membership is required",
         );
         await refuses(
-          `select public.file_card('game', 'code', 'seed-1', 'x', 'y', 'z', 2, 'proposed', $1, null)`,
+          `select public.file_card('game', 'code', 'seed-1', 'x', 'Summary.', 'y', 'z', 2, 'proposed', $1, null)`,
           "Board membership is required",
           [roleId],
         );
@@ -991,7 +1054,7 @@ Deno.test("migrations on PGlite", {
         "Board membership is required",
       );
       await refuses(
-        `select public.file_card('game', 'code', 'seed-1', 'x', 'y', 'z', 2, 'proposed', $1, null)`,
+        `select public.file_card('game', 'code', 'seed-1', 'x', 'Summary.', 'y', 'z', 2, 'proposed', $1, null)`,
         "Board membership is required",
         [roleId],
       );
@@ -1118,6 +1181,13 @@ Deno.test("migrations on PGlite", {
           assertEquals(green.length, 2);
           const cards = await rows(`select id from public.cards`);
           assertEquals(cards.length, total.n);
+          const summaries = await rows<{ summary: string | null }>(
+            `select summary from public.cards where summary is not null order by summary`,
+          );
+          assert(
+            summaries.some((c) => c.summary === "Rename the first unit to Sweeper."),
+            "anon reads cards.summary",
+          );
 
           const studio = await rows(`select * from public.public_studio`);
           assertEquals(studio.length, 1);
@@ -1240,7 +1310,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "function privileges: anon none, authenticated the ten board RPCs, service_role the thirteen",
+      "function privileges: anon none, authenticated the ten board RPCs, service_role the thirteen, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -1281,6 +1351,15 @@ Deno.test("migrations on PGlite", {
             "set_updated_at",
           ].sort(),
         );
+        // One file_card row: the eleven-argument version, granted like the old one.
+        assertEquals(privileges.filter((p) => p.proname === "file_card"), [
+          {
+            proname: "file_card",
+            anon: false,
+            authenticated: true,
+            service_role: true,
+          },
+        ]);
         for (const p of privileges) {
           assertEquals(p.anon, false, `anon may not run ${p.proname}`);
           assertEquals(

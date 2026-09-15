@@ -40,6 +40,7 @@ function rowsFor(query: Query): unknown {
         {
           id: 'c1',
           title: 'Week 1: the loop',
+          summary: 'The first playable loop.',
           intent: 'Build the core loop.',
           source: 'board',
           stage: 'voted',
@@ -178,7 +179,7 @@ describe('createSupabaseSource.load', () => {
 
     const cards = query(fake.queries, 'cards');
     expect(cards.select).toBe(
-      'id,title,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
+      'id,title,summary,intent,source,stage,shape,funding_target_usd,funded_usd,actual_usd,created_at',
     );
     expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
     expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
@@ -221,6 +222,7 @@ describe('createSupabaseSource.load', () => {
       {
         id: 'c1',
         title: 'Week 1: the loop',
+        summary: 'The first playable loop.',
         intent: 'Build the core loop.',
         source: 'board',
         stage: 'voted',
