@@ -104,9 +104,11 @@ wait_for_probe() {
       grep -F 'startup probe passed' <<< "$logs"
       return 0
     fi
-    if grep -qF 'dispatcher exited with an error' <<< "$logs"; then
+    # Only an exit systemd will not restart (78, logged with "restart":false) ends the wait; a
+    # retryable startup failure exits 1 and systemd tries again after its back-off.
+    if grep -qE 'dispatcher exited with an error.*"restart":false' <<< "$logs"; then
       tail -n 20 <<< "$logs"
-      die "the dispatcher stopped at startup; see the lines above, systemctl status dispatcher, and README.md (Roll back)"
+      die "the dispatcher stopped at startup and will not restart; see the lines above, systemctl status dispatcher, and README.md (Roll back)"
     fi
     sleep 5
   done

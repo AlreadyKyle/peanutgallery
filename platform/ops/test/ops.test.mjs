@@ -302,6 +302,33 @@ describe('deploy.sh supabase_get', () => {
   });
 });
 
+describe('deploy.sh wait_for_probe', () => {
+  // journalctl prints the fixture log; sleep returns at once so the wait loop runs quickly.
+  const bin = path.join(scratch, 'probe-bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(path.join(bin, 'journalctl'), '#!/bin/sh\nprintf "%s\\n" "$PROBE_LOG"\n', { mode: 0o755 });
+  writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  const wait = (log) =>
+    callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'PROBE_WAIT_SECONDS=1; wait_for_probe 0', { PROBE_LOG: log, PATH: `${bin}:${process.env.PATH}` });
+  const exited = (restart) =>
+    `{"level":"error","scope":"main","msg":"dispatcher exited with an error","error":"startup probe failed","exitCode":${restart ? 1 : 78},"restart":${restart}}`;
+
+  test('returns when the probe passes', () => {
+    const run = wait('{"scope":"probe","msg":"startup probe passed","apiKeySource":"ANTHROPIC_API_KEY"}');
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /startup probe passed/);
+  });
+
+  test('keeps waiting through a retryable exit and stops at once on one systemd will not restart', () => {
+    const retry = wait(exited(true));
+    assert.equal(retry.status, 1);
+    assert.match(retry.stderr, /no 'startup probe passed' within 1 seconds/);
+    const fatal = wait(exited(false));
+    assert.equal(fatal.status, 1);
+    assert.match(fatal.stderr, /will not restart/);
+  });
+});
+
 const SHELL_SCRIPTS = readdirSync(OPS_DIR).filter((name) => name.endsWith('.sh'));
 
 describe('shell scripts', () => {

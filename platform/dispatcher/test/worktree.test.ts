@@ -14,7 +14,7 @@ import {
   commitTrailers,
   git,
   gitArgs,
-  gitAuthArgs,
+  gitAuthEnv,
   KERNEL_PATHS,
   NO_HOOKS,
   lanePaths,
@@ -86,11 +86,13 @@ describe('pure helpers', () => {
     expect(commitMessage(input)).toBe(`${commitTitle(input)}\n\n${commitTrailers(input)}\n`);
   });
 
-  it('scopes the token to github.com', () => {
-    const args = gitAuthArgs('token');
-    expect(args[0]).toBe('-c');
-    expect(args[1]).toMatch(/^http\.https:\/\/github\.com\/\.extraheader=AUTHORIZATION: basic /);
-    expect(Buffer.from(args[1]!.split('basic ')[1]!, 'base64').toString()).toBe('x-access-token:token');
+  it('scopes the token to github.com and passes it in the environment, never as an argument', () => {
+    const env = gitAuthEnv('token');
+    expect(env.GIT_CONFIG_COUNT).toBe('1');
+    expect(env.GIT_CONFIG_KEY_0).toBe('http.https://github.com/.extraheader');
+    expect(env.GIT_CONFIG_VALUE_0).toMatch(/^AUTHORIZATION: basic /);
+    expect(Buffer.from(env.GIT_CONFIG_VALUE_0!.split('basic ')[1]!, 'base64').toString()).toBe('x-access-token:token');
+    expect(Object.values(env).join(' ')).not.toContain('-c');
   });
 });
 
@@ -202,7 +204,7 @@ describe('git hooks', () => {
   it('puts the hooks switch before every subcommand', () => {
     expect(NO_HOOKS).toEqual(['-c', 'core.hooksPath=/dev/null']);
     expect(gitArgs(['status', '--porcelain'])).toEqual(['-c', 'core.hooksPath=/dev/null', 'status', '--porcelain']);
-    expect(gitArgs([...gitAuthArgs('token'), 'push', 'origin'])).toEqual(['-c', 'core.hooksPath=/dev/null', ...gitAuthArgs('token'), 'push', 'origin']);
+    expect(gitArgs(['push', 'origin'])).toEqual(['-c', 'core.hooksPath=/dev/null', 'push', 'origin']);
   });
 
   it('runs a planted hook when git is called without the switch, so the test can see one', () => {

@@ -35,10 +35,16 @@ export async function git(args: string[], cwd: string, env?: NodeJS.ProcessEnv):
   return (await gitRaw(args, cwd, env)).trim();
 }
 
-// Scoped to github.com so the token never reaches another host.
-export function gitAuthArgs(token: string): string[] {
+// The token reaches git as configuration in the environment, scoped to github.com so it never
+// reaches another host. An argument would sit in /proc/<pid>/cmdline, which any process on the
+// machine can read with ps; a process's environment is readable only by its own user.
+export function gitAuthEnv(token: string): NodeJS.ProcessEnv {
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
-  return ['-c', `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basic}`];
+  return {
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+  };
 }
 
 export function shortId(cardId: string): string {
@@ -114,14 +120,14 @@ export interface Worktree {
   branch: string;
 }
 
-export async function createWorktree(repoRoot: string, root: string, cardId: string, lane: CardLane, authArgs: string[]): Promise<Worktree> {
+export async function createWorktree(repoRoot: string, root: string, cardId: string, lane: CardLane, authEnv: NodeJS.ProcessEnv): Promise<Worktree> {
   const target = worktreePath(root, cardId);
   const branch = branchName(cardId, lane);
   await mkdir(root, { recursive: true });
   if (existsSync(target)) {
     await removeWorktree(repoRoot, target, null);
   }
-  await git([...authArgs, 'fetch', 'origin', 'main'], repoRoot);
+  await git(['fetch', 'origin', 'main'], repoRoot, authEnv);
   await git(['worktree', 'add', '-B', branch, target, 'origin/main'], repoRoot);
   return { path: target, branch };
 }
