@@ -2,40 +2,26 @@ import { copy } from '../lib/copy';
 import { formatInteger, formatUsd } from '../lib/format';
 import type { StudioState } from '../lib/studio';
 import { EventList } from './EventList';
-import { Info } from './Info';
+import { Stat } from './Stat';
 
 export function LedgerSummary({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
-    return <p>{copy.loadingLedger}</p>;
+    return <p className="muted">{copy.loadingLedger}</p>;
   }
   if (studio.state !== 'ready') {
-    return <p>{copy.meterUnavailable}</p>;
+    return <p className="muted">{copy.meterUnavailable}</p>;
   }
   const { totals } = studio.snapshot;
+  const tokens = copy.tokensLine
+    .replace('{in}', formatInteger(totals.input_tokens))
+    .replace('{cached}', formatInteger(totals.cached_tokens))
+    .replace('{out}', formatInteger(totals.output_tokens));
   return (
     <>
-      <dl className="figures figures-small">
-        <div className="figure">
-          <dt>
-            {copy.agentSpend} <Info term={copy.agentSpend} text={copy.infoAgentSpend} />
-          </dt>
-          <dd>{formatUsd(totals.usd_total)}</dd>
-        </div>
-        <div className="figure">
-          <dt>{copy.inputTokens}</dt>
-          <dd>{formatInteger(totals.input_tokens)}</dd>
-        </div>
-        <div className="figure">
-          <dt>
-            {copy.cachedTokens} <Info term={copy.cachedTokens} text={copy.infoCachedTokens} />
-          </dt>
-          <dd>{formatInteger(totals.cached_tokens)}</dd>
-        </div>
-        <div className="figure">
-          <dt>{copy.outputTokens}</dt>
-          <dd>{formatInteger(totals.output_tokens)}</dd>
-        </div>
+      <dl className="stats">
+        <Stat label={copy.agentSpend} description={copy.describeAgentSpend} value={formatUsd(totals.usd_total)} />
       </dl>
+      <p className="muted small">{tokens}</p>
       <EventList snapshot={studio.snapshot} />
     </>
   );

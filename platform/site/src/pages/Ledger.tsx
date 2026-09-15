@@ -10,20 +10,20 @@ export function Ledger() {
   return (
     <main>
       <PageHeader title={copy.ledger} lede={copy.ledgerLede} />
-      <section className="section" aria-label="Pool">
-        <h2 className="label">{copy.pool}</h2>
+      <section className="section" aria-labelledby="funding">
+        <h2 id="funding">{copy.meter}</h2>
         <Meter studio={studio} />
       </section>
-      <section className="section" aria-label="Agent work">
-        <h2 className="label">{copy.agentWork}</h2>
+      <section className="section" aria-labelledby="agent-work">
+        <h2 id="agent-work">{copy.agentWork}</h2>
         <LedgerSummary studio={studio} />
       </section>
-      <section className="section" aria-label="Deploys">
-        <h2 className="label">{copy.deploys}</h2>
+      <section className="section" aria-labelledby="deploys">
+        <h2 id="deploys">{copy.deploys}</h2>
         {studio.state === 'ready' ? (
           <DeployList snapshot={studio.snapshot} />
         ) : (
-          <p>{studio.state === 'loading' ? copy.loadingDeploys : copy.meterUnavailable}</p>
+          <p className="muted">{studio.state === 'loading' ? copy.loadingDeploys : copy.meterUnavailable}</p>
         )}
       </section>
     </main>

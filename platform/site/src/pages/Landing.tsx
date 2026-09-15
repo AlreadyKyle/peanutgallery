@@ -13,37 +13,43 @@ function launchLine(studio: StudioState): string | null {
   return at === null ? copy.notLiveYet : `${copy.liveSince} ${formatDate(at)}`;
 }
 
-// Only a loaded launch date hides the pre-launch offer; unknown state keeps it.
-function hasLaunched(studio: StudioState): boolean {
-  return studio.state === 'ready' && studio.snapshot.launchedAt !== null;
-}
-
+// Order: what the studio is and how to take part, then what is building and what is next (the
+// reasons to visit), then how it works, the money and the rules.
 export function Landing() {
   const env = siteEnv();
   const studio = useStudio();
   const launch = launchLine(studio);
   return (
     <main>
-      <div className="masthead">
-        <h1 className="sr-only">{copy.studioName}</h1>
-        <p className="pitch">{copy.pitch}</p>
-        {launch === null ? null : <p className="launch">{launch}</p>}
-      </div>
-
-      <section className="lead" aria-label="Contribute">
+      <div className="hero">
+        <h1>{copy.pitchTitle}</h1>
+        <p className="lede">{copy.pitchBody}</p>
+        {launch === null ? null : <p className="muted">{launch}</p>}
         {env.stripePaymentLinkUrl === '' ? (
           <p>{copy.contributeUnavailable}</p>
         ) : (
-          <a className="button" href={env.stripePaymentLinkUrl}>
-            {copy.contribute}
-          </a>
+          <p>
+            <a className="button" href={env.stripePaymentLinkUrl}>
+              {copy.contribute}
+            </a>
+          </p>
         )}
-        <p>{copy.split}</p>
-        {hasLaunched(studio) ? null : <p>{copy.preLaunch}</p>}
+        <p className="muted small">{copy.split}</p>
+      </div>
+
+      <section className="section" aria-labelledby="now">
+        <h2 id="now">{copy.now}</h2>
+        <NowList studio={studio} />
       </section>
 
-      <section className="section" aria-label="How it works">
-        <h2 className="label">{copy.howItWorks}</h2>
+      <section className="section" aria-labelledby="next">
+        <h2 id="next">{copy.next}</h2>
+        <p className="muted">{copy.nextIntro}</p>
+        <NextList studio={studio} />
+      </section>
+
+      <section className="section" aria-labelledby="how">
+        <h2 id="how">{copy.howItWorks}</h2>
         <ol className="steps">
           {copy.steps.map((step) => (
             <li key={step}>{step}</li>
@@ -51,33 +57,21 @@ export function Landing() {
         </ol>
       </section>
 
-      <section className="section" aria-label="Meter">
-        <h2 className="label">{copy.meter}</h2>
+      <section className="section" aria-labelledby="funding">
+        <h2 id="funding">{copy.meter}</h2>
         <Meter studio={studio} />
       </section>
 
-      <section className="section" aria-label="Ledger">
-        <h2 className="label">{copy.ledger}</h2>
+      <section className="section" aria-labelledby="ledger">
+        <h2 id="ledger">{copy.ledger}</h2>
         <LedgerSummary studio={studio} />
         <p>
-          <Link className="more" to="/ledger">
-            {copy.fullLedger}
-          </Link>
+          <Link to="/ledger">{copy.fullLedger}</Link>
         </p>
       </section>
 
-      <section className="section" aria-label="Now">
-        <h2 className="label">{copy.now}</h2>
-        <NowList studio={studio} />
-      </section>
-
-      <section className="section" aria-label="Next">
-        <h2 className="label">{copy.next}</h2>
-        <NextList studio={studio} />
-      </section>
-
-      <section className="section" aria-label="Policies">
-        <h2 className="label">{copy.policies}</h2>
+      <section className="section" aria-labelledby="rules">
+        <h2 id="rules">{copy.policies}</h2>
         <p>{copy.artPolicy}</p>
         <p>{copy.allAges}</p>
         <p>{copy.fixedRulesIntro}</p>

@@ -1,31 +1,35 @@
-/* Peanut Gallery site styles. Tokens first; see BRAND.md for the scale and the patterns. */
+/* Peanut Gallery site styles. Plain and readable: one column, sentence case, gray for secondary
+   text, few rules. Tokens first; BRAND.md is the style guide and explains every one. */
 
 :root {
   color-scheme: light;
 
-  /* Colour: white ground, black type, one near-black for the funding-bar fill. */
+  /* Colour. Every text colour meets WCAG AA on --paper; styles.test.ts checks it. */
   --paper: #ffffff;
-  --ink: #000000;
-  --accent: #1a1a1a;
+  --ink: #111111; /* body text, headings, primary button */
+  --muted: #5c5c5c; /* secondary text: meta lines, descriptions, times */
+  --line: #e4e4e4; /* hairlines between rows, top bar and footer */
+  --track: #ececec; /* empty part of a funding bar */
+  --accent: #111111; /* filled part of a funding bar */
+  --ink-hover: #333333; /* primary button on hover */
+  --field: #8a8a8a; /* form field borders, 3.5:1 on --paper as a non-text control */
 
   /* Type */
-  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --weight-body: 400;
+  --weight-medium: 500;
+  --weight-strong: 600;
   --weight-bold: 700;
-  --weight-display: 900;
-  --leading-body: 1.5;
-  --leading-display: 0.95;
-  --tracking-display: -0.03em;
-  --tracking-label: 0.04em;
+  --leading-body: 1.6;
+  --leading-heading: 1.25;
 
-  /* Type scale: five sizes, a 1.2 ratio from the 17px body. Every text role uses exactly one of
-     them; inside a size, weight, style and case carry the difference, never a new size. */
-  --size-small: 0.875rem; /* 14px: labels, tags, status words, tooltips, footer */
-  --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, links, card titles */
-  --size-lead: 1.25rem; /* 20px: wordmark, pitch and launch line, ledes, small figures */
-  --size-large: 1.5rem; /* 24px: meter figures */
-  --size-display: 1.875rem; /* 30px: page titles */
+  /* Type scale: five sizes, a 1.2 ratio from the 17px body. Every text role uses exactly one. */
+  --size-small: 0.875rem; /* 14px: meta lines, descriptions, footer, disclosure label */
+  --size-body: 1.0625rem; /* 17px: paragraphs, card titles, nav, buttons */
+  --size-lead: 1.25rem; /* 20px: the lede under a page heading, figures */
+  --size-large: 1.5rem; /* 24px: section headings */
+  --size-display: 1.875rem; /* 30px: the page heading */
 
   /* Space */
   --space-1: 0.5rem;
@@ -34,11 +38,11 @@
   --space-4: 2.5rem;
   --space-5: 4rem;
 
-  /* Layout */
-  --measure: 46rem;
-  --wrap: 80rem;
-  --gutter: clamp(1.5rem, 4vw, 2rem);
-  --rule: 1px solid var(--ink);
+  /* Layout: one column for the bar, the page and the footer, so every left edge lines up. */
+  --wrap: 44rem;
+  --gutter: 1.25rem;
+  --radius: 0.375rem;
+  --target: 2.75rem; /* 44px minimum touch target */
   --focus: 3px solid var(--ink);
 }
 
@@ -75,7 +79,7 @@ body {
 .wrap,
 main {
   width: 100%;
-  max-width: var(--wrap);
+  max-width: calc(var(--wrap) + 2 * var(--gutter));
   margin-inline: auto;
   padding-inline: var(--gutter);
 }
@@ -87,34 +91,30 @@ main {
 
 /* Type ------------------------------------------------------------------ */
 
-.display,
 h1,
 h2,
 h3 {
-  font-weight: var(--weight-display);
-  font-style: italic;
-  text-transform: uppercase;
-  line-height: var(--leading-display);
-  letter-spacing: var(--tracking-display);
   margin: 0;
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
 }
 
-h1,
-.display {
+h1 {
   font-size: var(--size-display);
 }
 
 h2 {
-  font-size: var(--size-body);
+  font-size: var(--size-large);
+  margin-bottom: var(--space-2);
 }
 
 h3 {
   font-size: var(--size-body);
+  font-weight: var(--weight-strong);
 }
 
 p {
   margin: 0 0 var(--space-2);
-  max-width: var(--measure);
 }
 
 p:last-child {
@@ -124,8 +124,12 @@ p:last-child {
 a {
   color: inherit;
   text-decoration: underline;
-  text-underline-offset: 0.15em;
+  text-underline-offset: 0.2em;
   text-decoration-thickness: 1px;
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
 }
 
 code {
@@ -133,115 +137,12 @@ code {
   font-size: 0.9em;
 }
 
-/* Section label: a filled dot, then a small bold italic uppercase word. */
-.label {
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
+.muted {
+  color: var(--muted);
+}
+
+.small {
   font-size: var(--size-small);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  line-height: 1.2;
-  margin: 0 0 var(--space-3);
-}
-
-.label::before {
-  content: '';
-  flex: none;
-  width: 0.55em;
-  height: 0.55em;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-/* "Learn more" link: bold, arrow after. The arrow is decorative. */
-.more {
-  font-weight: var(--weight-bold);
-  text-decoration: none;
-}
-
-.more::after {
-  content: ' \2192' / '';
-}
-
-.more:hover,
-.more:focus-visible {
-  text-decoration: underline;
-}
-
-/* Top bar --------------------------------------------------------------- */
-
-.topbar {
-  border-bottom: var(--rule);
-}
-
-.topbar-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  padding-block: var(--space-2);
-}
-
-.brand {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-2);
-}
-
-.wordmark {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-display);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-display);
-  line-height: 1;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-/* The peanut mark: decorative, black on transparent, a little taller than the wordmark's caps. */
-.mark {
-  display: block;
-  width: auto;
-  height: 1.5em;
-}
-
-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-}
-
-nav a {
-  font-size: var(--size-body);
-  font-weight: var(--weight-display);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-display);
-  line-height: 1;
-  text-decoration: none;
-}
-
-nav a:hover,
-nav a.active {
-  text-decoration: underline;
-  text-decoration-thickness: 0.12em;
-  text-underline-offset: 0.18em;
-}
-
-/* Masthead and sections ------------------------------------------------- */
-
-.masthead {
-  margin-bottom: var(--space-4);
 }
 
 .sr-only {
@@ -256,196 +157,107 @@ nav a.active {
   border: 0;
 }
 
-/* The pitch and its launch line are one intro and share the lead size. */
-.pitch,
-.launch {
-  font-size: var(--size-lead);
+/* Top bar --------------------------------------------------------------- */
+
+.topbar {
+  border-bottom: 1px solid var(--line);
 }
 
-.pitch {
+.topbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-block: var(--space-2);
+}
+
+/* The wordmark is the one place the old display type survives: the studio's name, as a mark. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-bold);
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mark {
+  display: block;
+  width: auto;
+  height: 1.5em;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+}
+
+nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+nav a:hover,
+nav a.active {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+
+nav a.nav-primary {
+  font-weight: var(--weight-bold);
+}
+
+/* Page heading and sections --------------------------------------------- */
+
+.hero {
+  margin-bottom: var(--space-5);
+}
+
+.hero h1 {
   margin-bottom: var(--space-2);
 }
 
-/* One sentence under a page title. */
 .lede {
   font-size: var(--size-lead);
-  margin: var(--space-2) 0 0;
+}
+
+.section {
+  margin-bottom: var(--space-5);
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.steps,
+.rules {
+  margin: 0 0 var(--space-2);
+  padding-left: 1.4em;
+}
+
+.steps {
+  list-style: decimal outside;
 }
 
 .rules {
   list-style: disc outside;
-  margin: 0 0 var(--space-2);
-  padding-left: 1.2em;
-  max-width: var(--measure);
 }
 
+.steps li,
 .rules li {
-  margin-bottom: 0.4em;
+  margin-bottom: var(--space-1);
+  padding-left: 0.2em;
 }
-
-/* How it works: a numbered list with heavy italic numerals. */
-.steps {
-  list-style: decimal outside;
-  margin: 0 0 var(--space-2);
-  padding-left: 1.6em;
-  max-width: var(--measure);
-}
-
-.steps li {
-  margin-bottom: var(--space-2);
-  padding-left: 0.3em;
-}
-
-.steps li::marker {
-  font-weight: var(--weight-display);
-  font-style: italic;
-}
-
-.lead {
-  padding-bottom: var(--space-4);
-}
-
-.section {
-  border-top: var(--rule);
-  padding-block: var(--space-4) var(--space-5);
-}
-
-.section:last-child {
-  padding-bottom: 0;
-}
-
-.button {
-  display: inline-block;
-  margin-bottom: var(--space-2);
-  padding: 0.7em 1.4em;
-  border: var(--rule);
-  background: var(--ink);
-  color: var(--paper);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  text-decoration: none;
-}
-
-.button:hover,
-.button:focus-visible {
-  background: var(--paper);
-  color: var(--ink);
-}
-
-/* Figures: a huge numeral with its label beside it -------------------- */
-
-.figures {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
-  margin: 0 0 var(--space-3);
-}
-
-.figure {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 0.6em;
-  min-width: 0;
-}
-
-.figure dd {
-  order: -1;
-  margin: 0;
-  font-size: var(--size-large);
-  font-weight: var(--weight-display);
-  line-height: 1;
-  letter-spacing: var(--tracking-display);
-  font-variant-numeric: tabular-nums;
-}
-
-.figure dt {
-  font-size: var(--size-small);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  line-height: 1.2;
-}
-
-.figures-small {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.figures-small .figure dd {
-  font-size: var(--size-lead);
-}
-
-.meter-status {
-  font-weight: var(--weight-bold);
-}
-
-/* Info: a round "i" button and the tooltip it opens ---------------------- */
-
-/* The wrapper is not positioned: the tooltip anchors to the nearest positioned
-   ancestor (.figure, .card-meta, .card-track) and spans its width, so it never
-   runs past the viewport. */
-.info {
-  display: inline-flex;
-  vertical-align: middle;
-}
-
-.info .info-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: var(--rule);
-  border-radius: 50%;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: var(--size-small);
-  font-weight: var(--weight-bold);
-  font-style: normal;
-  text-transform: none;
-  letter-spacing: 0;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.info .info-button:hover,
-.info .info-button:focus-visible {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.tooltip {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + var(--space-1));
-  z-index: 1;
-  display: block;
-  padding: var(--space-1) var(--space-2);
-  border: var(--rule);
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: var(--size-small);
-  font-weight: var(--weight-body);
-  font-style: normal;
-  text-transform: none;
-  letter-spacing: 0;
-  line-height: var(--leading-body);
-  text-align: left;
-}
-
-.tooltip[hidden] {
-  display: none;
-}
-
-/* Cards: Now and Next, one column, a rule between each --------------------- */
 
 ul {
   list-style: none;
@@ -453,184 +265,217 @@ ul {
   padding: 0;
 }
 
+/* Buttons ---------------------------------------------------------------- */
+
+.button,
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target);
+  padding: 0.5em 1.25em;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:hover,
+button:hover:not(:disabled) {
+  background: var(--ink-hover);
+  border-color: var(--ink-hover);
+}
+
+.button-secondary {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.button-secondary:hover {
+  background: var(--track);
+  border-color: var(--ink);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-weight: var(--weight-body);
+  text-decoration: underline;
+}
+
+button.link:hover:not(:disabled) {
+  background: none;
+}
+
+/* Figures: a row per figure, label and description left, amount right --- */
+
+.stats {
+  margin: 0 0 var(--space-2);
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.stat:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.stat dt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  font-weight: var(--weight-strong);
+}
+
+.stat-description {
+  color: var(--muted);
+  font-size: var(--size-small);
+}
+
+.stat dd {
+  margin: 0;
+  font-size: var(--size-lead);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cards: Building now and Up next, separated by hairlines --------------- */
+
 .cards {
-  max-width: var(--measure);
   margin: 0 0 var(--space-2);
 }
 
 .card {
   padding-block: var(--space-3);
-  border-top: var(--rule);
+  border-top: 1px solid var(--line);
 }
 
 .card:last-child {
-  border-bottom: var(--rule);
+  border-bottom: 1px solid var(--line);
 }
 
 .card > :last-child {
   margin-bottom: 0;
 }
 
-.card-title {
-  margin-bottom: var(--space-1);
+.card h3 {
+  margin-bottom: 0.25rem;
 }
 
 .card-meta {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  color: var(--muted);
   font-size: var(--size-small);
 }
 
-.tag,
-.card-status {
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  line-height: 1.2;
-}
-
-.tag {
-  padding: 0.1em 0.4em;
-  border: var(--rule);
-}
-
-.card-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-}
-
-/* The public summary: plain body text under the card's meta row. */
 .card-summary {
   margin-bottom: var(--space-2);
-  font-size: var(--size-body);
-  font-weight: var(--weight-body);
-  line-height: var(--leading-body);
-}
-
-/* The agent brief: a native disclosure, closed by default. */
-.brief {
-  max-width: var(--measure);
-  margin-top: var(--space-2);
-}
-
-.brief summary {
-  display: list-item;
-  cursor: pointer;
-  width: fit-content;
-  font-size: var(--size-small);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  line-height: 1.2;
-}
-
-.brief summary::marker {
-  font-style: normal;
-}
-
-.brief summary:focus-visible {
-  outline: var(--focus);
-  outline-offset: 2px;
-}
-
-.brief p {
-  max-width: var(--measure);
-  margin: var(--space-1) 0 0;
-  padding-left: var(--space-2);
-  border-left: var(--rule);
-  font-size: var(--size-body);
-  font-weight: var(--weight-body);
-  font-style: normal;
-  line-height: var(--leading-body);
 }
 
 .card-track {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
   margin-bottom: var(--space-2);
 }
 
 .bar {
-  flex: 1 1 8rem;
-  min-width: 0;
-  height: 0.625rem;
-  border: var(--rule);
-  background: var(--paper);
+  height: 0.5rem;
+  margin-bottom: var(--space-1);
+  border-radius: 999px;
+  background: var(--track);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
+  border-radius: 999px;
   background: var(--accent);
 }
 
 .card-amount {
-  font-weight: var(--weight-bold);
+  color: var(--ink);
+  font-weight: var(--weight-strong);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-/* Event and deploy lists ------------------------------------------------- */
+/* The agent brief: a native disclosure, closed by default. */
+.brief {
+  margin-top: var(--space-1);
+}
 
-.events li,
-.deploys li {
+.brief summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: var(--size-small);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.brief p {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--line);
+}
+
+/* Event and deploy rows ---------------------------------------------------- */
+
+.rows li {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  padding: var(--space-1) 0;
-  border-top: var(--rule);
-}
-
-.events li:last-child,
-.deploys li:last-child {
-  border-bottom: var(--rule);
-}
-
-.event-time {
-  font-variant-numeric: tabular-nums;
-}
-
-.event-type {
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
+  gap: 0 var(--space-2);
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--line);
   font-size: var(--size-small);
 }
 
-.green {
-  font-weight: var(--weight-bold);
+.rows li:last-child {
+  border-bottom: 1px solid var(--line);
 }
 
-.red {
+.row-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.failed {
   font-weight: var(--weight-bold);
-  padding: 0 0.4em;
-  border: var(--rule);
 }
 
 /* Footer ----------------------------------------------------------------- */
 
 .site-footer {
-  border-top: var(--rule);
+  border-top: 1px solid var(--line);
 }
 
 .footer-row {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: baseline;
-  gap: var(--space-1) var(--space-4);
+  gap: var(--space-1) var(--space-3);
   padding-block: var(--space-3);
+  color: var(--muted);
   font-size: var(--size-small);
 }
 
@@ -645,13 +490,9 @@ ul {
   flex-direction: column;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  max-width: var(--measure);
 }
 
-.stack h2 {
-  margin: 0;
-}
-
+.stack h2,
 .stack p {
   margin: 0;
 }
@@ -660,8 +501,7 @@ ul {
   align-self: flex-start;
 }
 
-/* Board page only: its sections and forms carry no class. Public `.section` blocks space
-   themselves with padding and the top rule. */
+/* Board page only: its sections and forms carry no class. */
 section:not(.section) + section,
 section + form,
 form + form {
@@ -678,7 +518,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-strong);
 }
 
 fieldset {
@@ -691,7 +531,7 @@ fieldset {
 legend {
   padding: 0;
   margin-bottom: 0.25rem;
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-strong);
 }
 
 /* A radio or checkbox with its text beside it. */
@@ -704,90 +544,40 @@ label.choice {
 
 input,
 select,
-textarea,
-button {
-  font: inherit;
-  max-width: 100%;
-}
-
-input,
-select,
 textarea {
   width: 100%;
-  padding: 0.5rem 0.6rem;
-  border: var(--rule);
-  border-radius: 0;
+  max-width: 100%;
+  min-height: var(--target);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--field);
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
-  font-weight: var(--weight-body);
+  font: inherit;
 }
 
 input[type='radio'] {
   width: auto;
+  min-height: 0;
   margin: 0;
   padding: 0;
   accent-color: var(--ink);
-}
-
-button {
-  padding: 0.7em 1.4em;
-  border: var(--rule);
-  border-radius: 0;
-  background: var(--ink);
-  color: var(--paper);
-  font-weight: var(--weight-bold);
-  font-style: italic;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
-  cursor: pointer;
-}
-
-button:hover:not(:disabled),
-button:focus-visible {
-  background: var(--paper);
-  color: var(--ink);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-button.link {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ink);
-  font: inherit;
-  text-decoration: underline;
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .error {
   font-weight: var(--weight-bold);
 }
 
-/* Breakpoints ------------------------------------------------------------ */
+/* Narrow screens ----------------------------------------------------------- */
 
-@media (max-width: 63.99rem) {
-  .figures-small {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 47.99rem) {
-  .figures,
-  .figures-small {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
+@media (max-width: 30rem) {
   .topbar-row {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0;
   }
 
-  nav a {
-    font-size: var(--size-body);
+  nav {
+    gap: 0 var(--space-2);
   }
 }

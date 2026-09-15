@@ -38,15 +38,14 @@ function TopBar() {
           </Link>
         </div>
         <nav aria-label="Site">
-          <NavLink to="/" end>
-            {copy.studio}
-          </NavLink>
           <NavLink to="/ledger">{copy.ledger}</NavLink>
           {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
-          {env.stripePaymentLinkUrl === '' ? null : (
-            <a href={env.stripePaymentLinkUrl}>{copy.contribute}</a>
-          )}
           {env.discordInvite === '' ? null : <a href={env.discordInvite}>{copy.discord}</a>}
+          {env.stripePaymentLinkUrl === '' ? null : (
+            <a className="nav-primary" href={env.stripePaymentLinkUrl}>
+              {copy.contribute}
+            </a>
+          )}
         </nav>
       </div>
     </header>
@@ -64,9 +63,7 @@ function SiteFooter() {
       <div className="wrap footer-row">
         <p>{copy.footer}</p>
         {env.discordInvite === '' ? null : (
-          <a className="more" href={env.discordInvite}>
-            {copy.discord}
-          </a>
+          <a href={env.discordInvite}>{copy.discord}</a>
         )}
         <p className="credit">
           {copy.createdBy}{' '}
@@ -82,9 +79,7 @@ function NotFound() {
     <main>
       <PageHeader title={copy.notFound} lede={copy.notFoundBody} />
       <p>
-        <Link className="more" to="/">
-          {copy.studio}
-        </Link>
+        <Link to="/">{copy.home}</Link>
       </p>
     </main>
   );
