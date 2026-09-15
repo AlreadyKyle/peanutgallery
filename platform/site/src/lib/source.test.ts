@@ -51,6 +51,7 @@ function rowsFor(query: Query): unknown {
           funded_usd: '25.0000',
           actual_usd: '0.0000',
           created_at: '2026-09-14T00:00:00Z',
+          updated_at: '2026-09-14T02:00:00Z',
         },
       ];
     case 'public_card_funding':
@@ -181,8 +182,9 @@ describe('createSupabaseSource.load', () => {
 
     const cards = query(fake.queries, 'cards');
     expect(cards.select).toBe(
-      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at',
+      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at,updated_at',
     );
+    expect([...CARD_STAGES]).toEqual(['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live']);
     expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
     expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
 
@@ -235,6 +237,7 @@ describe('createSupabaseSource.load', () => {
         funded_usd: 25,
         actual_usd: 0,
         created_at: '2026-09-14T00:00:00Z',
+        updated_at: '2026-09-14T02:00:00Z',
       },
     ]);
     expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });

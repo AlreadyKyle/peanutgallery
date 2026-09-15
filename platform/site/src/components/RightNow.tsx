@@ -22,7 +22,8 @@ export function RightNow({ studio }: { studio: StudioState }) {
 }
 
 function Ready({ snapshot }: { snapshot: Snapshot }) {
-  const { now } = groupCards(snapshot.cards);
+  const { now, shipped } = groupCards(snapshot.cards);
+  const latest = shipped[0];
   return (
     <>
       {snapshot.pool === null ? null : (
@@ -39,6 +40,11 @@ function Ready({ snapshot }: { snapshot: Snapshot }) {
           </>
         )}
       </p>
+      {latest === undefined ? null : (
+        <p>
+          <span className="row-strong">{copy.latestShipped}</span> {latest.title}
+        </p>
+      )}
       <h3 className="panel-heading">{copy.recentWork}</h3>
       <EventList snapshot={{ ...snapshot, events: snapshot.events.slice(0, RECENT_EVENTS) }} />
       <p className="small">

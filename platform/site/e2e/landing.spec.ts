@@ -18,10 +18,14 @@ test('landing loads at 375 px with every element visible and no horizontal overf
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
   await expect(page.getByText('Vote on what they do next by contributing to their compute.')).toBeVisible();
   await expect(page.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
-  // Building now and Queued appear only when cards are in those stages, so only the fixed headings are listed.
+  // Building now, Queued and Shipped appear only when cards are in those stages, so only the fixed headings are listed.
   for (const name of ['Right now', "Fund what's next", 'How it works', 'Funding', 'Ledger', 'Fixed rules']) {
     await expect(main.getByRole('heading', { level: 2, name, exact: true })).toBeVisible();
   }
+  const optional = new Set(['Building now', 'Queued', 'Shipped']);
+  const order = ['Right now', 'Building now', "Fund what's next", 'Queued', 'Shipped', 'How it works', 'Funding', 'Ledger', 'Fixed rules'];
+  const headings = await main.getByRole('heading', { level: 2 }).allTextContents();
+  expect(headings).toEqual(order.filter((name) => !optional.has(name) || headings.includes(name)));
   await expect(main.getByRole('link', { name: 'Full ledger' }).first()).toBeVisible();
   await expect(page.getByText('Funding a card is your vote.', { exact: false })).toBeVisible();
   await expect(page.getByText('Art inside the games is made by code', { exact: false })).toBeVisible();

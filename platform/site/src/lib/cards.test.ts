@@ -7,6 +7,7 @@ import {
   groupCards,
   inCategory,
   isFullyFunded,
+  shippedOrder,
   sourceLabel,
   statusOf,
 } from './cards';
@@ -28,23 +29,40 @@ function card(overrides: Partial<Card> = {}): Card {
     funded_usd: 0,
     actual_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
+    updated_at: '2026-09-14T00:00:00Z',
     ...overrides,
   };
 }
 
 describe('groupCards', () => {
-  it('sends building and gated cards to now, funded cards to queued and the rest to fund', () => {
+  it('sends building and gated cards to now, funded cards to queued, live cards to shipped and the rest to fund', () => {
     const cards = [
       card({ id: 'a', stage: 'building' }),
       card({ id: 'b', stage: 'voted' }),
       card({ id: 'c', stage: 'gated' }),
       card({ id: 'd', stage: 'proposed' }),
       card({ id: 'e', stage: 'funded' }),
+      card({ id: 'f', stage: 'live', updated_at: '2026-09-15T10:00:00Z' }),
+      // A live goal with room left on its bar is still shipped, never fundable.
+      card({ id: 'g', stage: 'live', funding_target_usd: 10, funded_usd: 2, updated_at: '2026-09-15T12:00:00Z' }),
     ];
-    const { now, fund, queued } = groupCards(cards);
+    const { now, fund, queued, shipped } = groupCards(cards);
     expect(now.map((c) => c.id)).toEqual(['a', 'c']);
     expect(fund.map((c) => c.id)).toEqual(['b', 'd']);
     expect(queued.map((c) => c.id)).toEqual(['e']);
+    expect(shipped.map((c) => c.id)).toEqual(['g', 'f']);
+  });
+});
+
+describe('shippedOrder', () => {
+  it('puts the latest ship first, then the newest card when two shipped at the same time', () => {
+    const cards = [
+      card({ id: 'first', updated_at: '2026-09-15T09:00:00Z' }),
+      card({ id: 'latest', updated_at: '2026-09-15T11:30:00.123456+00:00' }),
+      card({ id: 'tie-old', updated_at: '2026-09-15T10:00:00Z', created_at: '2026-09-14T00:00:01Z' }),
+      card({ id: 'tie-new', updated_at: '2026-09-15T10:00:00Z', created_at: '2026-09-14T00:00:02Z' }),
+    ];
+    expect([...cards].sort(shippedOrder).map((c) => c.id)).toEqual(['latest', 'tie-new', 'tie-old', 'first']);
   });
 });
 
@@ -74,6 +92,7 @@ describe('statusOf', () => {
     expect(statusOf(card({ stage: 'building' }))).toBe('building');
     expect(statusOf(card({ stage: 'gated' }))).toBe('gated');
     expect(statusOf(card({ stage: 'funded' }))).toBe('queued');
+    expect(statusOf(card({ stage: 'live' }))).toBe('shipped');
     expect(statusOf(card({ stage: 'voted' }))).toBe('picked');
     expect(statusOf(card({ stage: 'designing' }))).toBe('open');
     expect(statusOf(card({ stage: 'proposed' }))).toBe('open');

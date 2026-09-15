@@ -23,6 +23,8 @@ export type Card = {
   funded_usd: number;
   actual_usd: number;
   created_at: string;
+  /** For a live card, when it shipped: the stage change is its last update. */
+  updated_at: string;
 };
 
 export type CardFunding = {
@@ -101,6 +103,7 @@ type CardRow = {
   funded_usd: Numeric;
   actual_usd: Numeric;
   created_at: string;
+  updated_at: string;
 };
 
 type FundingRow = {
@@ -128,8 +131,8 @@ type TotalsRow = {
 
 export const EVENT_LIMIT = 20;
 export const DEPLOY_LIMIT = 10;
-/** The stages the site lists: Now (building, gated) and Next (the rest). */
-export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated'] as const;
+/** The stages the site lists: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
+export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
 export const REALTIME_LISTENERS = [
   { table: 'pool' },
   { table: 'cards' },
@@ -183,6 +186,7 @@ function cardFrom(row: CardRow): Card {
     funded_usd: money(row.funded_usd),
     actual_usd: money(row.actual_usd),
     created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -239,7 +243,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
         client
           .from('cards')
           .select(
-            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at',
+            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at,updated_at',
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })

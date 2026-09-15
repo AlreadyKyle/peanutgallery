@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
-import { BuildingNow, FundBoard, QueuedList } from './Cards';
+import { BuildingNow, FundBoard, QueuedList, ShippedList } from './Cards';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -22,6 +23,7 @@ function card(overrides: Partial<Card> = {}): Card {
     funded_usd: 0,
     actual_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
+    updated_at: '2026-09-14T00:00:00Z',
     ...overrides,
   };
 }
@@ -55,6 +57,7 @@ function boxFor(title: string): HTMLElement {
 
 beforeEach(() => {
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
+  vi.stubEnv('VITE_PLAY_URL', '');
 });
 
 afterEach(() => {
@@ -182,6 +185,75 @@ describe('BuildingNow and QueuedList', () => {
     expect(row.textContent).toBe(`Queued one${copy.categories.studio} · ${copy.sources.board}`);
     cleanup();
     const { container } = render(<QueuedList snapshot={snapshot([card()])} />);
+    expect(container.innerHTML).toBe('');
+  });
+});
+
+describe('ShippedList', () => {
+  const PLAY = 'https://play.example';
+  const shipped = [
+    card({
+      id: 'older',
+      title: 'Save and resume',
+      summary: 'Your progress is kept between visits.',
+      stage: 'live',
+      shape: 'goal',
+      funding_target_usd: 3,
+      funded_usd: 3,
+      actual_usd: 1.234,
+      updated_at: '2026-09-15T09:00:00Z',
+    }),
+    card({
+      id: 'newer',
+      title: 'A clearer ledger page',
+      summary: '  ',
+      stage: 'live',
+      shape: 'oneoff',
+      folder: 'platform',
+      bucket: 'platform',
+      funding_target_usd: 0,
+      actual_usd: 0.5,
+      updated_at: '2026-09-16T18:30:00Z',
+    }),
+    card({ id: 'open', title: 'Still open', stage: 'proposed' }),
+  ];
+
+  it('lists live cards newest first with category, title, summary, cost, contributors and ship date', () => {
+    vi.stubEnv('VITE_PLAY_URL', PLAY);
+    render(<ShippedList snapshot={snapshot(shipped, { older: { contributors: 3, credited_usd: 3 } })} />);
+    const section = screen.getByRole('region', { name: copy.shipped });
+    expect(within(section).getByText(copy.shippedIntro)).toBeTruthy();
+    const rows = within(section).getAllByRole('listitem');
+    expect(rows.map((row) => within(row).getByRole('heading', { level: 3 }).textContent)).toEqual([
+      'A clearer ledger page',
+      'Save and resume',
+    ]);
+    expect(within(section).queryByText('Still open')).toBeNull();
+
+    const [studio, game] = rows as [HTMLElement, HTMLElement];
+    expect(within(studio).getByText(copy.categories.studio).classList.contains('shipped-category')).toBe(true);
+    // A card nobody funded names who asked for it instead of a contributor count.
+    expect(within(studio).getByText(`$0.50 ${copy.spent} · ${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
+    expect(within(studio).queryByRole('link', { name: copy.playTheGame })).toBeNull();
+    expect(studio.querySelectorAll('p')).toHaveLength(2);
+
+    expect(within(game).getByText(copy.categories.game)).toBeTruthy();
+    expect(within(game).getByText('Your progress is kept between visits.')).toBeTruthy();
+    expect(
+      within(game).getByText(`$1.23 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '3')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`),
+    ).toBeTruthy();
+    const play = within(game).getByRole('link', { name: copy.playTheGame });
+    expect(play.getAttribute('href')).toBe(PLAY);
+    expect(play.getAttribute('aria-describedby')).toBe(within(game).getByRole('heading', { level: 3 }).id);
+    expect(within(section).queryByRole('progressbar')).toBeNull();
+  });
+
+  it('shows no Play the game link without a play URL, and nothing at all without a shipped card', () => {
+    render(<ShippedList snapshot={snapshot(shipped)} />);
+    expect(screen.queryByRole('link', { name: copy.playTheGame })).toBeNull();
+    expect(screen.getByText(`$1.23 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '0')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
+    cleanup();
+    const { container } = render(<ShippedList snapshot={snapshot([card({ stage: 'funded' }), card({ id: 'b', stage: 'building' })])} />);
     expect(container.innerHTML).toBe('');
   });
 });

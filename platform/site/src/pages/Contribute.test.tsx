@@ -23,6 +23,7 @@ function card(overrides: Partial<Card>): Card {
     funded_usd: 0,
     actual_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
+    updated_at: '2026-09-14T00:00:00Z',
     ...overrides,
   };
 }
@@ -69,6 +70,7 @@ describe('Contribute', () => {
         card({ id: 's1', title: 'A clearer ledger', folder: 'platform', bucket: 'platform' }),
         card({ id: 'full', title: 'Already full', funding_target_usd: 5, funded_usd: 5 }),
         card({ id: 'b1', title: 'Being built', stage: 'building' }),
+        card({ id: 'l1', title: 'Already live', stage: 'live', funding_target_usd: 10, funded_usd: 4 }),
       ]),
     );
     expect(screen.getByRole('heading', { level: 1, name: copy.contributeTitle })).toBeTruthy();
@@ -86,6 +88,8 @@ describe('Contribute', () => {
     );
     expect(screen.queryByText('Already full')).toBeNull();
     expect(screen.queryByText('Being built')).toBeNull();
+    expect(screen.queryByText('Already live')).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(3);
   });
 
   it('keeps Pick for me when no card needs funding, and says so', async () => {

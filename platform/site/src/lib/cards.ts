@@ -1,7 +1,7 @@
 import { copy } from './copy';
 import type { Card } from './source';
 
-export type CardStatus = 'building' | 'gated' | 'queued' | 'picked' | 'open';
+export type CardStatus = 'building' | 'gated' | 'queued' | 'picked' | 'open' | 'shipped';
 
 /** What a card spends money on: the current game, the studio itself, or the next game. */
 export type CardCategory = 'game' | 'studio' | 'next';
@@ -9,6 +9,8 @@ export type CategoryFilter = 'all' | CardCategory;
 export const CATEGORY_FILTERS: readonly CategoryFilter[] = ['all', 'game', 'studio', 'next'];
 
 const NOW_STAGES = new Set(['building', 'gated']);
+const QUEUED_STAGE = 'funded';
+const SHIPPED_STAGE = 'live';
 const FUND_RANK: Record<string, number> = { voted: 0, designing: 1, proposed: 2 };
 const UNRANKED = 3;
 
@@ -21,6 +23,18 @@ export function fundOrder(a: Card, b: Card): number {
   return a.created_at < b.created_at ? -1 : 1;
 }
 
+function time(iso: string): number {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/** Shipped order: the newest ship first (the latest updated_at), then the newest card. */
+export function shippedOrder(a: Card, b: Card): number {
+  const shipped = time(b.updated_at) - time(a.updated_at);
+  if (shipped !== 0) return shipped;
+  return time(b.created_at) - time(a.created_at);
+}
+
 export type CardGroups = {
   /** Building or in the gate, in server order. */
   now: Card[];
@@ -28,20 +42,26 @@ export type CardGroups = {
   fund: Card[];
   /** Funded and waiting for the agents, oldest first. */
   queued: Card[];
+  /** Live, newest first. Never fundable, so never in fund. */
+  shipped: Card[];
 };
 
 export function groupCards(cards: readonly Card[]): CardGroups {
+  const elsewhere = (card: Card) =>
+    NOW_STAGES.has(card.stage) || card.stage === QUEUED_STAGE || card.stage === SHIPPED_STAGE;
   return {
     now: cards.filter((card) => NOW_STAGES.has(card.stage)),
-    fund: cards.filter((card) => !NOW_STAGES.has(card.stage) && card.stage !== 'funded').sort(fundOrder),
-    queued: cards.filter((card) => card.stage === 'funded'),
+    fund: cards.filter((card) => !elsewhere(card)).sort(fundOrder),
+    queued: cards.filter((card) => card.stage === QUEUED_STAGE),
+    shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
   };
 }
 
 export function statusOf(card: Card): CardStatus {
   if (card.stage === 'building') return 'building';
   if (card.stage === 'gated') return 'gated';
-  if (card.stage === 'funded') return 'queued';
+  if (card.stage === QUEUED_STAGE) return 'queued';
+  if (card.stage === SHIPPED_STAGE) return 'shipped';
   if (card.stage === 'voted') return 'picked';
   return 'open';
 }
