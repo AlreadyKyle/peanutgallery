@@ -68,10 +68,33 @@ function NowCard({ card }: { card: Card }) {
         <span className="tag">{sourceLabel(card.source)}</span>
         <span className="card-status">{status}</span>
       </p>
+      <Summary text={card.summary} />
       <p>
         <span className="card-amount">{formatUsd(card.actual_usd)}</span> {copy.spentSoFar}
       </p>
+      <Brief intent={card.intent} />
     </li>
+  );
+}
+
+function blank(text: string | null): boolean {
+  return text === null || text.trim() === '';
+}
+
+// The public line for supporters, shown under the title.
+function Summary({ text }: { text: string | null }) {
+  if (blank(text)) return null;
+  return <p className="card-summary">{text}</p>;
+}
+
+// The agent brief stays public but collapsed behind a native disclosure.
+function Brief({ intent }: { intent: string | null }) {
+  if (blank(intent)) return null;
+  return (
+    <details className="brief">
+      <summary>{copy.agentBrief}</summary>
+      <p>{intent}</p>
+    </details>
   );
 }
 
@@ -103,9 +126,7 @@ function NextCard({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
           <Info term={statusWord} text={decided ? copy.infoDecided : copy.infoOpen} />
         </span>
       </p>
-      {card.intent === null || card.intent === '' ? null : (
-        <p className="card-intent">{card.intent}</p>
-      )}
+      <Summary text={card.summary} />
       {card.funding_target_usd > 0 ? (
         <div className="card-track">
           <div
@@ -139,6 +160,7 @@ function NextCard({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
           </a>
         </p>
       ) : null}
+      <Brief intent={card.intent} />
     </li>
   );
 }
