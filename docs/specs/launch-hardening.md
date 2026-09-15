@@ -1,6 +1,6 @@
 # Launch hardening: founder billing, the daily cap, restarts, the kernel, rollback, alerts
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -62,22 +62,22 @@ The list lives in `platform/gate/kernel-paths.txt`, and the dispatcher's copy is
 
 ## Acceptance criteria
 
-- [ ] `record_usage(..., p_billed_to => 'founder')` inserts a ledger row with `billed_to` founder, adds to the card's `actual_usd`, and leaves `pool.balance_usd`, `daily_spent_usd` and `incident_reserve_usd` unchanged.
-- [ ] `record_usage` without `p_billed_to` behaves exactly as before, billed to studio.
-- [ ] As anon, a founder ledger row is not returned by `ledger` and is not counted in `public_ledger_totals`.
-- [ ] The session and the startup probe pass `billed_to` from the adapter's mode: attended is founder, unattended is studio.
-- [ ] In attended mode a tick starts a funded card with a zero balance and a daily spend above the cap; in unattended mode both still stop it.
-- [ ] A tick whose pool row is from yesterday with `daily_spent_usd` at the cap starts a card.
-- [ ] Stopping the dispatcher does not write `studio_state.paused`.
-- [ ] `lanePaths('platform', 'code')` is `['platform/site']`, and a change to any kernel path is a lane violation in every lane.
-- [ ] The dispatcher's kernel path list equals `platform/gate/kernel-paths.txt`.
-- [ ] `platform/gate/kernel-guard.sh` exits non-zero when the changed-files list contains a kernel path and zero otherwise; the gate runs it on `card/*` branches after restoring `platform/gate` from the base commit.
-- [ ] A smoke failure after merge restores the previous green deploy, writes a revert commit whose tree is the merge parent's tree, and records its sha on the `revert` event.
-- [ ] A deploy failure after merge writes the revert commit without a restore.
-- [ ] A refused ref update (main moved) is recorded on the `revert` event and alerted, and the card is still rejected.
-- [ ] With the alert variables unset no request is made; with them set, a tick pings the healthcheck, and a rejected card, a non-stopping pause and a revert each post one ntfy message.
-- [ ] The daily-cap alert posts once per New York day.
-- [ ] `seed.ts --week1-test` inserts the card without calling `founder_credit`.
+- [x] `record_usage(..., p_billed_to => 'founder')` inserts a ledger row with `billed_to` founder, adds to the card's `actual_usd`, and leaves `pool.balance_usd`, `daily_spent_usd` and `incident_reserve_usd` unchanged.
+- [x] `record_usage` without `p_billed_to` behaves exactly as before, billed to studio.
+- [x] As anon, a founder ledger row is not returned by `ledger` and is not counted in `public_ledger_totals`.
+- [x] The session and the startup probe pass `billed_to` from the adapter's mode: attended is founder, unattended is studio.
+- [x] In attended mode a tick starts a funded card with a zero balance and a daily spend above the cap; in unattended mode both still stop it.
+- [x] A tick whose pool row is from yesterday with `daily_spent_usd` at the cap starts a card.
+- [x] Stopping the dispatcher does not write `studio_state.paused`.
+- [x] `lanePaths('platform', 'code')` is `['platform/site']`, and a change to any kernel path is a lane violation in every lane.
+- [x] The dispatcher's kernel path list equals `platform/gate/kernel-paths.txt`.
+- [x] `platform/gate/kernel-guard.sh` exits non-zero when the changed-files list contains a kernel path and zero otherwise; the gate runs it on `card/*` branches after restoring `platform/gate` from the base commit.
+- [x] A smoke failure after merge restores the previous green deploy, writes a revert commit whose tree is the merge parent's tree, and records its sha on the `revert` event.
+- [x] A deploy failure after merge writes the revert commit without a restore.
+- [x] A refused ref update (main moved) is recorded on the `revert` event and alerted, and the card is still rejected.
+- [x] With the alert variables unset no request is made; with them set, a tick pings the healthcheck, and a rejected card, a non-stopping pause and a revert each post one ntfy message.
+- [x] The daily-cap alert posts once per New York day.
+- [x] `seed.ts --week1-test` inserts the card without calling `founder_credit`.
 
 ## Verification
 
@@ -96,3 +96,15 @@ The list lives in `platform/gate/kernel-paths.txt`, and the dispatcher's copy is
 - 2026-09-14: the revert is a new commit, never a force-push. It skips the gate because its tree is the last tree that passed the gate and deployed, and the push to main still runs the gate workflow for the record.
 - 2026-09-14: the kernel list is a text file in the gate so the shell guard and the dispatcher read one source.
 - 2026-09-14: healthchecks.io for liveness and ntfy for events. Both are plain HTTPS calls with no SDK, and no alert URL reaches an agent session.
+
+## Evidence
+
+2026-09-14:
+- Founder billing: PGlite step "record_usage billed to the founder charges the card and leaves the pool alone"; `migration.test.ts` founder-billing describe. Live migration applied, and anon sees studio rows only (`anon-negative-test.ts`: `PASS: anon access matches the RLS contract`). A rolled-back live call billed to the founder left the pool at 0.5019 and moved the card's `actual_usd` by 0.25.
+- Throttle and daily cap: `throttle.test.ts`, `tick.test.ts`.
+- Restarts: the `Db` interface has no pause write, and `main.ts` logs `dispatcher stopped` without touching `studio_state`.
+- Kernel paths: `worktree.test.ts` (list equals the gate file; kernel files refused in every lane) and `platform/gate/test/run-tests.sh` (guard and workflow order). Live: throwaway PR 16 on `card/kerneltest-code` failed its gate with `FAIL: kernel-guard path=platform/gate/ship-gate.sh`.
+- Rollback: `pipeline.test.ts` (smoke and deploy failures revert main; a refused ref update is alerted); `github.test.ts` (`revertMerge`).
+- Alerts: `alert.test.ts`, `tick.test.ts` (daily cap once a day).
+- Seed: `seed.ts --week1-test` ran live without `founder_credit` (pool stayed 0.5019).
+- Pending: the three week-1 runs with every ledger row billed to the founder (`docs/specs/week1-runs.md`).

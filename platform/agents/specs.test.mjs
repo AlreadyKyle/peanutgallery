@@ -114,8 +114,9 @@ test('budget shares across the nine files sum to 1', () => {
 
 // Prompt content the README promises: the kernel line and the gate section in every prompt,
 // the no-write-tools statement for roles without tools, the check-line grammar and the stop
-// rule for the roles that build seed cards, the working method for the four write roles that
-// build cards, and the pillars copied verbatim from the plan.
+// rule for the roles that build seed cards, the working method and the kernel-path rule for the
+// four write roles that build cards, the revert on main in every gate section, and the pillars
+// copied verbatim from the plan.
 const PROMPT_KERNEL_LINE = 'No agent with write access';
 const PROMPT_GATE_HEADING = '## How the gate works';
 const PROMPT_NO_WRITE_TOOLS = 'You have no write tools';
@@ -125,6 +126,8 @@ const CHECK_LINE_ROLES = ['builder-a', 'builder-b', 'qa'];
 const WORKING_METHOD_HEADING = '## Working method';
 const WORKING_METHOD_STEPS = ['Understand:', 'Plan:', 'Implement:', 'Verify:', 'Report:'];
 const WORKING_METHOD_ROLES = ['builder-a', 'builder-b', 'qa', 'platform-builder'];
+const KERNEL_PATHS_FILE = 'platform/gate/kernel-paths.txt';
+const GATE_REVERT = 'a revert commit lands on `main`';
 
 function readPrompt(spec) {
   return readFileSync(join(repoRoot, spec.prompt_path), 'utf8');
@@ -144,6 +147,7 @@ for (const { file, spec } of specs) {
     const prompt = readPrompt(spec);
     assert.ok(prompt.includes(PROMPT_KERNEL_LINE), `${spec.prompt_path} contains "${PROMPT_KERNEL_LINE}"`);
     assert.ok(prompt.includes(PROMPT_GATE_HEADING), `${spec.prompt_path} contains "${PROMPT_GATE_HEADING}"`);
+    assert.ok(prompt.includes(GATE_REVERT), `${spec.prompt_path} contains "${GATE_REVERT}"`);
   });
 
   if (spec.tools.length === 0) {
@@ -167,6 +171,10 @@ for (const { file, spec } of specs) {
       for (const step of WORKING_METHOD_STEPS) {
         assert.ok(prompt.includes(step), `${spec.prompt_path} contains "${step}"`);
       }
+    });
+
+    test(`${file} prompt points at the kernel path list`, () => {
+      assert.ok(readPrompt(spec).includes(KERNEL_PATHS_FILE), `${spec.prompt_path} contains "${KERNEL_PATHS_FILE}"`);
     });
   }
 }

@@ -16,11 +16,11 @@ No agent with write access to a build, a card or the org chart reads free text f
 
 ## What you may edit
 
-Only files under `seed-1/`, and only the paths the card's lane allows. Reproductions and bot changes live in `seed-1/bots/` and the tests; rebalance cards touch `seed-1/config/` and `seed-1/content/` only. Never edit `platform/`. A fix that changes a function is code lane. Every string is all-ages.
+Only files under `seed-1/`, and only the paths the card's lane allows. Reproductions live in the tests; rebalance cards touch `seed-1/config/` and `seed-1/content/` only. The bots and the invariant harness are kernel paths: a change to them is proposed as a card for the board. Never edit `platform/`. Never edit a kernel path, even inside your lane: `platform/gate/kernel-paths.txt` lists them (the gate, the dispatcher, the Supabase folder, the role specs, the ops files, the workflows, `docs/`, the root files, and in `seed-1/` its `CLAUDE.md`, `bots/`, `scripts/`, the build and package files, `sim/invariants.ts`, `tests/bot.test.ts` and `tests/invariants.test.ts`). The dispatcher rejects a change to any of them and the gate fails the branch. A fix that changes a function is code lane. Every string is all-ages.
 
 ## Lanes
 
-Config lane: `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: anything else under `seed-1/`; the full gate runs. The dispatcher stages only the lane's paths.
+Config lane: `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: anything else under `seed-1/` that is not a kernel path; the full gate runs. The dispatcher stages only the lane's paths.
 
 ## The check line
 
@@ -28,7 +28,7 @@ A card's `acceptance_test` is prose followed by one machine line: `check: config
 
 ## How the gate works
 
-Every change reaches `main` only through the gate. The dispatcher commits your worktree, pushes the branch, opens a pull request and polls the check named `gate`. The gate runs in order and stops at the first failure, naming the step and the detail: a secret scan; the deny-list scan over every string, filename and the commit message, which fails with the term shown; the runtime-token scan for stray debugging and stand-in text; for the code lane, typecheck and unit tests; the headless bot for ten simulated hours on a fixed seed, asserting that no resource goes negative, that every value in the state is a finite number, that at least one unlock lands in every simulated hour, and that the same seed gives the same state hash; then the build. On green the dispatcher squash-merges, Netlify deploys, and a smoke test loads the page, reads the served config and runs the bot for 60 real seconds. A smoke failure restores the last green deploy and the card is rejected with the failing check attached. Nothing appears in Live without a `live` event from the gate.
+Every change reaches `main` only through the gate. The dispatcher commits your worktree, pushes the branch, opens a pull request and polls the check named `gate`. The gate runs in order and stops at the first failure, naming the step and the detail: a secret scan; the deny-list scan over every string, filename and the commit message, which fails with the term shown; the runtime-token scan for stray debugging and stand-in text; for the code lane, typecheck and unit tests; the headless bot for ten simulated hours on a fixed seed, asserting that no resource goes negative, that every value in the state is a finite number, that at least one unlock lands in every simulated hour, and that the same seed gives the same state hash; then the build. On green the dispatcher squash-merges, Netlify deploys, and a smoke test loads the page, reads the served config and runs the bot for 60 real seconds. A failed deploy or smoke test after the merge takes the change back out: the last green deploy is restored, a revert commit lands on `main`, and the card is rejected with the failing check attached. Nothing appears in Live without a `live` event from the gate.
 
 ## Working method
 

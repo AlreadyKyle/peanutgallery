@@ -1,6 +1,6 @@
 # Unattended mode
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -17,12 +17,12 @@ Out: the Claude Agent SDK, a second-provider adapter, the VPS.
 
 ## Acceptance criteria
 
-- [ ] `STUDIO_ANTHROPIC_API_KEY` is required in unattended mode, ignored in attended mode, and refused when equal to `ANTHROPIC_API_KEY`.
-- [ ] The unattended child environment equals the attended allowlist plus `ANTHROPIC_API_KEY` set to the studio key; the dispatcher's own `ANTHROPIC_API_KEY` never reaches a child in either mode.
-- [ ] A session whose `start` event carries the wrong `apiKeySource` for the mode ends `refused` before any tool runs.
-- [ ] The startup probe writes a ledger row with a null card id.
-- [ ] `tick` starts a funded card in unattended mode with no board session.
-- [ ] Dispatcher log lines parse as JSON with `ts`, `level`, `scope` and `msg`.
+- [x] `STUDIO_ANTHROPIC_API_KEY` is required in unattended mode, ignored in attended mode, and refused when equal to `ANTHROPIC_API_KEY`.
+- [x] The unattended child environment equals the attended allowlist plus `ANTHROPIC_API_KEY` set to the studio key; the dispatcher's own `ANTHROPIC_API_KEY` never reaches a child in either mode.
+- [x] A session whose `start` event carries the wrong `apiKeySource` for the mode ends `refused` before any tool runs.
+- [x] The startup probe writes a ledger row with a null card id.
+- [x] `tick` starts a funded card in unattended mode with no board session.
+- [x] Dispatcher log lines parse as JSON with `ts`, `level`, `scope` and `msg`.
 
 ## Verification
 
@@ -35,3 +35,7 @@ Out: the Claude Agent SDK, a second-provider adapter, the VPS.
 - 2026-09-14: the same CLI, not the SDK. The command line, tool allowlist and stream parser are already tested; only the credential and the board-session rule differ.
 - 2026-09-14: the studio key lives under its own name in the dispatcher environment so the founder's key is never used unattended by accident.
 - 2026-09-14: the probe runs once per dispatcher start, not per card. Its verdict does not vary by card and each run costs money.
+
+## Evidence
+
+2026-09-14: `config.test.ts` (studio key), `unattended.test.ts` (child environment), `session.test.ts` (wrong `apiKeySource` refused), `startup.test.ts` (probe ledger row, billed to studio), `tick.test.ts` (starts with no board session), `log.test.ts` (JSON lines). Pending live: the unattended probe and a funded card building with no board session, on the VPS (`docs/specs/vps.md`).

@@ -1,6 +1,6 @@
 # Site design pass: plain and readable
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -36,13 +36,13 @@ Out: new content (Shipped, legal pages, OG tags), the /board layout beyond inher
 
 ## Acceptance criteria
 
-- [ ] `styles.test.ts` passes: five sizes on a 1.2 ratio, italic and uppercase only on `.wordmark`, no 900 weight or letter-spacing, `--ink` at 7:1 or better and `--muted` at 4.5:1 or better on `--paper`, colours only as tokens, buttons, nav links and fields at the 44px target.
-- [ ] The landing page has exactly one `h1`, whose text is the first pitch sentence, and its `h2` order is Building now, Up next, How it works, Funding, Ledger, Fixed rules.
-- [ ] No `role="tooltip"` and no Info button remain on public pages; every meter figure and agent spend shows its description.
-- [ ] A Next card shows "status · source", a bar caption "$x of $y · n contributors", and a "Fund this card" link styled as a button.
-- [ ] The public copy no longer mentions a stream, a kill switch or a founding badge, and says "These are contributions, not donations."
-- [ ] At 375px the landing, ledger and board pages have no horizontal scroll.
-- [ ] `BRAND.md` describes only what `styles.css` does.
+- [x] `styles.test.ts` passes: five sizes on a 1.2 ratio, italic and uppercase only on `.wordmark`, no 900 weight or letter-spacing, `--ink` at 7:1 or better and `--muted` at 4.5:1 or better on `--paper`, colours only as tokens, buttons, nav links and fields at the 44px target.
+- [x] ~~The landing page has exactly one `h1`, whose text is the first pitch sentence, and its `h2` order is Building now, Up next, How it works, Funding, Ledger, Fixed rules.~~ Superseded: `site-layout.md` adds the Right now panel and changes the order (2026-09-14).
+- [x] No `role="tooltip"` and no Info button remain on public pages; every meter figure and agent spend shows its description.
+- [x] ~~A Next card shows "status · source", a bar caption "$x of $y · n contributors", and a "Fund this card" link styled as a button.~~ Superseded: `site-layout.md` moves status and category to the top line of each card box (2026-09-14).
+- [x] The public copy no longer mentions a stream, a kill switch or a founding badge, and says "These are contributions, not donations."
+- [x] At 375px the landing, ledger and board pages have no horizontal scroll.
+- [x] `BRAND.md` describes only what `styles.css` does.
 
 ## Verification
 
@@ -57,3 +57,7 @@ Out: new content (Shipped, legal pages, OG tags), the /board layout beyond inher
 - 2026-09-14: descriptions replace tooltips (board). This supersedes the info-icon criterion in `live-cut.md`: explanations a reader needs should not sit behind a tap, especially on a phone.
 - 2026-09-14: Building now and Up next move above How it works and the money, because they are the reason to visit and to fund. This supersedes the section order in `live-cut.md`.
 - 2026-09-14: the nav drops Home because the wordmark links home, which keeps the nav on one line at 375px.
+
+## Evidence
+
+2026-09-14: `styles.test.ts` (8 pass); the Playwright live check on https://peanutgallery.games at 375px and 1440px found one h1 per route, no horizontal overflow and no console errors. The copy no longer mentions a stream, a kill switch or a founding badge. `BRAND.md` names match the site.

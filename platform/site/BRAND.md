@@ -119,7 +119,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 - Say "contributions", never "donations".
 - Money is `$0.00`. Counts use thousands separators.
 - Never describe something that doesn't exist yet: no stream, badge or feature before it ships.
-- Name things the way a first-time reader would: "Building now", "Up next", "Held in reserve".
+- Name things the way a first-time reader would: "Building now", "Fund what's next", "Held in reserve".
 
 ## Accessibility checklist
 

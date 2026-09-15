@@ -1,6 +1,6 @@
 # Working method: spec-driven, for us and for the agents
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -19,10 +19,10 @@ For the agents: a session receives the card with its estimate and ceiling, the d
 
 ## Acceptance criteria
 
-- [ ] `docs/specs/TEMPLATE.md` exists and every spec in the folder follows it.
-- [ ] The root `CLAUDE.md` carries the spec-driven section.
-- [ ] `sessionPrompt` includes `Estimate:`, `Ceiling:`, `Definition of done` and, only when set, `Design spec:`.
-- [ ] `builder-a.md`, `builder-b.md`, `qa.md` and `platform-builder.md` each carry a `## Working method` section with the five steps.
+- [x] `docs/specs/TEMPLATE.md` exists and every spec in the folder follows it.
+- [x] The root `CLAUDE.md` carries the spec-driven section.
+- [x] `sessionPrompt` includes `Estimate:`, `Ceiling:`, `Definition of done` and, only when set, `Design spec:`.
+- [x] `builder-a.md`, `builder-b.md`, `qa.md` and `platform-builder.md` each carry a `## Working method` section with the five steps.
 
 ## Verification
 
@@ -32,3 +32,11 @@ For the agents: a session receives the card with its estimate and ceiling, the d
 ## Decisions
 
 - 2026-09-14: the block lives in each prompt file rather than a shared file. The adapter appends exactly one file per role and the spec test asserts per file.
+
+## Evidence
+
+2026-09-14 (checked on main at b2c6360):
+- `docs/specs/TEMPLATE.md` exists; every spec carries Status, Scope, Acceptance criteria, Verification and Decisions.
+- The root `CLAUDE.md` has the "Spec-driven development" section.
+- `platform/dispatcher/test/session.test.ts` asserts `Estimate:`, `Ceiling:`, `Definition of done` and `Design spec:` only when set.
+- `node --test platform/agents/specs.test.mjs`: 64 pass, 0 fail, including the working-method checks for the four building roles.

@@ -1,7 +1,7 @@
 # systemd unit for the dispatcher container.
 # Install: copy to /etc/systemd/system/dispatcher.service, write the Appendix A environment to
 # /etc/backseat/dispatcher.env (mode 0600), then `systemctl enable --now dispatcher`.
-# Written for the week-2 VPS; not deployed in build 1.
+# Not deployed yet: the VPS, the claude CLI in this image and the alert settings are specified in docs/specs/vps.md.
 [Unit]
 Description=Backseat dispatcher
 After=docker.service network-online.target

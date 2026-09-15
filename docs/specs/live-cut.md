@@ -18,12 +18,12 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 
 ## Acceptance criteria
 
-- [ ] A Stripe `checkout.session.completed` for $1 at 80/20 creates a `contributions` row with `studio_pct_chosen` 20, increments `pool.balance_usd` by the agents' net amount and `pool.incident_reserve_usd` by 5% of the agents' share, and the public site shows the new figures within 60 seconds.
+- [x] A Stripe `checkout.session.completed` for $1 at 80/20 creates a `contributions` row with `studio_pct_chosen` 20, increments `pool.balance_usd` by the agents' net amount and `pool.incident_reserve_usd` by 5% of the agents' share, and the public site shows the new figures within 60 seconds.
 - [ ] A card in stage `funded` with a $2 estimate becomes a deployed change on the live seed site within 15 minutes, with ledger rows and a new green `deploys` row, three runs in a row.
-- [ ] The landing page renders the sections in the order above at 375 px with no horizontal scroll, with and without a database configured.
-- [ ] Every info icon opens by tap, hover and keyboard, and closes on Escape and on a tap outside.
-- [ ] Each Next card's Fund this link is the Payment Link with `client_reference_id` set to the card id.
-- [ ] `set_launched()` sets `launched_at` once and the site swaps the launch line within one poll.
+- [x] ~~The landing page renders the sections in the order above at 375 px with no horizontal scroll, with and without a database configured.~~ Superseded: `site-layout.md` sets the landing order (2026-09-14).
+- [x] ~~Every info icon opens by tap, hover and keyboard, and closes on Escape and on a tap outside.~~ Superseded: `site-design.md` replaced info icons with visible descriptions (2026-09-14).
+- [x] Each Next card's Fund this link is the Payment Link with `client_reference_id` set to the card id.
+- [x] `set_launched()` sets `launched_at` once and the site swaps the launch line within one poll.
 - [ ] In unattended mode a card funded to its target builds with no board session active.
 
 ## Verification
@@ -42,3 +42,11 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 - 2026-09-14: the fleet runs unattended through the same Claude Code command with the studio organisation's key. No SDK rewrite is needed for the basics.
 - 2026-09-14: observability stays first-party (`agent_events`, `ledger`), plus JSON-line dispatcher logs and a heartbeat. No third-party key reaches an agent session.
 - 2026-09-14: pitch line: "Watch AI agents build a game studio and free games. Vote on what they do next by contributing to their compute."
+
+## Evidence
+
+2026-09-14:
+- Criterion 1: the real $1 at 80/20 is credited (see `stripe-late-fee.md` Evidence), and the site shows the pool figures.
+- Criterion 5: the live check found 4 "Fund this card" links and 4 contribute choices, each the Payment Link with `client_reference_id=<uuid>`.
+- Criterion 6: PGlite "the board files Next cards, stamps the launch…" and `Landing.test.tsx` (live-since line).
+- Open: criterion 2 (three week-1 runs, `week1-runs.md`) and criterion 7 (unattended on the VPS, `vps.md`).
