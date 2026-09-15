@@ -24,6 +24,11 @@ function card(overrides: Partial<Card> = {}): Card {
   };
 }
 
+/** A paragraph whose whole text, across its inline elements, is exactly this. */
+function paragraph(text: string): HTMLElement {
+  return screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === text);
+}
+
 function ready(cards: Card[], funding: Snapshot['funding'] = {}): StudioState {
   return {
     state: 'ready',
@@ -85,19 +90,17 @@ describe('NowList and NextList states', () => {
 });
 
 describe('NowList card', () => {
-  it('shows the source tag, the stage word and what the card has spent', () => {
+  it('shows the stage word with the source on one meta line and what the card has spent', () => {
     const studio = ready([
       card({ id: 'a', stage: 'building', source: 'board', actual_usd: 0.42 }),
       card({ id: 'b', stage: 'gated', source: 'agent', actual_usd: 0 }),
     ]);
     render(<NowList studio={studio} />);
 
-    expect(screen.getByText(copy.sources.board)).toBeTruthy();
-    expect(screen.getByText(copy.sources.agent)).toBeTruthy();
-    expect(screen.getByText(copy.statusBuilding)).toBeTruthy();
-    expect(screen.getByText(copy.statusGated)).toBeTruthy();
+    expect(screen.getByText(`${copy.statusBuilding} · ${copy.sources.board}`)).toBeTruthy();
+    expect(screen.getByText(`${copy.statusGated} · ${copy.sources.agent}`)).toBeTruthy();
 
-    const spent = screen.getAllByText(copy.spentSoFar);
+    const spent = screen.getAllByText(new RegExp(copy.spentSoFar));
     expect(spent.map((p) => p.textContent)).toEqual([
       `$0.42 ${copy.spentSoFar}`,
       `$0.00 ${copy.spentSoFar}`,
@@ -183,7 +186,7 @@ describe('card summary and agent brief', () => {
 });
 
 describe('NextList card', () => {
-  it('shows the intent in the brief, the decided status with an info button, the bar and the contributors line', () => {
+  it('shows the intent in the brief, the decided status, the bar with its caption and the fund button', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const studio = ready(
       [
@@ -202,19 +205,21 @@ describe('NextList card', () => {
     render(<NextList studio={studio} />);
 
     expect(screen.getByText('Add a second stage.').closest('details.brief')).toBeTruthy();
-    expect(screen.getByText(copy.statusDecided)).toBeTruthy();
-    expect(screen.getByRole('button', { name: `${copy.about} ${copy.statusDecided}` })).toBeTruthy();
-    expect(screen.getByRole('button', { name: `${copy.about} ${copy.fundThis}` })).toBeTruthy();
+    expect(screen.getByText(`${copy.statusDecided} · ${copy.sources.community}`)).toBeTruthy();
+    // Nothing on the card hides behind a tap.
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
 
     const bar = screen.getByRole('progressbar');
     expect(bar.getAttribute('aria-label')).toBe('A second level');
     expect(bar.getAttribute('aria-valuemin')).toBe('0');
     expect(bar.getAttribute('aria-valuemax')).toBe('100');
     expect(bar.getAttribute('aria-valuenow')).toBe('25');
-    expect(screen.getByText('$25.00 of $100.00')).toBeTruthy();
-    expect(screen.getByText(copy.contributorsMany.replace('{n}', '3'))).toBeTruthy();
+    const caption = screen.getByText('$25.00 of $100.00').closest('p');
+    expect(caption?.textContent).toBe(`$25.00 of $100.00 · ${copy.contributorsMany.replace('{n}', '3')}`);
 
     const link = screen.getByRole('link', { name: copy.fundThis });
+    expect(link.classList.contains('button')).toBe(true);
     expect(link.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=n1`);
     const heading = screen.getByRole('heading', { level: 3, name: 'A second level' });
     expect(link.getAttribute('aria-describedby')).toBe(heading.id);
@@ -226,9 +231,8 @@ describe('NextList card', () => {
       { n2: { contributors: 1, credited_usd: 5 } },
     );
     render(<NextList studio={studio} />);
-    expect(screen.getByText(copy.statusOpen)).toBeTruthy();
-    expect(screen.getByRole('button', { name: `${copy.about} ${copy.statusOpen}` })).toBeTruthy();
-    expect(screen.getByText(copy.contributorsOne)).toBeTruthy();
+    expect(screen.getByText(`${copy.statusOpen} · ${copy.sources.board}`)).toBeTruthy();
+    expect(paragraph(`$0.00 of $50.00 · ${copy.contributorsOne}`)).toBeTruthy();
   });
 
   it('omits the fund link when the bar is full', () => {
@@ -268,7 +272,7 @@ describe('NextList card', () => {
   it('shows 0 contributors on a fundable card with no funding row yet', () => {
     const studio = ready([card({ id: 'new', stage: 'proposed', funding_target_usd: 20, funded_usd: 0 })]);
     render(<NextList studio={studio} />);
-    expect(screen.getByText(copy.contributorsMany.replace('{n}', '0'))).toBeTruthy();
+    expect(paragraph(`$0.00 of $20.00 · ${copy.contributorsMany.replace('{n}', '0')}`)).toBeTruthy();
   });
 
   it('shows no contributors line on a card with no target', () => {

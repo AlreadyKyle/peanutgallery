@@ -71,29 +71,29 @@ afterEach(() => {
 });
 
 describe('Ledger', () => {
-  it('renders the pool, the agent work lines and the deploy lines', async () => {
+  it('renders the funding, the agent work lines and the deploy lines', async () => {
     renderLedger(sourceOf(snapshot));
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
     expect(screen.getByText('$7.10')).toBeTruthy();
     expect(screen.getByText('$2.56')).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
-    expect(screen.getByText('12,000')).toBeTruthy();
+    expect(screen.getByText('12,000 in · 3,000 cached · 800 out tokens')).toBeTruthy();
 
     const events = listItems('Agent work');
     expect(events).toHaveLength(3);
     expect(events[0]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T01:00:00Z')}Builder AstartGatherer costs 11`,
+      `${formatDateTime('2026-09-14T01:00:00Z')}Builder A started · Gatherer costs 11`,
     );
-    expect(events[1]?.textContent).toBe(`${formatDateTime('2026-09-14T01:05:00Z')}shipGatherer costs 11`);
-    expect(events[2]?.textContent).toBe(`${formatDateTime('2026-09-14T01:06:00Z')}0f9e8d7cerror`);
+    expect(events[1]?.textContent).toBe(`${formatDateTime('2026-09-14T01:05:00Z')}shipped · Gatherer costs 11`);
+    expect(events[2]?.textContent).toBe(`${formatDateTime('2026-09-14T01:06:00Z')}0f9e8d7c hit an error`);
 
     const deploys = listItems('Deploys');
     expect(deploys).toHaveLength(2);
     expect(deploys[0]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T02:10:00Z')}seed-1b7e1c9anot greenfail: version.json sha mismatch`,
+      `${formatDateTime('2026-09-14T02:10:00Z')}Game b7e1c9a failed checks · fail: version.json sha mismatch`,
     );
     expect(deploys[1]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T01:20:00Z')}seed-12775bcbgreenok: page, config, bot`,
+      `${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks · ok: page, config, bot`,
     );
     expect(screen.queryByText('restored')).toBeNull();
   });
@@ -104,7 +104,7 @@ describe('Ledger', () => {
     renderLedger(sourceOf({ ...snapshot, deploys: [{ ...deploy, smoke_result: null }] }));
     await waitFor(() => expect(listItems('Deploys')).toHaveLength(1));
     expect(listItems('Deploys')[0]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T01:20:00Z')}seed-12775bcbgreen`,
+      `${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`,
     );
   });
 

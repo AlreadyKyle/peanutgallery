@@ -4,19 +4,21 @@ import type { Snapshot } from '../lib/source';
 
 export function DeployList({ snapshot }: { snapshot: Snapshot }) {
   if (snapshot.deploys.length === 0) {
-    return <p>{copy.deploysEmpty}</p>;
+    return <p className="muted">{copy.deploysEmpty}</p>;
   }
   return (
-    <ul className="deploys">
+    <ul className="rows">
       {snapshot.deploys.map((deploy) => (
         <li key={deploy.id}>
-          <span className="event-time">{formatDateTime(deploy.created_at)}</span>
-          <span>{deploy.folder}</span>
-          <code>{shortSha(deploy.sha)}</code>
-          <span className={deploy.is_green ? 'green' : 'red'}>
-            {deploy.is_green ? copy.deployGreen : copy.deployNotGreen}
+          <span className="row-time">{formatDateTime(deploy.created_at)}</span>
+          <span>
+            {copy.folders[deploy.folder] ?? deploy.folder}{' '}
+            <code className="muted">{shortSha(deploy.sha)}</code>{' '}
+            <span className={deploy.is_green ? undefined : 'failed'}>
+              {deploy.is_green ? copy.deployGreen : copy.deployNotGreen}
+            </span>
+            {deploy.smoke_result === null ? null : <span className="muted"> · {deploy.smoke_result}</span>}
           </span>
-          {deploy.smoke_result === null ? null : <span>{deploy.smoke_result}</span>}
         </li>
       ))}
     </ul>

@@ -52,7 +52,7 @@ afterEach(() => {
 describe('App routes', () => {
   it('renders the landing page at the root', () => {
     renderAt('/');
-    expect(screen.getByRole('heading', { level: 1, name: copy.studioName })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: copy.pitchTitle })).toBeTruthy();
   });
 
   it('renders the ledger page with its lede', () => {
@@ -61,18 +61,18 @@ describe('App routes', () => {
     expect(screen.getByText(copy.ledgerLede)).toBeTruthy();
   });
 
-  it('reports an unknown address with a link back to the studio page', () => {
+  it('reports an unknown address with a link back home', () => {
     renderAt('/no-such-page');
     expect(screen.getByRole('heading', { level: 1, name: copy.notFound })).toBeTruthy();
     expect(screen.getByText(copy.notFoundBody)).toBeTruthy();
     const main = screen.getByRole('main');
-    expect(within(main).getByRole('link', { name: 'Studio' }).getAttribute('href')).toBe('/');
-    expect(screen.queryByRole('heading', { level: 1, name: copy.studioName })).toBeNull();
+    expect(within(main).getByRole('link', { name: copy.home }).getAttribute('href')).toBe('/');
+    expect(screen.queryByRole('heading', { level: 1, name: copy.pitchTitle })).toBeNull();
   });
 });
 
 describe('Site chrome', () => {
-  it('shows the wordmark, the Studio and Ledger links, the pitch line and the footer line', () => {
+  it('shows the wordmark linking home, the Ledger link, the pitch line and the footer line', () => {
     renderAt('/');
     const banner = screen.getByRole('banner');
     const wordmark = within(banner).getByRole('link', { name: copy.studioName });
@@ -80,19 +80,19 @@ describe('Site chrome', () => {
     const mark = wordmark.querySelector('img.mark');
     expect(mark?.getAttribute('src')).toBe('/peanut.png');
     expect(mark?.getAttribute('alt')).toBe('');
-    expect(within(nav()).getByRole('link', { name: 'Studio' }).getAttribute('href')).toBe('/');
+    expect(within(nav()).queryByRole('link', { name: copy.home })).toBeNull();
     expect(within(nav()).getByRole('link', { name: 'Ledger' }).getAttribute('href')).toBe('/ledger');
-    expect(screen.getByText(copy.pitch)).toBeTruthy();
+    expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(copy.footer)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);
   });
 
   it('shows the pitch line on the landing only', () => {
     renderAt('/ledger');
-    expect(screen.queryByText(copy.pitch)).toBeNull();
+    expect(screen.queryByText(copy.pitchBody)).toBeNull();
     cleanup();
     renderAt('/board');
-    expect(screen.queryByText(copy.pitch)).toBeNull();
+    expect(screen.queryByText(copy.pitchBody)).toBeNull();
     expect(screen.getByRole('heading', { level: 1, name: 'Board' })).toBeTruthy();
   });
 

@@ -65,6 +65,11 @@ const snapshot: Snapshot = {
   cardTitles: {},
 };
 
+/** A paragraph whose whole text, across its inline elements, is exactly this. */
+function paragraph(text: string): HTMLElement {
+  return screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === text);
+}
+
 function fakeSource(): StudioSource {
   return {
     load: () => Promise.resolve(snapshot),
@@ -97,13 +102,13 @@ describe('Landing', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     renderLanding(fakeSource());
 
-    expect(screen.getByRole('heading', { level: 1, name: copy.studioName })).toBeTruthy();
-    expect(screen.getByText(copy.pitch)).toBeTruthy();
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([copy.pitchTitle]);
+    expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe(
       'https://buy.stripe.com/test-link',
     );
     expect(screen.getByText(copy.split)).toBeTruthy();
-    expect(screen.getByText(copy.preLaunch)).toBeTruthy();
+    expect(screen.getByText(copy.nextIntro)).toBeTruthy();
 
     for (const step of copy.steps) expect(screen.getByText(step)).toBeTruthy();
 
@@ -114,24 +119,29 @@ describe('Landing', () => {
 
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([copy.howItWorks, copy.meter, copy.ledger, copy.now, copy.next, copy.policies]);
+    ).toEqual([copy.now, copy.next, copy.howItWorks, copy.meter, copy.ledger, copy.policies]);
     expect(screen.getByRole('link', { name: copy.fullLedger }).getAttribute('href')).toBe('/ledger');
 
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
     expect(screen.getByText('$7.10')).toBeTruthy();
     expect(screen.getByText('$2.56')).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
-    expect(screen.getByText('12,000')).toBeTruthy();
+    expect(screen.getByText('12,000 in · 3,000 cached · 800 out tokens')).toBeTruthy();
+    // Every figure explains itself in a visible line.
+    expect(screen.getByText(copy.describeAvailable)).toBeTruthy();
+    expect(screen.getByText(copy.describeReserve)).toBeTruthy();
+    expect(screen.getByText(copy.describeIncidentReserve)).toBeTruthy();
+    expect(screen.getByText(copy.describeAgentSpend)).toBeTruthy();
+    expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
     expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy();
 
-    // Not launched yet, so the pre-launch lines show and no live-since date.
+    // Not launched yet, so the not-live line shows and no live-since date.
     expect(screen.getByText(copy.notLiveYet)).toBeTruthy();
-    expect(screen.getByText(copy.preLaunch)).toBeTruthy();
 
     // Now shows the building card and what it has spent; Next shows the queued cards.
     expect(screen.getByText('The core loop')).toBeTruthy();
-    expect(screen.getByText('$3.20')).toBeTruthy();
-    expect(screen.getByText('3 contributors')).toBeTruthy();
+    expect(screen.getByText(`$3.20 ${copy.spentSoFar}`)).toBeTruthy();
+    expect(paragraph('$25.00 of $100.00 · 3 contributors')).toBeTruthy();
 
     const bars = screen.getAllByRole('progressbar');
     expect(bars.map((bar) => bar.getAttribute('aria-label'))).toEqual([
@@ -139,7 +149,6 @@ describe('Landing', () => {
       'A music track',
     ]);
     expect(bars[0]?.getAttribute('aria-valuenow')).toBe('25');
-    expect(screen.getByText('$25.00 of $100.00')).toBeTruthy();
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
     ).toEqual(['The core loop', 'A second level', 'A music track']);
@@ -162,8 +171,8 @@ describe('Landing', () => {
     expect(screen.queryByText(copy.nextEmpty)).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.getByText(copy.contributeUnavailable)).toBeTruthy();
-    // Launch state is unknown without a database, so the offer stays.
-    expect(screen.getByText(copy.preLaunch)).toBeTruthy();
+    // Launch state is unknown without a database, so no launch line shows.
+    expect(screen.queryByText(copy.notLiveYet)).toBeNull();
   });
 
   it('shows the empty Now and Next lines when the database holds no cards', async () => {
@@ -186,6 +195,5 @@ describe('Landing', () => {
       expect(screen.getByText(`${copy.liveSince} ${formatDate('2026-09-20T00:00:00Z')}`)).toBeTruthy(),
     );
     expect(screen.queryByText(copy.notLiveYet)).toBeNull();
-    expect(screen.queryByText(copy.preLaunch)).toBeNull();
   });
 });
