@@ -138,3 +138,5 @@ else
   run_step runtime-token-deny-dist "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" "$REPO_ROOT/platform/site/dist"
 fi
 echo "GATE PASS folder=$FOLDER lane=$LANE"
+
+# kernel guard live test
