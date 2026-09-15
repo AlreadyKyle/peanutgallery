@@ -515,3 +515,89 @@ describe("founder-billing migration", () => {
     expect(founderBilling.match(/^revoke /gm)).toHaveLength(1);
   });
 });
+
+const BOARD_TWO_FACTOR_FILE = "20260919000000_board_two_factor.sql";
+const boardTwoFactor = readFileSync(resolve(MIGRATIONS_DIR, BOARD_TWO_FACTOR_FILE), "utf8");
+
+const AAL2_CHECK = "  if not public.board_aal2() then\n    raise exception 'A second factor is required';\n  end if;\n";
+const BOARD_PAUSE_AAL2_CHECK =
+  "  if public.board_role() = 'board'::public.board_role and not public.board_aal2() then\n    raise exception 'A second factor is required';\n  end if;\n";
+
+// Each state-changing board RPC, the migration that last defined it, and its argument types.
+const TWO_FACTOR_RPCS: Record<string, { previous: string; types: string }> = {
+  file_directive: {
+    previous: sql,
+    types: "public.card_bucket, public.card_lane, public.card_folder, text, text, text, numeric, text, uuid",
+  },
+  file_note: { previous: sql, types: "text" },
+  file_card: { previous: cardSummary, types: NEW_FILE_CARD_TYPES },
+  set_launched: { previous: liveCut, types: "" },
+  set_agent_mode: { previous: liveCut, types: "text" },
+};
+
+describe("board-two-factor migration", () => {
+  it("carries a 14-digit stamp that sorts after the founder-billing file", () => {
+    expect(BOARD_TWO_FACTOR_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(BOARD_TWO_FACTOR_FILE > FOUNDER_BILLING_FILE).toBe(true);
+  });
+
+  it("defines board_aal2 from the JWT's aal claim and grants it like is_board_member", () => {
+    const block = functionBlockIn(boardTwoFactor, "board_aal2");
+    expect(block).toContain("public.board_aal2() returns boolean");
+    expect(block).toContain("language plpgsql");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    expect(block).toContain("return coalesce(auth.jwt()->>'aal', '') = 'aal2';");
+    expect(boardTwoFactor).toContain("revoke all on function public.board_aal2() from public, anon;");
+    expect(boardTwoFactor).toContain("grant execute on function public.board_aal2() to authenticated, service_role;");
+  });
+
+  it("adds the second-factor refusal right after the membership check and changes nothing else in the five RPCs", () => {
+    const membership = "    raise exception 'Board membership is required';\n  end if;\n";
+    for (const [name, { previous }] of Object.entries(TWO_FACTOR_RPCS)) {
+      const block = functionBlockIn(boardTwoFactor, name);
+      expect(block, name).toContain(`${membership}${AAL2_CHECK}`);
+      expect(block.split(AAL2_CHECK), name).toHaveLength(2);
+      // Removing the check gives back the previous definition, character for character.
+      expect(block.replace(AAL2_CHECK, ""), name).toBe(functionBlockIn(previous, name));
+    }
+  });
+
+  it("lets a moderator pause at aal1 and requires aal2 of a board member", () => {
+    const block = functionBlockIn(boardTwoFactor, "set_paused");
+    const membership = "    raise exception 'Board or moderator membership is required';\n  end if;\n";
+    expect(block).toContain(`${membership}${BOARD_PAUSE_AAL2_CHECK}`);
+    expect(block).not.toContain(AAL2_CHECK);
+    expect(block.replace(BOARD_PAUSE_AAL2_CHECK, "")).toBe(functionBlock("set_paused"));
+  });
+
+  it("keeps the heartbeat, board_role, is_board_member and board_studio_state at aal1", () => {
+    for (const name of ["board_heartbeat", "board_role", "is_board_member", "board_studio_state"]) {
+      expect(boardTwoFactor, name).not.toContain(`function public.${name}(`);
+    }
+  });
+
+  it("repeats the earlier grants for every redefined function", () => {
+    const redefined: [string, string][] = [
+      ...Object.entries(TWO_FACTOR_RPCS).map(([name, { types }]): [string, string] => [name, types]),
+      ["set_paused", "boolean"],
+    ];
+    for (const [name, types] of redefined) {
+      expect(boardTwoFactor, name).toContain(`revoke all on function public.${name}(${types}) from public, anon;`);
+      expect(boardTwoFactor, name).toContain(`grant execute on function public.${name}(${types}) to authenticated, service_role;`);
+    }
+    expect(boardTwoFactor.match(/^grant /gm)).toHaveLength(7);
+    expect(boardTwoFactor.match(/^revoke /gm)).toHaveLength(7);
+  });
+
+  it("creates no table, type, view or policy and uses only repeatable statements", () => {
+    expect(boardTwoFactor).not.toMatch(/create table/i);
+    expect(boardTwoFactor).not.toMatch(/create type/i);
+    expect(boardTwoFactor).not.toMatch(/create policy/i);
+    expect(boardTwoFactor).not.toMatch(/create (or replace )?view/i);
+    expect(boardTwoFactor).not.toMatch(/alter publication/i);
+    expect(boardTwoFactor).not.toMatch(/^create (?!or replace function )/m);
+    expect(boardTwoFactor).not.toMatch(/^(alter|drop) /m);
+    expect(boardTwoFactor.match(/^create or replace function /gm)).toHaveLength(7);
+  });
+});

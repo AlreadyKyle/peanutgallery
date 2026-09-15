@@ -47,6 +47,9 @@ create table auth.users (id uuid primary key default gen_random_uuid(), email te
 create or replace function auth.email() returns text language sql stable as $$
   select nullif(current_setting('request.jwt.claim.email', true), '')
 $$;
+create or replace function auth.jwt() returns jsonb language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
+$$;
 create publication supabase_realtime;
 `;
 
@@ -82,11 +85,25 @@ Deno.test("migrations on PGlite", {
     await assertRejects(() => db.query(sql, params), Error, message);
   }
 
-  async function signInAs(email: string | null) {
+  /**
+   * Sets the claims Supabase Auth would put in the JWT: the email and the
+   * assurance level (aal1 after the magic link, aal2 after a TOTP code). A null
+   * aal leaves the claim out, as a token without it would.
+   */
+  async function signInAs(
+    email: string | null,
+    aal: "aal1" | "aal2" | null = null,
+  ) {
     await db.query(
       `select set_config('request.jwt.claim.email', $1, false)`,
       [email ?? ""],
     );
+    const claims = email === null
+      ? ""
+      : JSON.stringify(aal === null ? { email } : { email, aal });
+    await db.query(`select set_config('request.jwt.claims', $1, false)`, [
+      claims,
+    ]);
   }
 
   async function pool() {
@@ -115,6 +132,7 @@ Deno.test("migrations on PGlite", {
         "20260916000000_card_summary.sql",
         "20260917000000_contribution_session.sql",
         "20260918000000_founder_billing.sql",
+        "20260919000000_board_two_factor.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -695,7 +713,7 @@ Deno.test("migrations on PGlite", {
         await db.exec(
           `insert into public.board_members (email, role) values ('${BOARD_EMAIL}', 'board'), ('${MODERATOR_EMAIL}', 'moderator')`,
         );
-        await signInAs("Board@PeanutGallery.games");
+        await signInAs("Board@PeanutGallery.games", "aal2");
         assertEquals(
           (await row<{ b: boolean }>(`select public.is_board_member() as b`)).b,
           true,
@@ -798,7 +816,7 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "the board files Next cards, stamps the launch, sets the agent mode and reads studio_state",
       async () => {
-        await signInAs(BOARD_EMAIL);
+        await signInAs(BOARD_EMAIL, "aal2");
         // The test row was inserted with defaults, so the per-card maximum is 0 until set.
         await db.exec(
           `update public.studio_state set card_max_usd = 25 where id = 1`,
@@ -1050,9 +1068,108 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "a moderator can pause, heartbeat and read studio_state but not file or launch",
+      "a board session without the second factor is refused every state-changing RPC and keeps the aal1 ones",
       async () => {
-        await signInAs(MODERATOR_EMAIL);
+        const CHECK =
+          `'check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120'`;
+        const stateChanging: [string, unknown[]][] = [
+          [
+            `select public.file_directive('game', 'config', 'seed-1', 'Two-factor directive', 'Intent', ${CHECK}, 2, 'Reason', $1)`,
+            [roleId],
+          ],
+          [
+            `select public.file_card('game', 'config', 'seed-1', 'Two-factor card', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
+            [roleId],
+          ],
+          [`select public.file_note('Two-factor note')`, []],
+          [`select public.set_launched()`, []],
+          [`select public.set_agent_mode('unattended')`, []],
+          [`select public.set_paused(true)`, []],
+        ];
+        const counts = async () =>
+          await row(
+            `select (select count(*)::int from public.cards) as cards, (select count(*)::int from public.board_notes) as notes, (select agent_mode from public.studio_state where id = 1) as mode, (select paused from public.studio_state where id = 1) as paused`,
+          );
+        const before = await counts();
+
+        for (const aal of ["aal1", null] as const) {
+          await signInAs(BOARD_EMAIL, aal);
+          assertEquals(
+            (await row<{ a: boolean }>(`select public.board_aal2() as a`)).a,
+            false,
+          );
+          for (const [sql, params] of stateChanging) {
+            await refuses(sql, "A second factor is required", params);
+          }
+          // The heartbeat, the role and the studio state stay open at aal1.
+          assert(
+            (await row<{ t: Date }>(`select public.board_heartbeat() as t`))
+              .t instanceof Date,
+          );
+          assertEquals(
+            (await row<{ r: string }>(`select public.board_role()::text as r`))
+              .r,
+            "board",
+          );
+          const { s } = await row<{ s: Row }>(
+            `select public.board_studio_state() as s`,
+          );
+          assertEquals(s.agent_mode, "attended");
+        }
+        assertEquals(await counts(), before);
+
+        await signInAs(BOARD_EMAIL, "aal2");
+        assertEquals(
+          (await row<{ a: boolean }>(`select public.board_aal2() as a`)).a,
+          true,
+        );
+        const directive = await row<{ id: string }>(
+          `select public.file_directive('game', 'config', 'seed-1', 'Two-factor directive', 'Intent', ${CHECK}, 2, 'Reason', $1) as id`,
+          [roleId],
+        );
+        assertNotEquals(directive.id, null);
+        const card = await row<{ id: string }>(
+          `select public.file_card('game', 'config', 'seed-1', 'Two-factor card', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null) as id`,
+          [roleId],
+        );
+        assertNotEquals(card.id, null);
+        const note = await row<{ id: string }>(
+          `select public.file_note('Two-factor note') as id`,
+        );
+        assertNotEquals(note.id, null);
+        assert(
+          (await row<{ t: Date }>(`select public.set_launched() as t`))
+            .t instanceof Date,
+        );
+        await db.exec(`select public.set_agent_mode('unattended')`);
+        await db.exec(`select public.set_paused(true)`);
+        assertEquals(
+          await row(
+            `select agent_mode, paused, paused_by from public.studio_state where id = 1`,
+          ),
+          { agent_mode: "unattended", paused: true, paused_by: BOARD_EMAIL },
+        );
+        await db.exec(`select public.set_paused(false)`);
+        await db.exec(`select public.set_agent_mode('attended')`);
+        assertEquals(
+          await counts(),
+          {
+            cards: (before.cards as number) + 2,
+            notes: (before.notes as number) + 1,
+            mode: "attended",
+            paused: false,
+          },
+        );
+        await db.exec(
+          `delete from public.cards where id in ('${directive.id}', '${card.id}'); delete from public.board_notes where id = '${note.id}';`,
+        );
+      },
+    );
+
+    await t.step(
+      "a moderator can pause, heartbeat and read studio_state at aal1 but not file or launch",
+      async () => {
+        await signInAs(MODERATOR_EMAIL, "aal1");
         assertEquals(
           (await row<{ r: string }>(`select public.board_role()::text as r`)).r,
           "moderator",
@@ -1102,8 +1219,8 @@ Deno.test("migrations on PGlite", {
       },
     );
 
-    await t.step("an outsider is refused by every board RPC", async () => {
-      await signInAs(OUTSIDER_EMAIL);
+    await t.step("an outsider is refused by every board RPC, even at aal2", async () => {
+      await signInAs(OUTSIDER_EMAIL, "aal2");
       assertEquals(
         (await row<{ b: boolean }>(`select public.is_board_member() as b`)).b,
         false,
@@ -1394,7 +1511,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "function privileges: anon none, authenticated the ten board RPCs, service_role the thirteen, one file_card",
+      "function privileges: anon none, authenticated the eleven board RPCs, service_role the fourteen, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -1410,6 +1527,7 @@ Deno.test("migrations on PGlite", {
          where n.nspname = 'public' order by 1`,
         );
         const board = [
+          "board_aal2",
           "board_heartbeat",
           "board_role",
           "board_studio_state",
