@@ -114,6 +114,7 @@ Deno.test("migrations on PGlite", {
         "20260915000000_live_cut.sql",
         "20260916000000_card_summary.sql",
         "20260917000000_contribution_session.sql",
+        "20260918000000_founder_billing.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -648,6 +649,42 @@ Deno.test("migrations on PGlite", {
           `select public.record_usage($1, null, 'builder-model-id', 1, 0, 1, 0.01)`,
           "does not exist",
           [goalCardId.replace(/^[0-9a-f]{8}/, "00000000")],
+        );
+      },
+    );
+
+    await t.step(
+      "record_usage billed to the founder charges the card and leaves the pool alone",
+      async () => {
+        const before = await pool();
+        const card = await row<{ actual_usd: string }>(
+          `select actual_usd from public.cards where id = $1`,
+          [oneoffCardId],
+        );
+        const { r } = await row<{ r: Row }>(
+          `select public.record_usage($1, $2, 'builder-model-id', 500, 0, 50, 0.4, 'founder') as r`,
+          [oneoffCardId, roleId],
+        );
+        assertEquals(await pool(), before);
+        assertEquals(r.balance_usd, Number(before.balance_usd));
+        assertEquals(r.daily_spent_usd, Number(before.daily_spent_usd));
+        assertEquals(
+          r.actual_usd,
+          Number((Number(card.actual_usd) + 0.4).toFixed(4)),
+        );
+        const ledger = await row(
+          `select billed_to::text as billed_to, usd from public.ledger where id = $1`,
+          [r.ledger_id],
+        );
+        assertEquals(ledger, { billed_to: "founder", usd: "0.4000" });
+        const studio = await rows<{ billed_to: string }>(
+          `select distinct billed_to::text as billed_to from public.ledger where id <> $1`,
+          [r.ledger_id],
+        );
+        assertEquals(studio, [{ billed_to: "studio" }]);
+        await refuses(
+          `select public.record_usage(null, null, 'builder-model-id', 1, 0, 1, 0.01, null)`,
+          "p_billed_to is required",
         );
       },
     );
@@ -1218,6 +1255,12 @@ Deno.test("migrations on PGlite", {
         try {
           const events = await rows(`select * from public.public_agent_events`);
           assertEquals(events.length, 1);
+          const billing = await rows<{ billed_to: string }>(
+            `select distinct billed_to::text as billed_to from public.ledger`,
+          );
+          assertEquals(billing, [{ billed_to: "studio" }]);
+          const totals = await row(`select * from public.public_ledger_totals`);
+          assertEquals(totals.row_count, 4);
           const green = await rows(`select * from public.last_green`);
           assertEquals(green.length, 2);
           const cards = await rows(`select id from public.cards`);

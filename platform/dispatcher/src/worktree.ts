@@ -43,15 +43,60 @@ export function worktreePath(root: string, cardId: string): string {
   return path.join(root, `card-${shortId(cardId)}`);
 }
 
-// Config lane may touch data only, and only seed-1 has a config lane; code lane may touch
-// anything under its folder. An empty list means the lane does not exist for the folder.
+// Paths no agent may change in any lane: the gate, the dispatcher, the database, the role specs,
+// the workflows, the constitution, and the build and invariant harness of each folder. The same
+// list is platform/gate/kernel-paths.txt, which the gate checks card branches against; a test
+// keeps the two equal.
+export const KERNEL_PATHS: readonly string[] = [
+  '.github',
+  'CLAUDE.md',
+  'docs',
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+  'platform/agents',
+  'platform/dispatcher',
+  'platform/gate',
+  'platform/ops',
+  'platform/supabase',
+  'platform/site/build-sha.ts',
+  'platform/site/netlify.toml',
+  'platform/site/package.json',
+  'platform/site/playwright.config.ts',
+  'platform/site/vite.config.ts',
+  'seed-1/CLAUDE.md',
+  'seed-1/bots',
+  'seed-1/netlify.toml',
+  'seed-1/package.json',
+  'seed-1/scripts',
+  'seed-1/sim/invariants.ts',
+  'seed-1/tests/bot.test.ts',
+  'seed-1/tests/invariants.test.ts',
+  'seed-1/tsconfig.json',
+  'seed-1/vite.config.ts',
+];
+
+function under(file: string, dir: string): boolean {
+  return file === dir || file.startsWith(`${dir}/`);
+}
+
+// Config lane may touch data only, and only seed-1 has a config lane. Code lane may touch its
+// folder, which for platform is the site alone. An empty list means the lane does not exist for
+// the folder.
 export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
-  if (lane === 'code') return [folder];
+  if (lane === 'code') return folder === 'platform' ? ['platform/site'] : [folder];
   return folder === 'seed-1' ? ['seed-1/config', 'seed-1/content'] : [];
 }
 
+// The kernel paths that lie inside the allowed paths, named in the session prompt.
+export function protectedPaths(allowed: readonly string[]): string[] {
+  return KERNEL_PATHS.filter((kernel) => allowed.some((dir) => under(kernel, dir)));
+}
+
+// Files outside the allowed paths, and kernel files inside them.
 export function outsideLane(files: readonly string[], allowed: readonly string[]): string[] {
-  return files.filter((file) => !allowed.some((dir) => file === dir || file.startsWith(`${dir}/`)));
+  return files.filter((file) => !allowed.some((dir) => under(file, dir)) || KERNEL_PATHS.some((kernel) => under(file, kernel)));
 }
 
 export interface Worktree {

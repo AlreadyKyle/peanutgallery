@@ -66,8 +66,12 @@ export interface Deploy {
   created_at: string;
 }
 
+// Who pays for a turn: the founder's subscription in attended mode, the pool in unattended mode.
+export type Billing = 'studio' | 'founder';
+
 // card_id and role_id are null for spend that belongs to no card: the startup probe.
 export interface UsageInput {
+  billed_to: Billing;
   card_id: string | null;
   role_id: string | null;
   model: string;
@@ -122,7 +126,6 @@ export interface Db {
   insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>): Promise<void>;
   insertDeploy(input: DeployInput): Promise<void>;
   lastGreen(folder: CardFolder): Promise<Deploy | null>;
-  setPaused(paused: boolean, by: string, now: Date): Promise<void>;
 }
 
 type Row = Record<string, unknown>;
@@ -284,6 +287,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string): Db {
         p_cached_tokens: input.cached_tokens,
         p_output_tokens: input.output_tokens,
         p_usd: input.usd,
+        p_billed_to: input.billed_to,
       });
       if (error || !data) fail('record_usage', error);
       const row = data as Row;
@@ -317,12 +321,5 @@ export function createSupabaseDb(url: string, serviceRoleKey: string): Db {
       return data ? toDeploy(data as Row) : null;
     },
 
-    async setPaused(paused, by, now) {
-      const { error } = await client
-        .from('studio_state')
-        .update({ paused, paused_by: by, paused_at: paused ? now.toISOString() : null })
-        .eq('id', 1);
-      if (error) fail('studio_state pause', error);
-    },
   };
 }

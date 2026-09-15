@@ -11,7 +11,7 @@ import { parseBoardMembers, requireEnv, requireUsd, todayInNewYork, type Env } f
 import { readRoleSpecs } from "./lib/role-files.js";
 import { resolveModel } from "./lib/roles.js";
 import { parseSeedArgs, UsageError } from "./lib/seed-args.js";
-import { week1Card, WEEK1_EXECUTOR_ROLE, WEEK1_POOL_BALANCE_USD, type Week1Run } from "./lib/week1.js";
+import { week1Card, WEEK1_EXECUTOR_ROLE, type Week1Run } from "./lib/week1.js";
 
 const AGENTS_DIR = resolve(REPO_ROOT, "platform", "agents");
 /** A week-1 card in one of these stages is still in flight or shipped; a rejected or paused one is superseded by a fresh insert. */
@@ -74,24 +74,6 @@ async function seedBoardMembers(db: SupabaseClient, env: Env): Promise<void> {
   console.log(`board_members: ${members.map((m) => `${m.email} (${m.role})`).join(", ")}`);
 }
 
-async function topUpBalance(db: SupabaseClient): Promise<void> {
-  const pool = check("pool read", await db.from("pool").select("balance_usd").eq("id", 1).single<{ balance_usd: string }>());
-  const balance = Number(pool.balance_usd);
-  const gap = Math.round((WEEK1_POOL_BALANCE_USD - balance) * 10000) / 10000;
-  if (gap < 0) {
-    throw new Error(`pool.balance_usd is ${balance.toFixed(4)}, above ${WEEK1_POOL_BALANCE_USD.toFixed(2)}; founder_credit cannot lower it`);
-  }
-  if (gap === 0) {
-    console.log(`pool: balance already ${WEEK1_POOL_BALANCE_USD.toFixed(2)}`);
-    return;
-  }
-  const id = check(
-    "founder_credit",
-    await db.rpc("founder_credit", { p_amount_usd: gap, p_kind: "cash", p_display_name: "Founder" }),
-  );
-  console.log(`pool: founder_credit ${gap.toFixed(4)} (contribution ${String(id)}), balance now ${WEEK1_POOL_BALANCE_USD.toFixed(2)}`);
-}
-
 async function insertWeek1Card(db: SupabaseClient, run: Week1Run): Promise<void> {
   const role = check(
     "roles read",
@@ -132,8 +114,9 @@ async function main(): Promise<void> {
   await seedStreamState(db);
   await seedBoardMembers(db, env);
 
+  // The week-1 card runs attended, billed to the founder's subscription, so the pool is not
+  // topped up: it holds customer money only (docs/specs/launch-hardening.md).
   if (options.week1Test) {
-    await topUpBalance(db);
     await insertWeek1Card(db, options.run);
   }
 }

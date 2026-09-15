@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { available, canStart, concurrency, effectiveDailyCap, type StartConditions } from '../src/throttle.js';
+import { available, billingFor, canStart, concurrency, effectiveDailyCap, newYorkDate, spentToday, type StartConditions } from '../src/throttle.js';
 
 const base: StartConditions = {
   paused: false,
@@ -22,9 +22,26 @@ describe('available', () => {
   });
 });
 
+describe('billingFor', () => {
+  it('bills attended sessions to the founder and unattended sessions to the studio', () => {
+    expect(billingFor('attended')).toBe('founder');
+    expect(billingFor('unattended')).toBe('studio');
+  });
+});
+
+describe('spentToday', () => {
+  it('counts the day spend only when the pool row is from today in New York', () => {
+    const now = new Date('2026-09-15T03:30:00.000Z');
+    expect(newYorkDate(now)).toBe('2026-09-14');
+    expect(spentToday({ day: '2026-09-14', daily_spent_usd: 100 }, now)).toBe(100);
+    expect(spentToday({ day: '2026-09-13', daily_spent_usd: 100 }, now)).toBe(0);
+  });
+});
+
 describe('concurrency', () => {
-  it('is one in attended mode when the balance covers the rate', () => {
+  it('is one in attended mode whatever the balance', () => {
     expect(concurrency(50, 5, 'attended', 2)).toBe(1);
+    expect(concurrency(0, 5, 'attended', 2)).toBe(1);
   });
   it('is min(2, floor(balance / rate)) in unattended mode', () => {
     expect(concurrency(50, 5, 'unattended', 2)).toBe(2);
@@ -55,16 +72,19 @@ describe('canStart', () => {
     expect(canStart({ ...base, boardSessionActive: false })).toEqual({ ok: false, reason: 'no_board_session' });
     expect(canStart({ ...base, mode: 'unattended', boardSessionActive: false })).toEqual({ ok: true });
   });
-  it('sleeps at the daily cap, measured against min(balance, cap)', () => {
-    expect(canStart({ ...base, dailySpentUsd: 100 })).toEqual({ ok: false, reason: 'daily_cap' });
-    expect(canStart({ ...base, dailySpentUsd: 50 })).toEqual({ ok: false, reason: 'daily_cap' });
-    expect(canStart({ ...base, dailySpentUsd: 49.99 })).toEqual({ ok: true });
+  it('sleeps at the daily cap, measured against min(balance, cap), in unattended mode only', () => {
+    const unattended = { ...base, mode: 'unattended' as const };
+    expect(canStart({ ...unattended, dailySpentUsd: 100 })).toEqual({ ok: false, reason: 'daily_cap' });
+    expect(canStart({ ...unattended, dailySpentUsd: 50 })).toEqual({ ok: false, reason: 'daily_cap' });
+    expect(canStart({ ...unattended, dailySpentUsd: 49.99 })).toEqual({ ok: true });
+    expect(canStart({ ...base, balanceUsd: 0, dailySpentUsd: 100 })).toEqual({ ok: true });
   });
   it('sleeps with no funded cards', () => {
     expect(canStart({ ...base, smallestEstimateUsd: null })).toEqual({ ok: false, reason: 'no_funded_cards' });
   });
-  it('sleeps when the smallest estimate exceeds what is available', () => {
-    expect(canStart({ ...base, availableUsd: 1.99 })).toEqual({ ok: false, reason: 'insufficient_balance' });
+  it('sleeps when the smallest estimate exceeds what is available, in unattended mode only', () => {
+    expect(canStart({ ...base, mode: 'unattended', availableUsd: 1.99 })).toEqual({ ok: false, reason: 'insufficient_balance' });
+    expect(canStart({ ...base, availableUsd: 0 })).toEqual({ ok: true });
   });
   it('sleeps when every session slot is taken', () => {
     expect(canStart({ ...base, running: 1 })).toEqual({ ok: false, reason: 'concurrency' });

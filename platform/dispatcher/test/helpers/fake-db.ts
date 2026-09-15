@@ -1,6 +1,7 @@
 // In-memory database for tick, session and pipeline tests. Its claim rule matches the SQL
 // (only a funded card moves to building) and record_usage applies the same arithmetic as the
-// RPC: one ledger row per turn, balance and daily spend moved, actual_usd added up.
+// RPC: one ledger row per turn, balance and daily spend moved for studio rows only, actual_usd
+// added up for both.
 import type {
   AgentEventType,
   Card,
@@ -79,7 +80,6 @@ export class FakeDb implements Db {
   events: EventRow[] = [];
   deploys: Deploy[] = [];
   claims = 0;
-  pausedBy: string | null = null;
   heartbeats: Date[] = [];
   heartbeatError: Error | null = null;
 
@@ -121,8 +121,10 @@ export class FakeDb implements Db {
   async recordUsage(input: UsageInput): Promise<RecordUsageResult> {
     const id = `ledger-${this.ledger.length + 1}`;
     this.ledger.push({ id, ...input });
-    this.pool.balance_usd = round4(this.pool.balance_usd - input.usd);
-    this.pool.daily_spent_usd = round4(this.pool.daily_spent_usd + input.usd);
+    if (input.billed_to === 'studio') {
+      this.pool.balance_usd = round4(this.pool.balance_usd - input.usd);
+      this.pool.daily_spent_usd = round4(this.pool.daily_spent_usd + input.usd);
+    }
     const found = input.card_id === null ? undefined : this.cards.find((c) => c.id === input.card_id);
     if (found) found.actual_usd = round4(found.actual_usd + input.usd);
     return { ledger_id: id, balance_usd: this.pool.balance_usd, daily_spent_usd: this.pool.daily_spent_usd, actual_usd: found?.actual_usd ?? 0 };
@@ -139,9 +141,5 @@ export class FakeDb implements Db {
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);
     return green.length > 0 ? { ...green[green.length - 1]! } : null;
-  }
-  async setPaused(paused: boolean, by: string) {
-    this.studio.paused = paused;
-    this.pausedBy = paused ? by : null;
   }
 }

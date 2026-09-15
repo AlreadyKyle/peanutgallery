@@ -1,6 +1,6 @@
 # Backseat — Kick-off plan
 
-Version 3.1, 14 September 2026. Supersedes v3; the 14 September amendments are recorded in §10 (defaults 10–13) and specified under `docs/specs/`. Built from five research and design passes, a source check, a consistency audit, and the board's review notes. External figures carry a source in §9; figures without a source are the plan's own numbers.
+Version 3.2, 14 September 2026. Supersedes v3.1; the 14 September amendments are recorded in §10 (defaults 7 and 10–14) and specified under `docs/specs/`. Built from five research and design passes, a source check, a consistency audit, and the board's review notes. External figures carry a source in §9; figures without a source are the plan's own numbers.
 
 ## 1. Decision
 
@@ -24,7 +24,7 @@ Vote buckets at launch: Game, QA, Studio (studio name, host name, seed name). Th
 
 Vote regime at launch: one account, one vote, locked for 14 days.
 
-Launch roster. Studio Head (agenda, roadmap, org chart, Monday report; holds the Platform veto). Game Director (pillars; holds the Game veto). Builder A and Builder B (Game cards). Platform Builder (Platform cards, stricter gate). QA (bug reproduction, headless bots, nightly rebalance cards, incident classification). Host (chat and events in, speech out; no write tools). Scout (activates day 15: models, tools, engines, genre trends). Community (activates day 8: subreddit, Discord, chat logs, X mentions; proposes lore, meme and trend cards; no write tools). Nine roles, each with a role spec and a scorecard from day one. The studio seeds the pool with a $200 founding budget so day one has funded cards before the first contribution.
+Launch roster. Studio Head (agenda, roadmap, org chart, Monday report; holds the Platform veto). Game Director (pillars; holds the Game veto). Builder A and Builder B (Game cards). Platform Builder (Platform cards, stricter gate). QA (bug reproduction, headless bots, nightly rebalance cards, incident classification). Host (chat and events in, speech out; no write tools). Scout (activates day 15: models, tools, engines, genre trends). Community (activates day 8: subreddit, Discord, chat logs, X mentions; proposes lore, meme and trend cards; no write tools). Nine roles, each with a role spec and a scorecard from day one. Amended 14 September 2026: there is no founding budget. The studio's own build work runs attended on the founder's subscription and is billed to the founder, and the pool holds customer money only (`docs/specs/launch-hardening.md`).
 
 ## 4. Mechanics
 
@@ -286,13 +286,14 @@ Twitch Plays Pokémon — https://en.wikipedia.org/wiki/Twitch_Plays_Pok%C3%A9mo
 4. Launch seed: idle/incremental.
 5. Compute: attended mode on the founder's subscription before launch; the separate API organization ($500 monthly limit) from launch day.
 6. Second kill-switch holder: named by the board before day 15.
-7. Founding budget: $200 seeded at launch.
+7. Founding budget (14 September 2026): none. Pre-launch agent work runs attended on the founder's subscription, billed to the founder on the ledger and hidden from the public; the pool holds customer money only.
 8. Payments: Stripe Payment Links; Twitch Bits when Affiliate; no Ko-fi.
 9. Images: OpenAI gpt-image first, Gemini second, free credit before paid, studio imagery only.
 10. Site sections (14 September 2026): Now and Next replace the three sprint goal cards, which were retired from the database the same day. No season framing on the site until the first season is declared.
 11. Vote at live (14 September 2026): funding a Next card is the vote. Targets sit at or below the per-card maximum; the bar credits the agents' net amount; a full bar moves the card to `funded`.
 12. Unattended mode (14 September 2026): the same Claude Code command with `STUDIO_ANTHROPIC_API_KEY` from the studio organisation, never the founder's key; a session billed to the wrong account is refused.
 13. Observability (14 September 2026): `agent_events` and `ledger` are the record; the dispatcher logs JSON lines and writes a heartbeat to `studio_state`; Langfuse-class tooling stays the Scout's first trial after launch and is never fed from the agent child.
+14. Kernel paths (14 September 2026): `platform/gate/kernel-paths.txt` lists the files no agent may change in any lane; the dispatcher refuses them and the gate fails a card branch that touches one. A merged change that fails its deploy or smoke is reverted on main.
 
 ## 11. Kick-off
 
@@ -352,7 +353,7 @@ Week-1 seed data. Insert the nine launch roles into `roles` from `/agents/*.json
 
 Days 1–3 acceptance test, literal. A Stripe `checkout.session.completed` event for $1 with split "80/20" creates a `contributions` row with studio_pct_chosen 20, increments `pool.balance_usd` by the net Agents amount and `pool.incident_reserve_usd` by 5% of it, and the public site shows the new total within 60 seconds. The three sprint goal cards render bars from `funded_usd`.
 
-Week-1 acceptance test, literal. Seed `pool` with balance 50. Insert a card: bucket game, source board, shape oneoff, lane config, stage funded, estimate 2, acceptance_test "spawn table row X changes to Y", proposer and executor the Builder A role. Within 15 minutes: stage live, one or more `ledger` rows with usd > 0, `deploys` has a new green row, and the live site serves the change. Repeat three times.
+Week-1 acceptance test, literal. Amended 14 September 2026: the runs are attended and billed to the founder, so the pool is not seeded. Insert a card: bucket game, source board, shape oneoff, lane config, stage funded, estimate 2, acceptance_test "spawn table row X changes to Y", proposer and executor the Builder A role. Within 15 minutes: stage live, one or more `ledger` rows with usd > 0, `deploys` has a new green row, and the live site serves the change. Repeat three times.
 
 Seed 1 pillars (for the Game Director's role spec). Idle/incremental; one screen; numbers go up; every feature visible within 60 seconds of play; sessions of two minutes are satisfying; all-ages; procedural or vector art only.
 

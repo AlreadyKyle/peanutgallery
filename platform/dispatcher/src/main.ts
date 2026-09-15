@@ -1,10 +1,11 @@
 // Dispatcher entry: loads .env from the repository root, validates configuration, checks that
 // the database agrees on the agent mode, probes the account in unattended mode, recovers cards
 // left mid-flight by a previous process, starts the scheduler, and runs the tick loop until
-// SIGINT or SIGTERM.
+// SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a restart resumes work.
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { createAdapter } from './adapters/factory.js';
+import { createAlerter } from './alert.js';
 import { loadConfig, type DispatcherConfig } from './config.js';
 import { createSupabaseDb, type Card, type Db } from './db.js';
 import { createLogger, errorMessage, type Logger } from './log.js';
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
   const stop = new AbortController();
   const running = new Set<string>();
   const now = () => new Date();
+  const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
 
   await startupChecks({ db, adapter, config, log, runProbe });
   await recoverOrphans(db, config, log);
@@ -76,7 +78,8 @@ async function main(): Promise<void> {
     running,
     now,
     log,
-    runCard: (card: Card) => runCardPipeline(card, { db, adapter, config, log, stopSignal: stop.signal, now }),
+    alert,
+    runCard: (card: Card) => runCardPipeline(card, { db, adapter, config, log, alert, stopSignal: stop.signal, now }),
   };
 
   while (!stop.signal.aborted) {
@@ -94,8 +97,7 @@ async function main(): Promise<void> {
   while (running.size > 0 && Date.now() < deadline) {
     await sleep(500);
   }
-  await db.setPaused(true, 'dispatcher', now());
-  log.info('main', 'dispatcher stopped; studio paused', { unfinished: running.size });
+  log.info('main', 'dispatcher stopped', { unfinished: running.size });
 }
 
 main().catch((error: unknown) => {

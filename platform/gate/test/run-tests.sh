@@ -392,6 +392,18 @@ rm -f "$W/platform/site/package.json"
 expect "ship: absent package is a failure, not a pass" 1 '^GATE FAIL step=typecheck detail=@backseat/site is not in the workspace$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
 
 # ---------------------------------------------------------------- .github/workflows/gate.yml
+# ---------------------------------------------------------------- kernel-guard
+KERNEL="$GATE_DIR/kernel-guard.sh"
+printf 'seed-1/config/spawn-table.json\nseed-1/render/scene.ts\n' > "$T/kernel-ok.txt"
+printf 'seed-1/config/unlocks.json\nplatform/gate/ship-gate.sh\n' > "$T/kernel-gate.txt"
+printf 'seed-1/sim/invariants.ts\n' > "$T/kernel-file.txt"
+printf 'seed-1/sim/invariants.tsx\nplatform/gates/x.sh\n' > "$T/kernel-near.txt"
+expect "kernel-guard: usage without a file" 2 '^$' -- bash "$KERNEL"
+expect "kernel-guard: config and render changes pass" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-ok.txt"
+expect "kernel-guard: a file under a kernel folder fails" 1 '^FAIL: kernel-guard path=platform/gate/ship-gate.sh$' -- bash "$KERNEL" "$T/kernel-gate.txt"
+expect "kernel-guard: a kernel file fails" 1 '^FAIL: kernel-guard path=seed-1/sim/invariants.ts$' -- bash "$KERNEL" "$T/kernel-file.txt"
+expect "kernel-guard: a name that only starts like a kernel path passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-near.txt"
+
 # The dispatcher polls the check run named gate; these checks pin the names the workflow must keep.
 WORKFLOW="$REPO_ROOT/.github/workflows/gate.yml"
 workflow_has() { grep -qE -- "$1" "$WORKFLOW"; }
@@ -403,6 +415,7 @@ done
 assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-config, seed-code, platform\]$'
 assert "workflow: the gate job always runs" workflow_has '^    if: always\(\)$'
 assert "workflow: the gate job fails on a failed or cancelled job" workflow_has '\(failure\|cancelled\)'
+assert "workflow: card branches run the kernel guard from the base commit's gate" workflow_has 'git checkout "\$BASE" -- platform/gate && bash platform/gate/kernel-guard.sh'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 
 # ---------------------------------------------------------------- summary

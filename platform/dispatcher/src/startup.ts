@@ -6,6 +6,7 @@ import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
 import type { Logger } from './log.js';
 import { priceUsage } from './pricing.js';
+import { billingFor } from './throttle.js';
 import type { ProbeOptions, ProbeResult } from './probe-core.js';
 
 export type ProbeRunner = (adapter: AgentAdapter, options: ProbeOptions) => Promise<ProbeResult>;
@@ -41,7 +42,7 @@ export async function meterProbe(db: Db, config: DispatcherConfig, probe: ProbeR
     return;
   }
   const priced = priceUsage(config.priceTable, probe.model ?? config.modelBuilder, usage);
-  const recorded = await db.recordUsage({ card_id: null, role_id: null, ...priced });
+  const recorded = await db.recordUsage({ billed_to: billingFor(config.agentMode), card_id: null, role_id: null, ...priced });
   log.info('probe', 'probe metered', { ledger: recorded.ledger_id, model: priced.model, usd: priced.usd, balance: recorded.balance_usd });
 }
 

@@ -59,7 +59,14 @@ describe('sessionPrompt', () => {
     expect(prompt).toContain('Do not run git.');
     expect(prompt).toContain('Stop as soon as the acceptance check holds');
     expect(prompt).not.toContain('Design spec');
+    expect(prompt).not.toContain('Never edit');
     expect(prompt).not.toMatch(/board|note|community/i);
+  });
+
+  it('names the kernel paths inside a code lane as never to be edited', () => {
+    const prompt = sessionPrompt(card({ lane: 'code' }), ['seed-1'], 3);
+    expect(prompt).toContain('Allowed paths: seed-1.\nNever edit, even inside the allowed paths: seed-1/CLAUDE.md, seed-1/bots,');
+    expect(prompt).toContain('seed-1/sim/invariants.ts');
   });
 
   it('names the design spec, between the acceptance test and the allowed paths, only when the card has one', () => {
@@ -90,10 +97,28 @@ describe('runAgentSession metering', () => {
     });
     expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 3 turns', turns: 3 });
     expect(db.ledger.map((row) => row.usd)).toEqual([0.0045, 0.006]);
-    expect(db.ledger[0]).toMatchObject({ card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 100 });
+    expect(db.ledger[0]).toMatchObject({ billed_to: 'founder', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 100 });
     expect(db.cards[0]?.actual_usd).toBe(0.0105);
-    expect(db.pool.balance_usd).toBe(49.9895);
+    // Attended turns run on the founder's subscription: priced and charged to the card, not the pool.
+    expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
     expect(db.events.map((event) => event.type)).toEqual(['start', 'message', 'tool_call', 'tool_result']);
+  });
+
+  it('bills unattended turns to the studio and takes them from the pool', async () => {
+    const db = new FakeDb();
+    const { result } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+        await emit(usageEvent(1, 100));
+      },
+      {},
+      {},
+      { mode: 'unattended' },
+    );
+    expect(result.outcome).toBe('completed');
+    expect(db.ledger.map((row) => row.billed_to)).toEqual(['studio']);
+    expect(db.pool).toMatchObject({ balance_usd: 49.9955, daily_spent_usd: 0.0045 });
   });
 
   it('aborts with ceiling on the turn that crosses it and finishes as paused-worthy', async () => {

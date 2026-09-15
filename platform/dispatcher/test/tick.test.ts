@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createLogger } from '../src/log.js';
 import { tick, type TickDeps } from '../src/tick.js';
+import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
 
 function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}): TickDeps {
@@ -13,6 +14,7 @@ function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}):
     running: new Set<string>(),
     now: () => NOW,
     log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })),
+    alert: new RecordingAlerter(),
     runCard: async (c) => {
       started.push(c.id);
     },
@@ -42,14 +44,15 @@ describe('tick', () => {
     expect(await tick(deps(db, started))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
   });
 
-  it('reserves the estimates of building and gated cards', async () => {
+  it('reserves the estimates of building and gated cards in unattended mode', async () => {
     const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
     db.cards = [card({ id: 'a', stage: 'gated', estimate_usd: 4 }), card({ id: 'b', estimate_usd: 2 })];
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
+    expect(await tick(deps(db, [], { mode: 'unattended' }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
   });
 
-  it('sleeps while paused, without a board session, over the daily cap or at the concurrency limit', async () => {
+  it('sleeps while paused, without a board session or at the concurrency limit', async () => {
     const db = new FakeDb();
     db.cards = [card()];
     db.studio.paused = true;
@@ -58,11 +61,29 @@ describe('tick', () => {
     db.boardActive = false;
     expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_board_session' });
     db.boardActive = true;
-    db.pool.daily_spent_usd = 50;
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'daily_cap' });
-    db.pool.daily_spent_usd = 0;
     expect(await tick(deps(db, [], { running: new Set(['other-card']) }))).toEqual({ action: 'sleep', reason: 'concurrency' });
     expect(db.cards[0]?.stage).toBe('funded');
+  });
+
+  it('sleeps over the daily cap in unattended mode, alerting once a day and counting only today', async () => {
+    const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
+    db.cards = [card()];
+    db.pool.daily_spent_usd = 50;
+    const alert = new RecordingAlerter();
+    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
+    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
+    expect(alert.messages).toEqual(['The daily cap of $100.00 stopped the agents for 2026-09-14.']);
+    expect(alert.pings).toBe(2);
+    db.pool.day = '2026-09-13';
+    expect(await tick(deps(db, [], { mode: 'unattended' }))).toEqual({ action: 'started', cardId: card().id });
+  });
+
+  it('starts a card in attended mode with an empty pool, over the cap and above the balance', async () => {
+    const db = new FakeDb();
+    db.pool = { ...db.pool, balance_usd: 0, daily_spent_usd: 500 };
+    db.cards = [card({ estimate_usd: 12 })];
+    expect(await tick(deps(db, []))).toEqual({ action: 'started', cardId: card().id });
   });
 
   it('sleeps when studio_state.agent_mode differs from the adapter', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gateStatus, mergePullRequest, openPullRequest, type GitHubOptions } from '../src/github.js';
+import { gateStatus, mergePullRequest, openPullRequest, revertMerge, type GitHubOptions } from '../src/github.js';
+import { mockFetch as routeFetch } from './helpers/mock-fetch.js';
 
 interface Call {
   url: string;
@@ -68,5 +69,42 @@ describe('openPullRequest', () => {
   it('throws on any other failure', async () => {
     const { fetchFn } = mockFetch(403, { message: 'Resource not accessible by integration' });
     await expect(openPullRequest({ ...base, fetchFn }, { head: 'h', title: 't', body: 'b' })).rejects.toThrow('http 403 Resource not accessible by integration');
+  });
+});
+
+describe('revertMerge', () => {
+  const API = 'https://api.github.com/repos/owner/repo';
+  const routes = (ref: { status: number; json: unknown }, parents: unknown[] = [{ sha: 'parent-sha' }]) =>
+    routeFetch((method, url) => {
+      if (method === 'GET' && url === `${API}/git/commits/merge-sha`) return { status: 200, json: { sha: 'merge-sha', parents } };
+      if (method === 'GET' && url === `${API}/git/commits/parent-sha`) return { status: 200, json: { sha: 'parent-sha', tree: { sha: 'parent-tree' } } };
+      if (method === 'POST' && url === `${API}/git/commits`) return { status: 201, json: { sha: 'revert-sha' } };
+      if (method === 'PATCH' && url === `${API}/git/refs/heads/main`) return ref;
+      return undefined;
+    });
+
+  it('commits the parent tree on top of the merge and fast-forwards main to it', async () => {
+    const { fetchFn, calls } = routes({ status: 200, json: { object: { sha: 'revert-sha' } } });
+    expect(await revertMerge({ ...base, fetchFn }, 'merge-sha', 'Revert card x')).toEqual({ ok: true, sha: 'revert-sha' });
+    expect(calls.map((call) => call.method)).toEqual(['GET', 'GET', 'POST', 'PATCH']);
+    expect(calls[2]?.body).toEqual({ message: 'Revert card x', tree: 'parent-tree', parents: ['merge-sha'] });
+    expect(calls[3]?.body).toEqual({ sha: 'revert-sha', force: false });
+  });
+
+  it('refuses when main has moved past the merge', async () => {
+    const { fetchFn } = routes({ status: 422, json: { message: 'Update is not a fast forward' } });
+    expect(await revertMerge({ ...base, fetchFn }, 'merge-sha', 'Revert card x')).toEqual({
+      ok: false,
+      reason: 'main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward',
+    });
+  });
+
+  it('refuses a commit that is not a single-parent squash merge, before writing anything', async () => {
+    const { fetchFn, calls } = routes({ status: 200, json: {} }, [{ sha: 'a' }, { sha: 'b' }]);
+    expect(await revertMerge({ ...base, fetchFn }, 'merge-sha', 'Revert card x')).toEqual({
+      ok: false,
+      reason: 'merge commit merge-sha has 2 parents; only a squash merge is reverted',
+    });
+    expect(calls).toHaveLength(1);
   });
 });

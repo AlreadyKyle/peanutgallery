@@ -1,13 +1,16 @@
 // The life of one claimed card: worktree, pre-check, agent session, post-check, commit, push,
 // pull request, gate, merge, deploy, smoke; then live with a ship event, or rejected with the
-// failing check and the previous green deploy restored.
+// failing check. A merged change that fails its deploy or smoke is reverted on main, and after a
+// failed smoke the previous green deploy is restored. The board is alerted whenever a card stops
+// short of live for a reason other than the dispatcher stopping.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseChecks, evaluateCheck, AcceptanceGrammarError, type ConfigCheck } from './acceptance.js';
 import type { AgentAdapter, CardFolder } from './adapters/types.js';
+import type { Alerter } from './alert.js';
 import type { DispatcherConfig } from './config.js';
 import type { Card, Db, Role } from './db.js';
-import { mergePullRequest, openPullRequest, pushBranch, waitForGate, type GitHubOptions } from './github.js';
+import { mergePullRequest, openPullRequest, pushBranch, revertMerge, waitForGate, type GitHubOptions } from './github.js';
 import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
 import { runAgentSession, type SessionOutcome } from './session.js';
@@ -22,6 +25,8 @@ import {
   lanePaths,
   outsideLane,
   removeWorktree,
+  shortId,
+  singleLineTitle,
   type Worktree,
 } from './worktree.js';
 
@@ -30,6 +35,7 @@ export interface PipelineDeps {
   adapter: AgentAdapter;
   config: DispatcherConfig;
   log: Logger;
+  alert: Alerter;
   stopSignal: AbortSignal;
   now: () => Date;
   fetchFn?: typeof fetch;
@@ -102,11 +108,15 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     if (error instanceof CardStop) {
       log.warn('pipeline', `card ${card.id} ${error.stage}`, { check: error.failingCheck, detail: error.message });
       await finalize(card, deps, error.stage, error.failingCheck);
+      if (error.failingCheck !== 'dispatcher_stopped') {
+        await deps.alert.notify(`Card ${shortId(card.id)} ${error.stage} (${error.failingCheck}): ${singleLineTitle(card.title)}. ${error.message}`);
+      }
     } else {
       const detail = errorMessage(error);
       log.error('pipeline', `card ${card.id} failed`, { detail });
       await db.insertEvent(card.id, role?.id ?? null, 'error', { step: 'pipeline', message: detail });
       await finalize(card, deps, 'rejected', 'dispatcher_error');
+      await deps.alert.notify(`Card ${shortId(card.id)} rejected (dispatcher_error): ${singleLineTitle(card.title)}. ${detail}`);
     }
   } finally {
     if (worktree) {
@@ -256,6 +266,7 @@ async function deployAndSmoke(card: Card, role: Role, mergeSha: string, checks: 
   stopCheck(deps, 'while the deploy was running');
   if (!deploy.ok) {
     await deps.db.insertDeploy({ folder: card.folder, sha: mergeSha, netlify_deploy_id: deploy.deploy?.id ?? null, is_green: false, smoke_result: `fail: ${deploy.reason}` });
+    await rollBack(card, role, mergeSha, `deploy failed: ${deploy.reason}`, false, deps);
     throw new CardStop('rejected', 'deploy', deploy.reason);
   }
   const baseUrl = await siteUrl(netlify, siteId);
@@ -266,17 +277,50 @@ async function deployAndSmoke(card: Card, role: Role, mergeSha: string, checks: 
     deps.log.info('pipeline', `card ${card.id} is live`, { sha: mergeSha, url: baseUrl });
     return;
   }
-  const previous = await deps.db.lastGreen(card.folder);
   await deps.db.insertDeploy({ folder: card.folder, sha: mergeSha, netlify_deploy_id: deploy.deploy.id, is_green: false, smoke_result: smoke.summary });
-  if (previous?.netlify_deploy_id) {
-    await restoreDeploy(netlify, siteId, previous.netlify_deploy_id);
-    await deps.db.insertEvent(card.id, role.id, 'revert', { failed_sha: mergeSha, restored_sha: previous.sha, restored_deploy_id: previous.netlify_deploy_id, smoke: smoke.summary });
-    deps.log.warn('pipeline', `card ${card.id} smoke failed; previous deploy restored`, { restored: previous.netlify_deploy_id });
-  } else {
-    await deps.db.insertEvent(card.id, role.id, 'revert', { failed_sha: mergeSha, restored_sha: null, restored_deploy_id: null, smoke: smoke.summary });
-    deps.log.error('pipeline', `card ${card.id} smoke failed and no green deploy exists to restore`, { folder: card.folder });
-  }
+  await rollBack(card, role, mergeSha, `smoke failed: ${smoke.summary}`, true, deps);
   throw new CardStop('rejected', 'smoke', smoke.summary);
+}
+
+export function revertMessage(card: Card, reason: string): string {
+  return `Revert card ${shortId(card.id)}: ${singleLineTitle(card.title)}\n\nCard-Id: ${card.id}\nReason: ${reason}\n`;
+}
+
+// Takes a merged change that failed back out. After a failed smoke the broken build is already
+// live, so the newest green deploy is restored first; a failed deploy never published. Then main
+// gets a revert commit so the next merge does not ship the change again. Neither step throws: the
+// card is rejected either way, and the revert event and the alert say what happened.
+async function rollBack(card: Card, role: Role, mergeSha: string, reason: string, restore: boolean, deps: PipelineDeps): Promise<void> {
+  const payload: Record<string, unknown> = { failed_sha: mergeSha, reason };
+  if (restore) {
+    const previous = await deps.db.lastGreen(card.folder);
+    payload.restored_sha = previous?.sha ?? null;
+    payload.restored_deploy_id = previous?.netlify_deploy_id ?? null;
+    if (previous?.netlify_deploy_id) {
+      try {
+        await restoreDeploy(netlifyOptions(deps), siteIdFor(deps.config, card.folder), previous.netlify_deploy_id);
+      } catch (error) {
+        payload.restore_error = errorMessage(error);
+      }
+    } else {
+      payload.restore_error = `no green ${card.folder} deploy exists to restore`;
+    }
+  }
+  const revert = await revertMerge(githubOptions(deps), mergeSha, revertMessage(card, reason)).catch(
+    (error: unknown) => ({ ok: false, reason: errorMessage(error) }) as const,
+  );
+  if (revert.ok) payload.revert_sha = revert.sha;
+  else payload.revert_error = revert.reason;
+  await deps.db.insertEvent(card.id, role.id, 'revert', payload);
+
+  const problems = [payload.restore_error, payload.revert_error].filter((problem): problem is string => typeof problem === 'string');
+  if (problems.length === 0) {
+    deps.log.warn('pipeline', `card ${card.id} rolled back`, payload);
+    await deps.alert.notify(`Card ${shortId(card.id)} was reverted on main (${revert.ok ? revert.sha.slice(0, 7) : ''}): ${reason}`);
+  } else {
+    deps.log.error('pipeline', `card ${card.id} rollback incomplete`, payload);
+    await deps.alert.notify(`Card ${shortId(card.id)} failed after merge and the rollback is incomplete: ${problems.join('; ')}. Check main and the live site.`);
+  }
 }
 
 // actual_usd is written from the ledger at every terminal stage and at gated.

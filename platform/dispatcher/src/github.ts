@@ -137,3 +137,35 @@ export async function mergePullRequest(
   }
   return { ok: false, status: result.status, reason: apiMessage(result.json) || `http ${result.status}` };
 }
+
+export type RevertResult = { ok: true; sha: string } | { ok: false; reason: string };
+
+// Takes a squash merge back out of main with a new commit whose tree is the merge commit's
+// parent tree and whose parent is the merge commit. The ref update is fast-forward only, so it is
+// refused when main has moved past the merge; nothing is ever force-pushed.
+export async function revertMerge(opts: GitHubOptions, mergeSha: string, message: string): Promise<RevertResult> {
+  const merged = await request(opts, 'GET', `/repos/${opts.repo}/git/commits/${mergeSha}`);
+  if (merged.status !== 200 || !isRecord(merged.json)) {
+    return { ok: false, reason: `read merge commit ${mergeSha}: http ${merged.status} ${apiMessage(merged.json)}`.trim() };
+  }
+  const parents = Array.isArray(merged.json.parents) ? merged.json.parents.filter(isRecord) : [];
+  const parentSha = parents[0]?.sha;
+  if (parents.length !== 1 || typeof parentSha !== 'string') {
+    return { ok: false, reason: `merge commit ${mergeSha} has ${parents.length} parents; only a squash merge is reverted` };
+  }
+  const parent = await request(opts, 'GET', `/repos/${opts.repo}/git/commits/${parentSha}`);
+  const tree = isRecord(parent.json) && isRecord(parent.json.tree) ? parent.json.tree.sha : undefined;
+  if (parent.status !== 200 || typeof tree !== 'string') {
+    return { ok: false, reason: `read parent commit ${parentSha}: http ${parent.status} ${apiMessage(parent.json)}`.trim() };
+  }
+  const created = await request(opts, 'POST', `/repos/${opts.repo}/git/commits`, { message, tree, parents: [mergeSha] });
+  const sha = isRecord(created.json) ? created.json.sha : undefined;
+  if (created.status !== 201 || typeof sha !== 'string') {
+    return { ok: false, reason: `create revert commit: http ${created.status} ${apiMessage(created.json)}`.trim() };
+  }
+  const moved = await request(opts, 'PATCH', `/repos/${opts.repo}/git/refs/heads/main`, { sha, force: false });
+  if (moved.status !== 200) {
+    return { ok: false, reason: `main was not moved to the revert commit ${sha}: http ${moved.status} ${apiMessage(moved.json)}`.trim() };
+  }
+  return { ok: true, sha };
+}
