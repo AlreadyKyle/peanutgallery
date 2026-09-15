@@ -113,6 +113,7 @@ Deno.test("migrations on PGlite", {
         "20260914000000_week1_schema.sql",
         "20260915000000_live_cut.sql",
         "20260916000000_card_summary.sql",
+        "20260917000000_contribution_session.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -173,6 +174,17 @@ Deno.test("migrations on PGlite", {
         `select data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'cards' and column_name = 'summary'`,
       );
       assertEquals(summary, { data_type: "text", is_nullable: "YES" });
+      const sessionKey = await rows(
+        `select c.conname from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey) where c.conrelid = 'public.contributions'::regclass and c.contype = 'u' and a.attname = 'stripe_session_id'`,
+      );
+      assertEquals(sessionKey.length, 1);
+      const applySignatures = await rows(
+        `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'apply_contribution'`,
+      );
+      assertEquals(applySignatures, [{
+        args:
+          "p_stripe_event_id text, p_contributor_id text, p_display_name text, p_amount_usd numeric, p_net_usd numeric, p_studio_pct integer, p_goal_card_id uuid, p_stripe_session_id text",
+      }]);
       const withoutRls = await rows(
         `select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`,
       );
@@ -248,6 +260,35 @@ Deno.test("migrations on PGlite", {
       );
       assertEquals(count.n, 1);
     });
+
+    await t.step(
+      "one checkout session credits once across two event ids",
+      async () => {
+        const before = await pool();
+        const first = await row<{ r: Row }>(
+          `select public.apply_contribution('evt_s1', 'contrib_s', null, 1.00, 0.71, 20, null, 'cs_s') as r`,
+        );
+        assertEquals(first.r.inserted, true);
+        const second = await row<{ r: Row }>(
+          `select public.apply_contribution('evt_s2', 'contrib_s', null, 1.00, 0.71, 20, null, 'cs_s') as r`,
+        );
+        assertEquals(second.r.inserted, false);
+        assertEquals(second.r.contribution_id, first.r.contribution_id);
+        const credited = await rows(
+          `select stripe_event_id, stripe_session_id from public.contributions where stripe_session_id = 'cs_s'`,
+        );
+        assertEquals(credited, [{ stripe_event_id: "evt_s1", stripe_session_id: "cs_s" }]);
+        const after = await pool();
+        assertEquals(
+          (Number(after.balance_usd) - Number(before.balance_usd)).toFixed(4),
+          "0.4856",
+        );
+        await db.exec(
+          `delete from public.contributions where stripe_session_id = 'cs_s';
+           update public.pool set balance_usd = ${before.balance_usd}, reserve_usd = ${before.reserve_usd}, incident_reserve_usd = ${before.incident_reserve_usd} where id = 1;`,
+        );
+      },
+    );
 
     await t.step(
       "a goal card's bar rises by the net amount and an open decision of matching size is assigned",

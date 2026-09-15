@@ -1,4 +1,4 @@
-// Creates the Stripe webhook endpoint for checkout.session.completed.
+// Creates the Stripe webhook endpoint for the events in WEBHOOK_EVENTS.
 //   pnpm --filter @backseat/supabase exec tsx scripts/create-webhook-endpoint.ts --url <function url>
 // Prints the endpoint id and, once, the signing secret. Writes nothing to disk.
 // This creates a live Stripe resource; run it only with the board's yes.
@@ -6,6 +6,7 @@
 import { loadRepoEnv } from "../lib/client.js";
 import { requireEnv } from "../lib/env.js";
 import { STRIPE_API_VERSION } from "../functions/_shared/stripe_api_version.ts";
+import { WEBHOOK_EVENTS } from "../functions/_shared/webhook_events.ts";
 
 function parseArgs(argv: string[]): { url: string } {
   let url: string | undefined;
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
 
   const form = new URLSearchParams();
   form.set("url", url);
-  form.append("enabled_events[]", "checkout.session.completed");
+  for (const event of WEBHOOK_EVENTS) form.append("enabled_events[]", event);
   form.set("description", "Backseat contributions");
   form.set("api_version", STRIPE_API_VERSION);
 

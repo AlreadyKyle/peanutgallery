@@ -409,3 +409,52 @@ describe("card-summary migration", () => {
     expect(sql).toContain("alter publication supabase_realtime add table public.pool, public.cards, public.deploys;");
   });
 });
+
+const CONTRIBUTION_SESSION_FILE = "20260917000000_contribution_session.sql";
+const contributionSession = readFileSync(resolve(MIGRATIONS_DIR, CONTRIBUTION_SESSION_FILE), "utf8");
+
+const OLD_APPLY_TYPES = "text, text, text, numeric, numeric, integer, uuid";
+const NEW_APPLY_TYPES = "text, text, text, numeric, numeric, integer, uuid, text";
+
+describe("contribution-session migration", () => {
+  it("carries a 14-digit stamp that sorts after the card-summary file", () => {
+    expect(CONTRIBUTION_SESSION_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(CONTRIBUTION_SESSION_FILE > CARD_SUMMARY_FILE).toBe(true);
+  });
+
+  it("adds a unique stripe_session_id column", () => {
+    expect(contributionSession).toContain(
+      "alter table public.contributions add column if not exists stripe_session_id text unique;",
+    );
+  });
+
+  it("drops the seven-argument apply_contribution before creating the eight-argument one", () => {
+    const drop = contributionSession.indexOf(`drop function if exists public.apply_contribution(${OLD_APPLY_TYPES});`);
+    const create = contributionSession.indexOf("create or replace function public.apply_contribution(");
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(create).toBeGreaterThan(drop);
+  });
+
+  it("keys the insert on either unique column and keeps the live-cut arithmetic", () => {
+    const block = functionBlockIn(contributionSession, "apply_contribution");
+    expect(block).toContain("  p_goal_card_id uuid,\n  p_stripe_session_id text default null\n) returns jsonb");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    expect(block).toContain("stripe_event_id, stripe_session_id, credited_at");
+    expect(block).toContain("on conflict do nothing");
+    expect(block).not.toContain("on conflict (stripe_event_id)");
+    expect(block).toContain("stripe_session_id = p_stripe_session_id");
+    expect(block).toContain("v_incident := least(round(v_agents * v_incident_pct / 100.0, 4), v_room);");
+    expect(block).toContain("set balance_usd = balance_usd + (v_agents - v_incident)");
+    expect(block).toContain("funded_usd + (v_agents - v_incident)");
+  });
+
+  it("grants the new apply_contribution to service_role only", () => {
+    expect(contributionSession).toContain(
+      `revoke all on function public.apply_contribution(${NEW_APPLY_TYPES}) from public, anon, authenticated;`,
+    );
+    expect(contributionSession).toContain(`grant execute on function public.apply_contribution(${NEW_APPLY_TYPES}) to service_role;`);
+    expect(contributionSession.match(/^grant /gm)).toHaveLength(1);
+    expect(contributionSession.match(/^revoke /gm)).toHaveLength(1);
+  });
+});

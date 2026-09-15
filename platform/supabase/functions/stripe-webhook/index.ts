@@ -1,13 +1,13 @@
-// Stripe webhook: checkout.session.completed → apply_contribution RPC.
+// Stripe webhook: checkout.session.completed or charge.updated → apply_contribution RPC.
 // Deployed with verify_jwt = false (config.toml); the Stripe signature is the
 // authentication. The request handling lives in ../_shared/handler.ts with
-// these three functions injected; a dry run (service-role bearer plus
+// these four functions injected; a dry run (service-role bearer plus
 // x-dry-run: 1) verifies, parses and looks the fee up but never calls the RPC.
 
 import Stripe from "npm:stripe@^19";
 import type { Amounts } from "../_shared/split.ts";
 import { feeFromSession, type Parsed } from "../_shared/session.ts";
-import { createHandler } from "../_shared/handler.ts";
+import { type CheckoutSession, createHandler } from "../_shared/handler.ts";
 import { STRIPE_API_VERSION } from "../_shared/stripe_api_version.ts";
 
 const STRIPE_SECRET_KEY = requireEnv("STRIPE_SECRET_KEY");
@@ -48,6 +48,16 @@ async function lookupFee(sessionId: string): Promise<number | null> {
   return feeFromSession(session);
 }
 
+async function findSession(
+  paymentIntentId: string,
+): Promise<CheckoutSession | null> {
+  const sessions = await stripe.checkout.sessions.list({
+    payment_intent: paymentIntentId,
+    limit: 1,
+  });
+  return (sessions.data[0] as CheckoutSession | undefined) ?? null;
+}
+
 async function applyContribution(
   parsed: Parsed,
   amounts: Amounts,
@@ -67,6 +77,7 @@ async function applyContribution(
       p_net_usd: amounts.net_usd,
       p_studio_pct: parsed.studio_pct,
       p_goal_card_id: parsed.goal_card_id,
+      p_stripe_session_id: parsed.session_id,
     }),
   });
   const text = await res.text();
@@ -79,6 +90,7 @@ async function applyContribution(
 Deno.serve(createHandler({
   constructEvent,
   lookupFee,
+  findSession,
   applyContribution,
   serviceKey: SUPABASE_SERVICE_ROLE_KEY,
 }));
