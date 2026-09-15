@@ -16,7 +16,6 @@ export const WEEK1_RUNS: readonly Week1Run[] = [
 ];
 
 export const WEEK1_ESTIMATE_USD = 2;
-export const WEEK1_POOL_BALANCE_USD = 50;
 /** roles.name of the executor and proposer of the week-1 card (PLAN.md Appendix A). */
 export const WEEK1_EXECUTOR_ROLE = "Builder A";
 export const SPAWN_TABLE_PATH = "seed-1/config/spawn-table.json";

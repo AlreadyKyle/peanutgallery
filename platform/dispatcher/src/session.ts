@@ -7,7 +7,8 @@ import type { Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
 import { UnknownModelError, priceUsage, round4, type PriceTable } from './pricing.js';
 import path from 'node:path';
-import { lanePaths } from './worktree.js';
+import { billingFor } from './throttle.js';
+import { lanePaths, protectedPaths } from './worktree.js';
 
 export type SessionOutcome =
   | 'completed'
@@ -55,6 +56,7 @@ export function roleTools(role: Role): string[] {
 // files are read by Claude Code from the worktree.
 export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceilingUsd: number): string {
   const designSpec = card.design_spec_url?.trim();
+  const locked = protectedPaths(allowedPaths);
   const lines = [
     `Card ${card.id.replace(/-/g, '').slice(0, 8)}: ${card.title}`,
     `Bucket: ${card.bucket}. Lane: ${card.lane}. Folder: ${card.folder}.`,
@@ -68,6 +70,7 @@ export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceili
     '',
     ...(designSpec ? [`Design spec: ${designSpec}`, ''] : []),
     `Allowed paths: ${allowedPaths.join(', ')}.`,
+    ...(locked.length > 0 ? [`Never edit, even inside the allowed paths: ${locked.join(', ')}. The dispatcher rejects a change to any of them.`] : []),
     'Definition of done:',
     '- every check: line in the acceptance test is true in this working tree',
     '- the invariants pass: the commands your role prompt names all exit 0',
@@ -186,7 +189,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
           }
           throw error;
         }
-        const recorded = await deps.db.recordUsage({ card_id: card.id, role_id: role.id, ...priced });
+        const recorded = await deps.db.recordUsage({ billed_to: billingFor(deps.adapter.mode), card_id: card.id, role_id: role.id, ...priced });
         deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: priced.usd, actual: recorded.actual_usd });
         if (recorded.actual_usd >= ceiling) abort('ceiling', `actual ${recorded.actual_usd} reached the ceiling ${ceiling}`);
         return;

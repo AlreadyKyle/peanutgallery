@@ -29,6 +29,9 @@ export interface DispatcherConfig {
   // The studio organisation's key for unattended sessions; null in attended mode, where the
   // value is ignored. Never the founder's ANTHROPIC_API_KEY, which the dispatcher does not read.
   studioAnthropicApiKey: string | null;
+  // Optional board alerts: pinged every tick, and posted to when a card needs a human.
+  healthcheckUrl: string | null;
+  ntfyTopicUrl: string | null;
 }
 
 export class ConfigError extends Error {
@@ -62,6 +65,20 @@ export function numberEnv(env: Env, name: string, fallback: number): number {
 export function positiveIntegerEnv(env: Env, name: string, fallback: number): number {
   const value = numberEnv(env, name, fallback);
   if (!Number.isInteger(value) || value < 1) throw new ConfigError(`${name} must be a positive integer`);
+  return value;
+}
+
+// An optional https URL; unset or blank is null.
+export function optionalHttpsUrlEnv(env: Env, name: string): string | null {
+  const value = env[name]?.trim();
+  if (!value) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ConfigError(`${name} must be an https URL`);
+  }
+  if (url.protocol !== 'https:') throw new ConfigError(`${name} must be an https URL`);
   return value;
 }
 
@@ -114,5 +131,7 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
     boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
     studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),
+    healthcheckUrl: optionalHttpsUrlEnv(env, 'HEALTHCHECK_URL'),
+    ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
   };
 }

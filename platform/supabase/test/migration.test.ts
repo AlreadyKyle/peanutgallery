@@ -458,3 +458,60 @@ describe("contribution-session migration", () => {
     expect(contributionSession.match(/^revoke /gm)).toHaveLength(1);
   });
 });
+
+const FOUNDER_BILLING_FILE = "20260918000000_founder_billing.sql";
+const founderBilling = readFileSync(resolve(MIGRATIONS_DIR, FOUNDER_BILLING_FILE), "utf8");
+
+const OLD_USAGE_TYPES = "uuid, uuid, text, integer, integer, integer, numeric";
+const NEW_USAGE_TYPES = "uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing";
+
+describe("founder-billing migration", () => {
+  it("carries a 14-digit stamp that sorts after the contribution-session file", () => {
+    expect(FOUNDER_BILLING_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(FOUNDER_BILLING_FILE > CONTRIBUTION_SESSION_FILE).toBe(true);
+  });
+
+  it("adds the billing enum and a studio-default ledger column, both safe to run twice", () => {
+    expect(founderBilling).toContain("create type public.ledger_billing as enum ('studio', 'founder');");
+    expect(founderBilling).toContain("when duplicate_object then null;");
+    expect(founderBilling).toContain(
+      "alter table public.ledger add column if not exists billed_to public.ledger_billing not null default 'studio';",
+    );
+  });
+
+  it("drops the seven-argument record_usage before creating the eight-argument one", () => {
+    const drop = founderBilling.indexOf(`drop function if exists public.record_usage(${OLD_USAGE_TYPES});`);
+    const create = founderBilling.indexOf("create or replace function public.record_usage(");
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(create).toBeGreaterThan(drop);
+  });
+
+  it("leaves the pool alone for founder rows and keeps the studio arithmetic", () => {
+    const block = functionBlockIn(founderBilling, "record_usage");
+    expect(block).toContain("  p_usd numeric,\n  p_billed_to public.ledger_billing default 'studio'\n) returns jsonb");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    expect(block).toContain("raise exception 'p_billed_to is required';");
+    const founder = block.indexOf("if p_billed_to = 'founder'::public.ledger_billing then");
+    const studio = block.indexOf("else", founder);
+    expect(founder).toBeGreaterThan(0);
+    expect(block.slice(founder, studio)).not.toContain("update public.pool");
+    expect(block.slice(studio)).toContain("balance_usd = balance_usd - (v_usd - v_draw)");
+    expect(block).toContain("update public.cards set actual_usd = actual_usd + v_usd where id = p_card_id");
+  });
+
+  it("shows anon studio rows only, in the table and in the totals", () => {
+    expect(founderBilling).toContain(
+      "create policy ledger_public_read on public.ledger for select to anon, authenticated using (billed_to = 'studio');",
+    );
+    expect(founderBilling).toContain("drop policy if exists ledger_public_read on public.ledger;");
+    expect(founderBilling).toMatch(/create or replace view public\.public_ledger_totals[\s\S]*from public\.ledger\n  where billed_to = 'studio';/);
+  });
+
+  it("grants the new record_usage to service_role only", () => {
+    expect(founderBilling).toContain(`revoke all on function public.record_usage(${NEW_USAGE_TYPES}) from public, anon, authenticated;`);
+    expect(founderBilling).toContain(`grant execute on function public.record_usage(${NEW_USAGE_TYPES}) to service_role;`);
+    expect(founderBilling.match(/^grant /gm)).toHaveLength(1);
+    expect(founderBilling.match(/^revoke /gm)).toHaveLength(1);
+  });
+});

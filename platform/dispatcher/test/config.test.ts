@@ -34,6 +34,8 @@ describe('loadConfig', () => {
       claudeBin: 'claude',
       boardSessionTtlMin: 3,
       studioAnthropicApiKey: null,
+      healthcheckUrl: null,
+      ntfyTopicUrl: null,
     });
     expect(Object.keys(config.priceTable)).toEqual(['builder-class']);
   });
@@ -54,6 +56,8 @@ describe('loadConfig', () => {
         DISPATCHER_SCHEDULER: 'off',
         CLAUDE_BIN: '/opt/claude',
         BOARD_SESSION_TTL_MIN: '5',
+        HEALTHCHECK_URL: 'https://hc-ping.com/check-id',
+        NTFY_TOPIC_URL: 'https://ntfy.sh/topic-name',
       },
       REPO,
     );
@@ -70,6 +74,8 @@ describe('loadConfig', () => {
       claudeBin: '/opt/claude',
       boardSessionTtlMin: 5,
       studioAnthropicApiKey: 'studio-key',
+      healthcheckUrl: 'https://hc-ping.com/check-id',
+      ntfyTopicUrl: 'https://ntfy.sh/topic-name',
     });
   });
 
@@ -86,6 +92,8 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, SESSION_MAX_TURNS: '0' }, REPO)).toThrow('SESSION_MAX_TURNS must be a positive integer');
     expect(() => loadConfig({ ...FULL, DISPATCHER_TICK_MS: '1.5' }, REPO)).toThrow('DISPATCHER_TICK_MS must be a positive integer');
     expect(() => loadConfig({ ...FULL, PRICE_TABLE_JSON: '{}' }, REPO)).toThrow('PRICE_TABLE_JSON lists no models');
+    expect(() => loadConfig({ ...FULL, HEALTHCHECK_URL: 'http://hc-ping.com/check-id' }, REPO)).toThrow('HEALTHCHECK_URL must be an https URL');
+    expect(() => loadConfig({ ...FULL, NTFY_TOPIC_URL: 'ntfy topic' }, REPO)).toThrow('NTFY_TOPIC_URL must be an https URL');
   });
 });
 

@@ -28,6 +28,8 @@ const base: DispatcherConfig = {
   claudeBin: 'claude',
   boardSessionTtlMin: 3,
   studioAnthropicApiKey: null,
+  healthcheckUrl: null,
+  ntfyTopicUrl: null,
 };
 
 describe('createAdapter', () => {

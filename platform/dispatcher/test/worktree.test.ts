@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,8 +13,10 @@ import {
   commitTrailers,
   git,
   gitAuthArgs,
+  KERNEL_PATHS,
   lanePaths,
   outsideLane,
+  protectedPaths,
   shortId,
   singleLineTitle,
   worktreePath,
@@ -41,15 +44,29 @@ describe('pure helpers', () => {
   it('scopes lanes to their folders', () => {
     expect(lanePaths('seed-1', 'config')).toEqual(['seed-1/config', 'seed-1/content']);
     expect(lanePaths('seed-1', 'code')).toEqual(['seed-1']);
-    expect(lanePaths('platform', 'code')).toEqual(['platform']);
+    expect(lanePaths('platform', 'code')).toEqual(['platform/site']);
     expect(lanePaths('platform', 'config')).toEqual([]);
+  });
+
+  it('keeps the kernel list equal to the gate file', () => {
+    const file = readFileSync(path.resolve(import.meta.dirname, '..', '..', 'gate', 'kernel-paths.txt'), 'utf8');
+    const listed = file.split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
+    expect([...KERNEL_PATHS]).toEqual(listed);
+  });
+
+  it('refuses kernel files in every lane and names the ones inside a lane', () => {
+    expect(outsideLane(['seed-1/sim/invariants.ts', 'seed-1/sim/sim.ts', 'seed-1/bots/greedy.ts'], lanePaths('seed-1', 'code'))).toEqual(['seed-1/sim/invariants.ts', 'seed-1/bots/greedy.ts']);
+    expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml']);
+    expect(outsideLane(['seed-1/sim/invariants.tsx'], lanePaths('seed-1', 'code'))).toEqual([]);
+    expect(protectedPaths(lanePaths('seed-1', 'config'))).toEqual([]);
+    expect(protectedPaths(lanePaths('seed-1', 'code'))).toContain('seed-1/sim/invariants.ts');
   });
 
   it('reports files outside the allowed paths', () => {
     const allowed = ['seed-1/config', 'seed-1/content'];
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/content/strings.json'], allowed)).toEqual([]);
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/sim/index.ts', 'seed-1/configuration.md'], allowed)).toEqual(['seed-1/sim/index.ts', 'seed-1/configuration.md']);
-    expect(outsideLane(['platform/site/index.html'], ['platform'])).toEqual([]);
+    expect(outsideLane(['platform/site/index.html'], ['platform/site'])).toEqual([]);
   });
 
   it('keeps titles on one line and within the limit', () => {

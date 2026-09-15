@@ -36,6 +36,8 @@ const config: DispatcherConfig = {
   claudeBin: 'claude',
   boardSessionTtlMin: 3,
   studioAnthropicApiKey: 'studio-key',
+  healthcheckUrl: null,
+  ntfyTopicUrl: null,
 };
 
 function probeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
@@ -121,7 +123,7 @@ describe('startupProbe metering', () => {
     const db = unattendedDb();
     await startupProbe(deps(db, probeResult()).deps);
     const priced = priceUsage(PRICE_TABLE, 'builder-class', USAGE);
-    expect(db.ledger).toEqual([{ id: 'ledger-1', card_id: null, role_id: null, ...priced }]);
+    expect(db.ledger).toEqual([{ id: 'ledger-1', billed_to: 'studio', card_id: null, role_id: null, ...priced }]);
     expect(db.ledger[0]!.usd).toBe(0.006);
   });
 

@@ -42,6 +42,11 @@ jobs:
             echo "base=$PUSH_BASE" >> "$GITHUB_OUTPUT"
             echo "head=$PUSH_HEAD" >> "$GITHUB_OUTPUT"
           fi
+      - name: Use the base commit's gate on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+        run: git checkout "$BASE" -- platform/gate
       - name: Detect folders and lane
         id: paths
         env:
@@ -86,6 +91,11 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Kernel guard on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+        run: git checkout "$BASE" -- platform/gate && bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder seed-1 --lane config --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
 
@@ -112,6 +122,11 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Kernel guard on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+        run: git checkout "$BASE" -- platform/gate && bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder seed-1 --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
 
@@ -138,6 +153,11 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Kernel guard on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+        run: git checkout "$BASE" -- platform/gate && bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder platform --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
       - name: Install Chromium for Playwright

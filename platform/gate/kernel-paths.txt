@@ -1,0 +1,30 @@
+# Paths no agent may change, in any lane (docs/specs/launch-hardening.md, PLAN.md §4 Kernel).
+# One repository-relative path per line; a folder covers everything under it. The dispatcher
+# refuses a card that changes one, and the gate fails a card branch that does.
+.github
+CLAUDE.md
+docs
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+tsconfig.base.json
+platform/agents
+platform/dispatcher
+platform/gate
+platform/ops
+platform/supabase
+platform/site/build-sha.ts
+platform/site/netlify.toml
+platform/site/package.json
+platform/site/playwright.config.ts
+platform/site/vite.config.ts
+seed-1/CLAUDE.md
+seed-1/bots
+seed-1/netlify.toml
+seed-1/package.json
+seed-1/scripts
+seed-1/sim/invariants.ts
+seed-1/tests/bot.test.ts
+seed-1/tests/invariants.test.ts
+seed-1/tsconfig.json
+seed-1/vite.config.ts

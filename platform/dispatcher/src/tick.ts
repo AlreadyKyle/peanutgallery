@@ -1,11 +1,12 @@
-// The Appendix A loop, one tick: write the heartbeat, read studio_state, check the board
-// session, read the pool, apply the throttle, select the card, claim it, and start its pipeline
-// in the background.
+// The Appendix A loop, one tick: write the heartbeat and ping the healthcheck, read studio_state,
+// check the board session, read the pool, apply the throttle, select the card, claim it, and start
+// its pipeline in the background.
 import type { AgentMode } from './adapters/types.js';
+import type { Alerter } from './alert.js';
 import type { Card, Db } from './db.js';
 import { errorMessage, type Logger } from './log.js';
 import { selectCard } from './select.js';
-import { available, canStart, concurrency, type SleepReason } from './throttle.js';
+import { available, canStart, concurrency, newYorkDate, spentToday, type SleepReason } from './throttle.js';
 
 export interface TickDeps {
   db: Db;
@@ -16,6 +17,7 @@ export interface TickDeps {
   now: () => Date;
   runCard: (card: Card) => Promise<void>;
   log: Logger;
+  alert: Alerter;
 }
 
 export type TickOutcome =
@@ -25,6 +27,7 @@ export type TickOutcome =
 
 export async function tick(deps: TickDeps): Promise<TickOutcome> {
   await heartbeat(deps);
+  await deps.alert.ping();
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
   if (studio.agent_mode !== deps.mode) {
@@ -41,15 +44,23 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
     mode: deps.mode,
     boardSessionActive,
     balanceUsd: pool.balance_usd,
-    dailySpentUsd: pool.daily_spent_usd,
+    dailySpentUsd: spentToday(pool, deps.now()),
     dailyCapUsd: studio.daily_cap_usd,
     availableUsd,
     smallestEstimateUsd: smallestEstimate(funded),
     running: deps.running.size,
     concurrency: concurrency(pool.balance_usd, studio.agent_hourly_rate_usd, deps.mode, deps.maxConcurrency),
   });
-  if (!decision.ok) return { action: 'sleep', reason: decision.reason };
-  const card = selectCard(funded, availableUsd, pool.incident_reserve_usd);
+  if (!decision.ok) {
+    if (decision.reason === 'daily_cap') {
+      const day = newYorkDate(deps.now());
+      await deps.alert.notifyOnce(`daily_cap:${day}`, `The daily cap of $${studio.daily_cap_usd.toFixed(2)} stopped the agents for ${day}.`);
+    }
+    return { action: 'sleep', reason: decision.reason };
+  }
+  // An attended session is billed to the founder, so no estimate is too large for the pool.
+  const budgetUsd = deps.mode === 'attended' ? Number.POSITIVE_INFINITY : availableUsd;
+  const card = selectCard(funded, budgetUsd, pool.incident_reserve_usd);
   if (!card) return { action: 'sleep', reason: 'no_eligible_card' };
   const claimed = await deps.db.claimCard(card.id);
   if (!claimed) return { action: 'claim_lost', cardId: card.id };
