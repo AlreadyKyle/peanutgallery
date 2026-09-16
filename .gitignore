@@ -13,3 +13,6 @@ platform/supabase/.temp/
 supabase/.temp/
 test-results/
 playwright-report/
+
+# Worktrees the desktop app creates for background agents.
+.claude/worktrees/
