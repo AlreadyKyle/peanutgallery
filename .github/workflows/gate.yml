@@ -42,11 +42,29 @@ jobs:
             echo "base=$PUSH_BASE" >> "$GITHUB_OUTPUT"
             echo "head=$PUSH_HEAD" >> "$GITHUB_OUTPUT"
           fi
+      # The card checks run here, before any job installs dependencies: an install runs lifecycle
+      # scripts and reads .npmrc and .pnpmfile.cjs, so a card could run code before a later guard.
+      # A failure here skips every other job, and the gate job fails on it.
       - name: Use the base commit's gate on a card branch
         if: startsWith(github.head_ref, 'card/')
         env:
           BASE: ${{ steps.refs.outputs.base }}
         run: git checkout "$BASE" -- platform/gate
+      - name: List the changed files on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+          HEAD: ${{ steps.refs.outputs.head }}
+        run: bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+      - name: Kernel guard on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
+      - name: Refuse symlinks and submodules on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+          HEAD: ${{ steps.refs.outputs.head }}
+        run: bash platform/gate/changed-paths.sh --check-modes "$BASE" "$HEAD"
       - name: Detect folders and lane
         id: paths
         env:
@@ -98,9 +116,6 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Kernel guard on a card branch
-        if: startsWith(github.head_ref, 'card/')
-        run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder seed-1 --lane config --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
 
@@ -134,9 +149,6 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Kernel guard on a card branch
-        if: startsWith(github.head_ref, 'card/')
-        run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder seed-1 --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
 
@@ -170,9 +182,6 @@ jobs:
         run: |
           git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
           bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Kernel guard on a card branch
-        if: startsWith(github.head_ref, 'card/')
-        run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder platform --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
       # The rest of pnpm verify: the ship gate runs the dispatcher, supabase and site tests only.
@@ -199,13 +208,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require every needed job to pass or be skipped
+      # A skipped job passes only when detect ran and did not select it: a failed detect skips every
+      # other job, so detect's own result and each selected job's result are checked by name.
+      - name: Require detect and every job it selected to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
+          DETECT: ${{ needs.detect.result }}
+          SEED: ${{ needs.detect.outputs.seed }}
+          PLATFORM: ${{ needs.detect.outputs.platform }}
+          LANE: ${{ needs.detect.outputs.lane }}
+          SEED_CONFIG: ${{ needs.seed-config.result }}
+          SEED_CODE: ${{ needs.seed-code.result }}
+          PLATFORM_JOB: ${{ needs.platform.result }}
         run: |
           echo "$RESULTS"
           if echo "$RESULTS" | grep -Eq '"result": *"(failure|cancelled)"'; then
             echo "a needed job failed or was cancelled"
             exit 1
           fi
+          [ "$DETECT" = success ] || { echo "detect did not pass: $DETECT"; exit 1; }
+          want() {
+            [ "$2" = success ] || { echo "detect selected $1 and it did not pass: $2"; exit 1; }
+          }
+          if [ "$SEED" = true ] && [ "$LANE" = config ]; then want seed-config "$SEED_CONFIG"; fi
+          if [ "$SEED" = true ] && [ "$LANE" = code ]; then want seed-code "$SEED_CODE"; fi
+          if [ "$PLATFORM" = true ]; then want platform "$PLATFORM_JOB"; fi
           echo "gate passed"

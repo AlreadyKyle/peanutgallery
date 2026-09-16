@@ -81,6 +81,24 @@ describe('pure helpers', () => {
     expect(isKernelPath('seed-1/config/spawn-table.json')).toBe(false);
   });
 
+  it('matches kernel names and paths without regard to case, as a case-insensitive checkout reads them', () => {
+    expect(isKernelPath('seed-1/content/claude.md')).toBe(true);
+    expect(isKernelPath('.Claude/settings.json')).toBe(true);
+    expect(isKernelPath('seed-1/Vite.Config.ts')).toBe(true);
+    expect(isKernelPath('.GitHub/workflows/x.yml')).toBe(true);
+    expect(isKernelPath('Platform/Gate/ship-gate.sh')).toBe(true);
+    expect(isKernelPath('SEED-1/SIM/INVARIANTS.TS')).toBe(true);
+    expect(outsideLane(['seed-1/content/claude.md', 'seed-1/Content/strings.json'], lanePaths('seed-1', 'config'))).toEqual([
+      'seed-1/content/claude.md',
+      'seed-1/Content/strings.json',
+    ]);
+  });
+
+  it('lets * in a kernel name match any character, a newline included, as the shell glob does', () => {
+    expect(isKernelPath('seed-1/vite.config.\n.ts')).toBe(true);
+    expect(isKernelPath('seed-1/vitest.config.a\nb')).toBe(true);
+  });
+
   it('refuses kernel files in every lane and names the ones inside a lane', () => {
     expect(outsideLane(['seed-1/sim/invariants.ts', 'seed-1/sim/sim.ts', 'seed-1/bots/greedy.ts'], lanePaths('seed-1', 'code'))).toEqual(['seed-1/sim/invariants.ts', 'seed-1/bots/greedy.ts']);
     expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml']);
