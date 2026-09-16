@@ -1,10 +1,10 @@
 # Dispatcher on the VPS: runbook
 
-The dispatcher runs unattended on a Hetzner VPS in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
+The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
 ## What runs where
 
-- **Host.** Ubuntu 24.04 on x86 (Hetzner CX22 or CPX21), with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH.
+- **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto: free, in Canada, 4 cores and 24 GB of memory. Everything below is the same on any Ubuntu 24.04 host.
 - **Repository.** An https clone at `/srv/peanutgallery`, owned by uid 10001. It is bind-mounted at the same path in the container, so card worktrees (`.worktrees`) and the pnpm store (`.pnpm-store`) live in the clone and survive restarts.
 - **Image.** `peanutgallery/dispatcher:current` (also tagged with the commit it was built or deployed at). It holds Node 22, git, tini, pnpm 11.0.9 and the claude CLI 2.1.139, and nothing from the repository. Its entrypoint checks the CLI version and the https origin, runs `pnpm install` with no secret in its environment, and starts `platform/dispatcher/src/main.ts`.
 - **Secrets.** `/etc/peanutgallery/dispatcher.env`, root 0600, read only by `docker run --env-file`. Format: `KEY=value`, no quotes, no `export`, JSON on one line.
@@ -31,8 +31,8 @@ The board supplies these; nothing in the repository holds them. Export them in t
 
 ## Provision
 
-1. **Create the instance.** Hetzner Cloud: Ubuntu 24.04, x86, CX22 or CPX21, with the board's SSH key and no root password. Export its address as `VPS_IP`.
-2. **Hetzner Cloud firewall.** Inbound: TCP 22 only. Outbound: everything. Attach it to the instance. The dispatcher publishes no port, and Docker's `-p` would bypass ufw, so this firewall matches ufw rather than trusting it.
+1. **Create the instance.** Oracle Cloud, region `ca-toronto-1` (or `ca-montreal-1`): Always Free, shape `VM.Standard.A1.Flex` with 4 OCPUs and 24 GB, image Ubuntu 24.04, the board's SSH key, no root password. Export its address as `VPS_IP`. The default user is `ubuntu`, so run the steps below with `ssh ubuntu@$VPS_IP sudo ...`. Any other Ubuntu 24.04 host works unchanged.
+2. **Provider firewall.** Inbound: TCP 22 only. Outbound: everything. On Oracle that is the subnet's security list (its default already allows SSH only); leave the instance's pre-installed iptables rules alone. The dispatcher publishes no port, and Docker's `-p` would bypass ufw, so this firewall matches ufw rather than trusting it.
 3. **The GitHub token.** GitHub, Settings, Developer settings, Fine-grained tokens: resource owner AlreadyKyle, only the `peanutgallery` repository. Permissions: Contents read and write, Pull requests read and write, Checks read, Metadata read. No Workflows. Export it as `VPS_GITHUB_TOKEN`.
 4. **Alerts.** Create a healthchecks.io check for the VPS with a 1-minute period and a 5-minute grace, email to the board; export its ping URL as `HEALTHCHECK_URL`. Choose an ntfy topic, subscribe to it on the board's phones, and export its URL as `NTFY_TOPIC_URL`.
 5. **Write the env file on the Mac,** at the repository root:

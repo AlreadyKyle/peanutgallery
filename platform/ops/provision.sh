@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# provision.sh: prepares a Hetzner Ubuntu 24.04 x86 instance to run the dispatcher (docs/specs/vps.md).
+# provision.sh: prepares an Ubuntu 24.04 instance (arm64 or x86; the board's is an Oracle Cloud
+# Always Free Ampere host in Toronto) to run the dispatcher (docs/specs/vps.md).
 # Run as root on the VPS. Idempotent: every step checks before it acts, and the last line counts the
 # changes, so a second run reports 0. It enables the dispatcher unit and never starts it: starting
 # it is the cutover (platform/ops/README.md).
@@ -180,7 +181,7 @@ install_docker() {
   fi
 }
 
-# No container publishes a port. Docker's -p would bypass ufw, so the Hetzner Cloud firewall allows
+# No container publishes a port. Docker's -p would bypass ufw, so the provider's own firewall allows
 # SSH only as well (README.md).
 # Command output is captured before it is searched: under pipefail, grep -q closing a pipe early can
 # fail the pipeline even on a match.

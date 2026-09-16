@@ -9,7 +9,7 @@ The dispatcher runs on the founder's Mac in attended mode. A public studio needs
 ## Scope
 
 In:
-- A Hetzner VPS with Docker and systemd.
+- An always-free Oracle Cloud instance with Docker and systemd.
 - The dispatcher image with the `claude` CLI pinned, over a bind-mounted clone of the repository.
 - Startup exit codes that stop systemd from restarting a failure that cannot recover.
 - Child processes and git hooks that cannot read the dispatcher's secrets.
@@ -23,7 +23,7 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 
 ## Behaviour
 
-**Host.** Ubuntu 24.04 on x86 (Hetzner CX22 or CPX21). Its systemd 255 supports `RestartSteps`.
+**Host.** Ubuntu 24.04 with systemd 255, which supports `RestartSteps`. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto (`ca-toronto-1`): 4 arm64 cores and 24 GB of memory at no cost, in Canada. The image, the units and the scripts are the same on arm64 and x86, so any Ubuntu 24.04 host with Docker works.
 
 **Repository.** The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart. The image holds only the toolchain.
 
@@ -66,7 +66,7 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 1. apt installs git, ufw, unattended-upgrades, curl and jq.
 2. A 2 GB swapfile when there is no swap.
 3. Docker from Docker's apt repository when absent, enabled.
-4. ufw denies incoming and limits OpenSSH. No container port is published; Docker's `-p` bypasses ufw, so the Hetzner Cloud firewall matches it.
+4. ufw denies incoming and limits OpenSSH. No container port is published; Docker's `-p` bypasses ufw, so the provider's own firewall (an Oracle security list) matches it, and the instance's pre-installed iptables rules are left as they are.
 5. An sshd drop-in: no password authentication, root by key only.
 6. unattended-upgrades with no automatic reboot, and needrestart listing only.
 7. The https clone at `/srv/peanutgallery` when missing, with `.pnpm-store` and `.worktrees` in `.git/info/exclude`.
@@ -134,9 +134,10 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 ## Decisions
 
-- 2026-09-14: a small Hetzner VPS rather than the Mac (board). The agents stop when a Mac sleeps.
+- 2026-09-14: a small VPS rather than the Mac (board). The agents stop when a Mac sleeps.
 - 2026-09-14: healthchecks.io for liveness, ntfy for events (`launch-hardening.md`).
-- 2026-09-15: Ubuntu 24.04 on x86, Hetzner CX22 or CPX21 (board). systemd 255 has `RestartSteps`.
+- 2026-09-15: Ubuntu 24.04 with systemd 255, which has `RestartSteps` (board).
+- 2026-09-16: the host is an Oracle Cloud Always Free Ampere instance in Toronto rather than a paid Hetzner box (board). The studio has no budget and the pool holds customer money only, so a standing server cost cannot be funded yet; the free tier is in Canada and large enough. The cost of a paid host becomes a standing card if the free tier stops being enough.
 - 2026-09-15: a bind-mounted host clone, not a `COPY` of the repository (board). Worktree metadata survives restarts and an update is a fast-forward plus a restart.
 - 2026-09-15: a fine-grained GitHub token for this repository replaces the deploy key (board). The dispatcher's https push already needs a token, and no Workflows permission means no agent branch can change the gate workflow through it.
 - 2026-09-15: `node:22-bookworm-slim`, the claude CLI and pnpm through `npm install -g` at pinned versions, and no `NODE_ENV=production` (board). The CLI's ripgrep needs glibc, corepack's root cache is invisible to uid 10001, and tsx is a devDependency.
@@ -156,4 +157,4 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 ## Needs the board
 
-A Hetzner Ubuntu 24.04 instance and its IP, the healthchecks.io check URL, the ntfy topic, a fine-grained GitHub token for this repository, and prepaid credit on the studio Console organization.
+An Oracle Cloud Always Free Ubuntu 24.04 instance (Ampere, `ca-toronto-1`) and its IP, the healthchecks.io check URL, the ntfy topic, a fine-grained GitHub token for this repository, and prepaid credit on the studio Console organization.
