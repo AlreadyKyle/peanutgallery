@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { StartupError } from '../src/exit-code.js';
 import { gitConfigViolations, parseGitConfig, refusedKeys } from '../src/gitconfig.js';
+import { pushBranch } from '../src/github.js';
 import { checkRepositoryGit } from '../src/startup.js';
 import { AGENT_EMAIL, createWorktree, git, removeWorktree } from '../src/worktree.js';
 
@@ -58,6 +59,10 @@ describe('refusedKeys', () => {
         'remote.origin.fetch',
         'branch.main.remote',
         'branch.card/4c2f5a1e-code.merge',
+        'branch.main.gh-merge-base',
+        'branch.main.vscode-merge-base',
+        'branch.feature.x.anything',
+        'branch.main.pushremote',
         'extensions.objectformat',
         'lfs.repositoryformatversion',
       ]),
@@ -91,6 +96,8 @@ describe('refusedKeys', () => {
       'remote.origin.receivepack',
       'remote.origin.proxy',
       'remote.evil.url',
+      'remote.pushdefault',
+      'branch.autosetupmerge',
       'user.name',
     ];
     expect(refusedKeys(refused)).toEqual(refused);
@@ -143,6 +150,44 @@ describe('the repository git configuration', () => {
     await writeFile(path.join(repo, '.git', 'config'), clean, 'utf8');
     await rm(path.join(repo, '.git', 'config.worktree'), { force: true });
   }
+
+  it('allows the per-branch keys gh, GitHub Desktop and IDEs write, so an attended checkout starts', async () => {
+    try {
+      await appendFile(
+        path.join(repo, '.git', 'config'),
+        '[branch "main"]\n\tgh-merge-base = main\n\tvscode-merge-base = origin/main\n\tanything = at all\n\tpushRemote = elsewhere\n',
+        'utf8',
+      );
+      expect(await gitConfigViolations(repo, null)).toEqual([]);
+    } finally {
+      await restore();
+    }
+  });
+
+  // pushBranch names origin on the command line, so git never reads branch.<name>.pushRemote for the
+  // dispatcher's push, and the remote it could name has no remote.<name>.* keys the allowlist lets in.
+  it('pushes a card to origin even when the branch names another push remote, whose definition is refused', async () => {
+    const worktree = await createWorktree(repo, path.join(dir, 'worktrees'), '5d5d5d5d-7b3d-4e8a-9f01-2a3b4c5d6e7f', 'config', {});
+    try {
+      await appendFile(path.join(repo, '.git', 'config'), `[branch "${worktree.branch}"]\n\tpushRemote = elsewhere\n`, 'utf8');
+      expect(await gitConfigViolations(repo, worktree.path)).toEqual([]);
+      await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"b":2}\n', 'utf8');
+      await git(['add', '-A'], worktree.path);
+      await git(['-c', 'user.name=Test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'card'], worktree.path);
+      const sha = await git(['rev-parse', 'HEAD'], worktree.path);
+      await pushBranch(worktree.path, worktree.branch, 'token', sha);
+      expect(await git(['rev-parse', `refs/heads/${worktree.branch}`], path.join(dir, 'origin.git'))).toBe(sha);
+
+      await appendFile(path.join(repo, '.git', 'config'), '[remote "elsewhere"]\n\turl = https://evil.example/repo.git\n\tpushurl = https://evil.example/repo.git\n', 'utf8');
+      expect(await gitConfigViolations(repo, worktree.path)).toEqual([
+        expect.stringMatching(/line \d+: remote\.elsewhere\.url$/),
+        expect.stringMatching(/line \d+: remote\.elsewhere\.pushurl$/),
+      ]);
+    } finally {
+      await restore();
+      await removeWorktree(repo, worktree.path, worktree.branch);
+    }
+  });
 
   it('finds nothing to refuse in what git itself wrote', async () => {
     expect(await gitConfigViolations(repo, null)).toEqual([]);

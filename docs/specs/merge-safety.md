@@ -42,7 +42,7 @@ Out:
 - The gate's own card-branch checks (`gate-hardening.md`), which stay the second line for everything here.
 - Containment of a session running as the dispatcher's user. That is the session-containment work: the permission policy and the Bash sandbox. A separate OS user is covered by `vps.md` as a known risk. This change makes the dispatcher's own git use fail closed. It does not stop code from reading the dispatcher's environment or from escaping the process group with `setsid`.
 - A git state snapshot around the startup probe, which runs a one-turn read-only session. Its git calls still take the switches, the environment and the halt.
-- A timeout on the Supabase client. `metering-reconciliation` adds an 8-second fetch timeout to `createClient` in its second round, and this branch takes it when that branch merges.
+- A timeout on the Supabase client. It comes from `metering-reconciliation` (an 8-second fetch timeout on `createClient`), merged here as bcc6c77, and is not duplicated.
 - Migrations, `ROADMAP.md`, `PLAN.md` and any live system.
 
 ## Behaviour
@@ -71,11 +71,12 @@ A missing file is recorded as missing.
 - Allowed keys:
   - `core.repositoryformatversion`, `filemode`, `bare`, `logallrefupdates`, `ignorecase`, `precomposeunicode`, `symlinks`;
   - `remote.origin.url` and `fetch`;
-  - `branch.<name>.remote` and `merge`;
+  - any per-branch key `branch.<name>.<key>`: git's own (`remote`, `pushRemote`, `merge`, `mergeOptions`, `rebase`, `description`) and those gh, GitHub Desktop and IDEs write (`gh-merge-base`, `vscode-merge-base`);
   - `extensions.objectformat` and `refstorage`;
   - `lfs.repositoryformatversion`, which git-lfs writes as data (its filters live in global configuration, which the dispatcher's git never reads).
-- Every other key is refused. That covers every key that runs a program or redirects traffic: `include.*`, `includeIf.*`, `extensions.worktreeConfig`, `gpg.*`, `commit.gpgSign`, `tag.gpgSign`, `filter.*`, `diff.*.textconv`, `credential.*`, `http.*`, `https.*`, `url.*`, `protocol.*`, `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `core.hooksPath`, `core.gitProxy`, `core.pager`, `core.editor`, `remote.*.uploadpack`, `receivepack` and `proxy`, a remote other than origin, and anything unknown.
-- The allowed keys are what git writes for init, clone, fetch, worktree add, a push and branch -D. `gitconfig.test.ts` shows this for the local git (2.48.1) by running those steps and finding nothing refused. The list for Debian bookworm's 2.39 is the same set by git's documented behaviour; the first live line below confirms it.
+- Every other key is refused. That covers every key that runs a program or redirects traffic: `include.*`, `includeIf.*`, `extensions.worktreeConfig`, `gpg.*`, `commit.gpgSign`, `tag.gpgSign`, `filter.*`, `diff.*.textconv`, `credential.*`, `http.*`, `https.*`, `url.*`, `protocol.*`, `core.sshCommand`, `core.askPass`, `core.fsmonitor`, `core.hooksPath`, `core.gitProxy`, `core.pager`, `core.editor`, `remote.*.uploadpack`, `receivepack` and `proxy`, a remote other than origin, `remote.pushDefault`, the two-part `branch.*` settings such as `branch.autoSetupMerge`, and anything unknown.
+- No per-branch key runs a program or redirects traffic. Git reads them for pull, merge and a push with no remote named, and the dispatcher runs none of those: `pushBranch` pushes to `origin` by name, and `fetchMain` fetches from `origin` by name. A `remote` or `pushRemote` naming another remote points at a `remote.<name>.*` definition, which is refused, and `remote.origin.url` is checked at startup.
+- The other allowed keys are what git writes for init, clone, fetch, worktree add, a push and branch -D. `gitconfig.test.ts` shows this for the local git (2.48.1) by running those steps and finding nothing refused. The list for Debian bookworm's 2.39 is the same set by git's documented behaviour; the first live line below confirms it.
 
 **Checks around the session.** The pipeline takes the snapshot before the session. It checks the allowlist and then the snapshot at three points, and each check runs before any git call that acts on the result:
 - after the session ends, whatever the outcome;
@@ -181,6 +182,7 @@ A mismatch rejects the card `history`, and nothing merges. Each request that thr
 - [x] `verifyCardCommit` passes one lane commit on the base and returns its paths, and fails two commits as `history`, a kernel file renamed into the lane as `lane_violation`, and a symlink or gitlink as `file_mode`.
 - [x] `snapshotGitState` changes when `core.fsmonitor` is planted, when `info/exclude` changes, when the common `config.worktree` appears and when the worktree's `.git` file changes, and returns to its value when the file is restored.
 - [x] The allowlist finds nothing refused after init, clone, fetch, worktree add, a push and branch -D. It refuses a planted include, any key in the common `config.worktree`, every listed program-running or traffic-redirecting key, and an unreadable line.
+- [x] The allowlist lets `branch.<name>.gh-merge-base`, `vscode-merge-base`, an unknown `branch.<name>.anything` and `branch.<name>.pushRemote` through. A card still pushes to origin when its branch's `pushRemote` names another remote, and that remote's `url` and `pushurl` are refused.
 - [x] Startup exits fatally for a planted include, an origin other than the repository and an unreadable line, and passes a clean clone.
 - [x] A session that plants `gpg.program` and `commit.gpgSign` rejects the card `git_tamper`, names the keys, halts, pushes nothing, removes the worktree with fs and makes zero git calls after the session.
 - [x] A smoke bot that plants an include halts, makes zero git calls after the bot, removes the checkout, restores the last green deploy, writes the revert commit and rejects `git_tamper`.
@@ -271,18 +273,25 @@ Criteria and the tests that prove them:
 - Timeouts: `github.test.ts`, `netlify.test.ts` and `smoke.test.ts`.
 - The board role, the claim and `findEvent`: `db.test.ts`.
 
+**The base's second round and per-branch keys (bcc6c77 and the commit after it).**
+- `origin/metering-reconciliation` at aa06e43 was merged as bcc6c77.
+- Three files conflicted: `db.ts`, `startup.ts` and `db.test.ts`. The resolution keeps the base's `createSupabaseDb(url, key, { fetchFn, timeoutMs })` with its 8-second timeout, both import sets, and both sets of db tests, this branch's adapted to the options object. A recovery test fixture gained the ledger's new `request_id`.
+- No pipeline write is a ledger write, so no retry moved to metering's request-id path.
+- After the merge, `pnpm --filter @backseat/dispatcher test` gave `Tests  347 passed (347)`, and typecheck exit 0.
+- Per-branch keys, test first: "allows the keys git writes", "allows the per-branch keys gh, GitHub Desktop and IDEs write" and "pushes a card to origin even when the branch names another push remote" failed (`expected [ 'branch.main.gh-merge-base', …(3) ] to deeply equal []`). After the change, `gitconfig.test.ts` gave `Tests  9 passed (9)`, and the suite `Tests  349 passed (349)`.
+
 Pending: the three live lines.
 
 ## Residual risks
 
 - The session runs as the dispatcher's user. Code it runs can read the dispatcher's environment through `/proc`, and a process that calls `setsid` survives the group kill and can write configuration after the last check before the push. The permission policy and the Bash sandbox are what contain it. The checks here make the dispatcher's own git fail closed; they do not contain the session.
-- The allowlist is fail-closed. Any tool that writes an unlisted key into the repository configuration, on the VPS or on a board member's machine running attended, stops the dispatcher at the next check or startup. On a developer Mac, `branch.<name>.vscode-merge-base` or similar IDE keys refuse startup.
+- The allowlist is fail-closed. A tool that writes an unlisted key outside `branch.<name>.*` into the repository configuration, on the VPS or on a board member's machine running attended, stops the dispatcher at the next check or startup. Per-branch keys from gh, GitHub Desktop and IDEs are allowed.
 - The 2.39 key set rests on git's documented behaviour, not a run on that version; the first live line checks it.
 - The newest pull request for a branch is taken as the card's latest claim. That holds because a card reaches `gated` only after its push and pull request. A pull request someone opens by hand for a card branch would break it.
 - A green `deploys` row can be written twice when the ship writes fail after it and a later recovery sees a different newest green row.
 - A 5xx page on all three smoke tries fails the smoke and rolls back, as before. Only a transient 5xx is ridden out.
 - A lost merge request that GitHub merges after the 60-second poll leaves the card `gated`, reserving its estimate and holding the attended slot, until a restart resolves it.
-- The Supabase client has no request timeout on this branch until `metering-reconciliation` round 2 merges.
+- Supabase requests time out after 8 seconds (merged from `metering-reconciliation`). The pipeline's post-merge writes retry deploys rows, events and card updates with `retry`. None of them is a ledger write, so none carries a request id, and a write that succeeded but timed out on the way back can repeat: a second `smoke_pass` or `ship` event, or a second green `deploys` row.
 - The first smoke run in a fresh checkout pays for pnpm's install inside the bot's exec timeout; a slow install fails the smoke and rolls a good change back.
 
 ## Decisions
@@ -300,4 +309,5 @@ Pending: the three live lines.
 - 2026-09-16: the merge lock covers the remote range check, the merge, verification and rollback, but not the gate wait, so a slow gate does not hold up another card's verification.
 - 2026-09-16: recovery reads main's head before re-verifying and leaves the card to the board once main has moved. A smoke test against a newer build, or a revert that cannot land, would do harm or nothing.
 - 2026-09-16: the `smoke_pass` event uses the existing `message` type, since `agent_event_type` has no free value and migrations are out of scope. The site reads event types only, never payloads.
+- 2026-09-16: every `branch.<name>.<key>` is allowed, `pushRemote` naming another remote included. The dispatcher names `origin` on every fetch and push, so git never reads a per-branch remote for its own calls, and the remote such a key names is still refused. A founder's checkout carries per-branch keys from gh and IDEs, and refusing them would stop attended runs for nothing.
 - 2026-09-16: the `merge_unknown` marker is `failing_check` on the gated card as well as an event. `failing_check` belongs to the current claim, since gating clears it; an event from an earlier claim of the same card would mislead recovery.

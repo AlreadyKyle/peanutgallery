@@ -74,12 +74,21 @@ export function parseGitConfig(text: string): ParsedConfig {
 }
 
 // What git 2.39 (Debian bookworm, the dispatcher image) and current macOS git write for init, clone,
-// fetch, worktree add and branch -D. lfs.repositoryformatversion is data that git-lfs install writes;
-// its filters live in the global configuration, which the dispatcher's git never reads.
+// fetch, worktree add and branch -D, plus any per-branch key. lfs.repositoryformatversion is data that
+// git-lfs install writes; its filters live in the global configuration, which the dispatcher's git
+// never reads.
+//
+// Per-branch keys are allowed whatever their name, since gh, GitHub Desktop and IDEs write their own
+// (branch.<name>.gh-merge-base, branch.<name>.vscode-merge-base) on a founder's checkout. No
+// branch.<name>.<key> runs a program or redirects traffic: git's own (remote, pushRemote, merge,
+// mergeOptions, rebase, description) are read by pull, merge and a push with no remote named, none of
+// which the dispatcher runs. A remote or pushRemote naming anything but origin points at a
+// remote.<name>.* definition, which is refused, and pushBranch and fetchMain name origin explicitly.
+// The two-part branch.* settings (autoSetupMerge and the like) are not per-branch and stay refused.
 const ALLOWED: readonly RegExp[] = [
   /^core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks)$/,
   /^remote\.origin\.(url|fetch)$/,
-  /^branch\..+\.(remote|merge)$/,
+  /^branch\..+\.[a-z][a-z0-9-]*$/,
   /^extensions\.(objectformat|refstorage)$/,
   /^lfs\.repositoryformatversion$/,
 ];
