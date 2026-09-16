@@ -107,7 +107,7 @@ Per package:
 - **Gate.** The checks a change passes before it merges: `platform/gate/ship-gate.sh` run by the `gate` workflow. It covers the secret scan, the deny-list, the runtime-token scan, typecheck and tests, the headless bot and the build.
 - **Kernel.** The rules no card, vote or role change can edit (PLAN.md §4). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.
 - **Pool.** Customer money available for agent compute, in `pool.balance_usd`. There is no founding budget.
-- **Reserve.** 10% of every contribution, taken off the top and never spent. It covers disputes first.
+- **Reserve.** 10% of every contribution after Stripe's fee, taken before the split. Agents never spend it; it covers disputes first.
 - **Emergency fund.** The site's name for the incident reserve: 5% of the agents' share of each contribution, until it holds $500, for urgent bug fixes.
 - **Attended and unattended.** Attended: sessions run on the founder's subscription only while a board member is signed in at `/board`, billed to the founder. Unattended: sessions run with no one present on the studio's API key (`STUDIO_ANTHROPIC_API_KEY`), billed to the studio and paid from the pool.
 - **Directive.** A card the board forces to stage `funded` at priority 0. It skips the vote and still passes the gate.

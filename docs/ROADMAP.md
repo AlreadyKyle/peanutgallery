@@ -71,7 +71,7 @@ This pass's specs. A spec that is not on `main` yet is linked by its pull reques
 | [card-columns-and-open-funding](https://github.com/AlreadyKyle/peanutgallery/pull/32) | agreed (PR #32) |
 | [gate-hardening](https://github.com/AlreadyKyle/peanutgallery/pull/33) | agreed (PR #33) |
 | [site-truth-pass](https://github.com/AlreadyKyle/peanutgallery/pull/34) | agreed (PR #34) |
-| metering-reconciliation | agreed (PR link to come) |
+| [metering-reconciliation](https://github.com/AlreadyKyle/peanutgallery/pull/35) | agreed (PR #35) |
 | merge-safety | agreed (PR link to come) |
 | session-containment | agreed (PR link to come) |
 | ops-separation | agreed (PR link to come) |
