@@ -270,12 +270,6 @@ nav a.nav-primary {
   margin-bottom: var(--space-2);
 }
 
-.panel-heading {
-  margin: var(--space-2) 0 var(--space-1);
-  font-size: var(--size-small);
-  color: var(--muted);
-}
-
 .row-strong {
   font-weight: var(--weight-strong);
 }

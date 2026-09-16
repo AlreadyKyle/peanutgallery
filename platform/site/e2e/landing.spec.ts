@@ -34,7 +34,7 @@ test('landing loads at 375 px with every element visible and no horizontal overf
   await expect(page.getByText('kill switch', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   await expect(
-    footer.getByText('Free games, playable in a browser. Built by AI agents, directed by the players.'),
+    footer.getByText('Free games, playable in a browser. Built by AI agents and funded by supporters.'),
   ).toBeVisible();
   if ((process.env.VITE_STRIPE_PAYMENT_LINK_URL ?? '').trim() !== '') {
     await expect(nav.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');

@@ -11,7 +11,9 @@
 // and Contact links, and no console errors. The landing's h2 order, read from the page: Building
 // now, Queued and Shipped appear only when cards are in those stages. The Right now panel, the fund
 // links, the category filters and /contribute's choices. Assets, og:image as an absolute URL, and
-// /og.png as a 200 image/png of 1200x630. The www redirect runs only against production.
+// /og.png as a 200 image/png of 1200x630. The www redirect runs only against production. The
+// security headers from netlify.toml run against any address that is not local, because vite preview
+// does not send them.
 //
 // The data checks need the site to reach its database. A local build without the Supabase values
 // has none; --allow-no-data turns those checks into SKIP lines instead of failures.
@@ -35,6 +37,15 @@ const FOOTER_LINKS = [
 const H2_ORDER = ['Right now', 'Building now', "Fund what's next", 'Queued', 'Shipped', 'How it works', 'Funding', 'Ledger', 'Fixed rules'];
 const OPTIONAL_H2 = new Set(['Building now', 'Queued', 'Shipped']);
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
+const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+// The enforced headers netlify.toml sends on every path (docs/specs/site-truth-pass.md).
+const SECURITY_HEADERS = [
+  ['x-frame-options', 'DENY'],
+  ['x-content-type-options', 'nosniff'],
+  ['referrer-policy', 'strict-origin-when-cross-origin'],
+  ['permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
+  ['content-security-policy', "frame-ancestors 'none'"],
+];
 
 const results = [];
 function check(ok, message) {
@@ -209,6 +220,20 @@ try {
     await checkPng(ogImage, 'og:image');
   } else if (absolute) {
     skip(`og:image points at ${new URL(ogImage).origin}, not ${BASE}; ${BASE}/og.png was checked instead`);
+  }
+
+  if (LOCAL.test(BASE)) {
+    skip('security headers: a local preview does not send them');
+  } else {
+    // The landing, and a route served through the SPA rewrite.
+    for (const path of ['/', '/ledger']) {
+      const response = await fetch(BASE + path);
+      for (const [name, expected] of SECURITY_HEADERS) {
+        const actual = response.headers.get(name);
+        check(actual === expected, `${path} ${name}: ${actual}`);
+      }
+      check(response.headers.has('content-security-policy-report-only'), `${path} content-security-policy-report-only is sent`);
+    }
   }
 
   if (BASE === PRODUCTION) {

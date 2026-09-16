@@ -8,7 +8,8 @@ export const REFRESH_DEBOUNCE_MS = 500;
 export type StudioState =
   | { state: 'unconfigured' }
   | { state: 'loading' }
-  | { state: 'ready'; snapshot: Snapshot }
+  /** stale: the last refresh failed, so the snapshot on screen may be out of date. */
+  | { state: 'ready'; snapshot: Snapshot; stale: boolean }
   | { state: 'error'; message: string };
 
 const SourceContext = createContext<StudioSource | null>(null);
@@ -59,13 +60,16 @@ function useStudioLoad(active: boolean): StudioState {
       source
         .load()
         .then((snapshot) => {
-          if (current()) setState({ state: 'ready', snapshot });
+          if (current()) setState({ state: 'ready', snapshot, stale: false });
         })
         .catch((error: unknown) => {
           if (!current()) return;
-          setState((previous) =>
-            previous.state === 'ready' ? previous : { state: 'error', message: errorMessage(error) },
-          );
+          // Once figures are on screen, a failed refresh keeps them and marks them stale rather
+          // than blanking the page; the next successful load clears the mark.
+          setState((previous) => {
+            if (previous.state !== 'ready') return { state: 'error', message: errorMessage(error) };
+            return previous.stale ? previous : { ...previous, stale: true };
+          });
         });
     };
     // Every change notice and poll tick goes through one trailing debounce so a burst of

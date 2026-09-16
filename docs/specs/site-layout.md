@@ -28,7 +28,7 @@ Out: funding a next game (no folder or card exists; the next game is picked by a
 - Fund what's next lists proposed, designing and voted cards as boxes in a one-, two- or three-column grid. The picked cards come first, and the category filter sits above the grid.
 - Queued lists funded cards as rows.
 
-**Categories.** A card's category is The studio when its folder is `platform`, and Dust otherwise. The Next game filter shows a note that funding opens with the vote that picks the next game.
+**Categories.** A card's category is The studio when its folder is `platform`, and Dust otherwise. ~~The Next game filter shows a note that funding opens with the vote that picks the next game.~~ Superseded 2026-09-16 by `site-truth-pass.md`: no voting system exists, so the note says no card funds a next game yet.
 
 **Contribute.** Contribute in the nav and on the landing page goes to `/contribute`.
 - Pick for me comes first and links to the Payment Link with no card.

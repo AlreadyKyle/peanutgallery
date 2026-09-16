@@ -4,8 +4,10 @@ import {
   CARD_STAGES,
   createSupabaseSource,
   DEPLOY_LIMIT,
+  ENRICHMENTS,
   EVENT_LIMIT,
   REALTIME_LISTENERS,
+  type Snapshot,
 } from './source';
 
 type Query = {
@@ -83,7 +85,9 @@ function rowsFor(query: Query): unknown {
   }
 }
 
-function fakeClient(options: { events?: unknown[]; failTable?: string } = {}) {
+function fakeClient(
+  options: { events?: unknown[]; failTable?: string; failTitles?: boolean; rows?: Record<string, unknown> } = {},
+) {
   const queries: Query[] = [];
   const channels: Channel[] = [];
   const removed: string[] = [];
@@ -92,13 +96,16 @@ function fakeClient(options: { events?: unknown[]; failTable?: string } = {}) {
     const query: Query = { table, select: '', filters: [], orders: [], limit: null, terminal: '' };
     queries.push(query);
     const resolve = () => {
-      if (table === options.failTable) {
+      const titles = table === 'cards' && query.filters.some((f) => f.startsWith('in id'));
+      if (table === options.failTable || (options.failTitles === true && titles)) {
         return Promise.resolve({ data: null, error: { message: `${table} is unavailable` } });
       }
       const data =
-        table === 'public_agent_events' && options.events !== undefined
-          ? options.events
-          : rowsFor(query);
+        options.rows !== undefined && table in options.rows
+          ? options.rows[table]
+          : table === 'public_agent_events' && options.events !== undefined
+            ? options.events
+            : rowsFor(query);
       return Promise.resolve({ data, error: null });
     };
     const builder = {
@@ -164,6 +171,10 @@ function fakeClient(options: { events?: unknown[]; failTable?: string } = {}) {
   };
 
   return { client: client as unknown as SupabaseClient, queries, channels, removed };
+}
+
+function emptyQuery(table: string): Query {
+  return { table, select: '', filters: [], orders: [], limit: null, terminal: '' };
 }
 
 function query(queries: Query[], table: string, index = 0): Query {
@@ -258,6 +269,7 @@ describe('createSupabaseSource.load', () => {
     });
     expect(snapshot.events).toHaveLength(3);
     expect(snapshot.roles).toEqual([{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }]);
+    expect(snapshot.missing).toEqual([]);
   });
 
   it('fetches titles only for the distinct card ids in the loaded events', async () => {
@@ -276,9 +288,78 @@ describe('createSupabaseSource.load', () => {
     expect(snapshot.cardTitles).toEqual({});
   });
 
-  it('rejects with the database error message', async () => {
+  it('rejects with the database error message when the pool fails', async () => {
     const fake = fakeClient({ failTable: 'pool' });
     await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('pool is unavailable');
+  });
+
+  it('rejects when the cards fail', async () => {
+    const fake = fakeClient({ failTable: 'cards' });
+    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('cards is unavailable');
+  });
+
+  it('rejects when a pool figure is malformed', async () => {
+    const fake = fakeClient({ rows: { pool: { ...(rowsFor(emptyQuery('pool')) as object), balance_usd: 'abc' } } });
+    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('Malformed numeric value: abc');
+  });
+
+  it('names every enrichment the site reads', () => {
+    expect([...ENRICHMENTS]).toEqual(['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'cardTitles']);
+  });
+
+  // Each enrichment, the table or view it reads, and the empty value the snapshot falls back to.
+  const enrichments: [string, string, (snapshot: Snapshot) => void][] = [
+    ['funding', 'public_card_funding', (s) => expect(s.funding).toEqual({})],
+    ['spend', 'public_card_spend', (s) => expect(s.cards[0]?.spent_usd).toBe(0)],
+    ['studio', 'public_studio', (s) => expect(s.launchedAt).toBeNull()],
+    ['totals', 'public_ledger_totals', (s) => expect(s.totals.usd_total).toBe(0)],
+    [
+      'events',
+      'public_agent_events',
+      (s) => {
+        expect(s.events).toEqual([]);
+        expect(s.cardTitles).toEqual({});
+      },
+    ],
+    ['deploys', 'deploys', (s) => expect(s.deploys).toEqual([])],
+    ['roles', 'roles', (s) => expect(s.roles).toEqual([])],
+  ];
+
+  for (const [name, table, fallback] of enrichments) {
+    it(`keeps the pool and the cards and names ${name} as missing when ${table} fails`, async () => {
+      const fake = fakeClient({ failTable: table });
+      const snapshot = await createSupabaseSource(fake.client).load();
+      expect(snapshot.missing).toEqual([name]);
+      expect(snapshot.pool?.balance_usd).toBe(48.56);
+      expect(snapshot.cards.map((card) => card.id)).toEqual(['c1']);
+      fallback(snapshot);
+    });
+  }
+
+  it('names an enrichment as missing when one of its figures is malformed', async () => {
+    const fake = fakeClient({ rows: { public_card_funding: [{ card_id: 'c1', contributors: 'abc', credited_usd: '1.0000' }] } });
+    const snapshot = await createSupabaseSource(fake.client).load();
+    expect(snapshot.missing).toEqual(['funding']);
+    expect(snapshot.funding).toEqual({});
+  });
+
+  it('names the card titles as missing when the title query fails', async () => {
+    const fake = fakeClient({ failTitles: true });
+    const snapshot = await createSupabaseSource(fake.client).load();
+    expect(snapshot.missing).toEqual(['cardTitles']);
+    expect(snapshot.cardTitles).toEqual({});
+    expect(snapshot.events).toHaveLength(3);
+  });
+
+  it('lists several missing parts in a fixed order', async () => {
+    const fake = fakeClient({
+      rows: {
+        public_ledger_totals: { usd_total: 'x', input_tokens: '0', cached_tokens: '0', output_tokens: '0', row_count: '0' },
+        public_card_funding: [{ card_id: 'c1', contributors: 'y', credited_usd: '0' }],
+      },
+    });
+    const snapshot = await createSupabaseSource(fake.client).load();
+    expect(snapshot.missing).toEqual(['funding', 'totals']);
   });
 });
 

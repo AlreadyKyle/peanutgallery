@@ -23,6 +23,7 @@ const snapshot: Snapshot = {
   deploys: [],
   roles: [],
   cardTitles: {},
+  missing: [],
 };
 
 function renderAt(path: string, source: StudioSource | null = null) {

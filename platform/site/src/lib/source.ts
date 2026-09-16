@@ -70,6 +70,14 @@ export type Role = {
   state: string;
 };
 
+/**
+ * The parts of a snapshot the page can do without. The pool and the cards are the core: when either
+ * fails, the whole load fails. When an enrichment fails, the snapshot carries its empty value and
+ * names it in `missing`, so a page says that part is unavailable instead of showing zero.
+ */
+export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'cardTitles'] as const;
+export type Enrichment = (typeof ENRICHMENTS)[number];
+
 export type Snapshot = {
   pool: Pool | null;
   cards: Card[];
@@ -80,6 +88,8 @@ export type Snapshot = {
   deploys: Deploy[];
   roles: Role[];
   cardTitles: Record<string, string>;
+  /** The enrichments that failed to load, in ENRICHMENTS order. */
+  missing: Enrichment[];
 };
 
 export interface StudioSource {
@@ -252,12 +262,24 @@ async function loadCardTitles(
 export function createSupabaseSource(client: SupabaseClient): StudioSource {
   return {
     async load() {
-      const [pool, cards, funding, spend, studio, totals, events, deploys, roles] = await Promise.all([
+      const failed = new Set<Enrichment>();
+      /** Runs one enrichment; any error, a malformed figure included, names it missing and returns the fallback. */
+      const optional = async <T>(name: Enrichment, run: () => Promise<T>, fallback: T): Promise<T> => {
+        try {
+          return await run();
+        } catch {
+          failed.add(name);
+          return fallback;
+        }
+      };
+
+      const [pool, cardRows, funding, spend, studio, totals, events, deploys, roles] = await Promise.all([
         client
           .from('pool')
           .select('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day')
           .eq('id', 1)
-          .maybeSingle<PoolRow>(),
+          .maybeSingle<PoolRow>()
+          .then((result) => poolFrom(unwrap(result))),
         client
           .from('cards')
           .select(
@@ -265,44 +287,90 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })
-          .returns<CardRow[]>(),
-        client
-          .from('public_card_funding')
-          .select('card_id,contributors,credited_usd')
-          .returns<FundingRow[]>(),
-        client.from('public_card_spend').select('card_id,spent_usd').returns<SpendRow[]>(),
-        client.from('public_studio').select('launched_at').maybeSingle<StudioRow>(),
-        client.from('public_ledger_totals').select('*').maybeSingle<TotalsRow>(),
-        client
-          .from('public_agent_events')
-          .select('id,card_id,role_id,type,created_at')
-          .order('created_at', { ascending: false })
-          .limit(EVENT_LIMIT)
-          .returns<AgentEvent[]>(),
-        client
-          .from('deploys')
-          .select('id,folder,sha,is_green,smoke_result,created_at')
-          .order('created_at', { ascending: false })
-          .limit(DEPLOY_LIMIT)
-          .returns<Deploy[]>(),
-        client
-          .from('roles')
-          .select('id,title,write_access,state')
-          .order('hired_at', { ascending: true })
-          .order('title', { ascending: true })
-          .returns<Role[]>(),
+          .returns<CardRow[]>()
+          .then((result) => unwrap(result) ?? []),
+        optional(
+          'funding',
+          async () =>
+            fundingFrom(
+              unwrap(
+                await client
+                  .from('public_card_funding')
+                  .select('card_id,contributors,credited_usd')
+                  .returns<FundingRow[]>(),
+              ) ?? [],
+            ),
+          {},
+        ),
+        optional(
+          'spend',
+          async () =>
+            spendFrom(unwrap(await client.from('public_card_spend').select('card_id,spent_usd').returns<SpendRow[]>()) ?? []),
+          {},
+        ),
+        optional(
+          'studio',
+          async () =>
+            unwrap(await client.from('public_studio').select('launched_at').maybeSingle<StudioRow>())?.launched_at ?? null,
+          null,
+        ),
+        optional(
+          'totals',
+          async () => totalsFrom(unwrap(await client.from('public_ledger_totals').select('*').maybeSingle<TotalsRow>())),
+          zeroTotals,
+        ),
+        optional(
+          'events',
+          async () =>
+            unwrap(
+              await client
+                .from('public_agent_events')
+                .select('id,card_id,role_id,type,created_at')
+                .order('created_at', { ascending: false })
+                .limit(EVENT_LIMIT)
+                .returns<AgentEvent[]>(),
+            ) ?? [],
+          [] as AgentEvent[],
+        ),
+        optional(
+          'deploys',
+          async () =>
+            unwrap(
+              await client
+                .from('deploys')
+                .select('id,folder,sha,is_green,smoke_result,created_at')
+                .order('created_at', { ascending: false })
+                .limit(DEPLOY_LIMIT)
+                .returns<Deploy[]>(),
+            ) ?? [],
+          [] as Deploy[],
+        ),
+        optional(
+          'roles',
+          async () =>
+            unwrap(
+              await client
+                .from('roles')
+                .select('id,title,write_access,state')
+                .order('hired_at', { ascending: true })
+                .order('title', { ascending: true })
+                .returns<Role[]>(),
+            ) ?? [],
+          [] as Role[],
+        ),
       ]);
-      const eventRows = unwrap(events) ?? [];
+      const cardTitles = await optional('cardTitles', () => loadCardTitles(client, distinctCardIds(events)), {});
       return {
-        pool: poolFrom(unwrap(pool)),
-        cards: (unwrap(cards) ?? []).map((row) => cardFrom(row, spendFrom(unwrap(spend) ?? []))),
-        funding: fundingFrom(unwrap(funding) ?? []),
-        launchedAt: unwrap(studio)?.launched_at ?? null,
-        totals: totalsFrom(unwrap(totals)),
-        events: eventRows,
-        deploys: unwrap(deploys) ?? [],
-        roles: unwrap(roles) ?? [],
-        cardTitles: await loadCardTitles(client, distinctCardIds(eventRows)),
+        pool,
+        cards: cardRows.map((row) => cardFrom(row, spend)),
+        funding,
+        launchedAt: studio,
+        totals,
+        events,
+        deploys,
+        roles,
+        cardTitles,
+        missing: ENRICHMENTS.filter((name) => failed.has(name)),
       };
     },
     subscribe(onChange) {

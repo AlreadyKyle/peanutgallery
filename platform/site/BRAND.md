@@ -60,7 +60,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Landing intro.** `.intro` holds the hero and the Right now panel: side by side (3:2) from 64rem, stacked below.
 - **Hero:** one `h1` (the first pitch sentence), a `.lede` (the second), the muted launch line, the Contribute button and the muted split line.
-- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, and a Full ledger link. It carries no list: the panel has to stay about as tall as the pitch beside it, or the grid row leaves dead space under the pitch. Agent actions are the Ledger section below and the ledger page.
+- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, and a Full ledger link. When a refresh fails after figures have loaded, the muted small line "Could not refresh. These figures may be out of date." (`role="status"`) sits under the heading until a load succeeds. It carries no list: the panel has to stay about as tall as the pitch beside it, or the grid row leaves dead space under the pitch. Agent actions are the Ledger section below and the ledger page.
 
 **Landing order.**
 1. Intro.
@@ -74,7 +74,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Section.** `section.section` opens with an `h2` and nothing above it but space. Paragraphs directly inside a section stop at `--measure`.
 
-**Category filter.** `.filters` is a `role="group"` row of `button.filter` chips: All, Dust (the current game), The studio (platform cards), Next game. Each chip shows its count and uses `aria-pressed`; the pressed chip is filled. A category chip adds one muted note. Next game explains that funding opens with the vote that picks the next game; no card funds it yet. A category comes from the card's folder (`categoryOf` in `src/lib/cards.ts`).
+**Category filter.** `.filters` is a `role="group"` row of `button.filter` chips: All, Dust (the current game), The studio (platform cards), Next game. Each chip shows its count and uses `aria-pressed`; the pressed chip is filled. A category chip adds one muted note. Next game says that no card funds a next game yet. A category comes from the card's folder (`categoryOf` in `src/lib/cards.ts`).
 
 **Card grid.** `ul.card-grid` has one column on phones, two from 48rem and three from 64rem. Each `li.card` is a box:
 - a top line with the category (muted, 600) and the status. "Open for funding" is plain; "Picked by the board", "Building" and "In the gate" are `.badge` pills.
@@ -109,6 +109,8 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 - In the copy, `{email}` becomes the contact address as a mailto link, `{refunds}` a link to the Refunds page, and `{discord}` the Discord invite.
 - The legal pages end with the muted small "Last updated" line. Contact adds a Discord section only when the invite is set.
 - The strings live in `copy.ts` like every public string. The pages never say draft.
+
+**Stale and missing figures.** A failed refresh keeps the figures on screen and adds the stale line under the Right now heading and under the lede of the ledger and contribute pages. When one part of the data did not load, that part says "Not available right now." instead of a zero or an empty line: agent spend and tokens, agent actions and deploys. The launch line is left out when the studio's launch date did not load, and a funding caption leaves out the contributor count when the funding figures did not.
 
 **Figure row.** `Stat` renders a `div.stat` inside `dl.stats`: the label (600) and a muted description on the left, the amount on the right in tabular numerals at `--size-lead`. Every figure has a description.
 

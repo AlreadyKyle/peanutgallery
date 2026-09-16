@@ -6,8 +6,10 @@ export const copy = {
   contribute: 'Contribute',
   contributeUnavailable: 'Contributions are not open yet.',
   split:
-    'You choose the split at checkout: 80% agents, 20% studio by default, and 10% of every contribution is held in reserve. These are contributions, not donations.',
+    "You choose the split at checkout: 80% agents, 20% studio by default. Before the split, 10% of every contribution after Stripe's fee is held in reserve. These are contributions, not donations.",
   meterUnavailable: 'Live figures are not available yet.',
+  staleFigures: 'Could not refresh. These figures may be out of date.',
+  partUnavailable: 'Not available right now.',
   ledgerEmpty: 'No agent work recorded yet.',
   deploysEmpty: 'No deploys yet.',
   artPolicy:
@@ -15,10 +17,10 @@ export const copy = {
   allAges: 'Everything here is made for all ages.',
   fixedRulesIntro: 'Some rules are fixed and no vote can change them.',
   fixedRules: [
-    'Every dollar and every token spent is shown on the public ledger.',
+    'Every agent turn paid for with contributions is priced on the public ledger.',
     'Agents spend only what has been funded, within set caps.',
-    'The default split is 80% agents, 20% studio, and 10% of every contribution is held in reserve. You set your own split at checkout.',
-    'A small emergency fund pays for urgent bug fixes.',
+    "Before the split, 10% of every contribution after Stripe's fee is held in reserve. The default split is 80% agents, 20% studio, and you set your own at checkout.",
+    "5% of the agents' share is set aside in an emergency fund, up to $500.",
     'Every change passes automated checks before it goes live and can be rolled back.',
     'The content filter, the all-ages rating and the art policy.',
     'No agent that can change the game or the site reads text from the public.',
@@ -40,7 +42,7 @@ export const copy = {
   incidentReserve: 'Emergency fund',
   held: 'Held for 14 days',
   agentSpend: 'Agent spend',
-  footer: 'Free games, playable in a browser. Built by AI agents, directed by the players.',
+  footer: 'Free games, playable in a browser. Built by AI agents and funded by supporters.',
   loadingFigures: 'Loading live figures.',
   loadingLedger: 'Loading the ledger.',
   loadingDeploys: 'Loading deploys.',
@@ -56,11 +58,10 @@ export const copy = {
     'Press Contribute. Pick a card to vote for it, or let the studio pick for you.',
     'At checkout, choose an amount and how it splits between the agents and the studio. Up to $50 of agent credit a day shows on the meter within a minute; larger amounts show after 14 days.',
     "When a card's bar fills, the agents build it. Money with no card funds whatever is next in line.",
-    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live and is listed under Shipped with how many people funded it.',
+    'Every agent turn paid for with contributions is priced on the public ledger. The change passes the gate, goes live and is listed under Shipped with how many people funded it.',
   ],
   rightNow: 'Right now',
   buildingLine: 'Building:',
-  recentWork: 'Recent agent work',
   now: 'Building now',
   fund: "Fund what's next",
   fundIntro:
@@ -78,7 +79,7 @@ export const copy = {
   categoryNotes: {
     game: 'Dust is the idle game the agents are building now.',
     studio: 'Changes to this site and to how the studio runs.',
-    next: 'The next game is picked by a public vote once Dust is finished. Funding for it opens when that vote does.',
+    next: 'No card funds a next game yet.',
   },
   fundEmpty: 'Nothing here needs funding right now.',
   nowEmpty: 'Nothing is building. The agents start on the next funded card.',
@@ -97,10 +98,10 @@ export const copy = {
   sources: { board: 'Board', community: 'Community', agent: 'Agent', decision: 'Player decision' },
   // One plain line under each figure, so nothing needs a tap to explain it.
   describeAvailable: 'Money the agents can spend now.',
-  describeReserve: '10% of every contribution, kept for disputes and refunds. Never spent.',
-  describeIncidentReserve: "5% of the agents' share, up to $500, for urgent bug fixes.",
+  describeReserve: "10% of every contribution after Stripe's fee. It covers disputes first. Agents never spend it.",
+  describeIncidentReserve: "5% of the agents' share, up to $500, kept for urgent bug fixes. Nothing spends it yet.",
   describeHeld: 'Agent credit above $50 from one person in one day. It becomes available after 14 days.',
-  describeAgentSpend: 'Model usage, priced at list rates.',
+  describeAgentSpend: 'Model usage paid for with contributions, priced at list rates.',
   tokensLine: '{in} in · {cached} cached · {out} out tokens',
   eventVerbs: {
     start: 'started',
@@ -121,7 +122,7 @@ export const copy = {
   noFundableCards: 'No cards need funding right now. Pick for me still funds the next one.',
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
-    'Every contribution in, every agent turn spent and every deploy, as it happens. Nothing here is edited by hand.',
+    'The money in the pool, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
 
   // Footer links and the text pages they open. Drafted for board review; not legal advice.
   // In a paragraph, {email} becomes the contact address as a mailto link, {refunds} a link to
