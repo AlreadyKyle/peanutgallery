@@ -5,7 +5,7 @@ import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable, priceUsage, type LedgerUsage, type TurnUsage } from '../src/pricing.js';
 import type { ProbeOptions, ProbeResult } from '../src/probe-core.js';
-import { checkMode, checkRoleModels, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
+import { FallbackPricedError, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
@@ -13,6 +13,7 @@ const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
 const USAGE: TurnUsage = { input_tokens: 1000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 200 };
 const ROW: LedgerUsage = priceUsage(PRICE_TABLE, 'builder-class', USAGE);
+const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false };
 // The settle row for output the turn did not report.
 const SETTLE_ROW: LedgerUsage = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006 };
 
@@ -54,7 +55,7 @@ function probeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
     tools: ['Glob', 'Grep', 'Read'],
     apiKeySource: 'ANTHROPIC_API_KEY',
     costUsd: 0.009,
-    metering: { rows: [ROW, SETTLE_ROW], basis: 'result', fallbackModels: [], overcountUsd: 0 },
+    metering: { rows: [ROW, SETTLE_ROW], basis: 'result', fallbackModels: [], turnModels: ['builder-class'], overcountUsd: 0, mismatch: false, anomaly: false },
     turns: 1,
     exitCode: 0,
     ...overrides,
@@ -171,7 +172,7 @@ describe('startupProbe metering', () => {
     expect(fatalError).toEqual(new StartupError('startup probe failed: apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', true));
     expect(exitCodeFor(fatalError)).toBe(78);
 
-    const noStream = probeResult({ ok: false, fatal: false, reason: 'claude produced no stream output', metering: { rows: [], basis: 'estimate', fallbackModels: [], overcountUsd: 0 } });
+    const noStream = probeResult({ ok: false, fatal: false, reason: 'claude produced no stream output', metering: { ...NO_ROWS } });
     const transientError = await startupProbe(deps(unattendedDb(), noStream).deps).catch((caught: unknown) => caught);
     expect(transientError).toEqual(new StartupError('startup probe failed: claude produced no stream output', false));
     expect(exitCodeFor(transientError)).toBe(1);
@@ -190,19 +191,46 @@ describe('startupProbe metering', () => {
 
   it('writes no ledger row when the probe reported no usage', async () => {
     const db = unattendedDb();
-    await startupProbe(deps(db, probeResult({ metering: { rows: [], basis: 'estimate', fallbackModels: [], overcountUsd: 0 } })).deps);
+    await startupProbe(deps(db, probeResult({ metering: { ...NO_ROWS } })).deps);
     expect(db.ledger).toHaveLength(0);
   });
 
   it('records an unknown model at the fallback rates the way a card turn does, and then stops', async () => {
     const db = unattendedDb();
     const fallbackRow = { ...ROW, model: 'mystery-model' };
-    const metering = { rows: [fallbackRow], basis: 'result' as const, fallbackModels: ['mystery-model'], overcountUsd: 0 };
+    const metering = { ...NO_ROWS, rows: [fallbackRow], basis: 'result' as const, fallbackModels: ['mystery-model'], turnModels: ['mystery-model'] };
     const error = await startupProbe(deps(db, probeResult({ metering })).deps).catch((caught: unknown) => caught);
-    expect(error).toEqual(new StartupError('no price for model mystery-model', true));
+    expect(error).toBeInstanceOf(FallbackPricedError);
+    expect(error).toMatchObject({ message: 'no price for model mystery-model', fatal: true, models: ['mystery-model'] });
     // The model is missing from the price table on every start, and every start spends on a probe.
     expect(exitCodeFor(error)).toBe(78);
     expect(db.ledger).toEqual([{ id: 'ledger-1', billed_to: 'studio', card_id: null, role_id: null, ...fallbackRow }]);
+  });
+
+  it('meters a side model priced at fallback rates without stopping', async () => {
+    const db = unattendedDb();
+    const sideRow = { model: 'side-model', input_tokens: 100, cached_tokens: 0, output_tokens: 10, usd: 0.0008 };
+    const metering = { ...NO_ROWS, rows: [ROW, sideRow], basis: 'result' as const, fallbackModels: ['side-model'], turnModels: ['builder-class'] };
+    await expect(startupProbe(deps(db, probeResult({ metering })).deps)).resolves.toBeUndefined();
+    expect(db.ledger.map((row) => row.model)).toEqual(['builder-class', 'side-model']);
+  });
+
+  it('tries a ledger write three times before it gives up', async () => {
+    let failures = 2;
+    class FlakyDb extends FakeDb {
+      override async recordUsage(...args: Parameters<FakeDb['recordUsage']>) {
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error('db record_usage: connection reset');
+        }
+        return super.recordUsage(...args);
+      }
+    }
+    const db = Object.assign(new FlakyDb(), { studio: { ...new FakeDb().studio, agent_mode: 'unattended' } });
+    await meterProbe(db, config, probeResult(), silent, 1);
+    expect(db.ledger).toHaveLength(2);
+    failures = 3;
+    await expect(meterProbe(new FlakyDb(), config, probeResult(), silent, 1)).rejects.toThrow('connection reset');
   });
 });
 

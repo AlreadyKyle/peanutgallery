@@ -14,7 +14,7 @@ import { createSupabaseDb } from './db.js';
 import { errorMessage, logLine, type LogFields, type Logger, type LogLevel } from './log.js';
 import { round4 } from './pricing.js';
 import { initRecord, runProbe } from './probe-core.js';
-import { meterProbe } from './startup.js';
+import { FallbackPricedError, meterProbe } from './startup.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const FIXTURE = path.join(REPO_ROOT, 'platform', 'dispatcher', 'test', 'fixtures', 'probe.jsonl');
@@ -59,8 +59,13 @@ async function probeVerdict(details: string[]): Promise<string> {
     try {
       await meterProbe(createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey), config, probe, detailLogger(details));
     } catch (error) {
-      meterError = errorMessage(error);
-      details.push(`probe: not metered: ${meterError}`);
+      if (error instanceof FallbackPricedError) {
+        meterError = `metered at fallback rates because PRICE_TABLE_JSON has no row for ${error.models.join(', ')}`;
+        details.push(`probe: ${meterError}`);
+      } else {
+        meterError = `not metered: ${errorMessage(error)}`;
+        details.push(`probe: ${meterError}`);
+      }
     }
   } else {
     details.push('probe: attended mode runs on the subscription; nothing metered');
@@ -70,7 +75,7 @@ async function probeVerdict(details: string[]): Promise<string> {
   await writeFile(target, raw.length > 0 ? `${raw.join('\n')}\n` : '', 'utf8');
   details.push(`probe: raw stream saved to ${target} (${raw.length} lines)`);
   if (!probe.ok) return `FAIL: probe ${probe.reason} (claude exit ${probe.exitCode ?? 'signal'})`;
-  if (meterError !== null) return `FAIL: probe passed but was not metered: ${meterError}`;
+  if (meterError !== null) return `FAIL: probe passed but was ${meterError}`;
   return `PASS: probe mode=${adapter.mode} apiKeySource=${probe.apiKeySource ?? 'unreported'} tools=${probe.tools.join(',')} turns=${probe.turns} cost_usd=${probe.costUsd ?? 'unreported'}`;
 }
 

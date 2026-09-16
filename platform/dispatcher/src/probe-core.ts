@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, RawLineSink, SessionResult, SessionSpec } from './adapters/types.js';
 import { SessionMeter, type Settlement } from './metering.js';
-import type { LedgerUsage, PriceTable } from './pricing.js';
+import type { PriceTable } from './pricing.js';
 import { API_KEY_SOURCE } from './session.js';
 import { git, removeWorktree } from './worktree.js';
 
@@ -136,19 +136,16 @@ export interface ProbeResult {
   exitCode: number | null;
 }
 
-// The probe's ledger rows: one per turn that reported usage, then the settle rows against the result
-// line (metering.ts), with the models the price table lacks and the basis of the settlement.
+// The probe's ledger rows, metered as a card session is (metering.ts): nothing is written while the
+// probe runs, so every turn row is still pending and settle returns it, followed by the settle rows.
 export function probeMetering(table: PriceTable, events: readonly AgentEvent[]): Settlement {
   const meter = new SessionMeter(table);
-  const rows: LedgerUsage[] = [];
   for (const event of events) {
-    if (event.type !== 'turn_usage') continue;
-    const { row } = meter.addTurn(event);
-    if (row.input_tokens > 0 || row.cached_tokens > 0 || row.output_tokens > 0) rows.push(row);
+    if (event.type === 'turn_usage') meter.addTurn(event);
+    if (event.type === 'turn_content') meter.addContent(event);
   }
   const end = events.find((event): event is EndEvent => event.type === 'end') ?? null;
-  const settled = meter.settle(end);
-  return { ...settled, rows: [...rows, ...settled.rows] };
+  return meter.settle(end);
 }
 
 export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Promise<ProbeResult> {

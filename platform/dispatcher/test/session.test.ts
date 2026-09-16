@@ -6,6 +6,7 @@ import { ceilingUsd, runAgentSession, sessionPrompt, type SessionDeps } from '..
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeOptions, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
+import type { UsageInput } from '../src/db.js';
 
 // USD per million tokens; 1000 input + N output tokens cost 0.003 + N × 0.000015.
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }));
@@ -21,6 +22,7 @@ function deps(db: FakeDb, adapter: FakeAdapter, overrides: Partial<SessionDeps> 
     watchIntervalMs: 60_000,
     fallbackModel: 'builder-class',
     sessionMaxMs: 60 * 60_000,
+    ledgerRetryMs: 1,
     alert: new RecordingAlerter(),
     log: silent,
     stopSignal: new AbortController().signal,
@@ -33,9 +35,28 @@ async function run(db: FakeDb, script: FakeScript, overrides: Partial<SessionDep
   const c = card(cardOverrides);
   db.cards = [c];
   const adapter = new FakeAdapter(script, adapterOptions);
-  const alert = new RecordingAlerter();
-  const result = await runAgentSession(c, role(), '/worktree', db.studio, deps(db, adapter, { alert, ...overrides }));
+  const alert = (overrides.alert as RecordingAlerter | undefined) ?? new RecordingAlerter();
+  const result = await runAgentSession(c, role(), '/worktree', db.studio, deps(db, adapter, { ...overrides, alert }));
   return { result, adapter, alert };
+}
+
+// A database whose record_usage throws for rows the predicate picks, `times` times each call site.
+class FailingDb extends FakeDb {
+  attempts = 0;
+  constructor(
+    private readonly fails: (input: UsageInput) => boolean,
+    private times: number,
+  ) {
+    super();
+  }
+  override async recordUsage(input: UsageInput) {
+    if (this.fails(input) && this.times > 0) {
+      this.times -= 1;
+      this.attempts += 1;
+      throw new Error('db record_usage: connection reset');
+    }
+    return super.recordUsage(input);
+  }
 }
 
 describe('ceilingUsd', () => {
@@ -174,12 +195,13 @@ describe('runAgentSession metering', () => {
       { resultOnAbort: false },
     );
     expect(result.outcome).toBe('stopped');
-    // 3000 characters is 1000 tokens; 100 were reported, so 900 at $15 per million.
-    expect(db.ledger.map((row) => [row.output_tokens, row.usd])).toEqual([
-      [100, 0.0045],
-      [900, 0.0135],
+    // 3000 characters is 1,000 output tokens for the turn. The request in flight adds the turn's 1,000
+    // input tokens again and 1,024 output: 2,000 input and 2,024 output in all, $0.0364.
+    expect(db.ledger.map((row) => [row.input_tokens, row.output_tokens, row.usd])).toEqual([
+      [1000, 100, 0.0045],
+      [1000, 1924, 0.0319],
     ]);
-    expect(db.cards[0]?.actual_usd).toBe(0.018);
+    expect(db.cards[0]?.actual_usd).toBe(0.0364);
     expect(db.events.filter((event) => event.type === 'error')).toEqual([
       {
         card_id: card().id,
@@ -188,8 +210,12 @@ describe('runAgentSession metering', () => {
         payload: {
           step: 'metering',
           basis: 'estimate',
-          rows: [{ model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 900, usd: 0.0135 }],
+          rows: [{ model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 1924, usd: 0.0319 }],
+          unwritten_rows: [],
+          billed_to: 'founder',
           fallback_models: [],
+          mismatch: false,
+          anomaly: false,
           overcount_usd: 0,
           cli_total_cost_usd: null,
         },
@@ -197,6 +223,141 @@ describe('runAgentSession metering', () => {
     ]);
     expect(alert.messages).toHaveLength(1);
     expect(alert.messages[0]).toContain('Card 4c2f5a1e metering');
+  });
+
+  it('retries a failed turn write, and a turn the ledger refuses three times is written at settle', async () => {
+    const once = new FailingDb((input) => input.output_tokens === 10, 1);
+    const { result: completed } = await run(once, async (_spec, emit) => {
+      await emit(startEvent());
+      await emit(usageEvent(1, 10));
+    });
+    expect(completed.outcome).toBe('completed');
+    expect(once.ledger.map((row) => row.usd)).toEqual([0.0032]);
+
+    const refused = new FailingDb((input) => input.output_tokens === 10, 3);
+    const { result, alert } = await run(refused, async (_spec, emit, signal) => {
+      await emit(startEvent());
+      await emit(usageEvent(1, 10));
+      await untilAborted(signal, 200);
+    });
+    expect(result).toEqual({ outcome: 'error', detail: 'the ledger refused turn 1: db record_usage: connection reset', turns: 1 });
+    expect(refused.attempts).toBe(3);
+    // The row was not counted as recorded, so settle wrote it once and nothing else.
+    expect(refused.ledger.map((row) => [row.output_tokens, row.usd])).toEqual([[10, 0.0032]]);
+    expect(refused.cards[0]?.actual_usd).toBe(0.0032);
+    expect(alert.messages).toEqual([]);
+  });
+
+  it('names a settle row the ledger refuses, with its amount, for the board to post by hand', async () => {
+    const db = new FailingDb((input) => input.output_tokens === 4980, 3);
+    const modelUsage = [{ model: 'builder-class', input_tokens: 2000, output_tokens: 5000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null }];
+    const { result, alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 10));
+        await emit(usageEvent(2, 10));
+      },
+      {},
+      {},
+      { modelUsage },
+    );
+    expect(result.outcome).toBe('completed');
+    expect(db.attempts).toBe(3);
+    expect(db.ledger).toHaveLength(2);
+    expect(db.events.find((event) => event.type === 'error')?.payload).toMatchObject({
+      unwritten_rows: [{ model: 'builder-class', output_tokens: 4980, usd: 0.0746, error: 'db record_usage: connection reset' }],
+    });
+    expect(alert.messages).toEqual([expect.stringContaining('rows not written, to post by hand: builder-class 0.0746 USD')]);
+  });
+
+  it('reconciles a renamed modelUsage key under the turn model and alerts', async () => {
+    const db = new FakeDb();
+    const modelUsage = [{ model: 'builder-class-20260801', input_tokens: 2000, output_tokens: 5000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null }];
+    const { alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 10));
+        await emit(usageEvent(2, 10));
+      },
+      {},
+      {},
+      { modelUsage },
+    );
+    // Priced at builder-class's rates, the renamed key's rows total $0.081, once.
+    expect(db.ledger.map((row) => [row.model, row.usd])).toEqual([
+      ['builder-class', 0.0032],
+      ['builder-class', 0.0032],
+      ['builder-class', 0.0746],
+    ]);
+    expect(db.cards[0]?.actual_usd).toBe(0.081);
+    expect(alert.messages).toEqual([expect.stringContaining('modelUsage names builder-class-20260801 but the turns named builder-class')]);
+  });
+
+  it('settles a zeroed modelUsage on the estimate and alerts', async () => {
+    const db = new FakeDb();
+    const modelUsage = [{ model: 'builder-class', input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null }];
+    const { alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 100, 'builder-class', {}, 3000));
+      },
+      {},
+      {},
+      { modelUsage },
+    );
+    // The turn's 1,000 estimated output tokens, not the result line's zero: 900 more at $15 per million.
+    expect(db.ledger.map((row) => [row.output_tokens, row.usd])).toEqual([
+      [100, 0.0045],
+      [900, 0.0135],
+    ]);
+    expect(db.events.find((event) => event.type === 'error')?.payload).toMatchObject({ basis: 'estimate', anomaly: true });
+    expect(alert.messages).toEqual([expect.stringContaining('modelUsage reported fewer tokens than the turns')]);
+  });
+
+  it('meters a side model at fallback rates and alerts about it once per process', async () => {
+    const alert = new RecordingAlerter();
+    const modelUsage = [
+      { model: 'builder-class', input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null },
+      { model: 'side-model', input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null },
+    ];
+    for (let session = 0; session < 2; session += 1) {
+      const db = new FakeDb();
+      await run(
+        db,
+        async (_spec, emit) => {
+          await emit(startEvent());
+          await emit(usageEvent(1, 100));
+        },
+        { alert },
+        {},
+        { modelUsage },
+      );
+      // 100 × $3 + 10 × $15 per million at the fallback rates, which are builder-class's here.
+      expect(db.ledger.map((row) => [row.model, row.usd])).toEqual([
+        ['builder-class', 0.0045],
+        ['side-model', 0.0005],
+      ]);
+    }
+    expect(alert.messages).toEqual([expect.stringContaining('Model side-model is missing from PRICE_TABLE_JSON')]);
+  });
+
+  it('records an unattended session with no init line as the founder\'s spend and alerts', async () => {
+    const db = new FakeDb();
+    const { alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(usageEvent(1, 100));
+      },
+      {},
+      {},
+      { mode: 'unattended' },
+    );
+    expect(db.ledger).toEqual([expect.objectContaining({ billed_to: 'founder', usd: 0.0045 })]);
+    expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
+    expect(alert.messages).toEqual([expect.stringContaining('no init line confirmed the studio key')]);
   });
 
   it('aborts when the session runs past its wall clock', async () => {

@@ -44,6 +44,7 @@ describe('parseStream against the recorded sample', () => {
         model: 'claude-sonnet-5',
         usage: { input_tokens: 12, cache_creation_input_tokens: 8400, cache_creation_1h_input_tokens: 8400, cache_read_input_tokens: 0, output_tokens: 61 },
         contentChars: 'Reading the spawn table before changing it.'.length + JSON.stringify({ file_path: '<repo>/seed-1/config/spawn-table.json' }).length,
+        thinking: false,
       },
       {
         type: 'turn_usage',
@@ -55,6 +56,7 @@ describe('parseStream against the recorded sample', () => {
           old_string: '"id": "gatherer", "name": "Gatherer", "baseCost": 10',
           new_string: '"id": "gatherer", "name": "Gatherer", "baseCost": 11',
         }).length,
+        thinking: false,
       },
       {
         type: 'turn_usage',
@@ -62,6 +64,7 @@ describe('parseStream against the recorded sample', () => {
         model: 'claude-sonnet-5',
         usage: { input_tokens: 4, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 8412, output_tokens: 33 },
         contentChars: 'The gatherer baseCost is now 11 and the check line holds.'.length,
+        thinking: false,
       },
     ]);
   });
@@ -122,6 +125,7 @@ describe('StreamParser', () => {
         model: 'claude-sonnet-5',
         usage: { input_tokens: 1, cache_creation_input_tokens: 2, cache_creation_1h_input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 4 },
         contentChars: 7,
+        thinking: false,
       },
     ]);
     expect(parser.finish()).toEqual([]);
@@ -159,11 +163,53 @@ describe('StreamParser', () => {
         model: 'claude-sonnet-5',
         usage: { input_tokens: 1, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 9 },
         contentChars: 0,
+        thinking: false,
       },
     ]);
     expect(parser.push(line('end_turn', 9))).toEqual([]);
     expect(parser.turns).toBe(1);
     expect(parser.finish()).toEqual([]);
+  });
+});
+
+// Claude Code writes one assistant line per content block, all with the message's id and a null
+// stop_reason, so the turn ends at the next line of another kind.
+describe('turn boundaries in the real stream shape', () => {
+  const assistant = (content: unknown[], id = 'msg_real') =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { id, model: 'claude-sonnet-5', stop_reason: null, content, usage: { input_tokens: 3, cache_creation_input_tokens: 0, cache_read_input_tokens: 100, output_tokens: 2 } },
+    });
+  const user = JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } });
+
+  it('emits the turn on the user line that follows it, before the next assistant line', () => {
+    const parser = new StreamParser();
+    expect(parser.push(assistant([{ type: 'thinking', thinking: '', signature: 's' }])).map((e) => e.type)).toEqual([]);
+    expect(parser.push(assistant([{ type: 'tool_use', id: 't1', name: 'Read', input: { file_path: 'a' } }])).map((e) => e.type)).toEqual(['tool_call']);
+    const atUser = parser.push(user);
+    expect(atUser.map((e) => e.type)).toEqual(['turn_usage', 'tool_result']);
+    expect(atUser[0]).toMatchObject({ turn: 1, thinking: true, usage: { output_tokens: 2 } });
+    expect(parser.push(assistant([{ type: 'text', text: 'done' }], 'msg_next')).map((e) => e.type)).toEqual(['message']);
+    expect(parser.turns).toBe(2);
+  });
+
+  it('emits the turn on any other line kind: system, rate limit or result', () => {
+    for (const other of ['{"type":"system","subtype":"compact_boundary"}', '{"type":"rate_limit_event"}', '{"type":"result","subtype":"success"}']) {
+      const parser = new StreamParser();
+      parser.push(assistant([{ type: 'text', text: 'hello' }]));
+      expect(parser.push(other)[0], other).toMatchObject({ type: 'turn_usage', turn: 1 });
+    }
+  });
+
+  it('passes on the characters of a line for a turn already emitted, without counting another turn', () => {
+    const parser = new StreamParser();
+    parser.push(assistant([{ type: 'text', text: 'hello' }]));
+    parser.push(user);
+    expect(parser.push(assistant([{ type: 'text', text: 'late text' }]))).toEqual([
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 9, thinking: false },
+      { type: 'message', text: 'late text' },
+    ]);
+    expect(parser.turns).toBe(1);
   });
 });
 
@@ -209,6 +255,19 @@ describe('the result line', () => {
     });
   });
 
+  it('reads modelUsage written in snake_case', () => {
+    const line = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      modelUsage: { 'claude-sonnet-5': { input_tokens: 3, output_tokens: 4, cache_read_input_tokens: 5, cache_creation_input_tokens: 6, cost_usd: 0.5 } },
+    });
+    const [end] = new StreamParser().push(line);
+    expect(end).toMatchObject({
+      type: 'end',
+      modelUsage: [{ model: 'claude-sonnet-5', input_tokens: 3, output_tokens: 4, cache_read_input_tokens: 5, cache_creation_input_tokens: 6, cost_usd: 0.5 }],
+    });
+  });
+
   it('reports no usage, no models and no denials when the line carries none', () => {
     const [end] = new StreamParser().push('{"type":"result","subtype":"error_during_execution","is_error":true}');
     expect(end).toMatchObject({ type: 'end', usage: null, modelUsage: [], permissionDenials: [] });
@@ -220,7 +279,7 @@ describe('the result line', () => {
     parser.push(line([{ type: 'thinking', thinking: 'abcd', signature: 'not counted' }]));
     parser.push(line([{ type: 'text', text: 'hello' }]));
     parser.push(line([{ type: 'tool_use', id: 't', name: 'Read', input: { a: 1 } }]));
-    expect(parser.finish()).toMatchObject([{ type: 'turn_usage', contentChars: 4 + 5 + '{"a":1}'.length }]);
+    expect(parser.finish()).toMatchObject([{ type: 'turn_usage', contentChars: 4 + 5 + '{"a":1}'.length, thinking: true }]);
   });
 });
 
@@ -277,6 +336,7 @@ describe('usage in the recorded probe', () => {
         model: 'claude-sonnet-5',
         usage: { input_tokens: 2, cache_creation_input_tokens: 8449, cache_creation_1h_input_tokens: 8449, cache_read_input_tokens: 0, output_tokens: 2 },
         contentChars: 35,
+        thinking: true,
       },
     ]);
     const end = events.find((e) => e.type === 'end');

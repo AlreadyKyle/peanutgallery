@@ -10,6 +10,7 @@ import { SessionMeter } from './metering.js';
 import { modelPrice, round4, type LedgerUsage, type PriceTable } from './pricing.js';
 import path from 'node:path';
 import { billingFor } from './throttle.js';
+import { retry } from './time.js';
 import { KERNEL_NAMES, lanePaths, protectedPaths, shortId, singleLineTitle } from './worktree.js';
 
 export type SessionOutcome =
@@ -40,6 +41,8 @@ export interface SessionDeps {
   fallbackModel: string;
   // The longest a session may run before it is interrupted, in milliseconds.
   sessionMaxMs: number;
+  // The first wait between ledger write attempts; LEDGER_RETRY_MS when unset.
+  ledgerRetryMs?: number;
   alert: Alerter;
   log: Logger;
   stopSignal: AbortSignal;
@@ -48,6 +51,9 @@ export interface SessionDeps {
 
 const PAYLOAD_LIMIT = 8000;
 export const API_KEY_SOURCE = 'ANTHROPIC_API_KEY';
+// Each ledger write is tried this many times, waiting LEDGER_RETRY_MS and then twice as long.
+export const LEDGER_TRIES = 3;
+export const LEDGER_RETRY_MS = 500;
 
 export function ceilingUsd(estimateUsd: number, cardMaxUsd: number): number {
   return round4(Math.min(1.5 * estimateUsd, cardMaxUsd));
@@ -180,11 +186,17 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const wallClock = setTimeout(() => abort('wall_clock', `session ran past ${deps.sessionMaxMs / 60_000} minutes`), deps.sessionMaxMs);
 
   const meter = new SessionMeter(deps.priceTable);
-  // Who paid: the adapter's mode, unless the init line shows the session ran on another account. That
-  // spend is not the pool's, so it is recorded as the founder's and the session is refused.
-  let billedTo: Billing = billingFor(deps.adapter.mode);
+  const retryMs = deps.ledgerRetryMs ?? LEDGER_RETRY_MS;
+  // Who paid. An unattended session bills the pool only once its init line shows the studio key; until
+  // then, and for a session on the wrong account, the spend is recorded as the founder's.
+  const account = { billedTo: 'founder' as Billing, verified: false };
   let end: EndEvent | null = null;
-  const record = (row: LedgerUsage) => deps.db.recordUsage({ billed_to: billedTo, card_id: card.id, role_id: role.id, ...row });
+  const record = (row: LedgerUsage) => retry(() => deps.db.recordUsage({ billed_to: account.billedTo, card_id: card.id, role_id: role.id, ...row }), LEDGER_TRIES, retryMs);
+  const checkCeiling = () => {
+    const estimate = round4(priorUsd + meter.liveEstimateUsd());
+    if (estimate >= ceiling) abort('ceiling', `estimated spend ${estimate} reached the ceiling ${ceiling}`);
+    return estimate;
+  };
 
   let turns = 0;
   const onEvent = async (event: AgentEvent) => {
@@ -192,7 +204,10 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       case 'start': {
         // The refusal is decided, and the session interrupted, before anything is written.
         const refusal = startRefusal(deps.adapter.mode, event);
-        if (billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) billedTo = 'founder';
+        if (!billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
+          account.billedTo = billingFor(deps.adapter.mode);
+          account.verified = true;
+        }
         if (refusal) abort('refused', refusal);
         await deps.db.insertEvent(card.id, role.id, 'start', {
           session_id: event.sessionId,
@@ -207,17 +222,31 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       case 'turn_usage': {
         turns = event.turn;
         if (event.turn > deps.sessionMaxTurns) abort('turn_cap', `turn ${event.turn} exceeds the cap ${deps.sessionMaxTurns}`);
-        if (zeroUsage(event.usage) && event.contentChars === 0) return;
+        if (zeroUsage(event.usage) && event.contentChars === 0 && !event.thinking) return;
         const { row, fallback } = meter.addTurn(event);
-        const recorded = zeroUsage(event.usage) ? null : await record(row);
-        const estimate = round4(priorUsd + meter.liveEstimateUsd());
-        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: row.usd, actual: recorded?.actual_usd ?? null, estimate });
+        let actual: number | null = null;
+        if (!zeroUsage(event.usage)) {
+          try {
+            actual = (await record(row)).actual_usd;
+            meter.commit(row);
+          } catch (error) {
+            // The row stays pending and settle writes it again. A ledger that refuses three writes
+            // in a row cannot hold the caps, so the session stops.
+            deps.log.error('session', `turn ${event.turn} not metered`, { card: card.id, usd: row.usd, error: errorMessage(error) });
+            abort('error', `the ledger refused turn ${event.turn}: ${errorMessage(error)}`);
+          }
+        }
+        const estimate = checkCeiling();
+        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: row.usd, actual, estimate });
         // A model missing from the price table is recorded at the fallback rates first, so the
         // turn it already paid for is on the ledger, and then the session stops.
         if (fallback) abort('unknown_model', `no price for model ${event.model}`);
-        if (estimate >= ceiling) abort('ceiling', `estimated spend ${estimate} reached the ceiling ${ceiling}`);
         return;
       }
+      case 'turn_content':
+        meter.addContent(event);
+        checkCeiling();
+        return;
       case 'tool_call':
         await deps.db.insertEvent(card.id, role.id, 'tool_call', { tool_use_id: event.toolUseId, name: event.name, input: trimPayload(event.input) });
         return;
@@ -245,7 +274,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     clearInterval(watch);
     clearTimeout(wallClock);
     deps.stopSignal.removeEventListener('abort', onStop);
-    await settle(card, role, deps, meter, end, record);
+    await settle({ card, role, deps, meter, end, record, account });
   }
 
   if (state.aborted) return { outcome: state.aborted.outcome, detail: state.aborted.detail, turns: result.turns };
@@ -261,42 +290,71 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns };
 }
 
-// Writes the settle rows once the session has ended, however it ended. A session settled on an
-// estimate, one that used a model the price table lacks, or one whose turns recorded more than its
-// result line reports is written up as an error event and alerted once. A failure here is logged
-// and alerted and does not change the session's outcome.
-async function settle(
-  card: Card,
-  role: Role,
-  deps: SessionDeps,
-  meter: SessionMeter,
-  end: EndEvent | null,
-  record: (row: LedgerUsage) => Promise<unknown>,
-): Promise<void> {
+interface SettleContext {
+  card: Card;
+  role: Role;
+  deps: SessionDeps;
+  meter: SessionMeter;
+  end: EndEvent | null;
+  record: (row: LedgerUsage) => Promise<unknown>;
+  account: { billedTo: Billing; verified: boolean };
+}
+
+// Writes the settle rows once the session has ended, however it ended, and only once: a row that
+// fails its three tries is named with its usd in the error event and the alert, for the board to
+// post by hand, never written again by a second settle. A session settled on an estimate, with
+// mismatched model names, with a turn model priced at fallback rates, with an overcount, with rows
+// left unwritten, or unattended with no init line is written up as an error event and alerted once.
+// A side model priced at fallback rates is alerted once per process, not once per session.
+async function settle({ card, role, deps, meter, end, record, account }: SettleContext): Promise<void> {
+  const settled = meter.settle(end);
+  const unwritten: Array<LedgerUsage & { error: string }> = [];
+  for (const row of settled.rows) {
+    try {
+      await record(row);
+      meter.commit(row);
+    } catch (error) {
+      unwritten.push({ ...row, error: errorMessage(error) });
+    }
+  }
+  if (settled.rows.length > 0) deps.log.info('session', `card ${card.id} settled`, { basis: settled.basis, rows: settled.rows.length, unwritten: unwritten.length });
+
+  const metered = meter.turnsRecorded || settled.rows.length > 0;
+  const turnFallbacks = settled.fallbackModels.filter((model) => settled.turnModels.includes(model));
+  const sideFallbacks = settled.fallbackModels.filter((model) => !settled.turnModels.includes(model));
+  const reportedModels = (end?.modelUsage ?? []).map((entry) => entry.model);
+  const problems = [
+    ...(settled.basis === 'estimate' && metered
+      ? [settled.anomaly ? 'modelUsage reported fewer tokens than the turns, so the session was settled on the estimate' : 'no usable result line, so the session was settled on the estimate']
+      : []),
+    ...(settled.mismatch ? [`modelUsage names ${reportedModels.join(', ') || 'no model'} but the turns named ${settled.turnModels.join(', ')}`] : []),
+    ...(turnFallbacks.length > 0 ? [`priced at fallback rates: ${turnFallbacks.join(', ')}`] : []),
+    ...(settled.overcountUsd > 0 ? [`the rows recorded ${settled.overcountUsd} USD above the settled total`] : []),
+    ...(unwritten.length > 0 ? [`rows not written, to post by hand: ${unwritten.map((row) => `${row.model} ${row.usd} USD`).join(', ')}`] : []),
+    ...(deps.adapter.mode === 'unattended' && !account.verified && metered ? ['no init line confirmed the studio key, so the spend was recorded as the founder\'s'] : []),
+  ];
+  if (problems.length === 0 && sideFallbacks.length === 0) return;
+
+  const payload = {
+    step: 'metering',
+    basis: settled.basis,
+    rows: settled.rows,
+    unwritten_rows: unwritten,
+    billed_to: account.billedTo,
+    fallback_models: settled.fallbackModels,
+    mismatch: settled.mismatch,
+    anomaly: settled.anomaly,
+    overcount_usd: settled.overcountUsd,
+    cli_total_cost_usd: end?.totalCostUsd ?? null,
+  };
+  deps.log.warn('session', `card ${card.id} metering needs review`, payload);
   try {
-    const settled = meter.settle(end);
-    for (const row of settled.rows) await record(row);
-    const reported = settled.fallbackModels.length > 0 || settled.overcountUsd > 0 || (settled.basis === 'estimate' && meter.turnsRecorded);
-    if (settled.rows.length > 0) deps.log.info('session', `card ${card.id} settled`, { basis: settled.basis, rows: settled.rows.length });
-    if (!reported) return;
-    const payload = {
-      step: 'metering',
-      basis: settled.basis,
-      rows: settled.rows,
-      fallback_models: settled.fallbackModels,
-      overcount_usd: settled.overcountUsd,
-      cli_total_cost_usd: end?.totalCostUsd ?? null,
-    };
-    deps.log.warn('session', `card ${card.id} metering needs review`, payload);
     await deps.db.insertEvent(card.id, role.id, 'error', payload);
-    const problems = [
-      ...(settled.basis === 'estimate' ? ['no result line, so unreported output was estimated'] : []),
-      ...(settled.fallbackModels.length > 0 ? [`priced at fallback rates: ${settled.fallbackModels.join(', ')}`] : []),
-      ...(settled.overcountUsd > 0 ? [`turn rows recorded ${settled.overcountUsd} USD above the result line`] : []),
-    ];
-    await deps.alert.notify(`Card ${shortId(card.id)} metering: ${problems.join('; ')}. ${singleLineTitle(card.title)}`);
   } catch (error) {
-    deps.log.error('session', `card ${card.id} settle failed`, { error: errorMessage(error) });
-    await deps.alert.notify(`Card ${shortId(card.id)} metering: the settle rows were not written (${errorMessage(error)}). ${singleLineTitle(card.title)}`);
+    deps.log.error('session', `card ${card.id} metering event not written`, { error: errorMessage(error) });
+  }
+  if (problems.length > 0) await deps.alert.notify(`Card ${shortId(card.id)} metering: ${problems.join('; ')}. ${singleLineTitle(card.title)}`);
+  for (const model of sideFallbacks) {
+    await deps.alert.notifyOnce(`fallback-model:${model}`, `Model ${model} is missing from PRICE_TABLE_JSON; sessions that call it are metered at the table's highest rates until it is added.`);
   }
 }
