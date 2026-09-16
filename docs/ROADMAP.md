@@ -2,7 +2,7 @@
 
 The ordered list of what stands between today and the public announcement, each item pointing at its spec. `docs/PLAN.md` is the constitution; this file is the index. It is updated in the same pull request that changes a spec's status.
 
-Last updated 16 September 2026, main at 49d6e33.
+Last updated 16 September 2026, main at 2bb96dc.
 
 ## What "live" means
 
@@ -28,7 +28,7 @@ The stream, the host, Twitch, personal decisions, display names, the name pipeli
 |---|---|---|---|---|
 | 1 | Dispatcher and ledger hardening | `specs/launch-hardening.md` | built (live runs pending in 2) | none |
 | 2 | Prove the loop: week-1 runs, directives D1–D3 | `specs/week1-runs.md` | built (a real contribution closes it) | stay signed in at /board during runs; a real contribution to prove `charge.updated` |
-| 3 | Launch pages: Shipped, legal, previews, two-factor | `specs/launch-pages.md` | draft | review legal text; a contact address at peanutgallery.games |
+| 3 | Launch pages: Shipped, legal, previews, two-factor | `specs/launch-pages.md` | built (live steps pending) | review the legal text; create hello@peanutgallery.games; enrol TOTP on /board |
 | 4 | Refunds, disputes, daily hold | `specs/refunds-and-holds.md` | done | none |
 | 5 | VPS, unattended, alerts | `specs/vps.md` | built (cutover pending) | Oracle Cloud Always Free instance (Toronto) and IP, healthchecks.io URL, ntfy topic, a fine-grained GitHub token for this repository, studio Console prepaid credit |
 | 6 | Announcement | `specs/announcement.md` | draft | record or approve the clip, press Go live, post |

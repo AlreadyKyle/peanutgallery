@@ -12,7 +12,7 @@ import {
 } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
-import { formatInteger, formatUsd, percent } from '../lib/format';
+import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
 
@@ -42,6 +42,7 @@ const STATUS_WORDS: Record<ReturnType<typeof statusOf>, string> = {
   queued: copy.statusQueued,
   picked: copy.statusPicked,
   open: copy.statusOpen,
+  shipped: copy.statusShipped,
 };
 
 function contributorsLine(count: number): string {
@@ -102,7 +103,8 @@ function CardBox({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
       <div className="card-bottom">
         {building ? (
           <p className="card-meta">
-            {formatUsd(card.actual_usd)} {copy.spentSoFar} · {sourceLabel(card.source)}
+            {card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spentSoFar} · ` : ''}
+            {sourceLabel(card.source)}
           </p>
         ) : null}
         {!building && caption !== null ? (
@@ -183,6 +185,53 @@ export function FundBoard({ studio }: { studio: StudioState }) {
         );
       }}
     </Guarded>
+  );
+}
+
+/**
+ * "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source
+ * instead. Only studio-billed spend is public, so a card built on the founder's time shows none.
+ */
+export function shippedCaption(card: Card, snapshot: Snapshot): string {
+  const funding = snapshot.funding[card.id];
+  const who =
+    card.shape === 'goal' || funding !== undefined
+      ? contributorsLine(funding?.contributors ?? 0)
+      : sourceLabel(card.source);
+  const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spent} · ` : '';
+  return `${cost}${who} · ${copy.shippedOn} ${formatDate(card.updated_at)}`;
+}
+
+/** Live cards, newest first, as rows: what each change cost, who funded it and when it shipped. */
+export function ShippedList({ snapshot }: { snapshot: Snapshot }) {
+  const env = siteEnv();
+  const { shipped } = groupCards(snapshot.cards);
+  if (shipped.length === 0) return null;
+  return (
+    <section className="section" aria-labelledby="shipped">
+      <h2 id="shipped">{copy.shipped}</h2>
+      <p className="muted">{copy.shippedIntro}</p>
+      <ul className="shipped">
+        {shipped.map((card) => {
+          const titleId = `shipped-title-${card.id}`;
+          return (
+            <li key={card.id}>
+              <p className="shipped-category">{copy.categories[categoryOf(card)]}</p>
+              <h3 id={titleId}>{card.title}</h3>
+              {blank(card.summary) ? null : <p>{card.summary}</p>}
+              <p className="card-meta">{shippedCaption(card, snapshot)}</p>
+              {env.playUrl !== '' && card.folder === 'seed-1' ? (
+                <p className="small">
+                  <a href={env.playUrl} aria-describedby={titleId}>
+                    {copy.playTheGame}
+                  </a>
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

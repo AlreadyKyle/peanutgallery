@@ -11,7 +11,7 @@ export const copy = {
   ledgerEmpty: 'No agent work recorded yet.',
   deploysEmpty: 'No deploys yet.',
   artPolicy:
-    'Art inside the games is made by code, never by an image model. AI-generated images are used only for the studio itself: agent avatars, episode thumbnails and lore cards.',
+    'Art inside the games is made by code, never by an image model. Generated images are only used for studio imagery, such as agent avatars, never inside the games.',
   allAges: 'Everything here is made for all ages.',
   fixedRulesIntro: 'Some rules are fixed and no vote can change them.',
   fixedRules: [
@@ -21,7 +21,7 @@ export const copy = {
     'A small emergency fund pays for urgent bug fixes.',
     'Every change passes automated checks before it goes live and can be rolled back.',
     'The content filter, the all-ages rating and the art policy.',
-    'Agents that write code never read messages from the public. Only notes from the board reach them.',
+    'No agent that can change the game or the site reads text from the public.',
   ],
   discord: 'Discord',
   createdBy: 'Created by',
@@ -54,9 +54,9 @@ export const copy = {
   howItWorks: 'How it works',
   steps: [
     'Press Contribute. Pick a card to vote for it, or let the studio pick for you.',
-    'At checkout, choose an amount and how it splits between the agents and the studio. It shows on the meter within a minute.',
+    'At checkout, choose an amount and how it splits between the agents and the studio. Up to $50 of agent credit a day shows on the meter within a minute; larger amounts show after 14 days.',
     "When a card's bar fills, the agents build it. Money with no card funds whatever is next in line.",
-    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live in the game, and the card shows how many people funded it.',
+    'Every turn the agents spend is priced on the ledger. The change passes the gate, goes live and is listed under Shipped with how many people funded it.',
   ],
   rightNow: 'Right now',
   buildingLine: 'Building:',
@@ -67,6 +67,12 @@ export const copy = {
     'Funding a card is your vote. When its bar fills, the agents build it. At the default split about $3.10 of every $5 reaches the bar.',
   queued: 'Queued',
   queuedIntro: 'Fully funded and waiting for the agents.',
+  shipped: 'Shipped',
+  shippedIntro: 'Changes the agents built that passed the gate and went live, newest first.',
+  spent: 'spent',
+  shippedOn: 'shipped',
+  playTheGame: 'Play the game',
+  latestShipped: 'Latest shipped:',
   filterLabel: 'Show cards for',
   categories: { all: 'All', game: 'Dust', studio: 'The studio', next: 'Next game' },
   categoryNotes: {
@@ -82,6 +88,7 @@ export const copy = {
   statusQueued: 'Queued',
   statusPicked: 'Picked by the board',
   statusOpen: 'Open for funding',
+  statusShipped: 'Shipped',
   spentSoFar: 'spent so far',
   fundThis: 'Fund this card',
   agentBrief: 'What the agents are told',
@@ -115,4 +122,151 @@ export const copy = {
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
     'Every contribution in, every agent turn spent and every deploy, as it happens. Nothing here is edited by hand.',
+
+  // Footer links and the text pages they open. Drafted for board review; not legal advice.
+  // In a paragraph, {email} becomes the contact address as a mailto link, {refunds} a link to
+  // the Refunds page and {discord} the Discord invite.
+  footerLinks: { terms: 'Terms', privacy: 'Privacy', refunds: 'Refunds', contact: 'Contact' },
+  contactEmail: 'hello@peanutgallery.games',
+  refundsPageLink: 'Refunds page',
+  legalUpdated: 'Last updated 15 September 2026.',
+  terms: {
+    title: 'Terms',
+    lede: 'What a contribution pays for, what it does not buy, and the rules that apply.',
+    sections: [
+      {
+        heading: 'Who runs the studio',
+        paragraphs: ['Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada.'],
+      },
+      {
+        heading: 'What a contribution pays for',
+        paragraphs: [
+          "A contribution pays for the agents' compute and for the studio, in the split you choose at checkout.",
+          'It buys no goods, no ownership and no equity. It does not guarantee any outcome, and it adds no weight to any vote. Peanut Gallery is not a charity, and contributions are not donations.',
+        ],
+      },
+      {
+        heading: 'Funding a card',
+        paragraphs: [
+          "Funding a card is how you vote for it. When a card's bar is full, the card moves to the queue and the agents build it in turn.",
+          "Every change must pass the gate, the studio's automated checks, before it goes live. The gate may reject a change even when its card is fully funded.",
+        ],
+      },
+      {
+        heading: 'Rules contributions cannot change',
+        paragraphs: [
+          'No contribution, vote or card can change these rules: the public ledger, the spend caps, the default 80/20 split and the 10% reserve, the emergency fund rule, the gate, rollback, the content filter and the all-ages rating, the art policy, and the rule that no agent that can change the game or the site reads text from the public.',
+        ],
+      },
+      {
+        heading: 'Large contributions',
+        paragraphs: [
+          'Up to $50 of agent credit per person per day reaches the meter within a minute. Contributions above that are held for 14 days before they reach the meter.',
+        ],
+      },
+      {
+        heading: 'Refunds',
+        paragraphs: ['Refunds and disputes are handled as the {refunds} describes.'],
+      },
+      {
+        heading: 'The games',
+        paragraphs: ['The games are free to play.'],
+      },
+      {
+        heading: 'Law',
+        paragraphs: ['These terms are governed by the laws of Ontario and the laws of Canada that apply there.'],
+      },
+      {
+        heading: 'Changes to these terms',
+        paragraphs: ['When these terms change, the new version is posted on this page with its date.'],
+      },
+      {
+        heading: 'Contact',
+        paragraphs: ['Questions about these terms go to {email}.'],
+      },
+    ],
+  },
+  privacy: {
+    title: 'Privacy',
+    lede: 'What the studio stores when you contribute, and what it does not.',
+    sections: [
+      {
+        heading: 'Payments',
+        paragraphs: ['Stripe processes every payment. The studio never sees or stores your card number.'],
+      },
+      {
+        heading: 'What the studio stores',
+        paragraphs: [
+          "For each contribution the studio stores the amount, the split you chose, the card you funded, the time, Stripe's reference for the payment, and a one-way hash of the email address Stripe collects. The email address itself is not stored.",
+          'If you give a display name at checkout, it is stored and kept private until names are reviewed.',
+        ],
+      },
+      {
+        heading: 'What the site does not do',
+        paragraphs: ['The site has no ads, no analytics and no tracking cookies.'],
+      },
+      {
+        heading: 'Board sign-in',
+        paragraphs: ['Only board members can sign in. Sign-in uses Supabase Auth.'],
+      },
+      {
+        heading: 'Hosting',
+        paragraphs: ['The site is hosted on Netlify and the database on Supabase. Their logs may record IP addresses for security.'],
+      },
+      {
+        heading: 'What is public',
+        paragraphs: [
+          "The public pages show totals, such as the money available and each card's number of contributors. They never show names or email addresses.",
+        ],
+      },
+      {
+        heading: 'Your data',
+        paragraphs: [
+          'To ask for a copy of your data or for its deletion, email {email} and include the email address you paid with, so the matching record can be found.',
+          'Payment records the law requires the studio to keep are kept for as long as the law requires.',
+        ],
+      },
+    ],
+  },
+  refunds: {
+    title: 'Refunds',
+    lede: 'How to ask for a refund, and what a refund changes.',
+    sections: [
+      {
+        heading: 'Asking for a refund',
+        paragraphs: ['Email {email} within 14 days of your contribution, with your Stripe receipt.'],
+      },
+      {
+        heading: 'How refunds are paid',
+        paragraphs: ['Refunds go back through Stripe to the card or account you paid with.'],
+      },
+      {
+        heading: 'What a refund changes',
+        paragraphs: [
+          "A refund or a dispute takes that contribution's credit off the meter and off any card bar it funded. Work that has already shipped stays shipped.",
+        ],
+      },
+      {
+        heading: 'Disputes',
+        paragraphs: ['Disputes go through Stripe. The 10% reserve covers disputes first.'],
+      },
+    ],
+  },
+  contact: {
+    title: 'Contact',
+    lede: 'How to reach the studio.',
+    sections: [
+      {
+        heading: 'Email',
+        paragraphs: [
+          '{email}',
+          'Write about refunds, a copy or deletion of your data, or anything else about the studio.',
+        ],
+      },
+    ],
+    discordSection: {
+      heading: 'Discord',
+      paragraphs: ['The studio also has a {discord} server.'],
+    },
+  },
 } as const;

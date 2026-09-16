@@ -92,9 +92,15 @@ main {
   padding-block: var(--space-4) var(--space-5);
 }
 
-/* A text page (ledger, contribute, not found, board) keeps every block to the reading measure. */
+/* A text page (ledger, contribute, the legal pages, not found, board) keeps every block to the
+   reading measure. */
 main:not(.wide) > * {
   max-width: var(--measure);
+}
+
+/* Terms, Privacy, Refunds and Contact: short prose sections sit closer together than landing sections. */
+.text-page .section {
+  margin-bottom: var(--space-4);
 }
 
 /* Type ------------------------------------------------------------------ */
@@ -634,6 +640,36 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--line);
 }
 
+/* Shipped: rows at the reading measure, hairlines between them, newest first. */
+.shipped {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-2);
+}
+
+.shipped li {
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.shipped li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.shipped h3,
+.shipped p {
+  margin-bottom: var(--space-1);
+}
+
+.shipped p:last-child {
+  margin-bottom: 0;
+}
+
+.shipped-category {
+  color: var(--muted);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
 /* Event and deploy rows ---------------------------------------------------- */
 
 .rows li {
@@ -678,6 +714,12 @@ button.link:hover:not(:disabled) {
   margin: 0;
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
 /* Forms (the board page) ------------------------------------------------- */
 
 .stack {
@@ -707,6 +749,15 @@ form + form {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* The QR code shown while a board member sets up an authenticator app. */
+.qr {
+  display: block;
+  width: 12.5rem;
+  max-width: 100%;
+  height: auto;
+  margin-block: var(--space-2);
 }
 
 label {

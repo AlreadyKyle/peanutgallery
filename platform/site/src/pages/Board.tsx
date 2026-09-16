@@ -7,6 +7,7 @@ import {
   buckets,
   cardStages,
   dispatcherSeenAgoMs,
+  enrolTotp,
   fetchBoardRole,
   fileCard,
   fileDirective,
@@ -21,10 +22,15 @@ import {
   setLaunched,
   setPaused,
   STUDIO_STATE_POLL_MS,
+  TOTP_CODE,
+  twoFactorState,
+  verifyTotp,
   type AgentMode,
   type BoardRole,
   type BoardStudioState,
   type NextCardStage,
+  type TotpEnrolment,
+  type TwoFactorState,
 } from '../lib/board';
 import { formatClock, formatDateTime, formatUsd } from '../lib/format';
 import type { Role } from '../lib/source';
@@ -107,6 +113,8 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 function SignedIn({ client, email }: { client: SupabaseClient; email: string }) {
   const [role, setRole] = useState<BoardRole | null | 'pending'>('pending');
   const [roleError, setRoleError] = useState('');
+  // The board RPCs that change state refuse a session without a verified second factor (aal2).
+  const [secondFactor, setSecondFactor] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -143,9 +151,148 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
           {roleError === '' ? 'This account is not on the board.' : roleError}
         </p>
       ) : null}
-      {role === 'board' || role === 'moderator' ? <PauseControls client={client} /> : null}
-      {role === 'board' ? <BoardControls client={client} /> : null}
+      {/* The moderator's pause works at aal1; the board's needs the second factor. */}
+      {role === 'moderator' ? <PauseControls client={client} /> : null}
+      {role === 'board' ? (
+        <>
+          {secondFactor ? null : <TwoFactor client={client} onVerified={setSecondFactor} />}
+          {secondFactor ? <PauseControls client={client} /> : null}
+          <BoardControls client={client} secondFactor={secondFactor} />
+        </>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * The second factor for a board member: enrol an authenticator app when the account has no verified
+ * TOTP factor, otherwise verify a code from it. Reports aal2 through onVerified.
+ */
+function TwoFactor({
+  client,
+  onVerified,
+}: {
+  client: SupabaseClient;
+  onVerified: (verified: boolean) => void;
+}) {
+  const [state, setState] = useState<TwoFactorState | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [enrolment, setEnrolment] = useState<TotpEnrolment | null>(null);
+  const [code, setCode] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    twoFactorState(client)
+      .then((next) => {
+        if (!live) return;
+        setState(next);
+        if (next.level === 'aal2') onVerified(true);
+      })
+      .catch((error: unknown) => {
+        if (live) setLoadError(errorMessage(error));
+      });
+    return () => {
+      live = false;
+    };
+  }, [client, onVerified]);
+
+  async function startEnrolment() {
+    setBusy(true);
+    setMessage('');
+    try {
+      setEnrolment(await enrolTotp(client));
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const factorId = enrolment?.factorId ?? state?.verifiedFactorId ?? null;
+
+  async function verify(event: FormEvent) {
+    event.preventDefault();
+    if (factorId === null) return;
+    const entered = code.trim();
+    if (!TOTP_CODE.test(entered)) {
+      setMessage('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await verifyTotp(client, factorId, entered);
+      const next = await twoFactorState(client);
+      if (next.level === 'aal2') {
+        onVerified(true);
+      } else {
+        setState(next);
+        setMessage('The code was accepted, but this session has no second factor. Sign out and sign in again.');
+      }
+    } catch (error) {
+      setMessage(errorMessage(error));
+      setCode('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const codeForm =
+    factorId === null ? null : (
+      <form className="stack" onSubmit={verify} aria-label="Verify a code">
+        <label>
+          6-digit code
+          <input
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            required
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+        </label>
+        <button type="submit" disabled={busy}>
+          Verify
+        </button>
+      </form>
+    );
+
+  return (
+    <section aria-label="Two-factor sign-in">
+      <h2>Two-factor sign-in</h2>
+      <p>
+        A second factor is needed before you can pause agents, go live, change the agent mode, or file cards,
+        directives and notes.
+      </p>
+      {state === null ? (
+        <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
+      ) : null}
+      {state !== null && state.verifiedFactorId !== null ? (
+        <p>Enter the code your authenticator app shows for Peanut Gallery.</p>
+      ) : null}
+      {state !== null && state.verifiedFactorId === null && enrolment === null ? (
+        <>
+          <p>This account has no authenticator app yet.</p>
+          <button type="button" disabled={busy} onClick={() => void startEnrolment()}>
+            Set up an authenticator app
+          </button>
+        </>
+      ) : null}
+      {enrolment === null ? null : (
+        <>
+          <p>Scan the QR code with an authenticator app, or type the secret into it. Then enter the code it shows.</p>
+          <img className="qr" src={enrolment.qrCode} alt="QR code for your authenticator app" width={200} height={200} />
+          <p>
+            Secret: <code>{enrolment.secret}</code>
+          </p>
+        </>
+      )}
+      {codeForm}
+      {message === '' ? null : <p role="status">{message}</p>}
+    </section>
   );
 }
 
@@ -185,21 +332,35 @@ function useBoardStudioState(client: SupabaseClient): StudioLoad {
   return { state, loadError, refresh };
 }
 
-// Board members only; moderators never mount this, so they never load the studio state.
-function BoardControls({ client }: { client: SupabaseClient }) {
+// Board members only; moderators never mount this, so they never load the studio state. The status
+// and the heartbeat run at aal1, so attended dispatcher runs keep a board session; everything that
+// changes state waits for the second factor.
+function BoardControls({ client, secondFactor }: { client: SupabaseClient; secondFactor: boolean }) {
   const studio = useBoardStudioState(client);
   return (
     <>
-      <StudioStatus client={client} studio={studio} />
+      <StudioStatus client={client} studio={studio} canChange={secondFactor} />
       <SessionStatus client={client} />
-      <NextCardForm client={client} cardMaxUsd={studio.state?.card_max_usd ?? null} />
-      <DirectiveForm client={client} />
-      <NoteForm client={client} />
+      {secondFactor ? (
+        <>
+          <NextCardForm client={client} cardMaxUsd={studio.state?.card_max_usd ?? null} />
+          <DirectiveForm client={client} />
+          <NoteForm client={client} />
+        </>
+      ) : null}
     </>
   );
 }
 
-function StudioStatus({ client, studio }: { client: SupabaseClient; studio: StudioLoad }) {
+function StudioStatus({
+  client,
+  studio,
+  canChange,
+}: {
+  client: SupabaseClient;
+  studio: StudioLoad;
+  canChange: boolean;
+}) {
   const { state, loadError, refresh } = studio;
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -260,29 +421,33 @@ function StudioStatus({ client, studio }: { client: SupabaseClient; studio: Stud
           <p>
             Daily cap {formatUsd(state.daily_cap_usd)}. Card maximum {formatUsd(state.card_max_usd)}.
           </p>
-          {state.launched_at === null ? (
+          {canChange && state.launched_at === null ? (
             <button type="button" disabled={busy} onClick={() => void goLive()}>
               Go live
             </button>
           ) : null}
-          <fieldset disabled={busy}>
-            <legend>Agent mode</legend>
-            <div className="row">
-              {agentModes.map((mode) => (
-                <label key={mode} className="choice">
-                  <input
-                    type="radio"
-                    name="agent-mode"
-                    value={mode}
-                    checked={state.agent_mode === mode}
-                    onChange={() => void changeMode(mode)}
-                  />
-                  {mode}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <p>Restart the dispatcher in the same mode.</p>
+          {canChange ? (
+            <>
+              <fieldset disabled={busy}>
+                <legend>Agent mode</legend>
+                <div className="row">
+                  {agentModes.map((mode) => (
+                    <label key={mode} className="choice">
+                      <input
+                        type="radio"
+                        name="agent-mode"
+                        value={mode}
+                        checked={state.agent_mode === mode}
+                        onChange={() => void changeMode(mode)}
+                      />
+                      {mode}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <p>Restart the dispatcher in the same mode.</p>
+            </>
+          ) : null}
           {loadError === '' ? null : <p className="error">{loadError}</p>}
         </>
       )}
@@ -467,8 +632,8 @@ function NextCardForm({
     <form className="stack" onSubmit={submit} aria-label="File a Next card">
       <h2>File a Next card</h2>
       <p>
-        A Next card shows on the site under Next. Supporters fund it to vote for it; when its bar
-        reaches the target the agents build it.
+        A Next card shows on the site under Fund what's next. Supporters fund it to vote for it;
+        when its bar reaches the target the agents build it.
       </p>
       <label>
         Bucket
@@ -769,7 +934,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
   return (
     <form className="stack" onSubmit={submit} aria-label="File a note">
       <h2>File a note</h2>
-      <p>Notes are private advisory text to the Studio Head.</p>
+      <p>Notes are private advice for the Studio Head. Nothing reads them until note triage is built.</p>
       <label>
         Note
         <textarea required rows={4} value={text} onChange={(event) => setText(event.target.value)} />

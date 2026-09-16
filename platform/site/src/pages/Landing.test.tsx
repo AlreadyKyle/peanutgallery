@@ -29,8 +29,9 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       funding_target_usd: 100,
       funded_usd: 100,
-      actual_usd: 3.2,
+      spent_usd: 3.2,
       created_at: '2026-09-14T00:00:00Z',
+      updated_at: '2026-09-14T00:00:00Z',
     },
     {
       id: 'next1',
@@ -44,8 +45,9 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       funding_target_usd: 100,
       funded_usd: 25,
-      actual_usd: 0,
+      spent_usd: 0,
       created_at: '2026-09-14T00:00:01Z',
+      updated_at: '2026-09-14T00:00:01Z',
     },
     {
       id: 'next2',
@@ -59,8 +61,9 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       funding_target_usd: 50,
       funded_usd: 0,
-      actual_usd: 0,
+      spent_usd: 0,
       created_at: '2026-09-14T00:00:02Z',
+      updated_at: '2026-09-14T00:00:02Z',
     },
     {
       id: 'studio1',
@@ -74,8 +77,9 @@ const snapshot: Snapshot = {
       folder: 'platform',
       funding_target_usd: 10,
       funded_usd: 0,
-      actual_usd: 0,
+      spent_usd: 0,
       created_at: '2026-09-14T00:00:03Z',
+      updated_at: '2026-09-14T00:00:03Z',
     },
     {
       id: 'queued1',
@@ -89,11 +93,44 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       funding_target_usd: 0,
       funded_usd: 0,
-      actual_usd: 0,
+      spent_usd: 0,
       created_at: '2026-09-14T00:00:04Z',
+      updated_at: '2026-09-14T00:00:04Z',
+    },
+    {
+      id: 'live1',
+      title: 'Save and resume',
+      summary: 'Your progress is kept between visits.',
+      intent: 'Persist the save.',
+      source: 'board',
+      stage: 'live',
+      shape: 'goal',
+      bucket: 'game',
+      folder: 'seed-1',
+      funding_target_usd: 3,
+      funded_usd: 3,
+      spent_usd: 1.5,
+      created_at: '2026-09-13T00:00:00Z',
+      updated_at: '2026-09-15T09:00:00Z',
+    },
+    {
+      id: 'live2',
+      title: 'The unlock list',
+      summary: null,
+      intent: null,
+      source: 'board',
+      stage: 'live',
+      shape: 'oneoff',
+      bucket: 'game',
+      folder: 'seed-1',
+      funding_target_usd: 0,
+      funded_usd: 0,
+      spent_usd: 0.75,
+      created_at: '2026-09-13T00:00:01Z',
+      updated_at: '2026-09-15T11:00:00Z',
     },
   ],
-  funding: { next1: { contributors: 3, credited_usd: 18.5 } },
+  funding: { next1: { contributors: 3, credited_usd: 18.5 }, live1: { contributors: 2, credited_usd: 3 } },
   launchedAt: null,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [],
@@ -131,6 +168,7 @@ function renderLanding(source: StudioSource | null) {
 beforeEach(() => {
   vi.stubEnv('VITE_DISCORD_INVITE', '');
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
+  vi.stubEnv('VITE_PLAY_URL', '');
 });
 
 afterEach(() => {
@@ -159,13 +197,24 @@ describe('Landing', () => {
     await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
     expect(
       screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent),
-    ).toEqual([copy.rightNow, copy.now, copy.fund, copy.queued, copy.howItWorks, copy.meter, copy.ledger, copy.policies]);
+    ).toEqual([
+      copy.rightNow,
+      copy.now,
+      copy.fund,
+      copy.queued,
+      copy.shipped,
+      copy.howItWorks,
+      copy.meter,
+      copy.ledger,
+      copy.policies,
+    ]);
     expect(screen.getAllByRole('link', { name: copy.fullLedger }).map((link) => link.getAttribute('href'))).toEqual(['/ledger', '/ledger']);
 
     // Right now: money available, what is building and the latest agent work.
     const panel = screen.getByRole('complementary', { name: copy.rightNow });
     expect(within(panel).getByText('$48.56')).toBeTruthy();
     expect(paragraphIn(panel, `${copy.buildingLine} The core loop`)).toBeTruthy();
+    expect(paragraphIn(panel, `${copy.latestShipped} The unlock list`)).toBeTruthy();
     expect(within(panel).getByText(copy.ledgerEmpty)).toBeTruthy();
 
     expect(screen.getByText('$7.10')).toBeTruthy();
@@ -192,12 +241,35 @@ describe('Landing', () => {
     ]);
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
-    ).toEqual([copy.recentWork, 'The core loop', 'A second level', 'A music track', 'A clearer ledger page']);
+    ).toEqual([
+      copy.recentWork,
+      'The core loop',
+      'A second level',
+      'A music track',
+      'A clearer ledger page',
+      'The unlock list',
+      'Save and resume',
+    ]);
 
     // Queued lists the funded card as a row, not a box.
     const queued = screen.getByRole('region', { name: copy.queued });
     expect(within(queued).getByText('Gatherer costs 11')).toBeTruthy();
     expect(within(queued).queryByRole('progressbar')).toBeNull();
+
+    // Shipped lists the live cards newest first, with no bar and no fund button, and never in the fund board.
+    const shipped = screen.getByRole('region', { name: copy.shipped });
+    expect(within(shipped).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'The unlock list',
+      'Save and resume',
+    ]);
+    expect(within(shipped).getByText(copy.shippedIntro)).toBeTruthy();
+    expect(
+      within(shipped).getByText(
+        `$1.50 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '2')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`,
+      ),
+    ).toBeTruthy();
+    expect(within(shipped).queryByRole('progressbar')).toBeNull();
+    expect(within(shipped).queryByRole('link', { name: copy.playTheGame })).toBeNull();
 
     // Summaries show; the agent briefs sit in closed disclosures.
     expect(screen.getByText('Walk, jump and land in the first level.')).toBeTruthy();
@@ -205,6 +277,16 @@ describe('Landing', () => {
     expect(briefs.map((d) => [d.open, d.querySelector('p')?.textContent])).toEqual([
       [false, 'Move, jump, land.'],
       [false, 'Add a second stage.'],
+    ]);
+  });
+
+  it('links each shipped Dust card to the game when the play URL is set', async () => {
+    vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
+    renderLanding(fakeSource());
+    const shipped = await screen.findByRole('region', { name: copy.shipped });
+    expect(within(shipped).getAllByRole('link', { name: copy.playTheGame }).map((a) => a.getAttribute('href'))).toEqual([
+      'https://play.example',
+      'https://play.example',
     ]);
   });
 
@@ -251,6 +333,8 @@ describe('Landing', () => {
     expect(screen.getByText(copy.fundEmpty)).toBeTruthy();
     expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: copy.queued })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: copy.shipped })).toBeNull();
+    expect(screen.queryByText(copy.latestShipped)).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 

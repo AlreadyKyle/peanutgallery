@@ -50,10 +50,12 @@ function rowsFor(query: Query): unknown {
           folder: 'seed-1',
           funding_target_usd: '100.0000',
           funded_usd: '25.0000',
-          actual_usd: '0.0000',
           created_at: '2026-09-14T00:00:00Z',
+          updated_at: '2026-09-14T02:00:00Z',
         },
       ];
+    case 'public_card_spend':
+      return [{ card_id: 'c1', spent_usd: '0.4200' }];
     case 'public_card_funding':
       return [{ card_id: 'c1', contributors: '3', credited_usd: '18.5000' }];
     case 'public_studio':
@@ -182,14 +184,19 @@ describe('createSupabaseSource.load', () => {
 
     const cards = query(fake.queries, 'cards');
     expect(cards.select).toBe(
-      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,actual_usd,created_at',
+      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,created_at,updated_at',
     );
+    expect([...CARD_STAGES]).toEqual(['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live']);
     expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
     expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
 
     const funding = query(fake.queries, 'public_card_funding');
     expect(funding.select).toBe('card_id,contributors,credited_usd');
     expect(funding.terminal).toBe('returns');
+
+    const spend = query(fake.queries, 'public_card_spend');
+    expect(spend.select).toBe('card_id,spent_usd');
+    expect(spend.terminal).toBe('returns');
 
     const studio = query(fake.queries, 'public_studio');
     expect(studio.select).toBe('launched_at');
@@ -235,8 +242,9 @@ describe('createSupabaseSource.load', () => {
         folder: 'seed-1',
         funding_target_usd: 100,
         funded_usd: 25,
-        actual_usd: 0,
+        spent_usd: 0.42,
         created_at: '2026-09-14T00:00:00Z',
+        updated_at: '2026-09-14T02:00:00Z',
       },
     ]);
     expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });

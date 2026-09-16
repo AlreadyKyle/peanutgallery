@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BuildingNow, FundBoard, QueuedList } from '../components/Cards';
+import { BuildingNow, FundBoard, QueuedList, ShippedList } from '../components/Cards';
 import { LedgerSummary } from '../components/LedgerSummary';
 import { Meter } from '../components/Meter';
 import { RightNow } from '../components/RightNow';
@@ -15,7 +15,7 @@ function launchLine(studio: StudioState): string | null {
 }
 
 // Order: what the studio is and its state right now, then what is building and what to fund (the
-// reasons to visit), then what is queued, how it works, the money and the rules.
+// reasons to visit), then what is queued and what has shipped, how it works, the money and the rules.
 export function Landing() {
   const env = siteEnv();
   const studio = useStudio();
@@ -50,6 +50,8 @@ export function Landing() {
       </section>
 
       {studio.state === 'ready' ? <QueuedList snapshot={studio.snapshot} /> : null}
+
+      {studio.state === 'ready' ? <ShippedList snapshot={studio.snapshot} /> : null}
 
       <section className="section" aria-labelledby="how">
         <h2 id="how">{copy.howItWorks}</h2>

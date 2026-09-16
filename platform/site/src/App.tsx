@@ -7,6 +7,7 @@ import { Board } from './pages/Board';
 import { Contribute } from './pages/Contribute';
 import { Landing } from './pages/Landing';
 import { Ledger } from './pages/Ledger';
+import { Contact, Privacy, Refunds, Terms } from './pages/Legal';
 
 export function App() {
   return (
@@ -18,6 +19,10 @@ export function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/ledger" element={<Ledger />} />
             <Route path="/contribute" element={<Contribute />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/refunds" element={<Refunds />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="/board" element={<Board />} />
@@ -64,9 +69,25 @@ function SiteFooter() {
     <footer className="site-footer">
       <div className="wrap footer-row">
         <p>{copy.footer}</p>
-        {env.discordInvite === '' ? null : (
-          <a href={env.discordInvite}>{copy.discord}</a>
-        )}
+        <ul className="footer-links">
+          <li>
+            <Link to="/terms">{copy.footerLinks.terms}</Link>
+          </li>
+          <li>
+            <Link to="/privacy">{copy.footerLinks.privacy}</Link>
+          </li>
+          <li>
+            <Link to="/refunds">{copy.footerLinks.refunds}</Link>
+          </li>
+          <li>
+            <Link to="/contact">{copy.footerLinks.contact}</Link>
+          </li>
+          {env.discordInvite === '' ? null : (
+            <li>
+              <a href={env.discordInvite}>{copy.discord}</a>
+            </li>
+          )}
+        </ul>
         <p className="credit">
           {copy.createdBy}{' '}
           <a href={copy.createdByUrl}>{copy.createdByName}</a>

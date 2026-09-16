@@ -73,6 +73,57 @@ export async function sendMagicLink(client: SupabaseClient, email: string): Prom
   if (error) throw new Error(error.message);
 }
 
+/** Where the signed-in session stands on the second factor the board RPCs require. */
+export type TwoFactorState = {
+  /** aal2 once a TOTP code has been verified in this session; aal1 after the magic link alone. */
+  level: 'aal1' | 'aal2';
+  /** The verified TOTP factor to challenge, or null when the account has none and must enrol. */
+  verifiedFactorId: string | null;
+};
+
+export type TotpEnrolment = {
+  factorId: string;
+  /** An image URL (an SVG data URL from Supabase Auth) encoding the authenticator URI. */
+  qrCode: string;
+  secret: string;
+};
+
+export const TOTP_CODE = /^\d{6}$/;
+
+function mfaResult<T>(result: { data: T | null; error: { message: string } | null }, what: string): T {
+  if (result.error) throw new Error(result.error.message);
+  if (result.data === null) throw new Error(`${what} returned nothing`);
+  return result.data;
+}
+
+export async function twoFactorState(client: SupabaseClient): Promise<TwoFactorState> {
+  const assurance = mfaResult(await client.auth.mfa.getAuthenticatorAssuranceLevel(), 'getAuthenticatorAssuranceLevel');
+  const factors = mfaResult(await client.auth.mfa.listFactors(), 'listFactors');
+  const verified = factors.totp.find((factor) => factor.status === 'verified');
+  return {
+    level: assurance.currentLevel === 'aal2' ? 'aal2' : 'aal1',
+    verifiedFactorId: verified?.id ?? null,
+  };
+}
+
+/** Starts TOTP enrolment, first removing unverified TOTP factors left by an abandoned attempt. */
+export async function enrolTotp(client: SupabaseClient): Promise<TotpEnrolment> {
+  const factors = mfaResult(await client.auth.mfa.listFactors(), 'listFactors');
+  for (const factor of factors.all) {
+    if (factor.factor_type === 'totp' && factor.status === 'unverified') {
+      mfaResult(await client.auth.mfa.unenroll({ factorId: factor.id }), 'unenroll');
+    }
+  }
+  const enrolled = mfaResult(await client.auth.mfa.enroll({ factorType: 'totp' }), 'enroll');
+  return { factorId: enrolled.id, qrCode: enrolled.totp.qr_code, secret: enrolled.totp.secret };
+}
+
+/** Challenges the factor and verifies the code; on success the session is aal2. */
+export async function verifyTotp(client: SupabaseClient, factorId: string, code: string): Promise<void> {
+  const challenge = mfaResult(await client.auth.mfa.challenge({ factorId }), 'challenge');
+  mfaResult(await client.auth.mfa.verify({ factorId, challengeId: challenge.id, code }), 'verify');
+}
+
 export async function fetchBoardRole(client: SupabaseClient): Promise<BoardRole | null> {
   const role = unwrap<string>(await client.rpc('board_role'));
   return role === 'board' || role === 'moderator' ? role : null;
