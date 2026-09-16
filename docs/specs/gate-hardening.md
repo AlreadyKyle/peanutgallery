@@ -45,7 +45,7 @@ Out:
 
 **Kernel names.** `platform/gate/kernel-names.txt` lists names, one per line, where `*` matches within a name:
 - Claude Code configuration: `.claude`, `CLAUDE.md`, `CLAUDE.local.md`, `.mcp.json`
-- git and package manager configuration: `.gitattributes`, `.gitmodules`, `.npmrc`, `.pnpmfile.cjs`, `package.json`
+- git and package manager configuration: `.gitattributes`, `.gitmodules`, `.npmrc`, ~~`.pnpmfile.cjs`~~ `.pnpmfile.*` (superseded: pnpm 11 also loads `.pnpmfile.mjs`, `ops-separation.md`, 2026-09-16), `package.json`
 - build, test and deploy configuration: `vite.config.*`, `vitest.config.*`, `vitest.workspace.*`, `netlify.toml`
 
 A changed file is kernel when any segment of its path matches one of them. `kernel-guard.sh` fails it with the same `FAIL: kernel-guard path=<file>` line. The dispatcher's `KERNEL_NAMES` is tested equal to the file. `isKernelPath` covers both lists, and `outsideLane` uses it. Every session prompt names the kernel names as never to be created or edited.

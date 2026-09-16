@@ -429,7 +429,7 @@ expect "kernel-guard: a file under a kernel folder fails" 1 '^FAIL: kernel-guard
 expect "kernel-guard: a kernel file fails" 1 '^FAIL: kernel-guard path=seed-1/sim/invariants.ts$' -- bash "$KERNEL" "$T/kernel-file.txt"
 expect "kernel-guard: a name that only starts like a kernel path passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-near.txt"
 # kernel-names.txt: a file or folder with one of these names is kernel at any depth, in any lane.
-for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/vitest.config.ts seed-1/config/.npmrc \
+for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/vitest.config.ts seed-1/config/.npmrc .pnpmfile.mjs seed-1/.pnpmfile.cjs \
   seed-1/content/claude.md seed-1/render/.Claude/settings.json seed-1/Vite.Config.ts .GitHub/workflows/x.yml Platform/Gate/ship-gate.sh; do
   printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-name.txt"
   expect "kernel-guard: $file fails by name" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-name.txt"
