@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # changed-paths.sh: which folders a change touches and which lane it belongs to.
 #
-# usage: changed-paths.sh [--list] [--repo-root d] <base-ref> <head-ref>
+# usage: changed-paths.sh [--list | --check-modes] [--repo-root d] <base-ref> <head-ref>
 #
 # Compares the merge base of the two refs with head (a pull request diff). When base is the
 # all-zero sha or shares no history with head, every file in head counts as changed. Rename
 # detection is off whatever the repository's config says, so a renamed file lists both its old
-# and new names, and a kernel file moved into a config folder is still seen.
+# and new names, and a kernel file moved into a config folder is still seen. Submodule changes are
+# never ignored, whatever .gitmodules says.
 # Output: seed=true|false platform=true|false lane=config|code
 #   seed      a changed file lies under seed-1/, or outside both folders (workspace-level change)
 #   platform  a changed file lies under platform/, or outside both folders
 #   lane      config only when every changed file lies under seed-1/config/ or seed-1/content/
-# --list prints the changed files, one per line, instead. --repo-root names another repository.
+# --list prints the changed files, one per line, instead. Paths are not quoted for non-ASCII bytes;
+# git still quotes a path holding a tab, newline, double quote or backslash, and kernel-guard.sh
+# fails a quoted line.
+# --check-modes fails when a changed entry, on either side, is a symlink (mode 120000) or a
+# submodule (mode 160000): a link can point a lane path at a kernel file, and a submodule's contents
+# are never listed. First stdout line: PASS: mode-check entries=<n> or
+# FAIL: mode-check path=<file> mode=<mode>; exit 0 pass, 1 fail.
+# --repo-root names another repository.
 # Exit 0, or 2 on usage or when a ref does not resolve.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -19,16 +27,18 @@ GATE_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(gate_repo_root)
 
 usage() {
-  echo "usage: changed-paths.sh [--list] [--repo-root d] <base-ref> <head-ref>" >&2
+  echo "usage: changed-paths.sh [--list | --check-modes] [--repo-root d] <base-ref> <head-ref>" >&2
   exit 2
 }
 
-LIST=0
-while [ $# -gt 2 ]; do
+MODE=lanes
+while [ $# -gt 0 ]; do
   case "$1" in
-    --list) LIST=1; shift ;;
-    --repo-root) REPO_ROOT=$(gate_abs_path "$2"); shift 2 ;;
-    *) usage ;;
+    --list) [ "$MODE" = lanes ] || usage; MODE=list; shift ;;
+    --check-modes) [ "$MODE" = lanes ] || usage; MODE=modes; shift ;;
+    --repo-root) [ $# -ge 2 ] || usage; REPO_ROOT=$(gate_abs_path "$2"); shift 2 ;;
+    --*) usage ;;
+    *) break ;;
   esac
 done
 [ $# -eq 2 ] || usage
@@ -36,26 +46,75 @@ BASE=$1
 HEAD=$2
 export LC_ALL=C
 
+# Every git call that lists paths: no quoting of non-ASCII bytes, no rename detection, no ignored
+# submodules.
+git_paths() {
+  git -C "$REPO_ROOT" -c core.quotePath=false -c diff.renames=false -c diff.ignoreSubmodules=none "$@"
+}
+
 git -C "$REPO_ROOT" rev-parse --verify --quiet "$HEAD^{commit}" > /dev/null || { echo "changed-paths: head ref does not resolve: $HEAD" >&2; exit 2; }
 
+# The merge base, or empty when every file in head counts as changed.
+MB=""
+case "$BASE" in
+  0000000000000000000000000000000000000000|"") ;;
+  *)
+    if git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE^{commit}" > /dev/null; then
+      MB=$(git -C "$REPO_ROOT" merge-base "$BASE" "$HEAD" 2>/dev/null) || MB=""
+    fi
+    ;;
+esac
+
 changed_files() {
-  local mb
-  case "$BASE" in
-    0000000000000000000000000000000000000000|"")
-      git -C "$REPO_ROOT" ls-tree -r --name-only "$HEAD"
-      return
-      ;;
-  esac
-  if git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE^{commit}" > /dev/null \
-    && mb=$(git -C "$REPO_ROOT" merge-base "$BASE" "$HEAD" 2>/dev/null); then
-    git -C "$REPO_ROOT" -c diff.renames=false diff --no-renames --name-only "$mb" "$HEAD"
+  if [ -n "$MB" ]; then
+    git_paths diff --no-renames --ignore-submodules=none --name-only "$MB" "$HEAD"
   else
-    git -C "$REPO_ROOT" ls-tree -r --name-only "$HEAD"
+    git_paths ls-tree -r --name-only "$HEAD"
   fi
 }
 
+# One line per changed entry: old mode, new mode and path, tab separated. Read from -z output so
+# no path is quoted; an entry that does not exist on one side has mode 000000 there.
+changed_modes() {
+  local meta path mode
+  if [ -n "$MB" ]; then
+    git_paths diff --raw -z --no-renames --ignore-submodules=none "$MB" "$HEAD" | while IFS= read -r -d '' meta; do
+      IFS= read -r -d '' path || break
+      set -- $meta
+      printf '%s\t%s\t%s\n' "${1#:}" "$2" "$path"
+    done
+  else
+    git_paths ls-tree -r -z "$HEAD" | while IFS= read -r -d '' meta; do
+      mode=${meta%% *}
+      printf '000000\t%s\t%s\n' "$mode" "${meta#*	}"
+    done
+  fi
+}
+
+if [ "$MODE" = modes ]; then
+  count=0
+  failed=""
+  while IFS='	' read -r old new path; do
+    count=$((count + 1))
+    case "$old $new" in
+      *120000*|*160000*)
+        if [ -z "$failed" ]; then
+          case "$new" in 120000|160000) failed="path=$path mode=$new" ;; *) failed="path=$path mode=$old" ;; esac
+        fi
+        echo "mode-check: $path is a symlink or submodule" >&2
+        ;;
+    esac
+  done < <(changed_modes)
+  if [ -n "$failed" ]; then
+    echo "FAIL: mode-check $failed"
+    exit 1
+  fi
+  echo "PASS: mode-check entries=$count"
+  exit 0
+fi
+
 FILES=$(changed_files | sort -u)
-if [ "$LIST" -eq 1 ]; then
+if [ "$MODE" = list ]; then
   [ -z "$FILES" ] || printf '%s\n' "$FILES"
   exit 0
 fi

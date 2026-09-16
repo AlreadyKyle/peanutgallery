@@ -8,11 +8,11 @@
 #   --repo-root d   the repository to read for --tracked and --working-tree (default: this one)
 #
 # Shapes: Stripe secret, restricted, publishable and webhook keys; classic and fine-grained GitHub
-# tokens; Netlify personal tokens; JSON web tokens; Anthropic, OpenAI and Google API keys; Supabase
-# secret keys (a Supabase publishable key is public and is not a shape). A prefix alone is not a
-# hit: a real key always carries a body, so the pattern text in this file and in documentation does
-# not match itself. Lock files and binary media are skipped; SVGs, source maps and minified bundles
-# are served, so they are scanned.
+# tokens; Netlify personal tokens; JSON web tokens; Anthropic, OpenAI (project, service, admin and
+# legacy) and Google API keys; Supabase secret keys (a Supabase publishable key is public and is
+# not a shape). A prefix alone is not a hit: a real key always carries a body, so the pattern text
+# in this file and in documentation does not match itself. Lock files and binary media are skipped;
+# SVGs, source maps and minified bundles are served, so they are scanned.
 # First output line: PASS: ... or FAIL: ... (file, line and shape name only). Exit 0 pass, 1 fail, 2 usage.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -38,6 +38,7 @@ shapes() {
     anthropic-key 'sk-ant-[0-9A-Za-z_-]{12}' \
     supabase-secret-key 'sb_secret_[0-9A-Za-z_-]{8}' \
     openai-key 'sk-(proj|svcacct|admin)-[0-9A-Za-z_-]{8}' \
+    openai-key-legacy 'sk-[0-9A-Za-z_-]{16,}T3BlbkFJ' \
     google-api-key 'AIza[0-9A-Za-z_-]{35}'
 }
 

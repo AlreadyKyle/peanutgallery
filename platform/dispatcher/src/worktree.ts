@@ -115,16 +115,22 @@ export const KERNEL_NAMES: readonly string[] = [
 ];
 
 // Names hold letters, digits, dot, underscore, hyphen and * only (the test checks), so the dot is
-// the one character to escape.
-const KERNEL_NAME_PATTERNS: readonly RegExp[] = KERNEL_NAMES.map((name) => new RegExp(`^${name.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`));
+// the one character to escape. * matches any character, a newline included, as the shell glob in
+// kernel-guard.sh does, and case is ignored there and here.
+const KERNEL_NAME_PATTERNS: readonly RegExp[] = KERNEL_NAMES.map((name) => new RegExp(`^${name.replace(/\./g, '\\.').replace(/\*/g, '[\\s\\S]*')}$`, 'i'));
 
 function under(file: string, dir: string): boolean {
   return file === dir || file.startsWith(`${dir}/`);
 }
 
-// A kernel path, or a path with a kernel name as any of its segments.
+// A kernel path, or a path with a kernel name as any of its segments. Case is ignored: a
+// case-insensitive checkout (macOS) reads claude.md as CLAUDE.md and Platform/Gate as platform/gate.
 export function isKernelPath(file: string): boolean {
-  return KERNEL_PATHS.some((kernel) => under(file, kernel)) || file.split('/').some((segment) => KERNEL_NAME_PATTERNS.some((pattern) => pattern.test(segment)));
+  const lower = file.toLowerCase();
+  return (
+    KERNEL_PATHS.some((kernel) => under(lower, kernel.toLowerCase())) ||
+    file.split('/').some((segment) => KERNEL_NAME_PATTERNS.some((pattern) => pattern.test(segment)))
+  );
 }
 
 // Config lane may touch data only, and only seed-1 has a config lane. Code lane may touch its
