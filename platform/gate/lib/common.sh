@@ -36,11 +36,29 @@ gate_is_text() {
   grep -Iq . "$1" 2>/dev/null
 }
 
-# True for files the scanners never read: lock files, source maps, minified bundles and media.
-gate_is_generated() {
+# True for dependency lock files.
+gate_is_lock_file() {
   case "$(basename "$1")" in
-    pnpm-lock.yaml|package-lock.json|yarn.lock|deno.lock|*.lock|*.map|*.min.js|*.min.css) return 0 ;;
-    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.svg|*.woff|*.woff2|*.ttf|*.otf|*.mp3|*.ogg|*.wav|*.zip|*.gz) return 0 ;;
+    pnpm-lock.yaml|package-lock.json|yarn.lock|deno.lock|*.lock) return 0 ;;
+  esac
+  return 1
+}
+
+# True for binary media and archives. SVG is text and is not in this list.
+gate_is_binary_media() {
+  case "$(basename "$1")" in
+    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.woff|*.woff2|*.ttf|*.otf|*.mp3|*.ogg|*.wav|*.zip|*.gz) return 0 ;;
+  esac
+  return 1
+}
+
+# True for files the content scanners (banned phrases, runtime tokens) never read: lock files,
+# source maps, minified bundles, SVGs and binary media. The secret scan reads all but lock files
+# and binary media.
+gate_is_generated() {
+  if gate_is_lock_file "$1" || gate_is_binary_media "$1"; then return 0; fi
+  case "$(basename "$1")" in
+    *.map|*.min.js|*.min.css|*.svg) return 0 ;;
   esac
   return 1
 }

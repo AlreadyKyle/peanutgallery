@@ -8,8 +8,11 @@
 #   --repo-root d   the repository to read for --tracked and --working-tree (default: this one)
 #
 # Shapes: Stripe secret, restricted, publishable and webhook keys; classic and fine-grained GitHub
-# tokens; Netlify personal tokens; JSON web tokens. A prefix alone is not a hit: a real key always
-# carries a body, so the pattern text in this file and in documentation does not match itself.
+# tokens; Netlify personal tokens; JSON web tokens; Anthropic, OpenAI (project, service, admin and
+# legacy) and Google API keys; Supabase secret keys (a Supabase publishable key is public and is
+# not a shape). A prefix alone is not a hit: a real key always carries a body, so the pattern text
+# in this file and in documentation does not match itself. Lock files and binary media are skipped;
+# SVGs, source maps and minified bundles are served, so they are scanned.
 # First output line: PASS: ... or FAIL: ... (file, line and shape name only). Exit 0 pass, 1 fail, 2 usage.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -31,7 +34,12 @@ shapes() {
     github-token 'ghp_[0-9A-Za-z]{8}' \
     github-fine-grained-token 'github_pat_[0-9A-Za-z_]{8}' \
     netlify-token 'nfp_[0-9A-Za-z_-]{8}' \
-    json-web-token 'eyJhbGciOi[0-9A-Za-z_-]{16}'
+    json-web-token 'eyJhbGciOi[0-9A-Za-z_-]{16}' \
+    anthropic-key 'sk-ant-[0-9A-Za-z_-]{12}' \
+    supabase-secret-key 'sb_secret_[0-9A-Za-z_-]{8}' \
+    openai-key 'sk-(proj|svcacct|admin)-[0-9A-Za-z_-]{8}' \
+    openai-key-legacy 'sk-[0-9A-Za-z_-]{16,}T3BlbkFJ' \
+    google-api-key 'AIza[0-9A-Za-z_-]{35}'
 }
 
 if [ "${1:-}" = "--repo-root" ]; then
@@ -70,7 +78,8 @@ ALL=$(shapes | cut -f2 | paste -s -d '|' -)
 COUNT=0
 while IFS= read -r f; do
   [ -f "$f" ] || continue
-  gate_is_generated "$f" && continue
+  gate_is_lock_file "$f" && continue
+  gate_is_binary_media "$f" && continue
   gate_is_text "$f" || continue
   COUNT=$((COUNT + 1))
   grep -qE "$ALL" "$f" || continue

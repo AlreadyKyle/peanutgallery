@@ -15,10 +15,13 @@ import {
   git,
   gitArgs,
   gitAuthEnv,
+  isKernelPath,
+  KERNEL_NAMES,
   KERNEL_PATHS,
   NO_HOOKS,
   lanePaths,
   outsideLane,
+  parseStatus,
   protectedPaths,
   shortId,
   singleLineTitle,
@@ -51,10 +54,49 @@ describe('pure helpers', () => {
     expect(lanePaths('platform', 'config')).toEqual([]);
   });
 
+  function gateList(name: string): string[] {
+    const file = readFileSync(path.resolve(import.meta.dirname, '..', '..', 'gate', name), 'utf8');
+    return file.split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
+  }
+
   it('keeps the kernel list equal to the gate file', () => {
-    const file = readFileSync(path.resolve(import.meta.dirname, '..', '..', 'gate', 'kernel-paths.txt'), 'utf8');
-    const listed = file.split('\n').map((line) => line.trim()).filter((line) => line.length > 0 && !line.startsWith('#'));
-    expect([...KERNEL_PATHS]).toEqual(listed);
+    expect([...KERNEL_PATHS]).toEqual(gateList('kernel-paths.txt'));
+  });
+
+  it('keeps the kernel names equal to the gate file, with * as the only wildcard', () => {
+    expect([...KERNEL_NAMES]).toEqual(gateList('kernel-names.txt'));
+    for (const name of KERNEL_NAMES) expect(name).toMatch(/^[A-Za-z0-9._*-]+$/);
+  });
+
+  it('treats a kernel name at any depth as a kernel path', () => {
+    expect(isKernelPath('seed-1/content/CLAUDE.md')).toBe(true);
+    expect(isKernelPath('seed-1/render/.claude/settings.json')).toBe(true);
+    expect(isKernelPath('seed-1/vitest.config.ts')).toBe(true);
+    expect(isKernelPath('seed-1/config/vitest.workspace.json')).toBe(true);
+    expect(isKernelPath('platform/site/src/.npmrc')).toBe(true);
+    expect(isKernelPath('platform/gate/ship-gate.sh')).toBe(true);
+    expect(isKernelPath('seed-1/content/CLAUDE.md.txt')).toBe(false);
+    expect(isKernelPath('seed-1/content/claude/notes.json')).toBe(false);
+    expect(isKernelPath('seed-1/render/vite.configs/a.ts')).toBe(false);
+    expect(isKernelPath('seed-1/config/spawn-table.json')).toBe(false);
+  });
+
+  it('matches kernel names and paths without regard to case, as a case-insensitive checkout reads them', () => {
+    expect(isKernelPath('seed-1/content/claude.md')).toBe(true);
+    expect(isKernelPath('.Claude/settings.json')).toBe(true);
+    expect(isKernelPath('seed-1/Vite.Config.ts')).toBe(true);
+    expect(isKernelPath('.GitHub/workflows/x.yml')).toBe(true);
+    expect(isKernelPath('Platform/Gate/ship-gate.sh')).toBe(true);
+    expect(isKernelPath('SEED-1/SIM/INVARIANTS.TS')).toBe(true);
+    expect(outsideLane(['seed-1/content/claude.md', 'seed-1/Content/strings.json'], lanePaths('seed-1', 'config'))).toEqual([
+      'seed-1/content/claude.md',
+      'seed-1/Content/strings.json',
+    ]);
+  });
+
+  it('lets * in a kernel name match any character, a newline included, as the shell glob does', () => {
+    expect(isKernelPath('seed-1/vite.config.\n.ts')).toBe(true);
+    expect(isKernelPath('seed-1/vitest.config.a\nb')).toBe(true);
   });
 
   it('refuses kernel files in every lane and names the ones inside a lane', () => {
@@ -62,6 +104,12 @@ describe('pure helpers', () => {
     expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml']);
     expect(outsideLane(['platform/site/scripts/live-check.mjs', 'platform/site/scripts-notes.md'], lanePaths('platform', 'code'))).toEqual(['platform/site/scripts/live-check.mjs']);
     expect(outsideLane(['seed-1/sim/invariants.tsx'], lanePaths('seed-1', 'code'))).toEqual([]);
+    expect(outsideLane(['seed-1/content/CLAUDE.md', 'seed-1/config/spawn-table.json'], lanePaths('seed-1', 'config'))).toEqual(['seed-1/content/CLAUDE.md']);
+    expect(outsideLane(['seed-1/render/.claude/settings.json', 'seed-1/vitest.config.ts', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual([
+      'seed-1/render/.claude/settings.json',
+      'seed-1/vitest.config.ts',
+    ]);
+    expect(outsideLane(['platform/site/src/CLAUDE.md', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/src/CLAUDE.md']);
     expect(protectedPaths(lanePaths('seed-1', 'config'))).toEqual([]);
     expect(protectedPaths(lanePaths('seed-1', 'code'))).toContain('seed-1/sim/invariants.ts');
   });
@@ -71,6 +119,15 @@ describe('pure helpers', () => {
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/content/strings.json'], allowed)).toEqual([]);
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/sim/index.ts', 'seed-1/configuration.md'], allowed)).toEqual(['seed-1/sim/index.ts', 'seed-1/configuration.md']);
     expect(outsideLane(['platform/site/index.html'], ['platform/site'])).toEqual([]);
+  });
+
+  it('parses a rename or copy entry into both names, in either status column', () => {
+    expect(parseStatus('R  seed-1/content/x.json\0seed-1/tests/invariants.test.ts\0 M seed-1/config/a.json\0')).toEqual([
+      'seed-1/content/x.json',
+      'seed-1/tests/invariants.test.ts',
+      'seed-1/config/a.json',
+    ]);
+    expect(parseStatus('C  b.json\0a.json\0 R d.json\0c.json\0?? e.json\0')).toEqual(['b.json', 'a.json', 'd.json', 'c.json', 'e.json']);
   });
 
   it('keeps titles on one line and within the limit', () => {
@@ -131,11 +188,14 @@ describe('commitLane in a temporary repository', () => {
     expect(await commitLane(repo, ['seed-1/content'], input)).toEqual({ committed: false });
   });
 
-  it('reads the first status entry whole and reports a rename by its new name', async () => {
+  it('reads the first status entry whole and reports a rename by both its names', async () => {
     await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":12}]}\n', 'utf8');
     expect(await changedFiles(repo)).toEqual(['seed-1/config/spawn-table.json']);
     await git(['mv', 'seed-1/sim/index.ts', 'seed-1/sim/main.ts'], repo);
-    expect((await changedFiles(repo)).sort()).toEqual(['seed-1/config/spawn-table.json', 'seed-1/sim/main.ts']);
+    expect((await changedFiles(repo)).sort()).toEqual(['seed-1/config/spawn-table.json', 'seed-1/sim/index.ts', 'seed-1/sim/main.ts']);
+    await git(['config', 'status.renames', 'copies'], repo);
+    expect((await changedFiles(repo)).sort()).toEqual(['seed-1/config/spawn-table.json', 'seed-1/sim/index.ts', 'seed-1/sim/main.ts']);
+    await git(['config', '--unset', 'status.renames'], repo);
     await git(['mv', 'seed-1/sim/main.ts', 'seed-1/sim/index.ts'], repo);
     await git(['checkout', '--', 'seed-1/config/spawn-table.json'], repo);
     expect(await changedFiles(repo)).toEqual([]);

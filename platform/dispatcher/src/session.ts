@@ -8,7 +8,7 @@ import { errorMessage, type Logger } from './log.js';
 import { UnknownModelError, priceUsage, round4, type PriceTable } from './pricing.js';
 import path from 'node:path';
 import { billingFor } from './throttle.js';
-import { lanePaths, protectedPaths } from './worktree.js';
+import { KERNEL_NAMES, lanePaths, protectedPaths } from './worktree.js';
 
 export type SessionOutcome =
   | 'completed'
@@ -71,6 +71,7 @@ export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceili
     ...(designSpec ? [`Design spec: ${designSpec}`, ''] : []),
     `Allowed paths: ${allowedPaths.join(', ')}.`,
     ...(locked.length > 0 ? [`Never edit, even inside the allowed paths: ${locked.join(', ')}. The dispatcher rejects a change to any of them.`] : []),
+    `Never create or edit a file or folder with one of these names, at any depth: ${KERNEL_NAMES.join(', ')}. The dispatcher rejects those too.`,
     'Definition of done:',
     '- every check: line in the acceptance test is true in this working tree',
     '- the invariants pass: the commands your role prompt names all exit 0',

@@ -248,7 +248,9 @@ shape_cases() {
   printf '%s|%s\n' \
     stripe-secret-key "sk_""live_$BODY24" stripe-test-key "sk_""test_$BODY24" stripe-restricted-key "rk_""live_$BODY24" \
     stripe-publishable-key "pk_""live_$BODY24" stripe-webhook-secret "whsec""_$BODY24" github-token "ghp""_$BODY24" \
-    github-fine-grained-token "github_""pat_$BODY24" netlify-token "nfp""_$BODY24" json-web-token "eyJhbGci""Oi$BODY24"
+    github-fine-grained-token "github_""pat_$BODY24" netlify-token "nfp""_$BODY24" json-web-token "eyJhbGci""Oi$BODY24" \
+    anthropic-key "sk-""ant-api03-$BODY24" supabase-secret-key "sb_""secret_$BODY24" openai-key "sk-""proj-$BODY24" \
+    google-api-key "AI""za$BODY24$BODY24" openai-key-legacy "sk-""${BODY24}T3Blbk""FJ$BODY24"
 }
 shape_cases | while IFS='|' read -r name value; do
   printf 'key=%s\n' "$value" > "$C/secret.txt"
@@ -259,7 +261,18 @@ done
 read -r PASSED FAILED < "$T/counts.txt"
 printf 'prefix only: %s\n' "sk_""live_abc" > "$C/secret.txt"
 expect "secrets: a bare prefix is not a key" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
+printf 'key=%s\n' "sb_""publishable_$BODY24" > "$C/secret.txt"
+expect "secrets: a Supabase publishable key is public and passes" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
 rm -f "$C/secret.txt"
+mkdir -p "$T/served"
+for name in icon.svg app.js.map app.min.js app.min.css; do
+  printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/$name"
+  expect "secrets: a token in $name fails" 1 "^FAIL: secret-scan hits=1 first=$T/served/$name:1 shape=github-token\$" -- bash "$SECRETS" "$T/served/$name"
+  rm -f "$T/served/$name"
+done
+printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/icon.png"
+expect "secrets: binary media is skipped" 0 '^PASS: secret-scan files=0$' -- bash "$SECRETS" "$T/served/icon.png"
+rm -rf "$T/served"
 git -C "$C" init -q && git -C "$C" add -A && git -C "$C" commit -q -m "clean"
 expect "secrets: tracked scan of a clean repository passes" 0 '^PASS: secret-scan files=1$' -- bash "$SECRETS" --repo-root "$C" --tracked
 printf 'token=%s\n' "ghp""_$BODY24" > "$C/untracked.txt"
@@ -293,6 +306,18 @@ expect "changed: unknown head ref is an error" 2 '^$' -- bash "$CHANGED" --repo-
 git -C "$D" checkout -q -b card/abcd1234-config "$C0"
 printf '{"rows":[{"id":"cart"}]}\n' > "$D/seed-1/config/spawn-table.json"; git -C "$D" commit -q -am "branch config"; C5=$(git -C "$D" rev-parse HEAD)
 expect "changed: branch diff uses the merge base, not main's later commits" 0 '^seed=true platform=false lane=config$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C5"
+# A rename lists both names, so a kernel file moved into a config folder is still seen, and the
+# change is the code lane. The repository's own rename settings do not change that.
+git -C "$D" checkout -q main
+mkdir -p "$D/seed-1/tests" "$D/seed-1/content"
+printf 'export const invariants = [];\n' > "$D/seed-1/tests/invariants.test.ts"; git -C "$D" add -A; git -C "$D" commit -q -m "invariants"; C6=$(git -C "$D" rev-parse HEAD)
+git -C "$D" config diff.renames copies
+git -C "$D" mv seed-1/tests/invariants.test.ts seed-1/content/x.json; git -C "$D" commit -q -m "rename"; C7=$(git -C "$D" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$D" --list "$C6" "$C7" > "$T/renamed.txt"
+assert "changed: a rename lists both names" test "$(cat "$T/renamed.txt")" = "seed-1/content/x.json
+seed-1/tests/invariants.test.ts"
+expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
+expect "changed: kernel-guard fails the old name of a renamed kernel file" 1 '^FAIL: kernel-guard path=seed-1/tests/invariants.test.ts$' -- bash "$GATE_DIR/kernel-guard.sh" "$T/renamed.txt"
 
 # ---------------------------------------------------------------- headless-bot/run.mjs and ship-gate.sh
 W="$T/w"
@@ -403,6 +428,54 @@ expect "kernel-guard: config and render changes pass" 0 '^PASS: kernel-guard fil
 expect "kernel-guard: a file under a kernel folder fails" 1 '^FAIL: kernel-guard path=platform/gate/ship-gate.sh$' -- bash "$KERNEL" "$T/kernel-gate.txt"
 expect "kernel-guard: a kernel file fails" 1 '^FAIL: kernel-guard path=seed-1/sim/invariants.ts$' -- bash "$KERNEL" "$T/kernel-file.txt"
 expect "kernel-guard: a name that only starts like a kernel path passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-near.txt"
+# kernel-names.txt: a file or folder with one of these names is kernel at any depth, in any lane.
+for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/vitest.config.ts seed-1/config/.npmrc \
+  seed-1/content/claude.md seed-1/render/.Claude/settings.json seed-1/Vite.Config.ts .GitHub/workflows/x.yml Platform/Gate/ship-gate.sh; do
+  printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-name.txt"
+  expect "kernel-guard: $file fails by name" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-name.txt"
+done
+printf 'seed-1/config/spawn-table.json\nseed-1/content/CLAUDE.md.txt\nseed-1/content/claude/notes.json\nseed-1/render/vite.configs/a.ts\n' > "$T/kernel-name-near.txt"
+expect "kernel-guard: names that only resemble a kernel name pass" 0 '^PASS: kernel-guard files=4$' -- bash "$KERNEL" "$T/kernel-name-near.txt"
+printf 'seed-1/config/spawn-table.json\nseed-1/content/a\tb.json\n' > "$T/kernel-tab.txt"
+expect "kernel-guard: a tab in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-tab.txt"
+printf 'seed-1/content/a\001b.json\n' > "$T/kernel-control.txt"
+expect "kernel-guard: a control character in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-control.txt"
+printf '"seed-1/content/x.json"\n' > "$T/kernel-quoted.txt"
+expect "kernel-guard: a quoted line fails" 1 '^FAIL: kernel-guard path="seed-1/content/x\.json"$' -- bash "$KERNEL" "$T/kernel-quoted.txt"
+
+# Names git would quote reach the guard unquoted; names it still quotes, symlinks and submodules fail.
+E="$T/e"
+mkdir -p "$E/seed-1/content" "$E/.github/workflows"
+git -C "$E" init -q -b main
+printf '{}\n' > "$E/seed-1/content/strings.json"
+git -C "$E" add -A && git -C "$E" commit -q -m "base"; E0=$(git -C "$E" rev-parse HEAD)
+NTILDE=$(printf '\303\261')
+EACUTE=$(printf '\303\251')
+printf 'on: push\n' > "$E/.github/workflows/$NTILDE.yml"
+git -C "$E" add -A && git -C "$E" commit -q -m "workflow"; E1=$(git -C "$E" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$E" --list "$E0" "$E1" > "$T/non-ascii.txt"
+expect "kernel-guard: a non-ASCII workflow listed by changed-paths fails" 1 "^FAIL: kernel-guard path=\\.github/workflows/$NTILDE\\.yml\$" -- bash "$KERNEL" "$T/non-ascii.txt"
+mkdir -p "$E/seed-1/content/$EACUTE"
+printf '# notes\n' > "$E/seed-1/content/$EACUTE/CLAUDE.md"
+git -C "$E" add -A && git -C "$E" commit -q -m "nested"; E2=$(git -C "$E" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$E" --list "$E1" "$E2" > "$T/non-ascii.txt"
+expect "kernel-guard: CLAUDE.md in a non-ASCII folder listed by changed-paths fails" 1 "^FAIL: kernel-guard path=seed-1/content/$EACUTE/CLAUDE\\.md\$" -- bash "$KERNEL" "$T/non-ascii.txt"
+printf '{}\n' > "$E/seed-1/content/a	b.json"
+git -C "$E" add -A && git -C "$E" commit -q -m "tab"; E3=$(git -C "$E" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$E" --list "$E2" "$E3" > "$T/tab.txt"
+expect "kernel-guard: a tab in a name listed by changed-paths fails" 1 '^FAIL: kernel-guard path="seed-1/content/a' -- bash "$KERNEL" "$T/tab.txt"
+expect "changed: ordinary files pass the mode check" 0 '^PASS: mode-check entries=1$' -- bash "$CHANGED" --repo-root "$E" --check-modes "$E2" "$E3"
+ln -s ../../.github "$E/seed-1/content/gh"
+git -C "$E" add -A && git -C "$E" commit -q -m "link"; E4=$(git -C "$E" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$E" --list "$E3" "$E4" > "$T/link.txt"
+expect "kernel-guard: a symlink's own name passes the guard" 0 '^PASS: kernel-guard files=1$' -- bash "$KERNEL" "$T/link.txt"
+expect "changed: a symlink fails the mode check" 1 '^FAIL: mode-check path=seed-1/content/gh mode=120000$' -- bash "$CHANGED" --repo-root "$E" --check-modes "$E3" "$E4"
+expect "changed: a zero base checks the mode of every entry" 1 '^FAIL: mode-check path=seed-1/content/gh mode=120000$' -- bash "$CHANGED" --repo-root "$E" --check-modes 0000000000000000000000000000000000000000 "$E4"
+printf '[submodule "sub"]\n\tpath = seed-1/content/sub\n\turl = ./sub\n\tignore = all\n' > "$E/seed-1/content/.gitmodules"
+git -C "$E" update-index --add --cacheinfo "160000,$E0,seed-1/content/sub"
+git -C "$E" commit -q -m "submodule"; E5=$(git -C "$E" rev-parse HEAD)
+expect "changed: a submodule fails the mode check" 1 '^FAIL: mode-check path=seed-1/content/sub mode=160000$' -- bash "$CHANGED" --repo-root "$E" --check-modes "$E4" "$E5"
+expect "changed: --check-modes needs refs" 2 '^$' -- bash "$CHANGED" --repo-root "$E" --check-modes "$E4"
 
 # The dispatcher polls the check run named gate; these checks pin the names the workflow must keep.
 WORKFLOW="$REPO_ROOT/.github/workflows/gate.yml"
@@ -417,7 +490,24 @@ assert "workflow: the gate job always runs" workflow_has '^    if: always\(\)$'
 assert "workflow: the gate job fails on a failed or cancelled job" workflow_has '\(failure\|cancelled\)'
 assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -c 'run: git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 4
 assert "workflow: the gate is restored before the changed-files list is written" awk '/Use the base commit.s gate on a card branch/{r=NR} /Write the commit message and changed files/{if (!r || r > NR) bad=1; r=0} END{exit bad}' "$WORKFLOW"
-assert "workflow: card branches run the kernel guard" workflow_has 'run: bash platform/gate/kernel-guard.sh "\$RUNNER_TEMP/changed-files.txt"'
+job_block() { awk -v job="  $1:" '$0 == job {p=1; next} /^  [a-z-]+:$/{p=0} p' "$WORKFLOW"; }
+detect_runs() { job_block detect | grep -qF -- "$1"; }
+detect_installs_nothing() { ! job_block detect | grep -qE 'pnpm (install|i )|npm (install|ci)|uses: (pnpm/action-setup|actions/setup-node)'; }
+detect_order() { job_block detect | awk '/run: git checkout "\$BASE" -- platform\/gate$/{r=NR} /kernel-guard\.sh/{g=NR} /--check-modes/{m=NR} END{exit !(r && g && m && r < g && r < m)}'; }
+assert "workflow: card branches run the kernel guard in detect" detect_runs 'run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"'
+assert "workflow: card branches run the mode check in detect" detect_runs 'run: bash platform/gate/changed-paths.sh --check-modes "$BASE" "$HEAD"'
+assert "workflow: the kernel guard runs in one place only" test "$(grep -c 'platform/gate/kernel-guard.sh' "$WORKFLOW")" = 1
+assert "workflow: detect installs nothing" detect_installs_nothing
+assert "workflow: detect restores the base gate before the guard and the mode check" detect_order
+assert "workflow: the gate job requires detect to pass" workflow_has '\[ "\$DETECT" = success \]'
+for pair in 'seed-config SEED_CONFIG' 'seed-code SEED_CODE' 'platform PLATFORM_JOB'; do
+  set -- $pair
+  assert "workflow: the gate job requires $1 to pass when detect selects it" workflow_has "want $1 \"\\\$$2\""
+done
+for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
+  assert "workflow: the platform job runs $step after the ship gate" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Ship gate$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
+done
+assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 
 # ---------------------------------------------------------------- summary
