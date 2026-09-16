@@ -4,12 +4,13 @@ import { copy } from '../lib/copy';
 import { formatUsd } from '../lib/format';
 import type { Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
-import { EventList } from './EventList';
 import { Stat } from './Stat';
 
-const RECENT_EVENTS = 3;
-
-/** The glanceable state of the studio beside the pitch: money available, what is building, the latest agent work. */
+/**
+ * The glanceable state of the studio beside the pitch: money available, what is building and what
+ * shipped last. It stays about as tall as the pitch it sits beside, so the row leaves no gap; the
+ * agent work itself is the Ledger section below and the ledger page.
+ */
 export function RightNow({ studio }: { studio: StudioState }) {
   return (
     <aside className="panel" aria-labelledby="right-now">
@@ -45,8 +46,6 @@ function Ready({ snapshot }: { snapshot: Snapshot }) {
           <span className="row-strong">{copy.latestShipped}</span> {latest.title}
         </p>
       )}
-      <h3 className="panel-heading">{copy.recentWork}</h3>
-      <EventList snapshot={{ ...snapshot, events: snapshot.events.slice(0, RECENT_EVENTS) }} />
       <p className="small">
         <Link to="/ledger">{copy.fullLedger}</Link>
       </p>

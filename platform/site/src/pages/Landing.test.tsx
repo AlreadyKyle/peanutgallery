@@ -210,12 +210,14 @@ describe('Landing', () => {
     ]);
     expect(screen.getAllByRole('link', { name: copy.fullLedger }).map((link) => link.getAttribute('href'))).toEqual(['/ledger', '/ledger']);
 
-    // Right now: money available, what is building and the latest agent work.
+    // Right now: money available, what is building and what shipped last. The agent work itself is
+    // the Ledger section below, so the panel stays about as tall as the pitch beside it.
     const panel = screen.getByRole('complementary', { name: copy.rightNow });
     expect(within(panel).getByText('$48.56')).toBeTruthy();
     expect(paragraphIn(panel, `${copy.buildingLine} The core loop`)).toBeTruthy();
     expect(paragraphIn(panel, `${copy.latestShipped} The unlock list`)).toBeTruthy();
-    expect(within(panel).getByText(copy.ledgerEmpty)).toBeTruthy();
+    expect(within(panel).queryByText(copy.recentWork)).toBeNull();
+    expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy();
 
     expect(screen.getByText('$7.10')).toBeTruthy();
     expect(screen.getByText('$2.56')).toBeTruthy();
@@ -242,7 +244,6 @@ describe('Landing', () => {
     expect(
       screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
     ).toEqual([
-      copy.recentWork,
       'The core loop',
       'A second level',
       'A music track',

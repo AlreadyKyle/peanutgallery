@@ -70,7 +70,7 @@ export function Landing() {
 
         <section className="section" aria-labelledby="ledger">
           <h2 id="ledger">{copy.ledger}</h2>
-          <LedgerSummary studio={studio} events={false} />
+          <LedgerSummary studio={studio} />
           <p>
             <Link to="/ledger">{copy.fullLedger}</Link>
           </p>
