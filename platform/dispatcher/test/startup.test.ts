@@ -3,19 +3,20 @@ import { describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
-import { parsePriceTable, priceUsage, type LedgerUsage, type TurnUsage } from '../src/pricing.js';
+import type { MeterRow } from '../src/metering.js';
+import { parsePriceTable, priceUsage, type TurnUsage } from '../src/pricing.js';
 import type { ProbeOptions, ProbeResult } from '../src/probe-core.js';
-import { FallbackPricedError, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
+import { FallbackPricedError, UnwrittenRowsError, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }));
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
 const USAGE: TurnUsage = { input_tokens: 1000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 200 };
-const ROW: LedgerUsage = priceUsage(PRICE_TABLE, 'builder-class', USAGE);
+const ROW: MeterRow = { ...priceUsage(PRICE_TABLE, 'builder-class', USAGE), request_id: 'probe/test/turn/1' };
 const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false };
 // The settle row for output the turn did not report.
-const SETTLE_ROW: LedgerUsage = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006 };
+const SETTLE_ROW: MeterRow = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006, request_id: 'probe/test/settle/1' };
 
 const config: DispatcherConfig = {
   repoRoot: '/repo',
@@ -209,7 +210,7 @@ describe('startupProbe metering', () => {
 
   it('meters a side model priced at fallback rates without stopping', async () => {
     const db = unattendedDb();
-    const sideRow = { model: 'side-model', input_tokens: 100, cached_tokens: 0, output_tokens: 10, usd: 0.0008 };
+    const sideRow = { model: 'side-model', input_tokens: 100, cached_tokens: 0, output_tokens: 10, usd: 0.0008, request_id: 'probe/test/settle/2' };
     const metering = { ...NO_ROWS, rows: [ROW, sideRow], basis: 'result' as const, fallbackModels: ['side-model'], turnModels: ['builder-class'] };
     await expect(startupProbe(deps(db, probeResult({ metering })).deps)).resolves.toBeUndefined();
     expect(db.ledger.map((row) => row.model)).toEqual(['builder-class', 'side-model']);
@@ -231,6 +232,24 @@ describe('startupProbe metering', () => {
     expect(db.ledger).toHaveLength(2);
     failures = 3;
     await expect(meterProbe(new FlakyDb(), config, probeResult(), silent, 1)).rejects.toThrow('connection reset');
+  });
+
+  it('writes every row it can, then stops for good, naming the rows the ledger refused', async () => {
+    class RefusingDb extends FakeDb {
+      override async recordUsage(...args: Parameters<FakeDb['recordUsage']>) {
+        if (args[0].request_id === SETTLE_ROW.request_id) throw new Error('db record_usage: connection reset');
+        return super.recordUsage(...args);
+      }
+    }
+    const db = new RefusingDb();
+    const last: MeterRow = { ...SETTLE_ROW, output_tokens: 10, usd: 0.0002, request_id: 'probe/test/settle/2' };
+    const error = await meterProbe(db, config, probeResult({ metering: { ...NO_ROWS, basis: 'result', turnModels: ['builder-class'], rows: [ROW, SETTLE_ROW, last] } }), silent, 1).catch(
+      (caught: unknown) => caught,
+    );
+    expect(error).toBeInstanceOf(UnwrittenRowsError);
+    expect(exitCodeFor(error)).toBe(78);
+    expect((error as Error).message).toBe('the ledger refused probe rows: probe/test/settle/1 builder-class 0.0006 USD (db record_usage: connection reset)');
+    expect(db.ledger.map((row) => row.request_id)).toEqual(['probe/test/turn/1', 'probe/test/settle/2']);
   });
 });
 

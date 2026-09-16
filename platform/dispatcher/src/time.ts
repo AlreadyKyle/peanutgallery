@@ -18,14 +18,15 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 // Runs fn up to `tries` times, waiting delayMs before the second attempt and twice as long before
-// each one after; the last failure is rethrown.
-export async function retry<T>(fn: () => Promise<T>, tries: number, delayMs: number): Promise<T> {
+// each one after; onError hears every failure, and the last one is rethrown.
+export async function retry<T>(fn: () => Promise<T>, tries: number, delayMs: number, onError?: (error: unknown, attempt: number) => void): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= tries; attempt += 1) {
     try {
       return await fn();
     } catch (error) {
       lastError = error;
+      onError?.(error, attempt);
       if (attempt < tries) await sleep(delayMs * 2 ** (attempt - 1));
     }
   }

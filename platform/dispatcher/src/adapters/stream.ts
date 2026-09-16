@@ -6,8 +6,10 @@
 // assistant line for its id: a user line with the tool results, a system or rate-limit line, the
 // result line, another message id, or the end of the stream. A line that does carry a stop_reason
 // ends the turn at once. Usage is emitted once per turn from the last usage block seen for the id,
-// so metering runs before the next request's turn, not one turn late. A later line for the turn
-// just emitted adds no turn and no usage; its characters are passed on as turn_content.
+// so metering runs before the next request's turn, not one turn late. A later line for any turn
+// already emitted adds no turn and no usage; its characters and output are passed on as
+// turn_content. A compact_boundary line is passed on as a compaction, a request the turns do not
+// show.
 // The assistant lines' usage is not the whole bill: Claude Code writes them before the turn's output
 // is counted, so the result line's usage and modelUsage carry the totals the meter settles against.
 import type { AgentEvent, ModelUsage } from './types.js';
@@ -92,8 +94,10 @@ export function clip(text: string, limit: number = RESULT_TEXT_LIMIT): string {
 
 export class StreamParser {
   private pending: PendingTurn | null = null;
-  private flushedId: string | null = null;
-  private flushedModel = '';
+  // Every message id whose usage was emitted, with its model.
+  private readonly emitted = new Map<string, string>();
+  private lastModel = '';
+  private sessionModel = '';
   private turnCount = 0;
   private anonymousTurns = 0;
 
@@ -136,13 +140,18 @@ export class StreamParser {
     if (!this.pending) return [];
     const turn = this.pending;
     this.pending = null;
-    this.flushedId = turn.id;
-    this.flushedModel = turn.model;
+    this.emitted.set(turn.id, turn.model);
+    if (turn.model) this.lastModel = turn.model;
     return [{ type: 'turn_usage', turn: this.turnCount, model: turn.model, usage: turn.usage, contentChars: turn.contentChars, thinking: turn.thinking }];
   }
 
   private system(line: Record<string, unknown>): AgentEvent[] {
+    if (line.subtype === 'compact_boundary') {
+      const metadata = isRecord(line.compact_metadata) ? line.compact_metadata : {};
+      return [{ type: 'compaction', model: this.lastModel || this.sessionModel, preTokens: count(metadata.pre_tokens) }];
+    }
     if (line.subtype !== 'init') return [];
+    if (typeof line.model === 'string') this.sessionModel = line.model;
     const tools = Array.isArray(line.tools) ? line.tools.filter((t): t is string => typeof t === 'string') : [];
     return [
       {
@@ -157,16 +166,17 @@ export class StreamParser {
 
   private assistant(line: Record<string, unknown>): AgentEvent[] {
     const message = isRecord(line.message) ? line.message : {};
+    const flushed: AgentEvent[] = [];
     const events: AgentEvent[] = [];
     const usage = readUsage(message.usage);
     const model = typeof message.model === 'string' ? message.model : '';
     const id = typeof message.id === 'string' ? message.id : `anonymous-${++this.anonymousTurns}`;
     const stopReason = typeof message.stop_reason === 'string' && message.stop_reason.length > 0;
     if (this.pending && this.pending.id !== id) {
-      events.push(...this.flush());
+      flushed.push(...this.flush());
     }
     // A line for an id whose usage was already emitted adds no turn and no usage.
-    const finished = !this.pending && this.flushedId === id;
+    const finished = !this.pending && this.emitted.has(id);
     if (!this.pending && !finished) {
       this.turnCount += 1;
       const zero = { input_tokens: 0, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
@@ -193,11 +203,12 @@ export class StreamParser {
         });
       }
     }
-    if (finished && (late.contentChars > 0 || late.thinking)) {
-      events.unshift({ type: 'turn_content', model: model || this.flushedModel, contentChars: late.contentChars, thinking: late.thinking });
+    const outputTokens = usage?.output_tokens ?? 0;
+    if (finished && (late.contentChars > 0 || late.thinking || outputTokens > 0)) {
+      flushed.push({ type: 'turn_content', model: model || (this.emitted.get(id) ?? ''), contentChars: late.contentChars, thinking: late.thinking, outputTokens });
     }
     if (stopReason) events.push(...this.flush());
-    return events;
+    return [...flushed, ...events];
   }
 
   private user(line: Record<string, unknown>): AgentEvent[] {

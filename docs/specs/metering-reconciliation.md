@@ -23,6 +23,12 @@ A review of the first version found paths that still recorded too little or twic
 - a `modelUsage` key that differs from the turns' model was recorded a second time;
 - a failed settle row was lost.
 
+A second review found four more:
+- a retried write whose first attempt committed was recorded, and taken from the pool, twice;
+- a hung Supabase call had no timeout;
+- a compaction request was invisible to the estimate;
+- a short count of one token class sent the whole output to the estimate.
+
 ## Scope
 
 In:
@@ -34,9 +40,11 @@ In:
 - A wall clock, `SESSION_MAX_MINUTES`, documented in `.env.example`.
 - SIGINT before SIGTERM when a session is interrupted.
 - A price check for every writing role's model at startup, and for `MODEL_DIRECTOR` and `MODEL_HOST` in `config.ts`, the env file generator and `provision.sh`.
+- Idempotent ledger writes: `ledger.request_id` and a `record_usage` that writes an id once (`20260921000200_ledger_request_id.sql`).
+- A timeout on every Supabase request the dispatcher makes.
 
 Out:
-- `record_usage` and every migration. The settle rows are ordinary non-negative rows.
+- Any other change to `record_usage` or another migration. The settle rows are ordinary non-negative rows.
 - The command line's own `total_cost_usd`, which is priced from a table that is not ours. It is logged for comparison and never recorded.
 - `--max-budget-usd`, which stays as the command line's own ceiling.
 - Any live run of a session or the probe.
@@ -48,11 +56,13 @@ Out:
 **The stream.** Claude Code writes one assistant line per content block, each with the message id and a null `stop_reason`.
 - A turn ends at the first line that is not an assistant line for its id: a user line with tool results, a system or rate-limit line, the result line, another id, or the end of the stream. A line with a `stop_reason` ends it at once. The turn is metered before the next request's turn, not one turn late.
 - Each `turn_usage` event carries `contentChars`, the characters of the turn's text, thinking and tool input, and `thinking`, true when the turn had a thinking block.
-- A later line for the turn just emitted adds no turn and no usage. Its characters arrive as a `turn_content` event, so the estimate still counts them.
+- A later line for any turn already emitted (A, B, A included) adds no turn and no usage. Its characters and its reported output arrive as a `turn_content` event, so the estimate still counts them.
+- A `system` line with subtype `compact_boundary` is a `compaction` event carrying `compact_metadata.pre_tokens` (0 when missing), on the model of the last turn or the session's model before any turn. The field names are the ones Claude Code 2.1.139 writes.
 - The `end` event carries `usage` (the session total), `modelUsage` (one entry per model with input, output, cache-read and cache-write tokens and the command line's `cost_usd`, read from camelCase or snake_case fields) and `permissionDenials` (empty when the line has none).
 
 **The session meter** (`metering.ts`). Where the stream cannot be trusted, the meter records more, never less.
 - Each turn is priced with the table as a row rounded to four decimals, as `record_usage` rounds it. The row counts as recorded only once its write succeeds. A row whose write failed stays pending and is the first row settle returns.
+- Every row carries a request id made when it is priced: `<card id>/<run uuid>/turn/<n>` or `.../settle/<n>` in a session, `probe/<run uuid>/...` in the probe. Every attempt to write a row, including the settle's second try of a pending turn row, uses its id, and `record_usage` writes an id once.
 - A model missing from the table is priced at the highest of each rate across the table and named.
 - At the end, models are grouped:
   - a model both the turns and `modelUsage` name is its own group;
@@ -60,13 +70,13 @@ Out:
   - keys alone are side models, each its own group;
   - turn models alone are settled on the estimate.
 - A group with `modelUsage` settles each token class at the larger of `modelUsage` and the turns. A cache write the turns did not record counts as one-hour; with a single `modelUsage` entry the result line's own split is used. The difference from what the group recorded is one row.
-- If `modelUsage` reports fewer tokens of any class than the turns did, the group is a parse anomaly: its output takes the estimate as well, and the settlement's basis is `estimate`.
+- If `modelUsage` reports less output than the turns did, the group is a parse anomaly: its output takes the estimate, and the settlement's basis is `estimate`. A short count of any other class is covered by the larger count and is not an anomaly, so a result line one request short on input does not charge sixty thinking floors.
 - **The estimate** is used when there is no result line, when `modelUsage` is empty, for an anomaly and for a turn model `modelUsage` leaves out. Each turn's output is the largest of:
   - its reported tokens;
   - one token per three characters it wrote;
   - 1,024 tokens (`THINKING_FLOOR_TOKENS`) when it had a thinking block, because Claude Code leaves thinking text out of the stream.
 
-  Late characters add to it. With no result line at all, one more request is charged for the one in flight: the last turn's input again, the context it read or wrote to cache read once more, and 1,024 output tokens (`IN_FLIGHT_OUTPUT_TOKENS`).
+  Late characters and late output add to it. Each compaction is charged as a request of `pre_tokens` input and 1,024 output tokens, since no `modelUsage` entry counts it on this path. With no result line at all, one more request is charged for the one in flight: the last turn's input again, the context it read or wrote to cache read once more, and 1,024 output tokens (`IN_FLIGHT_OUTPUT_TOKENS`).
 - A negative difference is not written, since `record_usage` refuses it; it is reported as `overcountUsd`. After the per-class maximum it arises only from rounding.
 - The ceiling check while the session runs uses the same estimate, request in flight included.
 
@@ -74,16 +84,18 @@ Out:
 - A role model with no price returns `unknown_model` before the command line starts.
 - At `start` the tool list and the account are checked, and a refused session is interrupted before the event is written; the event payload names the refusal.
 - Rows are billed to the adapter's mode only once the init line confirms the account. A session on the wrong account, or an unattended session with no init line, records its rows as `billed_to = 'founder'`, so the pool never pays for spend the studio key did not make. The no-init case is alerted.
-- Every ledger write is tried three times, waiting 500 ms and then 1 s. A turn the ledger refuses three times stays pending and the session stops with `error`, since a ledger that refuses writes cannot hold the caps.
+- Every ledger write is tried three times with the same request id, waiting 500 ms and then 1 s, and each failed attempt is logged with the id and the usd. A turn the ledger refuses three times stays pending and the session stops with `error`, since a ledger that refuses writes cannot hold the caps.
+- Every Supabase request gives up after 8 seconds (`SUPABASE_TIMEOUT_MS`), or sooner when its caller's signal aborts, even if the connection never answers.
 - A turn on an unknown model is recorded at the fallback rates, then the session stops with `unknown_model`.
-- After the command line exits or throws, settle runs once. Its rows go through the same `record_usage` path, so `cards.actual_usd` includes them. A row that still fails is named with its usd in the `error` event and the alert, for the board to post by hand; settle never runs again.
+- After the command line exits or throws, settle runs once. Its rows are logged (id, model, tokens, usd) before any is written, then go through the same `record_usage` path, so `cards.actual_usd` includes them. A row that still fails is named with its id and usd in the `error` event and the alert, for the board to post by hand; settle never runs again.
+- Every session with a result line logs one `metering estimate check` line with the same fields: `card`, `basis`, `turns`, `estimate_usd` (the no-result estimate), `settled_usd` and `cli_total_cost_usd`. The floors are tuned from these lines.
 - These get one `error` event `{step: 'metering', basis, rows, unwritten_rows, billed_to, fallback_models, mismatch, anomaly, overcount_usd, cli_total_cost_usd}` and one ntfy alert:
   - a settlement on the estimate;
   - mismatched model names;
   - a turn model priced at fallback rates;
   - an overcount;
   - unwritten rows;
-  - an unattended session with no init line.
+  - spend recorded as the founder's because the init line reported the wrong account (the alert names the `apiKeySource` it reported), or because an unattended session had no init line.
 - A side model priced at fallback rates gets the event and an alert once per model per process, not per session.
 - A session that runs past `SESSION_MAX_MINUTES` (default 60) stops with `wall_clock`, which pauses the card.
 
@@ -91,7 +103,7 @@ Out:
 
 **The probe.**
 - `runProbe` meters with the same meter; nothing is written while it runs, so every turn row is pending and settle returns it.
-- `meterProbe` writes every row with the same three tries. A probe on the wrong account, or with no init line, is recorded as the founder's.
+- `meterProbe` tries every row three times with its id, and a refused row does not stop the others. When any row is refused after every row was tried, the process stops with exit 78 naming each refused row's id, model and usd, so it does not restart and pay for another probe. A probe on the wrong account, or with no init line, is recorded as the founder's.
 - A model the probe's turns ran on that has no price stops the process with exit 78 after its rows are written, and `probe.ts` says the probe was metered at fallback rates. A side model at fallback rates is logged and does not stop it.
 
 **Startup and configuration.**
@@ -122,6 +134,15 @@ Out:
 - [x] The adapter sends SIGINT, then SIGTERM after the grace period, then SIGKILL; a result line after SIGINT is parsed.
 - [x] `checkRoleModels` exits 78 for a writing role with an unpriced model, in either mode, before any probe.
 - [x] `config.ts`, the env file generator and `provision.sh`'s node check refuse an unpriced director or host model.
+- [x] `record_usage` with the same request id twice writes one row and takes the pool once, with the same result; two ids write two rows; a null id writes a row every time; the old eight-argument named call still works; the migration runs twice after the earlier ones; its body is the founder-billing body plus the request id.
+- [x] A session whose write commits but whose reply is lost retries with the same id and records the turn once; a turn refused three times is written at settle under its original id; every meter row carries an id.
+- [x] A Supabase request that never answers rejects after the timeout, and the caller's signal aborts it sooner; `record_usage` receives `p_request_id`.
+- [x] Settle rows are logged before the first is written, and each session with a result line logs one estimate check with the same fields.
+- [x] A `compact_boundary` line with `pre_tokens` 100,000 adds 100,000 input and 1,024 output to the no-result estimate, and nothing against a result line.
+- [x] Sixty thinking turns with a result line one request short on input and right on output settle on `result` with no row.
+- [x] A late line carries its output into the estimate, and a line for the first of three turns (A, B, A) counts no new turn.
+- [x] The alert for spend recorded as the founder's names the `apiKeySource` the init line reported.
+- [x] A probe row the ledger refuses does not stop the others, and the probe stops with exit 78 naming it.
 
 ## Verification
 
@@ -132,6 +153,31 @@ Out:
 - `pnpm verify`
 - Live, after merge: the next startup probe on the VPS writes a turn row and a settle row whose sum equals its `modelUsage` at `PRICE_TABLE_JSON`, and `probe.ts` prints the metered total next to the command line's.
 - Live, after merge: an interrupted card session (the board pauses it) writes a settle row on basis `result`, which shows whether Claude Code writes its result line on SIGINT.
+
+## Production steps
+
+The dispatcher built from this branch passes `p_request_id`, which the live `record_usage` does not take until the migration is applied. Apply the migration first; a dispatcher built before this branch keeps working after it.
+
+1. Order. Pull request 32 adds `20260921000000_open_goal_funding.sql` and `20260921000100_public_card_columns.sql`. They touch neither `ledger` nor `record_usage`, but this migration is stamped after them: merge and apply them first. If this one reaches the live project first, pushing theirs later needs `supabase db push --include-all`, since their stamps are older.
+2. Pause agents from /board and wait until no card is `building` or `gated`.
+3. Apply `platform/supabase/migrations/20260921000200_ledger_request_id.sql` to the live project, the way the earlier migrations were applied. It is safe to run twice.
+4. Check the function, as the service role:
+   - `select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'record_usage';` returns 1.
+   - `select pg_get_functiondef('public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing, text)'::regprocedure);` shows `p_request_id text DEFAULT NULL::text` and the request id check before the insert.
+   - `select indexdef from pg_indexes where indexname = 'ledger_request_id_key';` shows the partial unique index.
+5. `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` prints `PASS:`.
+6. Deploy the dispatcher from this branch, then resume from /board.
+
+Rollback, with the dispatcher stopped and redeployed from a build before this branch (a later build calls the nine-argument function):
+
+```sql
+drop function if exists public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing, text);
+-- then run the record_usage block and its revoke and grant lines from 20260918000000_founder_billing.sql
+drop index if exists public.ledger_request_id_key;
+alter table public.ledger drop column if exists request_id;
+```
+
+Then run `ledger-identity.ts` again. Dropping the column loses only the ids; every row and amount stays.
 
 ## Evidence
 
@@ -203,7 +249,32 @@ The review's tests:
 
 The comparison script's output for the recorded probe is unchanged: old $0.0211, new $0.0343 on basis `result`, command line $0.05404125.
 
-Pending: both live lines.
+Second review fixes, 2026-09-16 (on 72ef598). Test first:
+- Supabase: the seven text tests failed before the migration existed, and the PGlite run failed at "every migration applies in order".
+- Dispatcher: before the source changed, the new and updated tests failed, including:
+  - the stream tests for compaction, A, B, A and late output;
+  - the metering tests for request ids, compaction and the sixty-turn case, which settled on the estimate;
+  - the db tests, where the hung fetch ran to the 5 s test timeout;
+  - the startup test for unwritten probe rows.
+
+After the fixes:
+- `pnpm --filter @backseat/dispatcher test`: `Test Files  24 passed (24)`, `Tests  276 passed (276)` (264 before).
+- `pnpm --filter @backseat/dispatcher typecheck`: exit 0.
+- `pnpm --filter @backseat/supabase test`: `Test Files  11 passed (11)`, `Tests  129 passed (129)` (122 before).
+- `pnpm test:functions`: `ok | 58 passed (34 steps) | 0 failed` (33 steps before).
+- `pnpm verify`: exit 0: supabase 129, seed-1 77, site 123, dispatcher 276, gate `passed=211`, agents 64, ops 22 of 23 (1 skipped), deno `58 passed (34 steps) | 0 failed`, both `GATE PASS` lines, `PASS: secret-scan files=303`.
+
+The review's tests:
+- The request id: `migration.test.ts` "ledger-request-id migration" (the body is rebuilt from the founder-billing body and compared) and the PGlite step "record_usage writes a request id once, and without one as before".
+- The dispatcher's ids: `session.test.ts`, the lost reply and the refused turn; `metering.test.ts`, the pending row; `startup.test.ts`, the probe ids.
+- The timeout and `p_request_id`: `db.test.ts`.
+- Compaction, late output and A, B, A: `stream.test.ts` and `metering.test.ts`.
+- The sixty-turn case: `metering.test.ts`.
+- The logged rows and the estimate check: `session.test.ts`.
+- The named key source: `session.test.ts`.
+- The unwritten probe rows: `startup.test.ts`.
+
+Pending: the production steps above, and both live lines.
 
 ## Decisions
 
@@ -214,7 +285,12 @@ Pending: both live lines.
 - 2026-09-16 (review): a thinking turn's estimated output is at least 1,024 tokens, the smallest thinking budget the Messages API accepts, because Claude Code writes thinking blocks with their text left out; the recorded probe's thinking turn would otherwise estimate 12 tokens against a real 49. A session with no result line is also charged one more request for the one in flight: the last turn's input, its cached context read again, and 1,024 output tokens. Both lean high on purpose; the estimate is the rare path and stands in for a bill we cannot see.
 - 2026-09-16 (review): the ceiling uses the same estimate while the session runs, request in flight included. A thinking-heavy session reaches its ceiling sooner; the ceiling exists to stop spend before it happens, and the settle corrects the ledger afterwards.
 - 2026-09-16 (review): a turn row counts as recorded only after its write succeeds, and a failed one is written at settle. A ledger that refuses a write three times stops the session with `error`: `record_usage` is what moves the pool balance, the day's spend and the card's `actual_usd`, so a session must not keep spending while its writes fail.
-- 2026-09-16 (review): every token class settles at the larger of `modelUsage` and the turns, and a class `modelUsage` reports below the turns sends the group to the estimate and alerts. The turns' counts come from the same session, so a result below them points to a parse problem rather than a saving.
+- 2026-09-16 (review): every token class settles at the larger of `modelUsage` and the turns. Output `modelUsage` reports below the turns sends the group's output to the estimate and alerts; the turns' counts come from the same session, so a result below them points to a parse problem rather than a saving.
+- 2026-09-16 (second review): only output falls back to the estimate. A short input or cache count is already covered by taking the larger count, and sending the whole output to the estimate for it charged a thinking floor for every turn of a long session.
+- 2026-09-16 (second review): a ledger write is idempotent by a request id made on the dispatcher's side when the row is priced, and `record_usage` checks it after the lock it already takes (the card's, or the pool's when there is no card). A retry cannot tell a lost reply from a failed write, so without the id the safe retry and the double debit were the same call. The id is a trailing argument with a null default, so every existing caller keeps working.
+- 2026-09-16 (second review): every Supabase request times out at 8 seconds. Three tries of a hung write take about 25 seconds, so a single settle row fits the 50-second shutdown wait; the rows are logged before the first write so nothing is lost if it does not.
+- 2026-09-16 (second review): a compaction is charged in the estimate as one request of its `pre_tokens` input and 1,024 output tokens. The result line's `modelUsage` already counts it, so it is not added when there is one.
+- 2026-09-16 (second review): a probe row the ledger refuses stops the process with exit 78 after every row is tried. The probe's spend is made either way, and a restart would only pay for another.
 - 2026-09-16 (review): model names are matched between the turns and `modelUsage`. Unmatched names on both sides are reconciled on their total under the turn model, never written twice; unmatched `modelUsage` keys alone are side models and are written under their own names; an unmatched turn model is estimated. A side model at fallback rates alerts once per process, since the small fast model Claude Code calls would otherwise alert on every session.
 - 2026-09-16 (review): settle runs once. A settle row that fails three tries is named with its amount for the board to post by hand, rather than retried by a second settle that could write the rest twice.
 - 2026-09-16 (review): an unattended session's rows bill the pool only after the init line confirms the studio key; with no init line they are the founder's and alerted. The dispatcher's shutdown wait is 50 seconds, so the interrupt, the settle and the pause fit inside `docker stop`'s 60.

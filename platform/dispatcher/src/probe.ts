@@ -14,7 +14,7 @@ import { createSupabaseDb } from './db.js';
 import { errorMessage, logLine, type LogFields, type Logger, type LogLevel } from './log.js';
 import { round4 } from './pricing.js';
 import { initRecord, runProbe } from './probe-core.js';
-import { FallbackPricedError, meterProbe } from './startup.js';
+import { FallbackPricedError, UnwrittenRowsError, meterProbe } from './startup.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const FIXTURE = path.join(REPO_ROOT, 'platform', 'dispatcher', 'test', 'fixtures', 'probe.jsonl');
@@ -59,7 +59,10 @@ async function probeVerdict(details: string[]): Promise<string> {
     try {
       await meterProbe(createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey), config, probe, detailLogger(details));
     } catch (error) {
-      if (error instanceof FallbackPricedError) {
+      if (error instanceof UnwrittenRowsError) {
+        meterError = `only partly metered: ${error.message}`;
+        details.push(`probe: ${meterError}`);
+      } else if (error instanceof FallbackPricedError) {
         meterError = `metered at fallback rates because PRICE_TABLE_JSON has no row for ${error.models.join(', ')}`;
         details.push(`probe: ${meterError}`);
       } else {

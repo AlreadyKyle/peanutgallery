@@ -7,7 +7,8 @@ import type { AgentAdapter } from './adapters/types.js';
 import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
-import type { Logger } from './log.js';
+import { errorMessage, type Logger } from './log.js';
+import type { MeterRow } from './metering.js';
 import { modelPrice } from './pricing.js';
 import { LEDGER_RETRY_MS, LEDGER_TRIES, billedToWrongAccount } from './session.js';
 import { billingFor } from './throttle.js';
@@ -48,6 +49,17 @@ export class FallbackPricedError extends StartupError {
   }
 }
 
+// Rows the ledger refused after every retry. The probe's spend is already made, so the process stops
+// for good rather than restart and pay for another probe; the rows are named for the board to post.
+export class UnwrittenRowsError extends StartupError {
+  readonly rows: Array<MeterRow & { error: string }>;
+  constructor(rows: Array<MeterRow & { error: string }>) {
+    super(`the ledger refused probe rows: ${rows.map((row) => `${row.request_id} ${row.model} ${row.usd} USD (${row.error})`).join(', ')}`, true);
+    this.name = 'UnwrittenRowsError';
+    this.rows = rows;
+  }
+}
+
 // A session runs on its role's model, or MODEL_BUILDER when the role names none. A writing role whose
 // model has no price could not be metered, and the price table and the roles are the same on every
 // restart, so it is fatal.
@@ -75,15 +87,27 @@ export async function meterProbe(db: Db, config: DispatcherConfig, probe: ProbeR
     log.warn('probe', 'the probe reported no token usage; nothing metered', { ok: probe.ok, turns: probe.turns });
   }
   const billedTo = billedToWrongAccount(config.agentMode, probe.apiKeySource) ? 'founder' : billingFor(config.agentMode);
+  const unwritten: Array<MeterRow & { error: string }> = [];
   for (const row of rows) {
-    const recorded = await retry(() => db.recordUsage({ billed_to: billedTo, card_id: null, role_id: null, ...row }), LEDGER_TRIES, retryMs);
-    log.info('probe', 'probe metered', { ledger: recorded.ledger_id, model: row.model, usd: row.usd, billedTo, balance: recorded.balance_usd });
+    try {
+      const recorded = await retry(
+        () => db.recordUsage({ billed_to: billedTo, card_id: null, role_id: null, ...row }),
+        LEDGER_TRIES,
+        retryMs,
+        (error, attempt) => log.warn('probe', 'ledger write failed', { request_id: row.request_id, usd: row.usd, attempt, error: errorMessage(error) }),
+      );
+      log.info('probe', 'probe metered', { ledger: recorded.ledger_id, request_id: row.request_id, model: row.model, usd: row.usd, billedTo, balance: recorded.balance_usd });
+    } catch (error) {
+      log.error('probe', 'probe row not metered', { request_id: row.request_id, model: row.model, usd: row.usd, error: errorMessage(error) });
+      unwritten.push({ ...row, error: errorMessage(error) });
+    }
   }
   if (rows.length > 0 && (basis === 'estimate' || overcountUsd > 0 || mismatch)) {
     log.warn('probe', 'probe metering needs review', { basis, anomaly, mismatch, overcountUsd, cliTotalCostUsd: probe.costUsd });
   }
   const sideFallbacks = fallbackModels.filter((model) => !turnModels.includes(model));
   if (sideFallbacks.length > 0) log.warn('probe', 'side models metered at fallback rates; add them to PRICE_TABLE_JSON', { models: sideFallbacks });
+  if (unwritten.length > 0) throw new UnwrittenRowsError(unwritten);
   const turnFallbacks = fallbackModels.filter((model) => turnModels.includes(model));
   if (turnFallbacks.length > 0) throw new FallbackPricedError(turnFallbacks);
 }
