@@ -619,3 +619,100 @@ describe("card-spend migration", () => {
     expect(cardSpend).toContain("grant select on public.public_card_spend to anon, authenticated;");
   });
 });
+
+const REFUNDS_FILE = "20260920000000_refunds_and_holds.sql";
+const refunds = readFileSync(resolve(MIGRATIONS_DIR, REFUNDS_FILE), "utf8");
+
+describe("refunds-and-holds migration", () => {
+  it("carries a 14-digit stamp that sorts after the founder-billing file", () => {
+    expect(REFUNDS_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect(REFUNDS_FILE > FOUNDER_BILLING_FILE).toBe(true);
+  });
+
+  it("adds the entry enum, the child-row columns and the held totals, all safe to run twice", () => {
+    expect(refunds).toContain("create type public.contribution_entry as enum ('payment', 'release', 'refund', 'dispute');");
+    expect(refunds).toContain("when duplicate_object then null;");
+    for (const column of ["entry", "parent_id", "held_usd", "hold_until"]) {
+      expect(refunds).toContain(`alter table public.contributions add column if not exists ${column} `);
+    }
+    expect(refunds).toContain("alter table public.pool add column if not exists held_usd numeric(12,4) not null default 0;");
+    expect(refunds).toContain("credit_daily_cap_usd numeric(12,4) not null default 50;");
+    expect(refunds).toContain("credit_hold_days integer not null default 14;");
+    for (const constraint of refunds.matchAll(/add constraint (\w+)/g)) {
+      expect(refunds).toContain(`drop constraint if exists ${constraint[1]};`);
+    }
+    expect(refunds).toContain(
+      "create unique index if not exists contributions_one_release on public.contributions (parent_id) where entry = 'release';",
+    );
+  });
+
+  it("never changes a money column on a contribution row or deletes one", () => {
+    // The only update is the decision assignment on the row apply_contribution just inserted.
+    const updates = [...refunds.matchAll(/update public\.contributions[^;]*;/g)].map((m) => m[0]);
+    expect(updates).toEqual(["update public.contributions set decision_id = v_decision where id = v_id;"]);
+    expect(refunds).not.toMatch(/delete from public\.contributions/);
+  });
+
+  it("keeps the eight-argument apply_contribution, holds credit above the day's cap and locks the card before the pool", () => {
+    const block = functionBlockIn(refunds, "apply_contribution");
+    expect(block).toContain("  p_stripe_session_id text default null\n) returns jsonb");
+    expect(refunds).not.toContain("drop function if exists public.apply_contribution");
+    const card = block.indexOf("from public.cards where id = p_goal_card_id and shape = 'goal' for update");
+    const pool = block.indexOf("from public.pool where id = 1 for update");
+    const used = block.indexOf("into v_used");
+    expect(card).toBeGreaterThan(0);
+    expect(pool).toBeGreaterThan(card);
+    expect(used).toBeGreaterThan(pool);
+    expect(block).toContain("v_held := greatest(0, v_credit - greatest(0, v_daily_cap - v_used));");
+    expect(block).toContain("at time zone 'America/New_York'");
+    expect(block).toContain("set balance_usd = balance_usd + (v_credit - v_held),");
+    expect(block).toContain("held_usd = held_usd + v_held,");
+  });
+
+  it("releases each hold once, cards in id order before the pool", () => {
+    const block = functionBlockIn(refunds, "credit_held_contributions");
+    const cards = block.indexOf("perform 1 from public.cards where id = any(v_cards) order by id for update;");
+    const pool = block.indexOf("perform 1 from public.pool where id = 1 for update;");
+    expect(cards).toBeGreaterThan(0);
+    expect(pool).toBeGreaterThan(cards);
+    expect(block).toContain("on conflict do nothing");
+    expect(block).toContain("if v_release is null or v_amount = 0 then");
+  });
+
+  it("reverses by the kind's cumulative total, cancels holds first and covers disputes from the reserve", () => {
+    const block = functionBlockIn(refunds, "reverse_contribution");
+    expect(block).toContain(
+      "v_delta := least(round(p_kind_total_usd, 4) - v_before_kind, v_payment.amount_usd - v_before_all);",
+    );
+    expect(block).toContain("v_held := least(v_credit, v_held_left);");
+    expect(block).toContain("if p_kind = 'dispute' then");
+    expect(block).toContain("v_cover := least(v_agents - v_held, greatest(v_pool_reserve - v_reserve, 0));");
+    expect(block).not.toContain("set stage");
+  });
+
+  it("counts only credited money and contributors not fully reversed in public_card_funding", () => {
+    expect(refunds).toContain("where goal_card_id is not null and credited_at is not null");
+    expect(refunds).toContain("(count(*) filter (where paid_usd > 0))::integer as contributors,");
+    expect(refunds).toContain("sum(agents_usd - incident_usd - held_usd) as credit_usd");
+  });
+
+  it("grants the three money functions to service_role only", () => {
+    for (const signature of [
+      "apply_contribution(text, text, text, numeric, numeric, integer, uuid, text)",
+      "credit_held_contributions()",
+      "reverse_contribution(text, text, public.contribution_entry, numeric)",
+    ]) {
+      expect(refunds).toContain(`revoke all on function public.${signature} from public, anon, authenticated;`);
+      expect(refunds).toContain(`grant execute on function public.${signature} to service_role;`);
+    }
+  });
+
+  it("schedules the hourly release only where pg_cron ships", () => {
+    const guard = refunds.indexOf("if not exists (select 1 from pg_available_extensions where name = 'pg_cron') then");
+    const schedule = refunds.indexOf(
+      "perform cron.schedule('credit-held-contributions', '17 * * * *', 'select public.credit_held_contributions()');",
+    );
+    expect(guard).toBeGreaterThan(0);
+    expect(schedule).toBeGreaterThan(guard);
+  });
+});

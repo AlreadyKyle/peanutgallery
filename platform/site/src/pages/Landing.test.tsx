@@ -12,6 +12,7 @@ const snapshot: Snapshot = {
     balance_usd: 48.56,
     reserve_usd: 7.1,
     incident_reserve_usd: 2.56,
+    held_usd: 61.5,
     daily_spent_usd: 0,
     day: '2026-09-14',
   },
@@ -223,6 +224,9 @@ describe('Landing', () => {
     expect(screen.getAllByText(copy.describeAvailable)).toHaveLength(2);
     expect(screen.getByText(copy.describeReserve)).toBeTruthy();
     expect(screen.getByText(copy.describeIncidentReserve)).toBeTruthy();
+    expect(screen.getByText(copy.held)).toBeTruthy();
+    expect(screen.getByText('$61.50')).toBeTruthy();
+    expect(screen.getByText(copy.describeHeld)).toBeTruthy();
     expect(screen.getByText(copy.describeAgentSpend)).toBeTruthy();
     expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
     expect(screen.getByText(copy.notLiveYet)).toBeTruthy();

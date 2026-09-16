@@ -11,6 +11,7 @@ const snapshot: Snapshot = {
     balance_usd: 48.56,
     reserve_usd: 7.1,
     incident_reserve_usd: 2.56,
+    held_usd: 0,
     daily_spent_usd: 0,
     day: '2026-09-14',
   },

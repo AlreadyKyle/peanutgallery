@@ -19,7 +19,7 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 ## Acceptance criteria
 
 - [x] A Stripe `checkout.session.completed` for $1 at 80/20 creates a `contributions` row with `studio_pct_chosen` 20, increments `pool.balance_usd` by the agents' net amount and `pool.incident_reserve_usd` by 5% of the agents' share, and the public site shows the new figures within 60 seconds.
-- [ ] A card in stage `funded` with a $2 estimate becomes a deployed change on the live seed site within 15 minutes, with ledger rows and a new green `deploys` row, three runs in a row.
+- [x] A card in stage `funded` with a $2 estimate becomes a deployed change on the live seed site within 15 minutes, with ledger rows and a new green `deploys` row, three runs in a row.
 - [x] ~~The landing page renders the sections in the order above at 375 px with no horizontal scroll, with and without a database configured.~~ Superseded: `site-layout.md` sets the landing order (2026-09-14).
 - [x] ~~Every info icon opens by tap, hover and keyboard, and closes on Escape and on a tap outside.~~ Superseded: `site-design.md` replaced info icons with visible descriptions (2026-09-14).
 - [x] Each Next card's Fund this link is the Payment Link with `client_reference_id` set to the card id.
@@ -32,7 +32,7 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 - `pnpm --filter @backseat/site build && pnpm --filter @backseat/site e2e` passes at 375 px.
 - The signed synthetic dry run: `pnpm --filter @backseat/supabase exec tsx scripts/sign-synthetic-event.ts --split 8020 --amount-cents 100` returns 200 with `dry_run: true` and `studio_pct: 20`.
 - The board's real $1 and the three week-1 runs, with the SQL checks in the plan of 14 September 2026, quoted in the session report.
-- The ledger identity holds: sum of `agents_usd - incident_usd` over contributions minus the sum of `ledger.usd` equals `pool.balance_usd`.
+- ~~The ledger identity holds: sum of `agents_usd - incident_usd` over contributions minus the sum of `ledger.usd` equals `pool.balance_usd`.~~ Superseded: `refunds-and-holds.md` states the identity as I1–I3, exact through founder rows, S1 draws, holds and reversals, checked by `scripts/ledger-identity.ts` (2026-09-15).
 
 ## Decisions
 
@@ -49,4 +49,5 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 - Criterion 1: the real $1 at 80/20 is credited (see `stripe-late-fee.md` Evidence), and the site shows the pool figures.
 - Criterion 5: the live check found 4 "Fund this card" links and 4 contribute choices, each the Payment Link with `client_reference_id=<uuid>`.
 - Criterion 6: PGlite "the board files Next cards, stamps the launch…" and `Landing.test.tsx` (live-since line).
-- Open: criterion 2 (three week-1 runs, `week1-runs.md`) and criterion 7 (unattended on the VPS, `vps.md`).
+- Criterion 2: the three week-1 runs shipped on 15 and 16 September; run 3 went from insert to live in 2 minutes (`week1-runs.md` Evidence).
+- Open: criterion 7 (unattended on the VPS, `vps.md`).

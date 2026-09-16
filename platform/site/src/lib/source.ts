@@ -5,6 +5,7 @@ export type Pool = {
   balance_usd: number;
   reserve_usd: number;
   incident_reserve_usd: number;
+  held_usd: number;
   daily_spent_usd: number;
   day: string;
 };
@@ -90,6 +91,7 @@ type PoolRow = {
   balance_usd: Numeric;
   reserve_usd: Numeric;
   incident_reserve_usd: Numeric;
+  held_usd: Numeric;
   daily_spent_usd: Numeric;
   day: string;
 };
@@ -175,6 +177,7 @@ function poolFrom(row: PoolRow | null): Pool | null {
     balance_usd: money(row.balance_usd),
     reserve_usd: money(row.reserve_usd),
     incident_reserve_usd: money(row.incident_reserve_usd),
+    held_usd: money(row.held_usd),
     daily_spent_usd: money(row.daily_spent_usd),
     day: row.day,
   };
@@ -252,7 +255,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
       const [pool, cards, funding, spend, studio, totals, events, deploys, roles] = await Promise.all([
         client
           .from('pool')
-          .select('balance_usd,reserve_usd,incident_reserve_usd,daily_spent_usd,day')
+          .select('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day')
           .eq('id', 1)
           .maybeSingle<PoolRow>(),
         client
