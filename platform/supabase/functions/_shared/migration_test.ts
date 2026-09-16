@@ -53,6 +53,37 @@ $$;
 create publication supabase_realtime;
 `;
 
+/** Every cards column anon and authenticated may select, sorted. */
+const PUBLIC_CARD_COLUMNS = [
+  "acceptance_test",
+  "board_reason",
+  "branch",
+  "bucket",
+  "commit_sha",
+  "confidence",
+  "created_at",
+  "design_spec_url",
+  "director_stance",
+  "estimate_usd",
+  "executor_role_id",
+  "failing_check",
+  "folder",
+  "funded_usd",
+  "funding_target_usd",
+  "id",
+  "intent",
+  "lane",
+  "live_at",
+  "proposer_role_id",
+  "shape",
+  "source",
+  "stage",
+  "summary",
+  "title",
+  "updated_at",
+  "veto_reason",
+];
+
 const BOARD_EMAIL = "board@peanutgallery.games";
 const MODERATOR_EMAIL = "mod@peanutgallery.games";
 const OUTSIDER_EMAIL = "someone@peanutgallery.games";
@@ -137,6 +168,16 @@ Deno.test("migrations on PGlite", {
     );
   }
 
+  /** Each money column summed over one payment and its child rows. */
+  async function familySums(eventId: string) {
+    return await row(
+      `select sum(c.amount_usd) as amount, sum(c.net_usd) as net, sum(c.reserve_usd) as reserve, sum(c.agents_usd) as agents, sum(c.studio_usd) as studio, sum(c.incident_usd) as incident, sum(c.held_usd) as held
+       from public.contributions c, (select id from public.contributions where stripe_event_id = $1) p
+       where c.id = p.id or c.parent_id = p.id`,
+      [eventId],
+    );
+  }
+
   let goalCardId = "";
   let votedGoalId = "";
   let oneoffCardId = "";
@@ -154,6 +195,8 @@ Deno.test("migrations on PGlite", {
         "20260919000000_board_two_factor.sql",
         "20260919000100_card_spend.sql",
         "20260920000000_refunds_and_holds.sql",
+        "20260921000000_open_goal_funding.sql",
+        "20260921000100_public_card_columns.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -215,6 +258,10 @@ Deno.test("migrations on PGlite", {
         `select data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'cards' and column_name = 'summary'`,
       );
       assertEquals(summary, { data_type: "text", is_nullable: "YES" });
+      const liveAt = await row<{ data_type: string; is_nullable: string }>(
+        `select data_type, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'cards' and column_name = 'live_at'`,
+      );
+      assertEquals(liveAt, { data_type: "timestamp with time zone", is_nullable: "YES" });
       const sessionKey = await rows(
         `select c.conname from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey) where c.conrelid = 'public.contributions'::regclass and c.contype = 'u' and a.attname = 'stripe_session_id'`,
       );
@@ -410,18 +457,27 @@ Deno.test("migrations on PGlite", {
           `select public.apply_contribution('evt_f', 'contrib_f', null, 1.00, 0.71, 20, $1) as r`,
           [votedGoalId],
         )).r;
-        // net 0.71 at 20%: agents 0.5112, incident 0.0256, credit 0.4856; the card stays funded.
+        // net 0.71 at 20%: agents 0.5112, incident 0.0256, credit 0.4856. The card
+        // is funded, so it is no longer open: the money funds the pool, not the bar.
+        assertEquals(second.inserted, true);
         assertEquals(second.pool_credit_usd, 0.4856);
-        assertEquals(second.goal_stage, "funded");
-        assertEquals(second.goal_funded_usd, 1.8963);
+        assertEquals(second.goal_card_id, null);
+        assertEquals(second.goal_stage, null);
+        assertEquals(second.goal_funded_usd, null);
+        assertEquals(
+          await row(
+            `select goal_card_id from public.contributions where stripe_event_id = 'evt_f'`,
+          ),
+          { goal_card_id: null },
+        );
         assertEquals(
           await row(
             `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
             [votedGoalId],
           ),
-          { funded_usd: "1.8963", estimate_usd: "1.0000", stage: "funded" },
+          { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "funded" },
         );
-        // The pool moved by the same two credits as the bar.
+        // The pool still rose by both credits.
         const after = await pool();
         assertEquals(
           (Number(after.balance_usd) - Number(before.balance_usd)).toFixed(4),
@@ -447,25 +503,67 @@ Deno.test("migrations on PGlite", {
       },
     );
 
-    await t.step("a live goal keeps its stage while its bar rises", async () => {
-      const live = await row<{ id: string }>(
-        `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A live goal with a 1 target', 1, 'live') returning id`,
-      );
-      const { r } = await row<{ r: Row }>(
-        `select public.apply_contribution('evt_h', 'contrib_h', null, 2.00, 1.65, 0, $1) as r`,
-        [live.id],
-      );
-      assertEquals(r.goal_card_id, live.id);
-      assertEquals(r.goal_stage, "live");
-      assertEquals(r.goal_funded_usd, 1.4107);
-      assertEquals(
-        await row(
-          `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
-          [live.id],
-        ),
-        { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "live" },
-      );
-    });
+    await t.step(
+      "only an open goal is credited: live, funded and building goals send the money to the pool",
+      async () => {
+        for (const stage of ["live", "funded", "building"]) {
+          const card = await row<{ id: string }>(
+            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 1, $2) returning id`,
+            [`A ${stage} goal with a 1 target`, stage],
+          );
+          const before = await pool();
+          const { r } = await row<{ r: Row }>(
+            `select public.apply_contribution($1, $2, null, 2.00, 1.65, 0, $3) as r`,
+            [`evt_h_${stage}`, `contrib_h_${stage}`, card.id],
+          );
+          assertEquals(r.inserted, true, stage);
+          assertEquals(r.pool_credit_usd, 1.4107, stage);
+          assertEquals(r.goal_card_id, null, stage);
+          assertEquals(r.goal_stage, null, stage);
+          assertEquals(r.goal_funded_usd, null, stage);
+          assertEquals(
+            await row(
+              `select goal_card_id from public.contributions where stripe_event_id = $1`,
+              [`evt_h_${stage}`],
+            ),
+            { goal_card_id: null },
+            stage,
+          );
+          assertEquals(
+            await row(
+              `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
+              [card.id],
+            ),
+            { funded_usd: "0.0000", estimate_usd: "0.0000", stage },
+          );
+          const after = await pool();
+          assertEquals(
+            (Number(after.balance_usd) - Number(before.balance_usd)).toFixed(4),
+            "1.4107",
+            stage,
+          );
+        }
+
+        // A designing card is open: its bar rises, and only proposed or voted flips to funded.
+        const designing = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A designing goal with a 1 target', 1, 'designing') returning id`,
+        );
+        const { r } = await row<{ r: Row }>(
+          `select public.apply_contribution('evt_h_designing', 'contrib_h_designing', null, 2.00, 1.65, 0, $1) as r`,
+          [designing.id],
+        );
+        assertEquals(r.goal_card_id, designing.id);
+        assertEquals(r.goal_stage, "designing");
+        assertEquals(r.goal_funded_usd, 1.4107);
+        assertEquals(
+          await row(
+            `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
+            [designing.id],
+          ),
+          { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "designing" },
+        );
+      },
+    );
 
     await t.step(
       "a card that is not a goal is dropped and a large contribution finds no open decision",
@@ -1364,10 +1462,9 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on the five public tables and the six views and nothing else",
+      "anon holds select on four public tables, the six views and the public columns of cards, and nothing else",
       async () => {
         const expected = [
-          "cards",
           "deploys",
           "last_green",
           "ledger",
@@ -1387,7 +1484,27 @@ Deno.test("migrations on PGlite", {
             [grantee],
           );
           assertEquals(grants, expected, grantee);
+          // cards is granted column by column. actual_usd counts founder-billed
+          // turns, and severity and priority mark incidents, which stay private
+          // until post-mortem.
+          const columns = await rows<{ column_name: string }>(
+            `select column_name from information_schema.column_privileges where grantee = $1 and table_schema = 'public' and table_name = 'cards' and privilege_type = 'SELECT' order by 1`,
+            [grantee],
+          );
+          assertEquals(columns.map((c) => c.column_name), PUBLIC_CARD_COLUMNS, grantee);
+          const other = await rows(
+            `select column_name, privilege_type from information_schema.column_privileges where grantee = $1 and table_schema = 'public' and table_name = 'cards' and privilege_type <> 'SELECT'`,
+            [grantee],
+          );
+          assertEquals(other, [], grantee);
         }
+        // No view reads cards, so no view can hand a withheld column to anon.
+        assertEquals(
+          await rows(
+            `select view_name from information_schema.view_table_usage where table_schema = 'public' and table_name = 'cards'`,
+          ),
+          [],
+        );
       },
     );
 
@@ -1411,6 +1528,16 @@ Deno.test("migrations on PGlite", {
           assertEquals(green.length, 2);
           const cards = await rows(`select id from public.cards`);
           assertEquals(cards.length, total.n);
+          const shipped = await rows(
+            `select id, title, live_at from public.cards order by created_at limit 1`,
+          );
+          assertEquals(Object.keys(shipped[0]!), ["id", "title", "live_at"]);
+          for (const column of ["actual_usd", "severity", "priority", "*"]) {
+            await refuses(
+              `select ${column} from public.cards`,
+              "permission denied",
+            );
+          }
           const summaries = await rows<{ summary: string | null }>(
             `select summary from public.cards where summary is not null order by summary`,
           );
@@ -1429,8 +1556,9 @@ Deno.test("migrations on PGlite", {
             contributors: number;
             credited_usd: string;
           }>(`select * from public.public_card_funding`);
-          // Four goal cards received money: the 100-target card, the voted card
-          // (two contributions), the proposed card and the live card.
+          // Four goal cards received money while open: the 100-target card, the
+          // voted card (its second payment arrived after it was funded and went to
+          // the pool), the proposed card and the designing card.
           assertEquals(funding.length, 4);
           assertEquals(Object.keys(funding[0]!).sort(), [
             "card_id",
@@ -1445,8 +1573,8 @@ Deno.test("migrations on PGlite", {
           });
           assertEquals(byCard.get(votedGoalId), {
             card_id: votedGoalId,
-            contributors: 2,
-            credited_usd: "1.8963",
+            contributors: 1,
+            credited_usd: "1.4107",
           });
 
           await refuses(
@@ -1857,6 +1985,507 @@ Deno.test("migrations on PGlite", {
       },
     );
 
+    await t.step(
+      "below the incident cap at a 20% studio share, a refund and a dispute keep the payment's proportions",
+      async () => {
+        await db.exec(
+          `update public.pool set incident_reserve_usd = 0, reserve_usd = 100 where id = 1`,
+        );
+        const offsets = await identityOffsets();
+        const card = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded below the incident cap', 100, 'proposed') returning id`,
+        );
+        const pay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_w', 'contrib_w', null, 40.00, 40.00, 20, $1, 'cs_w') as r`,
+          [card.id],
+        )).r;
+        // net 40: reserve 4, remainder 36, studio 7.2, agents 28.8, incident 5% = 1.44, credit 27.36.
+        assertEquals(pay.reserve_usd, 4);
+        assertEquals(pay.studio_usd, 7.2);
+        assertEquals(pay.agents_usd, 28.8);
+        assertEquals(pay.incident_usd, 1.44);
+        assertEquals(pay.pool_credit_usd, 27.36);
+        assertEquals(pay.held_usd, 0);
+        assertEquals(pay.goal_funded_usd, 27.36);
+        const before = await pool();
+
+        const refund = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_wr', 'cs_w', 'refund', 10) as r`,
+        )).r;
+        assertEquals(refund.reversed_usd, 10);
+        assertEquals(refund.held_cancelled_usd, 0);
+        assertEquals(refund.reserve_cover_usd, 0);
+        assertEquals(refund.goal_funded_usd, 20.52);
+        assertEquals(refund.pool_reserve_usd, 103);
+        assertEquals(refund.pool_incident_reserve_usd, 1.08);
+        assertEquals(
+          await row(
+            `select entry::text as entry, amount_usd, net_usd, reserve_usd, agents_usd, studio_usd, incident_usd, held_usd from public.contributions where stripe_event_id = 'evt_wr'`,
+          ),
+          {
+            entry: "refund",
+            amount_usd: "-10.0000",
+            net_usd: "-10.0000",
+            reserve_usd: "-1.0000",
+            agents_usd: "-7.2000",
+            studio_usd: "-1.8000",
+            incident_usd: "-0.3600",
+            held_usd: "0.0000",
+          },
+        );
+        const afterRefund = await pool();
+        // The balance and the bar fall by the agents' credit share: 7.2 - 0.36 = 6.84.
+        assertEquals(
+          (Number(afterRefund.balance_usd) - Number(before.balance_usd)).toFixed(4),
+          "-6.8400",
+        );
+        assertEquals(
+          (Number(afterRefund.incident_reserve_usd) - Number(before.incident_reserve_usd)).toFixed(4),
+          "-0.3600",
+        );
+        assertEquals(
+          (Number(afterRefund.reserve_usd) - Number(before.reserve_usd)).toFixed(4),
+          "-1.0000",
+        );
+        assertEquals(refund.pool_balance_usd, Number(afterRefund.balance_usd));
+        assertEquals(await identityOffsets(), offsets);
+
+        // A dispute for the whole 40 reverses the 30 still due. The reserve covers
+        // the agents share of it in full, so the balance, the incident reserve and
+        // the bar do not move.
+        const dispute = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_wd', 'cs_w', 'dispute', 40) as r`,
+        )).r;
+        assertEquals(dispute.reversed_usd, 30);
+        assertEquals(dispute.fully_reversed, true);
+        assertEquals(dispute.reserve_cover_usd, 21.6);
+        assertEquals(dispute.goal_funded_usd, 20.52);
+        assertEquals(dispute.pool_reserve_usd, 78.4);
+        assertEquals(dispute.pool_incident_reserve_usd, 1.08);
+        assertEquals(
+          await row(
+            `select entry::text as entry, amount_usd, net_usd, reserve_usd, agents_usd, studio_usd, incident_usd, held_usd from public.contributions where stripe_event_id = 'evt_wd'`,
+          ),
+          {
+            entry: "dispute",
+            amount_usd: "-30.0000",
+            net_usd: "-30.0000",
+            reserve_usd: "-24.6000",
+            agents_usd: "0.0000",
+            studio_usd: "-5.4000",
+            incident_usd: "0.0000",
+            held_usd: "0.0000",
+          },
+        );
+        const afterDispute = await pool();
+        assertEquals(afterDispute.balance_usd, afterRefund.balance_usd);
+        assertEquals(afterDispute.incident_reserve_usd, afterRefund.incident_reserve_usd);
+        assertEquals(
+          (Number(afterDispute.reserve_usd) - Number(afterRefund.reserve_usd)).toFixed(4),
+          "-24.6000",
+        );
+        // The payment is gone from amount, net and studio; the reserve's cover
+        // moved 21.6 from agents to reserve, and the incident share it covered stays.
+        assertEquals(await familySums("evt_w"), {
+          amount: "0.0000",
+          net: "0.0000",
+          reserve: "-21.6000",
+          agents: "21.6000",
+          studio: "0.0000",
+          incident: "1.0800",
+          held: "0.0000",
+        });
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "a refund before and after the hold's release returns every column to zero",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const offsets = await identityOffsets();
+        const card = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card refunded around a release', 200, 'proposed') returning id`,
+        );
+        const before = await pool();
+        const pay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_rh', 'contrib_rh', null, 100.00, 100.00, 0, $1, 'cs_rh') as r`,
+          [card.id],
+        )).r;
+        assertEquals(pay.pool_credit_usd, 50);
+        assertEquals(pay.held_usd, 40);
+
+        // A 20 refund cancels 18 of the held 40.
+        const first = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_rh1', 'cs_rh', 'refund', 20) as r`,
+        )).r;
+        assertEquals(first.held_cancelled_usd, 18);
+        assertEquals(first.goal_funded_usd, 50);
+
+        // The release moves the 22 still held to the balance and the bar.
+        await db.exec(
+          `update public.contributions set hold_until = now() - interval '1 minute' where stripe_event_id = 'evt_rh'`,
+        );
+        const released = (await row<{ r: Row }>(
+          `select public.credit_held_contributions() as r`,
+        )).r;
+        assertEquals(released, { released: 1, released_usd: 22 });
+        assertEquals(
+          await row(`select funded_usd from public.cards where id = $1`, [card.id]),
+          { funded_usd: "72.0000" },
+        );
+
+        // Nothing is held any more, so both refunds come off the balance and the bar.
+        const partial = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_rh2', 'cs_rh', 'refund', 60) as r`,
+        )).r;
+        assertEquals(partial.reversed_usd, 40);
+        assertEquals(partial.held_cancelled_usd, 0);
+        assertEquals(partial.goal_funded_usd, 36);
+        const full = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_rh3', 'cs_rh', 'refund', 100) as r`,
+        )).r;
+        assertEquals(full.reversed_usd, 40);
+        assertEquals(full.fully_reversed, true);
+        assertEquals(full.goal_funded_usd, 0);
+
+        assertEquals(await familySums("evt_rh"), {
+          amount: "0.0000",
+          net: "0.0000",
+          reserve: "0.0000",
+          agents: "0.0000",
+          studio: "0.0000",
+          incident: "0.0000",
+          held: "0.0000",
+        });
+        const after = await pool();
+        for (const key of ["balance_usd", "reserve_usd", "incident_reserve_usd", "held_usd"] as const) {
+          assertEquals(after[key], before[key], key);
+        }
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "a dispute on a payment with money still held cancels the hold and covers only the credited part",
+      async () => {
+        await db.exec(
+          `update public.pool set incident_reserve_usd = 500, reserve_usd = 1000 where id = 1`,
+        );
+        const offsets = await identityOffsets();
+        const card = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed hold', 200, 'proposed') returning id`,
+        );
+        const pay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_dh', 'contrib_dh', null, 100.00, 100.00, 0, $1, 'cs_dh') as r`,
+          [card.id],
+        )).r;
+        assertEquals(pay.pool_credit_usd, 50);
+        assertEquals(pay.held_usd, 40);
+        const before = await pool();
+
+        const dispute = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_dhd', 'cs_dh', 'dispute', 100) as r`,
+        )).r;
+        // Agents 90: the held 40 is cancelled, and the reserve covers the credited 50.
+        assertEquals(dispute.held_cancelled_usd, 40);
+        assertEquals(dispute.reserve_cover_usd, 50);
+        assertEquals(dispute.goal_funded_usd, 50);
+        assertEquals(dispute.pool_reserve_usd, 950);
+        assertEquals(
+          await row(
+            `select amount_usd, reserve_usd, agents_usd, incident_usd, held_usd from public.contributions where stripe_event_id = 'evt_dhd'`,
+          ),
+          {
+            amount_usd: "-100.0000",
+            reserve_usd: "-60.0000",
+            agents_usd: "-40.0000",
+            incident_usd: "0.0000",
+            held_usd: "-40.0000",
+          },
+        );
+        const after = await pool();
+        assertEquals(after.balance_usd, before.balance_usd);
+        assertEquals(
+          (Number(after.held_usd) - Number(before.held_usd)).toFixed(4),
+          "-40.0000",
+        );
+        assertEquals(
+          (Number(after.reserve_usd) - Number(before.reserve_usd)).toFixed(4),
+          "-60.0000",
+        );
+
+        // The cancelled hold releases nothing.
+        await db.exec(
+          `update public.contributions set hold_until = now() - interval '1 minute' where stripe_event_id = 'evt_dh'`,
+        );
+        const released = (await row<{ r: Row }>(
+          `select public.credit_held_contributions() as r`,
+        )).r;
+        assertEquals(released, { released: 0, released_usd: 0 });
+        assertEquals(await pool(), after);
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "reverse_contribution reports the kind's earlier reversals and the total asked, so nothing left to reverse can be told apart",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const offsets = await identityOffsets();
+        await row(
+          `select public.apply_contribution('evt_kt', 'contrib_kt', null, 20.00, 20.00, 0, null, 'cs_kt') as r`,
+        );
+        const first = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_ktd1', 'cs_kt', 'dispute', 20) as r`,
+        )).r;
+        assertEquals(first.inserted, true);
+        assertEquals(first.kind_reversed_usd, 0);
+        assertEquals(first.kind_total_usd, 20);
+        // The other event for the same dispute, with the same total: this kind already reversed it.
+        const second = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_ktd2', 'cs_kt', 'dispute', 20) as r`,
+        )).r;
+        assertEquals(second.inserted, false);
+        assertEquals(second.replay, false);
+        assertEquals(second.reversed_usd, 0);
+        assertEquals(second.kind_reversed_usd, 20);
+        assertEquals(second.kind_total_usd, 20);
+        assert(
+          (second.kind_reversed_usd as number) >= (second.kind_total_usd as number),
+          "the dispute kind already covers the total",
+        );
+
+        await row(
+          `select public.apply_contribution('evt_kt2', 'contrib_kt2', null, 10.00, 10.00, 0, null, 'cs_kt2') as r`,
+        );
+        const partial = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_ktr1', 'cs_kt2', 'refund', 4) as r`,
+        )).r;
+        assertEquals(partial.kind_reversed_usd, 0);
+        assertEquals(partial.kind_total_usd, 4);
+        const refund = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_ktr2', 'cs_kt2', 'refund', 10) as r`,
+        )).r;
+        assertEquals(refund.inserted, true);
+        assertEquals(refund.kind_reversed_usd, 4);
+        assertEquals(refund.kind_total_usd, 10);
+        assertEquals(refund.fully_reversed, true);
+        // A dispute after the full refund: a refund took it, and the dispute kind reversed nothing.
+        const dispute = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_ktd3', 'cs_kt2', 'dispute', 10) as r`,
+        )).r;
+        assertEquals(dispute.inserted, false);
+        assertEquals(dispute.replay, false);
+        assertEquals(dispute.reversed_usd, 0);
+        assertEquals(dispute.reversed_total_usd, 10);
+        assertEquals(dispute.fully_reversed, true);
+        assertEquals(dispute.kind_reversed_usd, 0);
+        assertEquals(dispute.kind_total_usd, 10);
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "a refund larger than the reserve takes the reserve below zero and reports it",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        await row(
+          `select public.apply_contribution('evt_neg', 'contrib_neg', null, 10.00, 10.00, 0, null, 'cs_neg') as r`,
+        );
+        // The payment put 1 in the reserve; leave 0.5 of it.
+        await db.exec(`update public.pool set reserve_usd = 0.5 where id = 1`);
+        const offsets = await identityOffsets();
+        const before = await pool();
+        const refund = (await row<{ r: Row }>(
+          `select public.reverse_contribution('evt_negr', 'cs_neg', 'refund', 10) as r`,
+        )).r;
+        assertEquals(refund.pool_reserve_usd, -0.5);
+        assertEquals(refund.pool_incident_reserve_usd, 500);
+        assertEquals(
+          refund.pool_balance_usd,
+          Number((Number(before.balance_usd) - 9).toFixed(4)),
+        );
+        assertEquals((await pool()).reserve_usd, "-0.5000");
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "the daily cap counts payments from New York midnight on, not the second before",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const midnight =
+          `(date_trunc('day', now() at time zone 'America/New_York') at time zone 'America/New_York')`;
+
+        // Credit 54 against a cap of 50: 50 now and 4 held.
+        const early = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_ny1', 'contrib_ny1', null, 60.00, 60.00, 0, null, 'cs_ny1') as r`,
+        )).r;
+        assertEquals(early.pool_credit_usd, 50);
+        assertEquals(early.held_usd, 4);
+        await db.exec(
+          `update public.contributions set created_at = ${midnight} - interval '1 second' where stripe_event_id = 'evt_ny1'`,
+        );
+        const nextDay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_ny2', 'contrib_ny1', null, 20.00, 20.00, 0, null, 'cs_ny2') as r`,
+        )).r;
+        assertEquals(nextDay.pool_credit_usd, 18);
+        assertEquals(nextDay.held_usd, 0);
+
+        const atMidnight = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_ny3', 'contrib_ny3', null, 60.00, 60.00, 0, null, 'cs_ny3') as r`,
+        )).r;
+        assertEquals(atMidnight.pool_credit_usd, 50);
+        await db.exec(
+          `update public.contributions set created_at = ${midnight} where stripe_event_id = 'evt_ny3'`,
+        );
+        const sameDay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_ny4', 'contrib_ny3', null, 20.00, 20.00, 0, null, 'cs_ny4') as r`,
+        )).r;
+        assertEquals(sameDay.pool_credit_usd, 0);
+        assertEquals(sameDay.held_usd, 18);
+      },
+    );
+
+    await t.step(
+      "live_at is stamped when a card goes live and moves with nothing else",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const card = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card that ships with money held', 200, 'proposed') returning id`,
+        );
+        const pay = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_la', 'contrib_la', null, 100.00, 100.00, 0, $1, 'cs_la') as r`,
+          [card.id],
+        )).r;
+        assertEquals(pay.held_usd, 40);
+        const liveAt = async () =>
+          (await row<{ t: Date | null }>(
+            `select live_at as t from public.cards where id = $1`,
+            [card.id],
+          )).t;
+        assertEquals(await liveAt(), null);
+
+        await db.query(`update public.cards set stage = 'building' where id = $1`, [card.id]);
+        assertEquals(await liveAt(), null);
+        await db.query(`update public.cards set stage = 'live' where id = $1`, [card.id]);
+        const stamped = await liveAt();
+        assert(stamped instanceof Date);
+        assert(Math.abs(stamped.getTime() - Date.now()) < 60_000, "stamped now");
+
+        // Pin a known stamp, then nothing but a new move to live changes it.
+        const pinned = "2026-09-01T12:00:00.000Z";
+        await db.query(`update public.cards set live_at = $2 where id = $1`, [card.id, pinned]);
+        await db.query(`update public.cards set funded_usd = funded_usd + 1 where id = $1`, [card.id]);
+        await db.query(`update public.cards set funded_usd = funded_usd - 1, title = title where id = $1`, [card.id]);
+        await db.query(`update public.cards set stage = 'live' where id = $1`, [card.id]);
+        assertEquals((await liveAt())?.toISOString(), pinned);
+
+        // Money pledged while the card was open still reaches its bar on release.
+        await db.exec(
+          `update public.contributions set hold_until = now() - interval '1 minute' where stripe_event_id = 'evt_la'`,
+        );
+        const released = (await row<{ r: Row }>(
+          `select public.credit_held_contributions() as r`,
+        )).r;
+        assertEquals(released, { released: 1, released_usd: 40 });
+        assertEquals(
+          await row(
+            `select funded_usd, stage::text as stage from public.cards where id = $1`,
+            [card.id],
+          ),
+          { funded_usd: "90.0000", stage: "live" },
+        );
+        assertEquals((await liveAt())?.toISOString(), pinned);
+
+        // Shipping again restamps.
+        await db.query(`update public.cards set stage = 'rejected' where id = $1`, [card.id]);
+        assertEquals((await liveAt())?.toISOString(), pinned);
+        await db.query(`update public.cards set stage = 'live' where id = $1`, [card.id]);
+        assert(((await liveAt())?.getTime() ?? 0) > Date.parse(pinned), "restamped");
+
+        // A card inserted live is stamped too.
+        const inserted = await row<{ t: Date | null }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage) values ('game', 'board', 'oneoff', 'config', 'seed-1', 'A card inserted live', 'live') returning live_at as t`,
+        );
+        assert(inserted.t instanceof Date);
+      },
+    );
+
+    await t.step(
+      "the backfill stamps a live card with its last ship event, or its updated_at, and leaves updated_at alone",
+      async () => {
+        const migration = (await readMigrations()).find((m) =>
+          m.name === "20260921000100_public_card_columns.sql"
+        );
+        assert(migration, "the public card columns migration");
+        const already = await rows<{ id: string; live_at: Date }>(
+          `select id, live_at from public.cards where live_at is not null order by id`,
+        );
+        assert(already.length > 0, "an earlier step stamped a card");
+
+        await db.exec(`alter table public.cards disable trigger cards_set_live_at`);
+        const shipped = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, updated_at) values ('game', 'board', 'oneoff', 'config', 'seed-1', 'Live before live_at, with ship events', 'live', '2026-09-12T08:00:00Z') returning id`,
+        );
+        const quiet = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, updated_at) values ('game', 'board', 'oneoff', 'config', 'seed-1', 'Live before live_at, no ship event', 'live', '2026-09-05T08:00:00Z') returning id`,
+        );
+        const open = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, updated_at) values ('game', 'board', 'goal', 'config', 'seed-1', 'Voted, with a ship event', 'voted', '2026-09-06T08:00:00Z') returning id`,
+        );
+        await db.query(
+          `insert into public.agent_events (card_id, role_id, type, created_at) values
+             ($1, $3, 'ship', '2026-09-01T10:00:00Z'),
+             ($1, $3, 'ship', '2026-09-10T10:00:00Z'),
+             ($1, $3, 'gate_pass', '2026-09-11T10:00:00Z'),
+             ($2, $3, 'ship', '2026-09-11T10:00:00Z')`,
+          [shipped.id, open.id, roleId],
+        );
+        const stamps = async (id: string) =>
+          await row<{ live_at: string | null; updated_at: string }>(
+            `select to_char(live_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS') as live_at, to_char(updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS') as updated_at from public.cards where id = $1`,
+            [id],
+          );
+        assertEquals((await stamps(shipped.id)).live_at, null);
+
+        await db.exec(migration.sql);
+
+        assertEquals(await stamps(shipped.id), {
+          live_at: "2026-09-10T10:00:00",
+          updated_at: "2026-09-12T08:00:00",
+        });
+        assertEquals(await stamps(quiet.id), {
+          live_at: "2026-09-05T08:00:00",
+          updated_at: "2026-09-05T08:00:00",
+        });
+        assertEquals(await stamps(open.id), {
+          live_at: null,
+          updated_at: "2026-09-06T08:00:00",
+        });
+        assertEquals(
+          await rows(
+            `select id, live_at from public.cards where id = any($1::uuid[]) order by id`,
+            [already.map((a) => a.id)],
+          ),
+          already,
+        );
+        // Both card triggers are enabled after the run.
+        assertEquals(
+          await rows(
+            `select tgname, tgenabled from pg_trigger where tgrelid = 'public.cards'::regclass and not tgisinternal order by 1`,
+          ),
+          [
+            { tgname: "cards_set_live_at", tgenabled: "O" },
+            { tgname: "cards_set_updated_at", tgenabled: "O" },
+          ],
+        );
+        await db.query(`update public.cards set stage = 'live' where id = $1`, [open.id]);
+        assertNotEquals((await stamps(open.id)).live_at, null);
+      },
+    );
+
     await t.step("reverse_contribution refuses bad inputs", async () => {
       await refuses(
         `select public.reverse_contribution('', 'cs_r', 'refund', 1)`,
@@ -1922,6 +2551,7 @@ Deno.test("migrations on PGlite", {
             ...board,
             ...service,
             "restrict_auth_users_to_board",
+            "set_live_at",
             "set_updated_at",
           ].sort(),
         );
@@ -1945,6 +2575,13 @@ Deno.test("migrations on PGlite", {
             assertEquals(p.service_role, true, `service_role on ${p.proname}`);
           }
         }
+        // Every function authenticated may run is security definer, so the board's
+        // RPCs read cards with the owner's rights and the column grants do not
+        // limit them. The two trigger functions run with the caller's rights.
+        const invoker = await rows<{ proname: string }>(
+          `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
+        );
+        assertEquals(invoker.map((p) => p.proname), ["set_live_at", "set_updated_at"]);
       },
     );
 
