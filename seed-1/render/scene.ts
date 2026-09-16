@@ -9,12 +9,16 @@ import {
   ratePerSecond,
   step,
 } from '../sim/sim';
+import { serializeState } from '../sim/save';
 import type { SimState, UnlockRow } from '../sim/types';
 import { fill, formatDust, formatPercent, formatRate } from './format';
 import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
+
+export const SAVE_KEY = 'dust.save';
+const SAVE_INTERVAL_MS = 5000;
 
 const MARGIN = 16;
 const CONTENT_WIDTH = SCREEN_WIDTH - MARGIN * 2;
@@ -69,15 +73,16 @@ export class DustScene extends Phaser.Scene {
   private unlockSlots: UnlockSlot[] = [];
   private drawnUnlockCount = -1;
 
-  constructor(data: GameData, seed: number) {
+  constructor(data: GameData, seed: number, savedState: SimState | null = null) {
     super({ key: 'dust' });
     this.data_ = data;
-    this.state = createSim(data.config, seed);
+    this.state = savedState ?? createSim(data.config, seed);
   }
 
   create(): void {
     const { strings } = this.data_;
     this.cameras.main.setBackgroundColor(COLORS.background);
+    this.setUpSaving();
 
     let y = MARGIN;
     this.add.text(MARGIN, y, strings.title, textStyle(26, COLORS.text, 'bold'));
@@ -244,5 +249,23 @@ export class DustScene extends Phaser.Scene {
 
   private setText(target: Phaser.GameObjects.Text, value: string): void {
     if (target.text !== value) target.setText(value);
+  }
+
+  // Storage errors (a full or disabled store) are swallowed here so the game
+  // keeps playing without a save rather than throwing on every tick.
+  private save(): void {
+    try {
+      window.localStorage.setItem(SAVE_KEY, serializeState(this.state));
+    } catch {
+      // ignored
+    }
+  }
+
+  private setUpSaving(): void {
+    this.time.addEvent({ delay: SAVE_INTERVAL_MS, loop: true, callback: () => this.save() });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.save();
+    });
+    window.addEventListener('pagehide', () => this.save());
   }
 }
