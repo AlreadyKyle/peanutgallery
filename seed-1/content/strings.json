@@ -1,5 +1,6 @@
 {
   "title": "Dust",
+  "tabTitle": "Dust · Peanut Gallery",
   "labels": {
     "dust": "Dust",
     "perSecond": "per second",
@@ -10,7 +11,8 @@
     "unlocks": "Unlocks",
     "unlockedCount": "{unlocked} of {total} unlocked",
     "nextUnlock": "Next: {name} at {amount} dust",
-    "allUnlocked": "Every unlock is open."
+    "allUnlocked": "Every unlock is open.",
+    "unlocksEarned": "{count} unlocks earned"
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {

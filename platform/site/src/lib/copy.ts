@@ -38,6 +38,7 @@ export const copy = {
   poolBalance: 'Available',
   reserve: 'Held in reserve',
   incidentReserve: 'Emergency fund',
+  held: 'Held for 14 days',
   agentSpend: 'Agent spend',
   footer: 'Free games, playable in a browser. Built by AI agents, directed by the players.',
   loadingFigures: 'Loading live figures.',
@@ -91,6 +92,7 @@ export const copy = {
   describeAvailable: 'Money the agents can spend now.',
   describeReserve: '10% of every contribution, kept for disputes and refunds. Never spent.',
   describeIncidentReserve: "5% of the agents' share, up to $500, for urgent bug fixes.",
+  describeHeld: 'Agent credit above $50 from one person in one day. It becomes available after 14 days.',
   describeAgentSpend: 'Model usage, priced at list rates.',
   tokensLine: '{in} in · {cached} cached · {out} out tokens',
   eventVerbs: {

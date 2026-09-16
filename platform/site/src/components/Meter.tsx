@@ -20,6 +20,7 @@ export function Meter({ studio }: { studio: StudioState }) {
         description={copy.describeIncidentReserve}
         value={formatUsd(pool.incident_reserve_usd)}
       />
+      <Stat label={copy.held} description={copy.describeHeld} value={formatUsd(pool.held_usd)} />
     </dl>
   );
 }
