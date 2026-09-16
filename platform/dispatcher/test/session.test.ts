@@ -1,9 +1,10 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createLogger } from '../src/log.js';
-import { parsePriceTable } from '../src/pricing.js';
+import { parsePriceTable, priceUsage, round4 } from '../src/pricing.js';
 import { ceilingUsd, runAgentSession, sessionPrompt, type SessionDeps } from '../src/session.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeOptions, type FakeScript } from './helpers/fake-adapter.js';
+import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
 
 // USD per million tokens; 1000 input + N output tokens cost 0.003 + N × 0.000015.
@@ -19,6 +20,8 @@ function deps(db: FakeDb, adapter: FakeAdapter, overrides: Partial<SessionDeps> 
     boardSessionTtlMin: 3,
     watchIntervalMs: 60_000,
     fallbackModel: 'builder-class',
+    sessionMaxMs: 60 * 60_000,
+    alert: new RecordingAlerter(),
     log: silent,
     stopSignal: new AbortController().signal,
     now: () => NOW,
@@ -30,8 +33,9 @@ async function run(db: FakeDb, script: FakeScript, overrides: Partial<SessionDep
   const c = card(cardOverrides);
   db.cards = [c];
   const adapter = new FakeAdapter(script, adapterOptions);
-  const result = await runAgentSession(c, role(), '/worktree', db.studio, deps(db, adapter, overrides));
-  return { result, adapter };
+  const alert = new RecordingAlerter();
+  const result = await runAgentSession(c, role(), '/worktree', db.studio, deps(db, adapter, { alert, ...overrides }));
+  return { result, adapter, alert };
 }
 
 describe('ceilingUsd', () => {
@@ -93,7 +97,7 @@ describe('sessionPrompt', () => {
 describe('runAgentSession metering', () => {
   it('records one ledger row per turn and completes', async () => {
     const db = new FakeDb();
-    const { result } = await run(db, async (_spec, emit) => {
+    const { result, alert } = await run(db, async (_spec, emit) => {
       await emit(startEvent());
       await emit({ type: 'message', text: 'Reading the spawn table.' });
       await emit({ type: 'tool_call', toolUseId: 't1', name: 'Read', input: { file_path: 'seed-1/config/spawn-table.json' } });
@@ -109,6 +113,103 @@ describe('runAgentSession metering', () => {
     // Attended turns run on the founder's subscription: priced and charged to the card, not the pool.
     expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
     expect(db.events.map((event) => event.type)).toEqual(['start', 'message', 'tool_call', 'tool_result']);
+    // The result line agrees with the turns, so there is nothing to settle and nothing to alert.
+    expect(alert.messages).toEqual([]);
+  });
+
+  it('settles against the result line so the card is charged the modelUsage priced with our table', async () => {
+    const db = new FakeDb();
+    // The turns report 10 output tokens each; the result line counts 5000 over the session.
+    const modelUsage = [{ model: 'builder-class', input_tokens: 2000, output_tokens: 5000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: 9.99 }];
+    const { result, alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 10));
+        await emit(usageEvent(2, 10));
+      },
+      {},
+      {},
+      { modelUsage },
+    );
+    expect(result.outcome).toBe('completed');
+    const priced = round4(priceUsage(PRICE_TABLE, 'builder-class', { input_tokens: 2000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 5000 }).usd);
+    expect(priced).toBe(0.081);
+    expect(db.ledger.map((row) => [row.output_tokens, row.usd])).toEqual([
+      [10, 0.0032],
+      [10, 0.0032],
+      [4980, 0.0746],
+    ]);
+    expect(db.ledger[2]).toMatchObject({ billed_to: 'founder', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 0 });
+    expect(db.cards[0]?.actual_usd).toBe(priced);
+    expect(alert.messages).toEqual([]);
+  });
+
+  it('aborts before the estimated spend crosses the ceiling, counting output the stream has not reported', async () => {
+    const db = new FakeDb();
+    const { result } = await run(db, async (_spec, emit, signal) => {
+      await emit(startEvent());
+      // 10 output tokens reported ($0.0032 recorded), but 600000 characters written: about 200000
+      // tokens, $3 at the output rate, against a $3 ceiling.
+      await emit(usageEvent(1, 10, 'builder-class', {}, 600_000));
+      await untilAborted(signal, 200);
+    });
+    expect(result).toMatchObject({ outcome: 'ceiling', turns: 1 });
+    expect(db.ledger.map((row) => row.usd)).toEqual([0.0032]);
+  });
+
+  it('writes an estimate row and alerts once when a killed session leaves no result line', async () => {
+    const db = new FakeDb();
+    const stop = new AbortController();
+    const { result, alert } = await run(
+      db,
+      async (_spec, emit, signal) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 100, 'builder-class', {}, 3000));
+        stop.abort('dispatcher stopping');
+        await untilAborted(signal, 2000);
+      },
+      { stopSignal: stop.signal },
+      {},
+      { resultOnAbort: false },
+    );
+    expect(result.outcome).toBe('stopped');
+    // 3000 characters is 1000 tokens; 100 were reported, so 900 at $15 per million.
+    expect(db.ledger.map((row) => [row.output_tokens, row.usd])).toEqual([
+      [100, 0.0045],
+      [900, 0.0135],
+    ]);
+    expect(db.cards[0]?.actual_usd).toBe(0.018);
+    expect(db.events.filter((event) => event.type === 'error')).toEqual([
+      {
+        card_id: card().id,
+        role_id: 'role-builder-a',
+        type: 'error',
+        payload: {
+          step: 'metering',
+          basis: 'estimate',
+          rows: [{ model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 900, usd: 0.0135 }],
+          fallback_models: [],
+          overcount_usd: 0,
+          cli_total_cost_usd: null,
+        },
+      },
+    ]);
+    expect(alert.messages).toHaveLength(1);
+    expect(alert.messages[0]).toContain('Card 4c2f5a1e metering');
+  });
+
+  it('aborts when the session runs past its wall clock', async () => {
+    const db = new FakeDb();
+    const { result } = await run(
+      db,
+      async (_spec, emit, signal) => {
+        await emit(startEvent());
+        await untilAborted(signal, 2000);
+      },
+      { sessionMaxMs: 20 },
+    );
+    expect(result).toMatchObject({ outcome: 'wall_clock' });
   });
 
   it('bills unattended turns to the studio and takes them from the pool', async () => {
@@ -159,13 +260,28 @@ describe('runAgentSession metering', () => {
     expect(db.ledger).toHaveLength(2);
   });
 
-  it('aborts on an unknown model without a ledger row', async () => {
+  it('records an unknown model at the fallback rates and then aborts', async () => {
     const db = new FakeDb();
-    const { result } = await run(db, async (_spec, emit) => {
+    const { result, alert } = await run(db, async (_spec, emit, signal) => {
       await emit(startEvent());
       await emit(usageEvent(1, 10, 'mystery-model'));
+      await untilAborted(signal, 200);
     });
     expect(result).toMatchObject({ outcome: 'unknown_model', detail: 'no price for model mystery-model' });
+    // The only row in the table is builder-class, so the fallback rates are its rates.
+    expect(db.ledger).toEqual([expect.objectContaining({ model: 'mystery-model', input_tokens: 1000, output_tokens: 10, usd: 0.0032 })]);
+    expect(db.events.find((event) => event.type === 'error')?.payload).toMatchObject({ step: 'metering', basis: 'result', fallback_models: ['mystery-model'] });
+    expect(alert.messages).toHaveLength(1);
+  });
+
+  it('never starts a session whose model has no price', async () => {
+    const db = new FakeDb();
+    const adapter = new FakeAdapter(async () => undefined);
+    const c = card();
+    db.cards = [c];
+    const result = await runAgentSession(c, role({ model: 'mystery-model' }), '/worktree', db.studio, deps(db, adapter));
+    expect(result).toEqual({ outcome: 'unknown_model', detail: 'no price for model mystery-model', turns: 0 });
+    expect(adapter.specs).toHaveLength(0);
     expect(db.ledger).toHaveLength(0);
   });
 
@@ -187,7 +303,46 @@ describe('runAgentSession metering', () => {
     });
     expect(result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (ANTHROPIC_API_KEY)' });
     expect(db.ledger).toHaveLength(0);
-    expect(db.events[0]?.payload).toMatchObject({ mode: 'attended', api_key_source: 'ANTHROPIC_API_KEY' });
+    expect(db.events[0]?.payload).toMatchObject({
+      mode: 'attended',
+      api_key_source: 'ANTHROPIC_API_KEY',
+      refusal: 'session is billed to the wrong account (ANTHROPIC_API_KEY)',
+    });
+  });
+
+  it('decides the refusal before it writes the start event', async () => {
+    const seen: { signal: AbortSignal | null; abortedAtStart: boolean | null } = { signal: null, abortedAtStart: null };
+    class OrderDb extends FakeDb {
+      override async insertEvent(...args: Parameters<FakeDb['insertEvent']>) {
+        if (args[2] === 'start') seen.abortedAtStart = seen.signal?.aborted ?? null;
+        await super.insertEvent(...args);
+      }
+    }
+    const db = new OrderDb();
+    const { result } = await run(db, async (_spec, emit, signal) => {
+      seen.signal = signal;
+      await emit(startEvent(['Read', 'WebFetch']));
+    });
+    expect(result).toMatchObject({ outcome: 'refused', detail: 'session exposes excluded tools: WebFetch' });
+    expect(seen.abortedAtStart).toBe(true);
+    expect(db.events[0]?.payload).toMatchObject({ refusal: 'session exposes excluded tools: WebFetch' });
+  });
+
+  it('records the spend of a session on the wrong account as the founder\'s, never the pool\'s', async () => {
+    const db = new FakeDb();
+    const modelUsage = [{ model: 'builder-class', input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null }];
+    const { result } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent(undefined, 'none'));
+      },
+      {},
+      {},
+      { mode: 'unattended', modelUsage },
+    );
+    expect(result.outcome).toBe('refused');
+    expect(db.ledger).toEqual([expect.objectContaining({ billed_to: 'founder', usd: 0.0045 })]);
+    expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
   });
 
   it('refuses an unattended session that bills anything but the studio key', async () => {

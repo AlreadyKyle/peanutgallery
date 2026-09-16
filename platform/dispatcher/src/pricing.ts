@@ -1,6 +1,6 @@
 // Pure pricing: turns a stream-json usage block into a ledger row at list price.
-// Rates come from PRICE_TABLE_JSON (USD per million tokens). An unknown model throws;
-// the caller pauses the card rather than pricing at zero.
+// Rates come from PRICE_TABLE_JSON (USD per million tokens). An unknown model throws from
+// priceUsage; the session meter prices it at fallbackPrice instead and the caller pauses the card.
 
 export interface ModelPrice {
   input: number;
@@ -12,9 +12,12 @@ export interface ModelPrice {
 
 export type PriceTable = Readonly<Record<string, ModelPrice>>;
 
+// cache_creation_1h_input_tokens is the part of cache_creation_input_tokens written to the one-hour
+// cache; the rest was written to the five-minute cache.
 export interface TurnUsage {
   input_tokens: number;
   cache_creation_input_tokens: number;
+  cache_creation_1h_input_tokens: number;
   cache_read_input_tokens: number;
   output_tokens: number;
 }
@@ -81,16 +84,26 @@ export function round4(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-// Ledger mapping: cache-creation tokens are priced at the five-minute cache-write rate and
-// folded into input_tokens; cache-read tokens become cached_tokens at the cache-read rate.
-export function priceUsage(table: PriceTable, model: string, usage: TurnUsage): LedgerUsage {
-  const price = table[model];
-  if (!price) {
-    throw new UnknownModelError(model);
+// The highest of each rate across every model in the table. A model the table does not list is
+// priced at these rates, so its spend is recorded high rather than at zero.
+export function fallbackPrice(table: PriceTable): ModelPrice {
+  const price: ModelPrice = { input: 0, output: 0, cache_read: 0, cache_write_5m: 0, cache_write_1h: 0 };
+  for (const rates of Object.values(table)) {
+    for (const key of RATE_KEYS) price[key] = Math.max(price[key], rates[key]);
   }
+  return price;
+}
+
+// Ledger mapping: cache-creation tokens are priced at the one-hour cache-write rate for their
+// one-hour part and the five-minute rate for the rest, and folded into input_tokens; cache-read
+// tokens become cached_tokens at the cache-read rate.
+export function priceWith(price: ModelPrice, model: string, usage: TurnUsage): LedgerUsage {
+  const oneHour = Math.min(usage.cache_creation_1h_input_tokens, usage.cache_creation_input_tokens);
+  const fiveMinute = usage.cache_creation_input_tokens - oneHour;
   const usd =
     (usage.input_tokens * price.input +
-      usage.cache_creation_input_tokens * price.cache_write_5m +
+      fiveMinute * price.cache_write_5m +
+      oneHour * price.cache_write_1h +
       usage.cache_read_input_tokens * price.cache_read +
       usage.output_tokens * price.output) /
     1_000_000;
@@ -101,4 +114,17 @@ export function priceUsage(table: PriceTable, model: string, usage: TurnUsage): 
     output_tokens: usage.output_tokens,
     usd: round6(usd),
   };
+}
+
+// The table's own row for a model, or null; never a property inherited from Object.
+export function modelPrice(table: PriceTable, model: string): ModelPrice | null {
+  return Object.hasOwn(table, model) ? (table[model] ?? null) : null;
+}
+
+export function priceUsage(table: PriceTable, model: string, usage: TurnUsage): LedgerUsage {
+  const price = modelPrice(table, model);
+  if (!price) {
+    throw new UnknownModelError(model);
+  }
+  return priceWith(price, model, usage);
 }

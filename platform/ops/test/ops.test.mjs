@@ -125,6 +125,15 @@ describe('make-dispatcher-env.sh', () => {
     assert.match(run.stdout, /with 20 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
   });
 
+  test('copies the director and host models and the session wall clock when .env sets them', () => {
+    const run = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, MODEL_DIRECTOR: 'builder-class', MODEL_HOST: 'builder-class', SESSION_MAX_MINUTES: '45' }) });
+    assert.equal(run.status, 0, run.output);
+    const written = new Map(parseEnvFile(readFileSync(run.out, 'utf8')));
+    assert.equal(written.get('MODEL_DIRECTOR'), 'builder-class');
+    assert.equal(written.get('MODEL_HOST'), 'builder-class');
+    assert.equal(written.get('SESSION_MAX_MINUTES'), '45');
+  });
+
   test('uses the service role key when .env has no secret key', () => {
     const { SUPABASE_SECRET_KEY: _unused, ...withoutSecretKey } = MAC_DOTENV;
     const run = makeEnv({ dotenv: dotenvText(withoutSecretKey) });
@@ -162,6 +171,8 @@ describe('make-dispatcher-env.sh', () => {
       [dotenvText({ ...MAC_DOTENV, STUDIO_ANTHROPIC_API_KEY: '' }), 'STUDIO_ANTHROPIC_API_KEY is not set in .env'],
       [dotenvText({ ...MAC_DOTENV, STUDIO_ANTHROPIC_API_KEY: MAC_DOTENV.ANTHROPIC_API_KEY }), 'STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY'],
       [dotenvText({ ...MAC_DOTENV, MODEL_BUILDER: 'unpriced-model' }), 'MODEL_BUILDER has no row in PRICE_TABLE_JSON'],
+      [dotenvText({ ...MAC_DOTENV, MODEL_DIRECTOR: 'unpriced-model' }), 'MODEL_DIRECTOR has no row in PRICE_TABLE_JSON'],
+      [dotenvText({ ...MAC_DOTENV, MODEL_HOST: 'unpriced-model' }), 'MODEL_HOST has no row in PRICE_TABLE_JSON'],
       [dotenvText(MAC_DOTENV, '{"builder-class":'), 'PRICE_TABLE_JSON in .env is not valid JSON'],
       [dotenvText(MAC_DOTENV, null), 'PRICE_TABLE_JSON is not set in .env'],
       [dotenvText({ ...MAC_DOTENV, NETLIFY_AUTH_TOKEN: "\"'quoted'\"" }), 'NETLIFY_AUTH_TOKEN starts with a quote'],
@@ -214,6 +225,22 @@ describe('provision.sh env file checks', () => {
       assert.equal(check.status, 1, message);
       assert.ok(check.stdout.includes(message), `${message}\n${check.stdout}${check.stderr}`);
       assert.ok(!check.stdout.includes('fixture-'), 'the checks name keys only');
+    }
+  });
+
+  // The docker step runs this script on the VPS; here it runs on the local node with the same env.
+  test('refuse a model with no row in PRICE_TABLE_JSON the way the dispatcher does', () => {
+    const script = /docker run --rm --network none --env-file "\$ENV_FILE" "\$NODE_IMAGE" node -e '([^']+)'/.exec(read('platform/ops/provision.sh'))?.[1];
+    assert.ok(script, 'the price table check is in provision.sh');
+    const made = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, MODEL_DIRECTOR: 'builder-class' }) });
+    assert.equal(made.status, 0, made.output);
+    const env = Object.fromEntries(parseEnvFile(readFileSync(made.out, 'utf8')));
+    const check = (overrides) => spawnSync(process.execPath, ['-e', script], { env: { PATH: process.env.PATH, ...env, ...overrides }, encoding: 'utf8' });
+    assert.equal(check({}).status, 0, check({}).stderr);
+    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST']) {
+      const refused = check({ [name]: 'unpriced-model' });
+      assert.equal(refused.status, 1, name);
+      assert.equal(refused.stderr.trim(), `${name} has no row in PRICE_TABLE_JSON`);
     }
   });
 

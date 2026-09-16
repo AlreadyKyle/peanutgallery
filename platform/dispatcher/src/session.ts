@@ -1,14 +1,16 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
-// record_usage, enforces the cost and turn ceilings, and aborts when the board session lapses
-// or the board pauses the studio.
-import type { AgentAdapter, AgentEvent, AgentMode, SessionSpec } from './adapters/types.js';
+// record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
+// and wall-clock ceilings, and aborts when the board session lapses or the board pauses the studio.
+import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
-import type { Card, Db, Role, StudioState } from './db.js';
+import type { Alerter } from './alert.js';
+import type { Billing, Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
-import { UnknownModelError, priceUsage, round4, type PriceTable } from './pricing.js';
+import { SessionMeter } from './metering.js';
+import { modelPrice, round4, type LedgerUsage, type PriceTable } from './pricing.js';
 import path from 'node:path';
 import { billingFor } from './throttle.js';
-import { KERNEL_NAMES, lanePaths, protectedPaths } from './worktree.js';
+import { KERNEL_NAMES, lanePaths, protectedPaths, shortId, singleLineTitle } from './worktree.js';
 
 export type SessionOutcome =
   | 'completed'
@@ -17,6 +19,7 @@ export type SessionOutcome =
   | 'board_session_lapsed'
   | 'paused_by_board'
   | 'unknown_model'
+  | 'wall_clock'
   | 'refused'
   | 'stopped'
   | 'error';
@@ -35,6 +38,9 @@ export interface SessionDeps {
   boardSessionTtlMin: number;
   watchIntervalMs: number;
   fallbackModel: string;
+  // The longest a session may run before it is interrupted, in milliseconds.
+  sessionMaxMs: number;
+  alert: Alerter;
   log: Logger;
   stopSignal: AbortSignal;
   now: () => Date;
@@ -111,18 +117,32 @@ function zeroUsage(usage: { input_tokens: number; cache_creation_input_tokens: n
   return usage.input_tokens === 0 && usage.cache_creation_input_tokens === 0 && usage.cache_read_input_tokens === 0 && usage.output_tokens === 0;
 }
 
+// Why the init line refuses the session, or null when it may run.
+function startRefusal(mode: AgentMode, event: Extract<AgentEvent, { type: 'start' }>): string | null {
+  const refused = refusedTools(event.tools);
+  if (refused.length > 0) return `session exposes excluded tools: ${refused.join(', ')}`;
+  if (billedToWrongAccount(mode, event.apiKeySource)) return `session is billed to the wrong account (${event.apiKeySource ?? 'unreported'})`;
+  return null;
+}
+
 export async function runAgentSession(card: Card, role: Role, worktree: string, studio: StudioState, deps: SessionDeps): Promise<SessionRun> {
   const ceiling = ceilingUsd(card.estimate_usd, studio.card_max_usd);
-  const remaining = round4(ceiling - card.actual_usd);
+  // The card's spend before this session; the meter counts this session's.
+  const priorUsd = card.actual_usd;
+  const remaining = round4(ceiling - priorUsd);
   if (remaining <= 0) {
-    return { outcome: 'ceiling', detail: `actual ${card.actual_usd} has reached the ceiling ${ceiling} before the session`, turns: 0 };
+    return { outcome: 'ceiling', detail: `actual ${priorUsd} has reached the ceiling ${ceiling} before the session`, turns: 0 };
+  }
+  const model = role.model || deps.fallbackModel;
+  if (!modelPrice(deps.priceTable, model)) {
+    return { outcome: 'unknown_model', detail: `no price for model ${model}`, turns: 0 };
   }
   const spec: SessionSpec = {
     cardId: card.id,
     worktree,
     prompt: sessionPrompt(card, lanePaths(card.folder, card.lane), ceiling),
     systemPromptFile: rolePromptFile(role, worktree),
-    model: role.model || deps.fallbackModel,
+    model,
     roleTools: roleTools(role),
     folder: card.folder,
     maxTurns: deps.sessionMaxTurns,
@@ -157,42 +177,45 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       }
     })();
   }, deps.watchIntervalMs);
+  const wallClock = setTimeout(() => abort('wall_clock', `session ran past ${deps.sessionMaxMs / 60_000} minutes`), deps.sessionMaxMs);
+
+  const meter = new SessionMeter(deps.priceTable);
+  // Who paid: the adapter's mode, unless the init line shows the session ran on another account. That
+  // spend is not the pool's, so it is recorded as the founder's and the session is refused.
+  let billedTo: Billing = billingFor(deps.adapter.mode);
+  let end: EndEvent | null = null;
+  const record = (row: LedgerUsage) => deps.db.recordUsage({ billed_to: billedTo, card_id: card.id, role_id: role.id, ...row });
 
   let turns = 0;
   const onEvent = async (event: AgentEvent) => {
     switch (event.type) {
       case 'start': {
+        // The refusal is decided, and the session interrupted, before anything is written.
+        const refusal = startRefusal(deps.adapter.mode, event);
+        if (billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) billedTo = 'founder';
+        if (refusal) abort('refused', refusal);
         await deps.db.insertEvent(card.id, role.id, 'start', {
           session_id: event.sessionId,
           model: event.model,
           tools: event.tools,
           mode: deps.adapter.mode,
           api_key_source: event.apiKeySource,
+          refusal,
         });
-        const refused = refusedTools(event.tools);
-        if (refused.length > 0) abort('refused', `session exposes excluded tools: ${refused.join(', ')}`);
-        if (billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
-          abort('refused', `session is billed to the wrong account (${event.apiKeySource ?? 'unreported'})`);
-        }
         return;
       }
       case 'turn_usage': {
         turns = event.turn;
         if (event.turn > deps.sessionMaxTurns) abort('turn_cap', `turn ${event.turn} exceeds the cap ${deps.sessionMaxTurns}`);
-        if (zeroUsage(event.usage)) return;
-        let priced;
-        try {
-          priced = priceUsage(deps.priceTable, event.model, event.usage);
-        } catch (error) {
-          if (error instanceof UnknownModelError) {
-            abort('unknown_model', error.message);
-            return;
-          }
-          throw error;
-        }
-        const recorded = await deps.db.recordUsage({ billed_to: billingFor(deps.adapter.mode), card_id: card.id, role_id: role.id, ...priced });
-        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: priced.usd, actual: recorded.actual_usd });
-        if (recorded.actual_usd >= ceiling) abort('ceiling', `actual ${recorded.actual_usd} reached the ceiling ${ceiling}`);
+        if (zeroUsage(event.usage) && event.contentChars === 0) return;
+        const { row, fallback } = meter.addTurn(event);
+        const recorded = zeroUsage(event.usage) ? null : await record(row);
+        const estimate = round4(priorUsd + meter.liveEstimateUsd());
+        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: row.usd, actual: recorded?.actual_usd ?? null, estimate });
+        // A model missing from the price table is recorded at the fallback rates first, so the
+        // turn it already paid for is on the ledger, and then the session stops.
+        if (fallback) abort('unknown_model', `no price for model ${event.model}`);
+        if (estimate >= ceiling) abort('ceiling', `estimated spend ${estimate} reached the ceiling ${ceiling}`);
         return;
       }
       case 'tool_call':
@@ -208,6 +231,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
         await deps.db.insertEvent(card.id, role.id, 'error', { message: event.message });
         return;
       case 'end':
+        end = event;
         return;
     }
   };
@@ -216,12 +240,13 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   try {
     result = await deps.adapter.run(spec, onEvent, controller.signal);
   } catch (error) {
-    clearInterval(watch);
-    deps.stopSignal.removeEventListener('abort', onStop);
     return { outcome: 'error', detail: errorMessage(error), turns };
+  } finally {
+    clearInterval(watch);
+    clearTimeout(wallClock);
+    deps.stopSignal.removeEventListener('abort', onStop);
+    await settle(card, role, deps, meter, end, record);
   }
-  clearInterval(watch);
-  deps.stopSignal.removeEventListener('abort', onStop);
 
   if (state.aborted) return { outcome: state.aborted.outcome, detail: state.aborted.detail, turns: result.turns };
   if (result.killReason === 'turn_cap' || result.endSubtype === 'error_max_turns') {
@@ -234,4 +259,44 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     return { outcome: 'error', detail: `session ended with ${result.endSubtype ?? 'no result'} (exit ${result.exitCode ?? 'signal'})`, turns: result.turns };
   }
   return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns };
+}
+
+// Writes the settle rows once the session has ended, however it ended. A session settled on an
+// estimate, one that used a model the price table lacks, or one whose turns recorded more than its
+// result line reports is written up as an error event and alerted once. A failure here is logged
+// and alerted and does not change the session's outcome.
+async function settle(
+  card: Card,
+  role: Role,
+  deps: SessionDeps,
+  meter: SessionMeter,
+  end: EndEvent | null,
+  record: (row: LedgerUsage) => Promise<unknown>,
+): Promise<void> {
+  try {
+    const settled = meter.settle(end);
+    for (const row of settled.rows) await record(row);
+    const reported = settled.fallbackModels.length > 0 || settled.overcountUsd > 0 || (settled.basis === 'estimate' && meter.turnsRecorded);
+    if (settled.rows.length > 0) deps.log.info('session', `card ${card.id} settled`, { basis: settled.basis, rows: settled.rows.length });
+    if (!reported) return;
+    const payload = {
+      step: 'metering',
+      basis: settled.basis,
+      rows: settled.rows,
+      fallback_models: settled.fallbackModels,
+      overcount_usd: settled.overcountUsd,
+      cli_total_cost_usd: end?.totalCostUsd ?? null,
+    };
+    deps.log.warn('session', `card ${card.id} metering needs review`, payload);
+    await deps.db.insertEvent(card.id, role.id, 'error', payload);
+    const problems = [
+      ...(settled.basis === 'estimate' ? ['no result line, so unreported output was estimated'] : []),
+      ...(settled.fallbackModels.length > 0 ? [`priced at fallback rates: ${settled.fallbackModels.join(', ')}`] : []),
+      ...(settled.overcountUsd > 0 ? [`turn rows recorded ${settled.overcountUsd} USD above the result line`] : []),
+    ];
+    await deps.alert.notify(`Card ${shortId(card.id)} metering: ${problems.join('; ')}. ${singleLineTitle(card.title)}`);
+  } catch (error) {
+    deps.log.error('session', `card ${card.id} settle failed`, { error: errorMessage(error) });
+    await deps.alert.notify(`Card ${shortId(card.id)} metering: the settle rows were not written (${errorMessage(error)}). ${singleLineTitle(card.title)}`);
+  }
 }

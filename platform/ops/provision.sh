@@ -319,7 +319,10 @@ $problems"
     let table;
     try { table = JSON.parse(process.env.PRICE_TABLE_JSON); } catch { console.error("PRICE_TABLE_JSON is not valid JSON"); process.exit(1); }
     if (typeof table !== "object" || table === null || Array.isArray(table) || Object.keys(table).length === 0) { console.error("PRICE_TABLE_JSON must be an object keyed by model id"); process.exit(1); }
-    if (!Object.hasOwn(table, process.env.MODEL_BUILDER)) { console.error("MODEL_BUILDER has no row in PRICE_TABLE_JSON"); process.exit(1); }
+    for (const name of ["MODEL_BUILDER", "MODEL_DIRECTOR", "MODEL_HOST"]) {
+      const model = process.env[name];
+      if ((name === "MODEL_BUILDER" || model) && !Object.hasOwn(table, model ?? "")) { console.error(name + " has no row in PRICE_TABLE_JSON"); process.exit(1); }
+    }
   ' || die "$ENV_FILE: PRICE_TABLE_JSON failed the check above"
   say "env file: valid"
   if [ ! -s "$NTFY_FILE" ]; then

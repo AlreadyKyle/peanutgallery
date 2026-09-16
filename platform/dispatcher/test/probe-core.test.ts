@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseStream } from '../src/adapters/stream.js';
 import type { SessionResult } from '../src/adapters/types.js';
-import { PROMPT, initRecord, judge, memoryPaths, replacePaths, sumUsage, verdict } from '../src/probe-core.js';
+import { parsePriceTable } from '../src/pricing.js';
+import { PROMPT, initRecord, judge, memoryPaths, probeMetering, replacePaths, verdict } from '../src/probe-core.js';
 
 const fixture = readFileSync(new URL('./fixtures/sample-stream.jsonl', import.meta.url), 'utf8');
 
@@ -94,18 +95,26 @@ describe('initRecord and memoryPaths', () => {
   });
 });
 
-describe('sumUsage', () => {
-  it('sums every usage field over the turn_usage events and keeps the first model reported', () => {
-    const summed = sumUsage([
-      { type: 'start', sessionId: 'session-1', model: 'start-model', tools: ['Read'], apiKeySource: 'ANTHROPIC_API_KEY' },
-      { type: 'turn_usage', turn: 1, model: 'first-model', usage: { input_tokens: 1000, cache_creation_input_tokens: 200, cache_read_input_tokens: 30, output_tokens: 4 } },
-      { type: 'message', text: 'Tools: Read' },
-      { type: 'turn_usage', turn: 2, model: 'second-model', usage: { input_tokens: 5, cache_creation_input_tokens: 60, cache_read_input_tokens: 700, output_tokens: 8000 } },
-    ]);
-    expect(summed).toEqual({
-      usage: { input_tokens: 1005, cache_creation_input_tokens: 260, cache_read_input_tokens: 730, output_tokens: 8004 },
-      model: 'first-model',
-    });
+describe('probeMetering', () => {
+  it('meters the recorded probe as a session is metered: the turn row, then the settle row from the result line', () => {
+    const probe = readFileSync(new URL('./fixtures/probe.jsonl', import.meta.url), 'utf8');
+    const events = parseStream(probe);
+    const end = events.find((event) => event.type === 'end');
+    if (end?.type !== 'end') throw new Error('the recorded probe has no result line');
+    const models = Object.fromEntries(end.modelUsage.map((model) => [model.model, { input: 2, output: 10, cache_read: 0.2, cache_write_5m: 2.5, cache_write_1h: 4 }]));
+    const metering = probeMetering(parsePriceTable(JSON.stringify(models)), events);
+    const turns = events.filter((event) => event.type === 'turn_usage').length;
+    expect(metering.basis).toBe('result');
+    expect(metering.fallbackModels).toEqual([]);
+    expect(metering.rows.length).toBeGreaterThanOrEqual(turns);
+    const output = metering.rows.reduce((total, row) => total + row.output_tokens, 0);
+    expect(output).toBe(end.modelUsage.reduce((total, model) => total + model.output_tokens, 0));
+  });
+
+  it('names a model missing from the table and still returns its rows', () => {
+    const metering = probeMetering(parsePriceTable('{"builder-class":{"input":3,"output":15,"cache_read":0.3,"cache_write_5m":3.75,"cache_write_1h":6}}'), events(attendedRaw));
+    expect(metering.fallbackModels).toEqual(['claude-sonnet-5']);
+    expect(metering.rows.length).toBeGreaterThan(0);
   });
 });
 

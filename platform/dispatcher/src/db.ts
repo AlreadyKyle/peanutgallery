@@ -121,6 +121,8 @@ export interface Db {
   claimCard(id: string): Promise<Card | null>;
   updateCard(id: string, patch: CardPatch): Promise<void>;
   getRole(id: string): Promise<Role>;
+  // Roles that are not retired.
+  listActiveRoles(): Promise<Role[]>;
   recordUsage(input: UsageInput): Promise<RecordUsageResult>;
   sumLedger(cardId: string): Promise<number>;
   insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>): Promise<void>;
@@ -276,6 +278,12 @@ export function createSupabaseDb(url: string, serviceRoleKey: string): Db {
       const { data, error } = await client.from('roles').select('*').eq('id', id).single();
       if (error || !data) fail('role', error);
       return toRole(data as Row);
+    },
+
+    async listActiveRoles() {
+      const { data, error } = await client.from('roles').select('*').eq('state', 'active');
+      if (error) fail('roles active', error);
+      return rows(data).map(toRole);
     },
 
     async recordUsage(input) {

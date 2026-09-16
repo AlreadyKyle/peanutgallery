@@ -12,6 +12,7 @@ import { createAdapter } from './adapters/factory.js';
 import { loadConfig } from './config.js';
 import { createSupabaseDb } from './db.js';
 import { errorMessage, logLine, type LogFields, type Logger, type LogLevel } from './log.js';
+import { round4 } from './pricing.js';
 import { initRecord, runProbe } from './probe-core.js';
 import { meterProbe } from './startup.js';
 
@@ -43,8 +44,16 @@ async function probeVerdict(details: string[]): Promise<string> {
   const adapter = createAdapter(config);
   const raw: string[] = [];
   details.push(`probe: mode ${adapter.mode}; ANTHROPIC_BASE_URL is ${process.env.ANTHROPIC_BASE_URL ? 'set' : 'not set'} in the dispatcher environment`);
-  const probe = await runProbe(adapter, { repoRoot: REPO_ROOT, worktreeRoot: config.worktreeRoot, model: config.modelBuilder, onRawLine: (line) => raw.push(line) });
+  const probe = await runProbe(adapter, {
+    repoRoot: REPO_ROOT,
+    worktreeRoot: config.worktreeRoot,
+    model: config.modelBuilder,
+    priceTable: config.priceTable,
+    onRawLine: (line) => raw.push(line),
+  });
   reportInit(initRecord(raw), details);
+  const meteredUsd = round4(probe.metering.rows.reduce((total, row) => total + row.usd, 0));
+  details.push(`probe: metered ${meteredUsd} USD at PRICE_TABLE_JSON on a ${probe.metering.basis} basis (${probe.metering.rows.length} rows); the command line reported ${probe.costUsd ?? 'no'} USD`);
   let meterError: string | null = null;
   if (adapter.mode === 'unattended') {
     try {

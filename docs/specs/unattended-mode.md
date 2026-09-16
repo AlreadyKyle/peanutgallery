@@ -35,6 +35,7 @@ Out: the Claude Agent SDK, a second-provider adapter, the VPS.
 - 2026-09-14: the same CLI, not the SDK. The command line, tool allowlist and stream parser are already tested; only the credential and the board-session rule differ.
 - 2026-09-14: the studio key lives under its own name in the dispatcher environment so the founder's key is never used unattended by accident.
 - 2026-09-14: the probe runs once per dispatcher start, not per card. Its verdict does not vary by card and each run costs money.
+- 2026-09-16: probes and card sessions are reconciled from the result line. The assistant lines under-report output tokens, so each turn is still metered as it arrives and the session is settled to its `modelUsage` priced with `PRICE_TABLE_JSON`, or to an estimate when no result line arrives (`docs/specs/metering-reconciliation.md`).
 
 ## Evidence
 

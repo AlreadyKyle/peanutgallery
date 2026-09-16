@@ -58,10 +58,13 @@ beforeAll(async () => {
     netlifySiteIdSeed: 'site-seed',
     netlifySiteIdPlatform: 'site-platform',
     modelBuilder: 'builder-class',
+    modelDirector: null,
+    modelHost: null,
     priceTable: PRICE_TABLE,
     poolDailyCapUsd: 100,
     cardMaxUsd: 25,
     sessionMaxTurns: 60,
+    sessionMaxMinutes: 60,
     agentHourlyRateUsd: 5,
     tickMs: 60_000,
     worktreeRoot: path.join(dir, '.worktrees'),
@@ -320,6 +323,23 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'ceiling', actual_usd: 3.006, branch: 'card/4c2f5a1e-config' });
     expect(alert.messages).toEqual([expect.stringMatching(/^Card 4c2f5a1e paused \(ceiling\): spawn table row gatherer/)]);
     expect(db.ledger).toHaveLength(2);
+    expect(calls).toEqual([]);
+  });
+
+  it('pauses a session that runs past its wall clock', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (_spec, emit, signal) => {
+      await emit(startEvent());
+      await emit(usageEvent(1, 100));
+      await untilAborted(signal, 2000);
+    });
+    const alert = new RecordingAlerter();
+    // 0.0005 minutes is 30 ms; the variable itself takes whole minutes.
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), config: { ...config, sessionMaxMinutes: 0.0005 } });
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'wall_clock', actual_usd: 0.0045 });
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card 4c2f5a1e paused \(wall_clock\): /)]);
     expect(calls).toEqual([]);
   });
 

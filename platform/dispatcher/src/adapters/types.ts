@@ -21,17 +21,44 @@ export interface SessionSpec {
   maxBudgetUsd: number;
 }
 
+// One model's totals from the result line's modelUsage block. cost_usd is the command line's own
+// figure, from a table that is not ours; the ledger never records it.
+export interface ModelUsage {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  cost_usd: number | null;
+}
+
 export type AgentEvent =
   // apiKeySource is the init line's account report: 'ANTHROPIC_API_KEY' when the session bills
   // an API key, another value (Claude Code reports 'none' for a subscription sign-in) otherwise,
   // null when the line carries no such field. The session refuses the wrong source for its mode.
   | { type: 'start'; sessionId: string | null; model: string | null; tools: string[]; apiKeySource: string | null }
-  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage }
+  // contentChars is the length of the turn's text, thinking and tool input, so a meter can estimate
+  // output tokens the stream under-reports.
+  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number }
   | { type: 'tool_call'; toolUseId: string; name: string; input: unknown }
   | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean }
   | { type: 'message'; text: string }
-  | { type: 'end'; subtype: string; isError: boolean; totalCostUsd: number | null; numTurns: number | null; result: string }
+  // usage is the result line's session total, null when the line has none; modelUsage is empty when
+  // the line has no modelUsage block.
+  | {
+      type: 'end';
+      subtype: string;
+      isError: boolean;
+      totalCostUsd: number | null;
+      numTurns: number | null;
+      result: string;
+      usage: TurnUsage | null;
+      modelUsage: ModelUsage[];
+      permissionDenials: unknown[];
+    }
   | { type: 'error'; message: string };
+
+export type EndEvent = Extract<AgentEvent, { type: 'end' }>;
 
 export interface SessionResult {
   exitCode: number | null;

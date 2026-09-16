@@ -39,7 +39,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
    ```sh
    platform/ops/make-dispatcher-env.sh
    ```
-   It prints the path it wrote (a new temporary folder) and the key names, never the values. It refuses when an exported value is missing, when `VPS_GITHUB_TOKEN` equals the Mac's token, or when `MODEL_BUILDER` has no row in `PRICE_TABLE_JSON`. It copies no `ANTHROPIC_API_KEY`, `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac, and uses `SUPABASE_SECRET_KEY` as the service key when `.env` has one.
+   It prints the path it wrote (a new temporary folder) and the key names, never the values. It refuses when an exported value is missing, when `VPS_GITHUB_TOKEN` equals the Mac's token, or when `MODEL_BUILDER`, or a `MODEL_DIRECTOR` or `MODEL_HOST` that `.env` sets, has no row in `PRICE_TABLE_JSON`. It copies no `ANTHROPIC_API_KEY`, `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac, and uses `SUPABASE_SECRET_KEY` as the service key when `.env` has one.
 6. **Upload it** (replace `<path>` with the printed path), then delete the local copy:
    ```sh
    ssh root@$VPS_IP 'install -d -m 0700 /etc/peanutgallery'
@@ -55,7 +55,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
    ```sh
    ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh
    ```
-   It clones with the token from the env file, validates the env file (root 0600, no quoted value, `AGENT_MODE=unattended`, every required key, `PRICE_TABLE_JSON` parsed by node, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`), builds the image, runs `systemd-analyze verify` on both units and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
+   It clones with the token from the env file, validates the env file (root 0600, no quoted value, `AGENT_MODE=unattended`, every required key, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR` or `MODEL_HOST`, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`), builds the image, runs `systemd-analyze verify` on both units and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
 
 ### Pin the base image by digest
 
@@ -140,7 +140,7 @@ Dispatcher lines are JSON with `ts`, `level`, `scope` and `msg`; the entrypoint 
 
 ## Exit codes and restarts
 
-- **Exit 78** is a startup failure no restart can fix: a configuration error, a probe verdict that will not change (forbidden tools, memory paths, the wrong `apiKeySource`, no tools), a model missing from `PRICE_TABLE_JSON`, the wrong claude CLI, or a clone without an https origin. systemd does not restart it; the unit fails and ntfy gets "Peanut Gallery dispatcher unit failed on <hostname>". Fix the cause, then `systemctl reset-failed dispatcher && systemctl start dispatcher`.
+- **Exit 78** is a startup failure no restart can fix: a configuration error, a probe verdict that will not change (forbidden tools, memory paths, the wrong `apiKeySource`, no tools), a model missing from `PRICE_TABLE_JSON` (the configured models, a writing role's model, or a model the probe reported), the wrong claude CLI, or a clone without an https origin. systemd does not restart it; the unit fails and ntfy gets "Peanut Gallery dispatcher unit failed on <hostname>". Fix the cause, then `systemctl reset-failed dispatcher && systemctl start dispatcher`.
 - **Any other exit** restarts after 30 seconds, the delay growing over 6 steps to 30 minutes: a probe with no stream or an error result, a failed install, a mode mismatch with /board. After 8 starts in 6 hours the unit fails and ntfy is posted the same way.
 
 ## The money guardrail

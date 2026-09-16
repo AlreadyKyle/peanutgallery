@@ -118,6 +118,9 @@ export class FakeDb implements Db {
     if (!found) throw new Error(`db role: no row for ${id}`);
     return { ...found };
   }
+  async listActiveRoles() {
+    return this.roles.map((r) => ({ ...r }));
+  }
   async recordUsage(input: UsageInput): Promise<RecordUsageResult> {
     const id = `ledger-${this.ledger.length + 1}`;
     this.ledger.push({ id, ...input });

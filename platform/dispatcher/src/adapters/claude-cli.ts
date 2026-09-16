@@ -7,7 +7,7 @@ import { access, readFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import readline from 'node:readline';
 import { StreamParser } from './stream.js';
-import type { AgentAdapter, AgentEvent, AgentMode, CardFolder, EventSink, RawLineSink, SessionResult, SessionSpec } from './types.js';
+import type { AgentAdapter, AgentEvent, AgentMode, CardFolder, EndEvent, EventSink, RawLineSink, SessionResult, SessionSpec } from './types.js';
 
 export const EXCLUDED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'] as const;
 export const MCP_PREFIX = 'mcp__';
@@ -30,9 +30,11 @@ const PACKAGES: Record<CardFolder, string[]> = {
 };
 const BASH_SCRIPTS = ['test', 'typecheck', 'bot'];
 const STDERR_LIMIT = 4000;
+// An interrupted session gets SIGINT, then SIGTERM after INTERRUPT_GRACE_MS, then SIGKILL after
+// KILL_GRACE_MS. On SIGINT Claude Code can finish its result line, which carries the session's real
+// usage for the meter.
+export const INTERRUPT_GRACE_MS = 15_000;
 const KILL_GRACE_MS = 5000;
-
-type EndEvent = Extract<AgentEvent, { type: 'end' }>;
 
 export function refusedTools(tools: readonly string[]): string[] {
   return tools.filter((tool) => (EXCLUDED_TOOLS as readonly string[]).includes(tool) || tool.startsWith(MCP_PREFIX));
@@ -125,6 +127,7 @@ export interface ClaudeCliOptions {
   claudeBin: string;
   spawnFn?: SpawnFn;
   onRawLine?: RawLineSink;
+  interruptGraceMs?: number;
 }
 
 interface RunState {
@@ -139,9 +142,11 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
   private readonly claudeBin: string;
   private readonly spawnFn: SpawnFn;
   private readonly onRawLine: RawLineSink | undefined;
+  private readonly interruptGraceMs: number;
 
   constructor(options: ClaudeCliOptions) {
     this.claudeBin = options.claudeBin;
+    this.interruptGraceMs = options.interruptGraceMs ?? INTERRUPT_GRACE_MS;
     this.spawnFn = options.spawnFn ?? ((bin, args, opts) => spawn(bin, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] }));
     this.onRawLine = options.onRawLine;
   }
@@ -172,13 +177,18 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
     const parser = new StreamParser();
     const state: RunState = { killReason: null, end: null, stderr: '', sinkError: null };
 
+    const running = () => child.exitCode === null && child.signalCode === null;
     const kill = (reason: string) => {
       if (state.killReason) return;
       state.killReason = reason;
-      child.kill('SIGTERM');
+      child.kill('SIGINT');
       setTimeout(() => {
-        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-      }, KILL_GRACE_MS).unref();
+        if (!running()) return;
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          if (running()) child.kill('SIGKILL');
+        }, KILL_GRACE_MS).unref();
+      }, this.interruptGraceMs).unref();
     };
     const onAbort = () => kill(String(signal.reason ?? 'aborted'));
     if (signal.aborted) onAbort();

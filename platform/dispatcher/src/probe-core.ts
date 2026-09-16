@@ -6,8 +6,9 @@
 import { mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentAdapter, AgentEvent, AgentMode, RawLineSink, SessionResult, SessionSpec } from './adapters/types.js';
-import type { TurnUsage } from './pricing.js';
+import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, RawLineSink, SessionResult, SessionSpec } from './adapters/types.js';
+import { SessionMeter, type Settlement } from './metering.js';
+import type { LedgerUsage, PriceTable } from './pricing.js';
 import { API_KEY_SOURCE } from './session.js';
 import { git, removeWorktree } from './worktree.js';
 
@@ -114,6 +115,7 @@ export interface ProbeOptions {
   repoRoot: string;
   worktreeRoot: string;
   model: string;
+  priceTable: PriceTable;
   // Receives every raw stream line with local paths replaced, in order; the probe command saves
   // them as the fixture.
   onRawLine?: RawLineSink;
@@ -126,29 +128,27 @@ export interface ProbeResult {
   fatal: boolean;
   tools: string[];
   apiKeySource: string | null;
-  // The model the stream reported, for pricing; null when no turn reported one.
-  model: string | null;
+  // The command line's own cost figure, reported for comparison and never recorded.
   costUsd: number | null;
-  // Token usage summed over the probe's turns, so the caller can meter it to the ledger.
-  usage: TurnUsage;
+  // The ledger rows for the probe, metered as a card session is, so the caller can record them.
+  metering: Settlement;
   turns: number;
   exitCode: number | null;
 }
 
-// Token usage summed field by field over the turn_usage events, with the first model a turn
-// reported.
-export function sumUsage(events: readonly AgentEvent[]): { usage: TurnUsage; model: string | null } {
-  const usage: TurnUsage = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
-  let model: string | null = null;
+// The probe's ledger rows: one per turn that reported usage, then the settle rows against the result
+// line (metering.ts), with the models the price table lacks and the basis of the settlement.
+export function probeMetering(table: PriceTable, events: readonly AgentEvent[]): Settlement {
+  const meter = new SessionMeter(table);
+  const rows: LedgerUsage[] = [];
   for (const event of events) {
     if (event.type !== 'turn_usage') continue;
-    usage.input_tokens += event.usage.input_tokens;
-    usage.cache_creation_input_tokens += event.usage.cache_creation_input_tokens;
-    usage.cache_read_input_tokens += event.usage.cache_read_input_tokens;
-    usage.output_tokens += event.usage.output_tokens;
-    if (event.model) model = model ?? event.model;
+    const { row } = meter.addTurn(event);
+    if (row.input_tokens > 0 || row.cached_tokens > 0 || row.output_tokens > 0) rows.push(row);
   }
-  return { usage, model };
+  const end = events.find((event): event is EndEvent => event.type === 'end') ?? null;
+  const settled = meter.settle(end);
+  return { ...settled, rows: [...rows, ...settled.rows] };
 }
 
 export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Promise<ProbeResult> {
@@ -179,16 +179,14 @@ export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Pr
     const failure = verdict(adapter.mode, raw, events, result);
     const start = events.find((event) => event.type === 'start');
     const end = events.find((event) => event.type === 'end');
-    const summed = sumUsage(events);
     return {
       ok: failure === null,
       reason: failure?.reason ?? null,
       fatal: failure?.fatal ?? false,
       tools: start?.type === 'start' ? start.tools : [],
       apiKeySource: start?.type === 'start' ? start.apiKeySource : null,
-      model: summed.model ?? (start?.type === 'start' ? start.model : null),
       costUsd: end?.type === 'end' ? end.totalCostUsd : null,
-      usage: summed.usage,
+      metering: probeMetering(options.priceTable, events),
       turns: result.turns,
       exitCode: result.exitCode,
     };

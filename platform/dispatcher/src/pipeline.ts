@@ -63,6 +63,7 @@ const PAUSING_OUTCOMES: Partial<Record<SessionOutcome, string>> = {
   board_session_lapsed: 'board_session',
   paused_by_board: 'paused_by_board',
   unknown_model: 'unknown_model',
+  wall_clock: 'wall_clock',
   stopped: 'dispatcher_stopped',
 };
 
@@ -168,6 +169,8 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     boardSessionTtlMin: deps.config.boardSessionTtlMin,
     watchIntervalMs: deps.config.tickMs,
     fallbackModel: deps.config.modelBuilder,
+    sessionMaxMs: deps.config.sessionMaxMinutes * 60_000,
+    alert: deps.alert,
     log: deps.log,
     stopSignal: deps.stopSignal,
     now: deps.now,
