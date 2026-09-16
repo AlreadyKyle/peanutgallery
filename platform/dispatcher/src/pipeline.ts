@@ -21,7 +21,7 @@ import {
   commitTitle,
   commitTrailers,
   createWorktree,
-  gitAuthArgs,
+  gitAuthEnv,
   lanePaths,
   outsideLane,
   removeWorktree,
@@ -144,7 +144,7 @@ function allowedPaths(card: Card): string[] {
 }
 
 async function prepareWorktree(card: Card, deps: PipelineDeps): Promise<Worktree> {
-  const worktree = await createWorktree(deps.config.repoRoot, deps.config.worktreeRoot, card.id, card.lane, gitAuthArgs(deps.config.githubToken));
+  const worktree = await createWorktree(deps.config.repoRoot, deps.config.worktreeRoot, card.id, card.lane, gitAuthEnv(deps.config.githubToken));
   await deps.db.updateCard(card.id, { branch: worktree.branch });
   deps.log.info('pipeline', `worktree ready for card ${card.id}`, { path: worktree.path, branch: worktree.branch });
   return worktree;

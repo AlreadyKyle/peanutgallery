@@ -1,25 +1,44 @@
-# systemd unit for the dispatcher container.
-# Install: copy to /etc/systemd/system/dispatcher.service, write the Appendix A environment to
-# /etc/backseat/dispatcher.env (mode 0600), then `systemctl enable --now dispatcher`.
-# Not deployed yet: the VPS, the claude CLI in this image and the alert settings are specified in docs/specs/vps.md.
+# systemd unit for the Peanut Gallery dispatcher container on the VPS (docs/specs/vps.md).
+# provision.sh and deploy.sh install it at /etc/systemd/system/dispatcher.service. provision.sh
+# enables it and never starts it: starting it is the cutover (README.md).
+#
+# The container runs as uid 10001 over the bind-mounted clone at /srv/peanutgallery. Secrets come
+# only from docker's --env-file. There is no EnvironmentFile= here: systemd strips quotes and would
+# corrupt PRICE_TABLE_JSON. --pull never keeps docker from fetching a same-named image from a
+# registry.
+#
+# Restarts: after 30 seconds, growing over 6 steps to 30 minutes, at most 8 starts in 6 hours.
+# Exit 78 is a startup failure no restart can fix and is never restarted. Either way the unit ends
+# failed and OnFailure= starts dispatcher-alert.service.
 [Unit]
-Description=Backseat dispatcher
+Description=Peanut Gallery dispatcher
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
+StartLimitIntervalSec=6h
+StartLimitBurst=8
+OnFailure=dispatcher-alert.service
 
 [Service]
 Restart=always
-RestartSec=10
-TimeoutStopSec=60
-EnvironmentFile=/etc/backseat/dispatcher.env
-ExecStartPre=-/usr/bin/docker stop backseat-dispatcher
-ExecStartPre=-/usr/bin/docker rm backseat-dispatcher
-ExecStart=/usr/bin/docker run --rm --name backseat-dispatcher \
-  --env-file /etc/backseat/dispatcher.env \
-  --volume /var/lib/backseat/worktrees:/app/.worktrees \
-  backseat/dispatcher:latest
-ExecStop=/usr/bin/docker stop backseat-dispatcher
+RestartSec=30s
+RestartSteps=6
+RestartMaxDelaySec=30min
+RestartPreventExitStatus=78
+TimeoutStopSec=90s
+ExecStartPre=-/usr/bin/docker rm -f peanutgallery-dispatcher
+ExecStart=/usr/bin/docker run --rm --name peanutgallery-dispatcher \
+  --pull never \
+  --env-file /etc/peanutgallery/dispatcher.env \
+  --user 10001:10001 \
+  --volume /srv/peanutgallery:/srv/peanutgallery \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --memory 3g \
+  --pids-limit 512 \
+  --log-opt max-size=10m \
+  peanutgallery/dispatcher:current
+ExecStop=-/usr/bin/docker stop -t 60 peanutgallery-dispatcher
 
 [Install]
 WantedBy=multi-user.target

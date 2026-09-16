@@ -1,6 +1,6 @@
 # Refunds, disputes and the daily credit hold
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -62,8 +62,8 @@ An S1 draw moves money from the balance to the incident reserve side of the same
 - [x] A dispute draws the reserve first and alerts.
 - [x] A $120 contribution credits $50 immediately and holds the rest; the release job credits it once 14 days have passed.
 - [x] The ledger identity holds after refunds and releases (I1–I3 above).
-- [ ] The live endpoint lists `checkout.session.completed`, `charge.updated`, `charge.refunded` and `charge.dispute.created`.
-- [ ] The live database runs `credit-held-contributions` hourly, and `scripts/ledger-identity.ts` prints `PASS:` after the migration.
+- [x] The live endpoint lists `checkout.session.completed`, `charge.updated`, `charge.refunded` and `charge.dispute.created`.
+- [x] The live database runs `credit-held-contributions` hourly, and `scripts/ledger-identity.ts` prints `PASS:` after the migration.
 
 ## Verification
 
@@ -88,7 +88,13 @@ An S1 draw moves money from the balance to the incident reserve side of the same
 - **Identity:** `platform/supabase/test/ledger-identity.test.ts`.
 - **Static checks:** `platform/supabase/test/migration.test.ts` "refunds-and-holds migration".
 - **Site:** `platform/site/src/pages/Landing.test.tsx` (Held for 14 days).
-- **Pending live:** criteria 5 and 6.
+- **Live, 16 September 2026** (the board ran the migration and the deploy; auto mode blocks both):
+  - Migration applied through the Management API. `select jobname, schedule, active from cron.job` returns `credit-held-contributions, 17 * * * *, true`.
+  - `select credit_daily_cap_usd, credit_hold_days from studio_state` returns `50.0000, 14`; `pool.held_usd` is `0.0000`; the existing contribution backfilled as `entry = 'payment'`.
+  - `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api` redeployed the function. The first attempt ran from a checkout that was behind and shipped the old handler; after `git pull` the second attempt shipped this one, which is why the endpoint list is quoted below from the second run.
+  - `scripts/update-webhook-events.ts --id we_1UFd0XICmyTP81VUCeACUWhc` then `GET /v1/webhook_endpoints/...` returns `status enabled` with `["checkout.session.completed","charge.updated","charge.refunded","charge.dispute.created"]`.
+  - Dry runs against the live function, both 200: `charge.refunded` and `charge.dispute.created` for `pi_3UFkgKICmyTP81VU0oegNKiq` each returned `{"dry_run":true,"reversal":{...,"session_id":"cs_live_a1OkB7…","kind_total_usd":1}}`, so the live Stripe session lookup resolves the board's $1 payment. `checkout.session.completed` returned 200 with `dry_run: true` and `studio_pct: 20`.
+  - `scripts/ledger-identity.ts` prints `PASS: ledger identity holds over 1 contribution rows and 0 studio ledger rows`, with I1 0.0734, I2 0.5283 and I3 0.0000 all at drift 0.0000.
 
 ## Decisions
 
