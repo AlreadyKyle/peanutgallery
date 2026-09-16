@@ -244,10 +244,10 @@ export function createHandler(
 
     if (event.type === DISPUTE_FUNDS_WITHDRAWN_EVENT) {
       // The dispute's total is cumulative, so whichever of this and
-      // charge.dispute.created arrives second reverses nothing, quietly.
+      // charge.dispute.created arrives second reverses nothing.
       const dispute = event.data.object as DisputeObject;
       return reverse(deps, event.id, "dispute", disputeSource(dispute), dryRun, {
-        quietWhenNothingLeft: true,
+        fundsWithdrawn: true,
       });
     }
 
@@ -323,8 +323,27 @@ interface ReversalSource {
 }
 
 interface ReverseOptions {
-  /** No "nothing left to reverse" alert: the other event for the same dispute already sent one. */
-  quietWhenNothingLeft?: boolean;
+  /** The event is charge.dispute.funds_withdrawn rather than charge.dispute.created. */
+  fundsWithdrawn?: boolean;
+}
+
+/**
+ * Whether a dispute that reversed nothing is worth a line. When this same
+ * dispute already reversed its total (the other of its two events arrived
+ * first), it is not. When something else took the payment first, such as a
+ * refund before an escalated inquiry, it is. An RPC that does not return the
+ * kind totals yet alerts on created and stays quiet on funds_withdrawn.
+ */
+function alertNothingLeft(
+  result: Record<string, unknown>,
+  options: ReverseOptions,
+): boolean {
+  const already = result.kind_reversed_usd == null ? NaN : Number(result.kind_reversed_usd);
+  const total = result.kind_total_usd == null ? NaN : Number(result.kind_total_usd);
+  if (Number.isNaN(already) || Number.isNaN(total)) {
+    return !options.fundsWithdrawn;
+  }
+  return already < total;
 }
 
 /**
@@ -393,7 +412,7 @@ async function reverse(
   if (result.inserted === true) {
     await safeNotify(deps, reversalMessage(kind, source.source, result));
   } else if (
-    kind === "dispute" && result.replay !== true && !options.quietWhenNothingLeft
+    kind === "dispute" && result.replay !== true && alertNothingLeft(result, options)
   ) {
     await safeNotify(deps, `Dispute ${source.source}: nothing left to reverse on contribution ${shortId(result.parent_id)}`);
   }
@@ -414,7 +433,7 @@ async function apply(
     result.inserted === true && parsed.goal_card_id &&
     result.goal_card_id == null
   ) {
-    await safeNotify(deps, `Contribution ${parsed.session_id} named card ${parsed.goal_card_id}, which is not open for funding; it went to the pool`);
+    await safeNotify(deps, `Contribution ${parsed.session_id} named card ${parsed.goal_card_id}, but the ledger credited no card; the money went to the pool.`);
   }
   return result;
 }

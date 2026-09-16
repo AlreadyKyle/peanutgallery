@@ -329,7 +329,7 @@ Deno.test("a new contribution whose goal card was not credited alerts, and a rep
   const first = await call(dropped.deps, post());
   assertEquals(first.status, 200);
   assertEquals(dropped.notices, [
-    `Contribution cs_handler_1 named card ${goal}, which is not open for funding; it went to the pool`,
+    `Contribution cs_handler_1 named card ${goal}, but the ledger credited no card; the money went to the pool.`,
   ]);
 
   const replay = fake(
@@ -626,6 +626,28 @@ Deno.test("x-dry-run with a wrong bearer answers 401 before the signature is che
   assertEquals(f.applied, []);
 });
 
+Deno.test("a 401 from the dry-run gate leaves the request body unread", async () => {
+  const f = fake();
+  const body = new ReadableStream<Uint8Array>({
+    pull() {
+      throw new Error("the gate read the body");
+    },
+  });
+  const req = new Request("https://functions.invalid/stripe-webhook", {
+    method: "POST",
+    headers: {
+      "stripe-signature": GOOD_SIGNATURE,
+      authorization: "Bearer another-key",
+      "x-dry-run": "1",
+    },
+    body,
+  });
+  const res = await createHandler(f.deps)(req);
+  assertEquals(res.status, 401);
+  assertEquals(req.bodyUsed, false);
+  assertEquals(f.applied, []);
+});
+
 Deno.test("the service bearer without x-dry-run is a live request, and any value but 1 answers 400", async () => {
   const { deps, applied } = fake();
   const noHeader = await call(
@@ -852,18 +874,114 @@ Deno.test("charge.dispute.funds_withdrawn reverses the disputed amount and alert
   assert(notices[0]!.startsWith("Dispute dp_handler_1: reversed $1.00"));
 });
 
-Deno.test("charge.dispute.funds_withdrawn with nothing left to reverse sends no alert", async () => {
-  const { deps, reversals, notices } = fake(
-    {
-      reverseContribution: () =>
-        Promise.resolve({ found: true, inserted: false, replay: false, parent_id: "c1c1c1c1-x", reversed_usd: 0 }),
-    },
+Deno.test("without the RPC's kind totals, nothing left alerts on created and stays quiet on funds_withdrawn", async () => {
+  const nothingLeft = () =>
+    Promise.resolve({ found: true, inserted: false, replay: false, parent_id: "c1c1c1c1-x", reversed_usd: 0 });
+
+  const withdrawn = fake(
+    { reverseContribution: nothingLeft },
     disputeEvent({ status: "lost" }, "charge.dispute.funds_withdrawn"),
   );
-  const { status } = await call(deps, post());
-  assertEquals(status, 200);
-  assertEquals(reversals.length, 1);
-  assertEquals(notices, []);
+  const first = await call(withdrawn.deps, post());
+  assertEquals(first.status, 200);
+  assertEquals(withdrawn.reversals.length, 1);
+  assertEquals(withdrawn.notices, []);
+
+  const created = fake({ reverseContribution: nothingLeft }, disputeEvent());
+  const second = await call(created.deps, post());
+  assertEquals(second.status, 200);
+  assertEquals(created.notices, [
+    "Dispute dp_handler_1: nothing left to reverse on contribution c1c1c1c1",
+  ]);
+});
+
+/**
+ * A reverse_contribution stand-in for the one $1 payment that follows the RPC:
+ * each kind reverses up to Stripe's cumulative total, the payment caps them all,
+ * an event id is a replay only once it inserted a row, and every result carries
+ * kind_reversed_usd and kind_total_usd.
+ */
+function paymentLedger(paymentUsd = 1) {
+  const reversedByKind: Record<string, number> = { refund: 0, dispute: 0 };
+  const insertedEvents = new Set<string>();
+  const rows: ReversalInput[] = [];
+  const reverseContribution = (input: ReversalInput) => {
+    const parent_id = REVERSED.parent_id;
+    if (insertedEvents.has(input.event_id)) {
+      return Promise.resolve({ found: true, inserted: false, replay: true, parent_id });
+    }
+    const before = reversedByKind[input.kind]!;
+    const all = reversedByKind.refund! + reversedByKind.dispute!;
+    const delta = Math.min(input.kind_total_usd - before, paymentUsd - all);
+    const totals = { kind_reversed_usd: before, kind_total_usd: input.kind_total_usd };
+    if (delta <= 0) {
+      return Promise.resolve({
+        found: true,
+        inserted: false,
+        replay: false,
+        parent_id,
+        reversed_usd: 0,
+        ...totals,
+      });
+    }
+    insertedEvents.add(input.event_id);
+    reversedByKind[input.kind] = before + delta;
+    rows.push(input);
+    return Promise.resolve({ ...REVERSED, reversed_usd: delta, ...totals });
+  };
+  return { reverseContribution, rows };
+}
+
+function withId(event: WebhookEvent, id: string): WebhookEvent {
+  return { ...event, id };
+}
+
+/** Delivers each event to a fresh handler over one ledger and collects every alert. */
+async function deliver(
+  ledger: ReturnType<typeof paymentLedger>,
+  events: WebhookEvent[],
+): Promise<string[]> {
+  const notices: string[] = [];
+  for (const event of events) {
+    const f = fake({ reverseContribution: ledger.reverseContribution }, event);
+    const { status } = await call(f.deps, post());
+    assertEquals(status, 200, event.id);
+    notices.push(...f.notices);
+  }
+  return notices;
+}
+
+Deno.test("a dispute reverses once and alerts once whichever of its two events arrives first", async () => {
+  const created = withId(disputeEvent(), "evt_dispute_created");
+  const withdrawn = withId(
+    disputeEvent({}, "charge.dispute.funds_withdrawn"),
+    "evt_dispute_withdrawn",
+  );
+  for (const order of [[created, withdrawn], [withdrawn, created]]) {
+    const ledger = paymentLedger();
+    const notices = await deliver(ledger, order);
+    const label = order.map((e) => e.type).join(" then ");
+    assertEquals(ledger.rows.length, 1, label);
+    assertEquals(notices.length, 1, label);
+    assert(notices[0]!.startsWith("Dispute dp_handler_1: reversed $1.00"), label);
+  }
+});
+
+Deno.test("an inquiry, then a full refund, then the escalation's funds_withdrawn alerts that nothing was left", async () => {
+  const ledger = paymentLedger();
+  const notices = await deliver(ledger, [
+    withId(disputeEvent({ status: "warning_needs_response" }), "evt_inquiry"),
+    withId(refundedEvent({ amount_refunded: 100 }), "evt_refund_full"),
+    withId(disputeEvent({}, "charge.dispute.funds_withdrawn"), "evt_escalated"),
+  ]);
+  assertEquals(ledger.rows.map((row) => row.kind), ["refund"]);
+  assertEquals(notices.length, 3);
+  assert(notices[0]!.includes("is an inquiry"));
+  assert(notices[1]!.startsWith("Refund ch_handler_1: reversed $1.00"));
+  assertEquals(
+    notices[2],
+    "Dispute dp_handler_1: nothing left to reverse on contribution c1c1c1c1",
+  );
 });
 
 Deno.test("the webhook listens to exactly the five events", () => {
