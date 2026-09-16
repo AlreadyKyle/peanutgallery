@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -757,6 +757,68 @@ describe('runCardPipeline', () => {
     expect(existsSync(marker)).toBe(false);
     expect(existsSync(path.join(config.worktreeRoot, 'card-eeeeeeee'))).toBe(false);
     expect(alert.messages).toEqual([expect.stringMatching(/^Card eeeeeeee rejected \(git_tamper\): .*gpg\.program.*The dispatcher claims no card and runs no git until it restarts/)]);
+  });
+
+  // What a session can plant to make git read configuration, attributes or objects from somewhere
+  // the snapshot and the allowlist do not look, or to have git run a program. Each returns its cleanup.
+  const REDIRECTS: Array<[string, (worktree: string) => Promise<() => Promise<void>>]> = [
+    [
+      'a commondir pointing at a copy of the repository with a smudge filter',
+      async (worktree) => {
+        const copy = path.join(worktree, 'seed-1', 'content', 'copy.git');
+        await cp(path.join(repo, '.git'), copy, { recursive: true });
+        await appendFile(path.join(copy, 'config'), `[filter "x"]\n\tsmudge = "echo ran >> '${path.join(dir, 'filter-ran.txt')}'; cat"\n`, 'utf8');
+        await mkdir(path.join(copy, 'info'), { recursive: true });
+        await writeFile(path.join(copy, 'info', 'attributes'), '* filter=x\n', 'utf8');
+        await writeFile(path.join(repo, '.git', 'commondir'), `${copy}\n`, 'utf8');
+        return () => rm(path.join(repo, '.git', 'commondir'), { force: true });
+      },
+    ],
+    ['info/attributes', async () => placed(path.join(repo, '.git', 'info', 'attributes'), '* filter=x\n')],
+    ['objects/info/alternates', async () => placed(path.join(repo, '.git', 'objects', 'info', 'alternates'), `${path.join(dir, 'elsewhere', 'objects')}\n`)],
+    ['objects/info/http-alternates', async () => placed(path.join(repo, '.git', 'objects', 'info', 'http-alternates'), 'https://evil.example/objects\n')],
+    ['a hook that is not a sample', async () => placed(path.join(repo, '.git', 'hooks', 'post-commit'), '#!/bin/sh\nexit 0\n')],
+    ['a worktree config.worktree', async (worktree) => placed(path.join(repo, '.git', 'worktrees', path.basename(worktree), 'config.worktree'), '[core]\n\tbare = false\n')],
+    ['a worktree commondir that is not ../..', async (worktree) => placed(path.join(repo, '.git', 'worktrees', path.basename(worktree), 'commondir'), `${path.join(dir, 'elsewhere')}\n`)],
+  ];
+
+  async function placed(file: string, content: string): Promise<() => Promise<void>> {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, content, 'utf8');
+    return () => rm(file, { force: true });
+  }
+
+  it.each(REDIRECTS)('rejects git_tamper and runs no git after a session plants %s', async (_name, plantIt) => {
+    const c = card({ id: 'abcdef01-0000-4000-8000-000000000007' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const gitCalls = recordGit();
+    let atSessionEnd = -1;
+    let cleanup: () => Promise<void> = async () => undefined;
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      cleanup = await plantIt(spec.worktree);
+      await emit(usageEvent(1, 10));
+      atSessionEnd = gitCalls.length;
+    });
+    const alert = new RecordingAlerter();
+    try {
+      await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    } finally {
+      setGitRunner(null);
+      await cleanup();
+    }
+    const halted = haltReason();
+    resetHalt();
+    await git(['worktree', 'prune'], repo);
+    expect(atSessionEnd).toBeGreaterThan(0);
+    expect(gitCalls).toHaveLength(atSessionEnd);
+    expect(halted).toMatch(/^git_tamper: /);
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'git_tamper' });
+    expect(calls).toEqual([]);
+    expect(originHas('card/abcdef01-config')).toBe(false);
+    expect(existsSync(path.join(dir, 'filter-ran.txt'))).toBe(false);
   });
 
   it('rolls the merge back, halts and runs no more git when the smoke bot plants git configuration', async () => {

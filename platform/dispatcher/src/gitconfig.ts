@@ -4,7 +4,7 @@
 // are allowed; anything else, and above all a key that runs a program (gpg.program, filter drivers,
 // core.fsmonitor, credential helpers), redirects network traffic (url.*, http.proxy) or pulls in
 // another file (include, includeIf), is refused. A line the parser cannot read is refused too.
-import { readFile } from 'node:fs/promises';
+import { lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { commonGitDir, worktreeAdminDir } from './worktree.js';
 
@@ -106,13 +106,68 @@ async function readIfPresent(file: string): Promise<string | null> {
   }
 }
 
-// Every refused key and unreadable line in the common config, the common config.worktree and, for a
-// worktree, its own config.worktree, as "<file> line <n>: <key>". Empty means allowed.
+async function exists(file: string): Promise<boolean> {
+  try {
+    await lstat(file);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function names(folder: string): Promise<string[]> {
+  try {
+    return (await readdir(folder)).sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+// Files that send git's configuration, attributes or objects somewhere else, or that git would run.
+// Git itself writes none of them for the dispatcher's use, so their presence is refused:
+// - a commondir in the main repository, which points git at another common folder;
+// - info/attributes, which can name a filter or diff driver for every path;
+// - info/grafts, which rewrites history as git reads it;
+// - objects/info/alternates and http-alternates, which read objects from elsewhere;
+// - a hook other than git's own *.sample files;
+// - a config.worktree in any worktree's folder;
+// - a worktree commondir other than git's "../..".
+export async function gitLayoutViolations(repoRoot: string): Promise<string[]> {
+  const common = await commonGitDir(repoRoot);
+  const label = (file: string) => path.relative(repoRoot, file) || file;
+  const violations: string[] = [];
+  const refusedFiles = [
+    path.join(repoRoot, '.git', 'commondir'),
+    path.join(common, 'info', 'attributes'),
+    path.join(common, 'info', 'grafts'),
+    path.join(common, 'objects', 'info', 'alternates'),
+    path.join(common, 'objects', 'info', 'http-alternates'),
+  ];
+  for (const file of [...new Set(refusedFiles)]) {
+    if (await exists(file)) violations.push(`${label(file)}: present`);
+  }
+  for (const hook of await names(path.join(common, 'hooks'))) {
+    if (!hook.endsWith('.sample')) violations.push(`${label(path.join(common, 'hooks', hook))}: a hook that is not a sample`);
+  }
+  for (const name of await names(path.join(common, 'worktrees'))) {
+    const admin = path.join(common, 'worktrees', name);
+    if (await exists(path.join(admin, 'config.worktree'))) violations.push(`${label(path.join(admin, 'config.worktree'))}: present`);
+    const commondir = await readIfPresent(path.join(admin, 'commondir'));
+    if (commondir !== null && commondir.trim() !== '../..') violations.push(`${label(path.join(admin, 'commondir'))}: not ../..`);
+  }
+  return violations;
+}
+
+// Every refused file (gitLayoutViolations), and every refused key and unreadable line in the common
+// config, the common config.worktree and, for a worktree, its own config.worktree, as
+// "<file> line <n>: <key>". Empty means allowed.
 export async function gitConfigViolations(repoRoot: string, worktree: string | null): Promise<string[]> {
   const common = await commonGitDir(repoRoot);
   const files = [path.join(common, 'config'), path.join(common, 'config.worktree')];
   if (worktree) files.push(path.join(await worktreeAdminDir(common, worktree), 'config.worktree'));
-  const violations: string[] = [];
+  const violations: string[] = await gitLayoutViolations(repoRoot);
   for (const file of files) {
     const text = await readIfPresent(file);
     if (text === null) continue;

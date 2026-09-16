@@ -29,7 +29,9 @@ export const NO_HOOKS: readonly string[] = ['-c', 'core.hooksPath=/dev/null'];
 
 // core.fsmonitor names a command git runs on status, add and diff; it is turned off the same way.
 // The commit-graph file is not read, so a graph a session wrote cannot misreport history.
-export const GIT_SWITCHES: readonly string[] = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', ...NO_HOOKS];
+// No global attributes file is read either; the repository's own info/attributes is refused outright
+// (gitconfig.ts), so no attribute can name a filter or diff driver.
+export const GIT_SWITCHES: readonly string[] = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', '-c', 'core.attributesFile=/dev/null', ...NO_HOOKS];
 
 // No system or user configuration is read, so only the repository's own configuration applies, and
 // snapshotGitState watches that. Replace refs are ignored, so a replacement object a session wrote
@@ -85,12 +87,38 @@ export function gitBaseEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return base;
 }
 
+// The folders git uses for a call in cwd, named in the environment so git never works them out
+// itself. A commondir file, in the main repository or a worktree's folder, would otherwise send git to
+// a copy of the repository the snapshot and the allowlist never read.
+// - cwd holds a .git folder: that folder is both the git dir and the common dir.
+// - cwd holds a .git file: it names <common>/worktrees/<name>, and the common dir is two levels up.
+// - neither (git init or clone, a bare repository in tests): git may not search above cwd.
+export async function gitDirEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
+  const top = path.resolve(cwd);
+  const dotGit = path.join(top, '.git');
+  let stat;
+  try {
+    stat = await lstat(dotGit);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return { GIT_CEILING_DIRECTORIES: path.dirname(top) };
+  }
+  if (stat.isDirectory()) return { GIT_DIR: dotGit, GIT_COMMON_DIR: dotGit, GIT_WORK_TREE: top };
+  if (!stat.isFile()) throw new Error(`${dotGit} is neither a folder nor a file`);
+  const pointer = /^gitdir: (.+)$/m.exec(await readFile(dotGit, 'utf8'))?.[1]?.trim();
+  if (!pointer) throw new Error(`${dotGit} names no gitdir`);
+  const admin = path.resolve(top, pointer);
+  if (path.basename(path.dirname(admin)) !== 'worktrees') throw new Error(`${dotGit} does not point into a worktrees folder`);
+  return { GIT_DIR: admin, GIT_COMMON_DIR: path.dirname(path.dirname(admin)), GIT_WORK_TREE: top };
+}
+
 // A halted dispatcher runs no git: the repository's configuration is untrusted until an operator has
 // looked and restarted it.
 async function gitRaw(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
   const halted = haltReason();
   if (halted) throw new HaltedError(halted);
-  return runner({ args: gitArgs(args), cwd, env: { ...gitBaseEnv(process.env), ...env, ...GIT_ENV }, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' });
+  const dirs = await gitDirEnv(cwd);
+  return runner({ args: gitArgs(args), cwd, env: { ...gitBaseEnv(process.env), ...env, ...dirs, ...GIT_ENV }, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' });
 }
 
 export async function git(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
@@ -476,6 +504,9 @@ export async function snapshotGitState(repoRoot: string, worktree: string): Prom
   const entries: Array<[string, string]> = [
     ['config', path.join(common, 'config')],
     ['config.worktree', path.join(common, 'config.worktree')],
+    ['commondir', path.join(common, 'commondir')],
+    ['objects/info/alternates', path.join(common, 'objects', 'info', 'alternates')],
+    ['objects/info/http-alternates', path.join(common, 'objects', 'info', 'http-alternates')],
     ['info/attributes', path.join(common, 'info', 'attributes')],
     ['info/exclude', path.join(common, 'info', 'exclude')],
     ['info/grafts', path.join(common, 'info', 'grafts')],

@@ -48,7 +48,11 @@ Out:
 ## Behaviour
 
 **Git calls.** Every git command the dispatcher runs goes through `worktree.ts`: the worktree operations, the push and the probe's worktree.
-- It starts with `-c core.fsmonitor=false -c core.commitGraph=false -c core.hooksPath=/dev/null`.
+- It starts with `-c core.fsmonitor=false -c core.commitGraph=false -c core.attributesFile=/dev/null -c core.hooksPath=/dev/null`.
+- It names the repository's folders in its environment, so git never works them out itself and never follows a `commondir` file:
+  - A call in a folder holding a `.git` folder gets `GIT_DIR` and `GIT_COMMON_DIR` set to that folder, and `GIT_WORK_TREE` set to the call's folder.
+  - A call in a worktree gets `GIT_DIR` set to the `worktrees/<name>` folder its `.git` file names, and `GIT_COMMON_DIR` set to two levels above that. A `.git` file that points anywhere but into a `worktrees` folder, or a `.git` that is neither a file nor a folder, throws.
+  - A call in a folder with no `.git` (git init or clone, and the bare repositories in tests) gets `GIT_CEILING_DIRECTORIES` set to the folder's parent, so git does not search above it.
 - Its environment is an allowlist: `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `TZ`, `TMPDIR`, `SSL_CERT_FILE`, `SSL_CERT_DIR` and `LC_*`.
 - On top of that it gets `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_NO_REPLACE_OBJECTS=1`. It also gets what the caller passes: the github.com auth header, and a commit's author and committer.
 - No inherited `GIT_*` variable, and no secret loaded from `.env`, reaches git.
@@ -59,7 +63,7 @@ Out:
 **The base.** `createWorktree` prunes stale worktree entries and fetches `+refs/heads/main:refs/remotes/origin/main`. It reads that ref's commit as `baseSha` and adds the card worktree at the sha, so git writes no upstream configuration for the branch. The worktree carries `baseSha`.
 
 **Git state.** `snapshotGitState(repoRoot, worktree)` is a sha256, read with node fs only, over:
-- the common git folder's `config`, `config.worktree`, `info/attributes`, `info/exclude`, `info/grafts` and the `hooks` listing;
+- the common git folder's `config`, `config.worktree`, `commondir`, `objects/info/alternates`, `objects/info/http-alternates`, `info/attributes`, `info/exclude`, `info/grafts` and the `hooks` listing;
 - the worktree's `config.worktree`, `commondir` and `gitdir`, found through its `.git` file;
 - the worktree's `.git` file itself.
 
@@ -78,18 +82,27 @@ A missing file is recorded as missing.
 - No per-branch key runs a program or redirects traffic. Git reads them for pull, merge and a push with no remote named, and the dispatcher runs none of those: `pushBranch` pushes to `origin` by name, and `fetchMain` fetches from `origin` by name. A `remote` or `pushRemote` naming another remote points at a `remote.<name>.*` definition, which is refused, and `remote.origin.url` is checked at startup.
 - The other allowed keys are what git writes for init, clone, fetch, worktree add, a push and branch -D. `gitconfig.test.ts` shows this for the local git (2.48.1) by running those steps and finding nothing refused. The list for Debian bookworm's 2.39 is the same set by git's documented behaviour; the first live line below confirms it.
 
-**Checks around the session.** The pipeline takes the snapshot before the session. It checks the allowlist and then the snapshot at three points, and each check runs before any git call that acts on the result:
+**The repository layout** (`gitLayoutViolations`, part of every allowlist check). These files send git's configuration, attributes or objects somewhere else, or are programs git would run. Git writes none of them for the dispatcher's use, so their presence is refused, read with node fs:
+- `.git/commondir` in the main repository;
+- `info/attributes`, since the attributes file can name a filter or diff driver for every path;
+- `info/grafts`, which rewrites history as git reads it;
+- `objects/info/alternates` and `objects/info/http-alternates`;
+- any file in `hooks` other than git's own `*.sample` files;
+- a `config.worktree` in any `worktrees/<name>` folder;
+- a `worktrees/<name>/commondir` whose content is not `../..`.
+
+**Checks around the session.** The pipeline takes the snapshot before the session. It checks the layout, the allowlist and then the snapshot at three points, and each check runs before any git call that acts on the result:
 - after the session ends, whatever the outcome;
 - right before the commit;
 - right before the push.
 
-On a refused key, a changed snapshot or an unreadable state:
+On a refused file, a refused key, a changed snapshot or an unreadable state:
 - The card is rejected `git_tamper`. The alert names the refused keys and the files to check.
 - The process-level halt is set. From then on git throws. Each tick returns sleep `halted`, claims nothing and writes the heartbeat. It does not ping the healthcheck, so healthchecks.io emails the board too.
 - Every worktree, the card's and the smoke checkout, is removed with fs only. The worktree entry and the branch are left for after the restart.
 - The halt lives in memory and never writes `studio_state.paused`, which stays the board's. The startup check below takes the place of a persisted halt.
 
-**Startup.** Before any other startup step and before any git, `checkRepositoryGit` checks the repository against the allowlist. It also requires `remote.origin.url` to be `https://github.com/<GITHUB_REPO>`, with or without `.git`. A failure is a fatal `StartupError`, so the process exits 78 and systemd does not restart it. A restart after a tamper therefore refuses to start until someone has cleaned the configuration.
+**Startup.** Before any other startup step and before any git, `checkRepositoryGit` checks the repository's layout and its configuration against the allowlist. It also requires `remote.origin.url` to be `https://github.com/<GITHUB_REPO>`, with or without `.git`. A failure is a fatal `StartupError`, so the process exits 78 and systemd does not restart it. A restart after a tamper therefore refuses to start until someone has cleaned the configuration.
 
 **The session's process group.**
 - The Claude Code child is spawned `detached`, so it leads its own process group.
@@ -176,11 +189,15 @@ A mismatch rejects the card `history`, and nothing merges. Each request that thr
 
 ## Acceptance criteria
 
-- [x] Every git call carries `-c core.fsmonitor=false -c core.commitGraph=false -c core.hooksPath=/dev/null`, the three git environment variables, no inherited `GIT_DIR` and no `.env` secret, and a five-minute SIGKILL timeout, and a planted `core.fsmonitor` does not run under the dispatcher's git.
+- [x] ~~Every git call carries `-c core.fsmonitor=false -c core.commitGraph=false -c core.hooksPath=/dev/null`, the three git environment variables, no inherited `GIT_DIR` and no `.env` secret, and a five-minute SIGKILL timeout, and a planted `core.fsmonitor` does not run under the dispatcher's git.~~ Superseded by the commondir fix below: the dispatcher now sets `GIT_DIR` itself (2026-09-16).
+- [x] Every git call carries `-c core.fsmonitor=false -c core.commitGraph=false -c core.attributesFile=/dev/null -c core.hooksPath=/dev/null`, the three git environment variables, and its own `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE` (for a repository call, `.git`; for a worktree call, `.git/worktrees/<name>` with `.git` as the common folder), never an inherited `GIT_DIR` and no `.env` secret, and a five-minute SIGKILL timeout. A planted `core.fsmonitor` does not run under the dispatcher's git.
+- [x] With `.git/commondir` pointing at a copy of the repository whose config and `info/attributes` name a clean filter, plain git runs the filter on `git add`; the dispatcher's `git add` does not, and `rev-parse --git-common-dir` reports the real `.git`.
+- [x] Startup refuses, fatally and naming the file, each of: a main `.git/commondir`, `info/attributes`, `objects/info/alternates`, `objects/info/http-alternates`, a hook that is not a sample, a worktree `config.worktree`, and a worktree `commondir` other than `../..`; it passes again once the file is gone.
+- [x] A session that plants any of those files, the `commondir` one as a copy of the repository with a smudge filter, is rejected `git_tamper` with the dispatcher halted, nothing pushed, the filter never run and zero git calls after the session.
 - [x] Once halted, `git` throws `HaltedError` and the git runner is never called.
 - [x] `createWorktree` returns the fetched main sha, the worktree is at it, and no `branch.*` configuration is written.
 - [x] `verifyCardCommit` passes one lane commit on the base and returns its paths, and fails two commits as `history`, a kernel file renamed into the lane as `lane_violation`, and a symlink or gitlink as `file_mode`.
-- [x] `snapshotGitState` changes when `core.fsmonitor` is planted, when `info/exclude` changes, when the common `config.worktree` appears and when the worktree's `.git` file changes, and returns to its value when the file is restored.
+- [x] `snapshotGitState` changes when `core.fsmonitor` is planted, when `info/exclude` changes, when the common `config.worktree`, a `commondir`, `objects/info/alternates` or `http-alternates` appears, and when the worktree's `.git` file changes, and returns to its value when the file is removed or restored.
 - [x] The allowlist finds nothing refused after init, clone, fetch, worktree add, a push and branch -D. It refuses a planted include, any key in the common `config.worktree`, every listed program-running or traffic-redirecting key, and an unreadable line.
 - [x] The allowlist lets `branch.<name>.gh-merge-base`, `vscode-merge-base`, an unknown `branch.<name>.anything` and `branch.<name>.pushRemote` through. A card still pushes to origin when its branch's `pushRemote` names another remote, and that remote's `url` and `pushurl` are refused.
 - [x] Startup exits fatally for a planted include, an origin other than the repository and an unreadable line, and passes a clean clone.
@@ -280,10 +297,20 @@ Criteria and the tests that prove them:
 - After the merge, `pnpm --filter @backseat/dispatcher test` gave `Tests  347 passed (347)`, and typecheck exit 0.
 - Per-branch keys, test first: "allows the keys git writes", "allows the per-branch keys gh, GitHub Desktop and IDEs write" and "pushes a card to origin even when the branch names another push remote" failed (`expected [ 'branch.main.gh-merge-base', …(3) ] to deeply equal []`). After the change, `gitconfig.test.ts` gave `Tests  9 passed (9)`, and the suite `Tests  349 passed (349)`.
 
+**The commondir redirect (the commit after bd4a875).** The security review of ops-separation found the gap: `commonGitDir` took `.git` as the common folder and never read `commondir`, so the snapshot and the allowlist read the clean original while git followed a planted copy.
+- Test first, with the tests written and the source unchanged: `Test Files  3 failed | 23 passed (26)`, `Tests  27 failed | 337 passed (364)`.
+- After the change, `pnpm --filter @backseat/dispatcher test` gave `Test Files  26 passed (26)`, `Tests  364 passed (364)`, twice. Typecheck exit 0.
+- Mutation check, reverted afterwards: with the explicit git folders left out of git's environment, "ignores a commondir that points git at a planted copy" failed, because plain git reported the planted copy as its common folder.
+- Tests:
+  - `worktree.test.ts`: the redirect with a clean filter, the snapshot additions, and the environment of every call.
+  - `gitconfig.test.ts`: startup refuses each file.
+  - `pipeline.test.ts`: each file planted during a session.
+
 Pending: the three live lines.
 
 ## Residual risks
 
+- A `.sample` hook is allowed because git never runs a file with that suffix; a tool that installs real hooks in the repository (husky, pre-commit, lefthook) refuses startup. The same goes for a worktree someone added with per-worktree configuration.
 - The session runs as the dispatcher's user. Code it runs can read the dispatcher's environment through `/proc`, and a process that calls `setsid` survives the group kill and can write configuration after the last check before the push. The permission policy and the Bash sandbox are what contain it. The checks here make the dispatcher's own git fail closed; they do not contain the session.
 - The allowlist is fail-closed. A tool that writes an unlisted key outside `branch.<name>.*` into the repository configuration, on the VPS or on a board member's machine running attended, stops the dispatcher at the next check or startup. Per-branch keys from gh, GitHub Desktop and IDEs are allowed.
 - The 2.39 key set rests on git's documented behaviour, not a run on that version; the first live line checks it.
@@ -309,5 +336,6 @@ Pending: the three live lines.
 - 2026-09-16: the merge lock covers the remote range check, the merge, verification and rollback, but not the gate wait, so a slow gate does not hold up another card's verification.
 - 2026-09-16: recovery reads main's head before re-verifying and leaves the card to the board once main has moved. A smoke test against a newer build, or a revert that cannot land, would do harm or nothing.
 - 2026-09-16: the `smoke_pass` event uses the existing `message` type, since `agent_event_type` has no free value and migrations are out of scope. The site reads event types only, never payloads.
+- 2026-09-16: git's folders are named in its environment rather than checked after the fact, so a `commondir` file cannot redirect a dispatcher git call even between two checks. The layout check refuses the files that redirect or run anything anyway, at startup and at every check, so a planted file is reported and halts rather than lying inert. `info/grafts` is refused with them, though the review did not name it: git writes none, and it changes history as git reads it.
 - 2026-09-16: every `branch.<name>.<key>` is allowed, `pushRemote` naming another remote included. The dispatcher names `origin` on every fetch and push, so git never reads a per-branch remote for its own calls, and the remote such a key names is still refused. A founder's checkout carries per-branch keys from gh and IDEs, and refusing them would stop attended runs for nothing.
 - 2026-09-16: the `merge_unknown` marker is `failing_check` on the gated card as well as an event. `failing_check` belongs to the current claim, since gating clears it; an event from an earlier claim of the same card would mislead recovery.

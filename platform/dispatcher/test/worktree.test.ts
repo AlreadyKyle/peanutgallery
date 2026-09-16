@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { appendFile, mkdtemp, rm, symlink, writeFile, mkdir } from 'node:fs/promises';
+import { appendFile, cp, mkdtemp, rm, symlink, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -275,7 +275,7 @@ describe('git hooks', () => {
 
   it('puts the fsmonitor and hooks switches before every subcommand', () => {
     expect(NO_HOOKS).toEqual(['-c', 'core.hooksPath=/dev/null']);
-    const switches = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', '-c', 'core.hooksPath=/dev/null'];
+    const switches = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', '-c', 'core.attributesFile=/dev/null', '-c', 'core.hooksPath=/dev/null'];
     expect(GIT_SWITCHES).toEqual(switches);
     expect(gitArgs(['status', '--porcelain'])).toEqual([...switches, 'status', '--porcelain']);
     expect(gitArgs(['push', 'origin'])).toEqual([...switches, 'push', 'origin']);
@@ -440,10 +440,44 @@ describe('the committed range and the git state', () => {
     expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
     await rm(path.join(repo, '.git', 'config.worktree'));
     expect(await snapshotGitState(repo, worktree.path)).toBe(before);
+    for (const planted of [path.join(repo, '.git', 'commondir'), path.join(repo, '.git', 'objects', 'info', 'alternates'), path.join(repo, '.git', 'objects', 'info', 'http-alternates')]) {
+      await writeFile(planted, `${path.join(dir, 'elsewhere')}\n`, 'utf8');
+      expect(await snapshotGitState(repo, worktree.path), planted).not.toBe(before);
+      await rm(planted);
+    }
+    expect(await snapshotGitState(repo, worktree.path)).toBe(before);
     await writeFile(path.join(worktree.path, '.git'), `gitdir: ${path.join(dir, 'elsewhere')}\n`, 'utf8');
     expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
     await rm(worktree.path, { recursive: true, force: true });
     await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('ignores a commondir that points git at a planted copy of the repository with a filter in it', async () => {
+    const marker = path.join(dir, 'filter-ran.txt');
+    const evil = path.join(repo, 'seed-1', 'content', 'evil.git');
+    const commondir = path.join(repo, '.git', 'commondir');
+    try {
+      await cp(path.join(repo, '.git'), evil, { recursive: true });
+      await appendFile(path.join(evil, 'config'), `[filter "x"]\n\tclean = "echo ran >> '${marker}'; cat"\n\tsmudge = "echo ran >> '${marker}'; cat"\n`, 'utf8');
+      await mkdir(path.join(evil, 'info'), { recursive: true });
+      await writeFile(path.join(evil, 'info', 'attributes'), '* filter=x\n', 'utf8');
+      await writeFile(commondir, `${evil}\n`, 'utf8');
+      // Control: git without the dispatcher's environment follows commondir and runs the filter.
+      await writeFile(path.join(repo, 'control.txt'), 'control\n', 'utf8');
+      execFileSync('git', ['add', '--', 'control.txt'], { cwd: repo, stdio: 'pipe' });
+      expect(readFileSync(marker, 'utf8')).toContain('ran');
+      await rm(marker, { force: true });
+      await writeFile(path.join(repo, 'dispatcher.txt'), 'dispatcher\n', 'utf8');
+      await git(['add', '--', 'dispatcher.txt'], repo);
+      expect(await git(['rev-parse', '--git-common-dir'], repo)).toBe(path.join(repo, '.git'));
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      await rm(commondir, { force: true });
+      execFileSync('git', ['rm', '-q', '--cached', '--ignore-unmatch', 'control.txt', 'dispatcher.txt'], { cwd: repo, stdio: 'pipe' });
+      await rm(path.join(repo, 'control.txt'), { force: true });
+      await rm(path.join(repo, 'dispatcher.txt'), { force: true });
+      await rm(evil, { recursive: true, force: true });
+    }
   });
 
   it('runs no git at all once the dispatcher is halted', async () => {
@@ -496,8 +530,20 @@ describe('the committed range and the git state', () => {
       expect(call.args.slice(0, GIT_SWITCHES.length)).toEqual([...GIT_SWITCHES]);
       expect(call.env).toMatchObject(GIT_ENV);
       // Only the git variables the dispatcher sets itself: the fixed environment, and a commit's author.
-      expect(Object.keys(call.env).filter((name) => name.startsWith('GIT_') && !(name in GIT_ENV) && !/^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)$/.test(name))).toEqual([]);
-      expect(call.env).not.toHaveProperty('GIT_DIR');
+      // Only the git variables the dispatcher sets itself: the fixed environment, the repository's own
+      // folders, and a commit's author.
+      expect(
+        Object.keys(call.env).filter(
+          (name) => name.startsWith('GIT_') && !(name in GIT_ENV) && !/^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)$/.test(name) && !/^GIT_(DIR|COMMON_DIR|WORK_TREE)$/.test(name),
+        ),
+      ).toEqual([]);
+      expect(call.env.GIT_DIR).not.toBe(path.join(dir, 'nowhere.git'));
+      // git writes the worktree's gitdir as a real path (/private/var on macOS, where /var links to it);
+      // the worktree is gone by now, so the prefix is dropped rather than resolved.
+      const real = (value: string | undefined) => (value ?? '').replace(/^\/private(?=\/)/, '');
+      expect(real(call.env.GIT_COMMON_DIR)).toBe(real(path.join(repo, '.git')));
+      expect(real(call.env.GIT_WORK_TREE)).toBe(real(call.cwd));
+      expect(real(call.env.GIT_DIR)).toBe(real(call.cwd === repo ? path.join(repo, '.git') : path.join(repo, '.git', 'worktrees', 'card-cdcdcdcd')));
       expect(call.env).not.toHaveProperty('SUPABASE_SERVICE_ROLE_KEY');
       expect(call.timeout).toBe(GIT_TIMEOUT_MS);
       expect(call.killSignal).toBe('SIGKILL');

@@ -189,6 +189,58 @@ describe('the repository git configuration', () => {
     }
   });
 
+  // Files that redirect where git reads configuration, attributes or objects, or that git would run.
+  const PLANTS: Array<[string, (worktreeAdmin: string) => Promise<string>]> = [
+    ['a commondir in the main repository', async () => plant(path.join(repo, '.git', 'commondir'), `${path.join(dir, 'evil.git')}\n`)],
+    ['info/attributes', async () => plant(path.join(repo, '.git', 'info', 'attributes'), '* filter=x\n')],
+    ['objects/info/alternates', async () => plant(path.join(repo, '.git', 'objects', 'info', 'alternates'), `${path.join(dir, 'evil.git', 'objects')}\n`)],
+    ['objects/info/http-alternates', async () => plant(path.join(repo, '.git', 'objects', 'info', 'http-alternates'), 'https://evil.example/objects\n')],
+    ['a hook that is not a sample', async () => plant(path.join(repo, '.git', 'hooks', 'post-checkout'), '#!/bin/sh\nexit 0\n')],
+    ['a worktree config.worktree', async (admin) => plant(path.join(admin, 'config.worktree'), '[core]\n\tbare = false\n')],
+    ['a worktree commondir that is not ../..', async (admin) => plant(path.join(admin, 'commondir'), `${path.join(dir, 'evil.git')}\n`)],
+  ];
+
+  const planted: string[] = [];
+  async function plant(file: string, content: string): Promise<string> {
+    await mkdir(path.dirname(file), { recursive: true });
+    const before = await readFile(file, 'utf8').catch(() => null);
+    planted.push(before === null ? `rm:${file}` : `restore:${file}:${before}`);
+    await writeFile(file, content, 'utf8');
+    return file;
+  }
+  async function unplant(): Promise<void> {
+    for (const entry of planted.splice(0).reverse()) {
+      if (entry.startsWith('rm:')) await rm(entry.slice(3), { force: true });
+      else {
+        const [, file, ...content] = entry.split(':');
+        await writeFile(file!, content.join(':'), 'utf8');
+      }
+    }
+  }
+
+  it.each(PLANTS)('refuses to start with %s, and passes again once it is gone', async (_name, place) => {
+    await git(['remote', 'set-url', 'origin', 'https://github.com/owner/repo.git'], repo);
+    clean = await readFile(path.join(repo, '.git', 'config'), 'utf8');
+    // Added locally: origin now names github.com, which the test does not fetch.
+    const worktree = { path: path.join(dir, 'worktrees', 'plant-6e6e6e6e'), branch: null };
+    await git(['worktree', 'add', '--detach', worktree.path, 'HEAD'], repo);
+    const admin = path.join(repo, '.git', 'worktrees', path.basename(worktree.path));
+    try {
+      await expect(checkRepositoryGit(repo, 'owner/repo')).resolves.toBeUndefined();
+      const file = await place(admin);
+      const refused = await checkRepositoryGit(repo, 'owner/repo').catch((error: unknown) => error);
+      expect(refused).toBeInstanceOf(StartupError);
+      expect((refused as StartupError).fatal).toBe(true);
+      expect((refused as StartupError).message).toContain(path.relative(repo, file));
+      expect(await gitConfigViolations(repo, worktree.path)).not.toEqual([]);
+      await unplant();
+      await expect(checkRepositoryGit(repo, 'owner/repo')).resolves.toBeUndefined();
+    } finally {
+      await unplant();
+      await removeWorktree(repo, worktree.path, worktree.branch);
+    }
+  });
+
   it('finds nothing to refuse in what git itself wrote', async () => {
     expect(await gitConfigViolations(repo, null)).toEqual([]);
   });
