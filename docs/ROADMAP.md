@@ -48,6 +48,7 @@ Phases 3 and 4 can run in parallel with 2. Phase 5 needs 1 and 2. Phase 6 needs 
 | `specs/site-layout.md` | done |
 | `specs/unattended-mode.md` | built (live on the VPS in 5) |
 | `specs/live-cut.md` | agreed (criteria 2 and 7 close with phases 2 and 5) |
+| `specs/stale-tab.md` | built (live check on the next deploy) |
 
 ## After live
 
