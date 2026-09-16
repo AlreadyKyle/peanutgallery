@@ -1,6 +1,6 @@
 // GitHub: push the card branch, open the pull request, poll the gate check-run for the exact
 // head sha, and squash-merge with a sha guard. The dispatcher is the merge enforcer.
-import { git, gitAuthArgs } from './worktree.js';
+import { git, gitAuthEnv } from './worktree.js';
 import { sleep } from './time.js';
 
 export interface GitHubOptions {
@@ -48,7 +48,7 @@ function apiMessage(json: unknown): string {
 
 // Card branches belong to the dispatcher; a stale branch from an interrupted run is overwritten.
 export async function pushBranch(worktree: string, branch: string, token: string): Promise<void> {
-  await git([...gitAuthArgs(token), 'push', '--force', 'origin', `HEAD:refs/heads/${branch}`], worktree);
+  await git(['push', '--force', 'origin', `HEAD:refs/heads/${branch}`], worktree, gitAuthEnv(token));
 }
 
 export interface PullRequest {

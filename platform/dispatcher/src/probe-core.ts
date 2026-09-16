@@ -63,29 +63,51 @@ export function memoryPaths(init: Record<string, unknown> | null): string[] {
   return [];
 }
 
-// The reason the probe fails, or null when every rule holds.
-export function judge(mode: AgentMode, raw: readonly string[], events: readonly AgentEvent[], result: SessionResult): string | null {
-  if (raw.length === 0) return 'claude produced no stream output';
+// Why the probe failed, and whether a retry could change the verdict. The tool list, the memory
+// paths and the account an init line reports follow from the image, the command line and the
+// environment, so they come out the same on every restart: fatal. A missing stream, a missing init
+// line or an error result can be a network or API failure that passes on the next start: not fatal.
+export interface ProbeFailure {
+  reason: string;
+  fatal: boolean;
+}
+
+function transient(reason: string): ProbeFailure {
+  return { reason, fatal: false };
+}
+
+function fatal(reason: string): ProbeFailure {
+  return { reason, fatal: true };
+}
+
+// The probe's failure, or null when every rule holds.
+export function verdict(mode: AgentMode, raw: readonly string[], events: readonly AgentEvent[], result: SessionResult): ProbeFailure | null {
+  if (raw.length === 0) return transient('claude produced no stream output');
   const start = events.find((event) => event.type === 'start');
-  if (!start || start.type !== 'start') return 'no system init line in the stream';
-  if (start.tools.length === 0) return 'init line lists no tools';
+  if (!start || start.type !== 'start') return transient('no system init line in the stream');
+  if (start.tools.length === 0) return fatal('init line lists no tools');
   const forbidden = raw.flatMap((line) => [...line.matchAll(FORBIDDEN)].map((match) => match[0]));
-  if (forbidden.length > 0) return `forbidden tool names in the stream: ${[...new Set(forbidden)].join(', ')}`;
+  if (forbidden.length > 0) return fatal(`forbidden tool names in the stream: ${[...new Set(forbidden)].join(', ')}`);
   const memory = memoryPaths(initRecord(raw));
-  if (memory.length > 0) return `memory paths registered for the session: ${memory.join(', ')}`;
+  if (memory.length > 0) return fatal(`memory paths registered for the session: ${memory.join(', ')}`);
   const source = start.apiKeySource ?? 'unreported';
   if (mode === 'unattended' && start.apiKeySource !== API_KEY_SOURCE) {
-    return `apiKeySource is ${source}; unattended mode bills ${API_KEY_SOURCE} and nothing else`;
+    return fatal(`apiKeySource is ${source}; unattended mode bills ${API_KEY_SOURCE} and nothing else`);
   }
   if (mode === 'attended' && start.apiKeySource === API_KEY_SOURCE) {
-    return `apiKeySource is ${API_KEY_SOURCE}; attended mode runs on the subscription, not on a key`;
+    return fatal(`apiKeySource is ${API_KEY_SOURCE}; attended mode runs on the subscription, not on a key`);
   }
   if (result.isError) {
     const end = events.find((event) => event.type === 'end');
     const text = end?.type === 'end' && end.result ? `: ${end.result.split('\n')[0]}` : '';
-    return `session ended in error${text}`;
+    return transient(`session ended in error${text}`);
   }
   return null;
+}
+
+// The reason the probe fails, or null when every rule holds.
+export function judge(mode: AgentMode, raw: readonly string[], events: readonly AgentEvent[], result: SessionResult): string | null {
+  return verdict(mode, raw, events, result)?.reason ?? null;
 }
 
 export interface ProbeOptions {
@@ -100,6 +122,8 @@ export interface ProbeOptions {
 export interface ProbeResult {
   ok: boolean;
   reason: string | null;
+  // True when the failure cannot change on retry (see verdict); false when the probe passed.
+  fatal: boolean;
   tools: string[];
   apiKeySource: string | null;
   // The model the stream reported, for pricing; null when no turn reported one.
@@ -152,13 +176,14 @@ export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Pr
       raw.push(clean);
       options.onRawLine?.(clean);
     });
-    const reason = judge(adapter.mode, raw, events, result);
+    const failure = verdict(adapter.mode, raw, events, result);
     const start = events.find((event) => event.type === 'start');
     const end = events.find((event) => event.type === 'end');
     const summed = sumUsage(events);
     return {
-      ok: reason === null,
-      reason,
+      ok: failure === null,
+      reason: failure?.reason ?? null,
+      fatal: failure?.fatal ?? false,
       tools: start?.type === 'start' ? start.tools : [],
       apiKeySource: start?.type === 'start' ? start.apiKeySource : null,
       model: summed.model ?? (start?.type === 'start' ? start.model : null),

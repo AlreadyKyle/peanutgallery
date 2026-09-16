@@ -1,16 +1,18 @@
 // Seed: roles, studio_state, pool, stream_state and board_members. Idempotent;
-// service role; reads .env at the repo root. Next cards are filed separately
-// by scripts/file-next-cards.ts.
+// service role; reads .env at the repo root. studio_state is inserted only when
+// missing and warns when .env differs from the live row. Next cards are filed
+// separately by scripts/file-next-cards.ts.
 //   pnpm --filter @backseat/supabase seed
 //   pnpm --filter @backseat/supabase seed -- --week1-test [--run 1|2|3]
 
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadRepoEnv, REPO_ROOT, serviceClient } from "./lib/client.js";
-import { parseBoardMembers, requireEnv, requireUsd, todayInNewYork, type Env } from "./lib/env.js";
+import { parseBoardMembers, todayInNewYork, type Env } from "./lib/env.js";
 import { readRoleSpecs } from "./lib/role-files.js";
 import { resolveModel } from "./lib/roles.js";
 import { parseSeedArgs, UsageError } from "./lib/seed-args.js";
+import { seedStudioState, supabaseStudioStateStore } from "./lib/studio-state.js";
 import { week1Card, WEEK1_EXECUTOR_ROLE, type Week1Run } from "./lib/week1.js";
 
 const AGENTS_DIR = resolve(REPO_ROOT, "platform", "agents");
@@ -42,18 +44,6 @@ async function seedRoles(db: SupabaseClient, env: Env): Promise<void> {
   }));
   check("roles upsert", await db.from("roles").upsert(rows, { onConflict: "name" }));
   console.log(`roles: ${rows.length} upserted`);
-}
-
-async function seedStudioState(db: SupabaseClient, env: Env): Promise<void> {
-  const row = {
-    id: 1,
-    daily_cap_usd: requireUsd(env, "POOL_DAILY_CAP_USD"),
-    card_max_usd: requireUsd(env, "CARD_MAX_USD"),
-    agent_hourly_rate_usd: requireUsd(env, "AGENT_HOURLY_RATE_USD"),
-    agent_mode: requireEnv(env, "AGENT_MODE"),
-  };
-  check("studio_state upsert", await db.from("studio_state").upsert(row, { onConflict: "id" }));
-  console.log(`studio_state: daily cap ${row.daily_cap_usd}, card max ${row.card_max_usd}, rate ${row.agent_hourly_rate_usd}, mode ${row.agent_mode}`);
 }
 
 async function seedPool(db: SupabaseClient): Promise<void> {
@@ -109,7 +99,8 @@ async function main(): Promise<void> {
   const db = serviceClient(env);
 
   await seedRoles(db, env);
-  await seedStudioState(db, env);
+  // Insert-if-missing: the live mode and caps belong to /board, never to this machine's .env.
+  await seedStudioState(supabaseStudioStateStore(db), env, (line) => console.log(line));
   await seedPool(db);
   await seedStreamState(db);
   await seedBoardMembers(db, env);

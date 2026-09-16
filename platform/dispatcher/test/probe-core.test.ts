@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseStream } from '../src/adapters/stream.js';
 import type { SessionResult } from '../src/adapters/types.js';
-import { PROMPT, initRecord, judge, memoryPaths, replacePaths, sumUsage } from '../src/probe-core.js';
+import { PROMPT, initRecord, judge, memoryPaths, replacePaths, sumUsage, verdict } from '../src/probe-core.js';
 
 const fixture = readFileSync(new URL('./fixtures/sample-stream.jsonl', import.meta.url), 'utf8');
 
@@ -53,6 +53,33 @@ describe('judge', () => {
   it('fails a session that ended in error, quoting the first line of the result', () => {
     const errored = attendedRaw.map((line) => line.replace('"result":"The gatherer baseCost is now 11 and the check line holds."', '"result":"Not logged in\\nRun claude login"'));
     expect(judge('attended', errored, events(errored), { ...ok, isError: true })).toBe('session ended in error: Not logged in');
+  });
+});
+
+describe('verdict', () => {
+  it('passes what judge passes', () => {
+    expect(verdict('attended', attendedRaw, events(attendedRaw), ok)).toBeNull();
+    expect(verdict('unattended', unattendedRaw, events(unattendedRaw), ok)).toBeNull();
+  });
+
+  // What the image, the command line and the environment decide comes out the same on every start.
+  it('marks failures that cannot change on retry as fatal', () => {
+    const noTools = unattendedRaw.map((line) => line.replace('"tools":["Bash","Edit","Glob","Grep","Read","Write"]', '"tools":[]'));
+    const withWeb = [...unattendedRaw.slice(0, 1), unattendedRaw[1]!.replace('Reading the spawn table before changing it.', 'Tools: Read, WebSearch'), ...unattendedRaw.slice(2)];
+    const withMemory = [unattendedRaw[0]!.replace('"mcp_servers":[]', '"memory_paths":["<home>/.claude/memory/MEMORY.md"],"mcp_servers":[]'), ...unattendedRaw.slice(1)];
+    expect(verdict('unattended', noTools, events(noTools), ok)).toEqual({ reason: 'init line lists no tools', fatal: true });
+    expect(verdict('unattended', withWeb, events(withWeb), ok)).toEqual({ reason: 'forbidden tool names in the stream: WebSearch', fatal: true });
+    expect(verdict('unattended', withMemory, events(withMemory), ok)).toEqual({ reason: 'memory paths registered for the session: <home>/.claude/memory/MEMORY.md', fatal: true });
+    expect(verdict('unattended', attendedRaw, events(attendedRaw), ok)).toEqual({ reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', fatal: true });
+    expect(verdict('attended', unattendedRaw, events(unattendedRaw), ok)).toEqual({ reason: 'apiKeySource is ANTHROPIC_API_KEY; attended mode runs on the subscription, not on a key', fatal: true });
+  });
+
+  // A network or API failure can pass on the next start.
+  it('marks failures a retry can clear as not fatal', () => {
+    expect(verdict('unattended', [], [], ok)).toEqual({ reason: 'claude produced no stream output', fatal: false });
+    expect(verdict('unattended', ['warning: not a stream line'], [], ok)).toEqual({ reason: 'no system init line in the stream', fatal: false });
+    const errored = unattendedRaw.map((line) => line.replace('"result":"The gatherer baseCost is now 11 and the check line holds."', '"result":"API Error: 529 overloaded"'));
+    expect(verdict('unattended', errored, events(errored), { ...ok, isError: true })).toEqual({ reason: 'session ended in error: API Error: 529 overloaded', fatal: false });
   });
 });
 
