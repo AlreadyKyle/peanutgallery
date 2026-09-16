@@ -1563,6 +1563,10 @@ Deno.test("migrations on PGlite", {
         } finally {
           await db.exec(`reset role`);
         }
+      },
+    );
+
+    await t.step(
       "a $120 payment credits $50 today, holds the rest, and the release credits it once after 14 days",
       async () => {
         // The incident reserve at its cap keeps the agents share whole as pool credit.
@@ -1665,7 +1669,6 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "function privileges: anon none, authenticated the eleven board RPCs, service_role the fourteen, one file_card",
       "a refund cancels the hold first, follows Stripe's cumulative total and a replay changes nothing",
       async () => {
         // The incident reserve at its cap keeps the agents share whole as pool credit.
@@ -1878,7 +1881,7 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
-      "function privileges: anon none, authenticated the ten board RPCs, service_role the fifteen, one file_card",
+      "function privileges: anon none, authenticated the eleven board RPCs, service_role the sixteen, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
