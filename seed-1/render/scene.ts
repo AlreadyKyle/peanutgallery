@@ -4,7 +4,6 @@ import {
   costOf,
   createSim,
   isUnitAvailable,
-  isUnlocked,
   nextLockedUnlock,
   ownedCount,
   ratePerSecond,
@@ -12,15 +11,15 @@ import {
 } from '../sim/sim';
 import type { SimState, UnlockRow } from '../sim/types';
 import { fill, formatDust, formatPercent, formatRate } from './format';
+import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
-export const SCREEN_WIDTH = 420;
-export const SCREEN_HEIGHT = 880;
+export { SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
 
 const MARGIN = 16;
 const CONTENT_WIDTH = SCREEN_WIDTH - MARGIN * 2;
 const UNIT_ROW_HEIGHT = 58;
-const UNLOCK_ROW_HEIGHT = 22;
+const MAX_UNLOCK_LINES = 1 + MAX_UNEARNED_UNLOCK_LINES;
 
 const COLORS = {
   background: 0x12161c,
@@ -46,8 +45,7 @@ interface UnitRow {
   buttonLabel: Phaser.GameObjects.Text;
 }
 
-interface UnlockLine {
-  row: UnlockRow;
+interface UnlockSlot {
   dot: Phaser.GameObjects.Arc;
   label: Phaser.GameObjects.Text;
 }
@@ -67,7 +65,8 @@ export class DustScene extends Phaser.Scene {
   private progressTop = 0;
   private unitsTop = 0;
   private unitRows: UnitRow[] = [];
-  private unlockLines: UnlockLine[] = [];
+  private unlockListTop = 0;
+  private unlockSlots: UnlockSlot[] = [];
   private drawnUnlockCount = -1;
 
   constructor(data: GameData, seed: number) {
@@ -157,11 +156,11 @@ export class DustScene extends Phaser.Scene {
     this.progressTop = y;
     this.progressBar = this.add.graphics();
     y += 14;
-    for (const row of config.unlocks.unlocks) {
+    this.unlockListTop = y;
+    for (let i = 0; i < MAX_UNLOCK_LINES; i += 1) {
       const dot = this.add.circle(MARGIN + 6, y + 9, 5, COLORS.bar).setStrokeStyle(1, COLORS.bar);
       const label = this.add.text(MARGIN + 18, y, '', textStyle(12, COLORS.muted));
-      this.unlockLines.push({ row, dot, label });
-      y += UNLOCK_ROW_HEIGHT;
+      this.unlockSlots.push({ dot, label });
     }
   }
 
@@ -215,11 +214,30 @@ export class DustScene extends Phaser.Scene {
 
     if (this.drawnUnlockCount !== state.unlocked.length) {
       this.drawnUnlockCount = state.unlocked.length;
-      for (const line of this.unlockLines) {
-        const open = isUnlocked(state, line.row.id);
-        line.dot.setFillStyle(COLORS.bar, open ? 1 : 0);
-        line.label.setText(`${line.row.name}: ${this.describeEffect(line.row)} ${open ? '' : `(${formatDust(line.row.atTotalDust)})`}`.trimEnd());
-        line.label.setColor(open ? COLORS.text : COLORS.muted);
+      const earnedIds = new Set(state.unlocked.map((event) => event.id));
+      const lines = layoutUnlockList(this.unlockListTop, config.unlocks.unlocks, earnedIds);
+      for (let i = 0; i < this.unlockSlots.length; i += 1) {
+        const slot = this.unlockSlots[i];
+        const line = lines[i];
+        if (slot === undefined) continue;
+        if (line === undefined) {
+          slot.dot.setVisible(false);
+          slot.label.setVisible(false);
+          continue;
+        }
+        slot.dot.setY(line.y + 9);
+        slot.label.setY(line.y);
+        slot.label.setVisible(true);
+        if (line.kind === 'earned') {
+          slot.dot.setVisible(false);
+          slot.label.setText(fill(strings.labels.unlocksEarned, { count: String(line.count) }));
+          slot.label.setColor(COLORS.text);
+        } else {
+          slot.dot.setVisible(true);
+          slot.dot.setFillStyle(COLORS.bar, 0);
+          slot.label.setText(`${line.row.name}: ${this.describeEffect(line.row)} (${formatDust(line.row.atTotalDust)})`);
+          slot.label.setColor(COLORS.muted);
+        }
       }
     }
   }
