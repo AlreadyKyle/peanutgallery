@@ -24,7 +24,7 @@ function readSavedState(): SimState | null {
 function start(): void {
   loadGameData()
     .then((data) => {
-      document.title = data.strings.title;
+      document.title = data.strings.tabTitle;
       statusElement()?.remove();
       // The play seed is the wall-clock second the page opened, so strikes
       // roll differently per visit while the bot keeps its fixed seed.
