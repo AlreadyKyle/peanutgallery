@@ -154,6 +154,7 @@ Deno.test("migrations on PGlite", {
         "20260919000000_board_two_factor.sql",
         "20260919000100_card_spend.sql",
         "20260920000000_refunds_and_holds.sql",
+        "20260921000200_ledger_request_id.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -732,6 +733,82 @@ Deno.test("migrations on PGlite", {
           `select public.record_usage(null, null, 'builder-model-id', 1, 0, 1, 0.01, null)`,
           "p_billed_to is required",
         );
+      },
+    );
+
+    await t.step(
+      "record_usage writes a request id once, and without one as before",
+      async () => {
+        const ledgerCount = async (where: string, params: unknown[] = []) =>
+          Number((await row<{ n: string }>(`select count(*)::text as n from public.ledger where ${where}`, params)).n);
+        const studio = (requestId: string | null) =>
+          row<{ r: Row }>(
+            `select public.record_usage(null, $1, 'builder-model-id', 10, 0, 10, 0.25, 'studio', $2) as r`,
+            [roleId, requestId],
+          );
+        const before = await pool();
+        const cardBefore = await row<{ actual_usd: string }>(`select actual_usd from public.cards where id = $1`, [oneoffCardId]);
+        const ledgerBefore = await rows<{ id: string }>(`select id from public.ledger`);
+        const debited = async (usd: string) => {
+          const now = await pool();
+          assertEquals((Number(before.balance_usd) - Number(now.balance_usd)).toFixed(4), usd);
+          assertEquals((Number(now.daily_spent_usd) - Number(before.daily_spent_usd)).toFixed(4), usd);
+        };
+
+        const first = await studio("probe/one/turn/1");
+        const again = await studio("probe/one/turn/1");
+        assertEquals(again.r.ledger_id, first.r.ledger_id);
+        assertEquals(again.r.balance_usd, first.r.balance_usd);
+        assertEquals(again.r.daily_spent_usd, first.r.daily_spent_usd);
+        assertEquals(await ledgerCount("request_id = $1", ["probe/one/turn/1"]), 1);
+        await debited("0.2500");
+
+        const other = await studio("probe/one/turn/2");
+        assertNotEquals(other.r.ledger_id, first.r.ledger_id);
+        await debited("0.5000");
+
+        const nullsBefore = await ledgerCount("request_id is null");
+        await studio(null);
+        await studio(null);
+        assertEquals(await ledgerCount("request_id is null"), nullsBefore + 2);
+        await debited("1.0000");
+
+        // A founder row on a card: the card is charged once and the retry reports its total.
+        const card = await row<{ actual_usd: string }>(`select actual_usd from public.cards where id = $1`, [oneoffCardId]);
+        const founder = (requestId: string) =>
+          row<{ r: Row }>(
+            `select public.record_usage($1, $2, 'builder-model-id', 5, 0, 5, 0.1, 'founder', $3) as r`,
+            [oneoffCardId, roleId, requestId],
+          );
+        const charged = await founder("card/one/settle/1");
+        const retried = await founder("card/one/settle/1");
+        assertEquals(retried.r, charged.r);
+        const after = await row<{ actual_usd: string }>(`select actual_usd from public.cards where id = $1`, [oneoffCardId]);
+        assertEquals((Number(after.actual_usd) - Number(card.actual_usd)).toFixed(4), "0.1000");
+        await debited("1.0000");
+
+        // The old named-argument call, as supabase-js sends it before the dispatcher passes an id.
+        const named = await row<{ r: Row }>(
+          `select public.record_usage(p_card_id => null, p_role_id => $1, p_model => 'builder-model-id', p_input_tokens => 1, p_cached_tokens => 0, p_output_tokens => 1, p_usd => 0.01, p_billed_to => 'studio') as r`,
+          [roleId],
+        );
+        const namedRow = await row(`select request_id, usd from public.ledger where id = $1`, [named.r.ledger_id]);
+        assertEquals(namedRow, { request_id: null, usd: "0.0100" });
+        await debited("1.0100");
+
+        const signatures = await rows(
+          `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'record_usage'`,
+        );
+        assertEquals(signatures, [{
+          args:
+            "p_card_id uuid, p_role_id uuid, p_model text, p_input_tokens integer, p_cached_tokens integer, p_output_tokens integer, p_usd numeric, p_billed_to ledger_billing, p_request_id text",
+        }]);
+
+        // Later steps pin the ledger totals, so the rows this step wrote are taken back out.
+        await db.query(`delete from public.ledger where not (id = any($1::uuid[]))`, [ledgerBefore.map((l) => l.id)]);
+        await db.query(`update public.pool set balance_usd = $1, daily_spent_usd = $2 where id = 1`, [before.balance_usd, before.daily_spent_usd]);
+        await db.query(`update public.cards set actual_usd = $1 where id = $2`, [cardBefore.actual_usd, oneoffCardId]);
+        assertEquals(await pool(), before);
       },
     );
 

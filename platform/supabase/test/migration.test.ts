@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -714,5 +714,121 @@ describe("refunds-and-holds migration", () => {
     );
     expect(guard).toBeGreaterThan(0);
     expect(schedule).toBeGreaterThan(guard);
+  });
+});
+
+const LEDGER_REQUEST_ID_FILE = "20260921000200_ledger_request_id.sql";
+const ledgerRequestIdPath = resolve(MIGRATIONS_DIR, LEDGER_REQUEST_ID_FILE);
+const ledgerRequestId = existsSync(ledgerRequestIdPath) ? readFileSync(ledgerRequestIdPath, "utf8") : "";
+// The open-goal-funding and public-card-columns migrations (pull request 32); this one sorts after them.
+const OPEN_GOAL_FUNDING_FILE = "20260921000000_open_goal_funding.sql";
+const PUBLIC_CARD_COLUMNS_FILE = "20260921000100_public_card_columns.sql";
+const REQUEST_ID_USAGE_TYPES = `${NEW_USAGE_TYPES}, text`;
+
+// The only changes allowed to the founder-billing record_usage: the trailing argument, one variable,
+// the retry check before the insert, and the request id on the inserted row.
+const REQUEST_ID_CHECK = `  -- A repeated request id is a retry of a write that already landed: return
+  -- that row's result and change nothing. The card lock above, or the pool
+  -- lock when there is no card, makes a concurrent retry wait for the first.
+  if p_request_id is not null then
+    if p_card_id is null then
+      perform 1 from public.pool where id = 1 for update;
+    end if;
+    select id into v_existing from public.ledger where request_id = p_request_id;
+    if found then
+      select balance_usd, daily_spent_usd into v_balance, v_daily from public.pool where id = 1;
+      if p_card_id is not null then
+        select actual_usd into v_actual from public.cards where id = p_card_id;
+      end if;
+      return jsonb_build_object(
+        'ledger_id', v_existing,
+        'balance_usd', v_balance,
+        'daily_spent_usd', v_daily,
+        'actual_usd', v_actual
+      );
+    end if;
+  end if;
+
+`;
+
+function expectedRequestIdBody(previous: string): string {
+  const swaps: Array<[string, string]> = [
+    [
+      "  p_billed_to public.ledger_billing default 'studio'\n) returns jsonb",
+      "  p_billed_to public.ledger_billing default 'studio',\n  p_request_id text default null\n) returns jsonb",
+    ],
+    ["  v_actual numeric(12,4);\n", "  v_actual numeric(12,4);\n  v_existing uuid;\n"],
+    ["  insert into public.ledger (", `${REQUEST_ID_CHECK}  insert into public.ledger (`],
+    ["usd, billed_to)\n", "usd, billed_to, request_id)\n"],
+    ["v_usd, p_billed_to)\n", "v_usd, p_billed_to, p_request_id)\n"],
+  ];
+  let body = previous;
+  for (const [from, to] of swaps) {
+    expect(body.split(from), from).toHaveLength(2);
+    body = body.replace(from, to);
+  }
+  return body;
+}
+
+describe("ledger-request-id migration", () => {
+  it("carries a 14-digit stamp that sorts after the founder-billing, refunds and card-columns files", () => {
+    expect(ledgerRequestId, LEDGER_REQUEST_ID_FILE).not.toBe("");
+    expect(LEDGER_REQUEST_ID_FILE).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    for (const earlier of [FOUNDER_BILLING_FILE, REFUNDS_FILE, OPEN_GOAL_FUNDING_FILE, PUBLIC_CARD_COLUMNS_FILE]) {
+      expect(LEDGER_REQUEST_ID_FILE > earlier, earlier).toBe(true);
+    }
+  });
+
+  it("adds a nullable request_id with a partial unique index, both safe to run twice", () => {
+    expect(ledgerRequestId).toContain("alter table public.ledger add column if not exists request_id text;");
+    expect(ledgerRequestId).toContain(
+      "create unique index if not exists ledger_request_id_key on public.ledger (request_id) where request_id is not null;",
+    );
+  });
+
+  it("drops the eight-argument record_usage before creating the nine-argument one", () => {
+    const drop = ledgerRequestId.indexOf(`drop function if exists public.record_usage(${NEW_USAGE_TYPES});`);
+    const create = ledgerRequestId.indexOf("create or replace function public.record_usage(");
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(create).toBeGreaterThan(drop);
+  });
+
+  it("keeps the founder-billing body except for the request id", () => {
+    expect(functionBlockIn(ledgerRequestId, "record_usage")).toBe(expectedRequestIdBody(functionBlockIn(founderBilling, "record_usage")));
+  });
+
+  it("checks for the request id after the card lock and before the insert and the pool update", () => {
+    const block = functionBlockIn(ledgerRequestId, "record_usage");
+    const cardLock = block.indexOf("from public.cards where id = p_card_id for update;");
+    const check = block.indexOf("select id into v_existing from public.ledger where request_id = p_request_id;");
+    const insert = block.indexOf("insert into public.ledger (");
+    const debit = block.indexOf("update public.pool");
+    expect(cardLock).toBeGreaterThan(0);
+    expect(check).toBeGreaterThan(cardLock);
+    expect(insert).toBeGreaterThan(check);
+    expect(debit).toBeGreaterThan(insert);
+  });
+
+  it("grants the new record_usage to service_role only, with the exact lines", () => {
+    expect(ledgerRequestId).toContain(`revoke all on function public.record_usage(${REQUEST_ID_USAGE_TYPES}) from public, anon, authenticated;`);
+    expect(ledgerRequestId).toContain(`grant execute on function public.record_usage(${REQUEST_ID_USAGE_TYPES}) to service_role;`);
+    expect(ledgerRequestId.match(/^grant /gm)).toHaveLength(1);
+    expect(ledgerRequestId.match(/^revoke /gm)).toHaveLength(1);
+  });
+
+  it("holds nothing beyond its intended statements", () => {
+    const outsideFunction = ledgerRequestId.replace(functionBlockIn(ledgerRequestId, "record_usage"), "create or replace function public.record_usage(");
+    const statements = outsideFunction
+      .split("\n")
+      .filter((line) => /^(alter|create|drop|revoke|grant|set|do|insert|update|delete) /.test(line));
+    expect(statements).toEqual([
+      "set lock_timeout = '5s';",
+      "alter table public.ledger add column if not exists request_id text;",
+      "create unique index if not exists ledger_request_id_key on public.ledger (request_id) where request_id is not null;",
+      `drop function if exists public.record_usage(${NEW_USAGE_TYPES});`,
+      "create or replace function public.record_usage(",
+      `revoke all on function public.record_usage(${REQUEST_ID_USAGE_TYPES}) from public, anon, authenticated;`,
+      `grant execute on function public.record_usage(${REQUEST_ID_USAGE_TYPES}) to service_role;`,
+    ]);
   });
 });
