@@ -3,16 +3,22 @@
 // arrive as functions, so every status path and the dry-run rule are testable
 // without Stripe or the database. index.ts wires the real implementations in.
 //
+// A request carrying x-dry-run never runs live: without the service key as its
+// bearer it is refused with 401 before the body is read
+// (docs/specs/webhook-hardening.md).
+//
 // Stripe can attach a charge's balance transaction after
 // checkout.session.completed fires (docs/specs/stripe-late-fee.md). A paid
 // session is credited by whichever arrives with the fee: the completed event,
 // or the charge.updated that attaches the balance transaction. The RPC is keyed
 // by the Checkout session, so the pool moves once.
 //
-// charge.refunded and charge.dispute.created reverse the payment's credit
-// through reverse_contribution (docs/specs/refunds-and-holds.md). Stripe sends
-// the refunded total so far, so replays and partial refunds reverse only what
-// is still due. Every reversal and every new dispute is posted to the board.
+// charge.refunded, charge.dispute.created and charge.dispute.funds_withdrawn
+// reverse the payment's credit through reverse_contribution
+// (docs/specs/refunds-and-holds.md). Stripe sends the refunded or disputed total
+// so far, so replays, partial refunds and the second of the two dispute events
+// reverse only what is still due. A dispute inquiry withdraws no funds and
+// reverses nothing. Every reversal and every new dispute is posted to the board.
 
 import { type Amounts, computeAmounts, roundUsd } from "./split.ts";
 import { type Parsed, parseSession, type SessionLike } from "./session.ts";
@@ -20,6 +26,7 @@ import {
   CHARGE_UPDATED_EVENT,
   COMPLETED_EVENT,
   DISPUTE_CREATED_EVENT,
+  DISPUTE_FUNDS_WITHDRAWN_EVENT,
   REFUNDED_EVENT,
 } from "./webhook_events.ts";
 
@@ -27,6 +34,7 @@ export {
   CHARGE_UPDATED_EVENT,
   COMPLETED_EVENT,
   DISPUTE_CREATED_EVENT,
+  DISPUTE_FUNDS_WITHDRAWN_EVENT,
   REFUNDED_EVENT,
 } from "./webhook_events.ts";
 
@@ -53,12 +61,14 @@ export interface RefundedCharge {
   currency: string;
 }
 
-/** The dispute fields the handler reads from a charge.dispute.created event. */
+/** The dispute fields the handler reads from a charge.dispute.created or funds_withdrawn event. */
 export interface DisputeObject {
   id: string;
   payment_intent: string | { id: string } | null;
   amount: number;
   currency: string;
+  /** warning_needs_response, warning_under_review and warning_closed are inquiries. */
+  status: string;
 }
 
 export type ReversalKind = "refund" | "dispute";
@@ -87,7 +97,7 @@ export interface HandlerDeps {
   reverseContribution(input: ReversalInput): Promise<Record<string, unknown>>;
   /** Posts one line to the board's alert topic; a failure must not change the response. */
   notify(message: string): Promise<void>;
-  /** SUPABASE_SERVICE_ROLE_KEY; a dry run must present it as a bearer token. */
+  /** SUPABASE_SERVICE_ROLE_KEY as the function runtime supplies it; a dry run must present it as a bearer token. */
   serviceKey: string;
 }
 
@@ -108,11 +118,25 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** A dry run needs both the service-role bearer and x-dry-run: 1. */
-export function isDryRun(req: Request, serviceKey: string): boolean {
+/**
+ * No x-dry-run header is a live request. With the header, the bearer must be
+ * the service key (401 otherwise) and the value must be 1 (400 otherwise), so a
+ * request that asks for a dry run never runs live.
+ */
+export function dryRunGate(
+  req: Request,
+  serviceKey: string,
+): "live" | "dry" | Response {
+  const dry = req.headers.get("x-dry-run");
+  if (dry === null) return "live";
   const auth = req.headers.get("authorization") ?? "";
-  const dry = req.headers.get("x-dry-run") ?? "";
-  return dry === "1" && timingSafeEqual(auth, `Bearer ${serviceKey}`);
+  if (serviceKey === "" || !timingSafeEqual(auth, `Bearer ${serviceKey}`)) {
+    return json(401, { error: "x-dry-run needs the service key as the bearer" });
+  }
+  if (dry !== "1") {
+    return json(400, { error: "x-dry-run must be 1" });
+  }
+  return "dry";
 }
 
 function errorMessage(err: unknown): string {
@@ -126,6 +150,10 @@ export function createHandler(
     if (req.method !== "POST") {
       return json(405, { error: "POST only" });
     }
+    const gate = dryRunGate(req, deps.serviceKey);
+    if (gate instanceof Response) return gate;
+    const dryRun = gate === "dry";
+
     const signature = req.headers.get("stripe-signature");
     if (!signature) {
       return json(400, { error: "Missing stripe-signature header" });
@@ -142,8 +170,6 @@ export function createHandler(
       });
     }
 
-    const dryRun = isDryRun(req, deps.serviceKey);
-
     if (event.type === COMPLETED_EVENT) {
       const session = event.data.object as CheckoutSession;
       if (session.payment_status !== "paid") {
@@ -152,7 +178,7 @@ export function createHandler(
           reason: `payment_status ${session.payment_status}`,
         });
       }
-      return credit(deps, event.id, session, dryRun, "defer");
+      return credit(deps, event.id, session, dryRun, "completed");
     }
 
     if (event.type === CHARGE_UPDATED_EVENT) {
@@ -187,7 +213,7 @@ export function createHandler(
           reason: `payment_status ${session.payment_status}`,
         });
       }
-      return credit(deps, event.id, session, dryRun, "retry");
+      return credit(deps, event.id, session, dryRun, "charge_updated");
     }
 
     if (event.type === REFUNDED_EVENT) {
@@ -202,12 +228,27 @@ export function createHandler(
 
     if (event.type === DISPUTE_CREATED_EVENT) {
       const dispute = event.data.object as DisputeObject;
-      return reverse(deps, event.id, "dispute", {
-        intent: intentId(dispute.payment_intent),
-        currency: dispute.currency,
-        totalCents: dispute.amount,
-        source: dispute.id,
-      }, dryRun);
+      // An inquiry withdraws no funds. If it escalates, Stripe withdraws them
+      // and sends charge.dispute.funds_withdrawn, which reverses.
+      if (String(dispute.status ?? "").startsWith("warning_")) {
+        if (!dryRun) {
+          await safeNotify(deps, `Dispute ${dispute.id} is an inquiry (${dispute.status}): no funds were withdrawn and nothing was reversed`);
+        }
+        return json(200, {
+          ignored: true,
+          reason: `dispute inquiry ${dispute.status}`,
+        });
+      }
+      return reverse(deps, event.id, "dispute", disputeSource(dispute), dryRun);
+    }
+
+    if (event.type === DISPUTE_FUNDS_WITHDRAWN_EVENT) {
+      // The dispute's total is cumulative, so whichever of this and
+      // charge.dispute.created arrives second reverses nothing, quietly.
+      const dispute = event.data.object as DisputeObject;
+      return reverse(deps, event.id, "dispute", disputeSource(dispute), dryRun, {
+        quietWhenNothingLeft: true,
+      });
     }
 
     return json(200, { ignored: true, reason: `event type ${event.type}` });
@@ -216,6 +257,15 @@ export function createHandler(
 
 function intentId(intent: string | { id: string } | null): string | null {
   return typeof intent === "string" ? intent : intent?.id ?? null;
+}
+
+function disputeSource(dispute: DisputeObject): ReversalSource {
+  return {
+    intent: intentId(dispute.payment_intent),
+    currency: dispute.currency,
+    totalCents: dispute.amount,
+    source: dispute.id,
+  };
 }
 
 async function safeNotify(deps: HandlerDeps, message: string): Promise<void> {
@@ -259,6 +309,9 @@ export function reversalMessage(
     }
   }
   if (Number(result.pool_balance_usd) < 0) parts.push("the pool balance is below zero");
+  // Absent fields read as NaN, which is never below zero.
+  if (Number(result.pool_reserve_usd) < 0) parts.push("the 10% reserve is below zero");
+  if (Number(result.pool_incident_reserve_usd) < 0) parts.push("the emergency fund is below zero");
   return parts.join("; ");
 }
 
@@ -267,6 +320,11 @@ interface ReversalSource {
   currency: string;
   totalCents: number;
   source: string;
+}
+
+interface ReverseOptions {
+  /** No "nothing left to reverse" alert: the other event for the same dispute already sent one. */
+  quietWhenNothingLeft?: boolean;
 }
 
 /**
@@ -280,6 +338,7 @@ async function reverse(
   kind: ReversalKind,
   source: ReversalSource,
   dryRun: boolean,
+  options: ReverseOptions = {},
 ): Promise<Response> {
   if (!source.intent) {
     return json(200, { ignored: true, reason: `${kind} has no payment intent` });
@@ -333,10 +392,31 @@ async function reverse(
 
   if (result.inserted === true) {
     await safeNotify(deps, reversalMessage(kind, source.source, result));
-  } else if (kind === "dispute" && result.replay !== true) {
+  } else if (
+    kind === "dispute" && result.replay !== true && !options.quietWhenNothingLeft
+  ) {
     await safeNotify(deps, `Dispute ${source.source}: nothing left to reverse on contribution ${shortId(result.parent_id)}`);
   }
   return json(200, { ...result, event_id: eventId });
+}
+
+/**
+ * Calls apply_contribution and, when it inserts a payment that named a goal
+ * card the RPC did not credit, tells the board the money went to the pool.
+ */
+async function apply(
+  deps: HandlerDeps,
+  parsed: Parsed,
+  amounts: Amounts,
+): Promise<Record<string, unknown>> {
+  const result = await deps.applyContribution(parsed, amounts);
+  if (
+    result.inserted === true && parsed.goal_card_id &&
+    result.goal_card_id == null
+  ) {
+    await safeNotify(deps, `Contribution ${parsed.session_id} named card ${parsed.goal_card_id}, which is not open for funding; it went to the pool`);
+  }
+  return result;
 }
 
 type CreditOutcome =
@@ -372,26 +452,32 @@ async function creditSession(
       response: json(500, { error: "Balance transaction is not available yet" }),
     };
   }
-  const result = await deps.applyContribution(parsed, computeAmounts(parsed.amount_total, feeUsd));
+  const result = await apply(deps, parsed, computeAmounts(parsed.amount_total, feeUsd));
   return { status: "credited", result };
 }
 
 /**
  * Parses a paid session, looks its fee up and calls the RPC. When the fee is
- * not there yet, "defer" acknowledges (a charge.updated will credit) and
- * "retry" answers 500 so Stripe sends the event again.
+ * not there yet, the completed event acknowledges (a charge.updated will
+ * credit) and charge.updated answers 500 so Stripe sends it again. A session
+ * that cannot be parsed answers 500 so a fixed handler can still credit it on a
+ * retry; the completed event alerts the board, and charge.updated stays silent
+ * so each Stripe retry alerts once.
  */
 async function credit(
   deps: HandlerDeps,
   eventId: string,
   session: CheckoutSession,
   dryRun: boolean,
-  missingFee: "defer" | "retry",
+  trigger: "completed" | "charge_updated",
 ): Promise<Response> {
   let parsed: Parsed;
   try {
     parsed = await parseSession(eventId, session);
   } catch (err) {
+    if (!dryRun && trigger === "completed") {
+      await safeNotify(deps, `Checkout session ${session.id} (event ${eventId}) was not credited: ${errorMessage(err)}. Stripe retries for up to 3 days; fix the handler to credit it, or refund it.`);
+    }
     return json(500, {
       error: "Unusable checkout session",
       detail: errorMessage(err),
@@ -424,7 +510,7 @@ async function credit(
     });
   }
   if (feeUsd === null) {
-    if (missingFee === "defer") {
+    if (trigger === "completed") {
       return json(200, {
         deferred: true,
         reason: "Balance transaction is not available yet",
@@ -436,7 +522,7 @@ async function credit(
 
   try {
     const amounts = computeAmounts(parsed.amount_total, feeUsd);
-    const result = await deps.applyContribution(parsed, amounts);
+    const result = await apply(deps, parsed, amounts);
     return json(200, { ...result, event_id: parsed.event_id });
   } catch (err) {
     return json(500, {
