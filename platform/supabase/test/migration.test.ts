@@ -720,6 +720,22 @@ describe("refunds-and-holds migration", () => {
 const OPEN_FUNDING_FILE = "20260921000000_open_goal_funding.sql";
 const openFunding = readFileSync(resolve(MIGRATIONS_DIR, OPEN_FUNDING_FILE), "utf8");
 
+const LOCK_TIMEOUT = "set lock_timeout = '5s';";
+
+/** The text with one occurrence of part removed; fails when part is not there exactly once. */
+function removeOnce(text: string, part: string): string {
+  expect(text.split(part), part).toHaveLength(2);
+  return text.replace(part, "");
+}
+
+/** The text with every SQL line comment and blank line removed. */
+function withoutComments(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => line.trim() !== "" && !line.trim().startsWith("--"))
+    .join("\n");
+}
+
 const APPLY_SIGNATURE = "apply_contribution(text, text, text, numeric, numeric, integer, uuid, text)";
 const REVERSE_SIGNATURE = "reverse_contribution(text, text, public.contribution_entry, numeric)";
 
@@ -729,13 +745,23 @@ describe("open-goal-funding migration", () => {
     expect(OPEN_FUNDING_FILE > REFUNDS_FILE).toBe(true);
   });
 
-  it("changes only the goal lookup in apply_contribution, so the split and the hold are unchanged", () => {
-    const before = "    select id into v_goal from public.cards where id = p_goal_card_id and shape = 'goal' for update;\n";
-    const after =
-      "    select id into v_goal from public.cards where id = p_goal_card_id and shape = 'goal' and stage in ('proposed', 'designing', 'voted') for update;\n";
-    const block = functionBlockIn(openFunding, "apply_contribution");
-    expect(block.split(after)).toHaveLength(2);
-    expect(block.replace(after, before)).toBe(functionBlockIn(refunds, "apply_contribution"));
+  it("changes only the goal lookup and the replay's goal in apply_contribution, so the split and the hold are unchanged", () => {
+    const changes: [string, string][] = [
+      [
+        "    select id into v_goal from public.cards where id = p_goal_card_id and shape = 'goal' and stage in ('proposed', 'designing', 'voted') for update;\n",
+        "    select id into v_goal from public.cards where id = p_goal_card_id and shape = 'goal' for update;\n",
+      ],
+      [
+        "    select id, held_usd, hold_until, goal_card_id into v_id, v_held, v_hold_until, v_goal from public.contributions\n",
+        "    select id, held_usd, hold_until into v_id, v_held, v_hold_until from public.contributions\n",
+      ],
+    ];
+    let block = functionBlockIn(openFunding, "apply_contribution");
+    for (const [after, before] of changes) {
+      expect(block.split(after), after).toHaveLength(2);
+      block = block.replace(after, before);
+    }
+    expect(block).toBe(functionBlockIn(refunds, "apply_contribution"));
   });
 
   it("changes reverse_contribution only to return the pool's reserves and the kind's totals, so the reversal is unchanged", () => {
@@ -781,24 +807,56 @@ describe("open-goal-funding migration", () => {
     expect(openFunding.match(/^grant /gm)).toHaveLength(2);
     expect(openFunding.match(/^revoke /gm)).toHaveLength(2);
     expect(openFunding.match(/^create or replace function /gm)).toHaveLength(2);
-    expect(openFunding).not.toMatch(/^(create (?!or replace function )|alter |drop )/m);
+    let rest = openFunding;
+    for (const name of ["apply_contribution", "reverse_contribution"]) {
+      rest = removeOnce(rest, `${functionBlockIn(openFunding, name)}\n$$;`);
+    }
+    for (const signature of [APPLY_SIGNATURE, REVERSE_SIGNATURE]) {
+      rest = removeOnce(rest, `revoke all on function public.${signature} from public, anon, authenticated;`);
+      rest = removeOnce(rest, `grant execute on function public.${signature} to service_role;`);
+    }
+    rest = removeOnce(rest, LOCK_TIMEOUT);
+    expect(withoutComments(rest)).toBe("");
   });
 });
 
 const CARD_COLUMNS_FILE = "20260921000100_public_card_columns.sql";
 const cardColumns = readFileSync(resolve(MIGRATIONS_DIR, CARD_COLUMNS_FILE), "utf8");
 
-/** Every cards column across the migrations: the week-1 table, card-summary's summary, and live_at. */
-const weekOneCards = sql.slice(
-  sql.indexOf("create table public.cards ("),
-  sql.indexOf("\n);", sql.indexOf("create table public.cards (")),
-);
-const CARD_COLUMNS = [
-  ...weekOneCards.split("\n").slice(1).map((line) => line.trim().split(" ")[0]!),
-  "summary",
-  "live_at",
-];
 const WITHHELD_CARD_COLUMNS = ["actual_usd", "severity", "priority"];
+
+const LIVE_AT_BACKFILL = `do $$
+begin
+  alter table public.cards disable trigger cards_set_updated_at;
+  update public.cards c
+  set live_at = coalesce(
+    (select max(e.created_at) from public.agent_events e where e.card_id = c.id and e.type = 'ship'),
+    c.updated_at
+  )
+  where c.stage = 'live' and c.live_at is null;
+  alter table public.cards enable trigger cards_set_updated_at;
+end $$;`;
+
+const LIVE_AT_TRIGGER = `drop trigger if exists cards_set_live_at on public.cards;
+create trigger cards_set_live_at
+  before insert or update of stage on public.cards
+  for each row execute function public.set_live_at();`;
+
+const GRANT_END = ") on public.cards to anon, authenticated;";
+
+/** The one column grant on cards, from grant to semicolon. */
+function grantStatement(): string {
+  const grant = cardColumns.indexOf("grant select (");
+  const end = cardColumns.indexOf(GRANT_END, grant);
+  expect(grant).toBeGreaterThan(0);
+  expect(end).toBeGreaterThan(grant);
+  return cardColumns.slice(grant, end + GRANT_END.length);
+}
+
+/** The column list of the one column grant on cards. */
+function grantedCardColumns(): string[] {
+  return grantStatement().slice("grant select (".length, -GRANT_END.length).split(",").map((c) => c.trim());
+}
 
 describe("public-card-columns migration", () => {
   it("carries a 14-digit stamp that sorts after the open-goal-funding file", () => {
@@ -807,58 +865,52 @@ describe("public-card-columns migration", () => {
     expect(CARD_COLUMNS_FILE > REFUNDS_FILE).toBe(true);
   });
 
-  it("reads the cards columns from the week-1 table and the later additions", () => {
-    expect(CARD_COLUMNS).toHaveLength(30);
-    expect(cardSummary).toContain("alter table public.cards add column if not exists summary ");
-    for (const file of [liveCut, contributionSession, founderBilling, boardTwoFactor, cardSpend, refunds, openFunding]) {
-      expect(file).not.toMatch(/alter table public\.cards add column/);
+  it("sets a lock timeout first in both new files", () => {
+    for (const file of [openFunding, cardColumns]) {
+      expect(withoutComments(file).split("\n")[0]).toBe(LOCK_TIMEOUT);
     }
   });
 
   it("adds live_at, backfills live cards with updated_at held still, and stamps it on the move to live", () => {
     expect(cardColumns).toContain("alter table public.cards add column if not exists live_at timestamptz;");
-    const disable = cardColumns.indexOf("alter table public.cards disable trigger cards_set_updated_at;");
-    const backfill = cardColumns.indexOf("update public.cards c\n  set live_at = coalesce(");
-    const enable = cardColumns.indexOf("alter table public.cards enable trigger cards_set_updated_at;");
-    expect(disable).toBeGreaterThan(0);
-    expect(backfill).toBeGreaterThan(disable);
-    expect(enable).toBeGreaterThan(backfill);
-    expect(cardColumns).toContain("where e.card_id = c.id and e.type = 'ship'");
-    expect(cardColumns).toContain("where c.stage = 'live' and c.live_at is null;");
+    expect(cardColumns).toContain(LIVE_AT_BACKFILL);
     const block = functionBlockIn(cardColumns, "set_live_at");
     expect(block).toContain("public.set_live_at() returns trigger");
     expect(block).not.toContain("security definer");
-    expect(block).toContain("if new.stage = 'live' and (tg_op = 'INSERT' or old.stage is distinct from 'live') then");
-    const drop = cardColumns.indexOf("drop trigger if exists cards_set_live_at on public.cards;");
-    const create = cardColumns.indexOf(
-      "create trigger cards_set_live_at\n  before insert or update of stage on public.cards\n  for each row execute function public.set_live_at();",
-    );
-    expect(drop).toBeGreaterThan(0);
-    expect(create).toBeGreaterThan(drop);
+    expect(block).toContain("set search_path = ''");
+    expect(block).toContain("new.live_at := coalesce(new.live_at, now());");
+    expect(block).toContain("elsif new.stage = 'live' and old.stage is distinct from 'live' then\n    new.live_at := now();");
+    expect(cardColumns).toContain(LIVE_AT_TRIGGER);
     expect(cardColumns).toContain("revoke all on function public.set_live_at() from public, anon, authenticated;");
   });
 
-  it("revokes select on cards, then grants every column except actual_usd, severity and priority", () => {
-    const revoke = cardColumns.indexOf("revoke select on public.cards from anon, authenticated;");
+  it("revokes everything on cards, then grants select on every column but actual_usd, severity and priority", () => {
+    const revoke = cardColumns.indexOf("revoke all on public.cards from anon, authenticated;");
     const grant = cardColumns.indexOf("grant select (");
     expect(revoke).toBeGreaterThan(0);
     expect(grant).toBeGreaterThan(revoke);
-    const list = cardColumns.slice(
-      grant + "grant select (".length,
-      cardColumns.indexOf(") on public.cards to anon, authenticated;", grant),
-    );
-    const granted = list.split(",").map((c) => c.trim());
+    const granted = grantedCardColumns();
     for (const column of WITHHELD_CARD_COLUMNS) {
       expect(granted, column).not.toContain(column);
     }
-    expect([...granted].sort()).toEqual(CARD_COLUMNS.filter((c) => !WITHHELD_CARD_COLUMNS.includes(c)).sort());
+    expect(granted).toContain("id");
+    expect(granted).toContain("live_at");
+    expect(new Set(granted).size).toBe(granted.length);
     expect(cardColumns.match(/^grant /gm)).toHaveLength(1);
   });
 
-  it("leaves the realtime publication and every other table alone", () => {
+  it("holds only the column, backfill, trigger and grant statements, and leaves the publication alone", () => {
     expect(cardColumns).not.toMatch(/alter publication/i);
     expect(cardColumns).not.toMatch(/supabase_realtime/);
-    expect(cardColumns).not.toMatch(/create (table|type|policy|(or replace )?view)/i);
-    expect(cardColumns).not.toMatch(/^alter table (?!public\.cards add column if not exists live_at )/m);
+    let rest = cardColumns;
+    rest = removeOnce(rest, LOCK_TIMEOUT);
+    rest = removeOnce(rest, "alter table public.cards add column if not exists live_at timestamptz;");
+    rest = removeOnce(rest, LIVE_AT_BACKFILL);
+    rest = removeOnce(rest, `${functionBlockIn(cardColumns, "set_live_at")}\n$$;`);
+    rest = removeOnce(rest, LIVE_AT_TRIGGER);
+    rest = removeOnce(rest, "revoke all on function public.set_live_at() from public, anon, authenticated;");
+    rest = removeOnce(rest, "revoke all on public.cards from anon, authenticated;");
+    rest = removeOnce(rest, grantStatement());
+    expect(withoutComments(rest)).toBe("");
   });
 });

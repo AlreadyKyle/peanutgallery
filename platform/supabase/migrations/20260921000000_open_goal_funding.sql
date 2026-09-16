@@ -1,14 +1,20 @@
 -- Open goal funding (docs/specs/card-columns-and-open-funding.md).
 -- Applies on top of 20260920000000_refunds_and_holds.sql and can run twice.
 -- Both functions keep their signatures, their arithmetic and their grants.
+-- A lock wait longer than five seconds fails the migration rather than
+-- queueing every reader of cards and the pool behind it.
+
+set lock_timeout = '5s';
 
 -- apply_contribution --------------------------------------------------------
--- Same as the refunds-and-holds version except the goal lookup. A payment
+-- Same as the refunds-and-holds version except two lines. A payment
 -- credits a goal card only while the card is open to funding (proposed,
 -- designing or voted). Money that names a funded, building, gated, live,
 -- rejected or paused card funds the pool, and its row records no goal card.
 -- Money already held for an open card still reaches that card's bar when
 -- credit_held_contributions releases it, whatever the card's stage by then.
+-- A replay reports the goal card stored on the payment row, not a fresh
+-- lookup, so it names the card the money went to even after that card closed.
 
 create or replace function public.apply_contribution(
   p_stripe_event_id text,
@@ -121,7 +127,7 @@ begin
   returning id into v_id;
 
   if v_id is null then
-    select id, held_usd, hold_until into v_id, v_held, v_hold_until from public.contributions
+    select id, held_usd, hold_until, goal_card_id into v_id, v_held, v_hold_until, v_goal from public.contributions
     where stripe_event_id = p_stripe_event_id
        or (nullif(p_stripe_session_id, '') is not null and stripe_session_id = p_stripe_session_id)
     order by created_at asc

@@ -1,14 +1,21 @@
 -- Public card columns and the ship stamp (docs/specs/card-columns-and-open-funding.md).
 -- Applies on top of 20260921000000_open_goal_funding.sql and can run twice.
 --
--- cards.live_at records when a card last moved to live, so a later change to
--- a shipped card (a hold released onto its bar, say) no longer moves its ship
--- date. Anon and authenticated stop reading cards at table level and read a
--- named list of columns instead. actual_usd is withheld because it counts
--- turns billed to the founder, whose tokens are tracked and never published.
--- severity and priority are withheld because they mark incidents (priority 1
--- is an S1), and the incident list is private until its post-mortem (PLAN.md
--- §4 The Board). The realtime publication is not changed.
+-- cards.live_at records when a card last moved to live. It exists for the
+-- site's ship date: a hold released onto a shipped card's bar, or a refund
+-- taken off it, still moves updated_at, so the ship date the site shows moves
+-- with them until the site reads live_at. Anon and authenticated stop reading
+-- cards at table level and read a named list of columns instead. actual_usd
+-- is withheld because it counts turns billed to the founder, whose tokens are
+-- tracked and never published. severity and priority are withheld because
+-- they mark incidents (priority 1 is an S1), and the incident list is private
+-- until its post-mortem (PLAN.md §4 The Board). The realtime publication is
+-- not changed.
+--
+-- A lock wait longer than five seconds fails the migration rather than
+-- queueing every reader of cards behind it.
+
+set lock_timeout = '5s';
 
 alter table public.cards add column if not exists live_at timestamptz;
 
@@ -32,15 +39,22 @@ begin
 end $$;
 
 -- set_live_at ---------------------------------------------------------------
--- Stamps live_at when a card is inserted live or its stage changes to live.
--- An update that leaves the stage alone, or sets live again on a live card,
--- keeps the stamp. A card that leaves live and ships again is stamped again.
+-- A card inserted live keeps the live_at it was given, or is stamped now. A
+-- card whose stage changes to live is stamped now. An update that leaves the
+-- stage alone, or sets live again on a live card, keeps the stamp. A card
+-- that leaves live and ships again is stamped again. The search path is empty
+-- because the body names no relation.
 
 create or replace function public.set_live_at() returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
-  if new.stage = 'live' and (tg_op = 'INSERT' or old.stage is distinct from 'live') then
+  if tg_op = 'INSERT' then
+    if new.stage = 'live' then
+      new.live_at := coalesce(new.live_at, now());
+    end if;
+  elsif new.stage = 'live' and old.stage is distinct from 'live' then
     new.live_at := now();
   end if;
   return new;
@@ -55,12 +69,15 @@ create trigger cards_set_live_at
 revoke all on function public.set_live_at() from public, anon, authenticated;
 
 -- Column grants on cards ----------------------------------------------------
--- New card columns are private until granted here. The table-level revoke also
--- removes any column grants, so a second run starts from nothing. The board's
--- RPCs are security definer and service_role keeps its table-level grant, so
--- neither is limited by this list.
+-- Before this file anon and authenticated held SELECT and, on Postgres 17,
+-- MAINTAIN on cards; every write goes through the service role or a security
+-- definer RPC, and realtime needs SELECT only. Revoking everything also
+-- removes any column grants, so a second run starts from nothing. New card
+-- columns are private until granted here. The board's RPCs are security
+-- definer and service_role keeps its table-level grant, so neither is limited
+-- by this list.
 
-revoke select on public.cards from anon, authenticated;
+revoke all on public.cards from anon, authenticated;
 grant select (
   id, bucket, source, shape, lane, board_reason, folder, executor_role_id,
   title, summary, intent, acceptance_test, design_spec_url,
