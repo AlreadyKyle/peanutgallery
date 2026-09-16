@@ -60,7 +60,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Landing intro.** `.intro` holds the hero and the Right now panel: side by side (3:2) from 64rem, stacked below.
 - **Hero:** one `h1` (the first pitch sentence), a `.lede` (the second), the muted launch line, the Contribute button and the muted split line.
-- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, and a Full ledger link. When a refresh fails after figures have loaded, the muted small line "Could not refresh. These figures may be out of date." (`role="status"`) sits under the heading until a load succeeds. It carries no list: the panel has to stay about as tall as the pitch beside it, or the grid row leaves dead space under the pitch. Agent actions are the Ledger section below and the ledger page.
+- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, and a Full ledger link. Under the heading sits the page's status line (see Stale and missing figures). It carries no list: the panel has to stay about as tall as the pitch beside it, or the grid row leaves dead space under the pitch. Agent actions are the Ledger section below and the ledger page.
 
 **Landing order.**
 1. Intro.
@@ -110,7 +110,7 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 - The legal pages end with the muted small "Last updated" line. Contact adds a Discord section only when the invite is set.
 - The strings live in `copy.ts` like every public string. The pages never say draft.
 
-**Stale and missing figures.** A failed refresh keeps the figures on screen and adds the stale line under the Right now heading and under the lede of the ledger and contribute pages. When one part of the data did not load, that part says "Not available right now." instead of a zero or an empty line: agent spend and tokens, agent actions and deploys. The launch line is left out when the studio's launch date did not load, and a funding caption leaves out the contributor count when the funding figures did not.
+**Stale and missing figures.** A failed or timed-out refresh keeps the figures on screen and shows "Could not refresh. These figures may be out of date." until a load succeeds. Each page has one `p.muted.small.status` with `role="status"`, always in place and empty until then, so a screen reader announces the text when it arrives; `.status:empty` takes no space. It sits under the Right now heading on the landing and under the lede on the ledger and contribute pages. The Funding meter repeats the line above its figures, without `role="status"`, so a reader who scrolls to the money sees it and a screen reader hears it once. When one part of the data did not load, that part says "Not available right now." instead of a zero or an empty line: agent spend and tokens, agent actions and deploys. The launch line is left out when the studio's launch date did not load, and a funding caption leaves out the contributor count when the funding figures did not.
 
 **Figure row.** `Stat` renders a `div.stat` inside `dl.stats`: the label (600) and a muted description on the left, the amount on the right in tabular numerals at `--size-lead`. Every figure has a description.
 

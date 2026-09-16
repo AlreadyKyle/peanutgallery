@@ -159,6 +159,11 @@ code {
   font-size: var(--size-small);
 }
 
+/* A live region kept in place for its text to arrive; takes no space while empty. */
+.status:empty {
+  margin: 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

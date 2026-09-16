@@ -158,12 +158,17 @@ describe('Ledger', () => {
         return () => {};
       },
     });
+    const status = screen.getByRole('status');
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(status.textContent).toBe('');
+    expect(status.closest('.hero')).not.toBeNull();
     fail = true;
     onChange();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(screen.getAllByRole('status')).toEqual([status]);
     expect(screen.getByText('$48.56')).toBeTruthy();
+    const funding = screen.getByRole('region', { name: copy.meter });
+    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
   });
 
   it('shows the unavailable line in every section without a database', () => {

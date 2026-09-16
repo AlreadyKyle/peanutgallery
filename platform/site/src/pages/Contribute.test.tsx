@@ -111,11 +111,13 @@ describe('Contribute', () => {
         return () => {};
       },
     });
+    const status = screen.getByRole('status');
     await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(status.textContent).toBe('');
     fail = true;
     onChange();
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(screen.getAllByRole('status')).toEqual([status]);
     expect(screen.getByText('Rename the Gatherer')).toBeTruthy();
   });
 

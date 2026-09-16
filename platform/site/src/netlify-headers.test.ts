@@ -58,6 +58,17 @@ describe('netlify.toml security headers', () => {
     expect(policy['form-action']).toEqual(["'self'"]);
   });
 
+  it('matches the values live-check.mjs expects from production', () => {
+    const script = readFileSync(resolve(process.cwd(), 'scripts/live-check.mjs'), 'utf8');
+    const pieces = script.match(/const REPORT_ONLY_POLICY =\s*((?:"[^"]*"\s*\+?\s*)+);/)?.[1] ?? '';
+    const expected = [...pieces.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join('');
+    expect(expected).toBe(headers['Content-Security-Policy-Report-Only']);
+    for (const name of ['X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy', 'Content-Security-Policy']) {
+      expect(script).toContain(`'${name.toLowerCase()}'`);
+      expect(script).toContain(headers[name]);
+    }
+  });
+
   it('lets the site reach its Supabase project over https and wss', () => {
     expect(supabaseUrl).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
     const host = new URL(supabaseUrl).host;

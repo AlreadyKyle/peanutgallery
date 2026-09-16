@@ -8,12 +8,17 @@
 //
 // Every route (the landing, contribute, ledger, the four text pages, /board and a missing page) at
 // 375px and 1440px: status 200, one h1, no horizontal overflow, the footer's Terms, Privacy, Refunds
-// and Contact links, and no console errors. The landing's h2 order, read from the page: Building
-// now, Queued and Shipped appear only when cards are in those stages. The Right now panel, the fund
-// links, the category filters and /contribute's choices. Assets, og:image as an absolute URL, and
+// and Contact links, no console errors and no Content Security Policy report. The landing's h2
+// order, read from the page: Building now, Queued and Shipped appear only when cards are in those
+// stages. The Right now panel, the fund links, the category filters and /contribute's choices. Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. The www redirect runs only against production. The
-// security headers from netlify.toml run against any address that is not local, because vite preview
-// does not send them.
+// security headers from netlify.toml, the report-only policy's full value included, run against any
+// address that is not local, because vite preview does not send them.
+//
+// The report-only policy blocks nothing, so the only sign it would break the site is a report. Every
+// page listens for securitypolicyviolation, which fires for enforced and report-only policies alike,
+// and any report fails the run whatever the console printed. Enforcing the full policy waits on clean
+// runs against production (docs/specs/site-truth-pass.md).
 //
 // The data checks need the site to reach its database. A local build without the Supabase values
 // has none; --allow-no-data turns those checks into SKIP lines instead of failures.
@@ -38,13 +43,18 @@ const H2_ORDER = ['Right now', 'Building now', "Fund what's next", 'Queued', 'Sh
 const OPTIONAL_H2 = new Set(['Building now', 'Queued', 'Shipped']);
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
-// The enforced headers netlify.toml sends on every path (docs/specs/site-truth-pass.md).
+// The headers netlify.toml sends on every path, by exact value (docs/specs/site-truth-pass.md).
+const REPORT_ONLY_POLICY =
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
+  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
+  "object-src 'none'; base-uri 'self'; form-action 'self'";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
   ['x-content-type-options', 'nosniff'],
   ['referrer-policy', 'strict-origin-when-cross-origin'],
   ['permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
   ['content-security-policy', "frame-ancestors 'none'"],
+  ['content-security-policy-report-only', REPORT_ONLY_POLICY],
 ];
 
 const results = [];
@@ -82,6 +92,26 @@ async function checkPng(url, label) {
   }
 }
 
+/**
+ * Records every Content Security Policy report the page raises, enforced or report-only, from the
+ * securitypolicyviolation event rather than from console text.
+ */
+async function watchPolicy(page) {
+  const reports = [];
+  await page.exposeFunction('liveCheckPolicyReport', (line) => reports.push(line));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (event) => {
+      const blocked = event.blockedURI === '' ? 'inline' : event.blockedURI;
+      window.liveCheckPolicyReport(`${event.disposition} ${event.effectiveDirective} blocked ${blocked} on ${location.pathname}`);
+    });
+  });
+  return reports;
+}
+
+function checkPolicy(reports, label) {
+  check(reports.length === 0, `${label} no Content Security Policy reports${reports.length === 0 ? '' : `: ${reports.slice(0, 3).join(' | ')}`}`);
+}
+
 async function open(page, path) {
   const response = await page.goto(BASE + path, { waitUntil: 'load' });
   // Realtime keeps a socket open, so network idle may never come; give the data a moment either way.
@@ -97,6 +127,7 @@ try {
     [1440, 1000],
   ]) {
     const page = await browser.newPage({ viewport: { width, height } });
+    const reports = await watchPolicy(page);
     const errors = [];
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
@@ -119,10 +150,12 @@ try {
       check(links.every(Boolean), `${width}px ${path} footer links Terms, Privacy, Refunds, Contact`);
     }
     check(errors.length === 0, `${width}px no console errors${errors.length === 0 ? '' : `: ${errors.slice(0, 3).join(' | ')}`}`);
+    checkPolicy(reports, `${width}px`);
     await page.close();
   }
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const reports = await watchPolicy(page);
   await open(page, '/');
   const main = page.getByRole('main');
   const panel = page.getByRole('complementary');
@@ -202,6 +235,8 @@ try {
       check(false, `Payment Link fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  await page.waitForTimeout(500);
+  checkPolicy(reports, 'landing and contribute interactions');
   await page.close();
 
   for (const asset of ['/favicon.ico', '/peanut.png', '/version.json']) {
@@ -232,7 +267,6 @@ try {
         const actual = response.headers.get(name);
         check(actual === expected, `${path} ${name}: ${actual}`);
       }
-      check(response.headers.has('content-security-policy-report-only'), `${path} content-security-policy-report-only is sent`);
     }
   }
 

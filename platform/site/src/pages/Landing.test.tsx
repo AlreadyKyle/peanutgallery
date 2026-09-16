@@ -352,18 +352,31 @@ describe('Landing', () => {
       },
     });
     const panel = screen.getByRole('complementary', { name: copy.rightNow });
+    // The live region is in place, empty, before any figure loads, so its text arriving is announced.
+    const status = within(panel).getByRole('status');
+    expect(status.textContent).toBe('');
     await waitFor(() => expect(within(panel).getByText('$48.56')).toBeTruthy());
-    expect(within(panel).queryByRole('status')).toBeNull();
+    expect(within(panel).getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    const funding = screen.getByRole('region', { name: copy.meter });
+    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
 
     fail = true;
     onChange();
-    await waitFor(() => expect(within(panel).getByRole('status').textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(within(panel).getByRole('status')).toBe(status);
+    expect(status.className).toBe('muted small status');
     expect(within(panel).getByText('$48.56')).toBeTruthy();
-    expect(within(panel).getByRole('status').className).toBe('muted small');
+    // The meter repeats the line beside the money, without a second live region.
+    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
+    expect(within(funding).getByText('$7.10')).toBeTruthy();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
 
     fail = false;
     onChange();
-    await waitFor(() => expect(within(panel).queryByRole('status')).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(''), { timeout: 3000 });
+    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
   });
 
   it('says nothing about launch when the studio row did not load', async () => {

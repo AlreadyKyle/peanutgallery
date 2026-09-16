@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 import {
   CARD_STAGES,
@@ -6,6 +6,7 @@ import {
   DEPLOY_LIMIT,
   ENRICHMENTS,
   EVENT_LIMIT,
+  QUERY_TIMEOUT_MS,
   REALTIME_LISTENERS,
   type Snapshot,
 } from './source';
@@ -17,6 +18,7 @@ type Query = {
   orders: { column: string; ascending: boolean }[];
   limit: number | null;
   terminal: string;
+  signal: AbortSignal | null;
 };
 
 type Listener = { table: string; filter: string | null };
@@ -86,16 +88,31 @@ function rowsFor(query: Query): unknown {
 }
 
 function fakeClient(
-  options: { events?: unknown[]; failTable?: string; failTitles?: boolean; rows?: Record<string, unknown> } = {},
+  options: {
+    events?: unknown[];
+    failTable?: string;
+    failTitles?: boolean;
+    /** A table whose query never answers; it settles only when its signal aborts, as supabase-js does. */
+    hangTable?: string;
+    rows?: Record<string, unknown>;
+  } = {},
 ) {
   const queries: Query[] = [];
   const channels: Channel[] = [];
   const removed: string[] = [];
 
   function from(table: string) {
-    const query: Query = { table, select: '', filters: [], orders: [], limit: null, terminal: '' };
+    const query: Query = { table, select: '', filters: [], orders: [], limit: null, terminal: '', signal: null };
     queries.push(query);
     const resolve = () => {
+      if (table === options.hangTable) {
+        // supabase-js reports an aborted request as an error result, not a rejection.
+        return new Promise((settle) => {
+          query.signal?.addEventListener('abort', () =>
+            settle({ data: null, error: { message: 'AbortError: signal is aborted without reason' } }),
+          );
+        });
+      }
       const titles = table === 'cards' && query.filters.some((f) => f.startsWith('in id'));
       if (table === options.failTable || (options.failTitles === true && titles)) {
         return Promise.resolve({ data: null, error: { message: `${table} is unavailable` } });
@@ -127,6 +144,10 @@ function fakeClient(
       },
       limit(count: number) {
         query.limit = count;
+        return builder;
+      },
+      abortSignal(signal: AbortSignal) {
+        query.signal = signal;
         return builder;
       },
       maybeSingle() {
@@ -174,7 +195,7 @@ function fakeClient(
 }
 
 function emptyQuery(table: string): Query {
-  return { table, select: '', filters: [], orders: [], limit: null, terminal: '' };
+  return { table, select: '', filters: [], orders: [], limit: null, terminal: '', signal: null };
 }
 
 function query(queries: Query[], table: string, index = 0): Query {
@@ -270,6 +291,10 @@ describe('createSupabaseSource.load', () => {
     expect(snapshot.events).toHaveLength(3);
     expect(snapshot.roles).toEqual([{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }]);
     expect(snapshot.missing).toEqual([]);
+    // Every query, the title lookup included, carries a timeout signal.
+    expect(fake.queries.map((q) => [q.table, q.signal instanceof AbortSignal])).toEqual(
+      fake.queries.map((q) => [q.table, true]),
+    );
   });
 
   it('fetches titles only for the distinct card ids in the loaded events', async () => {
@@ -291,6 +316,39 @@ describe('createSupabaseSource.load', () => {
   it('rejects with the database error message when the pool fails', async () => {
     const fake = fakeClient({ failTable: 'pool' });
     await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('pool is unavailable');
+  });
+
+  it('aborts a request that never answers through supabase-js itself, and rejects the load', async () => {
+    // A fetch that never responds and, like the browser's, rejects with the signal's reason on abort.
+    const hung = (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal === undefined || signal === null) return;
+        if (signal.aborted) reject(signal.reason);
+        else signal.addEventListener('abort', () => reject(signal.reason));
+      });
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: hung },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    await expect(createSupabaseSource(client, { timeoutMs: 20 }).load()).rejects.toThrow(/TimeoutError|AbortError/);
+  });
+
+  it('rejects when a core query never answers, once its timeout aborts it', async () => {
+    const fake = fakeClient({ hangTable: 'pool' });
+    await expect(createSupabaseSource(fake.client, { timeoutMs: 20 }).load()).rejects.toThrow('AbortError');
+  });
+
+  it('names an enrichment as missing when its query never answers, once its timeout aborts it', async () => {
+    const fake = fakeClient({ hangTable: 'deploys' });
+    const snapshot = await createSupabaseSource(fake.client, { timeoutMs: 20 }).load();
+    expect(snapshot.missing).toEqual(['deploys']);
+    expect(snapshot.deploys).toEqual([]);
+    expect(snapshot.pool?.balance_usd).toBe(48.56);
+  });
+
+  it('times each query out after ten seconds by default', () => {
+    expect(QUERY_TIMEOUT_MS).toBe(10_000);
   });
 
   it('rejects when the cards fail', async () => {

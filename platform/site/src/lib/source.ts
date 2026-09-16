@@ -151,6 +151,11 @@ type TotalsRow = {
 };
 
 export const EVENT_LIMIT = 20;
+/**
+ * How long one query may take before it is aborted. A hung request would otherwise keep a load
+ * pending forever, so a failed refresh would never mark the figures stale.
+ */
+export const QUERY_TIMEOUT_MS = 10_000;
 export const DEPLOY_LIMIT = 10;
 /** The stages the site lists: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
 export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
@@ -249,19 +254,26 @@ function distinctCardIds(events: AgentEvent[]): string[] {
 async function loadCardTitles(
   client: SupabaseClient,
   ids: string[],
+  signal: AbortSignal,
 ): Promise<Record<string, string>> {
   const titles: Record<string, string> = {};
   if (ids.length === 0) return titles;
   const rows = unwrap(
-    await client.from('cards').select('id,title').in('id', ids).returns<TitleRow[]>(),
+    await client.from('cards').select('id,title').in('id', ids).abortSignal(signal).returns<TitleRow[]>(),
   );
   for (const row of rows ?? []) titles[row.id] = row.title;
   return titles;
 }
 
-export function createSupabaseSource(client: SupabaseClient): StudioSource {
+export function createSupabaseSource(
+  client: SupabaseClient,
+  { timeoutMs = QUERY_TIMEOUT_MS }: { timeoutMs?: number } = {},
+): StudioSource {
   return {
     async load() {
+      // Each query gets its own timer. An aborted query resolves with an error, which unwrap throws:
+      // a core query rejects the load, and an enrichment lands in missing.
+      const timeout = () => AbortSignal.timeout(timeoutMs);
       const failed = new Set<Enrichment>();
       /** Runs one enrichment; any error, a malformed figure included, names it missing and returns the fallback. */
       const optional = async <T>(name: Enrichment, run: () => Promise<T>, fallback: T): Promise<T> => {
@@ -278,6 +290,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
           .from('pool')
           .select('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day')
           .eq('id', 1)
+          .abortSignal(timeout())
           .maybeSingle<PoolRow>()
           .then((result) => poolFrom(unwrap(result))),
         client
@@ -287,6 +300,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })
+          .abortSignal(timeout())
           .returns<CardRow[]>()
           .then((result) => unwrap(result) ?? []),
         optional(
@@ -297,6 +311,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
                 await client
                   .from('public_card_funding')
                   .select('card_id,contributors,credited_usd')
+                  .abortSignal(timeout())
                   .returns<FundingRow[]>(),
               ) ?? [],
             ),
@@ -305,18 +320,27 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
         optional(
           'spend',
           async () =>
-            spendFrom(unwrap(await client.from('public_card_spend').select('card_id,spent_usd').returns<SpendRow[]>()) ?? []),
+            spendFrom(
+              unwrap(
+                await client.from('public_card_spend').select('card_id,spent_usd').abortSignal(timeout()).returns<SpendRow[]>(),
+              ) ?? [],
+            ),
           {},
         ),
         optional(
           'studio',
           async () =>
-            unwrap(await client.from('public_studio').select('launched_at').maybeSingle<StudioRow>())?.launched_at ?? null,
+            unwrap(
+              await client.from('public_studio').select('launched_at').abortSignal(timeout()).maybeSingle<StudioRow>(),
+            )?.launched_at ?? null,
           null,
         ),
         optional(
           'totals',
-          async () => totalsFrom(unwrap(await client.from('public_ledger_totals').select('*').maybeSingle<TotalsRow>())),
+          async () =>
+            totalsFrom(
+              unwrap(await client.from('public_ledger_totals').select('*').abortSignal(timeout()).maybeSingle<TotalsRow>()),
+            ),
           zeroTotals,
         ),
         optional(
@@ -328,6 +352,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
                 .select('id,card_id,role_id,type,created_at')
                 .order('created_at', { ascending: false })
                 .limit(EVENT_LIMIT)
+                .abortSignal(timeout())
                 .returns<AgentEvent[]>(),
             ) ?? [],
           [] as AgentEvent[],
@@ -341,6 +366,7 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
                 .select('id,folder,sha,is_green,smoke_result,created_at')
                 .order('created_at', { ascending: false })
                 .limit(DEPLOY_LIMIT)
+                .abortSignal(timeout())
                 .returns<Deploy[]>(),
             ) ?? [],
           [] as Deploy[],
@@ -354,12 +380,13 @@ export function createSupabaseSource(client: SupabaseClient): StudioSource {
                 .select('id,title,write_access,state')
                 .order('hired_at', { ascending: true })
                 .order('title', { ascending: true })
+                .abortSignal(timeout())
                 .returns<Role[]>(),
             ) ?? [],
           [] as Role[],
         ),
       ]);
-      const cardTitles = await optional('cardTitles', () => loadCardTitles(client, distinctCardIds(events)), {});
+      const cardTitles = await optional('cardTitles', () => loadCardTitles(client, distinctCardIds(events), timeout()), {});
       return {
         pool,
         cards: cardRows.map((row) => cardFrom(row, spend)),
