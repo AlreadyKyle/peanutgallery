@@ -1,8 +1,10 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   type CheckoutSession,
   createHandler,
   type HandlerDeps,
+  type ReversalInput,
+  reversalMessage,
   type WebhookEvent,
 } from "./handler.ts";
 import type { Amounts } from "./split.ts";
@@ -60,22 +62,81 @@ function paidSession(session: Record<string, unknown> = {}): CheckoutSession {
   return completedEvent(session).data.object as CheckoutSession;
 }
 
+/** A charge.refunded event for the $1 charge with $0.40 refunded so far unless overridden. */
+function refundedEvent(charge: Record<string, unknown> = {}): WebhookEvent {
+  return {
+    id: "evt_handler_refund",
+    type: "charge.refunded",
+    data: {
+      object: {
+        id: "ch_handler_1",
+        payment_intent: "pi_handler_1",
+        amount: 100,
+        amount_refunded: 40,
+        currency: "usd",
+        ...charge,
+      },
+    },
+  };
+}
+
+/** A charge.dispute.created event for the whole $1 charge unless overridden. */
+function disputeEvent(dispute: Record<string, unknown> = {}): WebhookEvent {
+  return {
+    id: "evt_handler_dispute",
+    type: "charge.dispute.created",
+    data: {
+      object: {
+        id: "dp_handler_1",
+        charge: "ch_handler_1",
+        payment_intent: "pi_handler_1",
+        amount: 100,
+        currency: "usd",
+        ...dispute,
+      },
+    },
+  };
+}
+
+const REVERSED = {
+  found: true,
+  inserted: true,
+  replay: false,
+  parent_id: "c1c1c1c1-0000-4000-8000-000000000000",
+  reversed_usd: 0.4,
+  held_cancelled_usd: 0,
+  reserve_cover_usd: 0,
+  pool_balance_usd: 0.3,
+  goal_card_id: null,
+};
+
 interface Fake {
   deps: HandlerDeps;
   applied: { parsed: Parsed; amounts: Amounts }[];
   feeLookups: string[];
   sessionLookups: string[];
+  reversals: ReversalInput[];
+  notices: string[];
 }
 
 function fake(
   overrides: Partial<
-    Pick<HandlerDeps, "lookupFee" | "findSession" | "applyContribution">
+    Pick<
+      HandlerDeps,
+      | "lookupFee"
+      | "findSession"
+      | "applyContribution"
+      | "reverseContribution"
+      | "notify"
+    >
   > = {},
   event: WebhookEvent = completedEvent(),
 ): Fake {
   const applied: Fake["applied"] = [];
   const feeLookups: string[] = [];
   const sessionLookups: string[] = [];
+  const reversals: ReversalInput[] = [];
+  const notices: string[] = [];
   const deps: HandlerDeps = {
     constructEvent: (_body, signature) => {
       if (signature !== GOOD_SIGNATURE) {
@@ -99,10 +160,32 @@ function fake(
       applied.push({ parsed, amounts });
       return Promise.resolve({ inserted: true, contribution_id: "c1" });
     },
+    reverseContribution: (input) => {
+      reversals.push(input);
+      return Promise.resolve({ ...REVERSED });
+    },
+    notify: (message) => {
+      notices.push(message);
+      return Promise.resolve();
+    },
     serviceKey: SERVICE_KEY,
     ...overrides,
   };
-  return { deps, applied, feeLookups, sessionLookups };
+  if (overrides.reverseContribution) {
+    const inner = overrides.reverseContribution;
+    deps.reverseContribution = (input) => {
+      reversals.push(input);
+      return inner(input);
+    };
+  }
+  if (overrides.notify) {
+    const inner = overrides.notify;
+    deps.notify = (message) => {
+      notices.push(message);
+      return inner(message);
+    };
+  }
+  return { deps, applied, feeLookups, sessionLookups, reversals, notices };
 }
 
 function post(headers: Record<string, string> = {}, method = "POST"): Request {
@@ -456,4 +539,208 @@ Deno.test("the service bearer without x-dry-run: 1 is a live request", async () 
   );
   assertEquals(otherValue.body.dry_run, undefined);
   assertEquals(applied.length, 2);
+});
+
+Deno.test("charge.refunded reverses the session's credit by Stripe's refunded total and alerts", async () => {
+  const { deps, applied, reversals, notices, sessionLookups } = fake(
+    {},
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, { ...REVERSED, event_id: "evt_handler_refund" });
+  assertEquals(sessionLookups, ["pi_handler_1"]);
+  assertEquals(reversals, [{
+    event_id: "evt_handler_refund",
+    session_id: "cs_handler_1",
+    kind: "refund",
+    kind_total_usd: 0.4,
+  }]);
+  assertEquals(applied.length, 0);
+  assertEquals(notices.length, 1);
+  assertEquals(
+    notices[0],
+    "Refund ch_handler_1: reversed $0.40 of contribution c1c1c1c1; held cancelled $0.00; reserve cover $0.00; pool balance $0.30",
+  );
+});
+
+Deno.test("a replayed refund answers 200 and sends no alert", async () => {
+  const { deps, notices } = fake(
+    {
+      reverseContribution: () =>
+        Promise.resolve({ found: true, inserted: false, replay: true, parent_id: "c1" }),
+    },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body.replay, true);
+  assertEquals(notices, []);
+});
+
+Deno.test("a refund of a payment never credited credits it first, then reverses it", async () => {
+  let calls = 0;
+  const { deps, applied, reversals, feeLookups } = fake(
+    {
+      reverseContribution: () => {
+        calls += 1;
+        return Promise.resolve(
+          calls === 1 ? { found: false, inserted: false } : { ...REVERSED },
+        );
+      },
+    },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body.inserted, true);
+  assertEquals(reversals.length, 2);
+  assertEquals(feeLookups, ["cs_handler_1"]);
+  assertEquals(applied.length, 1);
+  assertEquals(applied[0]!.parsed.event_id, "evt_handler_refund.credit");
+  assertEquals(applied[0]!.parsed.session_id, "cs_handler_1");
+});
+
+Deno.test("a refund of a payment whose fee is still missing answers 500 so Stripe retries", async () => {
+  const { deps, applied } = fake(
+    {
+      lookupFee: () => Promise.resolve(null),
+      reverseContribution: () => Promise.resolve({ found: false, inserted: false }),
+    },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 500);
+  assertEquals(body, { error: "Balance transaction is not available yet" });
+  assertEquals(applied.length, 0);
+});
+
+Deno.test("a refund answers 500 when the reversal is still not found after crediting", async () => {
+  const { deps } = fake(
+    { reverseContribution: () => Promise.resolve({ found: false, inserted: false }) },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 500);
+  assertEquals(body.error, "The credited payment was not found for reversal");
+});
+
+Deno.test("a refund answers 500 when reverse_contribution fails", async () => {
+  const { deps } = fake(
+    { reverseContribution: () => Promise.reject(new Error("rpc 503")) },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 500);
+  assertEquals(body, { error: "reverse_contribution failed", detail: "rpc 503" });
+});
+
+Deno.test("a refund without a payment intent or outside Checkout is ignored", async () => {
+  const noIntent = fake({}, refundedEvent({ payment_intent: null }));
+  const first = await call(noIntent.deps, post());
+  assertEquals(first.body, { ignored: true, reason: "refund has no payment intent" });
+  assertEquals(noIntent.reversals.length, 0);
+
+  const outside = fake({ findSession: () => Promise.resolve(null) }, refundedEvent());
+  const second = await call(outside.deps, post());
+  assertEquals(second.status, 200);
+  assertEquals(second.body, { ignored: true, reason: "no checkout session" });
+  assertEquals(outside.reversals.length, 0);
+});
+
+Deno.test("a refund in another currency is ignored and the board is told", async () => {
+  const { deps, reversals, notices } = fake({}, refundedEvent({ currency: "cad" }));
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body, { ignored: true, reason: "currency cad" });
+  assertEquals(reversals.length, 0);
+  assertEquals(notices, [
+    "Refund ch_handler_1 in cad was not reversed; only usd is handled",
+  ]);
+});
+
+Deno.test("a refund answers 500 when the session lookup throws", async () => {
+  const { deps } = fake(
+    { findSession: () => Promise.reject(new Error("stripe down")) },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 500);
+  assertEquals(body, { error: "Session lookup failed", detail: "stripe down" });
+});
+
+Deno.test("charge.dispute.created reverses the disputed amount and alerts, even when nothing is left", async () => {
+  const done = fake(
+    {
+      reverseContribution: () =>
+        Promise.resolve({ ...REVERSED, reversed_usd: 1, reserve_cover_usd: 0.61 }),
+    },
+    disputeEvent(),
+  );
+  const first = await call(done.deps, post());
+  assertEquals(first.status, 200);
+  assertEquals(done.reversals, [{
+    event_id: "evt_handler_dispute",
+    session_id: "cs_handler_1",
+    kind: "dispute",
+    kind_total_usd: 1,
+  }]);
+  assertEquals(done.notices.length, 1);
+  assert(done.notices[0]!.startsWith("Dispute dp_handler_1: reversed $1.00"));
+  assert(done.notices[0]!.includes("reserve cover $0.61"));
+
+  const empty = fake(
+    {
+      reverseContribution: () =>
+        Promise.resolve({ found: true, inserted: false, replay: false, parent_id: "c1c1c1c1-x", reversed_usd: 0 }),
+    },
+    disputeEvent(),
+  );
+  const second = await call(empty.deps, post());
+  assertEquals(second.status, 200);
+  assertEquals(empty.notices, [
+    "Dispute dp_handler_1: nothing left to reverse on contribution c1c1c1c1",
+  ]);
+});
+
+Deno.test("dry run on a refund finds the session and never reverses", async () => {
+  const { deps, reversals, notices } = fake({}, refundedEvent());
+  const { status, body } = await call(deps, post(DRY_RUN_HEADERS));
+  assertEquals(status, 200);
+  assertEquals(body, {
+    dry_run: true,
+    reversal: {
+      event_id: "evt_handler_refund",
+      session_id: "cs_handler_1",
+      kind: "refund",
+      kind_total_usd: 0.4,
+    },
+  });
+  assertEquals(reversals.length, 0);
+  assertEquals(notices.length, 0);
+});
+
+Deno.test("an alert that fails to send does not change the response", async () => {
+  const { deps } = fake(
+    { notify: () => Promise.reject(new Error("ntfy down")) },
+    refundedEvent(),
+  );
+  const { status, body } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(body.inserted, true);
+});
+
+Deno.test("the reversal message warns when a card past voting falls below its target or the pool goes below zero", () => {
+  const message = reversalMessage("refund", "ch_1", {
+    ...REVERSED,
+    goal_card_id: "abcdef12-0000-4000-8000-000000000000",
+    goal_stage: "funded",
+    goal_funded_usd: 1.5,
+    goal_target_usd: 3,
+    pool_balance_usd: -0.25,
+  });
+  assert(message.includes("card abcdef12 funded at $1.50 of $3.00"));
+  assert(message.includes("the card is past voting and now below its target"));
+  assert(message.endsWith("the pool balance is below zero"));
+  assert(!message.includes("@"));
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signPayload, syntheticEvent } from "../lib/synthetic-event.js";
+import { signPayload, syntheticEvent, syntheticReversalEvent } from "../lib/synthetic-event.js";
 
 describe("signPayload", () => {
   it("produces the Stripe-Signature header with the HMAC-SHA256 of timestamp.payload", () => {
@@ -41,5 +41,31 @@ describe("syntheticEvent", () => {
       { key: "split", type: "dropdown", optional: false, dropdown: { value: "5050" } },
       { key: "displayname", type: "text", optional: true, text: { value: "Board dry run" } },
     ]);
+  });
+});
+
+describe("syntheticReversalEvent", () => {
+  it("builds a fully refunded usd charge for the payment intent", () => {
+    const event = syntheticReversalEvent("charge.refunded", "abc", "pi_live_1", 100, 1700000000);
+    expect(event).toMatchObject({ id: "evt_synthetic_abc", type: "charge.refunded", livemode: false });
+    expect((event.data as { object: Record<string, unknown> }).object).toMatchObject({
+      id: "ch_synthetic_abc",
+      payment_intent: "pi_live_1",
+      amount: 100,
+      amount_refunded: 100,
+      currency: "usd",
+    });
+  });
+
+  it("builds a dispute for the payment intent", () => {
+    const event = syntheticReversalEvent("charge.dispute.created", "abc", "pi_live_1", 250, 1700000000);
+    expect(event).toMatchObject({ id: "evt_synthetic_abc", type: "charge.dispute.created" });
+    expect((event.data as { object: Record<string, unknown> }).object).toMatchObject({
+      id: "dp_synthetic_abc",
+      charge: "ch_synthetic_abc",
+      payment_intent: "pi_live_1",
+      amount: 250,
+      currency: "usd",
+    });
   });
 });
