@@ -1036,6 +1036,19 @@ Deno.test("the reversal message warns when a card past voting falls below its ta
   assert(!message.includes("@"));
 });
 
+Deno.test("the reversal message does not call an open card past voting", () => {
+  for (const goal_stage of ["proposed", "designing", "voted"]) {
+    const message = reversalMessage("refund", "ch_1", {
+      ...REVERSED,
+      goal_card_id: "abcdef12-0000-4000-8000-000000000000",
+      goal_stage,
+      goal_funded_usd: 1.5,
+      goal_target_usd: 3,
+    });
+    assert(!message.includes("past voting"), goal_stage);
+  }
+});
+
 Deno.test("the reversal message warns when the 10% reserve or the emergency fund goes below zero", () => {
   const message = reversalMessage("dispute", "dp_1", {
     ...REVERSED,

@@ -302,7 +302,7 @@ export function reversalMessage(
     );
     const stage = String(result.goal_stage);
     if (
-      !["proposed", "voted"].includes(stage) &&
+      !["proposed", "designing", "voted"].includes(stage) &&
       Number(result.goal_funded_usd) < Number(result.goal_target_usd)
     ) {
       parts.push("the card is past voting and now below its target");
