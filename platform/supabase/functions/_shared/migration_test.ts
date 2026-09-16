@@ -796,6 +796,30 @@ Deno.test("migrations on PGlite", {
         assertEquals(namedRow, { request_id: null, usd: "0.0100" });
         await debited("1.0100");
 
+        // The same id with any other value is refused, and nothing changes.
+        const stable = await pool();
+        const conflicts: Array<[string, unknown[]]> = [
+          ["another amount", [null, roleId, "builder-model-id", 0.26, "studio"]],
+          ["another model", [null, roleId, "other-model-id", 0.25, "studio"]],
+          ["another payer", [null, roleId, "builder-model-id", 0.25, "founder"]],
+          ["a card", [oneoffCardId, roleId, "builder-model-id", 0.25, "studio"]],
+        ];
+        for (const [what, [cardId, role, model, usd, billedTo]] of conflicts) {
+          await refuses(
+            `select public.record_usage($1, $2, $3, 10, 0, 10, $4, $5, 'probe/one/turn/1')`,
+            "request id probe/one/turn/1 was written with different values",
+            [cardId, role, model, usd, billedTo],
+          );
+          assertEquals(await ledgerCount("request_id = $1", ["probe/one/turn/1"]), 1, what);
+        }
+        assertEquals(await pool(), stable);
+        // The amount is compared after rounding, as it is stored.
+        const rounded = await row<{ r: Row }>(
+          `select public.record_usage(null, $1, 'builder-model-id', 10, 0, 10, 0.25004, 'studio', 'probe/one/turn/1') as r`,
+          [roleId],
+        );
+        assertEquals(rounded.r.ledger_id, first.r.ledger_id);
+
         const signatures = await rows(
           `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'record_usage'`,
         );
@@ -2063,6 +2087,40 @@ Deno.test("migrations on PGlite", {
       assertEquals(switched.scene, "devcam");
       assert(switched.updated_at.getTime() >= scene.updated_at.getTime());
     });
+
+    await t.step(
+      "the request-id rollback restores the eight-argument record_usage, and the migration applies again after it",
+      async () => {
+        const args = async () =>
+          (await rows<{ args: string }>(
+            `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'record_usage'`,
+          )).map((r) => r.args);
+        const rollbackSql = await Deno.readTextFile(
+          new URL("../../rollbacks/20260921000200_ledger_request_id_rollback.sql", import.meta.url),
+        );
+        const migrationSql = await Deno.readTextFile(
+          new URL("20260921000200_ledger_request_id.sql", MIGRATIONS_DIR),
+        );
+        await db.exec(rollbackSql);
+        await db.exec(rollbackSql);
+        assertEquals(await args(), [
+          "p_card_id uuid, p_role_id uuid, p_model text, p_input_tokens integer, p_cached_tokens integer, p_output_tokens integer, p_usd numeric, p_billed_to ledger_billing",
+        ]);
+        assertEquals(
+          await rows(`select column_name from information_schema.columns where table_schema = 'public' and table_name = 'ledger' and column_name = 'request_id'`),
+          [],
+        );
+        const service = await row<{ anon: boolean; service_role: boolean }>(
+          `select has_function_privilege('anon', 'public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing)', 'execute') as anon,
+                  has_function_privilege('service_role', 'public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing)', 'execute') as service_role`,
+        );
+        assertEquals(service, { anon: false, service_role: true });
+        await db.exec(migrationSql);
+        assertEquals(await args(), [
+          "p_card_id uuid, p_role_id uuid, p_model text, p_input_tokens integer, p_cached_tokens integer, p_output_tokens integer, p_usd numeric, p_billed_to ledger_billing, p_request_id text",
+        ]);
+      },
+    );
   } finally {
     await db.close();
   }

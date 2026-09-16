@@ -3,7 +3,8 @@
 -- The dispatcher retries a ledger write it could not confirm. A write that
 -- committed while the client saw an error would then be recorded, and taken
 -- from the pool, twice. Each dispatcher row now carries a request id made when
--- the row is priced, and record_usage writes an id once.
+-- the row is priced, and record_usage writes an id once. The same id with
+-- other values is refused rather than taken as a retry.
 
 set lock_timeout = '5s';
 
@@ -43,7 +44,7 @@ declare
   v_balance numeric(12,4);
   v_daily numeric(12,4);
   v_actual numeric(12,4);
-  v_existing uuid;
+  v_existing public.ledger%rowtype;
 begin
   if p_model is null or p_model = '' then
     raise exception 'p_model is required';
@@ -64,20 +65,27 @@ begin
   end if;
 
   -- A repeated request id is a retry of a write that already landed: return
-  -- that row's result and change nothing. The card lock above, or the pool
-  -- lock when there is no card, makes a concurrent retry wait for the first.
+  -- that row's result and change nothing. The same id with other values is a
+  -- fault in the caller and is refused. The card lock above, or the pool lock
+  -- when there is no card, makes a concurrent retry wait for the first.
   if p_request_id is not null then
     if p_card_id is null then
       perform 1 from public.pool where id = 1 for update;
     end if;
-    select id into v_existing from public.ledger where request_id = p_request_id;
+    select * into v_existing from public.ledger where request_id = p_request_id;
     if found then
+      if v_existing.card_id is distinct from p_card_id
+        or v_existing.model is distinct from p_model
+        or v_existing.usd is distinct from v_usd
+        or v_existing.billed_to is distinct from p_billed_to then
+        raise exception 'request id % was written with different values', p_request_id;
+      end if;
       select balance_usd, daily_spent_usd into v_balance, v_daily from public.pool where id = 1;
       if p_card_id is not null then
         select actual_usd into v_actual from public.cards where id = p_card_id;
       end if;
       return jsonb_build_object(
-        'ledger_id', v_existing,
+        'ledger_id', v_existing.id,
         'balance_usd', v_balance,
         'daily_spent_usd', v_daily,
         'actual_usd', v_actual
@@ -135,3 +143,6 @@ $$;
 
 revoke all on function public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing, text) from public, anon, authenticated;
 grant execute on function public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing, text) to service_role;
+
+-- PostgREST caches function signatures; reload so rpc/record_usage takes p_request_id at once.
+notify pgrst, 'reload schema';
