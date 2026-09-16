@@ -23,7 +23,7 @@ Out: funding a next game (no folder or card exists; the next game is picked by a
 ## Behaviour
 
 **Landing page.**
-- It opens with the pitch and Contribute beside a Right now panel (available money, what is building, the last three agent actions).
+- It opens with the pitch and Contribute beside a Right now panel (available money, what is building, what shipped last). ~~the last three agent actions~~ Superseded 2026-09-16: the panel carries no list, so it stays about as tall as the pitch and the row leaves no dead space; agent actions are the Ledger section below.
 - Building now shows only when a card is building.
 - Fund what's next lists proposed, designing and voted cards as boxes in a one-, two- or three-column grid. The picked cards come first, and the category filter sits above the grid.
 - Queued lists funded cards as rows.

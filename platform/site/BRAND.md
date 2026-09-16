@@ -60,7 +60,7 @@ Five sizes on a 1.2 ratio from a 17px body **(tested)**. Every font-size is one 
 
 **Landing intro.** `.intro` holds the hero and the Right now panel: side by side (3:2) from 64rem, stacked below.
 - **Hero:** one `h1` (the first pitch sentence), a `.lede` (the second), the muted launch line, the Contribute button and the muted split line.
-- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, the last three agent actions, and a Full ledger link.
+- **Right now (`aside.panel`):** the Available figure, what is building (or "Nothing is building"), "Latest shipped: <title>" once a card has shipped, and a Full ledger link. It carries no list: the panel has to stay about as tall as the pitch beside it, or the grid row leaves dead space under the pitch. Agent actions are the Ledger section below and the ledger page.
 
 **Landing order.**
 1. Intro.
