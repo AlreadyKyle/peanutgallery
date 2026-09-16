@@ -23,7 +23,7 @@ In:
 - A session meter that records each turn and settles the session against the result line, or an estimate when there is none. The session and the startup probe both use it.
 - The fallback price for an unknown model.
 - The refusal order at `start`, and founder billing for a session on the wrong account.
-- A wall clock, `SESSION_MAX_MINUTES`.
+- A wall clock, `SESSION_MAX_MINUTES`, documented in `.env.example`.
 - SIGINT before SIGTERM when a session is interrupted.
 - A price check for every writing role's model at startup, and for `MODEL_DIRECTOR` and `MODEL_HOST` in `config.ts`, the env file generator and `provision.sh`.
 
@@ -31,7 +31,6 @@ Out:
 - `record_usage` and every migration. The settle rows are ordinary non-negative rows.
 - The command line's own `total_cost_usd`, which is priced from a table that is not ours. It is logged for comparison and never recorded.
 - `--max-budget-usd`, which stays as the command line's own ceiling.
-- `.env.example`, which does not list `SESSION_MAX_MINUTES` yet.
 - Any live run of a session or the probe.
 
 ## Behaviour
@@ -144,6 +143,8 @@ CLI total_cost_usd: 0.05404125 USD (its own table; not recorded)
 - ops `tests 23, pass 22, skipped 1`
 - deno `ok | 58 passed (33 steps) | 0 failed`
 - `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=299`
+
+After merging `origin/gate-hardening` (03182ec, no conflicts), `pnpm verify` exit 0 again: dispatcher `Tests  247 passed (247)`, gate `PASS: gate tests passed=211`, ops `tests 23, pass 22, skipped 1`, the other counts unchanged.
 
 Pending: both live lines.
 
