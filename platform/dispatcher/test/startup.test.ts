@@ -14,7 +14,7 @@ const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
 const USAGE: TurnUsage = { input_tokens: 1000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 200 };
 const ROW: MeterRow = { ...priceUsage(PRICE_TABLE, 'builder-class', USAGE), request_id: 'probe/test/turn/1' };
-const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false };
+const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] };
 // The settle row for output the turn did not report.
 const SETTLE_ROW: MeterRow = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006, request_id: 'probe/test/settle/1' };
 
@@ -56,7 +56,7 @@ function probeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
     tools: ['Glob', 'Grep', 'Read'],
     apiKeySource: 'ANTHROPIC_API_KEY',
     costUsd: 0.009,
-    metering: { rows: [ROW, SETTLE_ROW], basis: 'result', fallbackModels: [], turnModels: ['builder-class'], overcountUsd: 0, mismatch: false, anomaly: false },
+    metering: { rows: [ROW, SETTLE_ROW], basis: 'result', fallbackModels: [], turnModels: ['builder-class'], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] },
     turns: 1,
     exitCode: 0,
     ...overrides,

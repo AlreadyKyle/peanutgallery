@@ -218,6 +218,7 @@ describe('runAgentSession metering', () => {
           fallback_models: [],
           mismatch: false,
           anomaly: false,
+          zeroed_fields: [],
           overcount_usd: 0,
           cli_total_cost_usd: null,
         },
@@ -382,6 +383,25 @@ describe('runAgentSession metering', () => {
     ]);
     expect(db.events.find((event) => event.type === 'error')?.payload).toMatchObject({ basis: 'estimate', anomaly: true });
     expect(alert.messages).toEqual([expect.stringContaining('modelUsage reported fewer tokens than the turns')]);
+    expect(alert.messages[0]).toContain('modelUsage reported 0 for builder-class input_tokens, builder-class output_tokens');
+  });
+
+  it('alerts on a zeroed input count and settles on the result line', async () => {
+    const db = new FakeDb();
+    const modelUsage = [{ model: 'builder-class', input_tokens: 0, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null }];
+    const { alert } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent());
+        await emit(usageEvent(1, 100));
+      },
+      {},
+      {},
+      { modelUsage },
+    );
+    expect(db.ledger).toHaveLength(1);
+    expect(db.events.find((event) => event.type === 'error')?.payload).toMatchObject({ basis: 'result', anomaly: false, zeroed_fields: ['builder-class input_tokens'] });
+    expect(alert.messages).toEqual([expect.stringContaining('modelUsage reported 0 for builder-class input_tokens')]);
   });
 
   it('meters a side model at fallback rates and alerts about it once per process', async () => {

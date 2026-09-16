@@ -60,6 +60,9 @@ export interface Settlement {
   mismatch: boolean;
   // True when modelUsage reports less output than the turns did.
   anomaly: boolean;
+  // "<model> <class>" for each token class modelUsage reports as zero where the turns reported some:
+  // a field that may have been renamed. Alerted; the larger count already covers the amount.
+  zeroedFields: string[];
 }
 
 type TurnInput = Pick<Extract<AgentEvent, { type: 'turn_usage' }>, 'model' | 'usage' | 'contentChars' | 'thinking'>;
@@ -99,6 +102,7 @@ function estimatedOutput(chars: number, reported: number, thinking: boolean): nu
 export class SessionMeter {
   private readonly table: PriceTable;
   private readonly idPrefix: string;
+  private readonly defaultModel: string;
   private readonly fallbackRates: ModelPrice;
   private readonly seen = new Map<string, Seen>();
   private readonly committed = new Map<string, LedgerUsage>();
@@ -106,11 +110,15 @@ export class SessionMeter {
   private readonly fallbacks = new Set<string>();
   private lastTurn: { model: string; usage: TurnUsage } | null = null;
   private turnRows = 0;
+  // Compactions before any turn, charged to the first turn's model when one arrives.
+  private readonly earlyCompactions: CompactionInput[] = [];
 
   // idPrefix must be unique to this session or probe run: the ids it makes are unique only under it.
-  constructor(table: PriceTable, idPrefix: string) {
+  // defaultModel is the model the session was started on, for a compaction no turn names.
+  constructor(table: PriceTable, idPrefix: string, defaultModel = '') {
     this.table = table;
     this.idPrefix = idPrefix;
+    this.defaultModel = defaultModel;
     this.fallbackRates = fallbackPrice(table);
   }
 
@@ -132,6 +140,7 @@ export class SessionMeter {
     seen.output += turn.usage.output_tokens;
     seen.estimatedOutput += estimatedOutput(turn.contentChars, turn.usage.output_tokens, turn.thinking);
     this.lastTurn = { model: turn.model, usage: turn.usage };
+    for (const compaction of this.earlyCompactions.splice(0)) this.chargeCompaction(turn.model, compaction.preTokens);
     if (nonZero(row)) this.pending.push(row);
     return { row, fallback };
   }
@@ -143,10 +152,26 @@ export class SessionMeter {
 
   // A compaction is a request of its own: the context it summarised as input, and
   // IN_FLIGHT_OUTPUT_TOKENS of output. Only the estimate charges it; modelUsage already counts it.
+  // A compaction before any turn waits for the first turn's model, since the init line's model may
+  // not be the name the turns report.
   addCompaction(compaction: CompactionInput): void {
-    const seen = this.tally(compaction.model);
-    seen.compactionInput += compaction.preTokens;
+    if (this.lastTurn === null) {
+      this.earlyCompactions.push(compaction);
+      return;
+    }
+    this.chargeCompaction(compaction.model || this.lastTurn.model, compaction.preTokens);
+  }
+
+  private chargeCompaction(model: string, preTokens: number): void {
+    const seen = this.tally(model);
+    seen.compactionInput += preTokens;
     seen.compactionOutput += IN_FLIGHT_OUTPUT_TOKENS;
+  }
+
+  // The model for a compaction no turn claimed: the name it came with when the table prices it,
+  // otherwise the session's model.
+  private earlyModel(compaction: CompactionInput): string {
+    return compaction.model && modelPrice(this.table, compaction.model) ? compaction.model : this.defaultModel || compaction.model;
   }
 
   // What this session's rows total: the committed ones and the pending ones.
@@ -170,6 +195,11 @@ export class SessionMeter {
   // including the request in flight. The ceiling is checked against it while the session runs.
   liveEstimateUsd(): number {
     let usd = 0;
+    for (const compaction of this.earlyCompactions) {
+      const model = this.earlyModel(compaction);
+      const request: TurnUsage = { input_tokens: compaction.preTokens, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: IN_FLIGHT_OUTPUT_TOKENS };
+      usd += priceWith(this.price([model]).price, model, request).usd;
+    }
     for (const model of this.seen.keys()) {
       usd += priceWith(this.price([model]).price, model, this.estimateUsage([model], true)).usd;
     }
@@ -177,12 +207,15 @@ export class SessionMeter {
   }
 
   settle(end: EndEvent | null): Settlement {
+    // No turn arrived to claim these, so they are charged now.
+    for (const compaction of this.earlyCompactions.splice(0)) this.chargeCompaction(this.earlyModel(compaction), compaction.preTokens);
     const reported = end?.modelUsage ?? [];
     const turnModels = [...this.seen.keys()];
     const rows: MeterRow[] = [...this.pending];
     let settleRows = 0;
     let overcount = 0;
     let anomaly = false;
+    const zeroedFields: string[] = [];
     let estimated = reported.length === 0;
     const { groups, mismatch } = reported.length === 0 ? { groups: turnModels.map((model) => ({ tallied: [model], reported: [] })), mismatch: false } : this.groups(reported);
 
@@ -193,6 +226,7 @@ export class SessionMeter {
         usage = this.estimateUsage(group.tallied, end === null);
       } else {
         const result = this.resultUsage(group, reported.length === 1 ? (end?.usage ?? null) : null);
+        zeroedFields.push(...result.zeroed.map((field) => `${this.rowModel(group)} ${field}`));
         anomaly ||= result.anomaly;
         estimated ||= result.anomaly;
         usage = result.usage;
@@ -218,7 +252,7 @@ export class SessionMeter {
         rows.push({ ...row, request_id: `${this.idPrefix}/settle/${settleRows}` });
       }
     }
-    return { rows, basis: estimated ? 'estimate' : 'result', fallbackModels: [...this.fallbacks], turnModels, overcountUsd: overcount, mismatch, anomaly };
+    return { rows, basis: estimated ? 'estimate' : 'result', fallbackModels: [...this.fallbacks], turnModels, overcountUsd: overcount, mismatch, anomaly, zeroedFields };
   }
 
   // Each model both the turns and modelUsage name is its own group. The rest are grouped so no
@@ -281,7 +315,7 @@ export class SessionMeter {
   // Each token class at the larger of modelUsage and the turns. Output modelUsage reports below the
   // turns is an anomaly (a renamed or missing field), and the output then takes the estimate. A short
   // count of any other class is covered by the larger count alone.
-  private resultUsage(group: Group, sessionUsage: TurnUsage | null): { usage: TurnUsage; anomaly: boolean } {
+  private resultUsage(group: Group, sessionUsage: TurnUsage | null): { usage: TurnUsage; anomaly: boolean; zeroed: string[] } {
     const seen = this.seenTotal(group.tallied);
     const rep = { input: 0, creation: 0, read: 0, output: 0 };
     for (const entry of group.reported) {
@@ -291,6 +325,16 @@ export class SessionMeter {
       rep.output += entry.output_tokens;
     }
     const anomaly = rep.output < seen.output;
+    const zeroed = (
+      [
+        ['input_tokens', rep.input, seen.input],
+        ['cache_creation_input_tokens', rep.creation, seen.creation],
+        ['cache_read_input_tokens', rep.read, seen.read],
+        ['output_tokens', rep.output, seen.output],
+      ] as const
+    )
+      .filter(([, reportedCount, seenCount]) => reportedCount === 0 && seenCount > 0)
+      .map(([field]) => field);
     const creation = Math.max(rep.creation, seen.creation);
     // Cache writes the turns did not record count as one-hour. With one model in modelUsage the result
     // line's own split covers the whole session and is used instead.
@@ -303,7 +347,7 @@ export class SessionMeter {
       cache_read_input_tokens: Math.max(rep.read, seen.read),
       output_tokens: anomaly ? Math.max(rep.output, seen.output, seen.estimatedOutput) : Math.max(rep.output, seen.output),
     };
-    return { usage, anomaly };
+    return { usage, anomaly, zeroed };
   }
 
   // The committed rows plus the pending ones, which settle writes first.

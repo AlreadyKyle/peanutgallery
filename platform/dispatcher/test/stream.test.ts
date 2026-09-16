@@ -166,8 +166,11 @@ describe('StreamParser', () => {
         thinking: false,
       },
     ]);
-    // The later line's output reaches the estimate only.
-    expect(parser.push(line('end_turn', 9))).toEqual([{ type: 'turn_content', model: 'claude-sonnet-5', contentChars: 0, thinking: false, outputTokens: 9 }]);
+    // message.usage is a running total per id: the same 9 again is nothing new.
+    expect(parser.push(line('end_turn', 9))).toEqual([]);
+    // A higher total passes on only the increase.
+    expect(parser.push(line('end_turn', 30))).toEqual([{ type: 'turn_content', model: 'claude-sonnet-5', contentChars: 0, thinking: false, outputTokens: 21 }]);
+    expect(parser.push(line('end_turn', 30))).toEqual([]);
     expect(parser.turns).toBe(1);
     expect(parser.finish()).toEqual([]);
   });
@@ -207,7 +210,7 @@ describe('turn boundaries in the real stream shape', () => {
     parser.push(assistant([{ type: 'text', text: 'hello' }]));
     parser.push(user);
     expect(parser.push(assistant([{ type: 'text', text: 'late text' }]))).toEqual([
-      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 9, thinking: false, outputTokens: 2 },
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 9, thinking: false, outputTokens: 0 },
       { type: 'message', text: 'late text' },
     ]);
     expect(parser.turns).toBe(1);
@@ -219,11 +222,28 @@ describe('turn boundaries in the real stream shape', () => {
     expect(parser.push(assistant([{ type: 'text', text: 'b' }], 'msg_b')).map((e) => e.type)).toEqual(['turn_usage', 'message']);
     expect(parser.push(assistant([{ type: 'text', text: 'again' }], 'msg_a'))).toEqual([
       expect.objectContaining({ type: 'turn_usage', turn: 2 }),
-      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 5, thinking: false, outputTokens: 2 },
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 5, thinking: false, outputTokens: 0 },
       { type: 'message', text: 'again' },
     ]);
     expect(parser.turns).toBe(2);
     expect(parser.finish()).toEqual([]);
+  });
+
+  it('marks a thinking block once per id across A, B, A', () => {
+    const thinking = [{ type: 'thinking', thinking: '', signature: 's' }];
+    const withThinking = new StreamParser();
+    withThinking.push(assistant(thinking, 'msg_a'));
+    withThinking.push(assistant([{ type: 'text', text: 'b' }], 'msg_b'));
+    // A's turn already carried its thinking block, so a later one adds nothing.
+    expect(withThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([]);
+
+    const lateThinking = new StreamParser();
+    lateThinking.push(assistant([{ type: 'text', text: 'a' }], 'msg_a'));
+    lateThinking.push(assistant([{ type: 'text', text: 'b' }], 'msg_b'));
+    expect(lateThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 0, thinking: true, outputTokens: 0 },
+    ]);
+    expect(lateThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([]);
   });
 });
 

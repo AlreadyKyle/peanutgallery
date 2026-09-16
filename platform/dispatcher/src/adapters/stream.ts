@@ -7,8 +7,9 @@
 // result line, another message id, or the end of the stream. A line that does carry a stop_reason
 // ends the turn at once. Usage is emitted once per turn from the last usage block seen for the id,
 // so metering runs before the next request's turn, not one turn late. A later line for any turn
-// already emitted adds no turn and no usage; its characters and output are passed on as
-// turn_content. A compact_boundary line is passed on as a compaction, a request the turns do not
+// already emitted adds no turn and no usage; its characters are passed on as turn_content, with the
+// increase in output over the highest seen for its id (message.usage is a running total per id) and
+// a thinking block only the first time its id shows one. A compact_boundary line is passed on as a compaction, a request the turns do not
 // show.
 // The assistant lines' usage is not the whole bill: Claude Code writes them before the turn's output
 // is counted, so the result line's usage and modelUsage carry the totals the meter settles against.
@@ -94,8 +95,9 @@ export function clip(text: string, limit: number = RESULT_TEXT_LIMIT): string {
 
 export class StreamParser {
   private pending: PendingTurn | null = null;
-  // Every message id whose usage was emitted, with its model.
-  private readonly emitted = new Map<string, string>();
+  // Every message id whose usage was emitted: its model, the highest output seen and whether a
+  // thinking block was counted.
+  private readonly emitted = new Map<string, { model: string; output: number; thinking: boolean }>();
   private lastModel = '';
   private sessionModel = '';
   private turnCount = 0;
@@ -140,7 +142,7 @@ export class StreamParser {
     if (!this.pending) return [];
     const turn = this.pending;
     this.pending = null;
-    this.emitted.set(turn.id, turn.model);
+    this.emitted.set(turn.id, { model: turn.model, output: turn.usage.output_tokens, thinking: turn.thinking });
     if (turn.model) this.lastModel = turn.model;
     return [{ type: 'turn_usage', turn: this.turnCount, model: turn.model, usage: turn.usage, contentChars: turn.contentChars, thinking: turn.thinking }];
   }
@@ -203,9 +205,16 @@ export class StreamParser {
         });
       }
     }
-    const outputTokens = usage?.output_tokens ?? 0;
-    if (finished && (late.contentChars > 0 || late.thinking || outputTokens > 0)) {
-      flushed.push({ type: 'turn_content', model: model || (this.emitted.get(id) ?? ''), contentChars: late.contentChars, thinking: late.thinking, outputTokens });
+    const prior = finished ? this.emitted.get(id) : undefined;
+    if (prior) {
+      const reported = usage?.output_tokens ?? 0;
+      const outputTokens = Math.max(0, reported - prior.output);
+      const thinking = late.thinking && !prior.thinking;
+      prior.output = Math.max(prior.output, reported);
+      prior.thinking ||= late.thinking;
+      if (late.contentChars > 0 || thinking || outputTokens > 0) {
+        flushed.push({ type: 'turn_content', model: model || prior.model, contentChars: late.contentChars, thinking, outputTokens });
+      }
     }
     if (stopReason) events.push(...this.flush());
     return [...flushed, ...events];

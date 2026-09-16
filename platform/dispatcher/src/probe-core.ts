@@ -140,8 +140,8 @@ export interface ProbeResult {
 // The probe's ledger rows, metered as a card session is (metering.ts): nothing is written while the
 // probe runs, so every turn row is still pending and settle returns it, followed by the settle rows.
 // The ids are unique under probe/<run>, so the rows are written once however often a write is retried.
-export function probeMetering(table: PriceTable, events: readonly AgentEvent[], idPrefix: string = `probe/${randomUUID()}`): Settlement {
-  const meter = new SessionMeter(table, idPrefix);
+export function probeMetering(table: PriceTable, events: readonly AgentEvent[], idPrefix: string = `probe/${randomUUID()}`, model = ''): Settlement {
+  const meter = new SessionMeter(table, idPrefix, model);
   for (const event of events) {
     if (event.type === 'turn_usage') meter.addTurn(event);
     if (event.type === 'turn_content') meter.addContent(event);
@@ -186,7 +186,7 @@ export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Pr
       tools: start?.type === 'start' ? start.tools : [],
       apiKeySource: start?.type === 'start' ? start.apiKeySource : null,
       costUsd: end?.type === 'end' ? end.totalCostUsd : null,
-      metering: probeMetering(options.priceTable, events),
+      metering: probeMetering(options.priceTable, events, `probe/${randomUUID()}`, options.model),
       turns: result.turns,
       exitCode: result.exitCode,
     };

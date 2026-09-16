@@ -187,7 +187,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const wallClock = setTimeout(() => abort('wall_clock', `session ran past ${deps.sessionMaxMs / 60_000} minutes`), deps.sessionMaxMs);
 
   // Row ids are unique under the card and this run, so a retried write is recorded once.
-  const meter = new SessionMeter(deps.priceTable, `${card.id}/${randomUUID()}`);
+  const meter = new SessionMeter(deps.priceTable, `${card.id}/${randomUUID()}`, spec.model);
   const retryMs = deps.ledgerRetryMs ?? LEDGER_RETRY_MS;
   // Who paid. An unattended session bills the pool only once its init line shows the studio key; until
   // then, and for a session on the wrong account, the spend is recorded as the founder's.
@@ -388,6 +388,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
     ...(settled.basis === 'estimate' && metered
       ? [settled.anomaly ? 'modelUsage reported fewer tokens than the turns, so the session was settled on the estimate' : 'no usable result line, so the session was settled on the estimate']
       : []),
+    ...(settled.zeroedFields.length > 0 ? [`modelUsage reported 0 for ${settled.zeroedFields.join(', ')} where the turns reported tokens`] : []),
     ...(settled.mismatch ? [`modelUsage names ${reportedModels.join(', ') || 'no model'} but the turns named ${settled.turnModels.join(', ')}`] : []),
     ...(turnFallbacks.length > 0 ? [`priced at fallback rates: ${turnFallbacks.join(', ')}`] : []),
     ...(settled.overcountUsd > 0 ? [`the rows recorded ${settled.overcountUsd} USD above the settled total`] : []),
@@ -405,6 +406,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
     fallback_models: settled.fallbackModels,
     mismatch: settled.mismatch,
     anomaly: settled.anomaly,
+    zeroed_fields: settled.zeroedFields,
     overcount_usd: settled.overcountUsd,
     cli_total_cost_usd: end?.totalCostUsd ?? null,
   };

@@ -42,7 +42,8 @@ export type AgentEvent =
   // whose text Claude Code does not write.
   | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number; thinking: boolean }
   // Content on a line for a turn whose usage was already emitted, so the estimate still counts it;
-  // outputTokens is that line's reported output.
+  // outputTokens is the increase in the id's reported output, and thinking is true only the first
+  // time the id shows a thinking block.
   | { type: 'turn_content'; model: string; contentChars: number; thinking: boolean; outputTokens: number }
   // A compact_boundary line: Claude Code summarised a context of preTokens tokens in a request of its
   // own, on the model named (the last turn's, or the session's before any turn).
