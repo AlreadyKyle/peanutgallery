@@ -5,7 +5,7 @@
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Card, Db } from './db.js';
-import type { Halt } from './halt.js';
+import { haltReason } from './halt.js';
 import { errorMessage, type Logger } from './log.js';
 import { selectCard } from './select.js';
 import { available, canStart, concurrency, newYorkDate, spentToday, type SleepReason } from './throttle.js';
@@ -20,7 +20,6 @@ export interface TickDeps {
   running: Map<string, Date>;
   // How long a card may stay in the pipeline before the board is alerted.
   stuckAfterMs: number;
-  halt: Halt;
   now: () => Date;
   runCard: (card: Card) => Promise<void>;
   log: Logger;
@@ -41,7 +40,7 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
 }
 
 async function evaluate(deps: TickDeps): Promise<TickOutcome> {
-  if (deps.halt.reason) return { action: 'sleep', reason: 'halted' };
+  if (haltReason()) return { action: 'sleep', reason: 'halted' };
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
   if (studio.agent_mode !== deps.mode) {
@@ -130,5 +129,8 @@ function startCard(deps: TickDeps, card: Card): void {
   deps
     .runCard(card)
     .catch((error: unknown) => deps.log.error('tick', `card ${card.id} pipeline threw`, { error: errorMessage(error) }))
-    .finally(() => deps.running.delete(card.id));
+    .finally(() => {
+      deps.running.delete(card.id);
+      deps.alert.forget(`stuck:${card.id}`);
+    });
 }

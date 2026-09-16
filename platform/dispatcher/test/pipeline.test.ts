@@ -6,15 +6,16 @@ import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
-import type { Halt } from '../src/halt.js';
+import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
-import { runCardPipeline, type PipelineDeps } from '../src/pipeline.js';
+import { runCardPipeline, type PipelineDeps, type PipelineTimings } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
 import type { BotExec } from '../src/smoke.js';
-import { AGENT_EMAIL, git } from '../src/worktree.js';
+import { AGENT_EMAIL, defaultGitRunner, git, setGitRunner, type GitCall } from '../src/worktree.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
+import { githubGitRoute, type CompareFile } from './helpers/github-git.js';
 import { mockFetch, type FetchCall, type Reply } from './helpers/mock-fetch.js';
 
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
@@ -25,6 +26,7 @@ const NETLIFY = 'https://api.netlify.com/api/v1/sites';
 const SITE_URL = 'https://platform.local';
 const SEED_URL = 'https://seed.local';
 const CHECK_RUNS = /^https:\/\/api\.github\.com\/repos\/owner\/repo\/commits\/([^/]+)\/check-runs/;
+const deploysUrl = (site: string) => `${NETLIFY}/${site}/deploys?page=1&per_page=50`;
 
 let dir: string;
 let origin: string;
@@ -94,8 +96,11 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// A test that merges for real moves origin's main; every test starts from the initial commit.
+// A test that merges for real moves origin's main; every test starts from the initial commit and
+// with no halt.
 beforeEach(async () => {
+  resetHalt();
+  setGitRunner(null);
   await git(['update-ref', 'refs/heads/main', initialSha], origin);
 });
 
@@ -115,19 +120,21 @@ function originHas(branch: string): boolean {
 type Answer = Reply | ((head: string) => Reply);
 
 // GitHub and Netlify answers for a card that sails through; tests override what they need. The
-// pull request's head is the sha the dispatcher really pushed, read from the origin repository.
+// pull request's head is the sha the dispatcher really pushed, read from the origin repository, and
+// compare and trees are computed from it.
 interface Remote {
   created?: Answer;
   existing?: Answer;
   pull?: Answer;
   gate?: Reply;
   merge?: Answer;
-  deploys?: Reply;
+  deploys?: Answer;
   site?: Answer;
   page?: Answer;
   version?: Reply;
   restore?: Reply;
   ref?: Reply;
+  compareExtra?: CompareFile[];
 }
 
 function answer(value: Answer | undefined, head: string, fallback: Reply): Reply {
@@ -135,9 +142,20 @@ function answer(value: Answer | undefined, head: string, fallback: Reply): Reply
   return typeof value === 'function' ? value(head) : value;
 }
 
+// Revert routes that answer for any merge sha.
+function revertRoute(method: string, url: string, ref?: Reply): Reply | undefined {
+  if (method === 'GET' && url === `${GITHUB}/git/commits/parent-sha`) return { status: 200, json: { sha: 'parent-sha', tree: { sha: 'parent-tree' } } };
+  const commit = /\/git\/commits\/([^/]+)$/.exec(url);
+  if (method === 'GET' && commit) return { status: 200, json: { sha: commit[1], parents: [{ sha: 'parent-sha' }] } };
+  if (method === 'POST' && url === `${GITHUB}/git/commits`) return { status: 201, json: { sha: 'revert-sha' } };
+  if (method === 'PATCH' && url === `${GITHUB}/git/refs/heads/main`) return ref ?? { status: 200, json: { object: { sha: 'revert-sha' } } };
+  return undefined;
+}
+
 function remote(over: Remote = {}) {
   const state = { head: '' };
   const readyDeploy = { id: 'dep-2', state: 'ready', commit_ref: MERGE_SHA, context: 'production' };
+  const github = githubGitRoute(origin, over.compareExtra);
   const mock = mockFetch((method, url, body) => {
     if (method === 'POST' && url === `${GITHUB}/pulls`) {
       state.head = originSha(`refs/heads/${(body as { head: string }).head}`);
@@ -150,37 +168,26 @@ function remote(over: Remote = {}) {
     if (method === 'GET' && CHECK_RUNS.test(url)) {
       return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
     }
+    const git = github(method, url);
+    if (git) return git;
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return answer(over.merge, state.head, { status: 200, json: { sha: MERGE_SHA } });
-    if (method === 'GET' && url === `${NETLIFY}/site-platform/deploys?per_page=20`) return over.deploys ?? { status: 200, json: [readyDeploy] };
+    if (method === 'GET' && url === deploysUrl('site-platform')) return answer(over.deploys, state.head, { status: 200, json: [readyDeploy] });
     if (method === 'GET' && url === `${NETLIFY}/site-platform`) return answer(over.site, state.head, { status: 200, json: { ssl_url: `${SITE_URL}/` } });
     if (method === 'POST' && url === `${NETLIFY}/site-platform/deploys/dep-1/restore`) return over.restore ?? { status: 200, json: { id: 'dep-1' } };
     if (method === 'GET' && url === `${SITE_URL}/`) return answer(over.page, state.head, { status: 200, text: `<meta name="build-sha" content="${MERGE_SHA}">` });
     if (method === 'GET' && url === `${SITE_URL}/version.json`) return over.version ?? { status: 200, json: { sha: MERGE_SHA } };
-    if (method === 'GET' && url === `${GITHUB}/git/commits/${MERGE_SHA}`) return { status: 200, json: { sha: MERGE_SHA, parents: [{ sha: 'parent-sha' }] } };
-    if (method === 'GET' && url === `${GITHUB}/git/commits/parent-sha`) return { status: 200, json: { sha: 'parent-sha', tree: { sha: 'parent-tree' } } };
-    if (method === 'POST' && url === `${GITHUB}/git/commits`) return { status: 201, json: { sha: 'revert-sha' } };
-    if (method === 'PATCH' && url === `${GITHUB}/git/refs/heads/main`) return over.ref ?? { status: 200, json: { object: { sha: 'revert-sha' } } };
-    return undefined;
+    return revertRoute(method, url, over.ref);
   });
   return { ...mock, state };
 }
 
-function deps(db: FakeDb, adapter: FakeAdapter, fetchFn: typeof fetch, stop = new AbortController(), alert = new RecordingAlerter(), halt: Halt = { reason: null }): PipelineDeps {
-  return {
-    db,
-    adapter,
-    config,
-    log: silent,
-    alert,
-    stopSignal: stop.signal,
-    now: () => NOW,
-    halt,
-    fetchFn,
-    timings: { prHeadTimeoutMs: 50, prHeadIntervalMs: 5, retryDelayMs: 1 },
-  };
+const FAST: Partial<PipelineTimings> = { prHeadTimeoutMs: 50, prHeadIntervalMs: 5, retryDelayMs: 1, deployIntervalMs: 5, mergeStateTimeoutMs: 40, mergeStateIntervalMs: 5 };
+
+function deps(db: FakeDb, adapter: FakeAdapter, fetchFn: typeof fetch, stop = new AbortController(), alert = new RecordingAlerter()): PipelineDeps {
+  return { db, adapter, config, log: silent, alert, stopSignal: stop.signal, now: () => NOW, fetchFn, timings: FAST };
 }
 
-const platformCard = () => card({ folder: 'platform', lane: 'code', acceptance_test: null, intent: 'Name the page.' });
+const platformCard = (overrides: Parameters<typeof card>[0] = {}) => card({ folder: 'platform', lane: 'code', acceptance_test: null, intent: 'Name the page.', ...overrides });
 const OLDER_GREEN = { id: 'row-1', folder: 'platform' as const, sha: 'older-sha', netlify_deploy_id: 'dep-1', is_green: true, smoke_result: 'pass: build older-sh served', created_at: NOW.toISOString() };
 
 const editSite: FakeScript = async (spec, emit) => {
@@ -196,6 +203,15 @@ const editSpawnTable = async (worktree: string, baseCost: number) => {
 
 function urls(calls: FetchCall[]): string[] {
   return calls.map((c) => `${c.method} ${c.url}`);
+}
+
+function recordGit(): GitCall[] {
+  const calls: GitCall[] = [];
+  setGitRunner((call) => {
+    calls.push(call);
+    return defaultGitRunner(call);
+  });
+  return calls;
 }
 
 describe('runCardPipeline', () => {
@@ -215,19 +231,27 @@ describe('runCardPipeline', () => {
     expect(final).toMatchObject({ stage: 'live', failing_check: null, branch: 'card/4c2f5a1e-code', commit_sha: MERGE_SHA, actual_usd: 0.0045 });
     expect(db.ledger).toHaveLength(1);
     expect(db.deploys).toEqual([expect.objectContaining({ folder: 'platform', sha: MERGE_SHA, netlify_deploy_id: 'dep-2', is_green: true, smoke_result: 'pass: build merge-sh served' })]);
-    expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_pass', 'ship']);
+    expect(db.events.map((e) => [e.type, e.payload.step])).toEqual([
+      ['start', undefined],
+      ['gate_pass', undefined],
+      ['message', 'smoke_pass'],
+      ['ship', undefined],
+    ]);
     expect(db.events.at(-1)?.payload).toMatchObject({ sha: MERGE_SHA, deploy_id: 'dep-2', url: SITE_URL });
     expect(state.head).toMatch(/^[0-9a-f]{40}$/);
     expect(urls(calls)).toEqual([
       `POST ${GITHUB}/pulls`,
       `GET ${GITHUB}/commits/${state.head}/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/compare/${initialSha}...${state.head}`,
+      `GET ${GITHUB}/git/trees/${initialSha}?recursive=1`,
+      `GET ${GITHUB}/git/trees/${state.head}?recursive=1`,
       `PUT ${GITHUB}/pulls/5/merge`,
-      `GET ${NETLIFY}/site-platform/deploys?per_page=20`,
+      `GET ${deploysUrl('site-platform')}`,
       `GET ${NETLIFY}/site-platform`,
       `GET ${SITE_URL}/`,
       `GET ${SITE_URL}/version.json`,
     ]);
-    expect(calls[2]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
+    expect(calls[5]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
     expect(calls[0]?.body).toMatchObject({ head: 'card/4c2f5a1e-code', base: 'main' });
     expect(String(calls[0]?.body && (calls[0].body as { body: string }).body)).toContain(`Card-Id: ${c.id}`);
 
@@ -272,25 +296,26 @@ describe('runCardPipeline', () => {
     ]);
   });
 
-  it.each<[string, Remote, string]>([
-    ['the site read returns 500', { site: { status: 500, json: {} } }, 'netlify site site-platform: http 500'],
+  it.each<[string, Remote, string, Partial<PipelineTimings>]>([
+    ['the site read keeps returning 500', { site: { status: 500, json: {} } }, 'netlify site site-platform: http 500', {}],
     [
-      'the smoke fetch throws',
+      'the smoke fetch keeps throwing',
       {
         page: () => {
           throw new TypeError('fetch failed');
         },
       },
       'fetch failed',
+      {},
     ],
-    ['the deploy list returns 502', { deploys: { status: 502, json: {} } }, 'netlify deploys: http 502'],
-  ])('restores, reverts and rejects post_merge when %s after the merge', async (_name, over, detail) => {
+    ['the deploy list returns 502 up to the deadline', { deploys: { status: 502, json: {} } }, 'netlify deploys: http 502', { deployTimeoutMs: 30 }],
+  ])('restores, reverts and rejects post_merge when %s after the merge', async (_name, over, detail, timings) => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     db.deploys = [OLDER_GREEN];
     const { fetchFn, calls } = remote(over);
     const alert = new RecordingAlerter();
-    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert), timings: { ...FAST, ...timings } });
 
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'post_merge', commit_sha: MERGE_SHA });
     expect(db.events.at(-1)).toMatchObject({
@@ -304,6 +329,48 @@ describe('runCardPipeline', () => {
       `Card 4c2f5a1e was reverted on main (revert-): post-merge check failed: ${detail}`,
       `Card 4c2f5a1e rejected (post_merge): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}`,
     ]);
+  });
+
+  it('rides out a single 502 from the deploy list, a failed site read and a failed restore call, and ships', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    let deployReads = 0;
+    let siteReads = 0;
+    const { fetchFn } = remote({
+      deploys: () => {
+        deployReads += 1;
+        return deployReads === 1 ? { status: 502, json: {} } : { status: 200, json: [{ id: 'dep-2', state: 'ready', commit_ref: MERGE_SHA, context: 'production' }] };
+      },
+      site: () => {
+        siteReads += 1;
+        if (siteReads === 1) throw new TypeError('fetch failed');
+        return { status: 200, json: { ssl_url: SITE_URL } };
+      },
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+    expect([deployReads, siteReads]).toEqual([2, 2]);
+  });
+
+  it('retries the restore and the revert when their requests throw', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    let restores = 0;
+    let patches = 0;
+    const base = remote({ page: { status: 500, text: '' } });
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/deploys/dep-1/restore') && ++restores === 1) throw new TypeError('fetch failed');
+      if (init?.method === 'PATCH' && ++patches === 1) throw new TypeError('fetch failed');
+      return base.fetchFn(input, init);
+    }) as typeof fetch;
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'smoke' });
+    expect([restores, patches]).toEqual([2, 2]);
+    expect(db.events.at(-1)?.payload).toMatchObject({ restored_sha: 'older-sha', revert_sha: 'revert-sha' });
+    expect(db.events.at(-1)?.payload).not.toHaveProperty('restore_error');
   });
 
   it('leaves a verified card gated with its merge sha, without a revert, when the ship writes keep failing', async () => {
@@ -323,8 +390,9 @@ describe('runCardPipeline', () => {
 
     expect(failing.attempts).toBe(4);
     expect(failing.cards[0]).toMatchObject({ stage: 'gated', failing_check: null, commit_sha: MERGE_SHA });
-    expect(failing.events.map((e) => e.type)).toEqual(['start', 'gate_pass']);
-    expect(urls(calls).some((call) => call.includes('/git/') || call.includes('/restore'))).toBe(false);
+    expect(failing.events.map((e) => e.type)).toEqual(['start', 'gate_pass', 'message']);
+    expect(failing.events.at(-1)?.payload).toEqual({ step: 'smoke_pass', sha: MERGE_SHA, deploy_id: 'dep-2', url: SITE_URL, smoke: 'pass: build merge-sh served' });
+    expect(urls(calls).some((call) => call.includes('/git/commits') || call.includes('/restore'))).toBe(false);
     expect(alert.messages).toEqual([
       'Card 4c2f5a1e merged as merge-sh and passed smoke, but recording it failed: db deploys insert: connection reset. It is left gated and is checked again when the dispatcher starts.',
     ]);
@@ -392,6 +460,17 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
   });
 
+  it('rejects history, without merging, when GitHub reports a range that differs from the local check', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({ compareExtra: [{ filename: 'platform/gate/ship-gate.sh', status: 'modified' }] });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'history', commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(alert.messages[0]).toContain('platform/gate/ship-gate.sh');
+  });
+
   it('waits for an existing pull request to show the pushed sha, then rejects pr_head without gating on the stale head', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
@@ -419,17 +498,22 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
   });
 
-  it('rejects merge when the merge request times out and the pull request did not merge', async () => {
+  it('leaves the card gated with a merge_unknown marker when the merge request times out and the pull request does not show merged', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn, calls } = remote({
+    const { fetchFn, calls, state } = remote({
       merge: () => {
         throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
       },
     });
-    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
-    expect(urls(calls).some((call) => call.includes('/deploys'))).toBe(false);
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'gated', failing_check: 'merge_unknown', commit_sha: null });
+    expect(db.events.at(-1)).toMatchObject({ type: 'error', payload: { step: 'merge_unknown', pr: 5, sha: state.head } });
+    expect(urls(calls).some((call) => call.includes('/deploys') || call.includes('/git/commits'))).toBe(false);
+    expect(alert.messages).toEqual([
+      expect.stringMatching(/^Card 4c2f5a1e: the merge request for pull request #5 failed .* It is left gated; the dispatcher checks it again when it starts, and nothing was closed\.$/),
+    ]);
   });
 
   it('pauses without a deploys row when the dispatcher stops during the gate wait', async () => {
@@ -469,10 +553,37 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'gated', failing_check: null, commit_sha: MERGE_SHA });
     expect(db.deploys).toEqual([]);
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_pass']);
-    expect(urls(calls).some((call) => call.includes('/git/') || call.includes('/restore'))).toBe(false);
+    expect(urls(calls).some((call) => call.includes('/git/commits') || call.includes('/restore'))).toBe(false);
     expect(alert.messages).toEqual([
       'Card 4c2f5a1e merged as merge-sh but the dispatcher stopped while the deploy was running. It is left gated and is checked again when the dispatcher starts.',
     ]);
+  });
+
+  it('rolls back instead of leaving the card gated when it stops during the deploy wait with no commit_sha written', async () => {
+    const c = platformCard();
+    class NoShaDb extends FakeDb {
+      override async updateCard(id: string, patch: Parameters<FakeDb['updateCard']>[1]) {
+        if (patch.commit_sha) throw new Error('db update card: connection reset');
+        return super.updateCard(id, patch);
+      }
+    }
+    const noSha = new NoShaDb();
+    noSha.cards = [{ ...c, stage: 'building' }];
+    noSha.deploys = [OLDER_GREEN];
+    const stop = new AbortController();
+    const { fetchFn, calls } = remote({
+      merge: () => {
+        stop.abort('dispatcher stopping');
+        return { status: 200, json: { sha: MERGE_SHA } };
+      },
+      deploys: { status: 200, json: [{ id: 'dep-2', state: 'building', commit_ref: MERGE_SHA, context: 'production' }] },
+    });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(noSha, new FakeAdapter(editSite), fetchFn, stop, alert));
+    expect(noSha.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'post_merge', commit_sha: null });
+    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
+    expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
+    expect(alert.messages[0]).toBe('Card 4c2f5a1e merged as merge-sh but its commit_sha was not written (db update card: connection reset). Verification goes on.');
   });
 
   it('writes a red deploys row when the deploy itself fails', async () => {
@@ -490,6 +601,62 @@ describe('runCardPipeline', () => {
     expect(alert.messages).toHaveLength(2);
   });
 
+  it('never merges, verifies or reverts two cards at the same time', async () => {
+    const first = platformCard({ id: 'a1a1a1a1-0000-4000-8000-00000000000a' });
+    const second = platformCard({ id: 'b2b2b2b2-0000-4000-8000-00000000000b' });
+    db.cards = [
+      { ...first, stage: 'building' },
+      { ...second, stage: 'building' },
+    ];
+    const heads = new Map<number, string>();
+    const polls = new Map<string, number>();
+    const merged: string[] = [];
+    const timeline: string[] = [];
+    const github = githubGitRoute(origin);
+    const { fetchFn } = mockFetch((method, url, body) => {
+      if (method === 'POST' && url === `${GITHUB}/pulls`) {
+        const number = heads.size + 1;
+        const head = originSha(`refs/heads/${(body as { head: string }).head}`);
+        heads.set(number, head);
+        return { status: 201, json: { number, head: { sha: head } } };
+      }
+      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+      const git = github(method, url);
+      if (git) return git;
+      const merge = /\/pulls\/(\d+)\/merge$/.exec(url);
+      if (method === 'PUT' && merge) {
+        const sha = `merge-${heads.get(Number(merge[1]))!.slice(0, 8)}`;
+        merged.push(sha);
+        timeline.push(`merge ${sha}`);
+        return { status: 200, json: { sha } };
+      }
+      if (method === 'GET' && url === deploysUrl('site-platform')) {
+        // A deploy builds until the other card has merged too, or for 200 polls (a second or more), so
+        // without the lock the second merge lands while the first card is still verifying.
+        const list = merged.map((sha) => {
+          const seen = (polls.get(sha) ?? 0) + 1;
+          polls.set(sha, seen);
+          return { id: `dep-${sha}`, state: merged.length === 2 || seen >= 200 ? 'ready' : 'building', commit_ref: sha, context: 'production' };
+        });
+        return { status: 200, json: list };
+      }
+      if (method === 'GET' && url === `${NETLIFY}/site-platform`) return { status: 200, json: { ssl_url: SITE_URL } };
+      if (method === 'GET' && url === `${SITE_URL}/`) return { status: 200, text: `<meta name="build-sha" content="${merged.at(-1)}">` };
+      if (method === 'GET' && url === `${SITE_URL}/version.json`) {
+        timeline.push(`verify ${merged.at(-1)}`);
+        return { status: 200, json: { sha: merged.at(-1) } };
+      }
+      return revertRoute(method, url);
+    });
+    await Promise.all([
+      runCardPipeline(first, deps(db, new FakeAdapter(editSite), fetchFn)),
+      runCardPipeline(second, deps(db, new FakeAdapter(editSite), fetchFn)),
+    ]);
+    expect(db.cards.map((c) => c.stage)).toEqual(['live', 'live']);
+    expect(merged).toHaveLength(2);
+    expect(timeline).toEqual([`merge ${merged[0]}`, `verify ${merged[0]}`, `merge ${merged[1]}`, `verify ${merged[1]}`]);
+  });
+
   it('runs the smoke bot in a detached worktree at the merge sha and removes it afterwards', async () => {
     const c = card({ id: 'dddddddd-0000-4000-8000-000000000004' });
     db.cards = [{ ...c, stage: 'building' }];
@@ -498,27 +665,7 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const served = { rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) };
-    const state = { merged: '' };
-    const { fetchFn } = mockFetch((method, url, body) => {
-      if (method === 'POST' && url === `${GITHUB}/pulls`) {
-        return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
-      }
-      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
-      if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
-        // The merge lands the pushed commit on origin's main, so the merge sha is a real commit.
-        state.merged = (body as { sha: string }).sha;
-        execFileSync('git', ['update-ref', 'refs/heads/main', state.merged], { cwd: origin, stdio: 'pipe' });
-        return { status: 200, json: { sha: state.merged } };
-      }
-      if (method === 'GET' && url === `${NETLIFY}/site-seed/deploys?per_page=20`) return { status: 200, json: [{ id: 'dep-9', state: 'ready', commit_ref: state.merged, context: 'production' }] };
-      if (method === 'GET' && url === `${NETLIFY}/site-seed`) return { status: 200, json: { ssl_url: SEED_URL } };
-      if (method === 'GET' && url === `${SEED_URL}/`) return { status: 200, text: `<meta name="build-sha" content="${state.merged}">` };
-      if (method === 'GET' && url === `${SEED_URL}/version.json`) return { status: 200, json: { sha: state.merged } };
-      if (method === 'GET' && url === `${SEED_URL}/config/spawn-table.json`) return { status: 200, json: served };
-      if (method === 'GET' && url === `${SEED_URL}/config/unlocks.json`) return { status: 200, json: { unlocks: [] } };
-      return undefined;
-    });
+    const { fetchFn, state } = seedRemote();
     const bot: { cwd: string; args: string[]; head: string; baseCost: number | null } = { cwd: '', args: [], head: '', baseCost: null };
     const botExec: BotExec = async (_file, args, options) => {
       bot.cwd = options.cwd;
@@ -573,36 +720,83 @@ describe('runCardPipeline', () => {
     expect(originHas('card/cccccccc-config')).toBe(false);
   });
 
-  it('rejects git_tamper, halts the dispatcher and runs no git when a session plants git configuration', async () => {
+  it('rejects git_tamper, halts, and runs no git at all after a session plants a signing program', async () => {
     const c = card({ id: 'eeeeeeee-0000-4000-8000-000000000005' });
     db.cards = [{ ...c, stage: 'building' }];
     const configFile = path.join(repo, '.git', 'config');
     const clean = await readFile(configFile, 'utf8');
-    const marker = path.join(dir, 'fsmonitor-ran.txt');
-    const monitor = path.join(dir, 'monitor.sh');
-    await writeFile(monitor, `#!/bin/sh\necho ran >> "${marker}"\nexit 1\n`, { encoding: 'utf8', mode: 0o755 });
+    const marker = path.join(dir, 'gpg-ran.txt');
+    const signer = path.join(dir, 'sign.sh');
+    await writeFile(signer, `#!/bin/sh\necho ran >> "${marker}"\nexit 1\n`, { encoding: 'utf8', mode: 0o755 });
     const { fetchFn, calls } = remote();
+    const gitCalls = recordGit();
+    let atSessionEnd = -1;
     const adapter = new FakeAdapter(async (spec, emit) => {
       await emit(startEvent());
       await editSpawnTable(spec.worktree, 11);
-      await appendFile(configFile, `[core]\n\tfsmonitor = ${monitor}\n`, 'utf8');
+      await appendFile(configFile, `[gpg]\n\tprogram = ${signer}\n[commit]\n\tgpgSign = true\n`, 'utf8');
       await emit(usageEvent(1, 10));
+      atSessionEnd = gitCalls.length;
     });
     const alert = new RecordingAlerter();
-    const halt: Halt = { reason: null };
     try {
-      await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert, halt));
+      await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
     } finally {
+      setGitRunner(null);
       await writeFile(configFile, clean, 'utf8');
-      await git(['worktree', 'prune'], repo);
     }
+    const halted = haltReason();
+    resetHalt();
+    await git(['worktree', 'prune'], repo);
+    expect(atSessionEnd).toBeGreaterThan(0);
+    expect(gitCalls).toHaveLength(atSessionEnd);
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'git_tamper' });
-    expect(halt.reason).toMatch(/^git_tamper: /);
+    expect(halted).toMatch(/^git_tamper: /);
     expect(calls).toEqual([]);
     expect(originHas('card/eeeeeeee-config')).toBe(false);
     expect(existsSync(marker)).toBe(false);
     expect(existsSync(path.join(config.worktreeRoot, 'card-eeeeeeee'))).toBe(false);
-    expect(alert.messages).toEqual([expect.stringMatching(/^Card eeeeeeee rejected \(git_tamper\): .*The dispatcher claims no card until it restarts/)]);
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card eeeeeeee rejected \(git_tamper\): .*gpg\.program.*The dispatcher claims no card and runs no git until it restarts/)]);
+  });
+
+  it('rolls the merge back, halts and runs no more git when the smoke bot plants git configuration', async () => {
+    const c = card({ id: 'f0f0f0f0-0000-4000-8000-000000000006' });
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [{ ...OLDER_GREEN, folder: 'seed-1' }];
+    const configFile = path.join(repo, '.git', 'config');
+    const clean = await readFile(configFile, 'utf8');
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 10));
+    });
+    const { fetchFn, calls, state } = seedRemote();
+    const gitCalls = recordGit();
+    let atBot = -1;
+    let botRoot = '';
+    const botExec: BotExec = async (_file, _args, options) => {
+      botRoot = options.cwd;
+      await appendFile(configFile, '[include]\n\tpath = ../../evil.gitconfig\n', 'utf8');
+      atBot = gitCalls.length;
+      return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=3\n' };
+    };
+    const alert = new RecordingAlerter();
+    try {
+      await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), botExec });
+    } finally {
+      setGitRunner(null);
+      await writeFile(configFile, clean, 'utf8');
+    }
+    const halted = haltReason();
+    resetHalt();
+    await git(['worktree', 'prune'], repo);
+    expect(gitCalls).toHaveLength(atBot);
+    expect(halted).toMatch(/^git_tamper: /);
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'git_tamper', commit_sha: state.merged });
+    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { failed_sha: state.merged, restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
+    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-seed/deploys/dep-1/restore`);
+    expect(existsSync(botRoot)).toBe(false);
+    expect(db.deploys.filter((row) => row.sha === state.merged && row.is_green)).toEqual([]);
   });
 
   it('pauses on the ceiling and records what was spent', async () => {
@@ -748,3 +942,33 @@ describe('runCardPipeline', () => {
     expect(pushed).toContain('seed-1/config/spawn-table.json');
   });
 });
+
+// The seed site, where the merge lands the pushed commit on origin's main so the merge sha is a real
+// commit the smoke worktree can check out.
+function seedRemote() {
+  const served = { rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) };
+  const state = { merged: '' };
+  const github = githubGitRoute(origin);
+  const mock = mockFetch((method, url, body) => {
+    if (method === 'POST' && url === `${GITHUB}/pulls`) {
+      return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
+    }
+    if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+    const git = github(method, url);
+    if (git) return git;
+    if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
+      state.merged = (body as { sha: string }).sha;
+      execFileSync('git', ['update-ref', 'refs/heads/main', state.merged], { cwd: origin, stdio: 'pipe' });
+      return { status: 200, json: { sha: state.merged } };
+    }
+    if (method === 'GET' && url === deploysUrl('site-seed')) return { status: 200, json: [{ id: 'dep-9', state: 'ready', commit_ref: state.merged, context: 'production' }] };
+    if (method === 'GET' && url === `${NETLIFY}/site-seed`) return { status: 200, json: { ssl_url: SEED_URL } };
+    if (method === 'POST' && url === `${NETLIFY}/site-seed/deploys/dep-1/restore`) return { status: 200, json: { id: 'dep-1' } };
+    if (method === 'GET' && url === `${SEED_URL}/`) return { status: 200, text: `<meta name="build-sha" content="${state.merged}">` };
+    if (method === 'GET' && url === `${SEED_URL}/version.json`) return { status: 200, json: { sha: state.merged } };
+    if (method === 'GET' && url === `${SEED_URL}/config/spawn-table.json`) return { status: 200, json: served };
+    if (method === 'GET' && url === `${SEED_URL}/config/unlocks.json`) return { status: 200, json: { unlocks: [] } };
+    return revertRoute(method, url);
+  });
+  return { ...mock, state };
+}

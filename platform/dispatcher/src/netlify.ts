@@ -60,13 +60,22 @@ function toDeploy(json: Record<string, unknown>): NetlifyDeploy {
   };
 }
 
+export const DEPLOYS_PER_PAGE = 50;
+export const DEPLOY_PAGES = 4;
+
+// Pages through the site's newest deploys, so a deploy a later merge pushed down the list is still
+// found; recovery can look for a deploy hours old.
 export async function findDeploy(opts: NetlifyOptions, siteId: string, sha: string): Promise<NetlifyDeploy | null> {
-  const result = await request(opts, 'GET', `/sites/${siteId}/deploys?per_page=20`);
-  if (result.status !== 200 || !Array.isArray(result.json)) {
-    throw new Error(`netlify deploys: http ${result.status}`);
+  for (let page = 1; page <= DEPLOY_PAGES; page += 1) {
+    const result = await request(opts, 'GET', `/sites/${siteId}/deploys?page=${page}&per_page=${DEPLOYS_PER_PAGE}`);
+    if (result.status !== 200 || !Array.isArray(result.json)) {
+      throw new Error(`netlify deploys: http ${result.status}`);
+    }
+    const match = result.json.filter(isRecord).map(toDeploy).find((deploy) => deploy.commitRef === sha && deploy.context === 'production');
+    if (match) return match;
+    if (result.json.length < DEPLOYS_PER_PAGE) return null;
   }
-  const match = result.json.filter(isRecord).map(toDeploy).find((deploy) => deploy.commitRef === sha && deploy.context === 'production');
-  return match ?? null;
+  return null;
 }
 
 export type DeployWait = { ok: true; deploy: NetlifyDeploy } | { ok: false; reason: string; deploy: NetlifyDeploy | null };
@@ -75,14 +84,33 @@ export interface WaitOptions {
   timeoutMs?: number;
   intervalMs?: number;
   signal?: AbortSignal;
+  // Called with each failed read; the wait goes on.
+  onError?: (error: unknown) => void;
 }
 
+// A failed read (an http error or a network error) does not end the wait: the next poll tries again.
+// If no read has seen a deploy by the deadline and the last one failed, that error is thrown, since
+// nothing is known about the deploy.
 export async function waitForDeploy(opts: NetlifyOptions, siteId: string, sha: string, wait: WaitOptions = {}): Promise<DeployWait> {
   const timeoutMs = wait.timeoutMs ?? 10 * 60_000;
   const intervalMs = wait.intervalMs ?? 10_000;
   const deadline = Date.now() + timeoutMs;
+  let seen: NetlifyDeploy | null = null;
   for (;;) {
-    const deploy = await findDeploy(opts, siteId, sha);
+    let deploy: NetlifyDeploy | null;
+    try {
+      deploy = await findDeploy(opts, siteId, sha);
+    } catch (error) {
+      wait.onError?.(error);
+      if (wait.signal?.aborted) return { ok: false, reason: 'dispatcher stopping', deploy: seen };
+      if (Date.now() >= deadline) {
+        if (seen) return { ok: false, reason: `deploy ${seen.id} still ${seen.state} after ${timeoutMs / 1000} s`, deploy: seen };
+        throw error;
+      }
+      await sleep(intervalMs, wait.signal);
+      continue;
+    }
+    seen = deploy ?? seen;
     // A skipped deploy never built this commit, whatever state it reports.
     if (deploy?.skipped) return { ok: false, reason: `deploy ${deploy.id} was skipped by the build ignore rule (state ${deploy.state})`, deploy };
     if (deploy?.state === 'ready') return { ok: true, deploy };

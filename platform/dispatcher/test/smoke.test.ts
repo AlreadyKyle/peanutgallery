@@ -30,7 +30,7 @@ describe('servedPath', () => {
 });
 
 describe('runSmoke build check', () => {
-  const base = { sha: SHA, folder: 'platform' as const, checks: [], botRoot: '/unused', botSeconds: 60 };
+  const base = { sha: SHA, folder: 'platform' as const, checks: [], botRoot: '/unused', botSeconds: 60, retryDelayMs: 1 };
 
   it('passes for a platform deploy that serves the merge sha', async () => {
     const { fetchFn, calls } = fetchFor(GOOD);
@@ -48,6 +48,23 @@ describe('runSmoke build check', () => {
     expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn: fetchFor({ ...GOOD, '/version.json': { status: 200, text: 'not json' } }).fetchFn })).toEqual({ ok: false, summary: 'fail: GET /version.json is not JSON' });
   });
 
+  it('tries a page again after a server error or a network error, three times in all', async () => {
+    let pageReads = 0;
+    const { fetchFn } = mockFetch((_method, url) => {
+      const route = url.slice(BASE.length);
+      if (route !== '/') return GOOD[route];
+      pageReads += 1;
+      if (pageReads === 1) return { status: 502, text: 'Bad gateway' };
+      if (pageReads === 2) throw new TypeError('fetch failed');
+      return GOOD['/'];
+    });
+    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn })).toEqual({ ok: true, summary: 'pass: build merge-sh served' });
+    expect(pageReads).toBe(3);
+    const failing = fetchFor({ ...GOOD, '/': { status: 503, text: '' } });
+    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn: failing.fetchFn })).toEqual({ ok: false, summary: 'fail: GET / returned 503' });
+    expect(failing.calls).toHaveLength(3);
+  });
+
   it('throws when a page never answers, once the request times out', async () => {
     const { fetchFn, signals } = hangingFetch();
     await expect(runSmoke({ ...base, baseUrl: BASE, fetchFn, timeoutMs: 20 })).rejects.toThrow(/timeout|abort/i);
@@ -57,7 +74,7 @@ describe('runSmoke build check', () => {
 
 describe('runSmoke config check', () => {
   const checks = parseChecks('check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11');
-  const base = { sha: SHA, folder: 'seed-1' as const, checks, botRoot: '/unused', botSeconds: 60 };
+  const base = { sha: SHA, folder: 'seed-1' as const, checks, botRoot: '/unused', botSeconds: 60, retryDelayMs: 1 };
 
   it('fails before the bot runs when the served config does not satisfy the check', async () => {
     const pages: Pages = { ...GOOD, '/config/spawn-table.json': { status: 200, json: { rows: [{ id: 'gatherer', baseCost: 10 }] } } };
@@ -119,7 +136,7 @@ describe('runSmoke headless bot', () => {
       runs.push({ file, args, options });
       return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=12\n' };
     };
-    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
+    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, retryDelayMs: 1, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
     expect(result).toEqual({ ok: true, summary: 'pass: build merge-sh served; 1 config check(s) hold; bot: 36000 simulated seconds, 12 unlocks, budget 60 s' });
     expect(runs).toHaveLength(1);
     const { file, args, options } = runs[0]!;
@@ -139,7 +156,7 @@ describe('runSmoke headless bot', () => {
     const exec: BotExec = async () => {
       throw new Error('Command failed: node platform/gate/headless-bot/run.mjs\nFAIL: headless-bot');
     };
-    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
+    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, retryDelayMs: 1, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
     expect(result).toEqual({ ok: false, summary: 'fail: headless bot failed on the served config: Command failed: node platform/gate/headless-bot/run.mjs' });
   });
 });

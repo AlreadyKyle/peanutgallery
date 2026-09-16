@@ -33,6 +33,19 @@ describe('createSupabaseDb', () => {
     expect(await createSupabaseDb('https://db.local', 'service-role', member.fetchFn).boardSessionActive(3, NOW)).toBe(true);
   });
 
+  it("finds a card's newest event by its payload step", async () => {
+    const { fetchFn, seen } = rest([{ payload_json: { step: 'smoke_pass', sha: 'merge-sha' } }]);
+    const db = createSupabaseDb('https://db.local', 'service-role', fetchFn);
+    expect(await db.findEvent('card-1', 'smoke_pass')).toEqual({ step: 'smoke_pass', sha: 'merge-sha' });
+    const url = seen[0]!.url;
+    expect(url.pathname).toBe('/rest/v1/agent_events');
+    expect(url.searchParams.get('card_id')).toBe('eq.card-1');
+    expect(url.searchParams.get('payload_json->>step')).toBe('eq.smoke_pass');
+    expect(url.searchParams.get('order')).toBe('created_at.desc');
+    expect(url.searchParams.get('limit')).toBe('1');
+    expect(await createSupabaseDb('https://db.local', 'service-role', rest([]).fetchFn).findEvent('card-1', 'smoke_pass')).toBeNull();
+  });
+
   it('clears commit_sha when it claims a card', async () => {
     const { fetchFn, seen } = rest([]);
     const db = createSupabaseDb('https://db.local', 'service-role', fetchFn);

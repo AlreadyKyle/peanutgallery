@@ -11,13 +11,12 @@ import { createAlerter } from './alert.js';
 import { loadConfig } from './config.js';
 import { createSupabaseDb, type Card } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
-import { createHalt } from './halt.js';
 import { createLogger, errorMessage } from './log.js';
-import { resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
+import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
 import { runProbe } from './probe-core.js';
 import { recoverOrphans } from './recovery.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
-import { startupChecks } from './startup.js';
+import { checkRepositoryGit, startupChecks } from './startup.js';
 import { tick } from './tick.js';
 import { sleep } from './time.js';
 
@@ -36,13 +35,23 @@ async function main(): Promise<void> {
   const adapter = createAdapter(config);
   const stop = new AbortController();
   const running = new Map<string, Date>();
-  const halt = createHalt();
   const now = () => new Date();
   const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
-  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, halt };
+  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now };
 
+  // Before any git runs: a repository whose git configuration is refused stops the process with 78.
+  await checkRepositoryGit(config.repoRoot, config.githubRepo);
   await startupChecks({ db, adapter, config, log, runProbe });
-  await recoverOrphans({ db, config, log, alert, running, now, resume: (card: Card) => resumeMerged(card, pipeline) });
+  await recoverOrphans({
+    db,
+    config,
+    log,
+    alert,
+    running,
+    now,
+    resume: (card: Card) => resumeMerged(card, pipeline),
+    lookupMerge: (card: Card) => findCardMerge(card, pipeline),
+  });
   const tasks = startScheduler(config.schedulerEnabled, log);
   log.info('main', 'dispatcher started', { mode: config.agentMode, tickMs: config.tickMs, repo: config.githubRepo, worktrees: config.worktreeRoot });
 
@@ -61,7 +70,6 @@ async function main(): Promise<void> {
     maxConcurrency: config.maxConcurrency,
     running,
     stuckAfterMs: stuckAfterMs(config.sessionMaxMinutes),
-    halt,
     now,
     log,
     alert,

@@ -126,6 +126,8 @@ export interface Db {
   recordUsage(input: UsageInput): Promise<RecordUsageResult>;
   sumLedger(cardId: string): Promise<number>;
   insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>): Promise<void>;
+  // The payload of the card's newest event whose payload step is the given one, or null.
+  findEvent(cardId: string, step: string): Promise<Record<string, unknown> | null>;
   insertDeploy(input: DeployInput): Promise<void>;
   lastGreen(folder: CardFolder): Promise<Deploy | null>;
 }
@@ -320,6 +322,20 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, fetchFn?: 
     async insertEvent(cardId, roleId, type, payload) {
       const { error } = await client.from('agent_events').insert({ card_id: cardId, role_id: roleId, type, payload_json: payload });
       if (error) fail('agent_events insert', error);
+    },
+
+    async findEvent(cardId, step) {
+      const { data, error } = await client
+        .from('agent_events')
+        .select('payload_json')
+        .eq('card_id', cardId)
+        .eq('payload_json->>step', step)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) fail('agent_events find', error);
+      const row = rows(data)[0];
+      const payload = row?.payload_json;
+      return typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
     },
 
     async insertDeploy(input) {

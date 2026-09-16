@@ -121,7 +121,32 @@ export function claudeArgs(spec: SessionSpec, systemPrompt: string | null): stri
   ];
 }
 
-export type SpawnFn = (bin: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => ChildProcess;
+// Signals the session's process group, or the child alone when it has no group of its own (a test
+// double without a pid, or a group already gone).
+export function signalSession(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // No process is left in the group; the child itself may still need the signal.
+    }
+  }
+  child.kill(signal);
+}
+
+// SIGKILL to every process left in the session's group. A process that called setsid has left the
+// group and is not reached; the session sandbox is what contains that.
+export function killGroup(child: ChildProcess): void {
+  if (!child.pid) return;
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    // The group is already empty.
+  }
+}
+
+export type SpawnFn =(bin: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => ChildProcess;
 
 export interface ClaudeCliOptions {
   claudeBin: string;
@@ -147,7 +172,9 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
   constructor(options: ClaudeCliOptions) {
     this.claudeBin = options.claudeBin;
     this.interruptGraceMs = options.interruptGraceMs ?? INTERRUPT_GRACE_MS;
-    this.spawnFn = options.spawnFn ?? ((bin, args, opts) => spawn(bin, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'] }));
+    // detached puts the session in its own process group, so every signal reaches what the session
+    // started too, and the group is killed once more when the session ends.
+    this.spawnFn = options.spawnFn ?? ((bin, args, opts) => spawn(bin, args, { ...opts, stdio: ['ignore', 'pipe', 'pipe'], detached: true }));
     this.onRawLine = options.onRawLine;
   }
 
@@ -181,12 +208,12 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
     const kill = (reason: string) => {
       if (state.killReason) return;
       state.killReason = reason;
-      child.kill('SIGINT');
+      signalSession(child, 'SIGINT');
       setTimeout(() => {
         if (!running()) return;
-        child.kill('SIGTERM');
+        signalSession(child, 'SIGTERM');
         setTimeout(() => {
-          if (running()) child.kill('SIGKILL');
+          if (running()) signalSession(child, 'SIGKILL');
         }, KILL_GRACE_MS).unref();
       }, this.interruptGraceMs).unref();
     };
@@ -228,6 +255,9 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
       child.once('close', (code) => resolve({ code, error: null }));
     });
     signal.removeEventListener('abort', onAbort);
+    // Whatever the session left running in its group (a watcher, a server a test started) dies with
+    // it, before the dispatcher reads the worktree or runs git.
+    killGroup(child);
     lines?.close();
     deliver(parser.finish());
     await chain;

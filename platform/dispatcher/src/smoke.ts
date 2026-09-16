@@ -12,6 +12,7 @@ import { evaluateCheck, type ConfigCheck } from './acceptance.js';
 import { childEnv } from './adapters/claude-cli.js';
 import type { CardFolder } from './adapters/types.js';
 import { requestSignal } from './github.js';
+import { retry } from './time.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -48,6 +49,8 @@ export interface SmokeInput {
   exec?: BotExec;
   // Per request; a page with no answer by then throws.
   timeoutMs?: number;
+  // The first wait before a page request is tried again.
+  retryDelayMs?: number;
 }
 
 export interface SmokeResult {
@@ -129,14 +132,41 @@ async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, bot
   }
 }
 
-// Every page request carries its own timeout. A request that throws, a timeout included, makes
-// runSmoke throw: that is no verdict on the build, and the pipeline decides what follows.
-function timedFetch(fetchFn: typeof fetch, timeoutMs: number | undefined): typeof fetch {
-  return ((url: string | URL | Request, init?: RequestInit) => fetchFn(url, { ...init, signal: requestSignal(timeoutMs, init?.signal ?? undefined) })) as typeof fetch;
+export const SMOKE_TRIES = 3;
+
+class ServerErrorAnswer extends Error {
+  readonly response: Response;
+  constructor(response: Response) {
+    super(`http ${response.status}`);
+    this.response = response;
+  }
+}
+
+// Every page request carries its own timeout and is tried up to three times, with a doubling wait,
+// when it throws or answers 5xx: a CDN blip is not a verdict on the build. A 5xx on the last try is
+// the answer; a throw on the last try makes runSmoke throw, which is no verdict, and the pipeline
+// decides what follows.
+function smokeFetch(fetchFn: typeof fetch, timeoutMs: number | undefined, retryDelayMs: number): typeof fetch {
+  return (async (url: string | URL | Request, init?: RequestInit) => {
+    try {
+      return await retry(
+        async () => {
+          const response = await fetchFn(url, { ...init, signal: requestSignal(timeoutMs, init?.signal ?? undefined) });
+          if (response.status >= 500) throw new ServerErrorAnswer(response);
+          return response;
+        },
+        SMOKE_TRIES,
+        retryDelayMs,
+      );
+    } catch (error) {
+      if (error instanceof ServerErrorAnswer) return error.response;
+      throw error;
+    }
+  }) as typeof fetch;
 }
 
 export async function runSmoke(input: SmokeInput): Promise<SmokeResult> {
-  const fetchFn = timedFetch(input.fetchFn ?? fetch, input.timeoutMs);
+  const fetchFn = smokeFetch(input.fetchFn ?? fetch, input.timeoutMs, input.retryDelayMs ?? 1000);
   const build = await checkBuild(fetchFn, input.baseUrl, input.sha);
   if (build) return { ok: false, summary: `fail: ${build}` };
   const config = await checkConfig(fetchFn, input.baseUrl, input.folder, input.checks);

@@ -25,8 +25,21 @@ describe('findDeploy', () => {
       ]),
     );
     expect(await findDeploy(o, SITE, SHA)).toEqual({ id: 'prod', state: 'building', commitRef: SHA, context: 'production', skipped: false, errorMessage: null });
-    expect(o.calls[0]?.url).toBe(`https://api.netlify.com/api/v1/sites/${SITE}/deploys?per_page=20`);
+    expect(o.calls[0]?.url).toBe(`https://api.netlify.com/api/v1/sites/${SITE}/deploys?page=1&per_page=50`);
     expect(await findDeploy(o, SITE, 'absent')).toBeNull();
+  });
+
+  it('pages through the deploys until it finds the sha or a page is short', async () => {
+    const filler = Array.from({ length: 50 }, (_, i) => ({ id: `old-${i}`, state: 'ready', commit_ref: `sha-${i}`, context: 'production' }));
+    const o = opts((_method, url) => {
+      if (url.endsWith('page=1&per_page=50')) return deploysReply(filler);
+      if (url.endsWith('page=2&per_page=50')) return deploysReply([{ id: 'found', state: 'ready', commit_ref: SHA, context: 'production' }]);
+      return undefined;
+    });
+    expect((await findDeploy(o, SITE, SHA))?.id).toBe('found');
+    expect(o.calls.map((call) => call.url.split('?')[1])).toEqual(['page=1&per_page=50', 'page=2&per_page=50']);
+    expect(await findDeploy(o, SITE, 'absent')).toBeNull();
+    expect(o.calls).toHaveLength(4);
   });
 
   it('throws on a non-200 answer', async () => {
@@ -64,6 +77,25 @@ describe('waitForDeploy', () => {
     expect(await waitForDeploy(building, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: 'deploy d1 still building after 0 s' });
     const none = opts(deploysReply([]));
     expect(await waitForDeploy(none, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: `no production deploy for ${SHA} after 0 s`, deploy: null });
+  });
+
+  it('rides out errors and non-200 answers until the deadline, and logs each', async () => {
+    let reads = 0;
+    const o = opts(() => {
+      reads += 1;
+      if (reads === 1) throw new TypeError('fetch failed');
+      if (reads === 2) return { status: 502, json: {} };
+      return deploysReply([{ id: 'd1', state: 'ready', commit_ref: SHA, context: 'production' }]);
+    });
+    const errors: string[] = [];
+    const wait = await waitForDeploy(o, SITE, SHA, { timeoutMs: 1000, intervalMs: 1, onError: (error) => errors.push(String(error)) });
+    expect(wait.ok).toBe(true);
+    expect(errors).toEqual(['TypeError: fetch failed', 'Error: netlify deploys: http 502']);
+  });
+
+  it('throws the last error when every read failed up to the deadline', async () => {
+    const o = opts(() => ({ status: 503, json: {} }));
+    await expect(waitForDeploy(o, SITE, SHA, { timeoutMs: 20, intervalMs: 5 })).rejects.toThrow('netlify deploys: http 503');
   });
 
   it('returns early when the signal aborts', async () => {

@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import { rolePromptFile } from '../src/session.js';
@@ -295,5 +297,45 @@ describe('role prompt delivery', () => {
     expect(rolePromptFile(role, '/repo/.worktrees/card-1')).toBe('/repo/.worktrees/card-1/platform/agents/prompts/builder-a.md');
     expect(rolePromptFile({ prompt_path: '' } as Parameters<typeof rolePromptFile>[0], '/repo/wt')).toBeNull();
     expect(() => rolePromptFile({ prompt_path: '../outside.md' } as Parameters<typeof rolePromptFile>[0], '/repo/wt')).toThrow(/escapes/);
+  });
+});
+
+describe('the session process group', () => {
+  function alive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function gone(pid: number, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!alive(pid)) return true;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return !alive(pid);
+  }
+
+  it('kills a background process the session left behind when the session ends', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'backseat-group-'));
+    const pidFile = path.join(dir, 'grandchild.pid');
+    const bin = path.join(dir, 'fake-claude.sh');
+    // Like test code a session ran: a background process that outlives the command that started it.
+    writeFileSync(bin, `#!/bin/sh\nsleep 30 >/dev/null 2>&1 &\necho $! > "${pidFile}"\nexit 0\n`, { mode: 0o755 });
+    let grandchild = 0;
+    try {
+      const adapter = new AttendedAdapter({ claudeBin: bin });
+      const result = await adapter.run({ ...spec, worktree: dir }, async () => undefined, new AbortController().signal);
+      expect(result.exitCode).toBe(0);
+      grandchild = Number(readFileSync(pidFile, 'utf8').trim());
+      expect(grandchild).toBeGreaterThan(0);
+      expect(await gone(grandchild, 2000)).toBe(true);
+    } finally {
+      if (grandchild > 0 && alive(grandchild)) process.kill(grandchild, 'SIGKILL');
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

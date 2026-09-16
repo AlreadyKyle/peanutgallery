@@ -12,6 +12,9 @@ export class RecordingAlerter implements Alerter {
   async notify(message: string) {
     this.messages.push(message);
   }
+  forget(key: string) {
+    this.keys.delete(key);
+  }
   async notifyOnce(key: string, message: string) {
     if (this.keys.has(key)) return;
     this.keys.add(key);

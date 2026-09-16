@@ -4,6 +4,7 @@ import { appendFile, mkdtemp, rm, symlink, writeFile, mkdir } from 'node:fs/prom
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { HaltedError, haltDispatcher, resetHalt } from '../src/halt.js';
 import {
   AGENT_EMAIL,
   branchName,
@@ -274,9 +275,10 @@ describe('git hooks', () => {
 
   it('puts the fsmonitor and hooks switches before every subcommand', () => {
     expect(NO_HOOKS).toEqual(['-c', 'core.hooksPath=/dev/null']);
-    expect(GIT_SWITCHES).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']);
-    expect(gitArgs(['status', '--porcelain'])).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', 'status', '--porcelain']);
-    expect(gitArgs(['push', 'origin'])).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', 'push', 'origin']);
+    const switches = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', '-c', 'core.hooksPath=/dev/null'];
+    expect(GIT_SWITCHES).toEqual(switches);
+    expect(gitArgs(['status', '--porcelain'])).toEqual([...switches, 'status', '--porcelain']);
+    expect(gitArgs(['push', 'origin'])).toEqual([...switches, 'push', 'origin']);
   });
 
   it('runs a planted hook when git is called without the switch, so the test can see one', () => {
@@ -359,7 +361,7 @@ describe('the committed range and the git state', () => {
     const worktree = await fresh('bbbbbbbb');
     await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":11}]}\n', 'utf8');
     const sha = await commitAll(worktree.path, 'card');
-    expect(await verifyCardCommit(worktree.path, { baseSha: base, sha, allowed })).toEqual({ ok: true });
+    expect(await verifyCardCommit(worktree.path, { baseSha: base, sha, allowed })).toEqual({ ok: true, paths: ['seed-1/config/spawn-table.json'] });
     await removeWorktree(repo, worktree.path, worktree.branch);
   });
 
@@ -434,10 +436,31 @@ describe('the committed range and the git state', () => {
     await appendFile(exclude, '*.json\n', 'utf8');
     expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
     await writeFile(exclude, excludeText, 'utf8');
+    await writeFile(path.join(repo, '.git', 'config.worktree'), '[gpg]\n\tprogram = /tmp/sign\n', 'utf8');
+    expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
+    await rm(path.join(repo, '.git', 'config.worktree'));
+    expect(await snapshotGitState(repo, worktree.path)).toBe(before);
     await writeFile(path.join(worktree.path, '.git'), `gitdir: ${path.join(dir, 'elsewhere')}\n`, 'utf8');
     expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
     await rm(worktree.path, { recursive: true, force: true });
     await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('runs no git at all once the dispatcher is halted', async () => {
+    const calls: GitCall[] = [];
+    setGitRunner((call) => {
+      calls.push(call);
+      return defaultGitRunner(call);
+    });
+    haltDispatcher('git_tamper: test');
+    try {
+      await expect(git(['status'], repo)).rejects.toThrow(HaltedError);
+      await expect(changedFiles(repo)).rejects.toThrow('the dispatcher is halted (git_tamper: test); no git runs until it restarts');
+      expect(calls).toEqual([]);
+    } finally {
+      resetHalt();
+      setGitRunner(null);
+    }
   });
 
   it('runs every git call with the switches, a clean config environment and a timeout that kills', async () => {
@@ -446,6 +469,11 @@ describe('the committed range and the git state', () => {
       calls.push(call);
       return defaultGitRunner(call);
     });
+    // Inherited git variables and the dispatcher's secrets never reach git; GIT_DIR would even
+    // point every command at another repository.
+    const saved = { GIT_DIR: process.env.GIT_DIR, SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY };
+    process.env.GIT_DIR = path.join(dir, 'nowhere.git');
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'secret-service-role';
     try {
       const worktree = await fresh('cdcdcdcd');
       await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":12}]}\n', 'utf8');
@@ -456,6 +484,10 @@ describe('the committed range and the git state', () => {
       await removeWorktree(repo, worktree.path, worktree.branch);
     } finally {
       setGitRunner(null);
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
     for (const expected of ['fetch', 'rev-parse', 'worktree', 'status', 'add', 'diff', 'commit', 'rev-list', 'diff-tree', 'branch']) {
       expect(calls.some((call) => call.args.includes(expected))).toBe(true);
@@ -463,6 +495,10 @@ describe('the committed range and the git state', () => {
     for (const call of calls) {
       expect(call.args.slice(0, GIT_SWITCHES.length)).toEqual([...GIT_SWITCHES]);
       expect(call.env).toMatchObject(GIT_ENV);
+      // Only the git variables the dispatcher sets itself: the fixed environment, and a commit's author.
+      expect(Object.keys(call.env).filter((name) => name.startsWith('GIT_') && !(name in GIT_ENV) && !/^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)$/.test(name))).toEqual([]);
+      expect(call.env).not.toHaveProperty('GIT_DIR');
+      expect(call.env).not.toHaveProperty('SUPABASE_SERVICE_ROLE_KEY');
       expect(call.timeout).toBe(GIT_TIMEOUT_MS);
       expect(call.killSignal).toBe('SIGKILL');
     }

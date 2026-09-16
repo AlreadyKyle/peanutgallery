@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { gateStatus, mergePullRequest, openPullRequest, revertMerge, waitForPullHead, type GitHubOptions } from '../src/github.js';
+import {
+  compareRange,
+  findPullForBranch,
+  gateStatus,
+  mainHead,
+  mergePullRequest,
+  openPullRequest,
+  revertMerge,
+  treeModes,
+  waitForPullHead,
+  type GitHubOptions,
+} from '../src/github.js';
 import { hangingFetch, mockFetch as routeFetch } from './helpers/mock-fetch.js';
 
 interface Call {
@@ -51,17 +62,84 @@ describe('mergePullRequest', () => {
 
   it('reads the pull request when the merge request throws, and takes its merge commit when it merged', async () => {
     const { fetchFn, calls } = afterLostPut({ status: 200, json: { number: 7, merged: true, merge_commit_sha: 'merge-sha', head: { sha: 'head-sha' } } });
-    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' })).toEqual({ ok: true, sha: 'merge-sha' });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 1000, intervalMs: 1 })).toEqual({ ok: true, sha: 'merge-sha' });
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([`PUT ${API}/pulls/7/merge`, `GET ${API}/pulls/7`]);
   });
 
-  it('is rejected when the merge request throws and the pull request did not merge', async () => {
-    const { fetchFn } = afterLostPut({ status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } });
-    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' })).toEqual({
+  it('polls the pull request after a lost merge request until it shows merged', async () => {
+    let reads = 0;
+    const { fetchFn } = routeFetch((method, url) => {
+      if (method === 'PUT') throw new Error('fetch failed');
+      if (method !== 'GET' || url !== `${API}/pulls/7`) return undefined;
+      reads += 1;
+      if (reads === 1) throw new Error('fetch failed');
+      return { status: 200, json: { number: 7, merged: reads >= 3, merge_commit_sha: reads >= 3 ? 'merge-sha' : null, head: { sha: 'head-sha' } } };
+    });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 1000, intervalMs: 1 })).toEqual({ ok: true, sha: 'merge-sha' });
+    expect(reads).toBe(3);
+  });
+
+  it('reports the merge as unknown, not refused, when the pull request never shows merged', async () => {
+    const { fetchFn, calls } = afterLostPut({ status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 30, intervalMs: 5 })).toEqual({
       ok: false,
       status: 0,
-      reason: 'the merge request failed (The operation was aborted due to timeout) and pull request 7 is not merged',
+      unknown: true,
+      reason: 'the merge request failed (The operation was aborted due to timeout) and pull request 7 did not show merged within 0.03 s',
     });
+    expect(calls.filter((call) => call.method === 'GET').length).toBeGreaterThan(1);
+  });
+});
+
+describe('reading the range, trees, pull requests and main', () => {
+  const API = 'https://api.github.com/repos/owner/repo';
+
+  it('reads a compare into its commits, merge base and files, renames with their old names', async () => {
+    const { fetchFn, calls } = mockFetch(200, {
+      ahead_by: 1,
+      behind_by: 0,
+      merge_base_commit: { sha: 'base-sha' },
+      commits: [{ sha: 'head-sha' }],
+      files: [
+        { filename: 'seed-1/content/x.json', status: 'renamed', previous_filename: 'seed-1/sim/invariants.ts' },
+        { filename: 'seed-1/config/a.json', status: 'modified' },
+      ],
+    });
+    expect(await compareRange({ ...base, fetchFn }, 'base-sha', 'head-sha')).toEqual({
+      aheadBy: 1,
+      behindBy: 0,
+      mergeBaseSha: 'base-sha',
+      commits: ['head-sha'],
+      files: [
+        { path: 'seed-1/content/x.json', status: 'renamed', previousPath: 'seed-1/sim/invariants.ts' },
+        { path: 'seed-1/config/a.json', status: 'modified', previousPath: null },
+      ],
+    });
+    expect(calls[0]?.url).toBe(`${API}/compare/base-sha...head-sha`);
+  });
+
+  it('reads a commit tree into modes by path, and refuses a truncated tree', async () => {
+    const tree = [
+      { path: 'seed-1', mode: '040000', type: 'tree' },
+      { path: 'seed-1/content/gh', mode: '120000', type: 'blob' },
+    ];
+    const { fetchFn, calls } = mockFetch(200, { tree, truncated: false });
+    expect(await treeModes({ ...base, fetchFn }, 'head-sha')).toEqual(new Map([['seed-1', '040000'], ['seed-1/content/gh', '120000']]));
+    expect(calls[0]?.url).toBe(`${API}/git/trees/head-sha?recursive=1`);
+    await expect(treeModes({ ...base, fetchFn: mockFetch(200, { tree, truncated: true }).fetchFn }, 'head-sha')).rejects.toThrow('github tree head-sha: truncated');
+  });
+
+  it('finds the newest pull request for a branch and whether it merged', async () => {
+    const { fetchFn, calls } = mockFetch(200, [{ number: 9, merged_at: '2026-09-16T12:00:00Z', merge_commit_sha: 'merge-sha', state: 'closed', head: { sha: 'head-sha' } }]);
+    expect(await findPullForBranch({ ...base, fetchFn }, 'card/4c2f5a1e-code')).toEqual({ number: 9, merged: true, mergeCommitSha: 'merge-sha', open: false });
+    expect(calls[0]?.url).toBe(`${API}/pulls?state=all&head=owner%3Acard%2F4c2f5a1e-code&sort=created&direction=desc&per_page=1`);
+    expect(await findPullForBranch({ ...base, fetchFn: mockFetch(200, []).fetchFn }, 'card/x')).toBeNull();
+  });
+
+  it("reads main's head", async () => {
+    const { fetchFn, calls } = mockFetch(200, { ref: 'refs/heads/main', object: { sha: 'main-sha' } });
+    expect(await mainHead({ ...base, fetchFn })).toBe('main-sha');
+    expect(calls[0]?.url).toBe(`${API}/git/ref/heads/main`);
   });
 });
 

@@ -139,6 +139,10 @@ export class FakeDb implements Db {
   async insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>) {
     this.events.push({ card_id: cardId, role_id: roleId, type, payload });
   }
+  async findEvent(cardId: string, step: string) {
+    const found = [...this.events].reverse().find((e) => e.card_id === cardId && e.payload.step === step);
+    return found ? { ...found.payload } : null;
+  }
   async insertDeploy(input: DeployInput) {
     this.deploys.push({ id: `deploy-${this.deploys.length + 1}`, created_at: new Date(NOW.getTime() + this.deploys.length * 1000).toISOString(), ...input });
   }

@@ -1,6 +1,8 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { haltDispatcher, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
+import { stuckAfterMs } from '../src/pipeline.js';
 import { tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
@@ -13,7 +15,6 @@ function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}):
     maxConcurrency: 1,
     running: new Map<string, Date>(),
     stuckAfterMs: 3 * 60 * 60_000,
-    halt: { reason: null },
     now: () => NOW,
     log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })),
     alert: new RecordingAlerter(),
@@ -137,12 +138,38 @@ describe('tick', () => {
     const db = new FakeDb();
     db.cards = [card()];
     const alert = new RecordingAlerter();
-    const halt = { reason: 'git_tamper: the git configuration changed during card 4c2f5a1e' };
-    expect(await tick(deps(db, [], { alert, halt }))).toEqual({ action: 'sleep', reason: 'halted' });
+    haltDispatcher('git_tamper: the git configuration changed during card 4c2f5a1e');
+    try {
+      expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'halted' });
+    } finally {
+      resetHalt();
+    }
     expect(db.claims).toBe(0);
     expect(db.cards[0]?.stage).toBe('funded');
     expect(db.heartbeats).toEqual([NOW]);
     expect(alert.pings).toBe(0);
+  });
+
+  it('forgets the stuck alert when a card finishes, so a later claim of it can alert again', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const alert = new RecordingAlerter();
+    const running = new Map<string, Date>();
+    let finish: () => void = () => undefined;
+    const runCard = () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    const later = new Date(NOW.getTime() + 3 * 60 * 60_000);
+    expect(await tick(deps(db, [], { alert, running, runCard }))).toEqual({ action: 'started', cardId: card().id });
+    await tick(deps(db, [], { alert, running, now: () => later, stuckAfterMs: 60_000 }));
+    expect(alert.messages).toHaveLength(1);
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(running.size).toBe(0);
+    running.set(card().id, NOW);
+    await tick(deps(db, [], { alert, running, now: () => later, stuckAfterMs: 60_000 }));
+    expect(alert.messages).toHaveLength(2);
   });
 
   it('alerts once when a running card has been in the pipeline past the limit', async () => {
@@ -156,6 +183,12 @@ describe('tick', () => {
     expect(await tick(deps(db, [], { alert, running, stuckAfterMs }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
     expect(await tick(deps(db, [], { alert, running, stuckAfterMs }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
     expect(alert.messages).toEqual(['Card stuckcar has been in the pipeline for 180 minutes, past its 120-minute limit. Check the dispatcher log.']);
+  });
+
+  it('sets the stuck limit from every bounded wait in the pipeline', () => {
+    // 60 session + 15 git (three network git calls at 5) + 1 pull request head + 20 gate + 1 merge state
+    // + 2 × (10 deploy + 5 smoke) for this card and one ahead of it on the merge lock + 2 retries + 10 margin.
+    expect(stuckAfterMs(60)).toBe(139 * 60_000);
   });
 
   it('skips vetoed cards, community cards and cards without an executor', async () => {
