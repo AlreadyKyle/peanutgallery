@@ -11,7 +11,9 @@ function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}):
     mode: 'attended',
     boardSessionTtlMin: 3,
     maxConcurrency: 1,
-    running: new Set<string>(),
+    running: new Map<string, Date>(),
+    stuckAfterMs: 3 * 60 * 60_000,
+    halt: { reason: null },
     now: () => NOW,
     log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })),
     alert: new RecordingAlerter(),
@@ -61,7 +63,7 @@ describe('tick', () => {
     db.boardActive = false;
     expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_board_session' });
     db.boardActive = true;
-    expect(await tick(deps(db, [], { running: new Set(['other-card']) }))).toEqual({ action: 'sleep', reason: 'concurrency' });
+    expect(await tick(deps(db, [], { running: new Map([['other-card', NOW]]) }))).toEqual({ action: 'sleep', reason: 'concurrency' });
     expect(db.cards[0]?.stage).toBe('funded');
   });
 
@@ -105,17 +107,55 @@ describe('tick', () => {
     expect(started).toEqual([card().id]);
   });
 
-  it('writes the heartbeat once per tick, before anything else, and goes on when the write fails', async () => {
+  it('writes the heartbeat and pings once per completed tick, and goes on when the write fails', async () => {
     const db = new FakeDb();
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    const alert = new RecordingAlerter();
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
     expect(db.heartbeats).toEqual([NOW]);
     db.studio.paused = true;
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'paused' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'paused' });
     expect(db.heartbeats).toHaveLength(2);
     db.studio.paused = false;
     db.heartbeatError = new Error('column "dispatcher_seen_at" of relation "studio_state" does not exist');
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
     expect(db.heartbeats).toHaveLength(2);
+    expect(alert.pings).toBe(3);
+  });
+
+  it('sends no ping and writes no heartbeat when the studio_state read throws', async () => {
+    const db = new FakeDb();
+    db.getStudioState = async () => {
+      throw new Error('db studio_state: fetch failed');
+    };
+    const alert = new RecordingAlerter();
+    await expect(tick(deps(db, [], { alert }))).rejects.toThrow('fetch failed');
+    expect(alert.pings).toBe(0);
+    expect(db.heartbeats).toEqual([]);
+  });
+
+  it('claims nothing while halted, and does not ping, so the healthcheck reports the stop', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const alert = new RecordingAlerter();
+    const halt = { reason: 'git_tamper: the git configuration changed during card 4c2f5a1e' };
+    expect(await tick(deps(db, [], { alert, halt }))).toEqual({ action: 'sleep', reason: 'halted' });
+    expect(db.claims).toBe(0);
+    expect(db.cards[0]?.stage).toBe('funded');
+    expect(db.heartbeats).toEqual([NOW]);
+    expect(alert.pings).toBe(0);
+  });
+
+  it('alerts once when a running card has been in the pipeline past the limit', async () => {
+    const db = new FakeDb();
+    const alert = new RecordingAlerter();
+    const running = new Map([
+      ['stuck-card-0000', new Date(NOW.getTime() - 3 * 60 * 60_000)],
+      ['fresh-card-0000', new Date(NOW.getTime() - 60_000)],
+    ]);
+    const stuckAfterMs = 2 * 60 * 60_000;
+    expect(await tick(deps(db, [], { alert, running, stuckAfterMs }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    expect(await tick(deps(db, [], { alert, running, stuckAfterMs }))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
+    expect(alert.messages).toEqual(['Card stuckcar has been in the pipeline for 180 minutes, past its 120-minute limit. Check the dispatcher log.']);
   });
 
   it('skips vetoed cards, community cards and cards without an executor', async () => {

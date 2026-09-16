@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { appendFile, mkdtemp, rm, symlink, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -12,7 +12,12 @@ import {
   commitMessage,
   commitTitle,
   commitTrailers,
+  createWorktree,
+  defaultGitRunner,
   git,
+  GIT_ENV,
+  GIT_SWITCHES,
+  GIT_TIMEOUT_MS,
   gitArgs,
   gitAuthEnv,
   isKernelPath,
@@ -23,10 +28,15 @@ import {
   outsideLane,
   parseStatus,
   protectedPaths,
+  removeWorktree,
+  setGitRunner,
   shortId,
   singleLineTitle,
+  snapshotGitState,
+  verifyCardCommit,
   worktreePath,
   type CommitInput,
+  type GitCall,
 } from '../src/worktree.js';
 
 const CARD_ID = '4c2f5a1e-7b3d-4e8a-9f01-2a3b4c5d6e7f';
@@ -246,7 +256,7 @@ describe('git hooks', () => {
     await git(['init', '-q', '--initial-branch=main', repo], dir);
     await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":10}]}\n', 'utf8');
     await git(['add', '-A'], repo);
-    await git(['commit', '-q', '-m', 'initial'], repo);
+    await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'initial'], repo);
     // Both places a hook can come from: the default hooks folder, and a hooks path the
     // repository's own config names.
     await plantHooks(path.join(repo, '.git', 'hooks'));
@@ -262,10 +272,11 @@ describe('git hooks', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('puts the hooks switch before every subcommand', () => {
+  it('puts the fsmonitor and hooks switches before every subcommand', () => {
     expect(NO_HOOKS).toEqual(['-c', 'core.hooksPath=/dev/null']);
-    expect(gitArgs(['status', '--porcelain'])).toEqual(['-c', 'core.hooksPath=/dev/null', 'status', '--porcelain']);
-    expect(gitArgs(['push', 'origin'])).toEqual(['-c', 'core.hooksPath=/dev/null', 'push', 'origin']);
+    expect(GIT_SWITCHES).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null']);
+    expect(gitArgs(['status', '--porcelain'])).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', 'status', '--porcelain']);
+    expect(gitArgs(['push', 'origin'])).toEqual(['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', 'push', 'origin']);
   });
 
   it('runs a planted hook when git is called without the switch, so the test can see one', () => {
@@ -282,5 +293,180 @@ describe('git hooks', () => {
     await git(['worktree', 'add', '--detach', path.join(dir, 'probe'), 'HEAD'], repo);
     expect(existsSync(path.join(dir, 'probe', 'seed-1', 'config', 'spawn-table.json'))).toBe(true);
     expect(existsSync(marker)).toBe(false);
+  });
+});
+
+describe('the committed range and the git state', () => {
+  let dir: string;
+  let repo: string;
+  let base: string;
+  const allowed = lanePaths('seed-1', 'config');
+  const savedGlobal = process.env.GIT_CONFIG_GLOBAL;
+  const savedNoSystem = process.env.GIT_CONFIG_NOSYSTEM;
+  const ident = ['-c', 'user.name=Agent', '-c', `user.email=${AGENT_EMAIL}`];
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-range-'));
+    process.env.GIT_CONFIG_GLOBAL = path.join(dir, 'gitconfig');
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+    await writeFile(process.env.GIT_CONFIG_GLOBAL, '', 'utf8');
+    const origin = path.join(dir, 'origin.git');
+    repo = path.join(dir, 'repo');
+    await git(['init', '-q', '--bare', '--initial-branch=main', origin], dir);
+    await git(['init', '-q', '--initial-branch=main', repo], dir);
+    await mkdir(path.join(repo, 'seed-1', 'config'), { recursive: true });
+    await mkdir(path.join(repo, 'seed-1', 'content'), { recursive: true });
+    await mkdir(path.join(repo, 'seed-1', 'sim'), { recursive: true });
+    await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":10}]}\n', 'utf8');
+    await writeFile(path.join(repo, 'seed-1', 'sim', 'invariants.ts'), 'export const invariants = [1];\n', 'utf8');
+    await writeFile(path.join(repo, 'seed-1', 'content', 'strings.json'), '{"title":"Dust"}\n', 'utf8');
+    await git(['add', '-A'], repo);
+    await git([...ident, 'commit', '-q', '-m', 'initial'], repo);
+    await git(['remote', 'add', 'origin', origin], repo);
+    await git(['push', '-q', 'origin', 'main'], repo);
+    base = await git(['rev-parse', 'HEAD'], repo);
+  });
+
+  afterAll(async () => {
+    setGitRunner(null);
+    if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = savedGlobal;
+    if (savedNoSystem === undefined) delete process.env.GIT_CONFIG_NOSYSTEM;
+    else process.env.GIT_CONFIG_NOSYSTEM = savedNoSystem;
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // A fresh card worktree on the base for each case.
+  async function fresh(id8: string) {
+    return createWorktree(repo, path.join(dir, 'worktrees'), `${id8}-0000-4000-8000-000000000000`, 'config', {});
+  }
+
+  async function commitAll(worktree: string, message: string): Promise<string> {
+    await git(['add', '-A'], worktree);
+    await git([...ident, 'commit', '-q', '-m', message], worktree);
+    return git(['rev-parse', 'HEAD'], worktree);
+  }
+
+  it('creates the worktree at the fetched main sha, returns the sha and writes no branch config', async () => {
+    const worktree = await fresh('aaaaaaaa');
+    expect(worktree.baseSha).toBe(base);
+    expect(await git(['rev-parse', 'HEAD'], worktree.path)).toBe(base);
+    expect(readFileSync(path.join(repo, '.git', 'config'), 'utf8')).not.toContain('[branch');
+    await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('passes one clean lane commit on the base', async () => {
+    const worktree = await fresh('bbbbbbbb');
+    await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":11}]}\n', 'utf8');
+    const sha = await commitAll(worktree.path, 'card');
+    expect(await verifyCardCommit(worktree.path, { baseSha: base, sha, allowed })).toEqual({ ok: true });
+    await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('refuses two commits, and a commit that is not HEAD, as history', async () => {
+    const worktree = await fresh('cccccccc');
+    await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":11}]}\n', 'utf8');
+    const first = await commitAll(worktree.path, 'agent');
+    await writeFile(path.join(worktree.path, 'seed-1', 'content', 'strings.json'), '{"title":"Dusk"}\n', 'utf8');
+    const second = await commitAll(worktree.path, 'card');
+    expect(await verifyCardCommit(worktree.path, { baseSha: base, sha: second, allowed })).toMatchObject({ ok: false, check: 'history' });
+    expect(await verifyCardCommit(worktree.path, { baseSha: base, sha: first, allowed })).toMatchObject({ ok: false, check: 'history' });
+    await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('refuses a kernel file renamed into the lane as a lane violation naming the kernel path', async () => {
+    const worktree = await fresh('dddddddd');
+    await git(['mv', 'seed-1/sim/invariants.ts', 'seed-1/content/invariants.json'], worktree.path);
+    const sha = await commitAll(worktree.path, 'card');
+    const result = await verifyCardCommit(worktree.path, { baseSha: base, sha, allowed });
+    expect(result).toEqual({ ok: false, check: 'lane_violation', detail: 'committed changes outside the lane: seed-1/sim/invariants.ts' });
+    await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('refuses a symlink and a gitlink inside the lane as file_mode', async () => {
+    const linked = await fresh('eeeeeeee');
+    await symlink('../../.github', path.join(linked.path, 'seed-1', 'content', 'gh'));
+    const linkSha = await commitAll(linked.path, 'card');
+    expect(await verifyCardCommit(linked.path, { baseSha: base, sha: linkSha, allowed })).toMatchObject({
+      ok: false,
+      check: 'file_mode',
+      detail: expect.stringContaining('seed-1/content/gh'),
+    });
+    await removeWorktree(repo, linked.path, linked.branch);
+
+    const gitlink = await fresh('ffffffff');
+    await git(['update-index', '--add', '--cacheinfo', `160000,${base},seed-1/content/sub`], gitlink.path);
+    await git([...ident, 'commit', '-q', '-m', 'card'], gitlink.path);
+    const subSha = await git(['rev-parse', 'HEAD'], gitlink.path);
+    expect(await verifyCardCommit(gitlink.path, { baseSha: base, sha: subSha, allowed })).toMatchObject({
+      ok: false,
+      check: 'file_mode',
+      detail: expect.stringContaining('160000'),
+    });
+    await removeWorktree(repo, gitlink.path, gitlink.branch);
+  });
+
+  it('changes the snapshot when a session plants core.fsmonitor, and no dispatcher git call runs it', async () => {
+    const worktree = await fresh('abababab');
+    const before = await snapshotGitState(repo, worktree.path);
+    expect(await snapshotGitState(repo, worktree.path)).toBe(before);
+    const marker = path.join(dir, 'fsmonitor-ran.txt');
+    const monitor = path.join(dir, 'monitor.sh');
+    await writeFile(monitor, `#!/bin/sh\necho ran >> "${marker}"\nexit 1\n`, { encoding: 'utf8', mode: 0o755 });
+    const configFile = path.join(repo, '.git', 'config');
+    const clean = readFileSync(configFile, 'utf8');
+    await appendFile(configFile, `[core]\n\tfsmonitor = ${monitor}\n`, 'utf8');
+    try {
+      expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
+      // Control: git without the switch runs the planted monitor.
+      execFileSync('git', ['status', '--porcelain'], { cwd: worktree.path, stdio: 'pipe' });
+      expect(existsSync(marker)).toBe(true);
+      await rm(marker, { force: true });
+      await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[]}\n', 'utf8');
+      expect(await changedFiles(worktree.path)).toEqual(['seed-1/config/spawn-table.json']);
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      await writeFile(configFile, clean, 'utf8');
+    }
+    expect(await snapshotGitState(repo, worktree.path)).toBe(before);
+    const exclude = path.join(repo, '.git', 'info', 'exclude');
+    const excludeText = readFileSync(exclude, 'utf8');
+    await appendFile(exclude, '*.json\n', 'utf8');
+    expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
+    await writeFile(exclude, excludeText, 'utf8');
+    await writeFile(path.join(worktree.path, '.git'), `gitdir: ${path.join(dir, 'elsewhere')}\n`, 'utf8');
+    expect(await snapshotGitState(repo, worktree.path)).not.toBe(before);
+    await rm(worktree.path, { recursive: true, force: true });
+    await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('runs every git call with the switches, a clean config environment and a timeout that kills', async () => {
+    const calls: GitCall[] = [];
+    setGitRunner((call) => {
+      calls.push(call);
+      return defaultGitRunner(call);
+    });
+    try {
+      const worktree = await fresh('cdcdcdcd');
+      await writeFile(path.join(worktree.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[{"id":"gatherer","baseCost":12}]}\n', 'utf8');
+      await changedFiles(worktree.path);
+      const commit = await commitLane(worktree.path, allowed, input);
+      if (!commit.committed) throw new Error('expected a commit');
+      await verifyCardCommit(worktree.path, { baseSha: worktree.baseSha, sha: commit.sha, allowed });
+      await removeWorktree(repo, worktree.path, worktree.branch);
+    } finally {
+      setGitRunner(null);
+    }
+    for (const expected of ['fetch', 'rev-parse', 'worktree', 'status', 'add', 'diff', 'commit', 'rev-list', 'diff-tree', 'branch']) {
+      expect(calls.some((call) => call.args.includes(expected))).toBe(true);
+    }
+    for (const call of calls) {
+      expect(call.args.slice(0, GIT_SWITCHES.length)).toEqual([...GIT_SWITCHES]);
+      expect(call.env).toMatchObject(GIT_ENV);
+      expect(call.timeout).toBe(GIT_TIMEOUT_MS);
+      expect(call.killSignal).toBe('SIGKILL');
+    }
+    expect(GIT_ENV).toEqual({ GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_NO_REPLACE_OBJECTS: '1' });
+    expect(GIT_TIMEOUT_MS).toBe(5 * 60_000);
   });
 });

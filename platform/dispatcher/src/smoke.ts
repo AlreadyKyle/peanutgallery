@@ -1,8 +1,8 @@
 // Production smoke test after a deploy: the served build carries the merge sha, every checked
 // config path serves the expected value, and (seed-1 only) the headless bot runs against the
-// served config within a real-second budget. The bot runs the merged seed code, which an agent
-// wrote, so it starts with the agent session's allowlisted environment and none of the
-// dispatcher's secrets.
+// served config within a real-second budget. The bot runs from a checkout of the merge commit,
+// which an agent wrote, so it starts with the agent session's allowlisted environment and none of
+// the dispatcher's secrets.
 import { execFile } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import { evaluateCheck, type ConfigCheck } from './acceptance.js';
 import { childEnv } from './adapters/claude-cli.js';
 import type { CardFolder } from './adapters/types.js';
+import { requestSignal } from './github.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -40,10 +41,13 @@ export interface SmokeInput {
   sha: string;
   folder: CardFolder;
   checks: readonly ConfigCheck[];
-  repoRoot: string;
+  // A checkout of the merge commit; the bot runs there. Unused for platform.
+  botRoot: string;
   botSeconds: number;
   fetchFn?: typeof fetch;
   exec?: BotExec;
+  // Per request; a page with no answer by then throws.
+  timeoutMs?: number;
 }
 
 export interface SmokeResult {
@@ -101,7 +105,7 @@ type BotRun = { ok: true; summary: string } | { ok: false; reason: string };
 
 // The bot runs at maximum speed until ten simulated hours or the real-second budget elapse;
 // the summary reports what the runner printed, not the budget.
-async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, repoRoot: string, seconds: number): Promise<BotRun> {
+async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, botRoot: string, seconds: number): Promise<BotRun> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-smoke-'));
   try {
     for (const file of BOT_CONFIG_FILES) {
@@ -109,10 +113,10 @@ async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, rep
       if (served.status !== 200) return { ok: false, reason: `GET /config/${file} returned ${served.status}` };
       await writeFile(path.join(dir, file), served.body, 'utf8');
     }
-    const args = [BOT_RUNNER, '--config-dir', dir, '--hours', BOT_HOURS, '--seed', BOT_SEED, '--real-seconds', String(seconds)];
+    const args = [BOT_RUNNER, '--config-dir', dir, '--hours', BOT_HOURS, '--seed', BOT_SEED, '--real-seconds', String(seconds), '--repo-root', botRoot];
     let stdout: string;
     try {
-      ({ stdout } = await exec('node', args, { cwd: repoRoot, env: childEnv(process.env), timeout: (seconds + 120) * 1000, maxBuffer: 16 * 1024 * 1024 }));
+      ({ stdout } = await exec('node', args, { cwd: botRoot, env: childEnv(process.env), timeout: (seconds + 120) * 1000, maxBuffer: 16 * 1024 * 1024 }));
     } catch (error) {
       const detail = error instanceof Error ? (error.message.split('\n')[0] ?? error.message) : String(error);
       return { ok: false, reason: `headless bot failed on the served config: ${detail}` };
@@ -125,14 +129,20 @@ async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, rep
   }
 }
 
+// Every page request carries its own timeout. A request that throws, a timeout included, makes
+// runSmoke throw: that is no verdict on the build, and the pipeline decides what follows.
+function timedFetch(fetchFn: typeof fetch, timeoutMs: number | undefined): typeof fetch {
+  return ((url: string | URL | Request, init?: RequestInit) => fetchFn(url, { ...init, signal: requestSignal(timeoutMs, init?.signal ?? undefined) })) as typeof fetch;
+}
+
 export async function runSmoke(input: SmokeInput): Promise<SmokeResult> {
-  const fetchFn = input.fetchFn ?? fetch;
+  const fetchFn = timedFetch(input.fetchFn ?? fetch, input.timeoutMs);
   const build = await checkBuild(fetchFn, input.baseUrl, input.sha);
   if (build) return { ok: false, summary: `fail: ${build}` };
   const config = await checkConfig(fetchFn, input.baseUrl, input.folder, input.checks);
   if (config) return { ok: false, summary: `fail: ${config}` };
   if (input.folder === 'seed-1') {
-    const bot = await runBot(fetchFn, input.exec ?? defaultExec, input.baseUrl, input.repoRoot, input.botSeconds);
+    const bot = await runBot(fetchFn, input.exec ?? defaultExec, input.baseUrl, input.botRoot, input.botSeconds);
     if (!bot.ok) return { ok: false, summary: `fail: ${bot.reason}` };
     return { ok: true, summary: `pass: build ${input.sha.slice(0, 8)} served; ${input.checks.length} config check(s) hold; ${bot.summary}` };
   }

@@ -107,6 +107,7 @@ export class FakeDb implements Db {
     const found = this.cards.find((c) => c.id === id && c.stage === 'funded');
     if (!found) return null;
     found.stage = 'building';
+    found.commit_sha = null;
     return { ...found };
   }
   async updateCard(id: string, patch: CardPatch) {

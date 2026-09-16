@@ -1,13 +1,16 @@
-import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { appendFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
+import type { Halt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
 import { runCardPipeline, type PipelineDeps } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
+import type { BotExec } from '../src/smoke.js';
 import { AGENT_EMAIL, git } from '../src/worktree.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
@@ -20,9 +23,13 @@ const MERGE_SHA = 'merge-sha-0123456789';
 const GITHUB = 'https://api.github.com/repos/owner/repo';
 const NETLIFY = 'https://api.netlify.com/api/v1/sites';
 const SITE_URL = 'https://platform.local';
+const SEED_URL = 'https://seed.local';
+const CHECK_RUNS = /^https:\/\/api\.github\.com\/repos\/owner\/repo\/commits\/([^/]+)\/check-runs/;
 
 let dir: string;
+let origin: string;
 let repo: string;
+let initialSha: string;
 let config: DispatcherConfig;
 const savedEnv = { GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM };
 
@@ -33,7 +40,7 @@ beforeAll(async () => {
   process.env.GIT_CONFIG_GLOBAL = path.join(dir, 'gitconfig');
   process.env.GIT_CONFIG_NOSYSTEM = '1';
   await writeFile(process.env.GIT_CONFIG_GLOBAL, '', 'utf8');
-  const origin = path.join(dir, 'origin.git');
+  origin = path.join(dir, 'origin.git');
   repo = path.join(dir, 'repo');
   await git(['init', '-q', '--bare', '--initial-branch=main', origin], dir);
   await git(['init', '-q', '--initial-branch=main', repo], dir);
@@ -47,6 +54,7 @@ beforeAll(async () => {
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'initial'], repo);
   await git(['remote', 'add', 'origin', origin], repo);
   await git(['push', '-q', 'origin', 'main'], repo);
+  initialSha = await git(['rev-parse', 'HEAD'], repo);
   config = {
     repoRoot: repo,
     agentMode: 'attended',
@@ -86,29 +94,67 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// GitHub and Netlify answers for a card that sails through; tests override what they need.
+// A test that merges for real moves origin's main; every test starts from the initial commit.
+beforeEach(async () => {
+  await git(['update-ref', 'refs/heads/main', initialSha], origin);
+});
+
+function originSha(ref: string): string {
+  return execFileSync('git', ['rev-parse', '--verify', ref], { cwd: origin, stdio: 'pipe' }).toString().trim();
+}
+
+function originHas(branch: string): boolean {
+  try {
+    originSha(`refs/heads/${branch}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type Answer = Reply | ((head: string) => Reply);
+
+// GitHub and Netlify answers for a card that sails through; tests override what they need. The
+// pull request's head is the sha the dispatcher really pushed, read from the origin repository.
 interface Remote {
+  created?: Answer;
+  existing?: Answer;
+  pull?: Answer;
   gate?: Reply;
-  merge?: Reply;
+  merge?: Answer;
   deploys?: Reply;
-  page?: Reply;
+  site?: Answer;
+  page?: Answer;
   version?: Reply;
   restore?: Reply;
   ref?: Reply;
 }
 
+function answer(value: Answer | undefined, head: string, fallback: Reply): Reply {
+  if (value === undefined) return fallback;
+  return typeof value === 'function' ? value(head) : value;
+}
+
 function remote(over: Remote = {}) {
+  const state = { head: '' };
   const readyDeploy = { id: 'dep-2', state: 'ready', commit_ref: MERGE_SHA, context: 'production' };
-  return mockFetch((method, url) => {
-    if (method === 'POST' && url === `${GITHUB}/pulls`) return { status: 201, json: { number: 5, head: { sha: 'head-sha' } } };
-    if (method === 'GET' && url.startsWith(`${GITHUB}/commits/head-sha/check-runs`)) {
+  const mock = mockFetch((method, url, body) => {
+    if (method === 'POST' && url === `${GITHUB}/pulls`) {
+      state.head = originSha(`refs/heads/${(body as { head: string }).head}`);
+      return answer(over.created, state.head, { status: 201, json: { number: 5, head: { sha: state.head } } });
+    }
+    if (method === 'GET' && url.startsWith(`${GITHUB}/pulls?state=open`)) return answer(over.existing, state.head, { status: 200, json: [] });
+    if (method === 'GET' && url === `${GITHUB}/pulls/5`) {
+      return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
+    }
+    if (method === 'GET' && CHECK_RUNS.test(url)) {
       return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
     }
-    if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return over.merge ?? { status: 200, json: { sha: MERGE_SHA } };
+    if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return answer(over.merge, state.head, { status: 200, json: { sha: MERGE_SHA } });
     if (method === 'GET' && url === `${NETLIFY}/site-platform/deploys?per_page=20`) return over.deploys ?? { status: 200, json: [readyDeploy] };
-    if (method === 'GET' && url === `${NETLIFY}/site-platform`) return { status: 200, json: { ssl_url: `${SITE_URL}/` } };
+    if (method === 'GET' && url === `${NETLIFY}/site-platform`) return answer(over.site, state.head, { status: 200, json: { ssl_url: `${SITE_URL}/` } });
     if (method === 'POST' && url === `${NETLIFY}/site-platform/deploys/dep-1/restore`) return over.restore ?? { status: 200, json: { id: 'dep-1' } };
-    if (method === 'GET' && url === `${SITE_URL}/`) return over.page ?? { status: 200, text: `<meta name="build-sha" content="${MERGE_SHA}">` };
+    if (method === 'GET' && url === `${SITE_URL}/`) return answer(over.page, state.head, { status: 200, text: `<meta name="build-sha" content="${MERGE_SHA}">` });
     if (method === 'GET' && url === `${SITE_URL}/version.json`) return over.version ?? { status: 200, json: { sha: MERGE_SHA } };
     if (method === 'GET' && url === `${GITHUB}/git/commits/${MERGE_SHA}`) return { status: 200, json: { sha: MERGE_SHA, parents: [{ sha: 'parent-sha' }] } };
     if (method === 'GET' && url === `${GITHUB}/git/commits/parent-sha`) return { status: 200, json: { sha: 'parent-sha', tree: { sha: 'parent-tree' } } };
@@ -116,13 +162,26 @@ function remote(over: Remote = {}) {
     if (method === 'PATCH' && url === `${GITHUB}/git/refs/heads/main`) return over.ref ?? { status: 200, json: { object: { sha: 'revert-sha' } } };
     return undefined;
   });
+  return { ...mock, state };
 }
 
-function deps(db: FakeDb, adapter: FakeAdapter, fetchFn: typeof fetch, stop = new AbortController(), alert = new RecordingAlerter()): PipelineDeps {
-  return { db, adapter, config, log: silent, alert, stopSignal: stop.signal, now: () => NOW, fetchFn };
+function deps(db: FakeDb, adapter: FakeAdapter, fetchFn: typeof fetch, stop = new AbortController(), alert = new RecordingAlerter(), halt: Halt = { reason: null }): PipelineDeps {
+  return {
+    db,
+    adapter,
+    config,
+    log: silent,
+    alert,
+    stopSignal: stop.signal,
+    now: () => NOW,
+    halt,
+    fetchFn,
+    timings: { prHeadTimeoutMs: 50, prHeadIntervalMs: 5, retryDelayMs: 1 },
+  };
 }
 
 const platformCard = () => card({ folder: 'platform', lane: 'code', acceptance_test: null, intent: 'Name the page.' });
+const OLDER_GREEN = { id: 'row-1', folder: 'platform' as const, sha: 'older-sha', netlify_deploy_id: 'dep-1', is_green: true, smoke_result: 'pass: build older-sh served', created_at: NOW.toISOString() };
 
 const editSite: FakeScript = async (spec, emit) => {
   await emit(startEvent());
@@ -148,7 +207,7 @@ describe('runCardPipeline', () => {
   it('takes a card from building to live with a green deploys row and a ship event', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn, calls } = remote();
+    const { fetchFn, calls, state } = remote();
     const adapter = new FakeAdapter(editSite);
     await runCardPipeline(c, deps(db, adapter, fetchFn));
 
@@ -158,21 +217,22 @@ describe('runCardPipeline', () => {
     expect(db.deploys).toEqual([expect.objectContaining({ folder: 'platform', sha: MERGE_SHA, netlify_deploy_id: 'dep-2', is_green: true, smoke_result: 'pass: build merge-sh served' })]);
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_pass', 'ship']);
     expect(db.events.at(-1)?.payload).toMatchObject({ sha: MERGE_SHA, deploy_id: 'dep-2', url: SITE_URL });
+    expect(state.head).toMatch(/^[0-9a-f]{40}$/);
     expect(urls(calls)).toEqual([
       `POST ${GITHUB}/pulls`,
-      `GET ${GITHUB}/commits/head-sha/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/commits/${state.head}/check-runs?check_name=gate&per_page=50`,
       `PUT ${GITHUB}/pulls/5/merge`,
       `GET ${NETLIFY}/site-platform/deploys?per_page=20`,
       `GET ${NETLIFY}/site-platform`,
       `GET ${SITE_URL}/`,
       `GET ${SITE_URL}/version.json`,
     ]);
-    expect(calls[2]?.body).toMatchObject({ sha: 'head-sha', merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
+    expect(calls[2]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
     expect(calls[0]?.body).toMatchObject({ head: 'card/4c2f5a1e-code', base: 'main' });
     expect(String(calls[0]?.body && (calls[0].body as { body: string }).body)).toContain(`Card-Id: ${c.id}`);
 
-    const pushed = await git(['show', '--format=%an <%ae>%n%B', '--name-only', 'refs/remotes/origin/card/4c2f5a1e-code'], repo).catch(() => git(['show', '--format=%an <%ae>%n%B', '--name-only', 'card/4c2f5a1e-code'], path.join(dir, 'origin.git')));
-    expect(pushed).toContain(`Builder A (AI agent) <${AGENT_EMAIL}>`);
+    const pushed = await git(['show', '--format=%an <%ae>%P%n%B', '--name-only', 'card/4c2f5a1e-code'], origin);
+    expect(pushed).toContain(`Builder A (AI agent) <${AGENT_EMAIL}>${initialSha}`);
     expect(pushed).toContain('platform/site/index.html');
     expect(existsSync(path.join(config.worktreeRoot, 'card-4c2f5a1e'))).toBe(false);
     expect(adapter.specs[0]?.prompt).toContain('Allowed paths: platform/site.');
@@ -181,7 +241,7 @@ describe('runCardPipeline', () => {
   it('restores the previous green deploy, reverts main and rejects the card when smoke fails', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    db.deploys = [{ id: 'row-1', folder: 'platform', sha: 'older-sha', netlify_deploy_id: 'dep-1', is_green: true, smoke_result: 'pass: build older-sh served', created_at: NOW.toISOString() }];
+    db.deploys = [OLDER_GREEN];
     const { fetchFn, calls } = remote({ page: { status: 500, text: '' } });
     const alert = new RecordingAlerter();
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
@@ -212,6 +272,64 @@ describe('runCardPipeline', () => {
     ]);
   });
 
+  it.each<[string, Remote, string]>([
+    ['the site read returns 500', { site: { status: 500, json: {} } }, 'netlify site site-platform: http 500'],
+    [
+      'the smoke fetch throws',
+      {
+        page: () => {
+          throw new TypeError('fetch failed');
+        },
+      },
+      'fetch failed',
+    ],
+    ['the deploy list returns 502', { deploys: { status: 502, json: {} } }, 'netlify deploys: http 502'],
+  ])('restores, reverts and rejects post_merge when %s after the merge', async (_name, over, detail) => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    const { fetchFn, calls } = remote(over);
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'post_merge', commit_sha: MERGE_SHA });
+    expect(db.events.at(-1)).toMatchObject({
+      type: 'revert',
+      payload: { failed_sha: MERGE_SHA, reason: `post-merge check failed: ${detail}`, restored_sha: 'older-sha', revert_sha: 'revert-sha' },
+    });
+    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
+    expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
+    expect(db.deploys.filter((row) => row.is_green)).toEqual([OLDER_GREEN]);
+    expect(alert.messages).toEqual([
+      `Card 4c2f5a1e was reverted on main (revert-): post-merge check failed: ${detail}`,
+      `Card 4c2f5a1e rejected (post_merge): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}`,
+    ]);
+  });
+
+  it('leaves a verified card gated with its merge sha, without a revert, when the ship writes keep failing', async () => {
+    const c = platformCard();
+    class FailingDeploys extends FakeDb {
+      attempts = 0;
+      override async insertDeploy() {
+        this.attempts += 1;
+        throw new Error('db deploys insert: connection reset');
+      }
+    }
+    const failing = new FailingDeploys();
+    failing.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(failing, new FakeAdapter(editSite), fetchFn, undefined, alert));
+
+    expect(failing.attempts).toBe(4);
+    expect(failing.cards[0]).toMatchObject({ stage: 'gated', failing_check: null, commit_sha: MERGE_SHA });
+    expect(failing.events.map((e) => e.type)).toEqual(['start', 'gate_pass']);
+    expect(urls(calls).some((call) => call.includes('/git/') || call.includes('/restore'))).toBe(false);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e merged as merge-sh and passed smoke, but recording it failed: db deploys insert: connection reset. It is left gated and is checked again when the dispatcher starts.',
+    ]);
+  });
+
   it('alerts that the rollback is incomplete when main has moved past the merge', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
@@ -227,6 +345,30 @@ describe('runCardPipeline', () => {
     });
     expect(alert.messages[0]).toBe(
       'Card 4c2f5a1e failed after merge and the rollback is incomplete: no green platform deploy exists to restore; main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward. Check main and the live site.',
+    );
+  });
+
+  it('still restores, reverts and alerts when the database fails during the rollback', async () => {
+    const c = platformCard();
+    class BrokenDb extends FakeDb {
+      override async lastGreen(): Promise<never> {
+        throw new Error('db last_green: connection reset');
+      }
+      override async insertEvent(cardId: string, roleId: string | null, type: Parameters<FakeDb['insertEvent']>[2], payload: Record<string, unknown>) {
+        if (type === 'revert') throw new Error('db agent_events insert: connection reset');
+        return super.insertEvent(cardId, roleId, type, payload);
+      }
+    }
+    const broken = new BrokenDb();
+    broken.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({ page: { status: 500, text: '' } });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(broken, new FakeAdapter(editSite), fetchFn, undefined, alert));
+
+    expect(broken.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'smoke' });
+    expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
+    expect(alert.messages[0]).toBe(
+      'Card 4c2f5a1e failed after merge and the rollback is incomplete: the last green deploy could not be read (db last_green: connection reset). Check main and the live site.',
     );
   });
 
@@ -250,17 +392,56 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
   });
 
+  it('waits for an existing pull request to show the pushed sha, then rejects pr_head without gating on the stale head', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({
+      created: { status: 422, json: { message: 'A pull request already exists for owner:card/4c2f5a1e-code.' } },
+      existing: { status: 200, json: [{ number: 5, head: { sha: 'stale-sha' } }] },
+      pull: { status: 200, json: { number: 5, head: { sha: 'stale-sha' }, merged: false } },
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'pr_head', commit_sha: null });
+    expect(urls(calls).filter((call) => call === `GET ${GITHUB}/pulls/5`).length).toBeGreaterThan(1);
+    expect(urls(calls).some((call) => CHECK_RUNS.test(call.slice(4)) || call.startsWith('PUT'))).toBe(false);
+  });
+
+  it('continues with the merge commit when the merge request times out but the pull request merged', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn } = remote({
+      merge: () => {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      },
+      pull: (head) => ({ status: 200, json: { number: 5, head: { sha: head }, merged: true, merge_commit_sha: MERGE_SHA } }),
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+  });
+
+  it('rejects merge when the merge request times out and the pull request did not merge', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({
+      merge: () => {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      },
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
+    expect(urls(calls).some((call) => call.includes('/deploys'))).toBe(false);
+  });
+
   it('pauses without a deploys row when the dispatcher stops during the gate wait', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     const stop = new AbortController();
-    const { fetchFn, calls } = mockFetch((method, url) => {
-      if (method === 'POST' && url === `${GITHUB}/pulls`) return { status: 201, json: { number: 5, head: { sha: 'head-sha' } } };
-      if (url.startsWith(`${GITHUB}/commits/head-sha/check-runs`)) {
+    const { fetchFn, calls } = remote({
+      gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'in_progress', conclusion: null }] } },
+      created: (head) => {
         stop.abort('dispatcher stopping');
-        return { status: 200, json: { check_runs: [{ name: 'gate', status: 'in_progress', conclusion: null }] } };
-      }
-      return undefined;
+        return { status: 201, json: { number: 5, head: { sha: head } } };
+      },
     });
     const alert = new RecordingAlerter();
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, stop, alert));
@@ -271,24 +452,27 @@ describe('runCardPipeline', () => {
     expect(urls(calls)).toHaveLength(2);
   });
 
-  it('pauses without a deploys row when the dispatcher stops during the deploy wait', async () => {
+  it('leaves a merged card gated with its merge sha, and alerts, when the dispatcher stops during the deploy wait', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     const stop = new AbortController();
     const building = { id: 'dep-2', state: 'building', commit_ref: MERGE_SHA, context: 'production' };
-    const { fetchFn } = mockFetch((method, url) => {
-      if (method === 'POST' && url === `${GITHUB}/pulls`) return { status: 201, json: { number: 5, head: { sha: 'head-sha' } } };
-      if (url.startsWith(`${GITHUB}/commits/head-sha/check-runs`)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
-      if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return { status: 200, json: { sha: MERGE_SHA } };
-      if (url === `${NETLIFY}/site-platform/deploys?per_page=20`) {
+    const { fetchFn, calls } = remote({
+      merge: () => {
         stop.abort('dispatcher stopping');
-        return { status: 200, json: [building] };
-      }
-      return undefined;
+        return { status: 200, json: { sha: MERGE_SHA } };
+      },
+      deploys: { status: 200, json: [building] },
     });
-    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, stop));
-    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'dispatcher_stopped', commit_sha: MERGE_SHA });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, stop, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'gated', failing_check: null, commit_sha: MERGE_SHA });
     expect(db.deploys).toEqual([]);
+    expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_pass']);
+    expect(urls(calls).some((call) => call.includes('/git/') || call.includes('/restore'))).toBe(false);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e merged as merge-sh but the dispatcher stopped while the deploy was running. It is left gated and is checked again when the dispatcher starts.',
+    ]);
   });
 
   it('writes a red deploys row when the deploy itself fails', async () => {
@@ -304,6 +488,121 @@ describe('runCardPipeline', () => {
     expect(db.events.at(-1)?.payload).not.toHaveProperty('restored_sha');
     expect(urls(calls).some((call) => call.includes('/restore'))).toBe(false);
     expect(alert.messages).toHaveLength(2);
+  });
+
+  it('runs the smoke bot in a detached worktree at the merge sha and removes it afterwards', async () => {
+    const c = card({ id: 'dddddddd-0000-4000-8000-000000000004' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 10));
+    });
+    const served = { rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) };
+    const state = { merged: '' };
+    const { fetchFn } = mockFetch((method, url, body) => {
+      if (method === 'POST' && url === `${GITHUB}/pulls`) {
+        return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
+      }
+      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+      if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
+        // The merge lands the pushed commit on origin's main, so the merge sha is a real commit.
+        state.merged = (body as { sha: string }).sha;
+        execFileSync('git', ['update-ref', 'refs/heads/main', state.merged], { cwd: origin, stdio: 'pipe' });
+        return { status: 200, json: { sha: state.merged } };
+      }
+      if (method === 'GET' && url === `${NETLIFY}/site-seed/deploys?per_page=20`) return { status: 200, json: [{ id: 'dep-9', state: 'ready', commit_ref: state.merged, context: 'production' }] };
+      if (method === 'GET' && url === `${NETLIFY}/site-seed`) return { status: 200, json: { ssl_url: SEED_URL } };
+      if (method === 'GET' && url === `${SEED_URL}/`) return { status: 200, text: `<meta name="build-sha" content="${state.merged}">` };
+      if (method === 'GET' && url === `${SEED_URL}/version.json`) return { status: 200, json: { sha: state.merged } };
+      if (method === 'GET' && url === `${SEED_URL}/config/spawn-table.json`) return { status: 200, json: served };
+      if (method === 'GET' && url === `${SEED_URL}/config/unlocks.json`) return { status: 200, json: { unlocks: [] } };
+      return undefined;
+    });
+    const bot: { cwd: string; args: string[]; head: string; baseCost: number | null } = { cwd: '', args: [], head: '', baseCost: null };
+    const botExec: BotExec = async (_file, args, options) => {
+      bot.cwd = options.cwd;
+      bot.args = args;
+      bot.head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: options.cwd, stdio: 'pipe' }).toString().trim();
+      bot.baseCost = (JSON.parse(readFileSync(path.join(options.cwd, 'seed-1', 'config', 'spawn-table.json'), 'utf8')) as typeof SPAWN_TABLE).rows[0]!.baseCost;
+      return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=3\n' };
+    };
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), botExec });
+
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: state.merged });
+    expect(state.merged).toMatch(/^[0-9a-f]{40}$/);
+    expect(bot.cwd).toBe(path.join(config.worktreeRoot, 'smoke-dddddddd'));
+    expect(bot.head).toBe(state.merged);
+    expect(bot.baseCost).toBe(11);
+    expect(bot.args.slice(-2)).toEqual(['--repo-root', bot.cwd]);
+    expect(existsSync(bot.cwd)).toBe(false);
+    expect(await git(['worktree', 'list', '--porcelain'], repo)).not.toContain('smoke-dddddddd');
+  });
+
+  it('rejects an agent commit in the worktree as history and pushes nothing', async () => {
+    const c = card({ id: 'bbbbbbbb-0000-4000-8000-000000000002' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      execFileSync('git', ['-c', 'user.name=Agent', '-c', 'user.email=agent@example.com', 'commit', '-q', '-a', '-m', 'agent'], { cwd: spec.worktree, stdio: 'pipe' });
+      await emit(usageEvent(1, 10));
+    });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'history' });
+    expect(calls).toEqual([]);
+    expect(originHas('card/bbbbbbbb-config')).toBe(false);
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card bbbbbbbb rejected \(history\): /)]);
+  });
+
+  it('rejects a symlink in the committed range as file_mode and pushes nothing', async () => {
+    const c = card({ id: 'cccccccc-0000-4000-8000-000000000003' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await symlink('../../.github', path.join(spec.worktree, 'seed-1', 'content', 'gh'));
+      await emit(usageEvent(1, 10));
+    });
+    await runCardPipeline(c, deps(db, adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'file_mode' });
+    expect(calls).toEqual([]);
+    expect(originHas('card/cccccccc-config')).toBe(false);
+  });
+
+  it('rejects git_tamper, halts the dispatcher and runs no git when a session plants git configuration', async () => {
+    const c = card({ id: 'eeeeeeee-0000-4000-8000-000000000005' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const configFile = path.join(repo, '.git', 'config');
+    const clean = await readFile(configFile, 'utf8');
+    const marker = path.join(dir, 'fsmonitor-ran.txt');
+    const monitor = path.join(dir, 'monitor.sh');
+    await writeFile(monitor, `#!/bin/sh\necho ran >> "${marker}"\nexit 1\n`, { encoding: 'utf8', mode: 0o755 });
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await appendFile(configFile, `[core]\n\tfsmonitor = ${monitor}\n`, 'utf8');
+      await emit(usageEvent(1, 10));
+    });
+    const alert = new RecordingAlerter();
+    const halt: Halt = { reason: null };
+    try {
+      await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert, halt));
+    } finally {
+      await writeFile(configFile, clean, 'utf8');
+      await git(['worktree', 'prune'], repo);
+    }
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'git_tamper' });
+    expect(halt.reason).toMatch(/^git_tamper: /);
+    expect(calls).toEqual([]);
+    expect(originHas('card/eeeeeeee-config')).toBe(false);
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(path.join(config.worktreeRoot, 'card-eeeeeeee'))).toBe(false);
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card eeeeeeee rejected \(git_tamper\): .*The dispatcher claims no card until it restarts/)]);
   });
 
   it('pauses on the ceiling and records what was spent', async () => {
@@ -440,15 +739,11 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const { fetchFn } = mockFetch((method, url) => {
-      if (method === 'POST' && url === `${GITHUB}/pulls`) return { status: 201, json: { number: 5, head: { sha: 'head-sha' } } };
-      if (url.startsWith(`${GITHUB}/commits/head-sha/check-runs`)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } };
-      return undefined;
-    });
+    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
     expect(JSON.parse(seen)).toEqual(SPAWN_TABLE);
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', branch: 'card/4c2f5a1e-config' });
-    const pushed = await git(['show', '--format=%B', '--name-only', 'card/4c2f5a1e-config'], path.join(dir, 'origin.git'));
+    const pushed = await git(['show', '--format=%B', '--name-only', 'card/4c2f5a1e-config'], origin);
     expect(pushed).toContain('Lane: config');
     expect(pushed).toContain('seed-1/config/spawn-table.json');
   });

@@ -1,19 +1,26 @@
-// The Appendix A loop, one tick: write the heartbeat and ping the healthcheck, read studio_state,
-// check the board session, read the pool, apply the throttle, select the card, claim it, and start
-// its pipeline in the background.
+// The Appendix A loop, one tick: read studio_state, check the board session, read the pool, apply
+// the throttle, select the card, claim it, and start its pipeline in the background. The heartbeat
+// and the healthcheck ping follow a tick that completed, so a dispatcher whose ticks keep failing
+// stops pinging. A halted dispatcher claims nothing and does not ping.
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Card, Db } from './db.js';
+import type { Halt } from './halt.js';
 import { errorMessage, type Logger } from './log.js';
 import { selectCard } from './select.js';
 import { available, canStart, concurrency, newYorkDate, spentToday, type SleepReason } from './throttle.js';
+import { shortId } from './worktree.js';
 
 export interface TickDeps {
   db: Db;
   mode: AgentMode;
   boardSessionTtlMin: number;
   maxConcurrency: number;
-  running: Set<string>;
+  // Card id to the time its pipeline started, for cards this process is running.
+  running: Map<string, Date>;
+  // How long a card may stay in the pipeline before the board is alerted.
+  stuckAfterMs: number;
+  halt: Halt;
   now: () => Date;
   runCard: (card: Card) => Promise<void>;
   log: Logger;
@@ -21,13 +28,20 @@ export interface TickDeps {
 }
 
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'no_eligible_card' | 'mode_mismatch' }
+  | { action: 'sleep'; reason: SleepReason | 'no_eligible_card' | 'mode_mismatch' | 'halted' }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
 export async function tick(deps: TickDeps): Promise<TickOutcome> {
+  await watchStuckCards(deps);
+  const outcome = await evaluate(deps);
   await heartbeat(deps);
-  await deps.alert.ping();
+  if (!(outcome.action === 'sleep' && outcome.reason === 'halted')) await deps.alert.ping();
+  return outcome;
+}
+
+async function evaluate(deps: TickDeps): Promise<TickOutcome> {
+  if (deps.halt.reason) return { action: 'sleep', reason: 'halted' };
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
   if (studio.agent_mode !== deps.mode) {
@@ -78,6 +92,22 @@ async function heartbeat(deps: TickDeps): Promise<void> {
   }
 }
 
+// Every wait in the pipeline has a deadline, so a card past the sum of them is stuck on something
+// that has none. The board is told once per card; the card is left running.
+async function watchStuckCards(deps: TickDeps): Promise<void> {
+  const now = deps.now().getTime();
+  for (const [cardId, startedAt] of deps.running) {
+    const elapsed = now - startedAt.getTime();
+    if (elapsed <= deps.stuckAfterMs) continue;
+    const minutes = Math.floor(elapsed / 60_000);
+    deps.log.error('tick', `card ${cardId} has been in the pipeline for ${minutes} minutes`, { limitMinutes: deps.stuckAfterMs / 60_000 });
+    await deps.alert.notifyOnce(
+      `stuck:${cardId}`,
+      `Card ${shortId(cardId)} has been in the pipeline for ${minutes} minutes, past its ${Math.round(deps.stuckAfterMs / 60_000)}-minute limit. Check the dispatcher log.`,
+    );
+  }
+}
+
 async function checkBoardSession(deps: TickDeps): Promise<boolean> {
   if (deps.mode !== 'attended') return true;
   return deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now());
@@ -95,7 +125,7 @@ function smallestEstimate(cards: readonly Card[]): number | null {
 }
 
 function startCard(deps: TickDeps, card: Card): void {
-  deps.running.add(card.id);
+  deps.running.set(card.id, deps.now());
   deps.log.info('tick', `card ${card.id} claimed`, { title: card.title, lane: card.lane, estimate: card.estimate_usd });
   deps
     .runCard(card)

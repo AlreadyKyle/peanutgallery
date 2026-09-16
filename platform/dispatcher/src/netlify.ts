@@ -1,11 +1,15 @@
 // Netlify: wait for the production deploy of a merge sha, restore a previous deploy, and read
 // the site URL for smoke tests.
+import { requestSignal } from './github.js';
 import { sleep } from './time.js';
 
 export interface NetlifyOptions {
   token: string;
   fetchFn?: typeof fetch;
   apiBase?: string;
+  // Per request; a request with no answer by then is aborted and throws.
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface NetlifyDeploy {
@@ -30,6 +34,7 @@ async function request(opts: NetlifyOptions, method: string, route: string): Pro
   const fetchFn = opts.fetchFn ?? fetch;
   const response = await fetchFn(`${opts.apiBase ?? API_BASE}${route}`, {
     method,
+    signal: requestSignal(opts.timeoutMs, opts.signal),
     headers: { Authorization: `Bearer ${opts.token}`, 'User-Agent': 'backseat-dispatcher' },
   });
   const body = await response.text();

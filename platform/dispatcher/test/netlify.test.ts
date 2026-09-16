@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findDeploy, restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from '../src/netlify.js';
-import { mockFetch, type Reply } from './helpers/mock-fetch.js';
+import { hangingFetch, mockFetch, type Reply } from './helpers/mock-fetch.js';
 
 const SITE = 'site-seed';
 const SHA = 'merge-sha';
@@ -31,6 +31,12 @@ describe('findDeploy', () => {
 
   it('throws on a non-200 answer', async () => {
     await expect(findDeploy(opts({ status: 401, json: { code: 401 } }), SITE, SHA)).rejects.toThrow('netlify deploys: http 401');
+  });
+
+  it('aborts a request that never answers', async () => {
+    const { fetchFn, signals } = hangingFetch();
+    await expect(findDeploy({ token: 'nf-token', fetchFn, timeoutMs: 20 }, SITE, SHA)).rejects.toThrow(/timeout|abort/i);
+    expect(signals[0]?.aborted).toBe(true);
   });
 });
 

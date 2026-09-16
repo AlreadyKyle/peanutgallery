@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { gateStatus, mergePullRequest, openPullRequest, revertMerge, type GitHubOptions } from '../src/github.js';
-import { mockFetch as routeFetch } from './helpers/mock-fetch.js';
+import { gateStatus, mergePullRequest, openPullRequest, revertMerge, waitForPullHead, type GitHubOptions } from '../src/github.js';
+import { hangingFetch, mockFetch as routeFetch } from './helpers/mock-fetch.js';
 
 interface Call {
   url: string;
@@ -39,6 +39,58 @@ describe('mergePullRequest', () => {
     const { fetchFn } = mockFetch(405, { message: 'Pull Request is not mergeable' });
     const result = await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' });
     expect(result).toEqual({ ok: false, status: 405, reason: 'Pull Request is not mergeable' });
+  });
+
+  const API = 'https://api.github.com/repos/owner/repo';
+  const afterLostPut = (pull: { status: number; json: unknown }) =>
+    routeFetch((method, url) => {
+      if (method === 'PUT') throw new Error('The operation was aborted due to timeout');
+      if (method === 'GET' && url === `${API}/pulls/7`) return pull;
+      return undefined;
+    });
+
+  it('reads the pull request when the merge request throws, and takes its merge commit when it merged', async () => {
+    const { fetchFn, calls } = afterLostPut({ status: 200, json: { number: 7, merged: true, merge_commit_sha: 'merge-sha', head: { sha: 'head-sha' } } });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' })).toEqual({ ok: true, sha: 'merge-sha' });
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([`PUT ${API}/pulls/7/merge`, `GET ${API}/pulls/7`]);
+  });
+
+  it('is rejected when the merge request throws and the pull request did not merge', async () => {
+    const { fetchFn } = afterLostPut({ status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' })).toEqual({
+      ok: false,
+      status: 0,
+      reason: 'the merge request failed (The operation was aborted due to timeout) and pull request 7 is not merged',
+    });
+  });
+});
+
+describe('waitForPullHead', () => {
+  const API = 'https://api.github.com/repos/owner/repo';
+
+  it('polls until the pull request head is the pushed sha', async () => {
+    let reads = 0;
+    const { fetchFn } = routeFetch((method, url) => {
+      if (method !== 'GET' || url !== `${API}/pulls/7`) return undefined;
+      reads += 1;
+      return { status: 200, json: { number: 7, head: { sha: reads < 3 ? 'stale-sha' : 'pushed-sha' } } };
+    });
+    expect(await waitForPullHead({ ...base, fetchFn }, 7, 'pushed-sha', { timeoutMs: 1000, intervalMs: 1 })).toBe(true);
+    expect(reads).toBe(3);
+  });
+
+  it('gives up when the head never moves', async () => {
+    const { fetchFn, calls } = routeFetch(() => ({ status: 200, json: { number: 7, head: { sha: 'stale-sha' } } }));
+    expect(await waitForPullHead({ ...base, fetchFn }, 7, 'pushed-sha', { timeoutMs: 30, intervalMs: 5 })).toBe(false);
+    expect(calls.length).toBeGreaterThan(1);
+  });
+});
+
+describe('request timeout', () => {
+  it('aborts a GitHub request that never answers', async () => {
+    const { fetchFn, signals } = hangingFetch();
+    await expect(gateStatus({ ...base, fetchFn, timeoutMs: 20 }, 'sha')).rejects.toThrow(/timeout|abort/i);
+    expect(signals[0]?.aborted).toBe(true);
   });
 });
 
