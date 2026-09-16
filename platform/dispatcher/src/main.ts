@@ -24,13 +24,15 @@ import { sleep } from './time.js';
 // grace (5 s), its settle rows and the card's pause all fit, inside docker stop's 60 s.
 const SHUTDOWN_GRACE_MS = 50_000;
 
-export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
+// The checkout this file runs from. .env is read from here and never from DISPATCHER_REPO_ROOT, a
+// clone agent-written code can write to.
+export const CODE_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
 const log = createLogger();
 
 async function main(): Promise<void> {
-  loadDotenv({ path: path.join(REPO_ROOT, '.env'), quiet: true });
-  const config = loadConfig(process.env, REPO_ROOT);
+  loadDotenv({ path: path.join(CODE_ROOT, '.env'), quiet: true });
+  const config = loadConfig(process.env, CODE_ROOT);
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const adapter = createAdapter(config);
   const stop = new AbortController();
@@ -53,7 +55,14 @@ async function main(): Promise<void> {
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
   });
   const tasks = startScheduler(config.schedulerEnabled, log);
-  log.info('main', 'dispatcher started', { mode: config.agentMode, tickMs: config.tickMs, repo: config.githubRepo, worktrees: config.worktreeRoot });
+  log.info('main', 'dispatcher started', {
+    mode: config.agentMode,
+    tickMs: config.tickMs,
+    repo: config.githubRepo,
+    code: config.codeRoot,
+    clone: config.repoRoot,
+    worktrees: config.worktreeRoot,
+  });
 
   const onSignal = (signal: string) => {
     if (stop.signal.aborted) return;

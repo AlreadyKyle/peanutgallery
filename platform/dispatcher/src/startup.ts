@@ -1,8 +1,12 @@
-// Startup rules for the dispatcher: the database must agree on the agent mode, every writing role's
+// Startup rules for the dispatcher: on the VPS its code root must be read-only to it, the database must agree on the agent mode, every writing role's
 // model must have a price, and in unattended mode the one-turn probe must pass and be metered before
 // any card runs. The probe runner is passed in so tests can run these rules without git, a network or
 // a real adapter. A failure that cannot change on retry is a fatal StartupError, which main.ts turns
 // into exit 78.
+import { randomBytes } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
+import { access, open, rm } from 'node:fs/promises';
+import path from 'node:path';
 import type { AgentAdapter } from './adapters/types.js';
 import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
@@ -142,9 +146,56 @@ export async function startupProbe(deps: StartupDeps): Promise<void> {
   log.info('probe', 'startup probe passed', { apiKeySource: probe.apiKeySource, tools: probe.tools, turns: probe.turns, costUsd: probe.costUsd });
 }
 
-// The mode and role model checks run first so a process that could not run a card never spends
-// money on a probe.
+// The folders of the code root the read-only check looks at: the root, the workspace's node_modules
+// and its package store, and the dispatcher's package, source and node_modules.
+export const CODE_PATHS: readonly string[] = ['.', 'node_modules', 'node_modules/.pnpm', 'platform/dispatcher', 'platform/dispatcher/src', 'platform/dispatcher/node_modules'];
+
+// Agent-written code runs as the dispatcher's own user. If that user could write the dispatcher's
+// source or the modules it loads, the next start would run the change with every secret. On the VPS
+// (DISPATCHER_CODE_READONLY=required) the code root is a root-owned clone mounted read-only, and this
+// check proves it before anything else runs: each folder must deny write access, and creating a file
+// in it must fail, since access() answers from the mode bits alone. A missing folder is refused as
+// well. The mount is the same on every start, so a failure is fatal.
+export async function checkCodeReadonly(codeRoot: string): Promise<void> {
+  const problems: string[] = [];
+  for (const relative of CODE_PATHS) {
+    const folder = path.join(codeRoot, relative);
+    try {
+      await access(folder, fsConstants.F_OK);
+    } catch {
+      problems.push(`${relative} (missing)`);
+      continue;
+    }
+    let writable = await access(folder, fsConstants.W_OK).then(
+      () => true,
+      () => false,
+    );
+    const probe = path.join(folder, `.dispatcher-readonly-check-${process.pid}-${randomBytes(4).toString('hex')}`);
+    try {
+      const handle = await open(probe, 'wx');
+      await handle.close();
+      await rm(probe, { force: true });
+      writable = true;
+    } catch {
+      // Refused, as it should be.
+    }
+    if (writable) problems.push(`${relative} (writable)`);
+  }
+  if (problems.length > 0) {
+    throw new StartupError(
+      `the code root ${codeRoot} is writable by this process or incomplete: ${problems.join(', ')}; DISPATCHER_CODE_READONLY=required runs the dispatcher only from a read-only code clone (platform/ops/README.md)`,
+      true,
+    );
+  }
+}
+
+// The code root check runs first, before any database read. The mode and role model checks run next
+// so a process that could not run a card never spends money on a probe.
 export async function startupChecks(deps: StartupDeps): Promise<void> {
+  if (deps.config.codeReadonly) {
+    await checkCodeReadonly(deps.config.codeRoot);
+    deps.log.info('startup', 'code root is read-only', { codeRoot: deps.config.codeRoot });
+  }
   await checkMode(deps.db, deps.config);
   await checkRoleModels(deps.db, deps.config);
   if (deps.config.agentMode === 'unattended') await startupProbe(deps);

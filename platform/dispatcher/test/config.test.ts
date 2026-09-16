@@ -20,6 +20,8 @@ describe('loadConfig', () => {
   it('applies the documented defaults', () => {
     const config = loadConfig(FULL, REPO);
     expect(config).toMatchObject({
+      codeRoot: REPO,
+      codeReadonly: false,
       repoRoot: REPO,
       agentMode: 'attended',
       githubRepo: 'owner/repo',
@@ -111,6 +113,52 @@ describe('loadConfig', () => {
       expect(() => loadConfig({ ...FULL, [name]: 'unpriced-model' }, REPO), name).toThrow(new ConfigError(`${name} has no row in PRICE_TABLE_JSON`));
     }
     expect(loadConfig({ ...FULL, MODEL_DIRECTOR: '  ', MODEL_HOST: '' }, REPO)).toMatchObject({ modelDirector: null, modelHost: null });
+  });
+});
+
+describe('the code, repository and worktree roots', () => {
+  const VPS = {
+    DISPATCHER_CODE_ROOT: '/opt/peanutgallery',
+    DISPATCHER_REPO_ROOT: '/srv/peanutgallery',
+    DISPATCHER_WORKTREE_ROOT: '/srv/peanutgallery-worktrees',
+    DISPATCHER_CODE_READONLY: 'required',
+  };
+
+  it('reads the roots dispatcher.service sets', () => {
+    expect(loadConfig({ ...FULL, ...VPS }, '/opt/peanutgallery')).toMatchObject({
+      codeRoot: '/opt/peanutgallery',
+      codeReadonly: true,
+      repoRoot: '/srv/peanutgallery',
+      worktreeRoot: '/srv/peanutgallery-worktrees',
+    });
+  });
+
+  it('resolves a relative repository root against the code root and a relative worktree root against the repository', () => {
+    expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work', DISPATCHER_WORKTREE_ROOT: 'trees' }, REPO)).toMatchObject({
+      codeRoot: REPO,
+      repoRoot: '/work',
+      worktreeRoot: '/work/trees',
+    });
+    expect(loadConfig({ ...FULL, DISPATCHER_CODE_READONLY: 'off' }, REPO).codeReadonly).toBe(false);
+  });
+
+  it('refuses a code root other than the one the process runs from', () => {
+    expect(() => loadConfig({ ...FULL, ...VPS }, '/srv/peanutgallery')).toThrow(
+      new ConfigError('DISPATCHER_CODE_ROOT is /opt/peanutgallery but the dispatcher runs from /srv/peanutgallery'),
+    );
+  });
+
+  it('refuses an unknown read-only setting', () => {
+    expect(() => loadConfig({ ...FULL, DISPATCHER_CODE_READONLY: 'yes' }, REPO)).toThrow(new ConfigError('DISPATCHER_CODE_READONLY must be required or off'));
+  });
+
+  it('refuses a repository or worktree root inside a read-only code root', () => {
+    expect(() => loadConfig({ ...FULL, DISPATCHER_CODE_READONLY: 'required' }, REPO)).toThrow(
+      new ConfigError('DISPATCHER_REPO_ROOT must be outside the code root when DISPATCHER_CODE_READONLY is required'),
+    );
+    expect(() => loadConfig({ ...FULL, ...VPS, DISPATCHER_WORKTREE_ROOT: '/opt/peanutgallery/.worktrees' }, '/opt/peanutgallery')).toThrow(
+      new ConfigError('DISPATCHER_WORKTREE_ROOT must be outside the code root when DISPATCHER_CODE_READONLY is required'),
+    );
   });
 });
 

@@ -1,12 +1,15 @@
+import { chmod, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { Writable } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import type { MeterRow } from '../src/metering.js';
 import { parsePriceTable, priceUsage, type TurnUsage } from '../src/pricing.js';
 import type { ProbeOptions, ProbeResult } from '../src/probe-core.js';
-import { FallbackPricedError, UnwrittenRowsError, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
+import { CODE_PATHS, FallbackPricedError, UnwrittenRowsError, checkCodeReadonly, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
@@ -19,6 +22,8 @@ const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turn
 const SETTLE_ROW: MeterRow = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006, request_id: 'probe/test/settle/1' };
 
 const config: DispatcherConfig = {
+  codeRoot: '/repo',
+  codeReadonly: false,
   repoRoot: '/repo',
   agentMode: 'unattended',
   supabaseUrl: 'https://db.local',
@@ -107,7 +112,73 @@ describe('checkMode', () => {
   });
 });
 
+// A code root with the folders the check reads, left writable.
+async function codeTree(): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'backseat-code-root-'));
+  for (const relative of CODE_PATHS) await mkdir(path.join(root, relative), { recursive: true });
+  return root;
+}
+
+const trees: string[] = [];
+afterEach(async () => {
+  for (const root of trees.splice(0)) {
+    for (const relative of CODE_PATHS) await chmod(path.join(root, relative), 0o755).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Root writes through any mode bits, so the read-only case only means something as another user.
+const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+
+describe('checkCodeReadonly', () => {
+  it('refuses to start, exit 78, when the code root or its node_modules is writable', async () => {
+    const root = await codeTree();
+    trees.push(root);
+    const error = await checkCodeReadonly(root).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(StartupError);
+    expect(exitCodeFor(error)).toBe(78);
+    expect((error as Error).message).toContain(`the code root ${root} is writable by this process`);
+    expect((error as Error).message).toContain('node_modules (writable)');
+  });
+
+  it('refuses a code root with no node_modules', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'backseat-code-root-'));
+    trees.push(root);
+    await chmod(root, 0o555);
+    const error = await checkCodeReadonly(root).catch((caught: unknown) => caught);
+    expect(exitCodeFor(error)).toBe(78);
+    expect((error as Error).message).toContain('node_modules (missing)');
+  });
+
+  it.skipIf(asRoot)('passes on a code root no one but root can write to', async () => {
+    const root = await codeTree();
+    trees.push(root);
+    for (const relative of [...CODE_PATHS].reverse()) await chmod(path.join(root, relative), 0o555);
+    await expect(checkCodeReadonly(root)).resolves.toBeUndefined();
+  });
+});
+
 describe('startupChecks', () => {
+  it('checks the code root first when DISPATCHER_CODE_READONLY is required, before the database or a probe', async () => {
+    const root = await codeTree();
+    trees.push(root);
+    const { deps: startup, calls } = deps(unattendedDb(), probeResult(), { config: { ...config, codeRoot: root, codeReadonly: true } });
+    const error = await startupChecks(startup).catch((caught: unknown) => caught);
+    expect((error as Error).message).toContain('is writable by this process');
+    expect(exitCodeFor(error)).toBe(78);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('runs every check on a read-only code root', async () => {
+    if (asRoot) return;
+    const root = await codeTree();
+    trees.push(root);
+    for (const relative of [...CODE_PATHS].reverse()) await chmod(path.join(root, relative), 0o555);
+    const { deps: startup, calls } = deps(unattendedDb(), probeResult(), { config: { ...config, codeRoot: root, codeReadonly: true } });
+    await startupChecks(startup);
+    expect(calls).toHaveLength(1);
+  });
+
   it('checks the mode before any probe call, so a mismatched process runs no probe', async () => {
     const db = new FakeDb();
     const { deps: startup, calls } = deps(db, probeResult());

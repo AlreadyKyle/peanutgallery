@@ -10,7 +10,7 @@ The dispatcher runs on the founder's Mac in attended mode. A public studio needs
 
 In:
 - An always-free Oracle Cloud instance with Docker and systemd.
-- The dispatcher image with the `claude` CLI pinned, over a bind-mounted clone of the repository.
+- The dispatcher image with the `claude` CLI pinned, ~~over a bind-mounted clone of the repository~~. Superseded: `ops-separation.md` runs it from a read-only code clone beside a work clone (2026-09-16).
 - Startup exit codes that stop systemd from restarting a failure that cannot recover.
 - Child processes and git hooks that cannot read the dispatcher's secrets.
 - A seed that cannot flip the live agent mode.
@@ -25,7 +25,7 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 
 **Host.** Ubuntu 24.04 with systemd 255, which supports `RestartSteps`. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto (`ca-toronto-1`): 4 arm64 cores and 24 GB of memory at no cost, in Canada. The image, the units and the scripts are the same on arm64 and x86, so any Ubuntu 24.04 host with Docker works.
 
-**Repository.** The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart. The image holds only the toolchain.
+**Repository.** ~~The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` keeps `/srv/peanutgallery` as uid 10001's work clone for git state only, runs the dispatcher from a root-owned code clone at `/srv/peanutgallery-code` mounted read-only at `/opt/peanutgallery`, and puts worktrees in `/srv/peanutgallery-worktrees` (2026-09-16). The image holds only the toolchain.
 
 **GitHub access.** A fine-grained token for this repository only: Contents read/write, Pull requests read/write, Checks read, Metadata read, no Workflows. The dispatcher already pushes with a one-off https extraheader; the clone and the deploy fetch use the same header for one command and never store it on disk.
 
@@ -34,10 +34,10 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 - `ARG CLAUDE_CODE_VERSION=2.1.139`, the version on the Mac and in the probe fixture; `ARG PNPM_VERSION=11.0.9`.
 - apt installs git, ca-certificates and tini. `npm install -g` installs the claude CLI and pnpm at those versions (not corepack: a root corepack cache is invisible to the non-root user).
 - User `agent`, uid and gid 10001, with the git identity "Peanut Gallery agents" <agents@peanutgallery.games>.
-- `CLAUDE_BIN=/usr/local/bin/claude`, `DISABLE_AUTOUPDATER=1`, `CI=true`, and the pnpm store on the bind mount at `/srv/peanutgallery/.pnpm-store`. No `NODE_ENV=production`, which drops devDependencies such as tsx.
-- `WORKDIR /srv/peanutgallery`; tini runs `platform/ops/dispatcher-entrypoint.sh`, copied into the image.
+- `CLAUDE_BIN=/usr/local/bin/claude`, `DISABLE_AUTOUPDATER=1`, `CI=true`, and ~~the pnpm store on the bind mount at `/srv/peanutgallery/.pnpm-store`~~ (superseded: `ops-separation.md` puts it in the code clone at `/opt/peanutgallery/.pnpm-store`, 2026-09-16). No `NODE_ENV=production`, which drops devDependencies such as tsx.
+- ~~`WORKDIR /srv/peanutgallery`~~ (superseded: `WORKDIR /opt/peanutgallery`, `ops-separation.md`, 2026-09-16); tini runs `platform/ops/dispatcher-entrypoint.sh`, copied into the image.
 
-**Entrypoint.** Checks that `claude --version` is `$CLAUDE_CODE_VERSION` and that `origin` is an https github.com URL, runs `pnpm install --frozen-lockfile --prefer-offline` with no secret in its environment, then execs the dispatcher from `platform/dispatcher`.
+**Entrypoint.** Checks that `claude --version` is `$CLAUDE_CODE_VERSION` and that `origin` is an https github.com URL, ~~runs `pnpm install --frozen-lockfile --prefer-offline` with no secret in its environment, then execs the dispatcher from `platform/dispatcher`~~. Superseded: `ops-separation.md` installs nothing in the entrypoint, checks the work clone's origin, and execs the dispatcher from the read-only code clone (2026-09-16).
 
 **Service.** `platform/ops/dispatcher.service` runs the container with `docker run --rm` as 10001:10001, all capabilities dropped, no new privileges, 3 GB of memory, 512 pids and 10 MB logs. It restarts always, with a delay growing from 30 seconds to 30 minutes over 6 steps, at most 8 starts in 6 hours, and never after exit 78. It waits 90 seconds to stop. `docker stop` gives the container 60 of them, and the dispatcher waits up to 50 for a running card: SIGINT to the session, SIGTERM 15 seconds later, SIGKILL 5 after that, then the settle rows and the pause. On failure it starts `dispatcher-alert.service`, a oneshot that posts "Peanut Gallery dispatcher unit failed on <hostname>" to the URL in `/etc/peanutgallery/ntfy.url`, and does nothing when that file is absent.
 
@@ -69,11 +69,11 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 4. ufw denies incoming and limits OpenSSH. No container port is published; Docker's `-p` bypasses ufw, so the provider's own firewall (an Oracle security list) matches it, and the instance's pre-installed iptables rules are left as they are.
 5. An sshd drop-in: no password authentication, root by key only.
 6. unattended-upgrades with no automatic reboot, and needrestart listing only.
-7. The https clone at `/srv/peanutgallery` when missing, with `.pnpm-store` and `.worktrees` in `.git/info/exclude`.
+7. ~~The https clone at `/srv/peanutgallery` when missing, with `.pnpm-store` and `.worktrees` in `.git/info/exclude`.~~ Superseded: `ops-separation.md` creates the root-owned code clone, the uid 10001 work clone (cloned inside the image) and the worktree folder, installs `node_modules` in a throwaway container, and builds the image and installs the units from the commit (2026-09-16).
 8. It stops and asks for the env file when it is missing, then validates it: root 0600, no quoted value, `AGENT_MODE=unattended`, the keys `config.ts` requires, `PRICE_TABLE_JSON` parsing in node, and none of the four forbidden keys.
 9. It builds `peanutgallery/dispatcher:<sha>` and `:current`, installs both units, reloads systemd and enables the dispatcher. It never starts it: starting is the cutover.
 
-**Deploy.** `platform/ops/deploy.sh` runs as root on the VPS. It refuses unless `studio_state.paused` is true and no card is `building` or `gated`, read through the service key. It fast-forwards the clone to `origin/main` inside the image as uid 10001, rebuilds the image only when `platform/ops` changed, reinstalls changed units, restarts the service, waits for `startup probe passed` in the journal, and reminds the operator to resume from /board.
+**Deploy.** `platform/ops/deploy.sh` runs as root on the VPS. It refuses unless `studio_state.paused` is true and no card is `building` or `gated`, read through the service key. ~~It fast-forwards the clone to `origin/main` inside the image as uid 10001, rebuilds the image only when `platform/ops` changed, reinstalls changed units,~~ Superseded: `ops-separation.md` works in the code clone only, refuses it when dirty, fast-forwards it (or checks out `--ref`), builds from `git archive`, installs `node_modules` in a throwaway container and units from `git show` (2026-09-16). It restarts the service, waits for `startup probe passed` in the journal, and reminds the operator to resume from /board.
 
 **Cutover.**
 1. Pause from /board.
@@ -137,7 +137,7 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-14: a small VPS rather than the Mac (board). The agents stop when a Mac sleeps.
 - 2026-09-14: healthchecks.io for liveness, ntfy for events (`launch-hardening.md`).
 - 2026-09-15: Ubuntu 24.04 with systemd 255, which has `RestartSteps` (board).
-- 2026-09-15: a bind-mounted host clone, not a `COPY` of the repository (board). Worktree metadata survives restarts and an update is a fast-forward plus a restart.
+- ~~2026-09-15: a bind-mounted host clone, not a `COPY` of the repository (board). Worktree metadata survives restarts and an update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` (2026-09-16). The container ran the dispatcher from that clone, which uid 10001 owned, so agent-written code could change the code the next start ran with every secret, and root's deploy acted on the same tree. Still no `COPY`: the code is a root-owned host clone mounted read-only, and the work clone and worktree folder stay bind-mounted.
 - 2026-09-15: a fine-grained GitHub token for this repository replaces the deploy key (board). The dispatcher's https push already needs a token, and no Workflows permission means no agent branch can change the gate workflow through it.
 - 2026-09-15: `node:22-bookworm-slim`, the claude CLI and pnpm through `npm install -g` at pinned versions, and no `NODE_ENV=production` (board). The CLI's ripgrep needs glibc, corepack's root cache is invisible to uid 10001, and tsx is a devDependency.
 - 2026-09-15: docker's env file is the only reader of the secrets (board). systemd's `EnvironmentFile` strips quotes.
@@ -147,11 +147,11 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-15: the separate uid for agent sessions is a follow-up, specified before any card source other than the board opens (board). Today every card comes from the board.
 - 2026-09-15: the image sets `pnpm_config_store_dir`, not `npm_config_store_dir`. pnpm 11.0.9 ignores the npm name: with it set, `pnpm store path` still printed the default store; with `pnpm_config_store_dir` it printed the override.
 - 2026-09-15: a model missing from `PRICE_TABLE_JSON` at the startup probe exits 78, and a malformed `PRICE_TABLE_JSON` is a `ConfigError`. Both are the same on every start, and each start spends on a probe it cannot meter.
-- 2026-09-15: the entrypoint's own checks (the claude CLI version, the clone, the https origin) exit 78; a failed `pnpm install` exits non-zero otherwise and is retried.
+- 2026-09-15: the entrypoint's own checks (the claude CLI version, the clone, the https origin) exit 78; ~~a failed `pnpm install` exits non-zero otherwise and is retried~~ (superseded: the entrypoint installs nothing, `ops-separation.md`, 2026-09-16).
 - 2026-09-15: the unit runs `docker run --pull never` and its `ExecStop` ignores a container already gone. A same-named image is never fetched from a registry, and a stop after the container exited on its own does not fail the unit.
 - 2026-09-15: the env file generator copies no `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac (paths on the Mac do not exist on the VPS), and refuses a `MODEL_BUILDER` with no price row. provision.sh also refuses duplicate keys, CRLF lines, a `GITHUB_REPO` other than the clone's, non-https URLs and an unpriced `MODEL_BUILDER`.
 - 2026-09-15: the one-off GitHub header reaches git through `GIT_CONFIG_COUNT` variables, not `-c` on the command line, in provision.sh and deploy.sh, so the token is in no process list. provision.sh clones with the env file's `GITHUB_TOKEN` when none is passed, so the operator never types it on an ssh command line.
-- 2026-09-15: deploy.sh also refuses while the unit is stopped (before the cutover a start would run a second dispatcher beside the Mac's) and while the clone is off `main` (after a rollback).
+- 2026-09-15: deploy.sh also refuses while the unit is stopped (before the cutover a start would run a second dispatcher beside the Mac's) ~~and while the clone is off `main` (after a rollback)~~ (superseded: a roll back is `deploy.sh --ref <sha>`, and a plain deploy returns the code clone to `main`, `ops-separation.md`, 2026-09-16).
 - 2026-09-15: the dispatcher's git commands keep the dispatcher's environment; only hooks are turned off. With hooks off git runs no program the repository supplies, and an allowlisted environment would drop the variables git needs on the Mac and in the tests.
 - 2026-09-16: the host is an Oracle Cloud Always Free Ampere instance in Toronto rather than a paid Hetzner box (board). The studio has no budget and the pool holds customer money only, so a standing server cost cannot be funded yet; the free tier is in Canada and large enough. The cost of a paid host becomes a standing card if the free tier stops being enough.
 

@@ -1,21 +1,35 @@
 #!/usr/bin/env bash
-# deploy.sh: updates the VPS dispatcher to origin/main (docs/specs/vps.md). Run as root on the VPS:
-#   ssh root@<vps-ip> 'bash /srv/peanutgallery/platform/ops/deploy.sh'
+# deploy.sh: updates the VPS dispatcher to origin/main, or rolls it back to an older commit of main
+# with --ref <sha> (docs/specs/vps.md, docs/specs/ops-separation.md). Run as root on the VPS:
+#   ssh root@<vps-ip> 'bash /srv/peanutgallery-code/platform/ops/deploy.sh'
+#   ssh root@<vps-ip> 'bash /srv/peanutgallery-code/platform/ops/deploy.sh --ref <sha>'
 #
 # Pause from /board first and let any building card finish: the script refuses unless
-# studio_state.paused is true and no card is building or gated. It then fast-forwards the clone
-# inside the image as uid 10001, rebuilds the image only when platform/ops changed, reinstalls
-# changed units, restarts the service, waits for `startup probe passed`, and reminds you to resume.
+# studio_state.paused is true and no card is building or gated.
+#
+# It works in the code clone only, /srv/peanutgallery-code, which root owns and the container mounts
+# read-only. It refuses when that clone has any uncommitted or untracked file, fetches main, and
+# fast-forwards to it (or checks out --ref, which must be on main). Everything root acts on comes
+# from the commit, never from the working tree: the image is built from `git archive` and the units
+# from `git show`. node_modules are installed in a throwaway container with no secret, and the clone
+# is then made root-owned and not writable by uid 10001. It restarts the service, waits for
+# `startup probe passed`, and reminds you to resume.
+#
+# It never runs git or anything else in the work clone, /srv/peanutgallery: uid 10001 and
+# agent-written code can write there, and the dispatcher fetches in it itself.
 # NODE_IMAGE=node:22-bookworm-slim@sha256:<digest> pins the base image when it rebuilds.
 set -euo pipefail
 
-REPO_DIR=/srv/peanutgallery
+CODE_DIR=/srv/peanutgallery-code
+CODE_MOUNT=/opt/peanutgallery
+WORK_DIR=/srv/peanutgallery
+WORKTREE_DIR=/srv/peanutgallery-worktrees
 ENV_FILE=/etc/peanutgallery/dispatcher.env
 IMAGE=peanutgallery/dispatcher
-AGENT_UID=10001
 NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
 UNITS="dispatcher.service dispatcher-alert.service"
 PROBE_WAIT_SECONDS=${PROBE_WAIT_SECONDS:-600}
+USAGE="usage: deploy.sh [--ref <commit sha>]"
 WORK=""
 
 say() { printf 'deploy: %s\n' "$*"; }
@@ -76,23 +90,76 @@ supabase_get() {
   curl -fsS -g --max-time 20 -H @"$WORK/supabase-headers" "${url%/}/rest/v1/$1"
 }
 
-host_git() {
-  git -c safe.directory="$REPO_DIR" -c core.hooksPath=/dev/null -C "$REPO_DIR" "$@"
+# code_git <args>: git in the code clone, the only git deploy.sh runs. core.fsmonitor and hooks are
+# off on the command line, which overrides any value in the clone's own configuration, so no
+# program a planted .git/config names runs as root.
+code_git() {
+  git -c safe.directory="$CODE_DIR" -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$CODE_DIR" "$@"
 }
 
-# image_git <args>: git as uid 10001 inside the dispatcher image, so the clone keeps its owner, with
-# hooks off. When GITHUB_AUTH_HEADER is exported, it becomes git's one-off extraheader for
-# github.com; docker passes it by name, so its value is on no command line and never in .git/config.
-image_git() {
-  local config=(-e GIT_CONFIG_COUNT=1)
-  if [ -n "${GITHUB_AUTH_HEADER:-}" ]; then
-    config=(-e GIT_CONFIG_COUNT=2 -e GIT_CONFIG_KEY_1=http.https://github.com/.extraheader -e GIT_CONFIG_VALUE_1)
+# check_clean: returns 0 when the code clone has no uncommitted change and no untracked file, else
+# prints what differs and how to inspect it and returns 1. Ignored and excluded files (node_modules,
+# .pnpm-store) do not count. Only deploy.sh and provision.sh change this clone, so a difference is
+# treated as tampering.
+check_clean() {
+  local status
+  if ! status=$(code_git status --porcelain --untracked-files=all); then
+    echo "could not read the status of $CODE_DIR"
+    return 1
   fi
-  GIT_CONFIG_VALUE_1=${GITHUB_AUTH_HEADER:-} docker run --rm --pull never --user "$AGENT_UID:$AGENT_UID" \
-    --cap-drop ALL --security-opt no-new-privileges \
-    --volume "$REPO_DIR:$REPO_DIR" --workdir "$REPO_DIR" --entrypoint git \
-    -e GIT_CONFIG_KEY_0=core.hooksPath -e GIT_CONFIG_VALUE_0=/dev/null "${config[@]}" \
-    "$IMAGE:current" "$@"
+  [ -z "$status" ] && return 0
+  echo "$CODE_DIR has uncommitted or untracked files, and only deploy.sh and provision.sh change it. Treat it as tampering: find out who changed it before anything runs from it. The first entries:"
+  head -n 20 <<< "$status"
+  echo "Inspect, as root, with fsmonitor and hooks off:
+  git -c safe.directory=$CODE_DIR -c core.fsmonitor=false -c core.hooksPath=/dev/null -C $CODE_DIR status --untracked-files=all
+  git -c safe.directory=$CODE_DIR -c core.fsmonitor=false -c core.hooksPath=/dev/null -C $CODE_DIR diff
+Then restore the clone (README.md, Roll back) or provision it again."
+  return 1
+}
+
+# exclude_store: pnpm's store sits in the code clone so it hard-links into node_modules; git ignores
+# it through .git/info/exclude.
+exclude_store() {
+  local exclude=$CODE_DIR/.git/info/exclude
+  if ! grep -qxF .pnpm-store "$exclude" 2> /dev/null; then
+    mkdir -p "$(dirname "$exclude")"
+    echo .pnpm-store >> "$exclude"
+    say ".pnpm-store added to $exclude"
+  fi
+}
+
+# unit_text <sha> <unit>: the unit file as committed at sha.
+unit_text() {
+  code_git show "$1:platform/ops/$2"
+}
+
+# build_context <sha>: platform/ops as committed at sha, as a tar stream for docker build.
+build_context() {
+  code_git archive --format=tar "$1:platform/ops"
+}
+
+# install_dependencies: pnpm install into the code clone in a throwaway container: root inside, no
+# capability, no env file, and an environment of four names. Dependency scripts it runs see no
+# secret, and the running dispatcher never installs anything.
+install_dependencies() {
+  docker run --rm --pull never --user 0:0 --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$CODE_DIR:$CODE_MOUNT" --workdir "$CODE_MOUNT" --entrypoint /usr/bin/env \
+    "$IMAGE:current" -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/root CI=true \
+    pnpm_config_store_dir="$CODE_MOUNT/.pnpm-store" \
+    pnpm install --frozen-lockfile --prefer-offline
+}
+
+# lock_code_clone: root owns everything in the code clone and nothing in it is writable by group or
+# others, so uid 10001 can change none of the code it runs. chown -h and chmod skip symlinks' targets.
+lock_code_clone() {
+  if [ -n "$(find "$CODE_DIR" \( ! -user 0 -o ! -group 0 \) -print -quit)" ]; then
+    chown -hR 0:0 "$CODE_DIR"
+    say "$CODE_DIR owned by root again"
+  fi
+  if [ -n "$(find "$CODE_DIR" ! -type l -perm /022 -print -quit)" ]; then
+    find "$CODE_DIR" ! -type l -perm /022 -exec chmod go-w {} +
+    say "group and other write removed in $CODE_DIR"
+  fi
 }
 
 wait_for_probe() {
@@ -121,10 +188,25 @@ image_id() {
 }
 
 main() {
-  local studio cards reason old new token unit reload=0 since before
+  local ref="" studio cards reason old new origin_main token header unit reload=0 since before
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --ref)
+        [ "$#" -ge 2 ] || die "$USAGE"
+        ref=$2
+        shift 2
+        ;;
+      *) die "$USAGE" ;;
+    esac
+  done
+  if [ -n "$ref" ] && ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
+    die "--ref takes a full 40-character commit sha"
+  fi
   [ "$(id -u)" -eq 0 ] || die "run as root"
   [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing; this VPS is not provisioned"
-  [ -d "$REPO_DIR/.git" ] || die "$REPO_DIR is not a clone; this VPS is not provisioned"
+  [ -d "$CODE_DIR/.git" ] || die "$CODE_DIR is not a clone; run provision.sh (README.md, Provision)"
+  [ -d "$WORK_DIR/.git" ] || die "$WORK_DIR is not a clone; run provision.sh (README.md, Provision)"
+  [ -d "$WORKTREE_DIR" ] || die "$WORKTREE_DIR is missing; run provision.sh (README.md, Provision)"
   # A stopped unit is either before the cutover, with the Mac dispatcher still running on the same
   # database, or stopped on purpose by the board. Starting it is not deploy.sh's call. A running,
   # restarting or failed unit is deployed and restarted.
@@ -141,44 +223,69 @@ main() {
   fi
   say "the studio is paused and no card is building or gated"
 
-  [ "$(host_git symbolic-ref -q HEAD || true)" = refs/heads/main ] || die "$REPO_DIR is not on main (after a rollback, check out main first: README.md, Roll back)"
-  old=$(host_git rev-parse HEAD)
+  exclude_store
+  if ! reason=$(check_clean); then
+    die "refused: $reason"
+  fi
+  old=$(code_git rev-parse HEAD)
   token=$(env_value GITHUB_TOKEN)
   [ -n "$token" ] || die "GITHUB_TOKEN is missing from $ENV_FILE"
-  GITHUB_AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | base64 -w0)"
-  export GITHUB_AUTH_HEADER
-  image_git fetch --quiet origin main
-  unset GITHUB_AUTH_HEADER
-  image_git merge --ff-only --quiet origin/main
-  new=$(host_git rev-parse HEAD)
-  if [ "$old" = "$new" ]; then
-    say "the clone is already at $new"
+  header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | base64 -w0)"
+  # The token reaches git as configuration in its environment for this one command, so it is on no
+  # command line and never in .git/config.
+  (
+    export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="$header"
+    code_git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main
+  ) || die "could not fetch main into $CODE_DIR"
+  origin_main=$(code_git rev-parse --verify 'refs/remotes/origin/main^{commit}')
+
+  if [ -z "$ref" ]; then
+    # After a roll back the clone is detached; a plain deploy returns it to main first.
+    if [ "$(code_git symbolic-ref -q HEAD || true)" != refs/heads/main ]; then
+      code_git checkout --quiet main
+    fi
+    code_git merge --ff-only --quiet refs/remotes/origin/main || die "main in $CODE_DIR does not fast-forward to origin/main; treat it as tampering and inspect the clone"
+    new=$(code_git rev-parse HEAD)
+    [ "$new" = "$origin_main" ] || die "HEAD in $CODE_DIR is $new, not origin/main at $origin_main"
   else
-    say "fast-forwarded $old to $new"
+    code_git merge-base --is-ancestor "$ref" refs/remotes/origin/main 2> /dev/null || die "$ref is not a commit on origin/main"
+    code_git checkout --quiet --detach "$ref"
+    new=$(code_git rev-parse HEAD)
+    [ "$new" = "$ref" ] || die "HEAD in $CODE_DIR is $new, not $ref"
+  fi
+  if [ "$old" = "$new" ]; then
+    say "the code clone is already at $new"
+  else
+    say "the code clone moved from $old to $new"
   fi
 
-  # The image for the new commit: one already tagged with it (a rerun), the current image when
-  # platform/ops did not change, or a new build. A rerun after a failed build builds again.
+  # The image for the new commit: one already tagged with it (a rerun or a roll back), the current
+  # image when platform/ops did not change, or a new build from the commit.
   before=$(image_id "$IMAGE:current")
   if [ -n "$(image_id "$IMAGE:$new")" ]; then
     docker tag "$IMAGE:$new" "$IMAGE:current"
-  elif [ "$old" != "$new" ] && host_git diff --quiet "$old" "$new" -- platform/ops; then
+  elif [ "$old" != "$new" ] && [ -n "$before" ] && code_git diff --quiet "$old" "$new" -- platform/ops; then
     docker tag "$IMAGE:current" "$IMAGE:$new"
     say "platform/ops unchanged; $IMAGE:current also tagged $new"
   else
-    if ! docker build --build-arg NODE_IMAGE="$NODE_IMAGE" \
-      -f "$REPO_DIR/platform/ops/Dockerfile.dispatcher" \
-      -t "$IMAGE:$new" -t "$IMAGE:current" "$REPO_DIR/platform/ops"; then
-      die "the image build failed. The clone is at $new and the running dispatcher is unchanged; fix and run deploy.sh again, or roll back the clone (README.md, Roll back)"
+    if ! build_context "$new" | docker build --build-arg NODE_IMAGE="$NODE_IMAGE" -f Dockerfile.dispatcher -t "$IMAGE:$new" -t "$IMAGE:current" -; then
+      die "the image build failed. The code clone is at $new and the running dispatcher is unchanged; fix main and run deploy.sh again, or roll back (README.md, Roll back)"
     fi
-    say "built $IMAGE:$new and :current"
+    say "built $IMAGE:$new and :current from $new"
+  fi
+
+  install_dependencies || die "pnpm install failed in the throwaway container. The code clone is at $new; fix and run deploy.sh again, or roll back (README.md, Roll back)"
+  lock_code_clone
+  if ! reason=$(check_clean); then
+    die "pnpm install left the code clone dirty: $reason"
   fi
 
   for unit in $UNITS; do
-    if ! cmp -s "$REPO_DIR/platform/ops/$unit" "/etc/systemd/system/$unit"; then
-      install -m 0644 "$REPO_DIR/platform/ops/$unit" "/etc/systemd/system/$unit"
+    unit_text "$new" "$unit" > "$WORK/$unit" || die "platform/ops/$unit is not in $new"
+    if ! cmp -s "$WORK/$unit" "/etc/systemd/system/$unit"; then
+      install -m 0644 "$WORK/$unit" "/etc/systemd/system/$unit"
       reload=1
-      say "installed /etc/systemd/system/$unit"
+      say "installed /etc/systemd/system/$unit from $new"
     fi
   done
   if [ "$reload" = 1 ]; then

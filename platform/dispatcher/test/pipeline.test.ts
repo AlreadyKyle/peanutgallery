@@ -58,6 +58,8 @@ beforeAll(async () => {
   await git(['push', '-q', 'origin', 'main'], repo);
   initialSha = await git(['rev-parse', 'HEAD'], repo);
   config = {
+    codeRoot: repo,
+    codeReadonly: false,
     repoRoot: repo,
     agentMode: 'attended',
     supabaseUrl: 'https://db.local',

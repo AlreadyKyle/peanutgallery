@@ -2,8 +2,11 @@
 # provision.sh and deploy.sh install it at /etc/systemd/system/dispatcher.service. provision.sh
 # enables it and never starts it: starting it is the cutover (README.md).
 #
-# The container runs as uid 10001 over the bind-mounted clone at /srv/peanutgallery. Secrets come
-# only from docker's --env-file. There is no EnvironmentFile= here: systemd strips quotes and would
+# The container runs as uid 10001 (docs/specs/ops-separation.md). It runs the dispatcher from the
+# root-owned code clone, mounted read-only at /opt/peanutgallery, and the dispatcher refuses to start
+# (exit 78) when it can write there. It fetches, pushes and adds worktrees in the work clone at
+# /srv/peanutgallery and the worktree folder at /srv/peanutgallery-worktrees, both owned by uid 10001
+# and mounted read-write. Secrets come only from docker's --env-file. There is no EnvironmentFile= here: systemd strips quotes and would
 # corrupt PRICE_TABLE_JSON. --pull never keeps docker from fetching a same-named image from a
 # registry.
 #
@@ -31,7 +34,13 @@ ExecStart=/usr/bin/docker run --rm --name peanutgallery-dispatcher \
   --pull never \
   --env-file /etc/peanutgallery/dispatcher.env \
   --user 10001:10001 \
+  --volume /srv/peanutgallery-code:/opt/peanutgallery:ro \
   --volume /srv/peanutgallery:/srv/peanutgallery \
+  --volume /srv/peanutgallery-worktrees:/srv/peanutgallery-worktrees \
+  --env DISPATCHER_CODE_ROOT=/opt/peanutgallery \
+  --env DISPATCHER_REPO_ROOT=/srv/peanutgallery \
+  --env DISPATCHER_WORKTREE_ROOT=/srv/peanutgallery-worktrees \
+  --env DISPATCHER_CODE_READONLY=required \
   --cap-drop ALL \
   --security-opt no-new-privileges \
   --memory 3g \
