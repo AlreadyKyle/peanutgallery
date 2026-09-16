@@ -131,7 +131,7 @@ describe('recoverOrphans', () => {
 
   it('pauses a building card and a gated card whose pull request did not merge, and alerts for each', async () => {
     db.cards = [{ ...building }, { ...gatedUnmerged }];
-    db.ledger = [{ id: 'ledger-1', billed_to: 'founder', card_id: building.id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1, cached_tokens: 0, output_tokens: 1, usd: 0.5 }];
+    db.ledger = [{ id: 'ledger-1', billed_to: 'founder', card_id: building.id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1, cached_tokens: 0, output_tokens: 1, usd: 0.5, request_id: 'card/aaaaaaaa/turn/1' }];
     const looked: string[] = [];
     const background = await recoverOrphans(
       recoveryDeps(

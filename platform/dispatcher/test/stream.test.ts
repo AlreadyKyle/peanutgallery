@@ -148,7 +148,7 @@ describe('StreamParser', () => {
     expect(parser.turns).toBe(2);
   });
 
-  it('emits usage on the stop_reason line and ignores a later line for the same id', () => {
+  it('emits usage on the stop_reason line and counts no turn or usage for a later line with the same id', () => {
     const parser = new StreamParser();
     const line = (stop: string | null, output: number) =>
       JSON.stringify({
@@ -166,7 +166,11 @@ describe('StreamParser', () => {
         thinking: false,
       },
     ]);
+    // message.usage is a running total per id: the same 9 again is nothing new.
     expect(parser.push(line('end_turn', 9))).toEqual([]);
+    // A higher total passes on only the increase.
+    expect(parser.push(line('end_turn', 30))).toEqual([{ type: 'turn_content', model: 'claude-sonnet-5', contentChars: 0, thinking: false, outputTokens: 21 }]);
+    expect(parser.push(line('end_turn', 30))).toEqual([]);
     expect(parser.turns).toBe(1);
     expect(parser.finish()).toEqual([]);
   });
@@ -206,10 +210,65 @@ describe('turn boundaries in the real stream shape', () => {
     parser.push(assistant([{ type: 'text', text: 'hello' }]));
     parser.push(user);
     expect(parser.push(assistant([{ type: 'text', text: 'late text' }]))).toEqual([
-      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 9, thinking: false },
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 9, thinking: false, outputTokens: 0 },
       { type: 'message', text: 'late text' },
     ]);
     expect(parser.turns).toBe(1);
+  });
+
+  it('treats a line for any turn already emitted as late: A, B, A', () => {
+    const parser = new StreamParser();
+    parser.push(assistant([{ type: 'text', text: 'a' }], 'msg_a'));
+    expect(parser.push(assistant([{ type: 'text', text: 'b' }], 'msg_b')).map((e) => e.type)).toEqual(['turn_usage', 'message']);
+    expect(parser.push(assistant([{ type: 'text', text: 'again' }], 'msg_a'))).toEqual([
+      expect.objectContaining({ type: 'turn_usage', turn: 2 }),
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 5, thinking: false, outputTokens: 0 },
+      { type: 'message', text: 'again' },
+    ]);
+    expect(parser.turns).toBe(2);
+    expect(parser.finish()).toEqual([]);
+  });
+
+  it('marks a thinking block once per id across A, B, A', () => {
+    const thinking = [{ type: 'thinking', thinking: '', signature: 's' }];
+    const withThinking = new StreamParser();
+    withThinking.push(assistant(thinking, 'msg_a'));
+    withThinking.push(assistant([{ type: 'text', text: 'b' }], 'msg_b'));
+    // A's turn already carried its thinking block, so a later one adds nothing.
+    expect(withThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([]);
+
+    const lateThinking = new StreamParser();
+    lateThinking.push(assistant([{ type: 'text', text: 'a' }], 'msg_a'));
+    lateThinking.push(assistant([{ type: 'text', text: 'b' }], 'msg_b'));
+    expect(lateThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([
+      { type: 'turn_content', model: 'claude-sonnet-5', contentChars: 0, thinking: true, outputTokens: 0 },
+    ]);
+    expect(lateThinking.push(assistant(thinking, 'msg_a')).filter((e) => e.type === 'turn_content')).toEqual([]);
+  });
+});
+
+describe('compaction', () => {
+  const init = JSON.stringify({ type: 'system', subtype: 'init', session_id: 's', tools: ['Read'], model: 'claude-sonnet-5', apiKeySource: 'none' });
+  // The shape Claude Code 2.1.139 writes for a compaction.
+  const boundary = (metadata: unknown) => JSON.stringify({ type: 'system', subtype: 'compact_boundary', session_id: 's', uuid: 'u', compact_metadata: metadata });
+
+  it('reads pre_tokens from a compact_boundary line and names the session model', () => {
+    const parser = new StreamParser();
+    parser.push(init);
+    expect(parser.push(boundary({ trigger: 'auto', pre_tokens: 150_000, post_tokens: 20_000, duration_ms: 9000 }))).toEqual([
+      { type: 'compaction', model: 'claude-sonnet-5', preTokens: 150_000 },
+    ]);
+  });
+
+  it('names the model of the last turn, ends that turn first, and reads missing counts as zero', () => {
+    const parser = new StreamParser();
+    parser.push(init);
+    parser.push(JSON.stringify({ type: 'assistant', message: { id: 'm1', model: 'claude-opus-5', content: [], usage: { output_tokens: 1 } } }));
+    expect(parser.push(boundary({ trigger: 'manual' }))).toEqual([
+      expect.objectContaining({ type: 'turn_usage', model: 'claude-opus-5' }),
+      { type: 'compaction', model: 'claude-opus-5', preTokens: 0 },
+    ]);
+    expect(parser.push(boundary('not an object'))).toEqual([{ type: 'compaction', model: 'claude-opus-5', preTokens: 0 }]);
   });
 });
 

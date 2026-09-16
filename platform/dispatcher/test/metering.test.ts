@@ -32,7 +32,7 @@ function ledgerTotal(rows: readonly LedgerUsage[]): number {
 // Meters a parsed stream the way a session does: each turn row written and committed as it arrives,
 // then the settle rows.
 function meter(table: PriceTable, events: readonly AgentEvent[]) {
-  const sessionMeter = new SessionMeter(table);
+  const sessionMeter = new SessionMeter(table, 'test');
   const turnRows = turnsOf(events).map((turn) => {
     const { row } = sessionMeter.addTurn(turn);
     sessionMeter.commit(row);
@@ -80,26 +80,28 @@ describe('SessionMeter on the recorded probe', () => {
 
   it.skipIf(!pinned)('records $0.0338 for the turn and $0.0005 for 47 unreported output tokens: $0.0343, not the CLI total', () => {
     const { turnRows, settled, rows } = meter(LIVE, events);
-    expect(turnRows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 8451, cached_tokens: 0, output_tokens: 2, usd: 0.0338 }]);
+    expect(turnRows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 8451, cached_tokens: 0, output_tokens: 2, usd: 0.0338, request_id: 'test/turn/1' }]);
     expect(settled).toEqual({
       basis: 'result',
-      rows: [{ model: 'claude-sonnet-5', input_tokens: 0, cached_tokens: 0, output_tokens: 47, usd: 0.0005 }],
+      rows: [{ model: 'claude-sonnet-5', input_tokens: 0, cached_tokens: 0, output_tokens: 47, usd: 0.0005, request_id: 'test/settle/1' }],
       fallbackModels: [],
       turnModels: ['claude-sonnet-5'],
       overcountUsd: 0,
       mismatch: false,
       anomaly: false,
+      zeroedFields: [],
     });
     expect(ledgerTotal(rows)).toBe(0.0343);
     expect(end.totalCostUsd).toBe(0.05404125);
   });
 
   it('writes a turn row whose write failed again at settle, so the ledger is not a turn short', () => {
-    const sessionMeter = new SessionMeter(LIVE);
+    const sessionMeter = new SessionMeter(LIVE, 'test');
     const [turn] = turnsOf(events);
     const { row } = sessionMeter.addTurn(turn!);
     const settled = sessionMeter.settle(end);
     expect(settled.rows[0]).toBe(row);
+    expect(row.request_id).toBe('test/turn/1');
     expect(ledgerTotal(settled.rows)).toBe(pricedModelUsage(LIVE, end));
   });
 
@@ -113,16 +115,16 @@ describe('SessionMeter on the recorded probe', () => {
     expect(ledgerTotal(rows)).toBeGreaterThanOrEqual(pricedModelUsage(LIVE, end));
     // The turn had a thinking block: 1,024 output tokens, and one request in flight with the 8449
     // cached tokens read again, 2 input and 1,024 output.
-    if (pinned) expect(settled.rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 2, cached_tokens: 8449, output_tokens: 2046, usd: 0.0222 }]);
+    if (pinned) expect(settled.rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 2, cached_tokens: 8449, output_tokens: 2046, usd: 0.0222, request_id: 'test/settle/1' }]);
   });
 
   it('checks the ceiling against the same estimate while the session runs', () => {
     const [turn] = turnsOf(events);
-    const thinking = new SessionMeter(LIVE);
+    const thinking = new SessionMeter(LIVE, 'test');
     thinking.addTurn({ ...turn!, contentChars: 3000, thinking: true });
     // 1,024 output tokens for the turn and 1,024 in flight, the cache read again and 2 more input.
     expect(thinking.liveEstimateUsd()).toBe(0.055974);
-    const plain = new SessionMeter(LIVE);
+    const plain = new SessionMeter(LIVE, 'test');
     plain.addTurn({ ...turn!, contentChars: 3000, thinking: false });
     // 3000 characters is 1,000 tokens.
     expect(plain.liveEstimateUsd()).toBe(0.055734);
@@ -136,7 +138,7 @@ describe('SessionMeter on the recorded probe', () => {
     const { settled } = meter(table2, withExtra);
     expect(settled).toMatchObject({ fallbackModels: ['mystery-model'], turnModels: ['claude-sonnet-5'], mismatch: false, basis: 'result' });
     // Fallback rates are the highest of each: input 2, output 20. 1000 × 2 + 500 × 20 = $0.012.
-    expect(settled.rows.find((row) => row.model === 'mystery-model')).toEqual({ model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 500, usd: 0.012 });
+    expect(settled.rows.find((row) => row.model === 'mystery-model')).toEqual({ model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 500, usd: 0.012, request_id: 'test/settle/2' });
   });
 
   it('reconciles a renamed modelUsage key on the total under the turn model, writing nothing twice', () => {
@@ -153,9 +155,14 @@ describe('SessionMeter on the recorded probe', () => {
     );
     expect(endOf(zeroed)?.modelUsage[0]).toMatchObject({ input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0 });
     const { settled, rows } = meter(LIVE, zeroed);
-    expect(settled).toMatchObject({ basis: 'estimate', anomaly: true, overcountUsd: 0 });
+    expect(settled).toMatchObject({
+      basis: 'estimate',
+      anomaly: true,
+      overcountUsd: 0,
+      zeroedFields: ['claude-sonnet-5 input_tokens', 'claude-sonnet-5 cache_creation_input_tokens', 'claude-sonnet-5 output_tokens'],
+    });
     // Every class at the turns' count, and the thinking turn's output at 1,024 tokens.
-    expect(settled.rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 0, cached_tokens: 0, output_tokens: 1022, usd: 0.0102 }]);
+    expect(settled.rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 0, cached_tokens: 0, output_tokens: 1022, usd: 0.0102, request_id: 'test/settle/1' }]);
     expect(ledgerTotal(rows)).toBeGreaterThanOrEqual(pricedModelUsage(LIVE, end));
   });
 });
@@ -180,7 +187,7 @@ describe('SessionMeter', () => {
     modelUsage,
     permissionDenials: [],
   });
-  const reported = (model: string, input: number, output: number) => ({ model, input_tokens: input, output_tokens: output, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null });
+  const reported_ = (model: string, input: number, output: number) => ({ model, input_tokens: input, output_tokens: output, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cost_usd: null });
   const committed = (sessionMeter: SessionMeter, model: string, turnUsage: TurnUsage, contentChars = 0, thinking = false) => {
     const { row } = sessionMeter.addTurn({ model, usage: turnUsage, contentChars, thinking });
     sessionMeter.commit(row);
@@ -188,67 +195,126 @@ describe('SessionMeter', () => {
   };
 
   it('prices an unknown turn at the fallback rates and says so', () => {
-    const sessionMeter = new SessionMeter(LIVE);
+    const sessionMeter = new SessionMeter(LIVE, 'test');
     const turn = sessionMeter.addTurn({ model: 'mystery-model', usage: usage(100), contentChars: 0, thinking: false });
-    expect(turn).toEqual({ fallback: true, row: { model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 100, usd: 0.003 } });
+    expect(turn).toEqual({ fallback: true, row: { model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 100, usd: 0.003, request_id: 'test/turn/1' } });
     expect(sessionMeter.settle(null)).toMatchObject({ fallbackModels: ['mystery-model'], turnModels: ['mystery-model'] });
   });
 
   it('puts a rounding overcount into overcountUsd and writes no row for it', () => {
-    const sessionMeter = new SessionMeter(LIVE);
+    const sessionMeter = new SessionMeter(LIVE, 'test');
     // Each turn is $0.00006, recorded as $0.0001; the three together are $0.0002.
     for (let turn = 0; turn < 3; turn += 1) committed(sessionMeter, 'claude-sonnet-5', usage(6, { input_tokens: 0 }));
-    const settled = sessionMeter.settle(end([reported('claude-sonnet-5', 0, 18)]));
+    const settled = sessionMeter.settle(end([reported_('claude-sonnet-5', 0, 18)]));
     expect(settled).toMatchObject({ basis: 'result', rows: [], overcountUsd: 0.0001, anomaly: false });
   });
 
   it('counts cache writes beyond what the turns recorded at the one-hour rate unless the one-model result split says otherwise', () => {
     const modelUsage = [{ model: 'claude-sonnet-5', input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 10_000, cost_usd: null }];
     const turn = usage(0, { input_tokens: 0, cache_creation_input_tokens: 4000, cache_creation_1h_input_tokens: 0 });
-    const turnSplit = new SessionMeter(LIVE);
+    const turnSplit = new SessionMeter(LIVE, 'test');
     committed(turnSplit, 'claude-sonnet-5', turn);
     // 4000 five-minute tokens recorded at $0.01; 6000 more at the one-hour rate is $0.024.
-    expect(turnSplit.settle(end(modelUsage)).rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 6000, cached_tokens: 0, output_tokens: 0, usd: 0.024 }]);
+    expect(turnSplit.settle(end(modelUsage)).rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 6000, cached_tokens: 0, output_tokens: 0, usd: 0.024, request_id: 'test/settle/1' }]);
 
-    const resultSplit = new SessionMeter(LIVE);
+    const resultSplit = new SessionMeter(LIVE, 'test');
     committed(resultSplit, 'claude-sonnet-5', turn);
     const endUsage = usage(0, { input_tokens: 0, cache_creation_input_tokens: 10_000, cache_creation_1h_input_tokens: 0 });
     // The result line puts all 10000 at five minutes: $0.025 in all, $0.015 still to record.
-    expect(resultSplit.settle(end(modelUsage, endUsage)).rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 6000, cached_tokens: 0, output_tokens: 0, usd: 0.015 }]);
+    expect(resultSplit.settle(end(modelUsage, endUsage)).rows).toEqual([{ model: 'claude-sonnet-5', input_tokens: 6000, cached_tokens: 0, output_tokens: 0, usd: 0.015, request_id: 'test/settle/1' }]);
   });
 
   it('estimates a turn model the result line leaves out, and names the mismatch', () => {
     const table = parsePriceTable(JSON.stringify({ 'claude-sonnet-5': LIVE_SONNET, 'test-class': { ...LIVE_SONNET, output: 20 } }));
-    const sessionMeter = new SessionMeter(table);
+    const sessionMeter = new SessionMeter(table, 'test');
     committed(sessionMeter, 'claude-sonnet-5', usage(100));
     committed(sessionMeter, 'test-class', usage(10, { input_tokens: 0 }), 3000);
-    const settled = sessionMeter.settle(end([reported('claude-sonnet-5', 1000, 100)]));
+    const settled = sessionMeter.settle(end([reported_('claude-sonnet-5', 1000, 100)]));
     // 3000 characters is 1,000 output tokens; 10 were recorded, so 990 at $20 per million.
     expect(settled).toEqual({
       basis: 'estimate',
-      rows: [{ model: 'test-class', input_tokens: 0, cached_tokens: 0, output_tokens: 990, usd: 0.0198 }],
+      rows: [{ model: 'test-class', input_tokens: 0, cached_tokens: 0, output_tokens: 990, usd: 0.0198, request_id: 'test/settle/1' }],
       fallbackModels: [],
       turnModels: ['claude-sonnet-5', 'test-class'],
       overcountUsd: 0,
       mismatch: true,
       anomaly: false,
+      zeroedFields: [],
     });
   });
 
   it('adds the characters of a late line to the estimate', () => {
-    const quiet = new SessionMeter(LIVE);
+    const quiet = new SessionMeter(LIVE, 'test');
     committed(quiet, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
-    const late = new SessionMeter(LIVE);
+    const late = new SessionMeter(LIVE, 'test');
     committed(late, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
-    late.addContent({ model: 'claude-sonnet-5', contentChars: 3000, thinking: false });
+    late.addContent({ model: 'claude-sonnet-5', contentChars: 3000, thinking: false, outputTokens: 0 });
     // 1,024 in flight either way; the late line adds 1,000 more.
     expect(quiet.settle(null).rows.map((row) => row.output_tokens)).toEqual([1024]);
     expect(late.settle(null).rows.map((row) => row.output_tokens)).toEqual([2024]);
+    // A late line whose running total is 400 against the 10 reported passes on 390: 400 in all, not 410.
+    const reported = new SessionMeter(LIVE, 'test');
+    committed(reported, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
+    reported.addContent({ model: 'claude-sonnet-5', contentChars: 3, thinking: false, outputTokens: 390 });
+    // 400 for the turn and 1,024 in flight, less the 10 recorded.
+    expect(reported.settle(null).rows.map((row) => row.output_tokens)).toEqual([1414]);
+  });
+
+  it('charges a compaction as one request in the estimate, and not against a result line', () => {
+    const compacted = new SessionMeter(LIVE, 'test');
+    committed(compacted, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
+    compacted.addCompaction({ model: 'claude-sonnet-5', preTokens: 100_000 });
+    // 100,000 input and 1,024 output for the compaction, 1,024 output in flight: $0.2206 against $0.0001 recorded.
+    expect(compacted.settle(null).rows).toEqual([
+      { model: 'claude-sonnet-5', input_tokens: 100_000, cached_tokens: 0, output_tokens: 2048, usd: 0.2205, request_id: 'test/settle/1' },
+    ]);
+    const reported = new SessionMeter(LIVE, 'test');
+    committed(reported, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
+    reported.addCompaction({ model: 'claude-sonnet-5', preTokens: 100_000 });
+    expect(reported.settle(end([reported_('claude-sonnet-5', 0, 10)]))).toMatchObject({ basis: 'result', rows: [] });
+    // A result line with no modelUsage counts no compaction, so the estimate charges it, with nothing in flight.
+    const empty = new SessionMeter(LIVE, 'test');
+    committed(empty, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
+    empty.addCompaction({ model: 'claude-sonnet-5', preTokens: 100_000 });
+    expect(empty.settle(end([])).rows.map((row) => [row.input_tokens, row.output_tokens])).toEqual([[100_000, 1024]]);
+  });
+
+  it('keeps every class but output at the larger count, so a short input does not send sixty thinking turns to the estimate', () => {
+    const sessionMeter = new SessionMeter(LIVE, 'test');
+    for (let turn = 0; turn < 60; turn += 1) committed(sessionMeter, 'claude-sonnet-5', usage(100), 0, true);
+    // The result line is one request short on input and right on output.
+    const settled = sessionMeter.settle(end([reported_('claude-sonnet-5', 59_000, 6000)]));
+    expect(settled).toMatchObject({ basis: 'result', anomaly: false, rows: [], overcountUsd: 0, zeroedFields: [] });
+  });
+
+  it('names a class modelUsage reports as zero against the turns without moving output to the estimate', () => {
+    const sessionMeter = new SessionMeter(LIVE, 'test');
+    committed(sessionMeter, 'claude-sonnet-5', usage(100));
+    const settled = sessionMeter.settle(end([reported_('claude-sonnet-5', 0, 100)]));
+    expect(settled).toMatchObject({ basis: 'result', anomaly: false, rows: [], zeroedFields: ['claude-sonnet-5 input_tokens'] });
+  });
+
+  it('charges a compaction before any turn to the first turn\'s model, or the session model when no turn came', () => {
+    const table = parsePriceTable(JSON.stringify({ 'claude-sonnet-5': LIVE_SONNET, 'test-class': { ...LIVE_SONNET, output: 20 } }));
+    const early = new SessionMeter(table, 'test', 'test-class');
+    early.addCompaction({ model: 'init-model', preTokens: 1000 });
+    committed(early, 'claude-sonnet-5', usage(10, { input_tokens: 0 }));
+    const settled = early.settle(null);
+    expect(settled.turnModels).toEqual(['claude-sonnet-5']);
+    expect(settled.fallbackModels).toEqual([]);
+    expect(settled.rows.map((row) => [row.model, row.input_tokens])).toEqual([['claude-sonnet-5', 1000]]);
+
+    const alone = new SessionMeter(table, 'test', 'test-class');
+    alone.addCompaction({ model: '', preTokens: 1000 });
+    const before = alone.liveEstimateUsd();
+    // 1,000 input and 1,024 output at test-class's rates: $0.002 + $0.02048.
+    expect(before).toBe(0.02248);
+    expect(alone.settle(null).rows.map((row) => [row.model, row.input_tokens, row.output_tokens, row.usd])).toEqual([['test-class', 1000, 1024, 0.0225]]);
   });
 
   it('writes nothing for a session that reported nothing, or whose estimate equals what was recorded', () => {
-    expect(new SessionMeter(LIVE).settle(null)).toEqual({ basis: 'estimate', rows: [], fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false });
-    const sessionMeter = new SessionMeter(LIVE);
+    expect(new SessionMeter(LIVE, 'test').settle(null)).toEqual({ basis: 'estimate', rows: [], fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] });
+    const sessionMeter = new SessionMeter(LIVE, 'test');
     committed(sessionMeter, 'claude-sonnet-5', usage(10), 30);
     // A result line with no modelUsage: no request was in flight, and 30 characters is the 10 tokens reported.
     expect(sessionMeter.settle(end([]))).toMatchObject({ basis: 'estimate', rows: [], overcountUsd: 0 });

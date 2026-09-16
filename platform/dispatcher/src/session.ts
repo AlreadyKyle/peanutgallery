@@ -1,13 +1,14 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
 // record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
 // and wall-clock ceilings, and aborts when the board session lapses or the board pauses the studio.
+import { randomUUID } from 'node:crypto';
 import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
 import type { Alerter } from './alert.js';
 import type { Billing, Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
-import { SessionMeter } from './metering.js';
-import { modelPrice, round4, type LedgerUsage, type PriceTable } from './pricing.js';
+import { SessionMeter, type MeterRow } from './metering.js';
+import { modelPrice, round4, type PriceTable } from './pricing.js';
 import path from 'node:path';
 import { billingFor } from './throttle.js';
 import { retry } from './time.js';
@@ -185,13 +186,20 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   }, deps.watchIntervalMs);
   const wallClock = setTimeout(() => abort('wall_clock', `session ran past ${deps.sessionMaxMs / 60_000} minutes`), deps.sessionMaxMs);
 
-  const meter = new SessionMeter(deps.priceTable);
+  // Row ids are unique under the card and this run, so a retried write is recorded once.
+  const meter = new SessionMeter(deps.priceTable, `${card.id}/${randomUUID()}`, spec.model);
   const retryMs = deps.ledgerRetryMs ?? LEDGER_RETRY_MS;
   // Who paid. An unattended session bills the pool only once its init line shows the studio key; until
   // then, and for a session on the wrong account, the spend is recorded as the founder's.
-  const account = { billedTo: 'founder' as Billing, verified: false };
+  const account: Account = { billedTo: 'founder', verified: false, started: false, apiKeySource: null };
   let end: EndEvent | null = null;
-  const record = (row: LedgerUsage) => retry(() => deps.db.recordUsage({ billed_to: account.billedTo, card_id: card.id, role_id: role.id, ...row }), LEDGER_TRIES, retryMs);
+  const record = (row: MeterRow) =>
+    retry(
+      () => deps.db.recordUsage({ billed_to: account.billedTo, card_id: card.id, role_id: role.id, ...row }),
+      LEDGER_TRIES,
+      retryMs,
+      (error, attempt) => deps.log.warn('session', 'ledger write failed', { card: card.id, request_id: row.request_id, usd: row.usd, attempt, error: errorMessage(error) }),
+    );
   const checkCeiling = () => {
     const estimate = round4(priorUsd + meter.liveEstimateUsd());
     if (estimate >= ceiling) abort('ceiling', `estimated spend ${estimate} reached the ceiling ${ceiling}`);
@@ -204,6 +212,8 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       case 'start': {
         // The refusal is decided, and the session interrupted, before anything is written.
         const refusal = startRefusal(deps.adapter.mode, event);
+        account.started = true;
+        account.apiKeySource = event.apiKeySource;
         if (!billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
           account.billedTo = billingFor(deps.adapter.mode);
           account.verified = true;
@@ -247,6 +257,11 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
         meter.addContent(event);
         checkCeiling();
         return;
+      case 'compaction':
+        meter.addCompaction(event);
+        checkCeiling();
+        deps.log.info('session', 'context compacted', { card: card.id, model: event.model, pre_tokens: event.preTokens });
+        return;
       case 'tool_call':
         await deps.db.insertEvent(card.id, role.id, 'tool_call', { tool_use_id: event.toolUseId, name: event.name, input: trimPayload(event.input) });
         return;
@@ -274,7 +289,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     clearInterval(watch);
     clearTimeout(wallClock);
     deps.stopSignal.removeEventListener('abort', onStop);
-    await settle({ card, role, deps, meter, end, record, account });
+    await settle({ card, role, deps, meter, end, record, account, turns });
   }
 
   if (state.aborted) return { outcome: state.aborted.outcome, detail: state.aborted.detail, turns: result.turns };
@@ -290,14 +305,33 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns };
 }
 
+// Why the spend was recorded as the founder's rather than the mode's account, when it was.
+function accountProblem(mode: AgentMode, account: Account): string[] {
+  if (account.started && billedToWrongAccount(mode, account.apiKeySource)) {
+    return [`the init line reported apiKeySource ${account.apiKeySource ?? 'unreported'}, so the spend was recorded as the founder's`];
+  }
+  if (!account.started && mode === 'unattended') return ["no init line confirmed the studio key, so the spend was recorded as the founder's"];
+  return [];
+}
+
 interface SettleContext {
   card: Card;
   role: Role;
   deps: SessionDeps;
   meter: SessionMeter;
   end: EndEvent | null;
-  record: (row: LedgerUsage) => Promise<unknown>;
-  account: { billedTo: Billing; verified: boolean };
+  record: (row: MeterRow) => Promise<unknown>;
+  account: Account;
+  turns: number;
+}
+
+interface Account {
+  billedTo: Billing;
+  // The init line confirmed the account the mode bills.
+  verified: boolean;
+  // An init line arrived, and the key source it reported.
+  started: boolean;
+  apiKeySource: string | null;
 }
 
 // Writes the settle rows once the session has ended, however it ended, and only once: a row that
@@ -305,10 +339,26 @@ interface SettleContext {
 // post by hand, never written again by a second settle. A session settled on an estimate, with
 // mismatched model names, with a turn model priced at fallback rates, with an overcount, with rows
 // left unwritten, or unattended with no init line is written up as an error event and alerted once.
-// A side model priced at fallback rates is alerted once per process, not once per session.
-async function settle({ card, role, deps, meter, end, record, account }: SettleContext): Promise<void> {
+// A side model priced at fallback rates is alerted once per process, not once per session. The rows
+// are logged before they are written, so a write that hangs or fails leaves them in the log.
+async function settle({ card, role, deps, meter, end, record, account, turns }: SettleContext): Promise<void> {
+  // The no-result estimate, taken before settle, to compare with what a result line settles to.
+  const estimateUsd = meter.liveEstimateUsd();
   const settled = meter.settle(end);
-  const unwritten: Array<LedgerUsage & { error: string }> = [];
+  const unwritten: Array<MeterRow & { error: string }> = [];
+  if (settled.rows.length > 0) {
+    deps.log.info('session', 'settle rows', {
+      card: card.id,
+      rows: settled.rows.map((row) => ({
+        request_id: row.request_id,
+        model: row.model,
+        input_tokens: row.input_tokens,
+        cached_tokens: row.cached_tokens,
+        output_tokens: row.output_tokens,
+        usd: row.usd,
+      })),
+    });
+  }
   for (const row of settled.rows) {
     try {
       await record(row);
@@ -318,6 +368,17 @@ async function settle({ card, role, deps, meter, end, record, account }: SettleC
     }
   }
   if (settled.rows.length > 0) deps.log.info('session', `card ${card.id} settled`, { basis: settled.basis, rows: settled.rows.length, unwritten: unwritten.length });
+  // One line with the same fields for every session with a result line, to tune the estimate's floors.
+  if (end !== null) {
+    deps.log.info('session', 'metering estimate check', {
+      card: card.id,
+      basis: settled.basis,
+      turns,
+      estimate_usd: estimateUsd,
+      settled_usd: meter.recordedUsd(),
+      cli_total_cost_usd: end.totalCostUsd,
+    });
+  }
 
   const metered = meter.turnsRecorded || settled.rows.length > 0;
   const turnFallbacks = settled.fallbackModels.filter((model) => settled.turnModels.includes(model));
@@ -327,11 +388,12 @@ async function settle({ card, role, deps, meter, end, record, account }: SettleC
     ...(settled.basis === 'estimate' && metered
       ? [settled.anomaly ? 'modelUsage reported fewer tokens than the turns, so the session was settled on the estimate' : 'no usable result line, so the session was settled on the estimate']
       : []),
+    ...(settled.zeroedFields.length > 0 ? [`modelUsage reported 0 for ${settled.zeroedFields.join(', ')} where the turns reported tokens`] : []),
     ...(settled.mismatch ? [`modelUsage names ${reportedModels.join(', ') || 'no model'} but the turns named ${settled.turnModels.join(', ')}`] : []),
     ...(turnFallbacks.length > 0 ? [`priced at fallback rates: ${turnFallbacks.join(', ')}`] : []),
     ...(settled.overcountUsd > 0 ? [`the rows recorded ${settled.overcountUsd} USD above the settled total`] : []),
-    ...(unwritten.length > 0 ? [`rows not written, to post by hand: ${unwritten.map((row) => `${row.model} ${row.usd} USD`).join(', ')}`] : []),
-    ...(deps.adapter.mode === 'unattended' && !account.verified && metered ? ['no init line confirmed the studio key, so the spend was recorded as the founder\'s'] : []),
+    ...(unwritten.length > 0 ? [`rows not written, to post by hand: ${unwritten.map((row) => `${row.request_id} ${row.model} ${row.usd} USD`).join(', ')}`] : []),
+    ...(metered ? accountProblem(deps.adapter.mode, account) : []),
   ];
   if (problems.length === 0 && sideFallbacks.length === 0) return;
 
@@ -344,6 +406,7 @@ async function settle({ card, role, deps, meter, end, record, account }: SettleC
     fallback_models: settled.fallbackModels,
     mismatch: settled.mismatch,
     anomaly: settled.anomaly,
+    zeroed_fields: settled.zeroedFields,
     overcount_usd: settled.overcountUsd,
     cli_total_cost_usd: end?.totalCostUsd ?? null,
   };

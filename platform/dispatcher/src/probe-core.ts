@@ -3,6 +3,7 @@
 // and quote any memory, and fails if a web, sub-agent or MCP tool appears anywhere in the
 // stream, the init line registers a memory path, or the session bills the wrong account for
 // the adapter's mode.
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -138,11 +139,13 @@ export interface ProbeResult {
 
 // The probe's ledger rows, metered as a card session is (metering.ts): nothing is written while the
 // probe runs, so every turn row is still pending and settle returns it, followed by the settle rows.
-export function probeMetering(table: PriceTable, events: readonly AgentEvent[]): Settlement {
-  const meter = new SessionMeter(table);
+// The ids are unique under probe/<run>, so the rows are written once however often a write is retried.
+export function probeMetering(table: PriceTable, events: readonly AgentEvent[], idPrefix: string = `probe/${randomUUID()}`, model = ''): Settlement {
+  const meter = new SessionMeter(table, idPrefix, model);
   for (const event of events) {
     if (event.type === 'turn_usage') meter.addTurn(event);
     if (event.type === 'turn_content') meter.addContent(event);
+    if (event.type === 'compaction') meter.addCompaction(event);
   }
   const end = events.find((event): event is EndEvent => event.type === 'end') ?? null;
   return meter.settle(end);
@@ -183,7 +186,7 @@ export async function runProbe(adapter: AgentAdapter, options: ProbeOptions): Pr
       tools: start?.type === 'start' ? start.tools : [],
       apiKeySource: start?.type === 'start' ? start.apiKeySource : null,
       costUsd: end?.type === 'end' ? end.totalCostUsd : null,
-      metering: probeMetering(options.priceTable, events),
+      metering: probeMetering(options.priceTable, events, `probe/${randomUUID()}`, options.model),
       turns: result.turns,
       exitCode: result.exitCode,
     };

@@ -69,7 +69,9 @@ export interface Deploy {
 // Who pays for a turn: the founder's subscription in attended mode, the pool in unattended mode.
 export type Billing = 'studio' | 'founder';
 
-// card_id and role_id are null for spend that belongs to no card: the startup probe.
+// card_id and role_id are null for spend that belongs to no card: the startup probe. request_id
+// names the row on the dispatcher's side, so a retried write is recorded once; null writes a row
+// every time.
 export interface UsageInput {
   billed_to: Billing;
   card_id: string | null;
@@ -79,6 +81,7 @@ export interface UsageInput {
   cached_tokens: number;
   output_tokens: number;
   usd: number;
+  request_id: string | null;
 }
 
 export interface RecordUsageResult {
@@ -206,9 +209,40 @@ function fail(op: string, error: { message: string } | null): never {
   throw new Error(`db ${op}: ${error?.message ?? 'no row'}`);
 }
 
-// fetchFn is for tests; the client uses the global fetch otherwise.
-export function createSupabaseDb(url: string, serviceRoleKey: string, fetchFn?: typeof fetch): Db {
-  const client = createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false }, ...(fetchFn ? { global: { fetch: fetchFn } } : {}) });
+// Every Supabase request gives up after this long, so a hung connection cannot hold a session's
+// settle past the dispatcher's shutdown wait.
+export const SUPABASE_TIMEOUT_MS = 8000;
+
+// Wraps fetch so the request aborts after timeoutMs, or when the caller's own signal aborts,
+// whichever comes first, and the promise rejects then even if the underlying fetch never settles.
+export function fetchWithTimeout(fetchFn: typeof fetch, timeoutMs: number): typeof fetch {
+  return (input, init) => {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+    return new Promise<Response>((resolve, reject) => {
+      const onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error(`request aborted: ${String(signal.reason)}`));
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, { once: true });
+      fetchFn(input, { ...init, signal })
+        .then(resolve, reject)
+        .finally(() => signal.removeEventListener('abort', onAbort));
+    });
+  };
+}
+
+export interface SupabaseDbOptions {
+  fetchFn?: typeof fetch;
+  timeoutMs?: number;
+}
+
+export function createSupabaseDb(url: string, serviceRoleKey: string, options: SupabaseDbOptions = {}): Db {
+  const client = createClient(url, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: fetchWithTimeout(options.fetchFn ?? fetch, options.timeoutMs ?? SUPABASE_TIMEOUT_MS) },
+  });
   const rows = (data: unknown): Row[] => (Array.isArray(data) ? (data as Row[]) : []);
 
   return {
@@ -302,6 +336,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, fetchFn?: 
         p_output_tokens: input.output_tokens,
         p_usd: input.usd,
         p_billed_to: input.billed_to,
+        p_request_id: input.request_id,
       });
       if (error || !data) fail('record_usage', error);
       const row = data as Row;
