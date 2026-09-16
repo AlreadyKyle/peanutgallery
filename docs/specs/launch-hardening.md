@@ -36,7 +36,7 @@ Out: the VPS (`vps.md`), refunds and holds (`refunds-and-holds.md`), a board rol
 
 **Daily cap.** A tick treats `daily_spent_usd` as zero when `pool.day` is not today in New York.
 
-**Restarts.** Stopping the dispatcher leaves `studio_state.paused` as it was. Startup already pauses any card left in `building` or `gated`.
+**Restarts.** Stopping the dispatcher leaves `studio_state.paused` as it was. ~~Startup already pauses any card left in `building` or `gated`.~~ Superseded: `merge-safety.md` pauses a `building` card and a `gated` card without a merge sha, and verifies a `gated` card with one again (2026-09-16).
 
 **Kernel paths.** No agent may change these files in any lane:
 - the gate
@@ -52,11 +52,11 @@ The list lives in `platform/gate/kernel-paths.txt`, and the dispatcher's copy is
 
 **Rollback.**
 - When a merged card's deploy fails, the dispatcher writes a commit on main whose tree is the merge commit's parent, with the merge commit as its parent. The ref update is fast-forward only, so a moved main refuses it.
-- When the smoke test fails, the previous green deploy is restored first, then the same revert commit is written.
+- When the smoke test fails, the previous green deploy is restored first, then the same revert commit is written. `merge-safety.md` adds a third case: an error after the merge and before the smoke verdict is rolled back the same way (2026-09-16).
 - The `revert` event names the revert commit or the reason it could not be written.
 
 **Alerts.**
-- With `HEALTHCHECK_URL` set, every tick pings it; healthchecks.io emails the board when pings stop.
+- ~~With `HEALTHCHECK_URL` set, every tick pings it; healthchecks.io emails the board when pings stop.~~ Superseded: `merge-safety.md` pings only after a tick completes without an error, and not while the dispatcher is halted (2026-09-16).
 - With `NTFY_TOPIC_URL` set, the dispatcher posts a line when a card is rejected, when a card pauses for any reason other than the dispatcher stopping, when a revert happens or fails, and once per New York day when the daily cap stops a tick.
 - Both variables are optional; unset means no calls. An alert failure is logged and never stops a card.
 

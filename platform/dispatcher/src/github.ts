@@ -2,7 +2,7 @@
 // head sha, and squash-merge with a sha guard. The dispatcher is the merge enforcer.
 import { errorMessage } from './log.js';
 import { git, gitAuthEnv } from './worktree.js';
-import { sleep } from './time.js';
+import { retry, sleep } from './time.js';
 
 export interface GitHubOptions {
   token: string;
@@ -165,18 +165,14 @@ const MERGE_STATE_READS = 3;
 // When the merge request itself fails (a network error or a timeout), GitHub may still have merged.
 // The pull request says which; status 0 marks a merge the dispatcher could not make or confirm.
 async function mergeStateAfterLostRequest(opts: GitHubOptions, number: number, cause: unknown): Promise<MergeResult> {
-  let lastError: unknown = null;
-  for (let read = 0; read < MERGE_STATE_READS; read += 1) {
-    try {
-      const pull = await readPullRequest(opts, number);
-      if (pull.merged && pull.mergeCommitSha) return { ok: true, sha: pull.mergeCommitSha };
-      return { ok: false, status: 0, reason: `the merge request failed (${errorMessage(cause)}) and pull request ${number} is not merged` };
-    } catch (error) {
-      lastError = error;
-      if (read + 1 < MERGE_STATE_READS) await sleep(1000 * (read + 1));
-    }
+  let pull: PullState;
+  try {
+    pull = await retry(() => readPullRequest(opts, number), MERGE_STATE_READS, 1000);
+  } catch (error) {
+    return { ok: false, status: 0, reason: `the merge request failed (${errorMessage(cause)}) and pull request ${number} could not be read (${errorMessage(error)}); check whether it merged` };
   }
-  return { ok: false, status: 0, reason: `the merge request failed (${errorMessage(cause)}) and pull request ${number} could not be read (${errorMessage(lastError)}); check whether it merged` };
+  if (pull.merged && pull.mergeCommitSha) return { ok: true, sha: pull.mergeCommitSha };
+  return { ok: false, status: 0, reason: `the merge request failed (${errorMessage(cause)}) and pull request ${number} is not merged` };
 }
 
 export async function mergePullRequest(

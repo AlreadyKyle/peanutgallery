@@ -29,7 +29,7 @@ import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
 import { runAgentSession, type SessionOutcome } from './session.js';
 import { runSmoke, type BotExec, type SmokeResult } from './smoke.js';
-import { sleep } from './time.js';
+import { retry } from './time.js';
 import {
   changedFiles,
   commitLane,
@@ -245,18 +245,9 @@ async function attempt(deps: PipelineDeps, what: string, write: () => Promise<un
   }
 }
 
+// A write after the merge: the first try and SHIP_WRITE_RETRIES more, with a doubling wait.
 async function retrying(deps: PipelineDeps, write: () => Promise<unknown>): Promise<void> {
-  const delay = timings(deps).retryDelayMs;
-  for (let retry = 0; ; retry += 1) {
-    try {
-      await write();
-      return;
-    } catch (error) {
-      if (retry >= SHIP_WRITE_RETRIES) throw error;
-      deps.log.warn('pipeline', 'write failed; retrying', { retry: retry + 1, error: errorMessage(error) });
-      await sleep(delay * 2 ** retry);
-    }
-  }
+  await retry(write, 1 + SHIP_WRITE_RETRIES, timings(deps).retryDelayMs);
 }
 
 async function gitStateUnchanged(repoRoot: string, worktree: string, before: string): Promise<boolean> {
