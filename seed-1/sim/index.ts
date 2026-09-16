@@ -28,6 +28,7 @@ export {
   strikeYield,
 } from './sim';
 export { hashState } from './hash';
+export { parseSavedState, serializeState } from './save';
 export { nextRandom, seedRng } from './rng';
 export {
   SECONDS_PER_HOUR,
