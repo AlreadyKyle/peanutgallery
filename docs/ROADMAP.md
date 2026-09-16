@@ -27,7 +27,7 @@ The stream, the host, Twitch, personal decisions, display names, the name pipeli
 | # | Phase | Spec | Status | Needs the board |
 |---|---|---|---|---|
 | 1 | Dispatcher and ledger hardening | `specs/launch-hardening.md` | built (live runs pending in 2) | none |
-| 2 | Prove the loop: week-1 runs, directives D1–D3 | `specs/week1-runs.md` | agreed | stay signed in at /board during runs; a real contribution to prove `charge.updated` |
+| 2 | Prove the loop: week-1 runs, directives D1–D3 | `specs/week1-runs.md` | built (a real contribution closes it) | stay signed in at /board during runs; a real contribution to prove `charge.updated` |
 | 3 | Launch pages: Shipped, legal, previews, two-factor | `specs/launch-pages.md` | draft | review legal text; a contact address at peanutgallery.games |
 | 4 | Refunds, disputes, daily hold | `specs/refunds-and-holds.md` | built (live apply pending) | allow the migration, function deploy and endpoint update |
 | 5 | VPS, unattended, alerts | `specs/vps.md` | draft | Hetzner instance and IP, healthchecks.io URL, ntfy topic, deploy key, studio Console prepaid credit |
