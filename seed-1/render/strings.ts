@@ -11,6 +11,7 @@ export interface Strings {
     unlockedCount: string;
     nextUnlock: string;
     allUnlocked: string;
+    unlocksEarned: string;
   };
   strikeDescription: string;
   unitDescriptions: Record<string, string>;
@@ -31,6 +32,7 @@ const LABEL_KEYS = [
   'unlockedCount',
   'nextUnlock',
   'allUnlocked',
+  'unlocksEarned',
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
