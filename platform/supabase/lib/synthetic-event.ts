@@ -1,5 +1,5 @@
-// Stripe webhook signing and the synthetic checkout.session.completed event
-// used by scripts/sign-synthetic-event.ts for the dry run.
+// Stripe webhook signing and the synthetic events used by
+// scripts/sign-synthetic-event.ts for the dry run.
 
 import { createHmac } from "node:crypto";
 
@@ -38,5 +38,48 @@ export function syntheticEvent(nonce: string, amountCents: number, split: string
         ],
       },
     },
+  };
+}
+
+/**
+ * A charge.refunded or charge.dispute.created event for a payment intent, with
+ * synthetic event, charge and dispute ids. Pointed at a real payment intent, the
+ * dry run proves the live session lookup without reversing anything.
+ */
+export function syntheticReversalEvent(
+  type: "charge.refunded" | "charge.dispute.created",
+  nonce: string,
+  paymentIntent: string,
+  amountCents: number,
+  createdSeconds: number,
+): Record<string, unknown> {
+  const object = type === "charge.refunded"
+    ? {
+        id: `ch_synthetic_${nonce}`,
+        object: "charge",
+        payment_intent: paymentIntent,
+        amount: amountCents,
+        amount_refunded: amountCents,
+        currency: "usd",
+        refunded: true,
+        livemode: false,
+      }
+    : {
+        id: `dp_synthetic_${nonce}`,
+        object: "dispute",
+        charge: `ch_synthetic_${nonce}`,
+        payment_intent: paymentIntent,
+        amount: amountCents,
+        currency: "usd",
+        status: "needs_response",
+        livemode: false,
+      };
+  return {
+    id: `evt_synthetic_${nonce}`,
+    object: "event",
+    created: createdSeconds,
+    livemode: false,
+    type,
+    data: { object },
   };
 }

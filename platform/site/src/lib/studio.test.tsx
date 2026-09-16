@@ -9,6 +9,7 @@ function snapshotWithBalance(balance: number): Snapshot {
       balance_usd: balance,
       reserve_usd: 0,
       incident_reserve_usd: 0,
+      held_usd: 0,
       daily_spent_usd: 0,
       day: '2026-09-14',
     },

@@ -2,7 +2,7 @@
 
 The ordered list of what stands between today and the public announcement, each item pointing at its spec. `docs/PLAN.md` is the constitution; this file is the index. It is updated in the same pull request that changes a spec's status.
 
-Last updated 14 September 2026, main at b2c6360.
+Last updated 15 September 2026, main at 6394a99.
 
 ## What "live" means
 
@@ -29,7 +29,7 @@ The stream, the host, Twitch, personal decisions, display names, the name pipeli
 | 1 | Dispatcher and ledger hardening | `specs/launch-hardening.md` | built (live runs pending in 2) | none |
 | 2 | Prove the loop: week-1 runs, directives D1–D3 | `specs/week1-runs.md` | agreed | stay signed in at /board during runs; a real contribution to prove `charge.updated` |
 | 3 | Launch pages: Shipped, legal, previews, two-factor | `specs/launch-pages.md` | draft | review legal text; a contact address at peanutgallery.games |
-| 4 | Refunds, disputes, daily hold | `specs/refunds-and-holds.md` | draft | allow the migration, function deploy and endpoint update |
+| 4 | Refunds, disputes, daily hold | `specs/refunds-and-holds.md` | built (live apply pending) | allow the migration, function deploy and endpoint update |
 | 5 | VPS, unattended, alerts | `specs/vps.md` | draft | Hetzner instance and IP, healthchecks.io URL, ntfy topic, deploy key, studio Console prepaid credit |
 | 6 | Announcement | `specs/announcement.md` | draft | record or approve the clip, press Go live, post |
 
@@ -48,6 +48,7 @@ Phases 3 and 4 can run in parallel with 2. Phase 5 needs 1 and 2. Phase 6 needs 
 | `specs/site-layout.md` | done |
 | `specs/unattended-mode.md` | built (live on the VPS in 5) |
 | `specs/live-cut.md` | agreed (criteria 2 and 7 close with phases 2 and 5) |
+| `specs/stale-tab.md` | built (live check on the next deploy) |
 
 ## After live
 

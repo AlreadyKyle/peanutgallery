@@ -32,7 +32,7 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 - `pnpm --filter @backseat/site build && pnpm --filter @backseat/site e2e` passes at 375 px.
 - The signed synthetic dry run: `pnpm --filter @backseat/supabase exec tsx scripts/sign-synthetic-event.ts --split 8020 --amount-cents 100` returns 200 with `dry_run: true` and `studio_pct: 20`.
 - The board's real $1 and the three week-1 runs, with the SQL checks in the plan of 14 September 2026, quoted in the session report.
-- The ledger identity holds: sum of `agents_usd - incident_usd` over contributions minus the sum of `ledger.usd` equals `pool.balance_usd`.
+- ~~The ledger identity holds: sum of `agents_usd - incident_usd` over contributions minus the sum of `ledger.usd` equals `pool.balance_usd`.~~ Superseded: `refunds-and-holds.md` states the identity as I1–I3, exact through founder rows, S1 draws, holds and reversals, checked by `scripts/ledger-identity.ts` (2026-09-15).
 
 ## Decisions
 
