@@ -1,5 +1,6 @@
 export interface Strings {
   title: string;
+  tabTitle: string;
   labels: {
     dust: string;
     perSecond: string;
@@ -66,6 +67,7 @@ export function parseStrings(raw: unknown): Strings {
   if (!isRecord(effectsRaw)) throw new Error('strings: "effects" must be an object');
   return {
     title: requireText(raw, 'title', 'strings'),
+    tabTitle: requireText(raw, 'tabTitle', 'strings'),
     labels,
     strikeDescription: requireText(raw, 'strikeDescription', 'strings'),
     unitDescriptions: requireTextRecord(raw, 'unitDescriptions', 'strings'),
