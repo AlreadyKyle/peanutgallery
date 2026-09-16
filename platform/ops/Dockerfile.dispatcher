@@ -37,6 +37,11 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "pnpm@${PN
 RUN groupadd --gid 10001 agent \
   && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash agent
 
+# The build uid for deploy.sh's and provision.sh's throwaway pnpm install: it owns only node_modules
+# and the store while the install runs, never the code clone's tracked files or .git.
+RUN groupadd --gid 10002 build \
+  && useradd --uid 10002 --gid 10002 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin build
+
 COPY --chmod=0755 dispatcher-entrypoint.sh /usr/local/bin/dispatcher-entrypoint.sh
 
 # Claude Code on Linux reads managed settings from /etc/claude-code/managed-settings.json whatever

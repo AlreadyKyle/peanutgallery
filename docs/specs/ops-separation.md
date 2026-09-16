@@ -47,21 +47,43 @@ Root never runs git or any program from the work clone or the worktree folder.
 **Image.** apt installs `bubblewrap` and `socat` beside git, ca-certificates and tini. `platform/ops/managed-settings.json` is copied as root, mode 0644, to `/etc/claude-code/managed-settings.json`, the path Claude Code 2.1.139 reads on Linux whatever `--setting-sources` says. It sets `disableAllHooks` and denies Read of `/proc`, `/etc/peanutgallery`, both clones' `.env*`, `~/.ssh`, `~/.aws`, `~/.config`, `~/.claude`, `~/.claude.json` and `~/.netrc`, and Edit under `/opt/peanutgallery` and `/srv/peanutgallery`. Edits under `/srv/peanutgallery-worktrees` stay allowed for the session policy to scope. The dockerignore admits the entrypoint and the settings. `WORKDIR` and the pnpm store move to `/opt/peanutgallery`.
 
 **Deploy.** `deploy.sh [--ref <sha>]`, as root:
-1. Refuses a bad `--ref` (not 40 hex characters) or an unknown argument, a missing env file, clone or worktree folder, a stopped unit, an unpaused studio or a card in flight.
-2. Runs git only in the code clone, every call as `git -c safe.directory=<code clone> -c core.fsmonitor=false -c core.hooksPath=/dev/null -C <code clone>`.
+`deploy.sh [--ref <sha>] [--confirm <12 characters>]` runs as root. The operator pipes it over ssh from a checkout of main on the Mac they have reviewed (`ssh root@<vps> 'bash -s -- [args]' < platform/ops/deploy.sh`), as `provision.sh` runs. It never reads its own location: the copy on the VPS is in the clone it distrusts.
+1. Refuses a bad `--ref` (not 40 hex characters), a bad `--confirm` (not 12 hex characters) or an unknown argument. Then refuses a missing env file, clone or worktree folder, an env file whose `GITHUB_REPO` is not `AlreadyKyle/peanutgallery`, a stopped unit, an unpaused studio or a card in flight.
+2. Runs git only in the code clone. Every call is `GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_PAGER=cat git -c safe.directory=<code clone> -c core.fsmonitor=false -c core.hooksPath=/dev/null -C <code clone>`.
 3. Refuses when `git status --porcelain --untracked-files=all` is not empty, printing the first entries and the commands to inspect them.
-4. Fetches `+refs/heads/main:refs/remotes/origin/main` with the token header in git's environment for that command only.
-5. Without `--ref`: checks out `main` if detached, `merge --ff-only refs/remotes/origin/main`, and requires `HEAD` to equal it. With `--ref`: requires the sha to be an ancestor of `origin/main`, checks it out detached and requires `HEAD` to equal it.
-6. Reuses `peanutgallery/dispatcher:<sha>`, or retags `:current` when `platform/ops` did not change, or builds with `git archive --format=tar <sha>:platform/ops | docker build -f Dockerfile.dispatcher -`.
-7. Runs `pnpm install --frozen-lockfile --prefer-offline` in a throwaway container: `--user 0:0 --cap-drop ALL --security-opt no-new-privileges`, no env file, `env -i` with `PATH`, `HOME`, `CI` and the store path, the code clone mounted at `/opt/peanutgallery`.
-8. Makes the code clone root-owned with nothing group- or other-writable, and refuses if it is dirty afterwards.
-9. Installs a unit only when `git show <sha>:platform/ops/<unit>` differs from `/etc/systemd/system`, restarts and waits for `startup probe passed`.
+4. Refuses the clone (`check_code_clone`) when:
+   - `.git` is not a folder;
+   - `git ls-files -v` shows a flag other than `H`;
+   - `git config --local` has a key outside those git writes for a clone (`core.repositoryformatversion`, `filemode`, `bare`, `logallrefupdates`, `ignorecase`, `precomposeunicode`, `symlinks`; `remote.origin.url` and `fetch`; `branch.main.remote` and `merge`; `extensions.objectformat`; `lfs.repositoryformatversion`);
+   - `.git/info/attributes`, `.git/info/grafts`, `.git/commondir` or `.git/objects/info/alternates` exists;
+   - any file is setuid or setgid;
+   - a symlink is absolute, does not resolve with `readlink -f`, or resolves outside the clone.
+5. Requires `remote.origin.url` to be `https://github.com/AlreadyKyle/peanutgallery.git`, and fetches `+refs/heads/main:refs/remotes/origin/main` from that URL by name, with the token header in git's environment for that command only.
+6. The target is `origin/main`, which `refs/heads/main` must fast-forward to. With `--ref`, the target is the sha, which must be a commit on `origin/main`, at or after `ROLLBACK_FLOOR`, and contain `platform/ops/managed-settings.json`. `ROLLBACK_FLOOR` is a constant in `deploy.sh`. It is empty until this change merges; the board then sets it to the merge sha and only moves it forward. While it is empty, every `--ref` is refused.
+7. When the target is not the deployed sha, it is a human check:
+   - it reads `/repos/AlreadyKyle/peanutgallery/commits/<target>/check-runs?check_name=gate` with the token in a header file, and refuses unless the latest `gate` run created by GitHub Actions concluded `success`;
+   - it prints the commits the target adds and removes and a diff stat of `platform/ops`, `platform/dispatcher`, `package.json`, `pnpm-lock.yaml` and `.github`, with control characters other than tab and newline removed;
+   - it continues only when `--confirm`, or the answer typed at a terminal when there is one, equals the target's first 12 characters. Under `bash -s` there is no terminal, so the first run prints the review and stops, and the operator runs again with `--confirm`.
+8. Without `--ref`: checks out `main` if detached and `merge --ff-only <target>`. With `--ref`: checks out the target detached. Either way it requires `HEAD` to equal the target.
+9. Reuses `peanutgallery/dispatcher:<sha>`, or retags `:current` when `platform/ops` did not change, or builds with `git archive --format=tar <sha>:platform/ops | docker build -f Dockerfile.dispatcher -`.
+10. Gives the build uid (10002, a user in the image) the `node_modules` folder beside each tracked `package.json` and `.pnpm-store`, refusing one that is a symlink. It runs `pnpm install --frozen-lockfile --prefer-offline` in a throwaway container:
+    - `--user 10002:10002 --cap-drop ALL --security-opt no-new-privileges`, no env file;
+    - `env -i` with `PATH`, `HOME=/tmp`, `CI` and the store path;
+    - the code clone mounted at `/opt/peanutgallery`, with `.git` mounted read-only over it.
+
+    Root is not needed: pnpm install writes only `node_modules` and the store, which was tried on a copy of the repository with every other file and folder read-only (Evidence).
+11. Strips setuid and setgid bits, makes the code clone root-owned with nothing group- or other-writable, and refuses unless `check_clean` and `check_code_clone` pass again.
+12. Installs a unit only when `git show <sha>:platform/ops/<unit>` differs from `/etc/systemd/system`. It notes the unit's `InvocationID`, restarts, and reads only the journal of the new invocation (`journalctl _SYSTEMD_INVOCATION_ID=<id>`, following a new id after a retryable exit). It requires `code root is read-only` there before `startup probe passed`.
+
+The functions both scripts run on the code clone (`code_git`, `check_clean`, `check_code_clone`, `own_for_build`, `prepare_install_dirs`, `run_install`, `unit_text`, `build_context`) sit between the same markers in `deploy.sh` and `provision.sh`, and a test keeps the two copies identical.
 
 It never touches the work clone; the dispatcher fetches `main` there before every card.
 
+**Kernel names.** `.pnpmfile.cjs` becomes `.pnpmfile.*` in `platform/gate/kernel-names.txt` and the dispatcher's `KERNEL_NAMES`: pnpm 11 also loads `.pnpmfile.mjs`, and the install runs whatever it holds. `gate-hardening.md` carries the same strike-through.
+
 **Provision.** As before (host, packages, swap, Docker, firewall, sshd, upgrades, the env file checks including the price table and model rows), then:
-- the code clone at `/srv/peanutgallery-code`, cloned by root, with the extraheader, origin and clean checks and `.pnpm-store` excluded;
-- the image from the clone's commit; `node_modules` through the same throwaway container when the installed `node_modules/.pnpm/lock.yaml` differs from `pnpm-lock.yaml`; the clone locked to root;
+- the code clone at `/srv/peanutgallery-code`, cloned by root with no system or global git configuration, with the extraheader, origin, clean and `check_code_clone` checks and `.pnpm-store` excluded;
+- the image from the clone's commit; `node_modules` through the same build-uid install when the installed `node_modules/.pnpm/lock.yaml` differs from `pnpm-lock.yaml`; setuid and setgid bits stripped, the clone locked to root, and both clone checks run again;
 - the work clone cloned inside the image as uid 10001 (`agent_git`: `--user 10001:10001 --cap-drop ALL`, fsmonitor and hooks off), its origin and extraheader checked the same way;
 - `/srv/peanutgallery-worktrees` as uid 10001, 0700;
 - the units from `git show`.
@@ -83,6 +105,13 @@ Every step checks before it acts, and folders are fixed one level only, never re
 - [x] The image installs bubblewrap and socat and copies `managed-settings.json` as root to `/etc/claude-code/managed-settings.json`; the dockerignore admits it; the settings parse and hold the deny list.
 - [x] `provision.sh` refuses the unit's four variables in the env file, creates both clones and the worktree folder with their owners, and accepts aarch64.
 - [x] Every ops script passes `bash -n` (the entrypoint `sh -n` and `dash -n` too).
+- [x] I1: both install runs use the build uid with `.git` mounted read-only; `check_code_clone` refuses each of: an `h` or `S` index flag, an unexpected config key, `info/attributes`, `info/grafts`, `commondir`, `objects/info/alternates`, a setuid file, an absolute, unresolvable or escaping symlink; and passes a fresh clone with pnpm-style relative links. The code clone functions are identical in both scripts.
+- [x] I1: `.pnpmfile.*` is a kernel name in the gate's list and the dispatcher's, and `.pnpmfile.mjs` fails the kernel guard.
+- [x] I2: `deploy.sh` reads nothing from its own location, and the runbook runs it with `bash -s` from the Mac's checkout.
+- [x] I3: `check_ref` refuses an empty floor, a sha below the floor, a sha off `origin/main`, a sha without `managed-settings.json` and a non-commit, and passes the floor and later commits on main.
+- [x] I4: `gate_verdict` passes only the latest GitHub Actions `gate` run concluding success; `check_gate` sends the token in a header file; `review_target` prints both commit ranges and the diff stat of the named paths without control characters; `confirm_target` requires the 12-character prefix and, with no terminal, stops and asks for `--confirm`.
+- [x] S1: `wait_for_probe` reads only the new invocation's journal and needs `code root is read-only` before `startup probe passed`; a probe line alone, the lines reversed, or the previous invocation's lines never pass.
+- [x] S2: `deploy.sh` fetches from its `REPO_URL` by name and checks `remote.origin.url` and `GITHUB_REPO`.
 - [ ] Every ops script passes shellcheck 0.9.0 (CI).
 - [ ] The production steps below pass on the VPS.
 
@@ -106,11 +135,18 @@ Each runs on the Oracle Cloud instance as root, during the cutover in `platform/
    Docker's default seccomp profile may refuse the user namespace bwrap needs. A non-zero exit is recorded as the finding for the session-containment work and does not block this change.
 4. **Managed settings in the image.** `docker run --rm --entrypoint stat peanutgallery/dispatcher:current -c '%U:%G %a' /etc/claude-code/managed-settings.json` reads `root:root 644`.
 5. **Start and the startup check.** After the cutover start, `journalctl -u dispatcher -n 50 --no-pager` shows `code root is read-only` with `"codeRoot":"/opt/peanutgallery"`, then `startup probe passed`.
-6. **Deploy twice.** `ssh root@$VPS_IP 'bash /srv/peanutgallery-code/platform/ops/deploy.sh'` twice with the studio paused. The first run restarts and quotes `startup probe passed`. The second prints `nothing to deploy`.
-7. **Tamper drill.**
-   - Run `touch /srv/peanutgallery-code/platform/ops/tamper-drill` and `deploy.sh`. It must stop with `refused: /srv/peanutgallery-code has uncommitted or untracked files` naming `platform/ops/tamper-drill`, and the running dispatcher and `/etc/systemd/system` must be unchanged.
-   - Remove the file and run `deploy.sh` again: `nothing to deploy`.
-8. **Write refusal drill.** Run `docker run --rm --user 10001:10001 -v /srv/peanutgallery-code:/opt/peanutgallery:ro --entrypoint touch peanutgallery/dispatcher:current /opt/peanutgallery/x`. It must fail with `Read-only file system`.
+6. **Deploy twice.** From the Mac's reviewed checkout, with the studio paused: `ssh root@$VPS_IP 'bash -s' < platform/ops/deploy.sh`.
+   - With a new commit on main, the first run prints `the gate check on <sha> concluded success` and the review, then stops asking for `--confirm`. Quote it.
+   - Run it again with `'bash -s -- --confirm <12 characters>'`: it restarts and quotes `code root is read-only` and `startup probe passed`.
+   - A third plain run prints `nothing to deploy`.
+   - A run with a wrong `--confirm` stops with `is not the first 12 characters of the target`.
+7. **Tamper drills.** After each drill, run `deploy.sh` and quote the refusal. The running dispatcher and `/etc/systemd/system` must be unchanged. Undo the drill, and a plain run prints `nothing to deploy`.
+   - `touch /srv/peanutgallery-code/platform/ops/tamper-drill` must stop with `has uncommitted or untracked files` naming it.
+   - `git -C /srv/peanutgallery-code config credential.helper drill` must stop with `.git/config sets credential.helper`.
+   - `ln -s /srv/peanutgallery /srv/peanutgallery-code/node_modules/drill` must stop with `is an absolute symlink`.
+8. **Roll back refusal.** With `ROLLBACK_FLOOR` still empty, `ssh root@$VPS_IP 'bash -s -- --ref <any sha>' < platform/ops/deploy.sh` stops with `ROLLBACK_FLOOR in deploy.sh is not set`. Once the board sets the floor, a `--ref` to a commit before it stops with `is older than the rollback floor`.
+9. **Install uid.** During a deploy that installs, `docker ps` shows the throwaway container. Afterwards `find /srv/peanutgallery-code ! -user 0 | head` prints nothing.
+10. **Write refusal drill.** Run `docker run --rm --user 10001:10001 -v /srv/peanutgallery-code:/opt/peanutgallery:ro --entrypoint touch peanutgallery/dispatcher:current /opt/peanutgallery/x`. It must fail with `Read-only file system`.
 
 ## Evidence
 
@@ -136,6 +172,14 @@ After the change:
   - deno `ok | 58 passed (33 steps) | 0 failed`
   - `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=309`
 
+Security review follow-up (I1–I4, S1, S2), 2026-09-16, as new commits on `ops-separation` after bccb1f7:
+- Kernel names, test first: `worktree.test.ts` gave `Tests  1 failed | 25 passed (26)` (`expected false to be true` for `.pnpmfile.mjs`), then `Tests  26 passed (26)`. The gate tests reported `PASS: gate tests passed=213` (211 before, with `.pnpmfile.mjs` and `seed-1/.pnpmfile.cjs` added to the by-name cases).
+- Before the new tests, the updated scripts failed 4 of the existing ops tests: the old fetch and install flags, the old git line, and the old probe wait.
+- The non-root install was tried on a copy of the repository: HEAD extracted from `git archive`, a `node_modules` folder beside each package, everything else `chmod a-w`. `pnpm install --frozen-lockfile --offline` gave `install exit 0`, `Progress: resolved 123, reused 123, downloaded 0, added 123, done`. That shows pnpm writes nothing outside `node_modules` and the store. It ran as the Mac user, not in Docker as uid 10002.
+- `pnpm test:ops`: exit 0, `tests 41`, `pass 40`, `fail 0`, `skipped 1` (shellcheck).
+- `bash -n deploy.sh` and `bash -n provision.sh`: exit 0.
+- `pnpm --filter @backseat/dispatcher test` and `pnpm verify`: quoted in the session report for the commit that carries this text.
+
 Criteria and the tests that prove them:
 - Config: `config.test.ts`, "the code, repository and worktree roots".
 - Startup check: `startup.test.ts`, "checkCodeReadonly" (writable, missing `node_modules`, a 0555 tree, skipped as root) and "startupChecks" (the check runs first and no probe runs; a read-only root reaches the probe).
@@ -144,6 +188,22 @@ Criteria and the tests that prove them:
 - The Linux managed-settings path: the 2.1.139 binary on the Mac (`~/.local/share/claude/versions/2.1.139`) resolves its managed folder as `/Library/Application Support/ClaudeCode` on macOS, `C:\Program Files\ClaudeCode` on Windows and `/etc/claude-code` otherwise, and reads `managed-settings.json` and `managed-settings.d` there.
 
 Pending: shellcheck in CI, and every production step.
+
+## Residual risks
+
+What is closed, and by which layer:
+- **The files the dispatcher runs.** Closed by the read-only mount, root ownership and the startup check. The install that fills `node_modules` cannot write tracked files or `.git` (build uid, `.git` read-only), and its output is checked for setuid files and escaping symlinks.
+- **Root on the host through the code clone.** Closed by `deploy.sh` and `provision.sh`: git with no system, global, hook or fsmonitor configuration; refusal of a dirty clone and of git state a clone does not have; images and units from the commit; the explicit fetch URL; the script piped from the operator's checkout.
+- **Roll back below this layout.** Closed by `ROLLBACK_FLOOR` and the managed-settings check, once the board sets the floor. Until then every `--ref` is refused.
+- **A forged probe line from the previous container.** Closed by reading only the new invocation's journal, in order.
+
+What is open:
+- **A commit on main becomes root-run code once a person confirms it.** `deploy.sh`'s gate check and review are a human check, not a closed path. Someone holding the GitHub token (which agent code can read from `/proc` today) could push a commit that passes the gate. It would run once an operator confirms the sha without reading the review. The durable fix is keeping the token out of agent reach: session containment (a separate uid and the Bash sandbox) and the key proxy, so no agent-reachable process holds the GitHub token or the studio key.
+- **The work clone's `.git`.** uid 10001 owns it, and the dispatcher's own git calls there read a planted `commondir`, `info/attributes` filters, alternates, or a process left running. Root never acts on it, but the dispatcher's git does, with its secrets. The fix is in the dispatcher on `merge-safety` and arrives when that branch merges into this one.
+- **The dispatcher's environment in `/proc`.** Unchanged (`vps.md`, Known risk); session containment closes it.
+- **Symlink resolution is checked on the host path.** A relative link is resolved at `/srv/peanutgallery-code` rather than at `/opt/peanutgallery`. Both mount points are two levels deep, so a link that escapes one escapes the other by the same `..` count, and absolute links are refused outright.
+- **`check_code_clone` does not hash `node_modules`.** Between deploys a change there needs root, since nothing else can write the tree. The check runs only when a deploy or provision does.
+- **Unverified without Docker and the VPS:** the non-root install inside the container, `.git` mounted read-only over the bind mount, `journalctl _SYSTEMD_INVOCATION_ID` filtering container output, and shellcheck 0.9.0 (CI).
 
 ## Decisions
 
@@ -158,4 +218,10 @@ Pending: shellcheck in CI, and every production step.
 - 2026-09-16: a roll back is `deploy.sh --ref <sha>` with the sha on `origin/main`, replacing the hand-run `docker tag` and `git checkout`. A plain deploy returns the code clone to `main`.
 - 2026-09-16: a dirty code clone is refused, not cleaned. Only the two scripts change it, so a difference needs a person to look.
 - 2026-09-16: `provision.sh` accepts aarch64. Its x86_64-only check contradicted the 16 Sep decision for an Oracle Ampere host and would have stopped provisioning there.
+- 2026-09-16 (review I1): the install runs as uid 10002 with `.git` read-only, not as root. pnpm writes only `node_modules` and the store, so root bought nothing but the power to rewrite the clone.
+- 2026-09-16 (review I1): the config key check allows the keys git writes for a clone, not all of `core.*`. `core.sshCommand`, `core.askPass`, `core.gitProxy`, `core.worktree` and `core.attributesFile` each run a program or redirect what git reads.
+- 2026-09-16 (review I1): `info/grafts` is refused with the three files the review named, since it rewrites history the same way.
+- 2026-09-16 (review I2): `deploy.sh` is piped over ssh from the operator's checkout, like `provision.sh`. The code clone's copy of the script is in the tree the script checks.
+- 2026-09-16 (review I4): the confirmation is two runs under `bash -s`, review then `--confirm`, because stdin is the script and there is no terminal. With a terminal it prompts. A main that moves between the runs no longer matches the prefix.
+- 2026-09-16 (review I4): the gate verdict counts only runs created by GitHub Actions, the latest by id. A check run from another app cannot stand in for the gate.
 - 2026-09-16: the smoke worktree moves with the rest, so `merge-safety.md`'s live line reads `/srv/peanutgallery-worktrees/smoke-` on the VPS rather than `.worktrees/smoke-`.

@@ -5,7 +5,7 @@
 // Every value in the fixtures is made up; none has the shape of a real credential.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
@@ -332,26 +332,47 @@ describe('deploy.sh supabase_get', () => {
 });
 
 describe('deploy.sh wait_for_probe', () => {
-  // journalctl prints the fixture log; sleep returns at once so the wait loop runs quickly.
+  // systemctl reports the current invocation; journalctl prints the fixture log only for that
+  // invocation's filter, so a line from any other start is never read. sleep returns at once.
   const bin = path.join(scratch, 'probe-bin');
   mkdirSync(bin, { recursive: true });
-  writeFileSync(path.join(bin, 'journalctl'), '#!/bin/sh\nprintf "%s\\n" "$PROBE_LOG"\n', { mode: 0o755 });
+  writeFileSync(path.join(bin, 'systemctl'), '#!/bin/sh\necho "$CURRENT_INVOCATION"\n', { mode: 0o755 });
+  writeFileSync(path.join(bin, 'journalctl'), '#!/bin/sh\n[ "$1" = "_SYSTEMD_INVOCATION_ID=invocation-new" ] && printf "%s\\n" "$PROBE_LOG"\nexit 0\n', { mode: 0o755 });
   writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  const wait = (log) =>
-    callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'PROBE_WAIT_SECONDS=1; wait_for_probe 0', { PROBE_LOG: log, PATH: `${bin}:${process.env.PATH}` });
+  const wait = (log, current = 'invocation-new') =>
+    callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'PROBE_WAIT_SECONDS=1; wait_for_probe invocation-old', {
+      PROBE_LOG: log,
+      CURRENT_INVOCATION: current,
+      PATH: `${bin}:${process.env.PATH}`,
+    });
   const exited = (restart) =>
     `{"level":"error","scope":"main","msg":"dispatcher exited with an error","error":"startup probe failed","exitCode":${restart ? 1 : 78},"restart":${restart}}`;
+  const readonly = '{"ts":"t","level":"info","scope":"startup","msg":"code root is read-only","codeRoot":"/opt/peanutgallery"}';
+  const passed = '{"ts":"t","level":"info","scope":"probe","msg":"startup probe passed","apiKeySource":"ANTHROPIC_API_KEY"}';
 
-  test('returns when the probe passes', () => {
-    const run = wait('{"scope":"probe","msg":"startup probe passed","apiKeySource":"ANTHROPIC_API_KEY"}');
+  test('returns when this start logs the read-only check and then the probe', () => {
+    const run = wait(`${readonly}\n${passed}`);
     assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /code root is read-only/);
     assert.match(run.stdout, /startup probe passed/);
+  });
+
+  test('does not accept a probe line without the read-only line first, or from the start before the restart', () => {
+    for (const [log, current] of [
+      [passed, 'invocation-new'],
+      [`${passed}\n${readonly}`, 'invocation-new'],
+      [`${readonly}\n${passed}`, 'invocation-old'],
+    ]) {
+      const run = wait(log, current);
+      assert.equal(run.status, 1, `${current}: ${log}`);
+      assert.match(run.stderr, /no 'code root is read-only' then 'startup probe passed' within 1 seconds/);
+    }
   });
 
   test('keeps waiting through a retryable exit and stops at once on one systemd will not restart', () => {
     const retry = wait(exited(true));
     assert.equal(retry.status, 1);
-    assert.match(retry.stderr, /no 'startup probe passed' within 1 seconds/);
+    assert.match(retry.stderr, /within 1 seconds/);
     const fatal = wait(exited(false));
     assert.equal(fatal.status, 1);
     assert.match(fatal.stderr, /will not restart/);
@@ -518,7 +539,9 @@ describe('the code clone and the work clone', () => {
   test('deploy.sh runs git only in the code clone, and root runs no git in the work clone', () => {
     // The one git command is code_git's; the other matches are the inspection commands its refusal prints.
     const deploy = gitLines('deploy.sh');
-    assert.equal(deploy.filter((line) => line.trim() === 'git -c safe.directory="$CODE_DIR" -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$CODE_DIR" "$@"').length, 1);
+    const codeGit =
+      'GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_PAGER=cat git -c safe.directory="$CODE_DIR" -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$CODE_DIR" "$@"';
+    assert.equal(deploy.filter((line) => line.replace(/\s+/g, ' ').trim() === codeGit).length, 1);
     for (const line of deploy) assert.match(line, /-C "?\$CODE_DIR"? /, line);
     assert.doesNotMatch(read('platform/ops/deploy.sh'), /image_git|--entrypoint git|\$WORK_DIR:/);
     for (const line of gitLines('provision.sh')) {
@@ -588,20 +611,27 @@ describe('the code clone and the work clone', () => {
 
   test('deploy.sh fast-forwards to the fetched origin/main or checks out --ref, and installs node_modules in a throwaway container', () => {
     const text = logicalLines(read('platform/ops/deploy.sh')).join('\n');
-    assert.match(text, /code_git fetch --quiet origin \+refs\/heads\/main:refs\/remotes\/origin\/main/);
-    assert.match(text, /code_git merge --ff-only --quiet refs\/remotes\/origin\/main/);
-    assert.match(text, /\[ "\$new" = "\$origin_main" \]/);
-    assert.match(text, /code_git merge-base --is-ancestor "\$ref" refs\/remotes\/origin\/main/);
-    assert.match(text, /code_git checkout --quiet --detach "\$ref"/);
+    // S2: the fetch names the repository's URL, and the clone's origin and the env file's repository are checked.
+    assert.match(text, /code_git fetch --quiet "\$REPO_URL" \+refs\/heads\/main:refs\/remotes\/origin\/main/);
+    assert.match(read('platform/ops/deploy.sh'), /^REPO_URL=https:\/\/github\.com\/AlreadyKyle\/peanutgallery\.git$/m);
+    assert.match(text, /\[ "\$\(code_git config --local --get remote\.origin\.url\)" = "\$REPO_URL" \]/);
+    assert.match(text, /\[ "\$\(env_value GITHUB_REPO\)" = "\$REPO_SLUG" \]/);
+    assert.doesNotMatch(text, /fetch --quiet origin/);
+    assert.match(text, /code_git merge --ff-only --quiet "\$target"/);
+    assert.match(text, /\[ "\$new" = "\$target" \]/);
+    assert.match(text, /code_git checkout --quiet --detach "\$target"/);
+    // I1: the install runs as the build uid with .git read-only over the code mount.
     const install = /docker run --rm [^\n]*pnpm install --frozen-lockfile[^\n]*/.exec(text)?.[0];
     assert.ok(install, 'pnpm install runs in a docker run --rm');
-    for (const flag of ['--user 0:0', '--cap-drop ALL', '--security-opt no-new-privileges', '--volume "$CODE_DIR:$CODE_MOUNT"', '--entrypoint /usr/bin/env', ' -i ']) {
+    for (const flag of ['--user "$BUILD_UID:$BUILD_UID"', '--cap-drop ALL', '--security-opt no-new-privileges', '--volume "$CODE_DIR:$CODE_MOUNT" --volume "$CODE_DIR/.git:$CODE_MOUNT/.git:ro"', '--entrypoint /usr/bin/env', ' -i ']) {
       assert.ok(install.includes(flag), flag);
     }
-    assert.doesNotMatch(install, /--env-file/);
+    assert.doesNotMatch(install, /--env-file|--user 0/);
     assert.match(text, /chown -hR 0:0 "\$CODE_DIR"/);
+    assert.match(read('platform/ops/Dockerfile.dispatcher'), /useradd --uid 10002 --gid 10002 /);
     for (const script of ['deploy.sh', 'provision.sh']) {
       assert.match(read(`platform/ops/${script}`), /^CODE_DIR=\/srv\/peanutgallery-code$/m, script);
+      assert.match(read(`platform/ops/${script}`), /^BUILD_UID=10002$/m, script);
     }
 
     const usage = callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'main --ref not-a-sha');
@@ -609,7 +639,179 @@ describe('the code clone and the work clone', () => {
     assert.match(usage.stderr, /--ref takes a full 40-character commit sha/);
     const unknown = callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'main --force');
     assert.equal(unknown.status, 1);
-    assert.match(unknown.stderr, /usage: deploy\.sh \[--ref <commit sha>\]/);
+    assert.match(unknown.stderr, /usage: deploy\.sh \[--ref <commit sha>\] \[--confirm/);
+    const confirm = callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'main --confirm abc');
+    assert.equal(confirm.status, 1);
+    assert.match(confirm.stderr, /--confirm takes the first 12 characters of the target sha/);
+  });
+
+  test('the code clone functions are identical in deploy.sh and provision.sh', () => {
+    const block = (script) => {
+      const text = read(`platform/ops/${script}`);
+      const start = text.indexOf('# >>> code clone functions');
+      const end = text.indexOf('# <<< code clone functions');
+      assert.ok(start >= 0 && end > start, script);
+      return text.slice(start, end);
+    };
+    assert.equal(block('provision.sh'), block('deploy.sh'));
+    for (const name of ['code_git', 'check_clean', 'check_code_clone', 'prepare_install_dirs', 'run_install', 'unit_text', 'build_context']) {
+      assert.match(block('deploy.sh'), new RegExp(`^${name}\\(\\) \\{$`, 'm'), name);
+    }
+  });
+
+  // I1: the state an install container or a planted change could leave, each refused on its own.
+  test('check_code_clone passes a fresh clone and refuses each kind of unexpected git state, setuid file and symlink', () => {
+    for (const script of ['deploy.sh', 'provision.sh']) {
+      const repo = fixtureRepo();
+      mkdirSync(path.join(repo, 'node_modules', '.pnpm', 'pkg'), { recursive: true });
+      symlinkSync('.pnpm/pkg', path.join(repo, 'node_modules', 'pkg'));
+      symlinkSync('../package.json', path.join(repo, 'node_modules', 'up-one-inside'));
+      writeFileSync(path.join(repo, 'package.json'), '{}\n');
+      const clean = sourced(script, repo, 'check_code_clone');
+      assert.equal(clean.status, 0, `${script}: ${clean.stdout}${clean.stderr}`);
+      assert.equal(clean.stdout, '');
+    }
+    const refused = (setup, message, undo) => {
+      const repo = fixtureRepo();
+      setup(repo);
+      const run = sourced('deploy.sh', repo, 'check_code_clone');
+      assert.equal(run.status, 1, `${message}: ${run.stdout}${run.stderr}`);
+      assert.match(run.stdout, message);
+      undo?.(repo);
+    };
+    refused((repo) => hostGit(repo, 'update-index', '--assume-unchanged', 'platform/ops/dispatcher.service'), /marks platform\/ops\/dispatcher\.service with h/);
+    refused((repo) => hostGit(repo, 'update-index', '--skip-worktree', 'platform/ops/dispatcher.service'), /marks platform\/ops\/dispatcher\.service with S/);
+    refused((repo) => hostGit(repo, 'config', 'credential.helper', '!touch /tmp/pwned'), /\.git\/config sets credential\.helper/);
+    refused((repo) => hostGit(repo, 'config', 'core.sshCommand', 'touch /tmp/pwned'), /\.git\/config sets core\.sshcommand/);
+    for (const file of ['info/attributes', 'info/grafts', 'commondir', 'objects/info/alternates']) {
+      refused((repo) => {
+        mkdirSync(path.dirname(path.join(repo, '.git', file)), { recursive: true });
+        writeFileSync(path.join(repo, '.git', file), '* filter=planted\n');
+      }, new RegExp(`\\.git/${file.replace('/', '\\/')} exists`));
+    }
+    refused((repo) => symlinkSync('/etc', path.join(repo, 'platform', 'ops', 'absolute')), /absolute is an absolute symlink/);
+    refused((repo) => symlinkSync('../../..', path.join(repo, 'platform', 'ops', 'escape')), /resolves outside it/);
+    refused((repo) => symlinkSync('missing/deeper/target', path.join(repo, 'platform', 'ops', 'unresolved')), /a symlink that does not resolve/);
+    const setuid = fixtureRepo();
+    chmodSync(path.join(setuid, 'platform', 'ops', 'Dockerfile.dispatcher'), 0o4755);
+    if ((statSync(path.join(setuid, 'platform', 'ops', 'Dockerfile.dispatcher')).mode & 0o4000) !== 0) {
+      const run = sourced('deploy.sh', setuid, 'check_code_clone');
+      assert.equal(run.status, 1);
+      assert.match(run.stdout, /Dockerfile\.dispatcher is setuid or setgid/);
+    }
+  });
+
+  // I3: a roll back stays on main, at or after the floor, and keeps the managed settings.
+  test('check_ref refuses a roll back with no floor, below the floor, off main or without the managed settings', () => {
+    const repo = fixtureRepo();
+    hostGit(repo, 'rm', '-q', 'platform/ops/managed-settings.json');
+    hostGit(repo, 'commit', '-q', '-m', 'before the floor');
+    const below = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    writeFileSync(path.join(repo, 'platform', 'ops', 'managed-settings.json'), '{}\n');
+    hostGit(repo, 'add', '-A');
+    hostGit(repo, 'commit', '-q', '-m', 'the floor');
+    const floor = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    writeFileSync(path.join(repo, 'platform', 'ops', 'dispatcher.service'), '[Service]\nExecStart=/bin/echo\n');
+    hostGit(repo, 'commit', '-q', '-am', 'after the floor');
+    const after = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    hostGit(repo, 'rm', '-q', 'platform/ops/managed-settings.json');
+    hostGit(repo, 'commit', '-q', '-m', 'settings removed');
+    const removed = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    hostGit(repo, 'update-ref', 'refs/remotes/origin/main', removed);
+    hostGit(repo, 'checkout', '-q', '-b', 'side', after);
+    writeFileSync(path.join(repo, 'platform', 'ops', 'side.txt'), 'side\n');
+    hostGit(repo, 'add', '-A');
+    hostGit(repo, 'commit', '-q', '-m', 'off main');
+    const side = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    const check = (ref, withFloor = floor) => sourced('deploy.sh', repo, `ROLLBACK_FLOOR=${withFloor}; check_ref ${ref}`);
+
+    const empty = check(after, '');
+    assert.equal(empty.status, 1);
+    assert.match(empty.stdout, /ROLLBACK_FLOOR in deploy\.sh is not set/);
+    assert.match(read('platform/ops/deploy.sh'), /^ROLLBACK_FLOOR=""$/m);
+    assert.equal(check(after).status, 0, check(after).stdout);
+    assert.equal(check(floor).status, 0);
+    assert.match(check(below).stdout, /is older than the rollback floor/);
+    assert.match(check(side).stdout, /is not a commit on origin\/main/);
+    assert.match(check(removed).stdout, /has no platform\/ops\/managed-settings\.json/);
+    assert.match(check('0'.repeat(40)).stdout, /is not a commit in/);
+  });
+
+  // I4: the gate verdict, the review and the confirmation.
+  test('gate_verdict reads only the latest gate run GitHub Actions created', () => {
+    const run = (id, conclusion, extra = {}) => ({ id, name: 'gate', status: 'completed', conclusion, app: { slug: 'github-actions' }, ...extra });
+    const verdict = (json) => callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'gate_verdict "$RUNS"', { RUNS: typeof json === 'string' ? json : JSON.stringify(json) }).stdout.trim();
+    assert.equal(verdict({ check_runs: [run(1, 'success')] }), 'success');
+    assert.equal(verdict({ check_runs: [run(1, 'success'), run(2, 'failure')] }), 'failure');
+    assert.equal(verdict({ check_runs: [run(1, 'failure'), run(2, 'success')] }), 'success');
+    assert.equal(verdict({ check_runs: [run(1, null, { status: 'in_progress' })] }), 'pending');
+    assert.equal(verdict({ check_runs: [run(1, 'success', { app: { slug: 'someone-else' } })] }), 'missing');
+    assert.equal(verdict({ check_runs: [run(1, 'success', { name: 'platform' })] }), 'missing');
+    assert.equal(verdict({ message: 'Bad credentials' }), 'unreadable');
+    assert.equal(verdict('not json'), 'unreadable');
+  });
+
+  test('check_gate sends the token in a header file and refuses anything but success', () => {
+    const bin = path.join(scratch, 'gate-bin');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nfor arg in "$@"; do case "$arg" in @*) cat "${arg#@}" >&2 ;; *) echo "arg: $arg" >&2 ;; esac; done\nprintf "%s" "$RUNS"\n', { mode: 0o755 });
+    const envFile = path.join(scratch, `gate-${runs++}.env`);
+    writeFileSync(envFile, 'GITHUB_TOKEN=fixture-gate-token\n');
+    const gate = (runsJson) =>
+      callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', 'ENV_FILE="$FIXTURE_ENV"; WORK=$(mktemp -d); check_gate abc123', {
+        FIXTURE_ENV: envFile,
+        RUNS: JSON.stringify(runsJson),
+        PATH: `${bin}:${process.env.PATH}`,
+      });
+    const ok = gate({ check_runs: [{ id: 1, name: 'gate', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] });
+    assert.equal(ok.status, 0, ok.stdout);
+    assert.match(ok.stderr, /^arg: https:\/\/api\.github\.com\/repos\/AlreadyKyle\/peanutgallery\/commits\/abc123\/check-runs\?check_name=gate/m);
+    assert.match(ok.stderr, /^Authorization: Bearer fixture-gate-token$/m);
+    assert.doesNotMatch(ok.stderr.split('\n').filter((line) => line.startsWith('arg:')).join('\n'), /fixture-gate-token/);
+    const failed = gate({ check_runs: [{ id: 1, name: 'gate', status: 'completed', conclusion: 'failure', app: { slug: 'github-actions' } }] });
+    assert.equal(failed.status, 1);
+    assert.match(failed.stdout, /the gate check on abc123 is failure, not success/);
+  });
+
+  test('review_target lists the commits and the diff stat without control characters, and confirm_target needs the sha prefix', () => {
+    const repo = fixtureRepo();
+    const old = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    writeFileSync(path.join(repo, 'platform', 'ops', 'dispatcher.service'), '[Service]\nExecStart=/bin/echo planted\n');
+    writeFileSync(path.join(repo, 'README.md'), 'not reviewed\n');
+    hostGit(repo, 'commit', '-q', '-am', 'Change the unit [2Jquietly');
+    hostGit(repo, 'add', '-A');
+    hostGit(repo, 'commit', '-q', '-m', 'Add a readme');
+    const target = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    const review = sourced('deploy.sh', repo, `review_target ${old} ${target}`);
+    assert.equal(review.status, 0, review.stderr);
+    assert.match(review.stdout, /Change the unit \[2Jquietly/);
+    assert.doesNotMatch(review.stdout, //);
+    assert.match(review.stdout, /Add a readme/);
+    assert.match(review.stdout, /platform\/ops\/dispatcher\.service \| 2 \+-/);
+    assert.doesNotMatch(review.stdout, /README\.md \|/);
+
+    const confirm = (given) => callFunction('deploy.sh', 'DEPLOY_SOURCE_ONLY', `CONFIRM_TTY=/nonexistent/tty; confirm_target ${target} "${given}"`);
+    assert.equal(confirm(target.slice(0, 12)).status, 0);
+    const wrong = confirm('0'.repeat(12));
+    assert.equal(wrong.status, 1);
+    assert.match(wrong.stdout, /is not the first 12 characters of the target/);
+    const none = confirm('');
+    assert.equal(none.status, 1);
+    assert.match(none.stdout, /run deploy\.sh again with --confirm/);
+  });
+
+  // I2: deploy.sh runs from the operator's checkout over ssh, never from a file on the VPS.
+  test('deploy.sh reads nothing from its own location and the runbook pipes it over ssh', () => {
+    // awk's own $0 (the input line) is not the script's path.
+    const commands = logicalLines(read('platform/ops/deploy.sh'))
+      .map((line) => line.replace(/awk -v root="\$root" '[^']*'/, 'awk'))
+      .join('\n');
+    assert.doesNotMatch(commands, /BASH_SOURCE|\$0\b|\$\{0\}|^\s*(source|\.) /m);
+    const readme = read('platform/ops/README.md');
+    assert.doesNotMatch(readme, /bash \/srv\/[^\s']*deploy\.sh/);
+    assert.match(readme, /ssh root@\$VPS_IP 'bash -s' < platform\/ops\/deploy\.sh/);
+    assert.match(readme, /ssh root@\$VPS_IP 'bash -s -- --confirm <first 12 characters of the target sha>' < platform\/ops\/deploy\.sh/);
+    assert.doesNotMatch(read('docs/specs/ops-separation.md'), /bash \/srv\/[^\s']*deploy\.sh/);
   });
 
   test('provision.sh creates both clones and the worktree folder with their owners, and accepts arm64', () => {

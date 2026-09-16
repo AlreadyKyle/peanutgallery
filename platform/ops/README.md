@@ -22,7 +22,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 |---|---|---|
 | `make-dispatcher-env.sh` | the Mac | writes the env file from `.env` and three exported values |
 | `provision.sh` | the VPS, as root | prepares the host, creates both clones and the worktree folder, validates the env file, builds, installs `node_modules`, installs and enables the units |
-| `deploy.sh` | the VPS, as root | refuses a dirty code clone, fast-forwards it to `origin/main` (or checks out `--ref <sha>`), rebuilds if `platform/ops` changed, reinstalls `node_modules`, restarts, waits for the probe |
+| `deploy.sh` | the VPS, as root, piped over ssh from the Mac's checkout | refuses a dirty or altered code clone, checks the gate on GitHub, prints a review and waits for a confirmed sha, fast-forwards the code clone to `origin/main` (or checks out `--ref <sha>`), rebuilds if `platform/ops` changed, reinstalls `node_modules`, restarts, waits for the probe |
 | `Dockerfile.dispatcher`, `dispatcher-entrypoint.sh`, `managed-settings.json` | the VPS | the image |
 | `dispatcher.service`, `dispatcher-alert.service` | the VPS | the units |
 
@@ -95,15 +95,28 @@ After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leav
 
 1. Merge to main as usual (the gate green on the head sha).
 2. Pause from /board and let any building card finish.
-3. `ssh root@$VPS_IP 'bash /srv/peanutgallery-code/platform/ops/deploy.sh'`
+3. On the Mac, bring your checkout to the reviewed main: `git switch main && git pull --ff-only`. Read `git log` and the diff of `platform/ops/deploy.sh` since you last deployed. The script root runs is the one in this checkout, never a file on the VPS: the copy in `/srv/peanutgallery-code` sits in the clone the script exists to distrust.
+4. From the repository root, run the review:
+   ```sh
+   ssh root@$VPS_IP 'bash -s' < platform/ops/deploy.sh
+   ```
+   It stops after printing the target sha, the commits it adds and removes, and a diff stat of `platform/ops`, `platform/dispatcher`, `package.json`, `pnpm-lock.yaml` and `.github`.
+5. Read that output. If every commit is one the board merged, deploy it:
+   ```sh
+   ssh root@$VPS_IP 'bash -s -- --confirm <first 12 characters of the target sha>' < platform/ops/deploy.sh
+   ```
+   When `deploy.sh` has a terminal, it asks for the 12 characters at a prompt instead.
 
-It refuses unless `studio_state.paused` is true and no card is building or gated, and while the dispatcher unit is stopped (before the cutover, a start would run a second dispatcher beside the Mac's). It refuses when the code clone has any uncommitted or untracked file: only `deploy.sh` and `provision.sh` change that clone, so a difference means someone else did, and the refusal prints the files and the commands to inspect them. Then, in the code clone only, with `core.fsmonitor` and hooks off on every git call:
-- It fetches `main` with a one-off token header, fast-forwards to the fetched `origin/main` (checking out `main` first after a roll back), and checks that `HEAD` is `origin/main`.
+It refuses unless `studio_state.paused` is true and no card is building or gated, and while the dispatcher unit is stopped (before the cutover, a start would run a second dispatcher beside the Mac's). Then, in the code clone only, with `core.fsmonitor` and hooks off and no system or global git configuration:
+- It refuses the clone when it has any uncommitted or untracked file, or git state a fresh clone does not have: index flags other than `H`, configuration keys git does not write for a clone, `.git/info/attributes`, `.git/info/grafts`, `.git/commondir` or `.git/objects/info/alternates`, a setuid or setgid file, or a symlink that is absolute, does not resolve or resolves outside the clone. The refusal prints what it found.
+- It fetches `main` from `https://github.com/AlreadyKyle/peanutgallery.git` by name, not from whatever `remote.origin.url` says, with a one-off token header.
+- It checks through the GitHub API that the target's latest `gate` check run from GitHub Actions concluded `success`, prints the review, and moves only when `--confirm` (or the prompt) matches the target. If main moved since the review, the prefix no longer matches and nothing happens.
+- It fast-forwards to the target (checking out `main` first after a roll back) and checks that `HEAD` is the target.
 - It rebuilds the image from `git archive` of the new commit only when `platform/ops` changed (otherwise it tags `:current` with the new sha too).
-- It runs `pnpm install --frozen-lockfile` into the code clone in a throwaway container: root inside, no capability, no env file. It then makes the clone root-owned and not writable by others, and checks it is still clean.
+- It runs `pnpm install --frozen-lockfile` into the code clone in a throwaway container as the build uid 10002, with no capability, no env file, and `.git` mounted read-only. The build uid owns only the `node_modules` folders and the store while it runs. Then it strips setuid and setgid bits, makes the clone root-owned and not writable by others, and runs both clone checks again.
 - It installs changed units from `git show <new sha>:platform/ops/<unit>`.
 
-It restarts and waits up to 10 minutes for `startup probe passed`; the journal also shows `code root is read-only` before it. Then resume from /board. If the build or the install fails, the code clone is already at the new commit: fix main and run `deploy.sh` again, or roll back.
+It restarts and waits up to 10 minutes for this start's `code root is read-only` line followed by its `startup probe passed` line. It reads only the journal of the unit's new invocation, so a line printed by the previous container while it stopped does not count. Then resume from /board. If the build or the install fails, the code clone is already at the new commit: fix main and run `deploy.sh` again, or roll back.
 
 `deploy.sh` never touches the work clone: the dispatcher fetches `main` there itself before every card.
 
@@ -116,11 +129,14 @@ When a deploy leaves the dispatcher failing or misbehaving:
    ```sh
    ssh root@$VPS_IP 'git -c safe.directory=/srv/peanutgallery-code -c core.fsmonitor=false -c core.hooksPath=/dev/null -C /srv/peanutgallery-code log --oneline -5 origin/main; docker image ls peanutgallery/dispatcher'
    ```
-3. Deploy it by its full sha (replace `<previous-sha>`):
+3. From the Mac checkout (Deploy an update, step 3), review and then deploy it by its full sha (replace `<previous-sha>`):
    ```sh
-   ssh root@$VPS_IP 'bash /srv/peanutgallery-code/platform/ops/deploy.sh --ref <previous-sha>'
+   ssh root@$VPS_IP 'bash -s -- --ref <previous-sha>' < platform/ops/deploy.sh
+   ssh root@$VPS_IP 'bash -s -- --ref <previous-sha> --confirm <first 12 characters of previous-sha>' < platform/ops/deploy.sh
    ```
-   `--ref` takes a full 40-character sha that must be on `origin/main`. `deploy.sh` checks it out detached in the code clone, reuses `peanutgallery/dispatcher:<previous-sha>` when that image exists (else builds it from the commit), installs that commit's `node_modules` and units, restarts, and waits for the probe. A failed unit (exit 78) is fine; a stopped one is refused as usual.
+   `--ref` takes a full 40-character sha. It must be on `origin/main`, at or after `ROLLBACK_FLOOR` in `deploy.sh`, and contain `platform/ops/managed-settings.json`, so a roll back never returns to a commit where the dispatcher ran from a clone it could write. `ROLLBACK_FLOOR` is empty until this layout merges: the board then sets it to the merge sha of `docs/specs/ops-separation.md` and only ever moves it forward. While it is empty, every `--ref` is refused.
+
+   The gate check and the review apply as for a plain deploy. `deploy.sh` checks the sha out detached in the code clone and reuses `peanutgallery/dispatcher:<previous-sha>` when that image exists (else builds it from the commit). It installs that commit's `node_modules` and units, restarts, and waits for the probe. A failed unit (exit 78) is fine; a stopped one is refused as usual.
 4. Resume from /board.
 5. Fix forward on main. The next plain `deploy.sh` checks out `main` again and fast-forwards to `origin/main`, so do not run it until the fix is merged.
 
@@ -167,9 +183,15 @@ The studio's Console organization holds prepaid credit with auto-reload off and 
 Agent-written test code runs as the dispatcher's OS user (uid 10001) and could read the dispatcher's environment, secrets included, from `/proc`.
 
 In place:
-- Agent sessions and the smoke test's headless bot start from an allowlisted environment with no secret; `pnpm install` runs only in `deploy.sh`'s throwaway container, which has none.
+- Agent sessions and the smoke test's headless bot start from an allowlisted environment with no secret; `pnpm install` runs only in the throwaway install container, which has none.
 - Every git command the dispatcher, `deploy.sh` and `provision.sh` run has fsmonitor and hooks off, so a planted hook or fsmonitor never runs with the dispatcher's environment or as root.
-- uid 10001 cannot change the code the dispatcher runs or the files root acts on: the dispatcher runs from the root-owned code clone mounted read-only and refuses to start if it can write there, root never runs git or code from the work clone, and `deploy.sh` refuses a dirty code clone and reads the image and units from the commit (`docs/specs/ops-separation.md`).
 - The Console limit caps what a leaked studio key can spend.
+
+What uid 10001 can and cannot change (`docs/specs/ops-separation.md`):
+- **The files of the dispatcher's code and `node_modules`: closed, by the mount and the startup check.** The code clone is root-owned and mounted read-only, and the dispatcher exits 78 if it can write there. The install that fills `node_modules` runs as a separate build uid that cannot write tracked files or `.git`. Its output is checked for setuid files and escaping symlinks.
+- **What root runs on the host: closed for the code clone, by `deploy.sh`.** Root runs git only in the code clone, with no system, global or planted hook or fsmonitor configuration. It refuses a dirty clone or unexpected git state, reads the image and units from the commit, and runs `deploy.sh` from the operator's checkout rather than the VPS. Root runs no git or program in the work clone or the worktree folder.
+- **Which commit becomes the code: a human check, not a closed path.** A commit that reaches `main` runs as the dispatcher once someone confirms it. `deploy.sh` requires the gate to have passed on it and a person to read the review and confirm the sha. It does not stop a person who confirms without reading. Nor does it stop someone holding the GitHub token (which agent code can read from `/proc` today) who pushes a commit that passes the gate. The durable fix is keeping the token out of agent reach: session containment and the key proxy.
+- **The work clone's `.git`: open here.** uid 10001 owns it, and the dispatcher's own git calls in it read its configuration: `commondir`, `info/attributes` filters, alternates, and processes left running. It holds only git state, and root never acts on it, but a planted change can still steer the dispatcher's git with the dispatcher's secrets. The fix is in the dispatcher on the merge-safety branch, not in these scripts.
+- **The dispatcher's environment: open.** Code an agent session runs can read it from `/proc`, as above.
 
 Follow-up: run agent sessions under a separate uid through a sudo wrapper at `CLAUDE_BIN`. It is specified and built before any card source other than the board opens.
