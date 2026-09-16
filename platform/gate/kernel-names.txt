@@ -1,0 +1,17 @@
+# Names no agent may create or change at any depth, in any lane (docs/specs/gate-hardening.md).
+# One name per line; * matches any run of characters within the name. A path is kernel when any of
+# its segments matches: Claude Code loads a nested CLAUDE.md or .claude folder into later sessions,
+# and a nested test, package or deploy config can override the one the gate relies on.
+.claude
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+.gitattributes
+.gitmodules
+.npmrc
+.pnpmfile.cjs
+package.json
+vite.config.*
+vitest.config.*
+vitest.workspace.*
+netlify.toml

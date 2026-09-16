@@ -63,6 +63,13 @@ describe('sessionPrompt', () => {
     expect(prompt).not.toMatch(/board|note|community/i);
   });
 
+  it('names the kernel file and folder names as never to be created or edited, in every lane', () => {
+    for (const [lane, allowed] of [['config', ['seed-1/config', 'seed-1/content']], ['code', ['seed-1']]] as const) {
+      const prompt = sessionPrompt(card({ lane }), allowed, 3);
+      expect(prompt).toContain('Never create or edit a file or folder with one of these names, at any depth: .claude, CLAUDE.md, CLAUDE.local.md,');
+    }
+  });
+
   it('names the kernel paths inside a code lane as never to be edited', () => {
     const prompt = sessionPrompt(card({ lane: 'code' }), ['seed-1'], 3);
     expect(prompt).toContain('Allowed paths: seed-1.\nNever edit, even inside the allowed paths: seed-1/CLAUDE.md, seed-1/bots,');

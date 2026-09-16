@@ -4,7 +4,9 @@
 # usage: changed-paths.sh [--list] [--repo-root d] <base-ref> <head-ref>
 #
 # Compares the merge base of the two refs with head (a pull request diff). When base is the
-# all-zero sha or shares no history with head, every file in head counts as changed.
+# all-zero sha or shares no history with head, every file in head counts as changed. Rename
+# detection is off whatever the repository's config says, so a renamed file lists both its old
+# and new names, and a kernel file moved into a config folder is still seen.
 # Output: seed=true|false platform=true|false lane=config|code
 #   seed      a changed file lies under seed-1/, or outside both folders (workspace-level change)
 #   platform  a changed file lies under platform/, or outside both folders
@@ -46,7 +48,7 @@ changed_files() {
   esac
   if git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE^{commit}" > /dev/null \
     && mb=$(git -C "$REPO_ROOT" merge-base "$BASE" "$HEAD" 2>/dev/null); then
-    git -C "$REPO_ROOT" diff --name-only "$mb" "$HEAD"
+    git -C "$REPO_ROOT" -c diff.renames=false diff --no-renames --name-only "$mb" "$HEAD"
   else
     git -C "$REPO_ROOT" ls-tree -r --name-only "$HEAD"
   fi

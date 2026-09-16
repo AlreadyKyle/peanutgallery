@@ -175,6 +175,18 @@ jobs:
         run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
       - name: Ship gate
         run: bash platform/gate/ship-gate.sh --folder platform --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+      # The rest of pnpm verify: the ship gate runs the dispatcher, supabase and site tests only.
+      - name: Gate tests
+        run: pnpm --filter @backseat/gate test
+      - name: Agent role spec tests
+        run: pnpm test:agents
+      - name: Ops tests
+        run: pnpm test:ops
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.7.13
+      - name: Stripe webhook function tests
+        run: pnpm test:functions
       - name: Install Chromium for Playwright
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
       - name: Site end-to-end

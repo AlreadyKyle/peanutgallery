@@ -94,8 +94,37 @@ export const KERNEL_PATHS: readonly string[] = [
   'seed-1/vite.config.ts',
 ];
 
+// File and folder names no agent may create or change at any depth: Claude Code loads a nested
+// CLAUDE.md or .claude folder into later sessions, and a nested package, test or deploy config can
+// override the one the gate relies on. The same list is platform/gate/kernel-names.txt; a test keeps
+// the two equal. * matches any run of characters within one path segment.
+export const KERNEL_NAMES: readonly string[] = [
+  '.claude',
+  'CLAUDE.md',
+  'CLAUDE.local.md',
+  '.mcp.json',
+  '.gitattributes',
+  '.gitmodules',
+  '.npmrc',
+  '.pnpmfile.cjs',
+  'package.json',
+  'vite.config.*',
+  'vitest.config.*',
+  'vitest.workspace.*',
+  'netlify.toml',
+];
+
+// Names hold letters, digits, dot, underscore, hyphen and * only (the test checks), so the dot is
+// the one character to escape.
+const KERNEL_NAME_PATTERNS: readonly RegExp[] = KERNEL_NAMES.map((name) => new RegExp(`^${name.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`));
+
 function under(file: string, dir: string): boolean {
   return file === dir || file.startsWith(`${dir}/`);
+}
+
+// A kernel path, or a path with a kernel name as any of its segments.
+export function isKernelPath(file: string): boolean {
+  return KERNEL_PATHS.some((kernel) => under(file, kernel)) || file.split('/').some((segment) => KERNEL_NAME_PATTERNS.some((pattern) => pattern.test(segment)));
 }
 
 // Config lane may touch data only, and only seed-1 has a config lane. Code lane may touch its
@@ -113,7 +142,7 @@ export function protectedPaths(allowed: readonly string[]): string[] {
 
 // Files outside the allowed paths, and kernel files inside them.
 export function outsideLane(files: readonly string[], allowed: readonly string[]): string[] {
-  return files.filter((file) => !allowed.some((dir) => under(file, dir)) || KERNEL_PATHS.some((kernel) => under(file, kernel)));
+  return files.filter((file) => !allowed.some((dir) => under(file, dir)) || isKernelPath(file));
 }
 
 export interface Worktree {
@@ -144,19 +173,29 @@ export async function removeWorktree(repoRoot: string, target: string, branch: s
 }
 
 // Paths from `git status --porcelain -z`, read untrimmed because the first entry begins with
-// a status character that may be a space. Entries are "XY path"; a rename or copy is followed
-// by a second entry holding the original path, which is skipped so the new name is reported.
-export async function changedFiles(worktree: string): Promise<string[]> {
-  const output = await gitRaw(['status', '--porcelain', '--untracked-files=all', '-z'], worktree);
+// a status character that may be a space. Entries are "XY path"; a rename or copy (R or C in
+// either column) is followed by a second entry holding the original path, and both are reported,
+// so a kernel file moved into a lane folder is still seen.
+export function parseStatus(output: string): string[] {
   const entries = output.split('\0').filter((entry) => entry.length > 0);
   const files: string[] = [];
   for (let i = 0; i < entries.length; i += 1) {
     const entry = entries[i] ?? '';
     if (entry.length < 4) continue;
     files.push(entry.slice(3));
-    if (entry.charAt(0) === 'R' || entry.charAt(0) === 'C') i += 1;
+    if (/[RC]/.test(entry.slice(0, 2))) {
+      const original = entries[i + 1];
+      if (original !== undefined) files.push(original);
+      i += 1;
+    }
   }
   return files;
+}
+
+// Rename detection is off whatever the repository's config says, so a rename arrives as a delete
+// and an add; parseStatus still reads a rename entry correctly if one appears.
+export async function changedFiles(worktree: string): Promise<string[]> {
+  return parseStatus(await gitRaw(['status', '--porcelain', '--no-renames', '--untracked-files=all', '-z'], worktree));
 }
 
 // Control characters become spaces so the title stays one line; runs of whitespace collapse.

@@ -248,7 +248,9 @@ shape_cases() {
   printf '%s|%s\n' \
     stripe-secret-key "sk_""live_$BODY24" stripe-test-key "sk_""test_$BODY24" stripe-restricted-key "rk_""live_$BODY24" \
     stripe-publishable-key "pk_""live_$BODY24" stripe-webhook-secret "whsec""_$BODY24" github-token "ghp""_$BODY24" \
-    github-fine-grained-token "github_""pat_$BODY24" netlify-token "nfp""_$BODY24" json-web-token "eyJhbGci""Oi$BODY24"
+    github-fine-grained-token "github_""pat_$BODY24" netlify-token "nfp""_$BODY24" json-web-token "eyJhbGci""Oi$BODY24" \
+    anthropic-key "sk-""ant-api03-$BODY24" supabase-secret-key "sb_""secret_$BODY24" openai-key "sk-""proj-$BODY24" \
+    google-api-key "AI""za$BODY24$BODY24"
 }
 shape_cases | while IFS='|' read -r name value; do
   printf 'key=%s\n' "$value" > "$C/secret.txt"
@@ -259,7 +261,18 @@ done
 read -r PASSED FAILED < "$T/counts.txt"
 printf 'prefix only: %s\n' "sk_""live_abc" > "$C/secret.txt"
 expect "secrets: a bare prefix is not a key" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
+printf 'key=%s\n' "sb_""publishable_$BODY24" > "$C/secret.txt"
+expect "secrets: a Supabase publishable key is public and passes" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
 rm -f "$C/secret.txt"
+mkdir -p "$T/served"
+for name in icon.svg app.js.map app.min.js app.min.css; do
+  printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/$name"
+  expect "secrets: a token in $name fails" 1 "^FAIL: secret-scan hits=1 first=$T/served/$name:1 shape=github-token\$" -- bash "$SECRETS" "$T/served/$name"
+  rm -f "$T/served/$name"
+done
+printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/icon.png"
+expect "secrets: binary media is skipped" 0 '^PASS: secret-scan files=0$' -- bash "$SECRETS" "$T/served/icon.png"
+rm -rf "$T/served"
 git -C "$C" init -q && git -C "$C" add -A && git -C "$C" commit -q -m "clean"
 expect "secrets: tracked scan of a clean repository passes" 0 '^PASS: secret-scan files=1$' -- bash "$SECRETS" --repo-root "$C" --tracked
 printf 'token=%s\n' "ghp""_$BODY24" > "$C/untracked.txt"
@@ -293,6 +306,18 @@ expect "changed: unknown head ref is an error" 2 '^$' -- bash "$CHANGED" --repo-
 git -C "$D" checkout -q -b card/abcd1234-config "$C0"
 printf '{"rows":[{"id":"cart"}]}\n' > "$D/seed-1/config/spawn-table.json"; git -C "$D" commit -q -am "branch config"; C5=$(git -C "$D" rev-parse HEAD)
 expect "changed: branch diff uses the merge base, not main's later commits" 0 '^seed=true platform=false lane=config$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C5"
+# A rename lists both names, so a kernel file moved into a config folder is still seen, and the
+# change is the code lane. The repository's own rename settings do not change that.
+git -C "$D" checkout -q main
+mkdir -p "$D/seed-1/tests" "$D/seed-1/content"
+printf 'export const invariants = [];\n' > "$D/seed-1/tests/invariants.test.ts"; git -C "$D" add -A; git -C "$D" commit -q -m "invariants"; C6=$(git -C "$D" rev-parse HEAD)
+git -C "$D" config diff.renames copies
+git -C "$D" mv seed-1/tests/invariants.test.ts seed-1/content/x.json; git -C "$D" commit -q -m "rename"; C7=$(git -C "$D" rev-parse HEAD)
+bash "$CHANGED" --repo-root "$D" --list "$C6" "$C7" > "$T/renamed.txt"
+assert "changed: a rename lists both names" test "$(cat "$T/renamed.txt")" = "seed-1/content/x.json
+seed-1/tests/invariants.test.ts"
+expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
+expect "changed: kernel-guard fails the old name of a renamed kernel file" 1 '^FAIL: kernel-guard path=seed-1/tests/invariants.test.ts$' -- bash "$GATE_DIR/kernel-guard.sh" "$T/renamed.txt"
 
 # ---------------------------------------------------------------- headless-bot/run.mjs and ship-gate.sh
 W="$T/w"
@@ -403,6 +428,13 @@ expect "kernel-guard: config and render changes pass" 0 '^PASS: kernel-guard fil
 expect "kernel-guard: a file under a kernel folder fails" 1 '^FAIL: kernel-guard path=platform/gate/ship-gate.sh$' -- bash "$KERNEL" "$T/kernel-gate.txt"
 expect "kernel-guard: a kernel file fails" 1 '^FAIL: kernel-guard path=seed-1/sim/invariants.ts$' -- bash "$KERNEL" "$T/kernel-file.txt"
 expect "kernel-guard: a name that only starts like a kernel path passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-near.txt"
+# kernel-names.txt: a file or folder with one of these names is kernel at any depth, in any lane.
+for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/vitest.config.ts seed-1/config/.npmrc; do
+  printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-name.txt"
+  expect "kernel-guard: $file fails by name" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-name.txt"
+done
+printf 'seed-1/config/spawn-table.json\nseed-1/content/CLAUDE.md.txt\nseed-1/content/claude/notes.json\nseed-1/render/vite.configs/a.ts\n' > "$T/kernel-name-near.txt"
+expect "kernel-guard: names that only resemble a kernel name pass" 0 '^PASS: kernel-guard files=4$' -- bash "$KERNEL" "$T/kernel-name-near.txt"
 
 # The dispatcher polls the check run named gate; these checks pin the names the workflow must keep.
 WORKFLOW="$REPO_ROOT/.github/workflows/gate.yml"
@@ -418,6 +450,10 @@ assert "workflow: the gate job fails on a failed or cancelled job" workflow_has 
 assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -c 'run: git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 4
 assert "workflow: the gate is restored before the changed-files list is written" awk '/Use the base commit.s gate on a card branch/{r=NR} /Write the commit message and changed files/{if (!r || r > NR) bad=1; r=0} END{exit bad}' "$WORKFLOW"
 assert "workflow: card branches run the kernel guard" workflow_has 'run: bash platform/gate/kernel-guard.sh "\$RUNNER_TEMP/changed-files.txt"'
+for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
+  assert "workflow: the platform job runs $step after the ship gate" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Ship gate$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
+done
+assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 
 # ---------------------------------------------------------------- summary
