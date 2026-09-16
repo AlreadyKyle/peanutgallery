@@ -34,7 +34,7 @@ Out: Twitch, the host, micro-votes, the name vote (the studio is already named).
 - Reddit posts for r/ClaudeAI, r/incremental_games and r/artificial (not r/gamedev)
 - a Show HN
 - an X thread
-- the backlash response line from PLAN.md §7
+- the backlash response line from PLAN.md §7, without its open-source clause while the repository is private and the public seed-1 mirror with a license does not exist
 
 **Launch day.**
 1. The board presses Go live on /board.
@@ -47,6 +47,7 @@ Out: Twitch, the host, micro-votes, the name vote (the studio is already named).
 - [ ] `docs/launch/` holds the drafts, each under the platform's length limit and free of hype words.
 - [ ] `select launched_at from public_studio` returns the launch time, and the site shows the live-since line.
 - [ ] PLAN.md §7 describes the site-first launch.
+- [ ] No post, draft or page says the studio or its games are open source until the public seed-1 mirror exists with a license.
 
 ## Verification
 

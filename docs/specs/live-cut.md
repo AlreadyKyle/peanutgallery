@@ -1,6 +1,6 @@
 # The live cut
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -11,6 +11,8 @@ Build 1 framed the work before launch as three funded weeks with goal cards on t
 In: the money loop (a real $1 on the meter within 60 seconds with its split recorded); fund-a-card voting (`next-cards.md`); the agent loop unattended (`unattended-mode.md`); Now and Next on the site; a How it works section; info icons on the meter, ledger figures and card status words; a lede under each page title; a Play link to the game; a board Go-live switch that stamps `studio_state.launched_at`; board controls to file Next cards and set the agent mode; a dispatcher heartbeat shown on /board; the working method (`working-method.md`).
 
 Out (PLAN.md §6 weeks 2 and 3, not started): OBS, stream scenes, host, TTS, Twitch, personal-decision UI, the vote board with quorums and regimes, Meet the Team, Board Decisions and Lore pages, TOTP, the image adapter, the public mirror, a VPS, Langfuse-class tooling (the Scout's first trial after launch), public display of contributor names (needs the name pipeline in PLAN.md §4).
+
+Amended 16 September 2026: two items listed as out have since been built in later specs, and neither is live yet. TOTP on /board is in `launch-pages.md`, and the VPS is in `vps.md`.
 
 ## Behaviour
 
@@ -51,3 +53,5 @@ The landing page reads, in order: pitch, launch line, Contribute, How it works, 
 - Criterion 6: PGlite "the board files Next cards, stamps the launch…" and `Landing.test.tsx` (live-since line).
 - Criterion 2: the three week-1 runs shipped on 15 and 16 September; run 3 went from insert to live in 2 minutes (`week1-runs.md` Evidence).
 - Open: criterion 7 (unattended on the VPS, `vps.md`).
+
+2026-09-16: the status moves from agreed to built. The work merged as ea52bb2 (PR 10), and every criterion a test or the week-1 runs can prove is ticked. Criterion 7 stays open until a card builds unattended on the VPS.

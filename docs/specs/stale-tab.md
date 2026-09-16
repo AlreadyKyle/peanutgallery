@@ -9,7 +9,7 @@ The board followed the Play link, pressed Back, and landed on the ledger page in
 ## Scope
 
 In: the public site notices it is running a build the site no longer serves and reloads once.
-Out: a service worker, a visible "new version" prompt, offline support, and the game (Dust loads its data at runtime and keeps no state worth protecting).
+Out: a service worker, a visible "new version" prompt, offline support, and the game. Dust loads its data at runtime, and since D2 save and resume (ce35e53, `week1-runs.md`) it keeps progress in the browser across a reload (amended 16 September 2026; this spec first said the game kept no state worth protecting).
 
 ## Behaviour
 
@@ -33,7 +33,9 @@ Out: a service worker, a visible "new version" prompt, offline support, and the 
 
 ## Evidence
 
-2026-09-15, branch `stale-tab`: `platform/site/src/lib/freshness.test.ts` (5 tests) covers the reload, every case that must not reload, and the watcher's events. Live check pending the next deploy.
+2026-09-15, branch `stale-tab`, since merged as 89cdbe9 (PR 25): `platform/site/src/lib/freshness.test.ts` (5 tests) covers the reload, every case that must not reload, and the watcher's events.
+
+2026-09-16: criterion 4 is still pending. Two merges since PR 25 changed `platform/site` (3a08226, PR 21, and 4f60c7c, PR 30), so the live check no longer waits on a deploy, but nobody has run it.
 
 ## Decisions
 

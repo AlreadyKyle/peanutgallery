@@ -11,8 +11,9 @@
     "test:functions": "deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions",
     "gate:dry-run": "bash platform/gate/ship-gate.sh --dry-run --folder seed-1 --lane code && bash platform/gate/ship-gate.sh --dry-run --folder platform --lane code",
     "secret-scan": "bash platform/gate/secret-scan.sh --tracked",
-    "verify": "pnpm typecheck && pnpm test && pnpm test:agents && pnpm test:ops && pnpm test:functions && pnpm gate:dry-run && pnpm secret-scan",
+    "verify": "pnpm typecheck && pnpm test && pnpm test:agents && pnpm test:ops && pnpm test:functions && pnpm gate:dry-run && pnpm secret-scan && pnpm test:docs",
     "test:agents": "node --test platform/agents/specs.test.mjs",
-    "test:ops": "node --test platform/ops/test/ops.test.mjs"
+    "test:ops": "node --test platform/ops/test/ops.test.mjs",
+    "test:docs": "node --test docs/docs.test.mjs"
   }
 }

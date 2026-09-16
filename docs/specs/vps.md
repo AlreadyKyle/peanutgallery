@@ -78,7 +78,7 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 **Cutover.**
 1. Pause from /board.
 2. Stop the Mac dispatcher.
-3. Set agent mode to unattended from /board (with the board's second factor once `launch-pages.md` ships it).
+3. Set agent mode to unattended from /board, with the board's second factor once the `launch-pages.md` migration is applied to the live project.
 4. `systemctl start dispatcher`.
 5. The startup probe passes with `apiKeySource` `ANTHROPIC_API_KEY` and bills the studio.
 6. Resume from /board.
@@ -120,7 +120,7 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 ## Evidence
 
-2026-09-15, built on branch `vps` (not yet deployed; no VPS exists):
+2026-09-15, built on branch `vps`, since merged as 49d6e33 (PR 22). Not yet deployed; no VPS exists:
 - Exit codes: `exit-code.test.ts` (the mapping; `main.ts` spawned the way the entrypoint runs it exits 78 on a configuration error and logs `restart: false`), `probe-core.test.ts` (`verdict` marks no tools, forbidden tools, memory paths and the wrong `apiKeySource` fatal, and no stream, no init line and an error result not), `startup.test.ts` (a fatal probe failure and an unpriced model exit 78; a transient probe failure, a spawn failure and a mode mismatch exit 1).
 - Smoke bot: `smoke.test.ts` "runs the bot with the agent session's allowlisted environment and none of the dispatcher's secrets".
 - Hooks: `worktree.test.ts` "git hooks" (a planted hook runs without the switch, and none runs on add, diff, commit, rev-parse, status or worktree add with it, from `.git/hooks` or a configured hooks path).
@@ -137,7 +137,6 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-14: a small VPS rather than the Mac (board). The agents stop when a Mac sleeps.
 - 2026-09-14: healthchecks.io for liveness, ntfy for events (`launch-hardening.md`).
 - 2026-09-15: Ubuntu 24.04 with systemd 255, which has `RestartSteps` (board).
-- 2026-09-16: the host is an Oracle Cloud Always Free Ampere instance in Toronto rather than a paid Hetzner box (board). The studio has no budget and the pool holds customer money only, so a standing server cost cannot be funded yet; the free tier is in Canada and large enough. The cost of a paid host becomes a standing card if the free tier stops being enough.
 - 2026-09-15: a bind-mounted host clone, not a `COPY` of the repository (board). Worktree metadata survives restarts and an update is a fast-forward plus a restart.
 - 2026-09-15: a fine-grained GitHub token for this repository replaces the deploy key (board). The dispatcher's https push already needs a token, and no Workflows permission means no agent branch can change the gate workflow through it.
 - 2026-09-15: `node:22-bookworm-slim`, the claude CLI and pnpm through `npm install -g` at pinned versions, and no `NODE_ENV=production` (board). The CLI's ripgrep needs glibc, corepack's root cache is invisible to uid 10001, and tsx is a devDependency.
@@ -154,6 +153,7 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-15: the one-off GitHub header reaches git through `GIT_CONFIG_COUNT` variables, not `-c` on the command line, in provision.sh and deploy.sh, so the token is in no process list. provision.sh clones with the env file's `GITHUB_TOKEN` when none is passed, so the operator never types it on an ssh command line.
 - 2026-09-15: deploy.sh also refuses while the unit is stopped (before the cutover a start would run a second dispatcher beside the Mac's) and while the clone is off `main` (after a rollback).
 - 2026-09-15: the dispatcher's git commands keep the dispatcher's environment; only hooks are turned off. With hooks off git runs no program the repository supplies, and an allowlisted environment would drop the variables git needs on the Mac and in the tests.
+- 2026-09-16: the host is an Oracle Cloud Always Free Ampere instance in Toronto rather than a paid Hetzner box (board). The studio has no budget and the pool holds customer money only, so a standing server cost cannot be funded yet; the free tier is in Canada and large enough. The cost of a paid host becomes a standing card if the free tier stops being enough.
 
 ## Needs the board
 

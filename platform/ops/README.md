@@ -72,7 +72,7 @@ Pass the printed `node@sha256:...` reference with its tag, as `NODE_IMAGE=node:2
 
 1. **Pause** from /board.
 2. **Stop the Mac dispatcher** (Ctrl-C in its terminal) and confirm no `dispatcher` process is left.
-3. **Set agent mode to unattended** from /board. Once `docs/specs/launch-pages.md` ships the second factor, this needs it.
+3. **Set agent mode to unattended** from /board. Once the two-factor migration from `docs/specs/launch-pages.md` is applied to the live project, this needs the board's second factor.
 4. **Start the service:** `ssh root@$VPS_IP 'systemctl start dispatcher'`.
 5. **The probe.** `ssh root@$VPS_IP 'journalctl -u dispatcher -n 50 --no-pager'` must show `startup probe passed` with `"apiKeySource":"ANTHROPIC_API_KEY"`, after a `probe metered` line naming the ledger row. Quote it in the spec.
 6. **Heartbeat.** /board shows the dispatcher seen under 3 minutes ago; the healthchecks.io check is green.

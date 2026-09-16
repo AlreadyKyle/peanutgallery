@@ -27,7 +27,7 @@ For the agents: a session receives the card with its estimate and ceiling, the d
 ## Verification
 
 - `pnpm --filter @backseat/dispatcher test` (session prompt assertions).
-- `pnpm test:agents` (prompt assertions; 60 tests pass).
+- `pnpm test:agents` (prompt assertions; 64 tests pass).
 
 ## Decisions
 
