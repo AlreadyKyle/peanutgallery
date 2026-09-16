@@ -88,13 +88,14 @@ export function startEvent(tools: string[] = ['Read', 'Edit', 'Write', 'Glob', '
   return { type: 'start', sessionId: 'session-1', model: 'builder-class', tools, apiKeySource };
 }
 
-export function usageEvent(turn: number, outputTokens: number, model = 'builder-class', extra: Partial<TurnUsage> = {}, contentChars = 0): AgentEvent {
+export function usageEvent(turn: number, outputTokens: number, model = 'builder-class', extra: Partial<TurnUsage> = {}, contentChars = 0, thinking = false): AgentEvent {
   return {
     type: 'turn_usage',
     turn,
     model,
     usage: { input_tokens: 1000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: outputTokens, ...extra },
     contentChars,
+    thinking,
   };
 }
 

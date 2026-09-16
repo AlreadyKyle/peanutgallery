@@ -1,10 +1,13 @@
 // Pure parser for Claude Code's --output-format stream-json lines.
 // Shape: a system/init line, assistant lines carrying message.model and message.usage,
 // user lines carrying tool_result blocks, and a final result line.
-// Assistant lines that share a message id belong to one turn; usage is emitted once per turn,
-// using the last usage block seen for that id, as soon as a line for that id carries a
-// stop_reason (the model has finished the turn), otherwise when the next turn begins or at
-// the end. Metering therefore runs before the next turn starts, not one turn late.
+// Assistant lines that share a message id belong to one turn. Claude Code writes one line per
+// content block, each with a null stop_reason, so a turn ends at the first line that is not an
+// assistant line for its id: a user line with the tool results, a system or rate-limit line, the
+// result line, another message id, or the end of the stream. A line that does carry a stop_reason
+// ends the turn at once. Usage is emitted once per turn from the last usage block seen for the id,
+// so metering runs before the next request's turn, not one turn late. A later line for the turn
+// just emitted adds no turn and no usage; its characters are passed on as turn_content.
 // The assistant lines' usage is not the whole bill: Claude Code writes them before the turn's output
 // is counted, so the result line's usage and modelUsage carry the totals the meter settles against.
 import type { AgentEvent, ModelUsage } from './types.js';
@@ -17,6 +20,7 @@ interface PendingTurn {
   model: string;
   usage: TurnUsage;
   contentChars: number;
+  thinking: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,19 +48,23 @@ export function readUsage(raw: unknown): TurnUsage | null {
   };
 }
 
-// The result line's modelUsage block is keyed by model id with camelCase counts.
+// The result line's modelUsage block is keyed by model id. Claude Code writes camelCase counts;
+// snake_case is read too, so a renamed field is not silently read as zero.
 export function readModelUsage(raw: unknown): ModelUsage[] {
   if (!isRecord(raw)) return [];
   return Object.entries(raw)
     .filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))
-    .map(([model, counts]) => ({
-      model,
-      input_tokens: count(counts.inputTokens),
-      output_tokens: count(counts.outputTokens),
-      cache_read_input_tokens: count(counts.cacheReadInputTokens),
-      cache_creation_input_tokens: count(counts.cacheCreationInputTokens),
-      cost_usd: typeof counts.costUSD === 'number' && Number.isFinite(counts.costUSD) ? counts.costUSD : null,
-    }));
+    .map(([model, counts]) => {
+      const cost = counts.costUSD ?? counts.cost_usd;
+      return {
+        model,
+        input_tokens: count(counts.inputTokens ?? counts.input_tokens),
+        output_tokens: count(counts.outputTokens ?? counts.output_tokens),
+        cache_read_input_tokens: count(counts.cacheReadInputTokens ?? counts.cache_read_input_tokens),
+        cache_creation_input_tokens: count(counts.cacheCreationInputTokens ?? counts.cache_creation_input_tokens),
+        cost_usd: typeof cost === 'number' && Number.isFinite(cost) ? cost : null,
+      };
+    });
 }
 
 // Characters of model output in one content block: text, thinking, or a tool call's input as JSON.
@@ -85,6 +93,7 @@ export function clip(text: string, limit: number = RESULT_TEXT_LIMIT): string {
 export class StreamParser {
   private pending: PendingTurn | null = null;
   private flushedId: string | null = null;
+  private flushedModel = '';
   private turnCount = 0;
   private anonymousTurns = 0;
 
@@ -102,18 +111,21 @@ export class StreamParser {
       return [];
     }
     if (!isRecord(parsed) || typeof parsed.type !== 'string') return [];
+    if (parsed.type === 'assistant') return this.assistant(parsed);
+    // Any other line ends the turn in progress.
+    const events = this.flush();
     switch (parsed.type) {
       case 'system':
-        return this.system(parsed);
-      case 'assistant':
-        return this.assistant(parsed);
+        events.push(...this.system(parsed));
+        break;
       case 'user':
-        return this.user(parsed);
+        events.push(...this.user(parsed));
+        break;
       case 'result':
-        return this.result(parsed);
-      default:
-        return [];
+        events.push(...this.result(parsed));
+        break;
     }
+    return events;
   }
 
   finish(): AgentEvent[] {
@@ -125,7 +137,8 @@ export class StreamParser {
     const turn = this.pending;
     this.pending = null;
     this.flushedId = turn.id;
-    return [{ type: 'turn_usage', turn: this.turnCount, model: turn.model, usage: turn.usage, contentChars: turn.contentChars }];
+    this.flushedModel = turn.model;
+    return [{ type: 'turn_usage', turn: this.turnCount, model: turn.model, usage: turn.usage, contentChars: turn.contentChars, thinking: turn.thinking }];
   }
 
   private system(line: Record<string, unknown>): AgentEvent[] {
@@ -157,15 +170,18 @@ export class StreamParser {
     if (!this.pending && !finished) {
       this.turnCount += 1;
       const zero = { input_tokens: 0, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
-      this.pending = { id, model, usage: usage ?? zero, contentChars: 0 };
+      this.pending = { id, model, usage: usage ?? zero, contentChars: 0, thinking: false };
     } else if (this.pending && usage) {
       this.pending.usage = usage;
       if (model) this.pending.model = model;
     }
     const content = Array.isArray(message.content) ? message.content : [];
+    const late = { contentChars: 0, thinking: false };
     for (const block of content) {
       if (!isRecord(block)) continue;
-      if (this.pending?.id === id) this.pending.contentChars += blockChars(block);
+      const target = this.pending?.id === id ? this.pending : late;
+      target.contentChars += blockChars(block);
+      if (block.type === 'thinking') target.thinking = true;
       if (block.type === 'text' && typeof block.text === 'string' && block.text.length > 0) {
         events.push({ type: 'message', text: block.text });
       } else if (block.type === 'tool_use' && typeof block.name === 'string') {
@@ -176,6 +192,9 @@ export class StreamParser {
           input: block.input,
         });
       }
+    }
+    if (finished && (late.contentChars > 0 || late.thinking)) {
+      events.unshift({ type: 'turn_content', model: model || this.flushedModel, contentChars: late.contentChars, thinking: late.thinking });
     }
     if (stopReason) events.push(...this.flush());
     return events;
@@ -198,7 +217,7 @@ export class StreamParser {
   }
 
   private result(line: Record<string, unknown>): AgentEvent[] {
-    const events = this.flush();
+    const events: AgentEvent[] = [];
     events.push({
       type: 'end',
       subtype: typeof line.subtype === 'string' ? line.subtype : '',

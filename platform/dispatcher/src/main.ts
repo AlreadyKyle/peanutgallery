@@ -21,7 +21,9 @@ import { startupChecks } from './startup.js';
 import { tick } from './tick.js';
 import { sleep } from './time.js';
 
-const SHUTDOWN_GRACE_MS = 30_000;
+// How long a stopping dispatcher waits for running cards: a session's SIGINT grace (15 s) and SIGTERM
+// grace (5 s), its settle rows and the card's pause all fit, inside docker stop's 60 s.
+const SHUTDOWN_GRACE_MS = 50_000;
 
 export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 

@@ -1,16 +1,32 @@
-// Pure session metering. Every turn is recorded as it arrives, priced with PRICE_TABLE_JSON, and the
-// session is settled against the result line when it ends. Claude Code writes each assistant line
-// before the turn's output is counted, so the turn rows fall short; the result line's modelUsage
-// holds the session's real token totals, and the settle rows make the ledger equal those totals
-// priced with our table. The command line's own cost figure uses a table that is not ours and is
-// never recorded. Without a result line the shortfall is estimated from the characters the model
-// wrote. A model missing from the table is priced at the table's highest rates.
-import type { AgentEvent, EndEvent } from './adapters/types.js';
+// Pure session metering. Every turn is priced with PRICE_TABLE_JSON as it arrives and written by the
+// caller; the session is settled when it ends. Claude Code writes each assistant line before the
+// turn's output is counted, so the turn rows fall short. The result line's modelUsage holds the
+// session's real token totals, and the settle rows make the ledger equal those totals priced with
+// our table. The command line's own cost figure uses a table that is not ours and is never recorded.
+//
+// Where the stream cannot be trusted the meter records more, never less:
+// - a turn row counts as recorded only once the caller commits it; a row whose write failed is
+//   written again at settle;
+// - every token class settles at the larger of the result line and the turns;
+// - a result line that reports less than the turns did, or no result line at all, settles on the
+//   estimate: each turn's output is the largest of its reported tokens, one token per three
+//   characters it wrote, and 1,024 tokens for a turn with a thinking block; without a result line
+//   one more request is charged for the one in flight when the session ended;
+// - modelUsage keys that do not match the turns' models are reconciled on their total, under the
+//   turns' model, rather than written a second time under a new name;
+// - a model missing from the table is priced at the table's highest rates.
+import type { AgentEvent, EndEvent, ModelUsage } from './adapters/types.js';
 import { fallbackPrice, modelPrice, priceWith, round4, round6, type LedgerUsage, type ModelPrice, type PriceTable, type TurnUsage } from './pricing.js';
 
 // Characters per output token for the estimate. Low on purpose: English prose and code run nearer
 // four, so dividing by three errs toward recording more.
 export const CHARS_PER_TOKEN = 3;
+// Claude Code writes thinking blocks with their text left out, so a thinking turn's output cannot be
+// counted from its characters. The estimate charges at least this many output tokens for it: the
+// smallest thinking budget the Messages API accepts.
+export const THINKING_FLOOR_TOKENS = 1024;
+// The output charged for the request in flight when a session ends without a result line.
+export const IN_FLIGHT_OUTPUT_TOKENS = 1024;
 
 export type MeterBasis = 'result' | 'estimate';
 
@@ -23,35 +39,60 @@ export interface TurnMetering {
 }
 
 export interface Settlement {
+  // The turn rows never committed, then one difference row per group of models.
   rows: LedgerUsage[];
   basis: MeterBasis;
   fallbackModels: string[];
-  // What the turn rows recorded above the result line's total, in USD. record_usage refuses a
-  // negative amount, so it is reported rather than written back.
+  // The models the turns reported, as opposed to models seen only in modelUsage.
+  turnModels: string[];
+  // What the rows recorded above the settled total, in USD. record_usage refuses a negative
+  // amount, so it is reported rather than written back.
   overcountUsd: number;
+  // True when modelUsage names a model the turns did not, and the turns name one it does not, or a
+  // turn model is missing from modelUsage.
+  mismatch: boolean;
+  // True when modelUsage reports fewer tokens of some class than the turns did.
+  anomaly: boolean;
 }
 
-type TurnInput = Pick<Extract<AgentEvent, { type: 'turn_usage' }>, 'model' | 'usage' | 'contentChars'>;
+type TurnInput = Pick<Extract<AgentEvent, { type: 'turn_usage' }>, 'model' | 'usage' | 'contentChars' | 'thinking'>;
+type ContentInput = Pick<Extract<AgentEvent, { type: 'turn_content' }>, 'model' | 'contentChars' | 'thinking'>;
 
-interface Tally {
-  usd: number;
+// Tokens the turns reported for one model, and the estimate of its output.
+interface Seen {
   input: number;
   creation: number;
   creation1h: number;
   read: number;
   output: number;
-  contentChars: number;
+  estimatedOutput: number;
 }
 
-function emptyTally(): Tally {
-  return { usd: 0, input: 0, creation: 0, creation1h: 0, read: 0, output: 0, contentChars: 0 };
+interface Group {
+  tallied: string[];
+  reported: ModelUsage[];
+}
+
+function emptySeen(): Seen {
+  return { input: 0, creation: 0, creation1h: 0, read: 0, output: 0, estimatedOutput: 0 };
+}
+
+function nonZero(row: LedgerUsage): boolean {
+  return row.usd > 0 || row.input_tokens > 0 || row.cached_tokens > 0 || row.output_tokens > 0;
+}
+
+function estimatedOutput(chars: number, reported: number, thinking: boolean): number {
+  return Math.max(Math.ceil(chars / CHARS_PER_TOKEN), reported, thinking ? THINKING_FLOOR_TOKENS : 0);
 }
 
 export class SessionMeter {
   private readonly table: PriceTable;
   private readonly fallbackRates: ModelPrice;
-  private readonly tallies = new Map<string, Tally>();
+  private readonly seen = new Map<string, Seen>();
+  private readonly committed = new Map<string, LedgerUsage>();
+  private readonly pending: LedgerUsage[] = [];
   private readonly fallbacks = new Set<string>();
+  private lastTurn: { model: string; usage: TurnUsage } | null = null;
 
   constructor(table: PriceTable) {
     this.table = table;
@@ -59,97 +100,215 @@ export class SessionMeter {
   }
 
   get turnsRecorded(): boolean {
-    return this.tallies.size > 0;
+    return this.seen.size > 0;
   }
 
+  // Prices a turn. The row is pending until commit() says its write succeeded.
   addTurn(turn: TurnInput): TurnMetering {
-    const { price, fallback } = this.price(turn.model);
+    const { price, fallback } = this.price([turn.model]);
     const priced = priceWith(price, turn.model, turn.usage);
     const row = { ...priced, usd: round4(priced.usd) };
-    const tally = this.tally(turn.model);
-    tally.usd = round4(tally.usd + row.usd);
-    tally.input += turn.usage.input_tokens;
-    tally.creation += turn.usage.cache_creation_input_tokens;
-    tally.creation1h += Math.min(turn.usage.cache_creation_1h_input_tokens, turn.usage.cache_creation_input_tokens);
-    tally.read += turn.usage.cache_read_input_tokens;
-    tally.output += turn.usage.output_tokens;
-    tally.contentChars += turn.contentChars;
+    const seen = this.tally(turn.model);
+    seen.input += turn.usage.input_tokens;
+    seen.creation += turn.usage.cache_creation_input_tokens;
+    seen.creation1h += Math.min(turn.usage.cache_creation_1h_input_tokens, turn.usage.cache_creation_input_tokens);
+    seen.read += turn.usage.cache_read_input_tokens;
+    seen.output += turn.usage.output_tokens;
+    seen.estimatedOutput += estimatedOutput(turn.contentChars, turn.usage.output_tokens, turn.thinking);
+    this.lastTurn = { model: turn.model, usage: turn.usage };
+    if (nonZero(row)) this.pending.push(row);
     return { row, fallback };
   }
 
-  // Recorded spend plus the estimated output shortfall, for the ceiling check while the session runs.
+  // Characters written on a line for a turn already priced.
+  addContent(content: ContentInput): void {
+    this.tally(content.model).estimatedOutput += estimatedOutput(content.contentChars, 0, content.thinking);
+  }
+
+  // The row's write succeeded: it counts as recorded and is not written again.
+  commit(row: LedgerUsage): void {
+    const at = this.pending.indexOf(row);
+    if (at >= 0) this.pending.splice(at, 1);
+    const total = this.committed.get(row.model) ?? { model: row.model, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 0 };
+    total.input_tokens += row.input_tokens;
+    total.cached_tokens += row.cached_tokens;
+    total.output_tokens += row.output_tokens;
+    total.usd = round4(total.usd + row.usd);
+    this.committed.set(row.model, total);
+  }
+
+  // What the ledger would hold for this session if it ended now with no result line: the estimate,
+  // including the request in flight. The ceiling is checked against it while the session runs.
   liveEstimateUsd(): number {
     let usd = 0;
-    for (const [model, tally] of this.tallies) {
-      usd += tally.usd + (this.shortfall(tally) * this.price(model).price.output) / 1_000_000;
+    for (const model of this.seen.keys()) {
+      usd += priceWith(this.price([model]).price, model, this.estimateUsage([model], true)).usd;
     }
     return round6(usd);
   }
 
   settle(end: EndEvent | null): Settlement {
-    if (end === null || end.modelUsage.length === 0) return this.estimate();
-    const rows: LedgerUsage[] = [];
+    const reported = end?.modelUsage ?? [];
+    const turnModels = [...this.seen.keys()];
+    const rows: LedgerUsage[] = [...this.pending];
     let overcount = 0;
-    const single = end.modelUsage.length === 1;
-    for (const reported of end.modelUsage) {
-      const tally = this.tallies.get(reported.model) ?? emptyTally();
-      const creation = reported.cache_creation_input_tokens;
-      // Cache writes the turns did not record count as one-hour. With one model the result line's
-      // own split covers the whole session and is used instead.
-      let oneHour = Math.min(creation, tally.creation1h + Math.max(0, creation - tally.creation));
-      if (single && end.usage && end.usage.cache_creation_input_tokens === creation) oneHour = end.usage.cache_creation_1h_input_tokens;
-      const usage: TurnUsage = {
-        input_tokens: reported.input_tokens,
-        cache_creation_input_tokens: creation,
-        cache_creation_1h_input_tokens: oneHour,
-        cache_read_input_tokens: reported.cache_read_input_tokens,
-        output_tokens: reported.output_tokens,
-      };
-      const authoritative = round4(priceWith(this.price(reported.model).price, reported.model, usage).usd);
-      const difference = round4(authoritative - tally.usd);
+    let anomaly = false;
+    let estimated = reported.length === 0;
+    const { groups, mismatch } = reported.length === 0 ? { groups: turnModels.map((model) => ({ tallied: [model], reported: [] })), mismatch: false } : this.groups(reported);
+
+    for (const group of groups) {
+      let usage: TurnUsage;
+      if (group.reported.length === 0) {
+        estimated = true;
+        usage = this.estimateUsage(group.tallied, end === null);
+      } else {
+        const result = this.resultUsage(group, reported.length === 1 ? (end?.usage ?? null) : null);
+        anomaly ||= result.anomaly;
+        estimated ||= result.anomaly;
+        usage = result.usage;
+      }
+      const price = this.price([...group.tallied, ...group.reported.map((entry) => entry.model)]).price;
+      const recorded = this.recorded(group.tallied);
+      const model = this.rowModel(group);
+      const settled = round4(priceWith(price, model, usage).usd);
+      const difference = round4(settled - recorded.usd);
       if (difference < 0) {
         overcount = round4(overcount - difference);
         continue;
       }
       const row: LedgerUsage = {
-        model: reported.model,
-        input_tokens: Math.max(0, reported.input_tokens + creation - (tally.input + tally.creation)),
-        cached_tokens: Math.max(0, reported.cache_read_input_tokens - tally.read),
-        output_tokens: Math.max(0, reported.output_tokens - tally.output),
+        model,
+        input_tokens: Math.max(0, usage.input_tokens + usage.cache_creation_input_tokens - recorded.input_tokens),
+        cached_tokens: Math.max(0, usage.cache_read_input_tokens - recorded.cached_tokens),
+        output_tokens: Math.max(0, usage.output_tokens - recorded.output_tokens),
         usd: difference,
       };
-      if (row.usd > 0 || row.input_tokens > 0 || row.cached_tokens > 0 || row.output_tokens > 0) rows.push(row);
+      if (nonZero(row)) rows.push(row);
     }
-    return { rows, basis: 'result', fallbackModels: [...this.fallbacks], overcountUsd: overcount };
+    return { rows, basis: estimated ? 'estimate' : 'result', fallbackModels: [...this.fallbacks], turnModels, overcountUsd: overcount, mismatch, anomaly };
   }
 
-  private estimate(): Settlement {
-    const rows: LedgerUsage[] = [];
-    for (const [model, tally] of this.tallies) {
-      const tokens = this.shortfall(tally);
-      const usd = round4((tokens * this.price(model).price.output) / 1_000_000);
-      if (usd > 0) rows.push({ model, input_tokens: 0, cached_tokens: 0, output_tokens: tokens, usd });
+  // Each model both the turns and modelUsage name is its own group. The rest are grouped so no
+  // spend is written twice: modelUsage keys the turns never named, beside turn models modelUsage
+  // lacks, are one group settled on their total (a renamed key); keys alone are side models, each
+  // its own group; turn models alone are settled on the estimate.
+  private groups(reported: readonly ModelUsage[]): { groups: Group[]; mismatch: boolean } {
+    const keys = new Set(reported.map((entry) => entry.model));
+    const groups: Group[] = reported.filter((entry) => this.seen.has(entry.model)).map((entry) => ({ tallied: [entry.model], reported: [entry] }));
+    const extraReported = reported.filter((entry) => !this.seen.has(entry.model));
+    const extraTallied = [...this.seen.keys()].filter((model) => !keys.has(model));
+    if (extraReported.length > 0 && extraTallied.length > 0) {
+      groups.push({ tallied: extraTallied, reported: extraReported });
+    } else {
+      for (const entry of extraReported) groups.push({ tallied: [], reported: [entry] });
+      for (const model of extraTallied) groups.push({ tallied: [model], reported: [] });
     }
-    return { rows, basis: 'estimate', fallbackModels: [...this.fallbacks], overcountUsd: 0 };
+    return { groups, mismatch: extraTallied.length > 0 };
   }
 
-  private shortfall(tally: Tally): number {
-    return Math.max(0, Math.ceil(tally.contentChars / CHARS_PER_TOKEN) - tally.output);
-  }
-
-  private tally(model: string): Tally {
-    let tally = this.tallies.get(model);
-    if (!tally) {
-      tally = emptyTally();
-      this.tallies.set(model, tally);
+  private seenTotal(models: readonly string[]): Seen {
+    const total = emptySeen();
+    for (const model of models) {
+      const seen = this.seen.get(model);
+      if (!seen) continue;
+      total.input += seen.input;
+      total.creation += seen.creation;
+      total.creation1h += seen.creation1h;
+      total.read += seen.read;
+      total.output += seen.output;
+      total.estimatedOutput += seen.estimatedOutput;
     }
-    return tally;
+    return total;
   }
 
-  private price(model: string): { price: ModelPrice; fallback: boolean } {
-    const price = modelPrice(this.table, model);
-    if (price) return { price, fallback: false };
-    this.fallbacks.add(model);
-    return { price: this.fallbackRates, fallback: true };
+  // The turns' tokens with the estimated output, plus, when the session ended with no result line,
+  // one more request for the one in flight: the last turn's input again, the context it read or
+  // wrote to cache read once more, and IN_FLIGHT_OUTPUT_TOKENS of output.
+  private estimateUsage(models: readonly string[], inFlight: boolean): TurnUsage {
+    const seen = this.seenTotal(models);
+    const usage: TurnUsage = {
+      input_tokens: seen.input,
+      cache_creation_input_tokens: seen.creation,
+      cache_creation_1h_input_tokens: seen.creation1h,
+      cache_read_input_tokens: seen.read,
+      output_tokens: Math.max(seen.output, seen.estimatedOutput),
+    };
+    const last = this.lastTurn;
+    if (inFlight && last && models.includes(last.model)) {
+      usage.input_tokens += last.usage.input_tokens;
+      usage.cache_read_input_tokens += last.usage.cache_read_input_tokens + last.usage.cache_creation_input_tokens;
+      usage.output_tokens += IN_FLIGHT_OUTPUT_TOKENS;
+    }
+    return usage;
+  }
+
+  // Each token class at the larger of modelUsage and the turns. A class modelUsage reports below the
+  // turns is an anomaly (a renamed or missing field), and the output then takes the estimate too.
+  private resultUsage(group: Group, sessionUsage: TurnUsage | null): { usage: TurnUsage; anomaly: boolean } {
+    const seen = this.seenTotal(group.tallied);
+    const rep = { input: 0, creation: 0, read: 0, output: 0 };
+    for (const entry of group.reported) {
+      rep.input += entry.input_tokens;
+      rep.creation += entry.cache_creation_input_tokens;
+      rep.read += entry.cache_read_input_tokens;
+      rep.output += entry.output_tokens;
+    }
+    const anomaly = rep.input < seen.input || rep.creation < seen.creation || rep.read < seen.read || rep.output < seen.output;
+    const creation = Math.max(rep.creation, seen.creation);
+    // Cache writes the turns did not record count as one-hour. With one model in modelUsage the result
+    // line's own split covers the whole session and is used instead.
+    let oneHour = Math.min(creation, seen.creation1h + Math.max(0, creation - seen.creation));
+    if (!anomaly && sessionUsage && sessionUsage.cache_creation_input_tokens === creation) oneHour = sessionUsage.cache_creation_1h_input_tokens;
+    const usage: TurnUsage = {
+      input_tokens: Math.max(rep.input, seen.input),
+      cache_creation_input_tokens: creation,
+      cache_creation_1h_input_tokens: oneHour,
+      cache_read_input_tokens: Math.max(rep.read, seen.read),
+      output_tokens: anomaly ? Math.max(rep.output, seen.output, seen.estimatedOutput) : Math.max(rep.output, seen.output),
+    };
+    return { usage, anomaly };
+  }
+
+  // The committed rows plus the pending ones, which settle writes first.
+  private recorded(models: readonly string[]): LedgerUsage {
+    const total = { model: '', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 0 };
+    const rows = [...models.map((model) => this.committed.get(model)), ...this.pending.filter((row) => models.includes(row.model))];
+    for (const row of rows) {
+      if (!row) continue;
+      total.input_tokens += row.input_tokens;
+      total.cached_tokens += row.cached_tokens;
+      total.output_tokens += row.output_tokens;
+      total.usd = round4(total.usd + row.usd);
+    }
+    return total;
+  }
+
+  // A group's difference row goes under the turn model that recorded the most, or the modelUsage key
+  // when no turn named the model.
+  private rowModel(group: Group): string {
+    if (group.tallied.length === 0) return group.reported[0]!.model;
+    return group.tallied.reduce((best, model) => (this.recorded([model]).usd > this.recorded([best]).usd ? model : best));
+  }
+
+  private tally(model: string): Seen {
+    let seen = this.seen.get(model);
+    if (!seen) {
+      seen = emptySeen();
+      this.seen.set(model, seen);
+    }
+    return seen;
+  }
+
+  // The highest of each rate across the priced models named; the fallback rates, with every model
+  // named reported as a fallback, when none is priced. A renamed modelUsage key is thereby priced
+  // at its turn model's rates.
+  private price(models: readonly string[]): { price: ModelPrice; fallback: boolean } {
+    const known = models.map((model) => modelPrice(this.table, model)).filter((price): price is ModelPrice => price !== null);
+    if (known.length === 0) {
+      for (const model of models) this.fallbacks.add(model);
+      return { price: this.fallbackRates, fallback: true };
+    }
+    if (known.length === 1) return { price: known[0]!, fallback: false };
+    return { price: fallbackPrice(Object.fromEntries(known.map((price, index) => [String(index), price]))), fallback: false };
   }
 }

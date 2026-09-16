@@ -38,8 +38,11 @@ export type AgentEvent =
   // null when the line carries no such field. The session refuses the wrong source for its mode.
   | { type: 'start'; sessionId: string | null; model: string | null; tools: string[]; apiKeySource: string | null }
   // contentChars is the length of the turn's text, thinking and tool input, so a meter can estimate
-  // output tokens the stream under-reports.
-  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number }
+  // output tokens the stream under-reports; thinking is true when the turn had a thinking block,
+  // whose text Claude Code does not write.
+  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number; thinking: boolean }
+  // Content on a line for a turn whose usage was already emitted, so the estimate still counts it.
+  | { type: 'turn_content'; model: string; contentChars: number; thinking: boolean }
   | { type: 'tool_call'; toolUseId: string; name: string; input: unknown }
   | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean }
   | { type: 'message'; text: string }
