@@ -9,6 +9,8 @@ export interface Alerter {
   // Sends the message the first time this process sees the key, so a condition that holds for a
   // whole day alerts once.
   notifyOnce(key: string, message: string): Promise<void>;
+  // Lets notifyOnce send for the key again.
+  forget(key: string): void;
 }
 
 export interface AlertOptions {
@@ -45,6 +47,9 @@ export function createAlerter(opts: AlertOptions): Alerter {
       if (opts.healthcheckUrl) await send(opts.healthcheckUrl, { method: 'GET' }, 'healthcheck ping');
     },
     notify,
+    forget(key) {
+      sent.delete(key);
+    },
     async notifyOnce(key, message) {
       if (sent.has(key)) return;
       sent.add(key);

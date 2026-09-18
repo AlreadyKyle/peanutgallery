@@ -7,6 +7,7 @@ import type { AgentAdapter } from './adapters/types.js';
 import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
+import { gitConfigViolations, originUrl } from './gitconfig.js';
 import { errorMessage, type Logger } from './log.js';
 import type { MeterRow } from './metering.js';
 import { modelPrice } from './pricing.js';
@@ -36,6 +37,26 @@ export async function checkMode(db: Db, config: DispatcherConfig): Promise<void>
       `studio_state.agent_mode is ${studio.agent_mode || 'unset'} but AGENT_MODE is ${config.agentMode}; set the mode from /board or start the dispatcher in the matching mode`,
       false,
     );
+  }
+}
+
+// The repository the dispatcher runs git in must carry only the git configuration git itself writes,
+// and its origin must be the studio's repository. A halt lives in memory, so this is what keeps a
+// restarted dispatcher from running git against configuration a session planted: the process exits
+// 78 and stays down until someone has cleaned the repository.
+export async function checkRepositoryGit(repoRoot: string, githubRepo: string): Promise<void> {
+  let violations: string[];
+  let origin: string | null;
+  try {
+    violations = await gitConfigViolations(repoRoot, null);
+    origin = await originUrl(repoRoot);
+  } catch (error) {
+    throw new StartupError(`the repository's git configuration could not be read: ${errorMessage(error)}`, true);
+  }
+  if (violations.length > 0) throw new StartupError(`the repository's git configuration is refused: ${violations.join('; ')}`, true);
+  const expected = `https://github.com/${githubRepo}`;
+  if (origin !== expected && origin !== `${expected}.git`) {
+    throw new StartupError(`remote.origin.url is ${origin ?? 'unset'}, not ${expected}(.git)`, true);
   }
 }
 
