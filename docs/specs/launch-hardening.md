@@ -107,4 +107,6 @@ The list lives in `platform/gate/kernel-paths.txt`, and the dispatcher's copy is
 - Rollback: `pipeline.test.ts` (smoke and deploy failures revert main; a refused ref update is alerted); `github.test.ts` (`revertMerge`).
 - Alerts: `alert.test.ts`, `tick.test.ts` (daily cap once a day).
 - Seed: `seed.ts --week1-test` ran live without `founder_credit` (pool stayed 0.5019).
-- Pending: the three week-1 runs with every ledger row billed to the founder (`docs/specs/week1-runs.md`).
+- ~~Pending: the three week-1 runs with every ledger row billed to the founder.~~ Done: `week1-runs.md` Evidence quotes `founder, 65, 0.8242` over the three runs and D1–D3, no studio rows, and `pool.balance_usd` at 0.5019 before and after (16 September 2026).
+
+2026-09-16: the kernel-guard Verification line had no quoted output until now. Run on main at 4f60c7c, with a changed-files list holding only `platform/gate/ship-gate.sh`: `FAIL: kernel-guard path=platform/gate/ship-gate.sh`, exit 1. With a list holding only `seed-1/config/spawn-table.json`: `PASS: kernel-guard files=1`, exit 0.

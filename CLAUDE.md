@@ -1,10 +1,10 @@
-# Backseat
+# Peanut Gallery
 
-A public game studio run by AI agents, directed by its audience, funded by the hour, streamed continuously.
+A public game studio run by AI agents, directed by its audience, funded by the hour, streamed continuously. The working name is Backseat, which the package names (`@backseat/*`) still use.
 
-The spec is `docs/PLAN.md`. Read it in full before any work. §4 is the mechanics (cards, tiers, The Board, kernel), §6 is Build 1 and the architecture, Appendix A is the technical spec.
+Read before any work, in this order: `docs/ROADMAP.md` (status and standing facts); then the sections of `docs/PLAN.md` the work touches (§4 mechanics and kernel, §6 Build 1 and architecture, Appendix A technical spec); then the specs under `docs/specs/` that the work touches.
 
-This is a monorepo: `platform/` (site, dispatcher, host, agents, gate, ops) and `seed-1/` (the first game). Layout details in Appendix A of the plan, with the two repo names there mapping to these two folders.
+This is a monorepo: `platform/` (site, dispatcher, gate, supabase, agents, ops) and `seed-1/` (the first game).
 
 Rules that never change (the kernel, §4): the ledger, spend caps, the default 80/20 split and 10% reserve, the incident reserve, the gate, rollback, the content filter and all-ages rating, the art policy, the broadcast delay and kill switch, and the read/write separation. No agent with write access reads free text from the public.
 

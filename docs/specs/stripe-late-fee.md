@@ -1,6 +1,6 @@
 # Credit a contribution when Stripe's fee arrives
 
-Status: done. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -46,3 +46,5 @@ A paid Checkout session is credited exactly once, as soon as its fee is known. W
 - Live endpoint `we_1UFd0XICmyTP81VUCeACUWhc`: `enabled ['checkout.session.completed', 'charge.updated']`.
 - Live contribution: `amount_usd 1.0000, studio_pct_chosen 20, agents_usd 0.5283, incident_usd 0.0264, has_session true`. Ledger identity drift `0.0000`.
 - Still unproven: `charge.updated` crediting a fresh payment end to end. The next real contribution checks it (`docs/specs/week1-runs.md`).
+
+2026-09-16: the status moves from done to built, because the `charge.updated` credit of a fresh payment has not been run live.

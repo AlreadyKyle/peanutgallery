@@ -1,6 +1,6 @@
 # Next cards: fund a card to vote for it
 
-Status: done. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -49,3 +49,5 @@ A Next card carries a funding target at or below the per-card maximum. A support
 - `platform/supabase/test/next-cards.test.ts` covers the filing pre-check.
 - Live: `select count(*) from cards where title ilike 'Week %'` returned 0.
 - Criterion 8 holds under the names from `site-layout.md`: cards picked by the board list first under Fund what's next, a bar shows when the target is above 0, and Fund this card shows only for goal cards that are not full (`Cards.test.tsx`).
+
+2026-09-16: the status moves from done to built. Two Verification lines have no quoted output here: "Guarded select returns exactly 4 rows before the delete; the delete returns the same 4 ids" (the Evidence quotes only a count of 0 for the Week cards afterwards) and "A real contribution toward a card moves its bar by the net amount and the pool by the same amount".

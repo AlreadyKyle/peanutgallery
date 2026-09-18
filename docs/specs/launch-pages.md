@@ -105,7 +105,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 
 ## Evidence
 
-2026-09-15, branch `launch-pages`, not merged. The live steps are pending: apply the migration, enrol TOTP on the live /board and file a test note, and run the live check against production.
+2026-09-15, branch `launch-pages`, since merged as 3a08226 (PR 21). The live steps are pending: apply the migration, enrol TOTP on the live /board and file a test note, and run the live check against production.
 
 - **Shipped.**
   - `cards.test.ts`: "sends building and gated cards to now, funded cards to queued, live cards to shipped and the rest to fund", and `shippedOrder`.
