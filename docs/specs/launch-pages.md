@@ -24,7 +24,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 **Shipped.**
 - The site's card select adds `live` to its stages and `updated_at` to its columns.
 - `groupCards` returns a `shipped` group: cards in `live`, newest `updated_at` first. A live card is never in Fund what's next and never offered on `/contribute`.
-- A Shipped section after Queued lists each shipped card with its category, title, summary, cost (studio-billed spend from `public_card_spend` as `$0.00`, left out when there is none), contributors (from `public_card_funding`) and ship date (`updated_at`). A Dust card also links "Play the game" to `VITE_PLAY_URL` when it is set.
+- A Shipped section after Queued lists each shipped card with its category, title, summary, cost (studio-billed spend from `public_card_spend` as `$0.00`, left out when there is none), contributors (from `public_card_funding`) and ship date ~~(`updated_at`)~~. Superseded: `card-columns-and-open-funding.md` adds `cards.live_at`, stamped when a card moves to live, and the site reads the ship date from it once that migration is live (2026-09-16). A Dust card also links "Play the game" to `VITE_PLAY_URL` when it is set.
 - With no shipped card the section is not rendered, like Building now and Queued.
 - The Right now panel reads "Latest shipped: <title>" when a card has shipped.
 
@@ -150,7 +150,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 ## Decisions
 
 - 2026-09-14: legal pages are drafted by Claude for board review, not legal advice.
-- 2026-09-15: no `public_shipped` view and no commit link (board). The repository is private, so a GitHub link would 404. Anon already reads `cards` at table level, so the site's card select adds `live` and `updated_at` instead.
+- 2026-09-15: no `public_shipped` view and no commit link (board). The repository is private, so a GitHub link would 404. ~~Anon already reads `cards` at table level, so the site's card select adds `live` and `updated_at` instead.~~ Superseded: `card-columns-and-open-funding.md` replaces the table-level read with column grants. The site's card select, with `live` in its stages and `updated_at` in its columns, names only granted columns (2026-09-16).
 - 2026-09-15: the legal and contact pages carry the operator line "Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada." and the address hello@peanutgallery.games (board). The content is as listed under Behaviour.
 - 2026-09-15: the 14-day hold above $50 of agent credit a day is stated on the Terms page as the rule, before phase 4 builds it (board).
 - 2026-09-15: link previews use a typographic `og.png` drawn by a committed Playwright script from the site's stylesheet (board). No generated imagery.
@@ -160,7 +160,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - 2026-09-15: BRAND.md documents the Shipped section, the text-page layout and the footer links (board).
 - 2026-09-15: Shipped renders as rows, not boxes, and is not rendered until a card ships. A shipped card is a record whose one action, Play the game, is the same for every Dust card; Building now and Queued already render nothing when empty.
 - 2026-09-15: a shipped card with no goal and no funding shows its source ("Board") in place of "0 contributors". A board directive was never open to fund, so a zero count would misread.
-- 2026-09-15: the ship date is `updated_at`, as agreed. It also moves if a live card is updated later, for example a contribution to a live goal. Accepted for launch.
+- ~~2026-09-15: the ship date is `updated_at`, as agreed. It also moves if a live card is updated later, for example a contribution to a live goal. Accepted for launch.~~ Superseded: `card-columns-and-open-funding.md` adds `cards.live_at` and stops crediting a card past voting (2026-09-16).
 - 2026-09-15: enrolment starts from a "Set up an authenticator app" button, not on page load, and first removes unverified TOTP factors from an abandoned attempt. Enrolling on load would create a factor on every visit.
 - 2026-09-15: the two-factor step shows for board members only. The moderator's only control, pause, stays at `aal1`.
 - 2026-09-15: Privacy says the public pages show totals and contributor counts, not "amounts and splits". The site shows no split aggregate or per-contribution amount, and ROADMAP.md forbids describing what does not exist.
@@ -169,4 +169,4 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - 2026-09-15: How it works step 4 now points at Shipped, and the /board note form says note triage is not built. The audit found both claims.
 - 2026-09-15: text-page sections sit `--space-4` apart, closer than landing sections, because each holds a sentence or two.
 - 2026-09-15: the live check fails when the site has no data unless `--allow-no-data` is passed, so a production run can never pass on an outage.
-- 2026-09-15: a card's public cost is its studio-billed spend from the view `public_card_spend`, never `cards.actual_usd`. `actual_usd` counts founder-billed turns, and PLAN.md §4 keeps the founder's tokens private. A card built only on the founder's time shows no cost. Building now uses the same figure. Anon can still select `cards.actual_usd` through the API; closing that needs column grants on `cards` and is left to a follow-up for the board (found in review, 15 September 2026).
+- 2026-09-15: a card's public cost is its studio-billed spend from the view `public_card_spend`, never `cards.actual_usd`. `actual_usd` counts founder-billed turns, and PLAN.md §4 keeps the founder's tokens private. A card built only on the founder's time shows no cost. Building now uses the same figure. ~~Anon can still select `cards.actual_usd` through the API; closing that needs column grants on `cards` and is left to a follow-up for the board (found in review, 15 September 2026).~~ Superseded: `card-columns-and-open-funding.md` grants anon and authenticated the public columns of `cards` only, without `actual_usd`, `severity` or `priority` (2026-09-16).

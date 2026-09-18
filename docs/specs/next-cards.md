@@ -13,13 +13,13 @@ Out: quorums, vote weights, regimes, micro-votes, personal decisions, contributo
 
 ## Behaviour
 
-A Next card carries a funding target at or below the per-card maximum. A supporter opens the Payment Link with `client_reference_id` set to the card id; the webhook passes it to `apply_contribution`, which credits the card's bar with the agents' net amount of that contribution (after the processor fee, the 10% reserve, the supporter's studio share and the incident carve-out). When the bar reaches the target the card moves to `funded`, its estimate equals its target, and the dispatcher builds it under the normal caps. Contributions with no card fund the pool. The board files Next cards from /board at stage `proposed` (Open) or `voted` (Decided).
+A Next card carries a funding target at or below the per-card maximum. A supporter opens the Payment Link with `client_reference_id` set to the card id; the webhook passes it to `apply_contribution`, which credits the card's bar with the agents' net amount of that contribution (after the processor fee, the 10% reserve, the supporter's studio share and the incident carve-out). When the bar reaches the target the card moves to `funded`, its estimate equals its target, and the dispatcher builds it under the normal caps. Contributions with no card fund the pool. Superseded in part: `card-columns-and-open-funding.md` credits the bar only while the card is proposed, designing or voted, and money naming any other card funds the pool (2026-09-16). The board files Next cards from /board at stage `proposed` (Open) or `voted` (Decided).
 
 ## Acceptance criteria
 
 - [x] `apply_contribution` selects the goal card `for update` before it locks the pool.
 - [x] `funded_usd` rises by `agents_usd - incident_usd`, not by the gross amount.
-- [x] A card in `proposed` or `voted` with `funded_usd >= funding_target_usd > 0` moves to `funded` with `estimate_usd = funding_target_usd` when the estimate was 0; a card in any other stage keeps its stage.
+- [x] A card in `proposed` or `voted` with `funded_usd >= funding_target_usd > 0` moves to `funded` with `estimate_usd = funding_target_usd` when the estimate was 0; ~~a card in any other stage keeps its stage.~~ Superseded: `card-columns-and-open-funding.md` credits only a proposed, designing or voted card, so a card past voting is not credited at all, and a designing card is credited and keeps its stage (2026-09-16).
 - [x] `file_card` refuses: a non-board caller, a blank title, a stage other than `proposed` or `voted`, a target of 0 or above `card_max_usd`, the config lane outside `seed-1`, a config-lane card without a `check:` line, an inactive executor.
 - [x] `public_card_funding` exposes only `card_id`, `contributors` and `credited_usd`; `contributors` counts distinct contributors, so one supporter who pays twice counts once.
 - [x] The filing script runs the dispatcher's pre-check against the repository's seed-1 files and never inserts a card the dispatcher would reject (`acceptance_grammar`, `acceptance_already_true`).

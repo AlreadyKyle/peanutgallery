@@ -7,6 +7,7 @@ import {
   reversalMessage,
   type WebhookEvent,
 } from "./handler.ts";
+import { WEBHOOK_EVENTS } from "./webhook_events.ts";
 import type { Amounts } from "./split.ts";
 import type { Parsed } from "./session.ts";
 
@@ -80,11 +81,14 @@ function refundedEvent(charge: Record<string, unknown> = {}): WebhookEvent {
   };
 }
 
-/** A charge.dispute.created event for the whole $1 charge unless overridden. */
-function disputeEvent(dispute: Record<string, unknown> = {}): WebhookEvent {
+/** A charge.dispute.created event for the whole $1 charge in needs_response unless overridden. */
+function disputeEvent(
+  dispute: Record<string, unknown> = {},
+  type = "charge.dispute.created",
+): WebhookEvent {
   return {
     id: "evt_handler_dispute",
-    type: "charge.dispute.created",
+    type,
     data: {
       object: {
         id: "dp_handler_1",
@@ -92,6 +96,7 @@ function disputeEvent(dispute: Record<string, unknown> = {}): WebhookEvent {
         payment_intent: "pi_handler_1",
         amount: 100,
         currency: "usd",
+        status: "needs_response",
         ...dispute,
       },
     },
@@ -266,13 +271,91 @@ Deno.test("handler acknowledges an unpaid session with 200 ignored", async () =>
   assertEquals(applied.length, 0);
 });
 
-Deno.test("handler answers 500 for a session it cannot parse", async () => {
-  const { deps, applied } = fake({}, completedEvent({ currency: "cad" }));
-  const { status, body } = await call(deps, post());
-  assertEquals(status, 500);
-  assertEquals(body.error, "Unusable checkout session");
-  assertEquals(body.detail, "Checkout session currency is cad, expected usd");
-  assertEquals(applied.length, 0);
+Deno.test("a completed session it cannot parse answers 500 and alerts once", async () => {
+  const cad = fake({}, completedEvent({ currency: "cad" }));
+  const first = await call(cad.deps, post());
+  assertEquals(first.status, 500);
+  assertEquals(first.body.error, "Unusable checkout session");
+  assertEquals(first.body.detail, "Checkout session currency is cad, expected usd");
+  assertEquals(cad.applied.length, 0);
+  assertEquals(cad.notices.length, 1);
+  assert(cad.notices[0]!.includes("cs_handler_1"));
+  assert(cad.notices[0]!.includes("evt_handler_1"));
+  assert(cad.notices[0]!.includes("Checkout session currency is cad, expected usd"));
+  assert(cad.notices[0]!.includes("3 days"));
+
+  const split = fake(
+    {},
+    completedEvent({
+      custom_fields: [{ key: "split", type: "dropdown", dropdown: { value: "9999" } }],
+    }),
+  );
+  const second = await call(split.deps, post());
+  assertEquals(second.status, 500);
+  assertEquals(second.body.detail, "Unknown split value: 9999");
+  assertEquals(split.applied.length, 0);
+  assertEquals(split.notices.length, 1);
+  assert(split.notices[0]!.includes("cs_handler_1"));
+  assert(split.notices[0]!.includes("Unknown split value: 9999"));
+});
+
+Deno.test("an unusable session answers 500 without an alert on charge.updated or in a dry run", async () => {
+  const updated = fake(
+    { findSession: () => Promise.resolve(paidSession({ currency: "cad" })) },
+    chargeUpdatedEvent(),
+  );
+  const first = await call(updated.deps, post());
+  assertEquals(first.status, 500);
+  assertEquals(first.body.error, "Unusable checkout session");
+  assertEquals(updated.applied.length, 0);
+  assertEquals(updated.notices, []);
+
+  const dry = fake({}, completedEvent({ currency: "cad" }));
+  const second = await call(dry.deps, post(DRY_RUN_HEADERS));
+  assertEquals(second.status, 500);
+  assertEquals(dry.applied.length, 0);
+  assertEquals(dry.notices, []);
+});
+
+Deno.test("a new contribution whose goal card was not credited alerts, and a replay does not", async () => {
+  const goal = "abcdef12-0000-4000-8000-000000000000";
+  const dropped = fake(
+    {
+      applyContribution: () =>
+        Promise.resolve({ inserted: true, contribution_id: "c1", goal_card_id: null }),
+    },
+    completedEvent({ client_reference_id: goal }),
+  );
+  const first = await call(dropped.deps, post());
+  assertEquals(first.status, 200);
+  assertEquals(dropped.notices, [
+    `Contribution cs_handler_1 named card ${goal}, but the ledger credited no card; the money went to the pool.`,
+  ]);
+
+  const replay = fake(
+    {
+      applyContribution: () =>
+        Promise.resolve({ inserted: false, contribution_id: "c1", goal_card_id: null }),
+    },
+    completedEvent({ client_reference_id: goal }),
+  );
+  const second = await call(replay.deps, post());
+  assertEquals(second.status, 200);
+  assertEquals(replay.notices, []);
+
+  const credited = fake(
+    {
+      applyContribution: () =>
+        Promise.resolve({ inserted: true, contribution_id: "c1", goal_card_id: goal }),
+    },
+    completedEvent({ client_reference_id: goal }),
+  );
+  await call(credited.deps, post());
+  assertEquals(credited.notices, []);
+
+  const noGoal = fake();
+  await call(noGoal.deps, post());
+  assertEquals(noGoal.notices, []);
 });
 
 Deno.test("handler credits a paid session through apply_contribution", async () => {
@@ -502,29 +585,70 @@ Deno.test("dry run still verifies the signature", async () => {
   assertEquals(applied.length, 0);
 });
 
-Deno.test("x-dry-run without the service bearer is a live request", async () => {
-  const { deps, applied } = fake();
-  const noBearer = await call(deps, post({ "x-dry-run": "1" }));
-  assertEquals(noBearer.status, 200);
-  assertEquals(noBearer.body.dry_run, undefined);
-  assertEquals(applied.length, 1);
-
-  const wrongBearer = await call(
-    deps,
-    post({ authorization: "Bearer another-key", "x-dry-run": "1" }),
-  );
-  assertEquals(wrongBearer.body.dry_run, undefined);
-  assertEquals(applied.length, 2);
-
-  const anonBearer = await call(
-    deps,
-    post({ authorization: `Bearer ${SERVICE_KEY}x`, "x-dry-run": "1" }),
-  );
-  assertEquals(anonBearer.body.dry_run, undefined);
-  assertEquals(applied.length, 3);
+Deno.test("x-dry-run without the service bearer answers 401 and runs nothing", async () => {
+  for (const event of [completedEvent(), refundedEvent()]) {
+    for (const authorization of [undefined, "Bearer another-key", `Bearer ${SERVICE_KEY}x`]) {
+      const f = fake({}, event);
+      const headers: Record<string, string> = { "x-dry-run": "1" };
+      if (authorization) headers.authorization = authorization;
+      const { status, body } = await call(f.deps, post(headers));
+      assertEquals(status, 401, `${event.type} ${authorization}`);
+      assertEquals(body, { error: "x-dry-run needs the service key as the bearer" });
+      assertEquals(f.applied, []);
+      assertEquals(f.reversals, []);
+      assertEquals(f.feeLookups, []);
+      assertEquals(f.sessionLookups, []);
+      assertEquals(f.notices, []);
+    }
+  }
 });
 
-Deno.test("the service bearer without x-dry-run: 1 is a live request", async () => {
+Deno.test("x-dry-run answers 401 when the function has no service key", async () => {
+  const f = fake();
+  f.deps.serviceKey = "";
+  const { status } = await call(f.deps, post({ authorization: "Bearer ", "x-dry-run": "1" }));
+  assertEquals(status, 401);
+  assertEquals(f.applied, []);
+  assertEquals(f.feeLookups, []);
+});
+
+Deno.test("x-dry-run with a wrong bearer answers 401 before the signature is checked", async () => {
+  const f = fake();
+  const { status } = await call(
+    f.deps,
+    post({
+      authorization: "Bearer another-key",
+      "x-dry-run": "1",
+      "stripe-signature": "t=1700000000,v1=wrong",
+    }),
+  );
+  assertEquals(status, 401);
+  assertEquals(f.applied, []);
+});
+
+Deno.test("a 401 from the dry-run gate leaves the request body unread", async () => {
+  const f = fake();
+  const body = new ReadableStream<Uint8Array>({
+    pull() {
+      throw new Error("the gate read the body");
+    },
+  });
+  const req = new Request("https://functions.invalid/stripe-webhook", {
+    method: "POST",
+    headers: {
+      "stripe-signature": GOOD_SIGNATURE,
+      authorization: "Bearer another-key",
+      "x-dry-run": "1",
+    },
+    body,
+  });
+  const res = await createHandler(f.deps)(req);
+  assertEquals(res.status, 401);
+  assertEquals(req.bodyUsed, false);
+  assertEquals(f.applied, []);
+});
+
+Deno.test("the service bearer without x-dry-run is a live request, and any value but 1 answers 400", async () => {
   const { deps, applied } = fake();
   const noHeader = await call(
     deps,
@@ -533,12 +657,16 @@ Deno.test("the service bearer without x-dry-run: 1 is a live request", async () 
   assertEquals(noHeader.body.dry_run, undefined);
   assertEquals(applied.length, 1);
 
-  const otherValue = await call(
-    deps,
+  const otherValue = fake();
+  const res = await call(
+    otherValue.deps,
     post({ authorization: `Bearer ${SERVICE_KEY}`, "x-dry-run": "true" }),
   );
-  assertEquals(otherValue.body.dry_run, undefined);
-  assertEquals(applied.length, 2);
+  assertEquals(res.status, 400);
+  assertEquals(otherValue.applied, []);
+  assertEquals(otherValue.feeLookups, []);
+  assertEquals(otherValue.sessionLookups, []);
+  assertEquals(otherValue.notices, []);
 });
 
 Deno.test("charge.refunded reverses the session's credit by Stripe's refunded total and alerts", async () => {
@@ -703,6 +831,169 @@ Deno.test("charge.dispute.created reverses the disputed amount and alerts, even 
   ]);
 });
 
+Deno.test("a dispute inquiry reverses nothing and tells the board", async () => {
+  for (const status of ["warning_needs_response", "warning_under_review", "warning_closed"]) {
+    const f = fake({}, disputeEvent({ status }));
+    const res = await call(f.deps, post());
+    assertEquals(res.status, 200);
+    assertEquals(res.body.ignored, true);
+    assert(String(res.body.reason).startsWith("dispute inquiry"));
+    assertEquals(f.reversals, []);
+    assertEquals(f.sessionLookups, []);
+    assertEquals(f.applied, []);
+    assertEquals(f.notices.length, 1, status);
+    assert(f.notices[0]!.includes("dp_handler_1"));
+    assert(f.notices[0]!.includes("inquiry"));
+    assert(f.notices[0]!.includes("nothing was reversed"));
+
+    const dry = fake({}, disputeEvent({ status }));
+    const dryRes = await call(dry.deps, post(DRY_RUN_HEADERS));
+    assertEquals(dryRes.status, 200);
+    assertEquals(dry.reversals, []);
+    assertEquals(dry.notices, []);
+  }
+});
+
+Deno.test("charge.dispute.funds_withdrawn reverses the disputed amount and alerts", async () => {
+  const { deps, reversals, notices } = fake(
+    {
+      reverseContribution: () =>
+        Promise.resolve({ ...REVERSED, reversed_usd: 1, reserve_cover_usd: 0.61 }),
+    },
+    disputeEvent({}, "charge.dispute.funds_withdrawn"),
+  );
+  const { status } = await call(deps, post());
+  assertEquals(status, 200);
+  assertEquals(reversals, [{
+    event_id: "evt_handler_dispute",
+    session_id: "cs_handler_1",
+    kind: "dispute",
+    kind_total_usd: 1,
+  }]);
+  assertEquals(notices.length, 1);
+  assert(notices[0]!.startsWith("Dispute dp_handler_1: reversed $1.00"));
+});
+
+Deno.test("without the RPC's kind totals, nothing left alerts on created and stays quiet on funds_withdrawn", async () => {
+  const nothingLeft = () =>
+    Promise.resolve({ found: true, inserted: false, replay: false, parent_id: "c1c1c1c1-x", reversed_usd: 0 });
+
+  const withdrawn = fake(
+    { reverseContribution: nothingLeft },
+    disputeEvent({ status: "lost" }, "charge.dispute.funds_withdrawn"),
+  );
+  const first = await call(withdrawn.deps, post());
+  assertEquals(first.status, 200);
+  assertEquals(withdrawn.reversals.length, 1);
+  assertEquals(withdrawn.notices, []);
+
+  const created = fake({ reverseContribution: nothingLeft }, disputeEvent());
+  const second = await call(created.deps, post());
+  assertEquals(second.status, 200);
+  assertEquals(created.notices, [
+    "Dispute dp_handler_1: nothing left to reverse on contribution c1c1c1c1",
+  ]);
+});
+
+/**
+ * A reverse_contribution stand-in for the one $1 payment that follows the RPC:
+ * each kind reverses up to Stripe's cumulative total, the payment caps them all,
+ * an event id is a replay only once it inserted a row, and every result carries
+ * kind_reversed_usd and kind_total_usd.
+ */
+function paymentLedger(paymentUsd = 1) {
+  const reversedByKind: Record<string, number> = { refund: 0, dispute: 0 };
+  const insertedEvents = new Set<string>();
+  const rows: ReversalInput[] = [];
+  const reverseContribution = (input: ReversalInput) => {
+    const parent_id = REVERSED.parent_id;
+    if (insertedEvents.has(input.event_id)) {
+      return Promise.resolve({ found: true, inserted: false, replay: true, parent_id });
+    }
+    const before = reversedByKind[input.kind]!;
+    const all = reversedByKind.refund! + reversedByKind.dispute!;
+    const delta = Math.min(input.kind_total_usd - before, paymentUsd - all);
+    const totals = { kind_reversed_usd: before, kind_total_usd: input.kind_total_usd };
+    if (delta <= 0) {
+      return Promise.resolve({
+        found: true,
+        inserted: false,
+        replay: false,
+        parent_id,
+        reversed_usd: 0,
+        ...totals,
+      });
+    }
+    insertedEvents.add(input.event_id);
+    reversedByKind[input.kind] = before + delta;
+    rows.push(input);
+    return Promise.resolve({ ...REVERSED, reversed_usd: delta, ...totals });
+  };
+  return { reverseContribution, rows };
+}
+
+function withId(event: WebhookEvent, id: string): WebhookEvent {
+  return { ...event, id };
+}
+
+/** Delivers each event to a fresh handler over one ledger and collects every alert. */
+async function deliver(
+  ledger: ReturnType<typeof paymentLedger>,
+  events: WebhookEvent[],
+): Promise<string[]> {
+  const notices: string[] = [];
+  for (const event of events) {
+    const f = fake({ reverseContribution: ledger.reverseContribution }, event);
+    const { status } = await call(f.deps, post());
+    assertEquals(status, 200, event.id);
+    notices.push(...f.notices);
+  }
+  return notices;
+}
+
+Deno.test("a dispute reverses once and alerts once whichever of its two events arrives first", async () => {
+  const created = withId(disputeEvent(), "evt_dispute_created");
+  const withdrawn = withId(
+    disputeEvent({}, "charge.dispute.funds_withdrawn"),
+    "evt_dispute_withdrawn",
+  );
+  for (const order of [[created, withdrawn], [withdrawn, created]]) {
+    const ledger = paymentLedger();
+    const notices = await deliver(ledger, order);
+    const label = order.map((e) => e.type).join(" then ");
+    assertEquals(ledger.rows.length, 1, label);
+    assertEquals(notices.length, 1, label);
+    assert(notices[0]!.startsWith("Dispute dp_handler_1: reversed $1.00"), label);
+  }
+});
+
+Deno.test("an inquiry, then a full refund, then the escalation's funds_withdrawn alerts that nothing was left", async () => {
+  const ledger = paymentLedger();
+  const notices = await deliver(ledger, [
+    withId(disputeEvent({ status: "warning_needs_response" }), "evt_inquiry"),
+    withId(refundedEvent({ amount_refunded: 100 }), "evt_refund_full"),
+    withId(disputeEvent({}, "charge.dispute.funds_withdrawn"), "evt_escalated"),
+  ]);
+  assertEquals(ledger.rows.map((row) => row.kind), ["refund"]);
+  assertEquals(notices.length, 3);
+  assert(notices[0]!.includes("is an inquiry"));
+  assert(notices[1]!.startsWith("Refund ch_handler_1: reversed $1.00"));
+  assertEquals(
+    notices[2],
+    "Dispute dp_handler_1: nothing left to reverse on contribution c1c1c1c1",
+  );
+});
+
+Deno.test("the webhook listens to exactly the five events", () => {
+  assertEquals([...WEBHOOK_EVENTS], [
+    "checkout.session.completed",
+    "charge.updated",
+    "charge.refunded",
+    "charge.dispute.created",
+    "charge.dispute.funds_withdrawn",
+  ]);
+});
+
 Deno.test("dry run on a refund finds the session and never reverses", async () => {
   const { deps, reversals, notices } = fake({}, refundedEvent());
   const { status, body } = await call(deps, post(DRY_RUN_HEADERS));
@@ -743,4 +1034,35 @@ Deno.test("the reversal message warns when a card past voting falls below its ta
   assert(message.includes("the card is past voting and now below its target"));
   assert(message.endsWith("the pool balance is below zero"));
   assert(!message.includes("@"));
+});
+
+Deno.test("the reversal message does not call an open card past voting", () => {
+  for (const goal_stage of ["proposed", "designing", "voted"]) {
+    const message = reversalMessage("refund", "ch_1", {
+      ...REVERSED,
+      goal_card_id: "abcdef12-0000-4000-8000-000000000000",
+      goal_stage,
+      goal_funded_usd: 1.5,
+      goal_target_usd: 3,
+    });
+    assert(!message.includes("past voting"), goal_stage);
+  }
+});
+
+Deno.test("the reversal message warns when the 10% reserve or the emergency fund goes below zero", () => {
+  const message = reversalMessage("dispute", "dp_1", {
+    ...REVERSED,
+    pool_reserve_usd: -0.05,
+    pool_incident_reserve_usd: -0.01,
+  });
+  assert(message.includes("the 10% reserve is below zero"));
+  assert(message.includes("the emergency fund is below zero"));
+
+  const healthy = reversalMessage("dispute", "dp_1", {
+    ...REVERSED,
+    pool_reserve_usd: 0,
+    pool_incident_reserve_usd: 0.02,
+  });
+  assert(!healthy.includes("below zero"));
+  assert(!reversalMessage("refund", "ch_1", REVERSED).includes("below zero"));
 });

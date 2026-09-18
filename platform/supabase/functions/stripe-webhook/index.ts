@@ -1,12 +1,14 @@
 // Stripe webhook: checkout.session.completed or charge.updated → apply_contribution RPC;
-// charge.refunded or charge.dispute.created → reverse_contribution RPC.
+// charge.refunded, charge.dispute.created (not an inquiry) or
+// charge.dispute.funds_withdrawn → reverse_contribution RPC.
 // Deployed with verify_jwt = false (config.toml); the Stripe signature is the
 // authentication. The request handling lives in ../_shared/handler.ts with
-// these functions injected; a dry run (service-role bearer plus x-dry-run: 1)
-// verifies, parses and looks the session up but never calls an RPC.
-// NTFY_TOPIC_URL is optional: unset, reversals are not posted anywhere.
+// these functions injected. A dry run (x-dry-run: 1 with SUPABASE_SERVICE_ROLE_KEY
+// as the bearer) verifies, parses and looks the session up but never calls an
+// RPC; x-dry-run with any other bearer answers 401 and runs nothing.
+// NTFY_TOPIC_URL is optional: unset, alerts are not posted anywhere.
 
-import Stripe from "npm:stripe@^19";
+import Stripe from "npm:stripe@19.3.1";
 import type { Amounts } from "../_shared/split.ts";
 import { feeFromSession, type Parsed } from "../_shared/session.ts";
 import {

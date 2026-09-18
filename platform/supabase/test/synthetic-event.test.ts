@@ -66,6 +66,28 @@ describe("syntheticReversalEvent", () => {
       payment_intent: "pi_live_1",
       amount: 250,
       currency: "usd",
+      status: "needs_response",
+    });
+  });
+
+  it("builds a funds_withdrawn dispute with the given status", () => {
+    const event = syntheticReversalEvent("charge.dispute.funds_withdrawn", "abc", "pi_live_1", 100, 1700000000, "lost");
+    expect(event).toMatchObject({ id: "evt_synthetic_abc", type: "charge.dispute.funds_withdrawn" });
+    expect((event.data as { object: Record<string, unknown> }).object).toMatchObject({
+      id: "dp_synthetic_abc",
+      object: "dispute",
+      payment_intent: "pi_live_1",
+      amount: 100,
+      currency: "usd",
+      status: "lost",
+    });
+  });
+
+  it("builds a dispute inquiry when the status is a warning", () => {
+    const event = syntheticReversalEvent("charge.dispute.created", "abc", "pi_live_1", 100, 1700000000, "warning_needs_response");
+    expect((event.data as { object: Record<string, unknown> }).object).toMatchObject({
+      id: "dp_synthetic_abc",
+      status: "warning_needs_response",
     });
   });
 });
