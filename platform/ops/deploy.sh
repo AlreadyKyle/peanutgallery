@@ -259,20 +259,24 @@ own_for_build() {
 # prepare_install_dirs: gives the build uid the only folders pnpm install writes: node_modules beside
 # every tracked package.json, and the pnpm store. The rest of the code clone stays root's.
 prepare_install_dirs() {
-  local list entry
+  local list entry failed
   list=$(mktemp)
   if ! code_git ls-files -z -- package.json '*/package.json' > "$list"; then
     rm -f "$list"
     echo "could not list the package.json files in $CODE_DIR"
     return 1
   fi
+  failed=0
   while IFS= read -r -d '' entry; do
     if ! own_for_build "$CODE_DIR/$(dirname "$entry")/node_modules"; then
-      rm -f "$list"
-      return 1
+      failed=1
+      break
     fi
   done < "$list"
   rm -f "$list"
+  if [ "$failed" -ne 0 ]; then
+    return 1
+  fi
   own_for_build "$CODE_DIR/.pnpm-store"
 }
 
