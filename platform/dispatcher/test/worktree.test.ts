@@ -85,6 +85,10 @@ describe('pure helpers', () => {
     expect(isKernelPath('seed-1/vitest.config.ts')).toBe(true);
     expect(isKernelPath('seed-1/config/vitest.workspace.json')).toBe(true);
     expect(isKernelPath('platform/site/src/.npmrc')).toBe(true);
+    // pnpm 11 loads .pnpmfile.mjs as well as .pnpmfile.cjs.
+    expect(isKernelPath('.pnpmfile.cjs')).toBe(true);
+    expect(isKernelPath('.pnpmfile.mjs')).toBe(true);
+    expect(isKernelPath('seed-1/.pnpmfile.mjs')).toBe(true);
     expect(isKernelPath('platform/gate/ship-gate.sh')).toBe(true);
     expect(isKernelPath('seed-1/content/CLAUDE.md.txt')).toBe(false);
     expect(isKernelPath('seed-1/content/claude/notes.json')).toBe(false);

@@ -196,7 +196,7 @@ export const KERNEL_NAMES: readonly string[] = [
   '.gitattributes',
   '.gitmodules',
   '.npmrc',
-  '.pnpmfile.cjs',
+  '.pnpmfile.*',
   'package.json',
   'vite.config.*',
   'vitest.config.*',

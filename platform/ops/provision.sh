@@ -10,14 +10,27 @@
 # or copy it over and run it there:
 #   scp platform/ops/provision.sh root@<vps-ip>:/root/ && ssh root@<vps-ip> 'bash /root/provision.sh'
 #
-# The clone authenticates with GITHUB_TOKEN from the environment when set, else with GITHUB_TOKEN
+# The host holds two clones and a worktree folder (docs/specs/ops-separation.md):
+#   /srv/peanutgallery-code       the code clone: root-owned, cloned by root, mounted read-only into
+#                                 the container. The dispatcher and its node_modules run from here.
+#   /srv/peanutgallery            the work clone: uid 10001's, cloned inside the image as uid 10001.
+#                                 The dispatcher fetches, pushes and adds worktrees here.
+#   /srv/peanutgallery-worktrees  uid 10001's: card, smoke and probe worktrees.
+# Root never runs git or any other program from the work clone or the worktree folder: agent-written
+# code can write to both.
+#
+# The clones authenticate with GITHUB_TOKEN from the environment when set, else with GITHUB_TOKEN
 # from the env file, as a one-off header in git's environment. It is never written to .git/config.
 # NODE_IMAGE=node:22-bookworm-slim@sha256:<digest> pins the base image for the build.
 set -euo pipefail
 
 REPO_URL=https://github.com/AlreadyKyle/peanutgallery.git
 REPO_SLUG=AlreadyKyle/peanutgallery
-REPO_DIR=/srv/peanutgallery
+CODE_DIR=/srv/peanutgallery-code
+CODE_MOUNT=/opt/peanutgallery
+WORK_DIR=/srv/peanutgallery
+WORKTREE_DIR=/srv/peanutgallery-worktrees
+BUILD_UID=10002
 ETC_DIR=/etc/peanutgallery
 ENV_FILE=$ETC_DIR/dispatcher.env
 NTFY_FILE=$ETC_DIR/ntfy.url
@@ -33,6 +46,8 @@ SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID_SEED NETLIFY_SITE_ID_PLATFORM MODEL_BUILDER PRICE_TABLE_JSON STUDIO_ANTHROPIC_API_KEY HEALTHCHECK_URL NTFY_TOPIC_URL"
 # Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key.
 FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY"
+# Set by dispatcher.service, so the env file never carries a second value.
+UNIT_KEYS="DISPATCHER_CODE_ROOT DISPATCHER_REPO_ROOT DISPATCHER_WORKTREE_ROOT DISPATCHER_CODE_READONLY"
 
 CHANGES=0
 
@@ -100,6 +115,12 @@ check_env_lines() {
       problems=1
     fi
   done
+  for name in $UNIT_KEYS; do
+    if grep -q "^$name=" "$file"; then
+      echo "$name is set by dispatcher.service; remove it from the env file"
+      problems=1
+    fi
+  done
   value=$(env_value GITHUB_REPO "$file")
   if [ -n "$value" ] && [ "$value" != "$REPO_SLUG" ]; then
     echo "GITHUB_REPO is not $REPO_SLUG, the repository this VPS clones"
@@ -122,7 +143,10 @@ check_host() {
   # shellcheck source=/dev/null
   os=$(. /etc/os-release && echo "$ID $VERSION_ID")
   [ "$os" = "ubuntu 24.04" ] || die "this is $os; the dispatcher's units are written for Ubuntu 24.04"
-  [ "$(uname -m)" = x86_64 ] || die "this is $(uname -m); the image is built for x86_64"
+  case "$(uname -m)" in
+    x86_64 | aarch64) ;;
+    *) die "this is $(uname -m); the image and the claude CLI are built for x86_64 and arm64 (aarch64)" ;;
+  esac
   systemd_version=$(systemctl --version | awk 'NR == 1 { print $2 }')
   [ "${systemd_version%%.*}" -ge 254 ] || die "systemd $systemd_version has no RestartSteps (254 or later)"
   say "host: $os, $(uname -m), systemd $systemd_version"
@@ -267,36 +291,299 @@ EOF
   fi
 }
 
-clone_repository() {
-  local token header entry exclude
-  install -d -m 0700 "$ETC_DIR"
-  if [ ! -d "$REPO_DIR/.git" ]; then
-    token=${GITHUB_TOKEN:-$(env_value GITHUB_TOKEN)}
-    [ -n "$token" ] || die "no GitHub token to clone with: upload $ENV_FILE first (README.md), or pass GITHUB_TOKEN for this run"
-    header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$token" | base64 -w0)"
-    mkdir -p "$(dirname "$REPO_DIR")"
-    GIT_CONFIG_COUNT=2 \
-      GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null \
-      GIT_CONFIG_KEY_1=http.https://github.com/.extraheader GIT_CONFIG_VALUE_1="$header" \
-      git clone --quiet "$REPO_URL" "$REPO_DIR"
-    changed "cloned $REPO_URL into $REPO_DIR"
+# github_header: the one-off https header for github.com, from GITHUB_TOKEN in the environment or
+# the env file.
+github_header() {
+  local token
+  token=${GITHUB_TOKEN:-$(env_value GITHUB_TOKEN)}
+  [ -n "$token" ] || die "no GitHub token to clone with: upload $ENV_FILE first (README.md), or pass GITHUB_TOKEN for this run"
+  printf 'AUTHORIZATION: basic %s' "$(printf 'x-access-token:%s' "$token" | base64 -w0)"
+}
+
+# ensure_dir <path> <owner uid> <mode>: creates the folder, or corrects the folder's own owner and
+# mode. Never recursive: root does not walk a tree uid 10001 writes to.
+ensure_dir() {
+  local dir=$1 owner=$2 mode=$3
+  [ ! -L "$dir" ] || die "$dir is a symlink; move it aside"
+  if [ ! -d "$dir" ]; then
+    install -d -o "$owner" -g "$owner" -m "$mode" "$dir"
+    changed "created $dir ($owner:$owner, $mode)"
+  elif [ "$(stat -c '%u:%g %a' "$dir")" != "$owner:$owner ${mode#0}" ]; then
+    chown "$owner:$owner" "$dir"
+    chmod "$mode" "$dir"
+    changed "$dir set to $owner:$owner, $mode"
   fi
-  if git config --file "$REPO_DIR/.git/config" --get-regexp 'extraheader' > /dev/null; then
-    die "$REPO_DIR/.git/config stores an extraheader; remove it: the token must never be on disk"
+}
+
+# >>> code clone functions: identical in deploy.sh and provision.sh (platform/ops/test/ops.test.mjs)
+
+# code_git <args>: git in the code clone, as root. No system or global configuration is read,
+# replacement objects are ignored, no pager runs, and core.fsmonitor and hooks are off on the
+# command line, which overrides any value in the clone's own configuration.
+code_git() {
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_PAGER=cat \
+    git -c safe.directory="$CODE_DIR" -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$CODE_DIR" "$@"
+}
+
+# check_clean: returns 0 when the code clone has no uncommitted change and no untracked file, else
+# prints what differs and how to inspect it and returns 1. Ignored and excluded files (node_modules,
+# .pnpm-store) do not count. Only deploy.sh and provision.sh change this clone, so a difference is
+# treated as tampering.
+check_clean() {
+  local status
+  if ! status=$(code_git status --porcelain --untracked-files=all); then
+    echo "could not read the status of $CODE_DIR"
+    return 1
   fi
-  [ "$(git config --file "$REPO_DIR/.git/config" --get remote.origin.url)" = "$REPO_URL" ] || die "$REPO_DIR's origin is not $REPO_URL"
-  exclude=$REPO_DIR/.git/info/exclude
-  for entry in .pnpm-store .worktrees; do
-    if ! grep -qxF "$entry" "$exclude" 2> /dev/null; then
-      mkdir -p "$(dirname "$exclude")"
-      echo "$entry" >> "$exclude"
-      changed "$entry added to .git/info/exclude"
+  [ -z "$status" ] && return 0
+  echo "$CODE_DIR has uncommitted or untracked files, and only deploy.sh and provision.sh change it. Treat it as tampering: find out who changed it before anything runs from it. The first entries:"
+  head -n 20 <<< "$status"
+  echo "Inspect, as root, with fsmonitor and hooks off:
+  git -c safe.directory=$CODE_DIR -c core.fsmonitor=false -c core.hooksPath=/dev/null -C $CODE_DIR status --untracked-files=all
+  git -c safe.directory=$CODE_DIR -c core.fsmonitor=false -c core.hooksPath=/dev/null -C $CODE_DIR diff
+Then move the clone aside and run provision.sh again (README.md, Roll back)."
+  return 1
+}
+
+# The keys git writes in a clone's own configuration. Any other key (a credential helper, a proxy or
+# ssh command, an attributes or excludes file, a worktree) is refused.
+CODE_CONFIG_KEYS=" core.repositoryformatversion core.filemode core.bare core.logallrefupdates core.ignorecase core.precomposeunicode core.symlinks remote.origin.url remote.origin.fetch branch.main.remote branch.main.merge extensions.objectformat lfs.repositoryformatversion "
+
+# check_code_clone: refuses state in the code clone that would make git or node act on something
+# other than the commit: a .git that is not a folder, index flags other than H (assume-unchanged,
+# skip-worktree), configuration keys git does not write for a clone, info/attributes, info/grafts,
+# commondir or objects/info/alternates, a setuid or setgid file, and a symlink that is absolute, does
+# not resolve, or resolves outside the clone. Prints one line per problem and returns 1 when there
+# is any.
+check_code_clone() {
+  local problems=0 list entry keys key file root links outside
+  if [ ! -d "$CODE_DIR/.git" ] || [ -L "$CODE_DIR/.git" ]; then
+    echo "$CODE_DIR/.git is not a folder"
+    return 1
+  fi
+  list=$(mktemp)
+  if ! code_git ls-files -v -z > "$list"; then
+    echo "could not list the index of $CODE_DIR"
+    problems=1
+  fi
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      'H '*) ;;
+      *)
+        echo "the index marks ${entry#* } with ${entry%% *}; only H is expected (no assume-unchanged or skip-worktree)"
+        problems=1
+        ;;
+    esac
+  done < "$list"
+  rm -f "$list"
+  if ! keys=$(code_git config --local --name-only --list); then
+    echo "could not read $CODE_DIR/.git/config"
+    problems=1
+  fi
+  while IFS= read -r key; do
+    [ -n "$key" ] || continue
+    case "$CODE_CONFIG_KEYS" in
+      *" $key "*) ;;
+      *)
+        echo "$CODE_DIR/.git/config sets $key, which git does not write for a clone"
+        problems=1
+        ;;
+    esac
+  done <<< "$keys"
+  for file in info/attributes info/grafts commondir objects/info/alternates; do
+    if [ -e "$CODE_DIR/.git/$file" ] || [ -L "$CODE_DIR/.git/$file" ]; then
+      echo "$CODE_DIR/.git/$file exists; a clone has none"
+      problems=1
     fi
   done
-  if [ -n "$(find "$REPO_DIR" \( ! -uid "$AGENT_UID" -o ! -gid "$AGENT_UID" \) -print -quit)" ]; then
-    chown -R "$AGENT_UID:$AGENT_UID" "$REPO_DIR"
-    changed "$REPO_DIR owned by $AGENT_UID:$AGENT_UID"
+  file=$(find "$CODE_DIR" ! -type l \( -perm -4000 -o -perm -2000 \) -print -quit)
+  if [ -n "$file" ]; then
+    echo "$file is setuid or setgid"
+    problems=1
   fi
+  file=$(find "$CODE_DIR" -type l -lname '/*' -print -quit)
+  if [ -n "$file" ]; then
+    echo "$file is an absolute symlink"
+    problems=1
+  fi
+  root=$(cd "$CODE_DIR" && pwd -P)
+  if ! links=$(find "$CODE_DIR" -type l -exec readlink -f {} +); then
+    echo "$CODE_DIR has a symlink that does not resolve"
+    problems=1
+  fi
+  outside=$(printf '%s\n' "$links" | awk -v root="$root" 'NF && index($0, root "/") != 1 && $0 != root { print; exit }')
+  if [ -n "$outside" ]; then
+    echo "a symlink in $CODE_DIR resolves outside it, to $outside"
+    problems=1
+  fi
+  [ "$problems" = 0 ]
+}
+
+# own_for_build <folder>: creates the folder for the build uid, or gives an existing one to it.
+own_for_build() {
+  if [ -L "$1" ]; then
+    echo "$1 is a symlink"
+    return 1
+  fi
+  if [ -d "$1" ]; then
+    chown -hR "$BUILD_UID:$BUILD_UID" "$1"
+  else
+    install -d -o "$BUILD_UID" -g "$BUILD_UID" -m 0755 "$1"
+  fi
+}
+
+# prepare_install_dirs: gives the build uid the only folders pnpm install writes: node_modules beside
+# every tracked package.json, and the pnpm store. The rest of the code clone stays root's.
+prepare_install_dirs() {
+  local list entry failed
+  list=$(mktemp)
+  if ! code_git ls-files -z -- package.json '*/package.json' > "$list"; then
+    rm -f "$list"
+    echo "could not list the package.json files in $CODE_DIR"
+    return 1
+  fi
+  failed=0
+  while IFS= read -r -d '' entry; do
+    if ! own_for_build "$CODE_DIR/$(dirname "$entry")/node_modules"; then
+      failed=1
+      break
+    fi
+  done < "$list"
+  rm -f "$list"
+  if [ "$failed" -ne 0 ]; then
+    return 1
+  fi
+  own_for_build "$CODE_DIR/.pnpm-store"
+}
+
+# run_install: pnpm install into the code clone in a throwaway container, as the build uid, with no
+# capability, no env file and an environment of four names. .git is mounted read-only over the code
+# mount, and the build uid owns only the folders prepare_install_dirs gave it, so neither pnpm nor a
+# dependency script can change git state or a tracked file. Root is not needed: pnpm writes only
+# node_modules and the store.
+run_install() {
+  docker run --rm --pull never --user "$BUILD_UID:$BUILD_UID" --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$CODE_DIR:$CODE_MOUNT" --volume "$CODE_DIR/.git:$CODE_MOUNT/.git:ro" \
+    --workdir "$CODE_MOUNT" --entrypoint /usr/bin/env \
+    "$IMAGE:current" -i PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp CI=true \
+    pnpm_config_store_dir="$CODE_MOUNT/.pnpm-store" \
+    pnpm install --frozen-lockfile --prefer-offline
+}
+
+# unit_text <sha> <unit>: the unit file as committed at sha.
+unit_text() {
+  code_git show "$1:platform/ops/$2"
+}
+
+# build_context <sha>: platform/ops as committed at sha, as a tar stream for docker build.
+build_context() {
+  code_git archive --format=tar "$1:platform/ops"
+}
+
+# <<< code clone functions
+
+# agent_git <args>: git as uid 10001 inside the dispatcher image, in the work clone, with no capability
+# and no env file. When GITHUB_AUTH_HEADER is exported it becomes git's one-off extraheader for
+# github.com; docker passes it by name, so its value is on no command line and never in .git/config.
+agent_git() {
+  local config=(-e GIT_CONFIG_COUNT=0)
+  if [ -n "${GITHUB_AUTH_HEADER:-}" ]; then
+    config=(-e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=http.https://github.com/.extraheader -e GIT_CONFIG_VALUE_0)
+  fi
+  GIT_CONFIG_VALUE_0=${GITHUB_AUTH_HEADER:-} docker run --rm --pull never --user "$AGENT_UID:$AGENT_UID" \
+    --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$WORK_DIR:$WORK_DIR" --workdir "$WORK_DIR" --entrypoint git "${config[@]}" \
+    "$IMAGE:current" -c core.fsmonitor=false -c core.hooksPath=/dev/null "$@"
+}
+
+# The code clone: cloned by root over https, root-owned, clean. pnpm's store is excluded from git.
+clone_code() {
+  local header exclude problems
+  install -d -m 0700 "$ETC_DIR"
+  ensure_dir "$CODE_DIR" 0 0755
+  if [ ! -d "$CODE_DIR/.git" ]; then
+    [ -z "$(find "$CODE_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ] || die "$CODE_DIR has files but no .git; move it aside"
+    header=$(github_header)
+    (
+      export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader GIT_CONFIG_VALUE_0="$header"
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c core.fsmonitor=false -c core.hooksPath=/dev/null clone --quiet "$REPO_URL" "$CODE_DIR"
+    )
+    changed "cloned $REPO_URL into $CODE_DIR"
+  fi
+  if ! problems=$(check_code_clone); then
+    die "$problems"
+  fi
+  if code_git config --local --get-regexp extraheader > /dev/null; then
+    die "$CODE_DIR/.git/config stores an extraheader; remove it: the token must never be on disk"
+  fi
+  [ "$(code_git config --local --get remote.origin.url)" = "$REPO_URL" ] || die "$CODE_DIR's origin is not $REPO_URL"
+  exclude=$CODE_DIR/.git/info/exclude
+  if ! grep -qxF .pnpm-store "$exclude" 2> /dev/null; then
+    mkdir -p "$(dirname "$exclude")"
+    echo .pnpm-store >> "$exclude"
+    changed ".pnpm-store added to $exclude"
+  fi
+  if ! problems=$(check_clean); then
+    die "$problems"
+  fi
+}
+
+# node_modules in the code clone, installed by the build uid in a throwaway container (run_install).
+# It runs when the installed lockfile differs from the committed one, so a second run changes nothing.
+install_dependencies() {
+  local problems
+  if ! cmp -s "$CODE_DIR/pnpm-lock.yaml" "$CODE_DIR/node_modules/.pnpm/lock.yaml"; then
+    if ! problems=$(prepare_install_dirs); then
+      die "could not prepare node_modules for the install: $problems"
+    fi
+    run_install
+    changed "installed node_modules in $CODE_DIR in a throwaway container"
+  fi
+}
+
+# No setuid or setgid bit, root owns everything in the code clone, nothing in it is writable by group
+# or others, and it is clean and holds no git state a clone does not have.
+lock_code_clone() {
+  local problems
+  if [ -n "$(find "$CODE_DIR" ! -type l \( -perm -4000 -o -perm -2000 \) -print -quit)" ]; then
+    find "$CODE_DIR" ! -type l \( -perm -4000 -o -perm -2000 \) -exec chmod ug-s {} +
+    changed "setuid and setgid bits removed in $CODE_DIR"
+  fi
+  if [ -n "$(find "$CODE_DIR" \( ! -user 0 -o ! -group 0 \) -print -quit)" ]; then
+    chown -hR 0:0 "$CODE_DIR"
+    changed "$CODE_DIR owned by root"
+  fi
+  if [ -n "$(find "$CODE_DIR" ! -type l \( -perm -020 -o -perm -002 \) -print -quit)" ]; then
+    find "$CODE_DIR" ! -type l \( -perm -020 -o -perm -002 \) -exec chmod go-w {} +
+    changed "group and other write removed in $CODE_DIR"
+  fi
+  if ! problems=$(check_clean); then
+    die "$problems"
+  fi
+  if ! problems=$(check_code_clone); then
+    die "$problems"
+  fi
+}
+
+# The work clone: uid 10001's, cloned inside the image as uid 10001, so root never runs git in a tree
+# agent-written code can write to. The worktree folder beside it is uid 10001's too.
+create_work_clone() {
+  local origin
+  ensure_dir "$WORK_DIR" "$AGENT_UID" 0755
+  if [ ! -d "$WORK_DIR/.git" ]; then
+    [ -z "$(find "$WORK_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ] || die "$WORK_DIR has files but no .git; move it aside"
+    GITHUB_AUTH_HEADER=$(github_header)
+    export GITHUB_AUTH_HEADER
+    agent_git clone --quiet "$REPO_URL" "$WORK_DIR"
+    unset GITHUB_AUTH_HEADER
+    changed "cloned $REPO_URL into $WORK_DIR as uid $AGENT_UID"
+  fi
+  origin=$(agent_git config --get remote.origin.url) || die "could not read $WORK_DIR's origin"
+  [ "$origin" = "$REPO_URL" ] || die "$WORK_DIR's origin is not $REPO_URL"
+  if agent_git config --get-regexp extraheader > /dev/null; then
+    die "$WORK_DIR/.git/config stores an extraheader; remove it: the token must never be on disk"
+  fi
+  ensure_dir "$WORKTREE_DIR" "$AGENT_UID" 0700
 }
 
 check_env_file() {
@@ -330,9 +617,10 @@ $problems"
   fi
 }
 
+# The image is built from the code clone's commit, never from its working tree.
 build_image() {
   local sha current wanted
-  sha=$(git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" rev-parse HEAD)
+  sha=$(code_git rev-parse HEAD)
   if docker image inspect "$IMAGE:$sha" > /dev/null 2>&1; then
     wanted=$(docker image inspect --format '{{.Id}}' "$IMAGE:$sha")
     current=$(docker image inspect --format '{{.Id}}' "$IMAGE:current" 2> /dev/null || true)
@@ -341,20 +629,22 @@ build_image() {
       changed "$IMAGE:current tagged $sha"
     fi
   else
-    docker build --build-arg NODE_IMAGE="$NODE_IMAGE" \
-      -f "$REPO_DIR/platform/ops/Dockerfile.dispatcher" \
-      -t "$IMAGE:$sha" -t "$IMAGE:current" "$REPO_DIR/platform/ops"
-    changed "built $IMAGE:$sha and :current"
+    build_context "$sha" | docker build --build-arg NODE_IMAGE="$NODE_IMAGE" -f Dockerfile.dispatcher -t "$IMAGE:$sha" -t "$IMAGE:current" -
+    changed "built $IMAGE:$sha and :current from $sha"
   fi
 }
 
+# The units as committed at the code clone's HEAD.
 install_units() {
-  local unit reload=0
+  local unit sha text reload=0
+  sha=$(code_git rev-parse HEAD)
   for unit in $UNITS; do
-    if ! cmp -s "$REPO_DIR/platform/ops/$unit" "/etc/systemd/system/$unit"; then
-      install -m 0644 "$REPO_DIR/platform/ops/$unit" "/etc/systemd/system/$unit"
+    text=$(mktemp)
+    unit_text "$sha" "$unit" > "$text"
+    install_file "/etc/systemd/system/$unit" 0644 < "$text"
+    rm -f "$text"
+    if [ "$WROTE" = 1 ]; then
       reload=1
-      changed "installed /etc/systemd/system/$unit"
     fi
   done
   if [ "$reload" = 1 ]; then
@@ -375,9 +665,12 @@ main() {
   configure_firewall
   configure_sshd
   configure_upgrades
-  clone_repository
+  clone_code
   check_env_file
   build_image
+  install_dependencies
+  lock_code_clone
+  create_work_clone
   install_units
   if systemctl is-active --quiet dispatcher; then
     say "the dispatcher is running"

@@ -37,6 +37,8 @@ beforeAll(async () => {
   await git(['add', '-A'], repo);
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'initial'], repo);
   config = {
+    codeRoot: repo,
+    codeReadonly: false,
     repoRoot: repo,
     agentMode: 'attended',
     supabaseUrl: 'https://db.local',

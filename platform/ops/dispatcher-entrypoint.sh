@@ -1,14 +1,20 @@
 #!/bin/sh
 # dispatcher-entrypoint.sh: the container's command under tini (Dockerfile.dispatcher).
-# Checks the pinned claude CLI and the https origin, installs the workspace's dependencies into the
-# bind-mounted clone, then execs the dispatcher so it receives tini's signals directly.
+# Checks the pinned claude CLI, the code clone and the work clone's https origin, then execs the
+# dispatcher from the code clone so it receives tini's signals directly.
 #
-# Exit 78 when a check fails that no restart can fix (the wrong CLI, no clone, a non-https origin):
-# dispatcher.service does not restart exit 78. A failed install exits non-zero otherwise, and systemd
-# backs off and retries (a network blip). The dispatcher itself exits 78 or 1 (src/exit-code.ts).
+# The dispatcher's code and node_modules come from the root-owned code clone, mounted read-only at
+# /opt/peanutgallery; deploy.sh installs node_modules there in a throwaway container with no secret.
+# Nothing is installed here, and nothing runs from the work clone at /srv/peanutgallery, which uid
+# 10001 and agent-written code can write to (docs/specs/ops-separation.md).
+#
+# Exit 78 when a check fails that no restart can fix (the wrong CLI, a missing clone, a non-https
+# origin): dispatcher.service does not restart exit 78. The dispatcher itself exits 78 or 1
+# (src/exit-code.ts), 78 among others when its code root is writable.
 set -eu
 
-REPO=/srv/peanutgallery
+CODE=${DISPATCHER_CODE_ROOT:-/opt/peanutgallery}
+REPO=${DISPATCHER_REPO_ROOT:-/srv/peanutgallery}
 EXIT_FATAL=78
 
 fatal() {
@@ -16,8 +22,9 @@ fatal() {
   exit "$EXIT_FATAL"
 }
 
-cd "$REPO" 2> /dev/null || fatal "$REPO is not mounted"
-[ -d .git ] || fatal "$REPO has no .git; provision.sh clones the repository there"
+[ -f "$CODE/platform/dispatcher/src/main.ts" ] || fatal "$CODE has no dispatcher; dispatcher.service mounts the code clone there"
+[ -d "$CODE/node_modules" ] || fatal "$CODE has no node_modules; deploy.sh installs them"
+[ -d "$REPO/.git" ] || fatal "$REPO has no .git; provision.sh clones the work clone there"
 
 wanted=${CLAUDE_CODE_VERSION:?CLAUDE_CODE_VERSION is set by the image}
 reported=$(claude --version 2> /dev/null) || fatal "claude --version failed"
@@ -27,18 +34,18 @@ case "$version" in
   *) fatal "claude --version reports '$version'; this image pins $wanted" ;;
 esac
 
-origin=$(git -c core.hooksPath=/dev/null remote get-url origin 2> /dev/null) || fatal "the clone has no origin remote"
+origin=$(git -C "$REPO" -c core.fsmonitor=false -c core.hooksPath=/dev/null remote get-url origin 2> /dev/null) || fatal "the work clone has no origin remote"
 case "$origin" in
   https://github.com/*) ;;
   *) fatal "origin is not an https github.com URL; the dispatcher fetches and pushes with an https token header" ;;
 esac
 
-# The install needs no secret, so it runs with none: the dependency scripts it runs never see the
-# dispatcher's environment.
-env -i PATH="$PATH" HOME="$HOME" CI=true pnpm_config_store_dir="${pnpm_config_store_dir:?set by the image}" \
-  pnpm install --frozen-lockfile --prefer-offline
+# tsx keeps a transform cache in the temp folder, which agent-written code in this container can write
+# to. With the cache off every module is compiled from the read-only code clone.
+TSX_DISABLE_CACHE=1
+export TSX_DISABLE_CACHE
 
 # The package's start script is `tsx src/main.ts`; loading tsx into node directly runs the same
 # entry without a second process between tini and the dispatcher.
-cd platform/dispatcher
+cd "$CODE/platform/dispatcher" || fatal "$CODE/platform/dispatcher is not readable"
 exec node --import tsx src/main.ts

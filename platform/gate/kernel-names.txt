@@ -9,7 +9,7 @@ CLAUDE.local.md
 .gitattributes
 .gitmodules
 .npmrc
-.pnpmfile.cjs
+.pnpmfile.*
 package.json
 vite.config.*
 vitest.config.*

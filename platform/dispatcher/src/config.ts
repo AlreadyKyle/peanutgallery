@@ -5,6 +5,12 @@ import { modelPrice, parsePriceTable, type PriceTable } from './pricing.js';
 import type { AgentMode } from './throttle.js';
 
 export interface DispatcherConfig {
+  // The checkout the dispatcher's own code and node_modules are loaded from.
+  codeRoot: string;
+  // DISPATCHER_CODE_READONLY=required: startup refuses a code root this process can write to.
+  codeReadonly: boolean;
+  // The clone git fetches, pushes and adds worktrees from: the code root unless
+  // DISPATCHER_REPO_ROOT names another. On the VPS it is a separate clone no code runs from.
   repoRoot: string;
   agentMode: AgentMode;
   supabaseUrl: string;
@@ -130,7 +136,40 @@ export function pricedModel(model: string, name: string, table: PriceTable): str
   return model;
 }
 
-export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
+// True when target is root itself or a path inside it.
+function inside(target: string, root: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+export type Roots = Pick<DispatcherConfig, 'codeRoot' | 'codeReadonly' | 'repoRoot' | 'worktreeRoot'>;
+
+// DISPATCHER_CODE_ROOT, when set, must name the checkout the process really runs from, or the
+// read-only check would look at a folder the code is not loaded from. A read-only code root cannot
+// hold the git state and the worktrees the dispatcher writes.
+export function rootsEnv(env: Env, codeRoot: string): Roots {
+  const declared = optionalEnv(env, 'DISPATCHER_CODE_ROOT', '');
+  if (declared && path.resolve(declared) !== path.resolve(codeRoot)) {
+    throw new ConfigError(`DISPATCHER_CODE_ROOT is ${declared} but the dispatcher runs from ${codeRoot}`);
+  }
+  const readonly = optionalEnv(env, 'DISPATCHER_CODE_READONLY', 'off');
+  if (readonly !== 'required' && readonly !== 'off') throw new ConfigError('DISPATCHER_CODE_READONLY must be required or off');
+  const repoRoot = path.resolve(codeRoot, optionalEnv(env, 'DISPATCHER_REPO_ROOT', '.'));
+  const worktreeRoot = path.resolve(repoRoot, optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '.worktrees'));
+  if (readonly === 'required') {
+    const writable: Array<[string, string]> = [
+      ['DISPATCHER_REPO_ROOT', repoRoot],
+      ['DISPATCHER_WORKTREE_ROOT', worktreeRoot],
+    ];
+    for (const [name, target] of writable) {
+      if (inside(target, path.resolve(codeRoot))) throw new ConfigError(`${name} must be outside the code root when DISPATCHER_CODE_READONLY is required`);
+    }
+  }
+  return { codeRoot, codeReadonly: readonly === 'required', repoRoot, worktreeRoot };
+}
+
+// codeRoot is the checkout this process runs from; main.ts derives it from its own path.
+export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
   const scheduler = optionalEnv(env, 'DISPATCHER_SCHEDULER', 'on');
@@ -139,8 +178,9 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
   const modelBuilder = requireEnv(env, 'MODEL_BUILDER');
   const priceTable = priceTableEnv(env);
   pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
+  const roots = rootsEnv(env, codeRoot);
   return {
-    repoRoot,
+    ...roots,
     agentMode,
     supabaseUrl: requireEnv(env, 'SUPABASE_URL'),
     supabaseServiceRoleKey: requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY'),
@@ -159,7 +199,6 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
     sessionMaxMinutes: positiveIntegerEnv(env, 'SESSION_MAX_MINUTES', 60),
     agentHourlyRateUsd: numberEnv(env, 'AGENT_HOURLY_RATE_USD', 5),
     tickMs: positiveIntegerEnv(env, 'DISPATCHER_TICK_MS', 60_000),
-    worktreeRoot: path.resolve(repoRoot, optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '.worktrees')),
     maxConcurrency: positiveIntegerEnv(env, 'DISPATCHER_MAX_CONCURRENCY', 1),
     schedulerEnabled: scheduler === 'on',
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),

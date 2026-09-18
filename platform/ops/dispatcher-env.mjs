@@ -34,7 +34,10 @@ export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_HOST'];
 export const NOT_COPIED = {
   ANTHROPIC_API_KEY: "the founder's key; the VPS bills the studio key only",
   CLAUDE_BIN: 'the image sets /usr/local/bin/claude; a path on the Mac does not exist on the VPS',
-  DISPATCHER_WORKTREE_ROOT: 'the default, .worktrees in the clone, is the folder provision.sh excludes; a path on the Mac does not exist on the VPS',
+  DISPATCHER_WORKTREE_ROOT: 'dispatcher.service sets /srv/peanutgallery-worktrees; a path on the Mac does not exist on the VPS',
+  DISPATCHER_CODE_ROOT: 'dispatcher.service sets /opt/peanutgallery, the read-only code clone',
+  DISPATCHER_REPO_ROOT: 'dispatcher.service sets /srv/peanutgallery, the work clone',
+  DISPATCHER_CODE_READONLY: 'dispatcher.service sets required',
 };
 
 // Never in the VPS env file (provision.sh refuses a file that has one).

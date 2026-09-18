@@ -6,6 +6,8 @@ import type { DispatcherConfig } from '../src/config.js';
 import { parsePriceTable } from '../src/pricing.js';
 
 const base: DispatcherConfig = {
+  codeRoot: '/repo',
+  codeReadonly: false,
   repoRoot: '/repo',
   agentMode: 'attended',
   supabaseUrl: 'https://db.local',

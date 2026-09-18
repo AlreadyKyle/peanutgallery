@@ -5,17 +5,25 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 ## What runs where
 
 - **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto: free, in Canada, 4 cores and 24 GB of memory. Everything below is the same on any Ubuntu 24.04 host.
-- **Repository.** An https clone at `/srv/peanutgallery`, owned by uid 10001. It is bind-mounted at the same path in the container, so card worktrees (`.worktrees`) and the pnpm store (`.pnpm-store`) live in the clone and survive restarts.
-- **Image.** `peanutgallery/dispatcher:current` (also tagged with the commit it was built or deployed at). It holds Node 22, git, tini, pnpm 11.0.9 and the claude CLI 2.1.139, and nothing from the repository. Its entrypoint checks the CLI version and the https origin, runs `pnpm install` with no secret in its environment, and starts `platform/dispatcher/src/main.ts`.
+- **Two clones and a worktree folder** (`docs/specs/ops-separation.md`). Agent-written code runs as uid 10001, so nothing uid 10001 can write is ever run by root or loaded as the dispatcher's code.
+
+  | Host path | Owner | In the container | Holds |
+  |---|---|---|---|
+  | `/srv/peanutgallery-code` | root, not writable by others | `/opt/peanutgallery`, read-only | the code clone: the dispatcher's code, `node_modules` and the pnpm store (`.pnpm-store`, excluded from git). Only `deploy.sh` and `provision.sh` change it. |
+  | `/srv/peanutgallery` | uid 10001 | same path, read-write | the work clone: the git state the dispatcher fetches, pushes and adds worktrees from. Nothing runs from it, and root runs no git in it. |
+  | `/srv/peanutgallery-worktrees` | uid 10001, 0700 | same path, read-write | card, smoke and probe worktrees. Their metadata lives in the work clone's `.git`, so both survive restarts. |
+
+  The dispatcher starts with `DISPATCHER_CODE_READONLY=required` and exits 78 when it can write to its code root or its `node_modules`.
+- **Image.** `peanutgallery/dispatcher:current` (also tagged with the commit it was built or deployed at), built from `git archive <sha>:platform/ops`, never from a working tree. It holds Node 22, git, tini, bubblewrap, socat, pnpm 11.0.9 and the claude CLI 2.1.139, plus Claude Code's managed settings at `/etc/claude-code/managed-settings.json` (root, 0644: hooks off, reads of `/proc`, the env files and credential folders denied, edits to both clones denied). Its entrypoint checks the CLI version, the code clone and the work clone's https origin, and starts `platform/dispatcher/src/main.ts` from the code clone. It installs nothing.
 - **Secrets.** `/etc/peanutgallery/dispatcher.env`, root 0600, read only by `docker run --env-file`. Format: `KEY=value`, no quotes, no `export`, JSON on one line.
 - **Units.** `dispatcher.service` runs the container. `dispatcher-alert.service` posts to ntfy when the dispatcher unit fails for good; it reads the topic URL from `/etc/peanutgallery/ntfy.url`.
 
 | File | Runs on | Does |
 |---|---|---|
 | `make-dispatcher-env.sh` | the Mac | writes the env file from `.env` and three exported values |
-| `provision.sh` | the VPS, as root | prepares the host, clones, validates the env file, builds, installs and enables the units |
-| `deploy.sh` | the VPS, as root | fast-forwards to `origin/main`, rebuilds if `platform/ops` changed, restarts, waits for the probe |
-| `Dockerfile.dispatcher`, `dispatcher-entrypoint.sh` | the VPS | the image |
+| `provision.sh` | the VPS, as root | prepares the host, creates both clones and the worktree folder, validates the env file, builds, installs `node_modules`, installs and enables the units |
+| `deploy.sh` | the VPS, as root, piped over ssh from the Mac's checkout | refuses a dirty or altered code clone, checks the gate on GitHub, prints a review and waits for a confirmed sha, fast-forwards the code clone to `origin/main` (or checks out `--ref <sha>`), rebuilds if `platform/ops` changed, reinstalls `node_modules`, restarts, waits for the probe |
+| `Dockerfile.dispatcher`, `dispatcher-entrypoint.sh`, `managed-settings.json` | the VPS | the image |
 | `dispatcher.service`, `dispatcher-alert.service` | the VPS | the units |
 
 ## Operator inputs
@@ -55,7 +63,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
    ```sh
    ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh
    ```
-   It clones with the token from the env file, validates the env file (root 0600, no quoted value, `AGENT_MODE=unattended`, every required key, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR` or `MODEL_HOST`, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`), builds the image, runs `systemd-analyze verify` on both units and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
+   It clones the code clone as root with the token from the env file and refuses it if it has uncommitted or untracked files. It validates the env file (root 0600, no quoted value, `AGENT_MODE=unattended`, every required key, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR` or `MODEL_HOST`, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, and none of the `DISPATCHER_*_ROOT` or `DISPATCHER_CODE_READONLY` values the unit sets). It builds the image from the commit, installs `node_modules` into the code clone in a throwaway container with no secret, and makes the code clone root-owned and not writable by others. It clones the work clone inside the image as uid 10001, creates `/srv/peanutgallery-worktrees`, installs both units from the commit, runs `systemd-analyze verify` and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
 
 ### Pin the base image by digest
 
@@ -87,29 +95,52 @@ After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leav
 
 1. Merge to main as usual (the gate green on the head sha).
 2. Pause from /board and let any building card finish.
-3. `ssh root@$VPS_IP 'bash /srv/peanutgallery/platform/ops/deploy.sh'`
+3. On the Mac, bring your checkout to the reviewed main: `git switch main && git pull --ff-only`. Read `git log` and the diff of `platform/ops/deploy.sh` since you last deployed. The script root runs is the one in this checkout, never a file on the VPS: the copy in `/srv/peanutgallery-code` sits in the clone the script exists to distrust.
+4. From the repository root, run the review:
+   ```sh
+   ssh root@$VPS_IP 'bash -s' < platform/ops/deploy.sh
+   ```
+   It stops after printing the target sha, the commits it adds and removes, and a diff stat of `platform/ops`, `platform/dispatcher`, `package.json`, `pnpm-lock.yaml` and `.github`.
+5. Read that output. If every commit is one the board merged, deploy it:
+   ```sh
+   ssh root@$VPS_IP 'bash -s -- --confirm <first 12 characters of the target sha>' < platform/ops/deploy.sh
+   ```
+   When `deploy.sh` has a terminal, it asks for the 12 characters at a prompt instead.
 
-It refuses unless `studio_state.paused` is true and no card is building or gated, unless the clone is on `main`, and while the dispatcher unit is stopped (before the cutover, a start would run a second dispatcher beside the Mac's). It fetches with a one-off token header and fast-forwards inside the image as uid 10001. It rebuilds the image only when `platform/ops` changed (otherwise it tags `:current` with the new sha too), reinstalls changed units, restarts, and waits up to 10 minutes for `startup probe passed`. Then resume from /board. If the build fails, the clone is already at the new commit and the running dispatcher is unchanged: fix main and run `deploy.sh` again (it builds again), or roll back.
+It refuses unless `studio_state.paused` is true and no card is building or gated, and while the dispatcher unit is stopped (before the cutover, a start would run a second dispatcher beside the Mac's). Then, in the code clone only, with `core.fsmonitor` and hooks off and no system or global git configuration:
+- It refuses the clone when it has any uncommitted or untracked file, or git state a fresh clone does not have: index flags other than `H`, configuration keys git does not write for a clone, `.git/info/attributes`, `.git/info/grafts`, `.git/commondir` or `.git/objects/info/alternates`, a setuid or setgid file, or a symlink that is absolute, does not resolve or resolves outside the clone. The refusal prints what it found.
+- It fetches `main` from `https://github.com/AlreadyKyle/peanutgallery.git` by name, not from whatever `remote.origin.url` says, with a one-off token header.
+- It checks through the GitHub API that the target's latest `gate` check run from GitHub Actions concluded `success`, prints the review, and moves only when `--confirm` (or the prompt) matches the target. If main moved since the review, the prefix no longer matches and nothing happens.
+- It fast-forwards to the target (checking out `main` first after a roll back) and checks that `HEAD` is the target.
+- It rebuilds the image from `git archive` of the new commit only when `platform/ops` changed (otherwise it tags `:current` with the new sha too).
+- It runs `pnpm install --frozen-lockfile` into the code clone in a throwaway container as the build uid 10002, with no capability, no env file, and `.git` mounted read-only. The build uid owns only the `node_modules` folders and the store while it runs. Then it strips setuid and setgid bits, makes the clone root-owned and not writable by others, and runs both clone checks again.
+- It installs changed units from `git show <new sha>:platform/ops/<unit>`.
+
+It restarts and waits up to 10 minutes for this start's `code root is read-only` line followed by its `startup probe passed` line. It reads only the journal of the unit's new invocation, so a line printed by the previous container while it stopped does not count. Then resume from /board. If the build or the install fails, the code clone is already at the new commit: fix main and run `deploy.sh` again, or roll back.
+
+`deploy.sh` never touches the work clone: the dispatcher fetches `main` there itself before every card.
 
 ## Roll back
 
 When a deploy leaves the dispatcher failing or misbehaving:
 
 1. Pause from /board.
-2. Find the previous commit and its image:
+2. Find the previous commit:
    ```sh
-   ssh root@$VPS_IP 'git -c safe.directory=/srv/peanutgallery -C /srv/peanutgallery log --oneline -5; docker image ls peanutgallery/dispatcher'
+   ssh root@$VPS_IP 'git -c safe.directory=/srv/peanutgallery-code -c core.fsmonitor=false -c core.hooksPath=/dev/null -C /srv/peanutgallery-code log --oneline -5 origin/main; docker image ls peanutgallery/dispatcher'
    ```
-3. Point `:current` at the previous image and check out the previous commit, detached, as uid 10001 (replace `<previous-sha>`):
+3. From the Mac checkout (Deploy an update, step 3), review and then deploy it by its full sha (replace `<previous-sha>`):
    ```sh
-   ssh root@$VPS_IP 'docker tag peanutgallery/dispatcher:<previous-sha> peanutgallery/dispatcher:current &&
-     docker run --rm --pull never --user 10001:10001 --volume /srv/peanutgallery:/srv/peanutgallery \
-       --workdir /srv/peanutgallery --entrypoint git peanutgallery/dispatcher:current \
-       -c core.hooksPath=/dev/null checkout --detach <previous-sha>'
+   ssh root@$VPS_IP 'bash -s -- --ref <previous-sha>' < platform/ops/deploy.sh
+   ssh root@$VPS_IP 'bash -s -- --ref <previous-sha> --confirm <first 12 characters of previous-sha>' < platform/ops/deploy.sh
    ```
-4. If the bad commit changed a unit: `ssh root@$VPS_IP 'install -m 0644 /srv/peanutgallery/platform/ops/dispatcher*.service /etc/systemd/system/ && systemctl daemon-reload'`.
-5. `ssh root@$VPS_IP 'systemctl reset-failed dispatcher; systemctl restart dispatcher'`, check for `startup probe passed`, resume.
-6. Fix forward on main. Before the next deploy, put the clone back on main (the same `docker run ... git` command with `checkout main`); `deploy.sh` refuses a detached clone.
+   `--ref` takes a full 40-character sha. It must be on `origin/main`, at or after `ROLLBACK_FLOOR` in `deploy.sh`, and contain `platform/ops/managed-settings.json`, so a roll back never returns to a commit where the dispatcher ran from a clone it could write. `ROLLBACK_FLOOR` is empty until this layout merges: the board then sets it to the merge sha of `docs/specs/ops-separation.md` and only ever moves it forward. While it is empty, every `--ref` is refused.
+
+   The gate check and the review apply as for a plain deploy. `deploy.sh` checks the sha out detached in the code clone and reuses `peanutgallery/dispatcher:<previous-sha>` when that image exists (else builds it from the commit). It installs that commit's `node_modules` and units, restarts, and waits for the probe. A failed unit (exit 78) is fine; a stopped one is refused as usual.
+4. Resume from /board.
+5. Fix forward on main. The next plain `deploy.sh` checks out `main` again and fast-forwards to `origin/main`, so do not run it until the fix is merged.
+
+If `deploy.sh` refuses a dirty code clone, do not clean it by hand and deploy over it. Inspect the files it lists, find out how they changed, and if in doubt move the clone aside (`mv /srv/peanutgallery-code /root/peanutgallery-code.suspect`) and run `provision.sh` again, which clones it fresh.
 
 A card that failed after merge is reverted on main by the dispatcher itself (`docs/specs/launch-hardening.md`); this section is for the dispatcher's own code.
 
@@ -117,7 +148,7 @@ A card that failed after merge is reverted on main by the dispatcher itself (`do
 
 Each rotation: pause from /board, change the value in `/etc/peanutgallery/dispatcher.env` on the VPS (for example `ssh -t root@$VPS_IP 'nano /etc/peanutgallery/dispatcher.env'`; the file keeps its owner and mode), run `provision.sh` again to validate it (it reports 0 changes), `systemctl restart dispatcher`, check `startup probe passed` and the heartbeat, resume, and only then revoke the old key.
 
-- **GitHub token.** Create a new fine-grained token with the same repository and permissions (Provision, step 3), set `GITHUB_TOKEN`, restart, and check the next card pushes its branch. Revoke the old token on GitHub. The token lives only on the VPS.
+- **GitHub token.** Create a new fine-grained token with the same repository and permissions (Provision, step 3), set `GITHUB_TOKEN`, restart, and check the next card pushes its branch from the work clone. The next `deploy.sh` fetches the code clone with the same value. Revoke the old token on GitHub. The token lives only in the env file on the VPS; neither clone stores it.
 - **Studio Anthropic key.** In the studio's Console organization (never the founder's), create a key, set `STUDIO_ANTHROPIC_API_KEY`, restart: the probe must pass with `apiKeySource` `ANTHROPIC_API_KEY`. Delete the old key in the Console. Update the Mac's `.env` too.
 - **Supabase secret key.** Supabase dashboard, project settings, API keys: create a secret key, set `SUPABASE_SERVICE_ROLE_KEY` to it, restart, and check the heartbeat moves. Delete the old secret key. Update `SUPABASE_SECRET_KEY` in the Mac's `.env`.
 - **Netlify token.** Netlify, user settings, applications, personal access tokens: create one, set `NETLIFY_AUTH_TOKEN`, restart. Revoke the old token after the next card's deploy is read. Update the Mac's `.env`.
@@ -132,7 +163,7 @@ ssh root@$VPS_IP 'systemctl status dispatcher; systemctl show dispatcher -p NRes
 ssh root@$VPS_IP 'journalctl -u dispatcher-alert -n 20 --no-pager'     # unit-failed alerts
 ```
 
-Dispatcher lines are JSON with `ts`, `level`, `scope` and `msg`; the entrypoint and `pnpm install` print plain text before them. `agent_events` and `ledger` remain the record of what each card did.
+Dispatcher lines are JSON with `ts`, `level`, `scope` and `msg`; the entrypoint prints plain text before them only when a check fails. `agent_events` and `ledger` remain the record of what each card did.
 
 ## Pause from /board
 
@@ -140,7 +171,7 @@ Dispatcher lines are JSON with `ts`, `level`, `scope` and `msg`; the entrypoint 
 
 ## Exit codes and restarts
 
-- **Exit 78** is a startup failure no restart can fix: a configuration error, a probe verdict that will not change (forbidden tools, memory paths, the wrong `apiKeySource`, no tools), a model missing from `PRICE_TABLE_JSON` (the configured models, a writing role's model, or a model the probe reported), the wrong claude CLI, or a clone without an https origin. systemd does not restart it; the unit fails and ntfy gets "Peanut Gallery dispatcher unit failed on <hostname>". Fix the cause, then `systemctl reset-failed dispatcher && systemctl start dispatcher`.
+- **Exit 78** is a startup failure no restart can fix: a configuration error, a code root the dispatcher can write to (the unit's `:ro` mount or the code clone's owner is wrong; run `deploy.sh` or `provision.sh` again), a probe verdict that will not change (forbidden tools, memory paths, the wrong `apiKeySource`, no tools), a model missing from `PRICE_TABLE_JSON` (the configured models, a writing role's model, or a model the probe reported), the wrong claude CLI, or a clone without an https origin. systemd does not restart it; the unit fails and ntfy gets "Peanut Gallery dispatcher unit failed on <hostname>". Fix the cause, then `systemctl reset-failed dispatcher && systemctl start dispatcher`.
 - **Any other exit** restarts after 30 seconds, the delay growing over 6 steps to 30 minutes: a probe with no stream or an error result, a failed install, a mode mismatch with /board. After 8 starts in 6 hours the unit fails and ntfy is posted the same way.
 
 ## The money guardrail
@@ -152,8 +183,15 @@ The studio's Console organization holds prepaid credit with auto-reload off and 
 Agent-written test code runs as the dispatcher's OS user (uid 10001) and could read the dispatcher's environment, secrets included, from `/proc`.
 
 In place:
-- Agent sessions, the smoke test's headless bot and the entrypoint's `pnpm install` start from an allowlisted environment with no secret.
-- Every git command the dispatcher runs has hooks off, so a planted hook never runs with its environment.
+- Agent sessions and the smoke test's headless bot start from an allowlisted environment with no secret; `pnpm install` runs only in the throwaway install container, which has none.
+- Every git command the dispatcher, `deploy.sh` and `provision.sh` run has fsmonitor and hooks off, so a planted hook or fsmonitor never runs with the dispatcher's environment or as root.
 - The Console limit caps what a leaked studio key can spend.
+
+What uid 10001 can and cannot change (`docs/specs/ops-separation.md`):
+- **The files of the dispatcher's code and `node_modules`: closed, by the mount and the startup check.** The code clone is root-owned and mounted read-only, and the dispatcher exits 78 if it can write there. The install that fills `node_modules` runs as a separate build uid that cannot write tracked files or `.git`. Its output is checked for setuid files and escaping symlinks.
+- **What root runs on the host: closed for the code clone, by `deploy.sh`.** Root runs git only in the code clone, with no system, global or planted hook or fsmonitor configuration. It refuses a dirty clone or unexpected git state, reads the image and units from the commit, and runs `deploy.sh` from the operator's checkout rather than the VPS. Root runs no git or program in the work clone or the worktree folder.
+- **Which commit becomes the code: a human check, not a closed path.** A commit that reaches `main` runs as the dispatcher once someone confirms it. `deploy.sh` requires the gate to have passed on it and a person to read the review and confirm the sha. It does not stop a person who confirms without reading. Nor does it stop someone holding the GitHub token (which agent code can read from `/proc` today) who pushes a commit that passes the gate. The durable fix is keeping the token out of agent reach: session containment and the key proxy.
+- **The work clone's `.git`: open here.** uid 10001 owns it, and the dispatcher's own git calls in it read its configuration: `commondir`, `info/attributes` filters, alternates, and processes left running. It holds only git state, and root never acts on it, but a planted change can still steer the dispatcher's git with the dispatcher's secrets. The fix is in the dispatcher on the merge-safety branch, not in these scripts.
+- **The dispatcher's environment: open.** Code an agent session runs can read it from `/proc`, as above.
 
 Follow-up: run agent sessions under a separate uid through a sudo wrapper at `CLAUDE_BIN`. It is specified and built before any card source other than the board opens.
