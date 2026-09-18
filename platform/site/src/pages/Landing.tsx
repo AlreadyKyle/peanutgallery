@@ -27,7 +27,7 @@ export function Landing() {
         <div className="hero">
           <h1>{copy.pitchTitle}</h1>
           <p className="lede">{copy.pitchBody}</p>
-          {launch === null ? null : <p className="muted">{launch}</p>}
+          {launch === null ? null : <p className="muted small">{launch}</p>}
           {env.stripePaymentLinkUrl === '' ? (
             <p>{copy.contributeUnavailable}</p>
           ) : (

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// BRAND.md is the style guide; these tests keep the stylesheet to it.
+// DESIGN.md is the style guide; these tests keep the stylesheet to it.
 // jsdom gives import.meta.url an http scheme, so resolve from the package root vitest runs in.
 const css = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
 const SIZES = ['--size-small', '--size-body', '--size-lead', '--size-large', '--size-display'];
@@ -68,6 +68,11 @@ describe('plain and readable', () => {
       .filter((rule) => /font-style:\s*italic|text-transform:\s*uppercase/.test(rule.body))
       .map((rule) => rule.selector);
     expect(styled).toEqual(['.wordmark']);
+  });
+
+  it('balances the lines of every heading', () => {
+    const headings = rules().find((rule) => rule.selector.replace(/\s+/g, '') === 'h1,h2,h3');
+    expect(headings?.body).toMatch(/text-wrap:\s*balance/);
   });
 
   it('never uses the 900 display weight or letter-spacing', () => {

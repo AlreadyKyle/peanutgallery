@@ -27,7 +27,7 @@ test('landing loads at 375 px with every element visible and no horizontal overf
   const headings = await main.getByRole('heading', { level: 2 }).allTextContents();
   expect(headings).toEqual(order.filter((name) => !optional.has(name) || headings.includes(name)));
   await expect(main.getByRole('link', { name: 'Full ledger' }).first()).toBeVisible();
-  await expect(page.getByText('Funding a card is your vote.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Fund a card to grow the studio and its games.', { exact: false })).toBeVisible();
   await expect(page.getByText('Art inside the games is made by code', { exact: false })).toBeVisible();
   await expect(page.getByText('Everything here is made for all ages.')).toBeVisible();
   await expect(page.getByText('Some rules are fixed and no vote can change them.', { exact: false })).toBeVisible();

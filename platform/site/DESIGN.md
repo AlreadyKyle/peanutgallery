@@ -13,6 +13,8 @@ Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the ru
 5. **Space before rules.** Sections are separated by space. Hairlines (`--line`) separate rows in a list, and the top bar and footer. Things you can act on (cards, choices, the Right now panel) are boxes with a `--line` border and `--radius-box` corners, so they read as separate objects.
 6. **Things you can press look pressable.** Links are underlined, and buttons are filled or outlined boxes at least 44px tall **(tested)**.
 7. **Every public string lives in `src/lib/copy.ts`.** `/board` keeps its own literals.
+8. **Three text styles to a block.** A block (the hero, a card, a panel, a section intro) uses at most a heading, body text and one small muted line, plus its button. If a fourth style seems needed, the block is saying too much: cut a line or move it.
+9. **Headings balance their lines.** Headings use `text-wrap: balance` **(tested)**, so a headline never leaves one or two words alone on its last line.
 
 ## Tokens
 
@@ -137,6 +139,8 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 - From 64rem: the intro splits 3:2, the card grid goes to three columns, steps to four, and Funding and Ledger sit side by side.
 
 ## Copy rules
+
+The full rules, with examples and the patterns to avoid, are in `docs/COPY.md`. `src/lib/copy.test.ts` enforces them. In short:
 
 - Plain, short and declarative. One idea per sentence. Sentence case everywhere.
 - Say "contributions", never "donations".

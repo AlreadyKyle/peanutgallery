@@ -4,8 +4,32 @@
     {
       "name": "site-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["platform/site/node_modules/vite/bin/vite.js", "preview", "platform/site", "--host", "127.0.0.1", "--port", "4174", "--strictPort"],
+      "runtimeArgs": [
+        "platform/site/node_modules/vite/bin/vite.js",
+        "preview",
+        "platform/site",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4174",
+        "--strictPort"
+      ],
       "port": 4174
+    },
+    {
+      "name": "site-preview-4180",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "platform/site/node_modules/vite/bin/vite.js",
+        "preview",
+        "platform/site",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4180",
+        "--strictPort"
+      ],
+      "port": 4180
     }
   ]
 }
