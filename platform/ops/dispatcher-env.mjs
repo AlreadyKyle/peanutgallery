@@ -17,12 +17,18 @@ export const OPTIONAL_KEYS = [
   'POOL_DAILY_CAP_USD',
   'CARD_MAX_USD',
   'SESSION_MAX_TURNS',
+  'SESSION_MAX_MINUTES',
   'AGENT_HOURLY_RATE_USD',
   'DISPATCHER_TICK_MS',
   'DISPATCHER_MAX_CONCURRENCY',
   'DISPATCHER_SCHEDULER',
   'BOARD_SESSION_TTL_MIN',
+  'MODEL_DIRECTOR',
+  'MODEL_HOST',
 ];
+
+// Optional models that, when set, need a row in PRICE_TABLE_JSON, as loadConfig requires.
+export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_HOST'];
 
 // Read by loadConfig but never copied from the Mac's .env, with the reason.
 export const NOT_COPIED = {
@@ -88,6 +94,10 @@ export function dispatcherEnvEntries(dotenvText, operator) {
       } else {
         priceTable = JSON.stringify(parsed);
         if (model && !Object.hasOwn(parsed, model)) problems.push('MODEL_BUILDER has no row in PRICE_TABLE_JSON; the startup probe could not be metered');
+        for (const key of PRICED_OPTIONAL_MODELS) {
+          const optional = fromDotenv(key);
+          if (optional && !Object.hasOwn(parsed, optional)) problems.push(`${key} has no row in PRICE_TABLE_JSON; the dispatcher would refuse to start`);
+        }
       }
     }
   }

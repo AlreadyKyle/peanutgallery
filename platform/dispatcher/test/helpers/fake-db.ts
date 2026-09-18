@@ -1,6 +1,6 @@
 // In-memory database for tick, session and pipeline tests. Its claim rule matches the SQL
 // (only a funded card moves to building) and record_usage applies the same arithmetic as the
-// RPC: one ledger row per turn, balance and daily spend moved for studio rows only, actual_usd
+// RPC: one ledger row per request id, balance and daily spend moved for studio rows only, actual_usd
 // added up for both.
 import type {
   AgentEventType,
@@ -118,7 +118,16 @@ export class FakeDb implements Db {
     if (!found) throw new Error(`db role: no row for ${id}`);
     return { ...found };
   }
+  async listActiveRoles() {
+    return this.roles.map((r) => ({ ...r }));
+  }
   async recordUsage(input: UsageInput): Promise<RecordUsageResult> {
+    // A request id already written returns that row and changes nothing, as record_usage does.
+    const existing = input.request_id === null ? undefined : this.ledger.find((row) => row.request_id === input.request_id);
+    if (existing) {
+      const card = existing.card_id === null ? undefined : this.cards.find((c) => c.id === existing.card_id);
+      return { ledger_id: existing.id, balance_usd: this.pool.balance_usd, daily_spent_usd: this.pool.daily_spent_usd, actual_usd: card?.actual_usd ?? 0 };
+    }
     const id = `ledger-${this.ledger.length + 1}`;
     this.ledger.push({ id, ...input });
     if (input.billed_to === 'studio') {

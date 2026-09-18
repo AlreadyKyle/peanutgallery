@@ -1,7 +1,7 @@
 // Environment parsing for the dispatcher. Every value is validated by hand; a missing or
 // malformed value stops the process before any tick runs.
 import path from 'node:path';
-import { parsePriceTable, type PriceTable } from './pricing.js';
+import { modelPrice, parsePriceTable, type PriceTable } from './pricing.js';
 import type { AgentMode } from './throttle.js';
 
 export interface DispatcherConfig {
@@ -15,10 +15,16 @@ export interface DispatcherConfig {
   netlifySiteIdSeed: string;
   netlifySiteIdPlatform: string;
   modelBuilder: string;
+  // The director and host models, when set. Nothing in the dispatcher runs them yet; they are
+  // checked against the price table so a role seeded with one can be metered.
+  modelDirector: string | null;
+  modelHost: string | null;
   priceTable: PriceTable;
   poolDailyCapUsd: number;
   cardMaxUsd: number;
   sessionMaxTurns: number;
+  // The longest one agent session may run before it is interrupted.
+  sessionMaxMinutes: number;
   agentHourlyRateUsd: number;
   tickMs: number;
   worktreeRoot: string;
@@ -116,12 +122,23 @@ export function priceTableEnv(env: Env): PriceTable {
   }
 }
 
+// A model id with no row in the price table could not be metered, so it stops the process here
+// rather than at the first turn. Blank is null.
+export function pricedModel(model: string, name: string, table: PriceTable): string | null {
+  if (!model) return null;
+  if (!modelPrice(table, model)) throw new ConfigError(`${name} has no row in PRICE_TABLE_JSON`);
+  return model;
+}
+
 export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
   const scheduler = optionalEnv(env, 'DISPATCHER_SCHEDULER', 'on');
   if (scheduler !== 'on' && scheduler !== 'off') throw new ConfigError('DISPATCHER_SCHEDULER must be on or off');
   const agentMode = agentModeEnv(env);
+  const modelBuilder = requireEnv(env, 'MODEL_BUILDER');
+  const priceTable = priceTableEnv(env);
+  pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
   return {
     repoRoot,
     agentMode,
@@ -132,11 +149,14 @@ export function loadConfig(env: Env, repoRoot: string): DispatcherConfig {
     netlifyAuthToken: requireEnv(env, 'NETLIFY_AUTH_TOKEN'),
     netlifySiteIdSeed: requireEnv(env, 'NETLIFY_SITE_ID_SEED'),
     netlifySiteIdPlatform: requireEnv(env, 'NETLIFY_SITE_ID_PLATFORM'),
-    modelBuilder: requireEnv(env, 'MODEL_BUILDER'),
-    priceTable: priceTableEnv(env),
+    modelBuilder,
+    modelDirector: pricedModel(optionalEnv(env, 'MODEL_DIRECTOR', ''), 'MODEL_DIRECTOR', priceTable),
+    modelHost: pricedModel(optionalEnv(env, 'MODEL_HOST', ''), 'MODEL_HOST', priceTable),
+    priceTable,
     poolDailyCapUsd: numberEnv(env, 'POOL_DAILY_CAP_USD', 100),
     cardMaxUsd: numberEnv(env, 'CARD_MAX_USD', 25),
     sessionMaxTurns: positiveIntegerEnv(env, 'SESSION_MAX_TURNS', 60),
+    sessionMaxMinutes: positiveIntegerEnv(env, 'SESSION_MAX_MINUTES', 60),
     agentHourlyRateUsd: numberEnv(env, 'AGENT_HOURLY_RATE_USD', 5),
     tickMs: positiveIntegerEnv(env, 'DISPATCHER_TICK_MS', 60_000),
     worktreeRoot: path.resolve(repoRoot, optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '.worktrees')),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UnknownModelError, parsePriceTable, priceUsage, round6 } from '../src/pricing.js';
+import { UnknownModelError, fallbackPrice, parsePriceTable, priceUsage, round6 } from '../src/pricing.js';
 
 // Rates are USD per million tokens. This table exists only to exercise the arithmetic;
 // the live table comes from PRICE_TABLE_JSON.
@@ -31,7 +31,7 @@ describe('priceUsage', () => {
   const table = parsePriceTable(TABLE);
 
   it('prices every model in the table and maps tokens to ledger columns', () => {
-    const usage = { input_tokens: 1000, cache_creation_input_tokens: 2000, cache_read_input_tokens: 4000, output_tokens: 500 };
+    const usage = { input_tokens: 1000, cache_creation_input_tokens: 2000, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 4000, output_tokens: 500 };
     for (const model of Object.keys(table)) {
       const price = table[model]!;
       const row = priceUsage(table, model, usage);
@@ -48,6 +48,7 @@ describe('priceUsage', () => {
     const row = priceUsage(table, 'builder-class', {
       input_tokens: 1000,
       cache_creation_input_tokens: 2000,
+      cache_creation_1h_input_tokens: 0,
       cache_read_input_tokens: 4000,
       output_tokens: 500,
     });
@@ -55,10 +56,29 @@ describe('priceUsage', () => {
     expect(row.usd).toBe(0.0192);
   });
 
+  it('prices the one-hour part of the cache writes at the one-hour rate and the rest at the five-minute rate', () => {
+    const row = priceUsage(table, 'builder-class', {
+      input_tokens: 1000,
+      cache_creation_input_tokens: 2000,
+      cache_creation_1h_input_tokens: 500,
+      cache_read_input_tokens: 4000,
+      output_tokens: 500,
+    });
+    // 0.003 input + 1500 × 3.75 + 500 × 6 (0.005625 + 0.003) + 0.0012 cache read + 0.0075 output
+    expect(row.usd).toBe(0.020325);
+    expect(row.input_tokens).toBe(3000);
+  });
+
+  it('never prices more one-hour tokens than there are cache writes', () => {
+    const usage = { input_tokens: 0, cache_creation_input_tokens: 100, cache_read_input_tokens: 0, output_tokens: 0 };
+    expect(priceUsage(table, 'builder-class', { ...usage, cache_creation_1h_input_tokens: 5000 }).usd).toBe(0.0006);
+  });
+
   it('rounds to six decimals', () => {
     const row = priceUsage(table, 'builder-class', {
       input_tokens: 1,
       cache_creation_input_tokens: 1,
+      cache_creation_1h_input_tokens: 0,
       cache_read_input_tokens: 1,
       output_tokens: 1,
     });
@@ -67,7 +87,20 @@ describe('priceUsage', () => {
 
   it('throws for a model that is not in the table', () => {
     expect(() =>
-      priceUsage(table, 'missing-model', { input_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 }),
+      priceUsage(table, 'missing-model', { input_tokens: 1, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 }),
     ).toThrow(UnknownModelError);
+  });
+});
+
+describe('fallbackPrice', () => {
+  it('takes the highest of each rate across every model in the table', () => {
+    const table = parsePriceTable(
+      JSON.stringify({
+        cheap: { input: 1, output: 40, cache_read: 0.1, cache_write_5m: 1.25, cache_write_1h: 2 },
+        dear: { input: 15, output: 75, cache_read: 1.5, cache_write_5m: 18.75, cache_write_1h: 1 },
+      }),
+    );
+    expect(fallbackPrice(table)).toEqual({ input: 15, output: 75, cache_read: 1.5, cache_write_5m: 18.75, cache_write_1h: 2 });
+    expect(fallbackPrice(parsePriceTable(TABLE))).toEqual(parsePriceTable(TABLE)['director-class']);
   });
 });

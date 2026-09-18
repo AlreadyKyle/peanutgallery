@@ -33,6 +33,9 @@ describe('loadConfig', () => {
       schedulerEnabled: true,
       claudeBin: 'claude',
       boardSessionTtlMin: 3,
+      sessionMaxMinutes: 60,
+      modelDirector: null,
+      modelHost: null,
       studioAnthropicApiKey: null,
       healthcheckUrl: null,
       ntfyTopicUrl: null,
@@ -56,6 +59,9 @@ describe('loadConfig', () => {
         DISPATCHER_SCHEDULER: 'off',
         CLAUDE_BIN: '/opt/claude',
         BOARD_SESSION_TTL_MIN: '5',
+        SESSION_MAX_MINUTES: '90',
+        MODEL_DIRECTOR: 'builder-class',
+        MODEL_HOST: 'builder-class',
         HEALTHCHECK_URL: 'https://hc-ping.com/check-id',
         NTFY_TOPIC_URL: 'https://ntfy.sh/topic-name',
       },
@@ -73,6 +79,9 @@ describe('loadConfig', () => {
       schedulerEnabled: false,
       claudeBin: '/opt/claude',
       boardSessionTtlMin: 5,
+      sessionMaxMinutes: 90,
+      modelDirector: 'builder-class',
+      modelHost: 'builder-class',
       studioAnthropicApiKey: 'studio-key',
       healthcheckUrl: 'https://hc-ping.com/check-id',
       ntfyTopicUrl: 'https://ntfy.sh/topic-name',
@@ -94,6 +103,14 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, PRICE_TABLE_JSON: '{}' }, REPO)).toThrow('PRICE_TABLE_JSON lists no models');
     expect(() => loadConfig({ ...FULL, HEALTHCHECK_URL: 'http://hc-ping.com/check-id' }, REPO)).toThrow('HEALTHCHECK_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, NTFY_TOPIC_URL: 'ntfy topic' }, REPO)).toThrow('NTFY_TOPIC_URL must be an https URL');
+    expect(() => loadConfig({ ...FULL, SESSION_MAX_MINUTES: '0' }, REPO)).toThrow('SESSION_MAX_MINUTES must be a positive integer');
+  });
+
+  it('refuses a model with no row in the price table', () => {
+    for (const name of ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST']) {
+      expect(() => loadConfig({ ...FULL, [name]: 'unpriced-model' }, REPO), name).toThrow(new ConfigError(`${name} has no row in PRICE_TABLE_JSON`));
+    }
+    expect(loadConfig({ ...FULL, MODEL_DIRECTOR: '  ', MODEL_HOST: '' }, REPO)).toMatchObject({ modelDirector: null, modelHost: null });
   });
 });
 

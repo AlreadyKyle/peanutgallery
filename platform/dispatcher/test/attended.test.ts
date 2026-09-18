@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import { rolePromptFile } from '../src/session.js';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AttendedAdapter, CHILD_ENV_SWITCHES, DISALLOWED_TOOLS, allowedToolRules, baseToolNames, childEnv, claudeArgs, refusedTools } from '../src/adapters/attended.js';
 import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
 
@@ -41,9 +41,22 @@ class FakeChild extends EventEmitter {
   }
 }
 
-function adapterWith(child: FakeChild, capture?: { bin?: string; args?: string[]; cwd?: string; env?: NodeJS.ProcessEnv }) {
+// A child that, like Claude Code, keeps running after SIGINT until it has written its result line,
+// and exits on SIGTERM or SIGKILL.
+class InterruptibleChild extends FakeChild {
+  signals: string[] = [];
+  override kill(signal?: NodeJS.Signals | number): boolean {
+    const name = typeof signal === 'string' ? signal : 'SIGTERM';
+    this.signals.push(name);
+    if (name === 'SIGINT') return true;
+    return super.kill(signal);
+  }
+}
+
+function adapterWith(child: FakeChild, capture?: { bin?: string; args?: string[]; cwd?: string; env?: NodeJS.ProcessEnv }, interruptGraceMs?: number) {
   return new AttendedAdapter({
     claudeBin: 'claude',
+    interruptGraceMs,
     spawnFn: (bin, args, options) => {
       if (capture) Object.assign(capture, { bin, args, cwd: options.cwd, env: options.env });
       return child as unknown as ChildProcess;
@@ -186,6 +199,70 @@ describe('AttendedAdapter.run', () => {
     expect(child.killed).toBe(true);
     expect(result.killed).toBe(true);
     expect(result.killReason).toBe('ceiling');
+  });
+
+  describe('interrupting a session', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('sends SIGINT first, SIGTERM after the grace period and SIGKILL five seconds later', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const child = new InterruptibleChild();
+      const adapter = adapterWith(child);
+      const controller = new AbortController();
+      const run = adapter.run(spec, () => undefined, controller.signal);
+      controller.abort('ceiling');
+      expect(child.signals).toEqual(['SIGINT']);
+      vi.advanceTimersByTime(14_999);
+      expect(child.signals).toEqual(['SIGINT']);
+      // The fake exits on SIGTERM; mark it alive again to see the SIGKILL that follows a child that ignores it.
+      child.kill = (signal?: NodeJS.Signals | number) => {
+        child.signals.push(String(signal));
+        return true;
+      };
+      vi.advanceTimersByTime(1);
+      expect(child.signals).toEqual(['SIGINT', 'SIGTERM']);
+      vi.advanceTimersByTime(4_999);
+      expect(child.signals).toEqual(['SIGINT', 'SIGTERM']);
+      vi.advanceTimersByTime(1);
+      expect(child.signals).toEqual(['SIGINT', 'SIGTERM', 'SIGKILL']);
+      child.finish(137);
+      const result = await run;
+      expect(result).toMatchObject({ killed: true, killReason: 'ceiling' });
+    });
+
+    it('sends nothing more once the child has exited after SIGINT', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const child = new InterruptibleChild();
+      const controller = new AbortController();
+      const run = adapterWith(child).run(spec, () => undefined, controller.signal);
+      controller.abort('wall_clock');
+      child.finish(130);
+      await run;
+      vi.advanceTimersByTime(60_000);
+      expect(child.signals).toEqual(['SIGINT']);
+    });
+
+    it('parses the result line the child writes after SIGINT', async () => {
+      const probe = readFileSync(new URL('./fixtures/probe.jsonl', import.meta.url), 'utf8').split('\n').filter((line) => line.length > 0);
+      const result = probe.find((line) => line.startsWith('{"type":"result"'))!;
+      const child = new InterruptibleChild();
+      const events: AgentEvent[] = [];
+      const controller = new AbortController();
+      const run = adapterWith(child, undefined, 1000).run(spec, (event) => void events.push(event), controller.signal);
+      child.stdout.write(`${probe.filter((line) => line !== result).join('\n')}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+      controller.abort('stopped');
+      expect(child.signals).toEqual(['SIGINT']);
+      child.stdout.write(`${result}\n`);
+      child.finish(0);
+      const outcome = await run;
+      expect(outcome).toMatchObject({ killed: true, killReason: 'stopped', endSubtype: 'success' });
+      const end = events.find((event) => event.type === 'end');
+      expect(end?.type === 'end' && end.modelUsage.length).toBeGreaterThan(0);
+      expect(child.signals).toEqual(['SIGINT']);
+    });
   });
 
   it('reports a failure when claude exits without a result line', async () => {

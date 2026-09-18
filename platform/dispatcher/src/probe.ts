@@ -12,8 +12,9 @@ import { createAdapter } from './adapters/factory.js';
 import { loadConfig } from './config.js';
 import { createSupabaseDb } from './db.js';
 import { errorMessage, logLine, type LogFields, type Logger, type LogLevel } from './log.js';
+import { round4 } from './pricing.js';
 import { initRecord, runProbe } from './probe-core.js';
-import { meterProbe } from './startup.js';
+import { FallbackPricedError, UnwrittenRowsError, meterProbe } from './startup.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const FIXTURE = path.join(REPO_ROOT, 'platform', 'dispatcher', 'test', 'fixtures', 'probe.jsonl');
@@ -43,15 +44,31 @@ async function probeVerdict(details: string[]): Promise<string> {
   const adapter = createAdapter(config);
   const raw: string[] = [];
   details.push(`probe: mode ${adapter.mode}; ANTHROPIC_BASE_URL is ${process.env.ANTHROPIC_BASE_URL ? 'set' : 'not set'} in the dispatcher environment`);
-  const probe = await runProbe(adapter, { repoRoot: REPO_ROOT, worktreeRoot: config.worktreeRoot, model: config.modelBuilder, onRawLine: (line) => raw.push(line) });
+  const probe = await runProbe(adapter, {
+    repoRoot: REPO_ROOT,
+    worktreeRoot: config.worktreeRoot,
+    model: config.modelBuilder,
+    priceTable: config.priceTable,
+    onRawLine: (line) => raw.push(line),
+  });
   reportInit(initRecord(raw), details);
+  const meteredUsd = round4(probe.metering.rows.reduce((total, row) => total + row.usd, 0));
+  details.push(`probe: metered ${meteredUsd} USD at PRICE_TABLE_JSON on a ${probe.metering.basis} basis (${probe.metering.rows.length} rows); the command line reported ${probe.costUsd ?? 'no'} USD`);
   let meterError: string | null = null;
   if (adapter.mode === 'unattended') {
     try {
       await meterProbe(createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey), config, probe, detailLogger(details));
     } catch (error) {
-      meterError = errorMessage(error);
-      details.push(`probe: not metered: ${meterError}`);
+      if (error instanceof UnwrittenRowsError) {
+        meterError = `only partly metered: ${error.message}`;
+        details.push(`probe: ${meterError}`);
+      } else if (error instanceof FallbackPricedError) {
+        meterError = `metered at fallback rates because PRICE_TABLE_JSON has no row for ${error.models.join(', ')}`;
+        details.push(`probe: ${meterError}`);
+      } else {
+        meterError = `not metered: ${errorMessage(error)}`;
+        details.push(`probe: ${meterError}`);
+      }
     }
   } else {
     details.push('probe: attended mode runs on the subscription; nothing metered');
@@ -61,7 +78,7 @@ async function probeVerdict(details: string[]): Promise<string> {
   await writeFile(target, raw.length > 0 ? `${raw.join('\n')}\n` : '', 'utf8');
   details.push(`probe: raw stream saved to ${target} (${raw.length} lines)`);
   if (!probe.ok) return `FAIL: probe ${probe.reason} (claude exit ${probe.exitCode ?? 'signal'})`;
-  if (meterError !== null) return `FAIL: probe passed but was not metered: ${meterError}`;
+  if (meterError !== null) return `FAIL: probe passed but was ${meterError}`;
   return `PASS: probe mode=${adapter.mode} apiKeySource=${probe.apiKeySource ?? 'unreported'} tools=${probe.tools.join(',')} turns=${probe.turns} cost_usd=${probe.costUsd ?? 'unreported'}`;
 }
 
