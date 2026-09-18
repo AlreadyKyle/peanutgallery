@@ -1,23 +1,24 @@
 // Dispatcher entry: loads .env from the repository root, validates configuration, checks that
 // the database agrees on the agent mode, probes the account in unattended mode, recovers cards
 // left mid-flight by a previous process, starts the scheduler, and runs the tick loop until
-// SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a restart resumes work.
+// SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a restart resumes work, and a
+// restart also clears a halt.
 // A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
-import { loadConfig, type DispatcherConfig } from './config.js';
-import { createSupabaseDb, type Card, type Db } from './db.js';
+import { loadConfig } from './config.js';
+import { createSupabaseDb, type Card } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
-import { createLogger, errorMessage, type Logger } from './log.js';
-import { runCardPipeline } from './pipeline.js';
+import { createLogger, errorMessage } from './log.js';
+import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
 import { runProbe } from './probe-core.js';
+import { recoverOrphans } from './recovery.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
-import { startupChecks } from './startup.js';
+import { checkRepositoryGit, startupChecks } from './startup.js';
 import { tick } from './tick.js';
 import { sleep } from './time.js';
-import { removeWorktree, worktreePath } from './worktree.js';
 
 // How long a stopping dispatcher waits for running cards: a session's SIGINT grace (15 s) and SIGTERM
 // grace (5 s), its settle rows and the card's pause all fit, inside docker stop's 60 s.
@@ -27,42 +28,30 @@ export const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
 const log = createLogger();
 
-// A card still building or gated when this process starts belonged to a process that is gone;
-// it is paused so the board can re-fund it rather than left reserving budget forever. Its
-// worktree is pruned; the remote branch and any open pull request stay as they are and are
-// named in the event so the board can see them (the next claim force-pushes the same branch).
-async function recoverOrphans(db: Db, config: DispatcherConfig, logger: Logger): Promise<void> {
-  const orphans = await db.listCardsInStages(['building', 'gated']);
-  for (const card of orphans) {
-    const actual = await db.sumLedger(card.id);
-    await removeWorktree(config.repoRoot, worktreePath(config.worktreeRoot, card.id), card.branch).catch((error: unknown) =>
-      logger.warn('main', 'worktree removal failed', { card: card.id, error: errorMessage(error) }),
-    );
-    await db.updateCard(card.id, { stage: 'paused', failing_check: 'dispatcher_restart', actual_usd: actual });
-    await db.insertEvent(card.id, card.executor_role_id, 'error', {
-      step: 'dispatcher_restart',
-      previous_stage: card.stage,
-      branch: card.branch,
-      message: card.branch
-        ? `the card was ${card.stage} when the dispatcher restarted; branch ${card.branch} and its pull request are left open`
-        : `the card was ${card.stage} when the dispatcher restarted`,
-    });
-    logger.warn('main', `card ${card.id} was ${card.stage} at startup; paused`, { title: card.title, branch: card.branch });
-  }
-}
-
 async function main(): Promise<void> {
   loadDotenv({ path: path.join(REPO_ROOT, '.env'), quiet: true });
   const config = loadConfig(process.env, REPO_ROOT);
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const adapter = createAdapter(config);
   const stop = new AbortController();
-  const running = new Set<string>();
+  const running = new Map<string, Date>();
   const now = () => new Date();
   const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
+  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now };
 
+  // Before any git runs: a repository whose git configuration is refused stops the process with 78.
+  await checkRepositoryGit(config.repoRoot, config.githubRepo);
   await startupChecks({ db, adapter, config, log, runProbe });
-  await recoverOrphans(db, config, log);
+  await recoverOrphans({
+    db,
+    config,
+    log,
+    alert,
+    running,
+    now,
+    resume: (card: Card) => resumeMerged(card, pipeline),
+    lookupMerge: (card: Card) => findCardMerge(card, pipeline),
+  });
   const tasks = startScheduler(config.schedulerEnabled, log);
   log.info('main', 'dispatcher started', { mode: config.agentMode, tickMs: config.tickMs, repo: config.githubRepo, worktrees: config.worktreeRoot });
 
@@ -80,10 +69,11 @@ async function main(): Promise<void> {
     boardSessionTtlMin: config.boardSessionTtlMin,
     maxConcurrency: config.maxConcurrency,
     running,
+    stuckAfterMs: stuckAfterMs(config.sessionMaxMinutes),
     now,
     log,
     alert,
-    runCard: (card: Card) => runCardPipeline(card, { db, adapter, config, log, alert, stopSignal: stop.signal, now }),
+    runCard: (card: Card) => runCardPipeline(card, pipeline),
   };
 
   while (!stop.signal.aborted) {

@@ -129,6 +129,8 @@ export interface Db {
   recordUsage(input: UsageInput): Promise<RecordUsageResult>;
   sumLedger(cardId: string): Promise<number>;
   insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>): Promise<void>;
+  // The payload of the card's newest event whose payload step is the given one, or null.
+  findEvent(cardId: string, step: string): Promise<Record<string, unknown> | null>;
   insertDeploy(input: DeployInput): Promise<void>;
   lastGreen(folder: CardFolder): Promise<Deploy | null>;
 }
@@ -276,9 +278,11 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       };
     },
 
+    // Only a board member's heartbeat counts. A moderator can be signed in to /board, but an
+    // attended session runs on the founder's subscription and needs the board present.
     async boardSessionActive(ttlMinutes, now) {
       const since = new Date(now.getTime() - ttlMinutes * 60_000).toISOString();
-      const { data, error } = await client.from('board_members').select('email').gte('last_seen_at', since).limit(1);
+      const { data, error } = await client.from('board_members').select('email').eq('role', 'board').gte('last_seen_at', since).limit(1);
       if (error) fail('board_members', error);
       return rows(data).length > 0;
     },
@@ -296,9 +300,10 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     },
 
     // The claim is one conditional UPDATE: only a card still in stage funded moves to building,
-    // so two dispatchers racing for the same card cannot both win.
+    // so two dispatchers racing for the same card cannot both win. commit_sha is cleared, so a sha
+    // from an earlier run never marks this run as merged.
     async claimCard(id) {
-      const { data, error } = await client.from('cards').update({ stage: 'building' }).eq('id', id).eq('stage', 'funded').select('*');
+      const { data, error } = await client.from('cards').update({ stage: 'building', commit_sha: null }).eq('id', id).eq('stage', 'funded').select('*');
       if (error) fail('claim card', error);
       const claimed = rows(data);
       return claimed.length === 1 ? toCard(claimed[0] as Row) : null;
@@ -352,6 +357,20 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async insertEvent(cardId, roleId, type, payload) {
       const { error } = await client.from('agent_events').insert({ card_id: cardId, role_id: roleId, type, payload_json: payload });
       if (error) fail('agent_events insert', error);
+    },
+
+    async findEvent(cardId, step) {
+      const { data, error } = await client
+        .from('agent_events')
+        .select('payload_json')
+        .eq('card_id', cardId)
+        .eq('payload_json->>step', step)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) fail('agent_events find', error);
+      const row = rows(data)[0];
+      const payload = row?.payload_json;
+      return typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
     },
 
     async insertDeploy(input) {

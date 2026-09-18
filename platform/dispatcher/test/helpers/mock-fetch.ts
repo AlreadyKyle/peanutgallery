@@ -22,3 +22,16 @@ export function mockFetch(route: Route): { fetchFn: typeof fetch; calls: FetchCa
   }) as typeof fetch;
   return { fetchFn, calls };
 }
+
+// A fetch that never answers and rejects only when its signal aborts, as the real fetch does.
+export function hangingFetch(): { fetchFn: typeof fetch; signals: AbortSignal[] } {
+  const signals: AbortSignal[] = [];
+  const fetchFn = ((_input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) return;
+      signals.push(signal);
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    })) as typeof fetch;
+  return { fetchFn, signals };
+}

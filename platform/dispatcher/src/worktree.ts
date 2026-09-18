@@ -1,13 +1,18 @@
 // Git worktrees for agent sessions: one worktree per card on branch card/<id8>-<lane>,
-// created from origin/main; only lane paths are staged; commits carry the agent author.
+// created at the fetched main sha; only lane paths are staged; commits carry the agent author. The
+// committed range and the repository's git configuration are checked after the session, since the
+// session can run code that commits or writes git configuration itself.
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, readlink, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { CardFolder } from './adapters/types.js';
 import type { CardLane } from './db.js';
+import { HaltedError, haltReason } from './halt.js';
+import { Mutex } from './lock.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,13 +27,98 @@ const DELETE = 127;
 // core.hooksPath in the repository's own config.
 export const NO_HOOKS: readonly string[] = ['-c', 'core.hooksPath=/dev/null'];
 
+// core.fsmonitor names a command git runs on status, add and diff; it is turned off the same way.
+// The commit-graph file is not read, so a graph a session wrote cannot misreport history.
+// No global attributes file is read either; the repository's own info/attributes is refused outright
+// (gitconfig.ts), so no attribute can name a filter or diff driver.
+export const GIT_SWITCHES: readonly string[] = ['-c', 'core.fsmonitor=false', '-c', 'core.commitGraph=false', '-c', 'core.attributesFile=/dev/null', ...NO_HOOKS];
+
+// No system or user configuration is read, so only the repository's own configuration applies, and
+// snapshotGitState watches that. Replace refs are ignored, so a replacement object a session wrote
+// cannot make the tree git shows differ from the tree git pushes.
+export const GIT_ENV: Readonly<Record<string, string>> = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_NO_REPLACE_OBJECTS: '1' };
+
+// A git command that runs longer is killed.
+export const GIT_TIMEOUT_MS = 5 * 60_000;
+
 export function gitArgs(args: readonly string[]): string[] {
-  return [...NO_HOOKS, ...args];
+  return [...GIT_SWITCHES, ...args];
 }
 
-async function gitRaw(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
-  const { stdout } = await execFileAsync('git', gitArgs(args), { cwd, env: { ...process.env, ...env }, maxBuffer: 16 * 1024 * 1024 });
+export interface GitCall {
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeout: number;
+  killSignal: NodeJS.Signals;
+}
+
+// Runs git and resolves with its stdout, or rejects when it exits non-zero or is killed.
+export type GitRunner = (call: GitCall) => Promise<string>;
+
+export const defaultGitRunner: GitRunner = async (call) => {
+  const { stdout } = await execFileAsync('git', call.args, {
+    cwd: call.cwd,
+    env: call.env,
+    timeout: call.timeout,
+    killSignal: call.killSignal,
+    maxBuffer: 16 * 1024 * 1024,
+  });
   return stdout;
+};
+
+let runner: GitRunner = defaultGitRunner;
+
+// Tests wrap the runner to see every call; null restores the default.
+export function setGitRunner(next: GitRunner | null): void {
+  runner = next ?? defaultGitRunner;
+}
+
+// The environment git starts from: what it needs to find programs, write temporary files and reach
+// https hosts, and nothing else. Every inherited GIT_* variable (GIT_DIR, GIT_SSH_COMMAND, a
+// GIT_CONFIG_* list) and every secret the dispatcher loaded from .env is left out.
+export const GIT_ENV_NAMES: readonly string[] = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'TZ', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR'];
+
+export function gitBaseEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const base: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (value !== undefined && (GIT_ENV_NAMES.includes(name) || name.startsWith('LC_'))) base[name] = value;
+  }
+  return base;
+}
+
+// The folders git uses for a call in cwd, named in the environment so git never works them out
+// itself. A commondir file, in the main repository or a worktree's folder, would otherwise send git to
+// a copy of the repository the snapshot and the allowlist never read.
+// - cwd holds a .git folder: that folder is both the git dir and the common dir.
+// - cwd holds a .git file: it names <common>/worktrees/<name>, and the common dir is two levels up.
+// - neither (git init or clone, a bare repository in tests): git may not search above cwd.
+export async function gitDirEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
+  const top = path.resolve(cwd);
+  const dotGit = path.join(top, '.git');
+  let stat;
+  try {
+    stat = await lstat(dotGit);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return { GIT_CEILING_DIRECTORIES: path.dirname(top) };
+  }
+  if (stat.isDirectory()) return { GIT_DIR: dotGit, GIT_COMMON_DIR: dotGit, GIT_WORK_TREE: top };
+  if (!stat.isFile()) throw new Error(`${dotGit} is neither a folder nor a file`);
+  const pointer = /^gitdir: (.+)$/m.exec(await readFile(dotGit, 'utf8'))?.[1]?.trim();
+  if (!pointer) throw new Error(`${dotGit} names no gitdir`);
+  const admin = path.resolve(top, pointer);
+  if (path.basename(path.dirname(admin)) !== 'worktrees') throw new Error(`${dotGit} does not point into a worktrees folder`);
+  return { GIT_DIR: admin, GIT_COMMON_DIR: path.dirname(path.dirname(admin)), GIT_WORK_TREE: top };
+}
+
+// A halted dispatcher runs no git: the repository's configuration is untrusted until an operator has
+// looked and restarted it.
+async function gitRaw(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
+  const halted = haltReason();
+  if (halted) throw new HaltedError(halted);
+  const dirs = await gitDirEnv(cwd);
+  return runner({ args: gitArgs(args), cwd, env: { ...gitBaseEnv(process.env), ...env, ...dirs, ...GIT_ENV }, timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' });
 }
 
 export async function git(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
@@ -154,21 +244,64 @@ export function outsideLane(files: readonly string[], allowed: readonly string[]
 export interface Worktree {
   path: string;
   branch: string;
+  // The main sha the worktree was created at; the card's one commit must sit directly on it.
+  baseSha: string;
 }
 
+const MAIN_REF = 'refs/remotes/origin/main';
+
+// Fetches origin's main into its remote-tracking ref by full name, so a tag or branch named
+// origin/main cannot stand in for it, and returns its commit sha.
+export async function fetchMain(repoRoot: string, authEnv: NodeJS.ProcessEnv): Promise<string> {
+  await git(['fetch', 'origin', `+refs/heads/main:${MAIN_REF}`], repoRoot, authEnv);
+  return git(['rev-parse', '--verify', `${MAIN_REF}^{commit}`], repoRoot);
+}
+
+// The worktree starts at the sha rather than the remote-tracking ref, so git writes no upstream
+// configuration for the branch.
+// Worktree creation and removal touch refs, the worktree list and the remote-tracking ref that every
+// card shares, so two cards never run them at once.
+const repoLock = new Mutex();
+
 export async function createWorktree(repoRoot: string, root: string, cardId: string, lane: CardLane, authEnv: NodeJS.ProcessEnv): Promise<Worktree> {
-  const target = worktreePath(root, cardId);
-  const branch = branchName(cardId, lane);
-  await mkdir(root, { recursive: true });
-  if (existsSync(target)) {
-    await removeWorktree(repoRoot, target, null);
-  }
-  await git(['fetch', 'origin', 'main'], repoRoot, authEnv);
-  await git(['worktree', 'add', '-B', branch, target, 'origin/main'], repoRoot);
-  return { path: target, branch };
+  return repoLock.run(async () => {
+    const target = worktreePath(root, cardId);
+    const branch = branchName(cardId, lane);
+    await mkdir(root, { recursive: true });
+    if (existsSync(target)) {
+      await removeWorktreeUnlocked(repoRoot, target, null);
+    }
+    await git(['worktree', 'prune'], repoRoot);
+    const baseSha = await fetchMain(repoRoot, authEnv);
+    await git(['worktree', 'add', '-B', branch, target, baseSha], repoRoot);
+    return { path: target, branch, baseSha };
+  });
+}
+
+export function smokeWorktreePath(root: string, cardId: string): string {
+  return path.join(root, `smoke-${shortId(cardId)}`);
+}
+
+// A detached checkout of a merge commit, for the smoke test's headless bot.
+export async function createSmokeWorktree(repoRoot: string, root: string, cardId: string, sha: string, authEnv: NodeJS.ProcessEnv): Promise<string> {
+  return repoLock.run(async () => {
+    const target = smokeWorktreePath(root, cardId);
+    await mkdir(root, { recursive: true });
+    if (existsSync(target)) {
+      await removeWorktreeUnlocked(repoRoot, target, null);
+    }
+    await git(['worktree', 'prune'], repoRoot);
+    await fetchMain(repoRoot, authEnv);
+    await git(['worktree', 'add', '--detach', target, `${sha}^{commit}`], repoRoot);
+    return target;
+  });
 }
 
 export async function removeWorktree(repoRoot: string, target: string, branch: string | null): Promise<void> {
+  await repoLock.run(() => removeWorktreeUnlocked(repoRoot, target, branch));
+}
+
+async function removeWorktreeUnlocked(repoRoot: string, target: string, branch: string | null): Promise<void> {
   if (existsSync(target)) {
     await git(['worktree', 'remove', '--force', target], repoRoot).catch(() => rm(target, { recursive: true, force: true }));
   }
@@ -258,4 +391,136 @@ export async function commitLane(worktree: string, allowed: readonly string[], i
     await rm(messageFile, { force: true });
   }
   return { committed: true, sha: await git(['rev-parse', 'HEAD'], worktree) };
+}
+
+// On success, paths lists every path the commit changes, sorted, so the range GitHub reports can be
+// compared with it before the merge.
+export type CommitCheck = { ok: true; paths: string[] } | { ok: false; check: 'history' | 'lane_violation' | 'file_mode'; detail: string };
+
+export interface CommitExpectation {
+  baseSha: string;
+  sha: string;
+  allowed: readonly string[];
+}
+
+const SYMLINK_MODE = '120000';
+const GITLINK_MODE = '160000';
+
+export interface RawEntry {
+  srcMode: string;
+  dstMode: string;
+  path: string;
+}
+
+// `diff-tree -r -z --raw` output: ":<src mode> <dst mode> <src sha> <dst sha> <status>" then the
+// path, each ended by NUL. With renames off every entry carries one path.
+export function parseRawDiff(output: string): RawEntry[] {
+  const fields = output.split('\0');
+  const entries: RawEntry[] = [];
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const meta = fields[i] ?? '';
+    if (!meta.startsWith(':')) continue;
+    const [srcMode = '', dstMode = ''] = meta.slice(1).split(' ');
+    entries.push({ srcMode, dstMode, path: fields[i + 1] ?? '' });
+  }
+  return entries;
+}
+
+// The pushed commit must be HEAD, the only commit on top of the base, with one parent, and change
+// only regular files inside the lane. A session that committed itself, moved a kernel file into the
+// lane or committed a symlink or submodule fails here, before anything is pushed.
+export async function headSha(worktree: string): Promise<string> {
+  return git(['rev-parse', '--verify', 'HEAD^{commit}'], worktree);
+}
+
+export async function verifyCardCommit(worktree: string, expected: CommitExpectation): Promise<CommitCheck> {
+  const head = await headSha(worktree);
+  if (head !== expected.sha) return { ok: false, check: 'history', detail: `HEAD is ${head}, not the dispatcher's commit ${expected.sha}` };
+  const parents = (await git(['rev-list', '--parents', '-n', '1', expected.sha], worktree)).split(' ').slice(1);
+  if (parents.length !== 1 || parents[0] !== expected.baseSha) {
+    return { ok: false, check: 'history', detail: `commit ${expected.sha} has parents ${parents.join(', ') || 'none'}, not the base ${expected.baseSha}` };
+  }
+  const count = await git(['rev-list', '--count', `${expected.baseSha}..${expected.sha}`], worktree);
+  if (count !== '1') return { ok: false, check: 'history', detail: `${count} commits sit on the base ${expected.baseSha}, not 1` };
+  const entries = parseRawDiff(await gitRaw(['-c', 'core.quotePath=false', 'diff-tree', '-r', '-z', '--raw', '--no-renames', expected.baseSha, expected.sha], worktree));
+  const stray = outsideLane(
+    entries.map((entry) => entry.path),
+    expected.allowed,
+  );
+  if (stray.length > 0) return { ok: false, check: 'lane_violation', detail: `committed changes outside the lane: ${stray.join(', ')}` };
+  const special = entries.filter((entry) => [entry.srcMode, entry.dstMode].some((mode) => mode === SYMLINK_MODE || mode === GITLINK_MODE));
+  if (special.length > 0) {
+    return { ok: false, check: 'file_mode', detail: `symlinks or submodules committed: ${special.map((entry) => `${entry.path} (${entry.srcMode} -> ${entry.dstMode})`).join(', ')}` };
+  }
+  return { ok: true, paths: [...new Set(entries.map((entry) => entry.path))].sort() };
+}
+
+// The repository folder git reads configuration from: <repo>/.git, or the common folder a .git
+// file points to.
+export async function commonGitDir(repoRoot: string): Promise<string> {
+  const dotGit = path.join(repoRoot, '.git');
+  if ((await lstat(dotGit)).isDirectory()) return dotGit;
+  const pointer = /^gitdir: (.+)$/m.exec(await readFile(dotGit, 'utf8'))?.[1]?.trim();
+  if (!pointer) throw new Error(`${dotGit} is neither a folder nor a gitdir file`);
+  const gitDir = path.resolve(repoRoot, pointer);
+  const common = await readFile(path.join(gitDir, 'commondir'), 'utf8').catch(() => null);
+  return common === null ? gitDir : path.resolve(gitDir, common.trim());
+}
+
+// One entry's state: missing, a symlink and its target, a folder and its names, or a file and its
+// bytes.
+async function entryState(file: string): Promise<Buffer> {
+  let stat;
+  try {
+    stat = await lstat(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return Buffer.from('missing');
+    throw error;
+  }
+  if (stat.isSymbolicLink()) return Buffer.from(`symlink ${await readlink(file)}`);
+  if (stat.isDirectory()) return Buffer.from(`folder ${(await readdir(file)).sort().join('\0')}`);
+  if (stat.isFile()) return Buffer.concat([Buffer.from('file '), await readFile(file)]);
+  return Buffer.from(`other ${stat.mode}`);
+}
+
+// The worktree's own folder under <common>/worktrees, named by its .git file. A changed .git file
+// changes the snapshot by itself, so reading the pointer here is safe.
+export async function worktreeAdminDir(common: string, worktree: string): Promise<string> {
+  const pointer = await readFile(path.join(worktree, '.git'), 'utf8')
+    .then((text) => /^gitdir: (.+)$/m.exec(text)?.[1]?.trim() ?? null)
+    .catch(() => null);
+  return pointer ? path.resolve(worktree, pointer) : path.join(common, 'worktrees', path.basename(worktree));
+}
+
+// A sha256 over what git reads as configuration for the worktree: the common folder's config,
+// config.worktree, info/attributes, info/exclude, info/grafts and the hooks listing, the worktree's own
+// config.worktree, commondir and gitdir, and the worktree's .git file. It is read with node fs only,
+// since running git against a tampered repository is what this guards. Taken before a session and
+// again after, a difference means the session wrote git configuration that a later git call would
+// act on.
+export async function snapshotGitState(repoRoot: string, worktree: string): Promise<string> {
+  const common = await commonGitDir(repoRoot);
+  const admin = await worktreeAdminDir(common, worktree);
+  const entries: Array<[string, string]> = [
+    ['config', path.join(common, 'config')],
+    ['config.worktree', path.join(common, 'config.worktree')],
+    ['commondir', path.join(common, 'commondir')],
+    ['objects/info/alternates', path.join(common, 'objects', 'info', 'alternates')],
+    ['objects/info/http-alternates', path.join(common, 'objects', 'info', 'http-alternates')],
+    ['info/attributes', path.join(common, 'info', 'attributes')],
+    ['info/exclude', path.join(common, 'info', 'exclude')],
+    ['info/grafts', path.join(common, 'info', 'grafts')],
+    ['hooks', path.join(common, 'hooks')],
+    ['worktree config.worktree', path.join(admin, 'config.worktree')],
+    ['worktree commondir', path.join(admin, 'commondir')],
+    ['worktree gitdir', path.join(admin, 'gitdir')],
+    ['worktree .git', path.join(worktree, '.git')],
+  ];
+  const hash = createHash('sha256');
+  for (const [label, file] of entries) {
+    const state = await entryState(file);
+    hash.update(`${label}\0${state.length}\0`);
+    hash.update(state);
+  }
+  return hash.digest('hex');
 }
