@@ -49,10 +49,14 @@ function contributorsLine(count: number): string {
   return count === 1 ? copy.contributorsOne : copy.contributorsMany.replace('{n}', formatInteger(count));
 }
 
-/** "$0.00 of $3.00 · 0 contributors" for a card with a target, or null. */
+/**
+ * "$0.00 of $3.00 · 0 contributors" for a card with a target, or null. The count is left out when
+ * the funding figures did not load, instead of showing 0.
+ */
 export function fundingCaption(card: Card, snapshot: Snapshot): string | null {
   if (card.funding_target_usd <= 0) return null;
   const amount = `${formatUsd(card.funded_usd)} of ${formatUsd(card.funding_target_usd)}`;
+  if (snapshot.missing.includes('funding')) return amount;
   const funding = snapshot.funding[card.id];
   // A goal card shows its count from the start; no funding row yet means 0.
   const showContributors = card.shape === 'goal' || funding !== undefined;
@@ -191,15 +195,17 @@ export function FundBoard({ studio }: { studio: StudioState }) {
 /**
  * "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source
  * instead. Only studio-billed spend is public, so a card built on the founder's time shows none.
+ * When the funding figures did not load, a goal card leaves its count out instead of showing 0.
  */
 export function shippedCaption(card: Card, snapshot: Snapshot): string {
   const funding = snapshot.funding[card.id];
-  const who =
-    card.shape === 'goal' || funding !== undefined
-      ? contributorsLine(funding?.contributors ?? 0)
-      : sourceLabel(card.source);
+  let who: string | null = sourceLabel(card.source);
+  if (card.shape === 'goal' || funding !== undefined) {
+    who = snapshot.missing.includes('funding') ? null : contributorsLine(funding?.contributors ?? 0);
+  }
   const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spent} · ` : '';
-  return `${cost}${who} · ${copy.shippedOn} ${formatDate(card.updated_at)}`;
+  const count = who === null ? '' : `${who} · `;
+  return `${cost}${count}${copy.shippedOn} ${formatDate(card.updated_at)}`;
 }
 
 /** Live cards, newest first, as rows: what each change cost, who funded it and when it shipped. */

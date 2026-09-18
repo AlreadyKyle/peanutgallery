@@ -135,6 +135,7 @@ const snapshot: Snapshot = {
     { id: 'r-host', title: 'Host', write_access: false, state: 'active' },
   ],
   cardTitles: {},
+  missing: [],
 };
 
 const source: StudioSource = {

@@ -159,6 +159,11 @@ code {
   font-size: var(--size-small);
 }
 
+/* A live region kept in place for its text to arrive; takes no space while empty. */
+.status:empty {
+  margin: 0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -268,12 +273,6 @@ nav a.nav-primary {
 
 .panel .stats {
   margin-bottom: var(--space-2);
-}
-
-.panel-heading {
-  margin: var(--space-2) 0 var(--space-1);
-  font-size: var(--size-small);
-  color: var(--muted);
 }
 
 .row-strong {

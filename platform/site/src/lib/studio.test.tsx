@@ -14,13 +14,14 @@ function snapshotWithBalance(balance: number): Snapshot {
       day: '2026-09-14',
     },
     cards: [],
-  funding: {},
-  launchedAt: null,
+    funding: {},
+    launchedAt: null,
     totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
     events: [],
     deploys: [],
     roles: [],
     cardTitles: {},
+    missing: [],
   };
 }
 
@@ -46,6 +47,11 @@ function renderStudio(source: StudioSource | null) {
   return renderHook(() => useStudio(), {
     wrapper: ({ children }) => <SourceProvider source={source}>{children}</SourceProvider>,
   });
+}
+
+function staleOf(result: { current: ReturnType<typeof useStudio> }): boolean | null {
+  const state = result.current;
+  return state.state === 'ready' ? state.stale : null;
 }
 
 function balanceOf(result: { current: ReturnType<typeof useStudio> }): number | null {
@@ -81,11 +87,36 @@ describe('useStudio', () => {
 
     await act(async () => loads[0]?.resolve(snapshotWithBalance(10)));
     expect(balanceOf(result)).toBe(10);
+    expect(staleOf(result)).toBe(false);
 
     notify();
     await flush(REFRESH_DEBOUNCE_MS);
     await act(async () => loads[1]?.reject(new Error('network down')));
     expect(balanceOf(result)).toBe(10);
+  });
+
+  it('marks the kept snapshot stale after a failed refresh and clears it on the next successful load', async () => {
+    const { source, loads, notify } = controlledSource();
+    const { result } = renderStudio(source);
+    await act(async () => loads[0]?.resolve(snapshotWithBalance(10)));
+    expect(staleOf(result)).toBe(false);
+
+    notify();
+    await flush(REFRESH_DEBOUNCE_MS);
+    await act(async () => loads[1]?.reject(new Error('network down')));
+    expect(staleOf(result)).toBe(true);
+    expect(balanceOf(result)).toBe(10);
+
+    notify();
+    await flush(REFRESH_DEBOUNCE_MS);
+    await act(async () => loads[2]?.reject(new Error('still down')));
+    expect(staleOf(result)).toBe(true);
+
+    notify();
+    await flush(REFRESH_DEBOUNCE_MS);
+    await act(async () => loads[3]?.resolve(snapshotWithBalance(12)));
+    expect(staleOf(result)).toBe(false);
+    expect(balanceOf(result)).toBe(12);
   });
 
   it('reports the error when no snapshot has loaded yet', async () => {

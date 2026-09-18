@@ -2,6 +2,7 @@ import { DeployList } from '../components/DeployList';
 import { LedgerSummary } from '../components/LedgerSummary';
 import { Meter } from '../components/Meter';
 import { PageHeader } from '../components/PageHeader';
+import { StaleNotice } from '../components/StaleNotice';
 import { copy } from '../lib/copy';
 import { useStudio } from '../lib/studio';
 
@@ -9,7 +10,9 @@ export function Ledger() {
   const studio = useStudio();
   return (
     <main>
-      <PageHeader title={copy.ledger} lede={copy.ledgerLede} />
+      <PageHeader title={copy.ledger} lede={copy.ledgerLede}>
+        <StaleNotice studio={studio} />
+      </PageHeader>
       <section className="section" aria-labelledby="funding">
         <h2 id="funding">{copy.meter}</h2>
         <Meter studio={studio} />

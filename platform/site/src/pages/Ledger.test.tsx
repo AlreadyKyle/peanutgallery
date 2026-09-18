@@ -49,6 +49,7 @@ const snapshot: Snapshot = {
   ],
   roles: [{ id: builderId, title: 'Builder A', write_access: true, state: 'active' }],
   cardTitles: { [cardId]: 'Gatherer costs 11' },
+  missing: [],
 };
 
 function sourceOf(value: Snapshot): StudioSource {
@@ -114,6 +115,60 @@ describe('Ledger', () => {
     await waitFor(() => expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy());
     expect(screen.getByText(copy.deploysEmpty)).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
+  });
+
+  it('says a part is unavailable instead of showing zero or an empty line when it did not load', async () => {
+    renderLedger(
+      sourceOf({
+        ...snapshot,
+        totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
+        events: [],
+        deploys: [],
+        cardTitles: {},
+        missing: ['totals', 'events', 'deploys', 'cardTitles'],
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
+    const work = screen.getByRole('region', { name: copy.agentWork });
+    expect(within(work).getAllByText(copy.partUnavailable)).toHaveLength(2);
+    expect(within(work).queryByText(copy.describeAgentSpend)).toBeNull();
+    expect(within(work).queryByText(/tokens/)).toBeNull();
+    expect(screen.queryByText(copy.ledgerEmpty)).toBeNull();
+    const deploys = screen.getByRole('region', { name: copy.deploys });
+    expect(within(deploys).getByText(copy.partUnavailable)).toBeTruthy();
+    expect(screen.queryByText(copy.deploysEmpty)).toBeNull();
+    expect(within(work).queryByText('$0.00')).toBeNull();
+  });
+
+  it('shows the totals and the deploys when only the agent actions did not load', async () => {
+    renderLedger(sourceOf({ ...snapshot, events: [], cardTitles: {}, missing: ['events'] }));
+    await waitFor(() => expect(screen.getByText('$1.25')).toBeTruthy());
+    const work = screen.getByRole('region', { name: copy.agentWork });
+    expect(within(work).getByText(copy.partUnavailable)).toBeTruthy();
+    expect(listItems('Deploys')).toHaveLength(2);
+  });
+
+  it('says the figures may be out of date under the heading when a refresh fails', async () => {
+    let onChange = () => {};
+    let fail = false;
+    renderLedger({
+      load: () => (fail ? Promise.reject(new Error('network down')) : Promise.resolve(snapshot)),
+      subscribe: (callback) => {
+        onChange = callback;
+        return () => {};
+      },
+    });
+    const status = screen.getByRole('status');
+    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
+    expect(status.textContent).toBe('');
+    expect(status.closest('.hero')).not.toBeNull();
+    fail = true;
+    onChange();
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(screen.getAllByRole('status')).toEqual([status]);
+    expect(screen.getByText('$48.56')).toBeTruthy();
+    const funding = screen.getByRole('region', { name: copy.meter });
+    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
   });
 
   it('shows the unavailable line in every section without a database', () => {

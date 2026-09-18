@@ -3,6 +3,9 @@ import { formatDateTime, shortSha } from '../lib/format';
 import type { Snapshot } from '../lib/source';
 
 export function DeployList({ snapshot }: { snapshot: Snapshot }) {
+  if (snapshot.missing.includes('deploys')) {
+    return <p className="muted">{copy.partUnavailable}</p>;
+  }
   if (snapshot.deploys.length === 0) {
     return <p className="muted">{copy.deploysEmpty}</p>;
   }

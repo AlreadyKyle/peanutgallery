@@ -137,6 +137,7 @@ const snapshot: Snapshot = {
   deploys: [],
   roles: [],
   cardTitles: {},
+  missing: [],
 };
 
 /** A paragraph whose whole text, across its inline elements, is exactly this. */
@@ -216,7 +217,8 @@ describe('Landing', () => {
     expect(within(panel).getByText('$48.56')).toBeTruthy();
     expect(paragraphIn(panel, `${copy.buildingLine} The core loop`)).toBeTruthy();
     expect(paragraphIn(panel, `${copy.latestShipped} The unlock list`)).toBeTruthy();
-    expect(within(panel).queryByText(copy.recentWork)).toBeNull();
+    expect(within(panel).queryByRole('list')).toBeNull();
+    expect(screen.queryByText(copy.staleFigures)).toBeNull();
     expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy();
 
     expect(screen.getByText('$7.10')).toBeTruthy();
@@ -337,6 +339,54 @@ describe('Landing', () => {
     expect(screen.queryByRole('heading', { level: 2, name: copy.shipped })).toBeNull();
     expect(screen.queryByText(copy.latestShipped)).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('keeps the figures and says they may be out of date when a refresh fails, until one succeeds', async () => {
+    let onChange = () => {};
+    let fail = false;
+    renderLanding({
+      load: () => (fail ? Promise.reject(new Error('network down')) : Promise.resolve(snapshot)),
+      subscribe: (callback) => {
+        onChange = callback;
+        return () => {};
+      },
+    });
+    const panel = screen.getByRole('complementary', { name: copy.rightNow });
+    // The live region is in place, empty, before any figure loads, so its text arriving is announced.
+    const status = within(panel).getByRole('status');
+    expect(status.textContent).toBe('');
+    await waitFor(() => expect(within(panel).getByText('$48.56')).toBeTruthy());
+    expect(within(panel).getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('');
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    const funding = screen.getByRole('region', { name: copy.meter });
+    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
+
+    fail = true;
+    onChange();
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(within(panel).getByRole('status')).toBe(status);
+    expect(status.className).toBe('muted small status');
+    expect(within(panel).getByText('$48.56')).toBeTruthy();
+    // The meter repeats the line beside the money, without a second live region.
+    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
+    expect(within(funding).getByText('$7.10')).toBeTruthy();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+
+    fail = false;
+    onChange();
+    await waitFor(() => expect(status.textContent).toBe(''), { timeout: 3000 });
+    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
+  });
+
+  it('says nothing about launch when the studio row did not load', async () => {
+    renderLanding({
+      load: () => Promise.resolve({ ...snapshot, launchedAt: null, missing: ['studio'] }),
+      subscribe: () => () => {},
+    });
+    await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
+    expect(screen.queryByText(copy.notLiveYet)).toBeNull();
+    expect(screen.queryByText(new RegExp(copy.liveSince))).toBeNull();
   });
 
   it('shows the live-since date once the studio has launched', async () => {

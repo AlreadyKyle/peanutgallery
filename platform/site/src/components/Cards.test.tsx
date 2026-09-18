@@ -39,11 +39,12 @@ function snapshot(cards: Card[], funding: Snapshot['funding'] = {}): Snapshot {
     deploys: [],
     roles: [],
     cardTitles: {},
+    missing: [],
   };
 }
 
 function ready(cards: Card[], funding: Snapshot['funding'] = {}): StudioState {
-  return { state: 'ready', snapshot: snapshot(cards, funding) };
+  return { state: 'ready', snapshot: snapshot(cards, funding), stale: false };
 }
 
 /** A paragraph whose whole text, across its inline elements, is exactly this. */
@@ -139,6 +140,14 @@ describe('a card box', () => {
     expect(paragraph(`$0.00 of $20.00 · ${copy.contributorsMany.replace('{n}', '0')}`)).toBeTruthy();
     expect(document.querySelectorAll('p.card-summary')).toHaveLength(0);
     expect(boxFor('New').querySelector('details.brief')).toBeNull();
+  });
+
+  it('leaves the contributor count out of the caption when the funding figures did not load', () => {
+    const studio = ready([card({ id: 'n2', funding_target_usd: 50, funded_usd: 5 })]);
+    if (studio.state !== 'ready') throw new Error('fixture is not ready');
+    render(<FundBoard studio={{ ...studio, snapshot: { ...studio.snapshot, missing: ['funding'] } }} />);
+    expect(paragraph('$5.00 of $50.00')).toBeTruthy();
+    expect(screen.queryByText(/contributor/)).toBeNull();
   });
 
   it('omits the fund button for a full bar, a non-goal card and a missing payment link, and the bar at a zero target', () => {
@@ -255,6 +264,14 @@ describe('ShippedList', () => {
     render(<ShippedList snapshot={snapshot([card({ id: 'f', title: 'Founder built', stage: 'live', shape: 'oneoff', spent_usd: 0, updated_at: '2026-09-15T04:26:18Z' })])} />);
     expect(screen.getByText(`${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-15T04:26:18Z')}`)).toBeTruthy();
     expect(screen.queryByText(/\$/)).toBeNull();
+  });
+
+  it('leaves the contributor count out of a shipped row when the funding figures did not load', () => {
+    render(<ShippedList snapshot={{ ...snapshot(shipped, { older: { contributors: 3, credited_usd: 3 } }), funding: {}, missing: ['funding'] }} />);
+    expect(screen.getByText(`$1.23 ${copy.spent} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
+    // A card that was never open to fund still names its source.
+    expect(screen.getByText(`$0.50 ${copy.spent} · ${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
+    expect(screen.queryByText(/contributor/)).toBeNull();
   });
 
   it('shows no Play the game link without a play URL, and nothing at all without a shipped card', () => {

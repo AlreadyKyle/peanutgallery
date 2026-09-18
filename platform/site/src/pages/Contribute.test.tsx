@@ -39,6 +39,7 @@ function source(cards: Card[]): StudioSource {
     deploys: [],
     roles: [],
     cardTitles: {},
+    missing: [],
   };
   return { load: () => Promise.resolve(snapshot), subscribe: () => () => {} };
 }
@@ -96,6 +97,28 @@ describe('Contribute', () => {
     renderContribute(source([]));
     await waitFor(() => expect(screen.getByText(copy.noFundableCards)).toBeTruthy());
     expect(screen.getByRole('link', { name: new RegExp(copy.pickForMe) }).getAttribute('href')).toBe(STRIPE);
+  });
+
+  it('says the figures may be out of date when a refresh fails', async () => {
+    let onChange = () => {};
+    let fail = false;
+    const cards = [card({ id: 'g1', title: 'Rename the Gatherer' })];
+    const loaded = source(cards);
+    renderContribute({
+      load: () => (fail ? Promise.reject(new Error('network down')) : loaded.load()),
+      subscribe: (callback) => {
+        onChange = callback;
+        return () => {};
+      },
+    });
+    const status = screen.getByRole('status');
+    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+    expect(status.textContent).toBe('');
+    fail = true;
+    onChange();
+    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    expect(screen.getAllByRole('status')).toEqual([status]);
+    expect(screen.getByText('Rename the Gatherer')).toBeTruthy();
   });
 
   it('says contributions are not open without a payment link', () => {

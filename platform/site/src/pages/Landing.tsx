@@ -8,8 +8,9 @@ import { siteEnv } from '../lib/env';
 import { formatDate } from '../lib/format';
 import { useStudio, type StudioState } from '../lib/studio';
 
+// Nothing until the studio row has loaded, so a failed read never says the studio is not live.
 function launchLine(studio: StudioState): string | null {
-  if (studio.state !== 'ready') return null;
+  if (studio.state !== 'ready' || studio.snapshot.missing.includes('studio')) return null;
   const at = studio.snapshot.launchedAt;
   return at === null ? copy.notLiveYet : `${copy.liveSince} ${formatDate(at)}`;
 }
