@@ -62,7 +62,7 @@ An S1 draw moves money from the balance to the incident reserve side of the same
 - [x] A dispute draws the reserve first and alerts.
 - [x] A $120 contribution credits $50 immediately and holds the rest; the release job credits it once 14 days have passed.
 - [x] The ledger identity holds after refunds and releases (I1–I3 above).
-- [x] The live endpoint lists `checkout.session.completed`, `charge.updated`, `charge.refunded` and `charge.dispute.created`.
+- [x] ~~The live endpoint lists `checkout.session.completed`, `charge.updated`, `charge.refunded` and `charge.dispute.created`.~~ Superseded: `webhook-hardening.md` adds `charge.dispute.funds_withdrawn` and makes a dispute inquiry reverse nothing (2026-09-16).
 - [x] The live database runs `credit-held-contributions` hourly, and `scripts/ledger-identity.ts` prints `PASS:` after the migration.
 
 ## Verification

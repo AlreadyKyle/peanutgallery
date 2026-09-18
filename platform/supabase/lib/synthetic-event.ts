@@ -41,17 +41,22 @@ export function syntheticEvent(nonce: string, amountCents: number, split: string
   };
 }
 
+export type ReversalEventType = "charge.refunded" | "charge.dispute.created" | "charge.dispute.funds_withdrawn";
+
 /**
- * A charge.refunded or charge.dispute.created event for a payment intent, with
- * synthetic event, charge and dispute ids. Pointed at a real payment intent, the
- * dry run proves the live session lookup without reversing anything.
+ * A charge.refunded, charge.dispute.created or charge.dispute.funds_withdrawn
+ * event for a payment intent, with synthetic event, charge and dispute ids.
+ * Pointed at a real payment intent, the dry run proves the live session lookup
+ * without reversing anything. disputeStatus is ignored for a refund; a warning_
+ * status makes charge.dispute.created an inquiry.
  */
 export function syntheticReversalEvent(
-  type: "charge.refunded" | "charge.dispute.created",
+  type: ReversalEventType,
   nonce: string,
   paymentIntent: string,
   amountCents: number,
   createdSeconds: number,
+  disputeStatus = "needs_response",
 ): Record<string, unknown> {
   const object = type === "charge.refunded"
     ? {
@@ -71,7 +76,7 @@ export function syntheticReversalEvent(
         payment_intent: paymentIntent,
         amount: amountCents,
         currency: "usd",
-        status: "needs_response",
+        status: disputeStatus,
         livemode: false,
       };
   return {
