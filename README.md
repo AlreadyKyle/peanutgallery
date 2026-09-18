@@ -81,7 +81,7 @@ Per package:
 
 ## Other guides
 
-- `platform/site/BRAND.md`: the site's style guide and copy rules.
+- `platform/site/DESIGN.md`: the site's style guide and copy rules.
 - `platform/agents/README.md`: the role spec schema and what each prompt must say.
 - `platform/ops/README.md`: the VPS runbook (provision, cutover, deploy, roll back, rotate keys).
 - `seed-1/CLAUDE.md`: Dust's layout, rules, lanes and protected paths.

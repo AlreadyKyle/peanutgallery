@@ -1,5 +1,5 @@
 /* Peanut Gallery site styles. Plain and readable: one column, sentence case, gray for secondary
-   text, few rules. Tokens first; BRAND.md is the style guide and explains every one. */
+   text, few rules. Tokens first; DESIGN.md is the style guide and explains every one. */
 
 :root {
   color-scheme: light;
@@ -109,6 +109,7 @@ h1,
 h2,
 h3 {
   margin: 0;
+  text-wrap: balance;
   font-weight: var(--weight-bold);
   line-height: var(--leading-heading);
 }
@@ -282,7 +283,8 @@ nav a.nav-primary {
 /* Two sections side by side on a wide screen. */
 .columns {
   display: grid;
-  gap: 0 var(--space-5);
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
 }
 
 .hero h1 {
@@ -297,7 +299,12 @@ nav a.nav-primary {
   margin-bottom: var(--space-5);
 }
 
-.section:last-child {
+.section:last-child,
+.columns > .section {
+  margin-bottom: 0;
+}
+
+main > .columns:last-child {
   margin-bottom: 0;
 }
 
