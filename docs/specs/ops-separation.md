@@ -1,6 +1,6 @@
 # Ops separation: a read-only code clone, a work clone, and a deploy that trusts only commits
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -112,7 +112,7 @@ Every step checks before it acts, and folders are fixed one level only, never re
 - [x] I4: `gate_verdict` passes only the latest GitHub Actions `gate` run concluding success; `check_gate` sends the token in a header file; `review_target` prints both commit ranges and the diff stat of the named paths without control characters; `confirm_target` requires the 12-character prefix and, with no terminal, stops and asks for `--confirm`.
 - [x] S1: `wait_for_probe` reads only the new invocation's journal and needs `code root is read-only` before `startup probe passed`; a probe line alone, the lines reversed, or the previous invocation's lines never pass.
 - [x] S2: `deploy.sh` fetches from its `REPO_URL` by name and checks `remote.origin.url` and `GITHUB_REPO`.
-- [ ] Every ops script passes shellcheck 0.9.0 (CI).
+- [x] Every ops script passes shellcheck 0.9.0 (CI).
 - [ ] The production steps below pass on the VPS.
 
 ## Verification
@@ -188,6 +188,14 @@ Criteria and the tests that prove them:
 - The Linux managed-settings path: the 2.1.139 binary on the Mac (`~/.local/share/claude/versions/2.1.139`) resolves its managed folder as `/Library/Application Support/ClaudeCode` on macOS, `C:\Program Files\ClaudeCode` on Windows and `/etc/claude-code` otherwise, and reads `managed-settings.json` and `managed-settings.d` there.
 
 Pending: shellcheck in CI, and every production step.
+
+
+2026-09-20, status corrected from agreed to built, and the shellcheck line closed.
+
+- **shellcheck.** The gate ran green on the head sha of PR 40 (merged as ef352a2), which runs
+  shellcheck over the ops scripts in CI. The local run had missed a loop pattern because shellcheck
+  is not installed on the board's Mac; CI caught it and the fix is in the merged commit.
+- **Still open:** the production steps, which need the VPS. No instance exists yet.
 
 ## Residual risks
 

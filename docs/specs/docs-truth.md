@@ -1,6 +1,6 @@
 # Docs truth pass: a newcomer's README, a current plan and roadmap, and a drift guard
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -56,6 +56,14 @@ None. This change touches only docs, one prompt, `.env.example` and a test scrip
 - **`pnpm verify`:** exit 0. Supabase 122 passed, site 123, seed-1 77, dispatcher 207, `PASS: gate tests passed=157`, agents 64, ops 20 passed and 1 skipped, Deno `58 passed (33 steps) | 0 failed`, `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=296`, docs 4.
 - **`grep -rn -i "backseat" README.md CLAUDE.md`:** README.md line 5 ("Backseat is the working name. The package names (`@backseat/*`) and parts of `docs/PLAN.md` still use it.") and CLAUDE.md line 3 (the working name and the `@backseat/*` package names); every other hit is a `pnpm --filter @backseat/...` command.
 - **Sources for the facts added.** The split: `SPLIT_MAP` in `split.ts`. The merge rule: `gateStatus`, `waitForGate` and `mergePullRequest` in `platform/dispatcher/src/github.ts`, and `gh api repos/AlreadyKyle/peanutgallery/branches/main/protection` returning HTTP 403 "Upgrade to GitHub Pro or make this repository public to enable this feature". The lifecycle: `pipeline.ts`, `tick.ts`, `worktree.ts` and `smoke.ts`. The environment: `config.ts`, `dispatcher-env.mjs`, `platform/supabase/lib/*.ts`, the scripts and the function's `index.ts`. The gate: the header of `ship-gate.sh` and `.github/workflows/gate.yml`. The webhook events: `webhook_events.ts`. The merges: `gh pr view` for PRs 21 (3a08226), 22 (49d6e33), 25 (89cdbe9) and 30 (4f60c7c). The containment decision (PLAN.md §10 default 20): the board's instruction of 16 September 2026 for this pass; its spec is not on `main` yet.
+
+
+2026-09-20, status corrected from agreed to done. The drift guard merged as 267c7fe (PR 36) and its
+Production steps section is "None". `pnpm test:docs` on this branch: `ℹ tests 4`, `ℹ pass 4`,
+`ℹ fail 0`.
+
+This pass also used the guard as intended: the statuses of ten specs were corrected in the spec files
+first, and `docs/ROADMAP.md` was brought into line in the same pull request.
 
 ## Decisions
 

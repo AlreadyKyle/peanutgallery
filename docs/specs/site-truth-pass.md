@@ -1,6 +1,6 @@
 # Site truth pass: copy that is true, figures that fail honestly, security headers
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -98,7 +98,7 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
 - [x] With the report-only policy enforced on a local preview built with the public values, loading every route raises no violation.
 - [x] `live-check.mjs` checks the headers, the report-only value included, against a non-local address and skips them locally.
 - [x] `live-check.mjs` fails on any Content Security Policy report, whatever the console printed.
-- [ ] Live: after deploy, `node platform/site/scripts/live-check.mjs` passes against https://peanutgallery.games, header and policy report lines included.
+- [x] Live: after deploy, `node platform/site/scripts/live-check.mjs` passes against https://peanutgallery.games, header and policy report lines included.
 - [ ] Before enforcing the full policy: clean live checks against production, and the /board two-factor enrolment in Chromium and Safari with DevTools open and no report, each recorded under Evidence.
 
 ## Verification
@@ -157,6 +157,21 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
   - Through a proxy on `http://192.168.0.115:4175` adding the `netlify.toml` headers: `PASS live-check http://192.168.0.115:4175 passed=109 failed=0 skipped=2`, including the three report lines and `PASS / content-security-policy-report-only: default-src 'self'; ... form-action 'self'` and the same on `/ledger`.
   - Through a proxy on port 4177 whose report-only policy leaves out the Supabase hosts: `FAIL live-check http://192.168.0.115:4177 passed=104 failed=5 skipped=2`, exit 1. The failures are the three report checks (for example `FAIL 375px no Content Security Policy reports: report connect-src blocked wss://lyxndueoeisyqzewflpu.supabase.co/realtime/v1/websocket?...`) and the report-only value on `/` and `/ledger`. The same run printed `PASS 375px no console errors` and `PASS 1440px no console errors`: the console check alone does not see report-only violations.
   - At 7775826, through a proxy on port 4176 adding no headers: `FAIL live-check http://192.168.0.115:4176 passed=94 failed=12 skipped=2`, the header lines.
+
+
+2026-09-20, status corrected from agreed to built, and the first live line closed.
+
+- **The live check passes against production,** header and policy report lines included:
+  `PASS live-check https://peanutgallery.games passed=111 failed=0 skipped=0`. Among them, on both
+  `/` and `/ledger`: `x-content-type-options: nosniff`,
+  `referrer-policy: strict-origin-when-cross-origin`,
+  `permissions-policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()`,
+  `content-security-policy: frame-ancestors 'none'`, the full
+  `content-security-policy-report-only` line, and `www redirects 301`.
+- **Still open, and the only thing between this spec and done:** the report-only policy has not been
+  watched in a browser before being enforced. It needs /board two-factor enrolment carried out in
+  Chromium and in Safari with DevTools open and no CSP report raised, each recorded here. The board
+  enrolled on 20 September but nobody was watching the console, so it does not count.
 
 ## Decisions
 

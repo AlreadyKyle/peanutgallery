@@ -1,6 +1,6 @@
 # Card columns and open funding
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -79,8 +79,8 @@ Out:
 - [x] No view reads `cards`, and `set_live_at` and `set_updated_at` are the only functions in `public` that are not security definer. Neither is executable by anon or authenticated.
 - [x] The realtime publication still lists `cards`, `deploys` and `pool`.
 - [x] `scripts/anon-negative-test.ts` reads `cards` with `select=id,title,stage,funded_usd,live_at` and expects `actual_usd`, `severity`, `priority` and `*` refused with 42501.
-- [ ] Live: both migrations are applied, the privilege and trigger checks below hold, every live card has `live_at`, `anon-negative-test.ts` and `ledger-identity.ts` print `PASS:`, and the site's live check passes.
-- [ ] Live: an anon realtime subscription to `cards` still receives changes.
+- [x] Live: both migrations are applied, the privilege and trigger checks below hold, every live card has `live_at`, `anon-negative-test.ts` and `ledger-identity.ts` print `PASS:`, and the site's live check passes.
+- [x] Live: an anon realtime subscription to `cards` still receives changes.
 
 ## Verification
 
@@ -152,6 +152,29 @@ Rollback, if a check fails:
 - **Ship stamp.** Step "live_at is stamped when a card goes live and moves with nothing else" adds an insert at live with `live_at` 2026-08-01T09:00:00Z kept, a move to live that names a `live_at` stamped now, and `proconfig` `['search_path=""']`. It failed before the trigger change.
 - **File contents.** `migration.test.ts` removes each file's expected statements and requires nothing but comments to remain; appending `update public.cards set title = title;` or `select cron.schedule(1);` fails it. Both files start with `set lock_timeout = '5s';`, and the PGlite run applies each twice with it.
 - **Suites.** `pnpm test:functions` `ok | 58 passed (45 steps) | 0 failed`; `@backseat/supabase` `Tests 132 passed (132)`; `pnpm verify`: supabase 132, site 123, seed-1 77, dispatcher 207, Deno 58 passed (45 steps), `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=299`.
+
+
+2026-09-20, the two live lines, re-run against production from `main` at ef352a2.
+
+- **Both migrations are applied, and the column split holds.** `scripts/anon-negative-test.ts`, all
+  eight lines `ok`: `public_studio`, `public_card_funding` and `public_card_spend` readable;
+  `cards(id,title,stage,funded_usd,live_at)` readable; and `cards(actual_usd)`, `cards(severity)`,
+  `cards(priority)` and `cards(*)` each refused with `42501 permission denied for table cards`.
+- **Every live card has `live_at`.** 6 live cards, 0 with a null `live_at`.
+- **An anon realtime subscription still receives changes.** An anonymous client subscribed to
+  `postgres_changes` on `cards` received a no-op update within the timeout. It was delivered 27
+  columns — `acceptance_test, board_reason, branch, bucket, commit_sha, confidence, created_at,
+  design_spec_url, director_stance, estimate_usd, executor_role_id, failing_check, folder,
+  funded_usd, funding_target_usd, id, intent, lane, live_at, proposer_role_id, shape, source, stage,
+  summary, title, updated_at, veto_reason` — and none of `actual_usd`, `priority` or `severity`.
+- **The ledger and the site.** `scripts/ledger-identity.ts`:
+  `PASS: ledger identity holds over 1 contribution rows and 0 studio ledger rows`, with I1, I2 and I3
+  each at `drift 0.0000`. `platform/site/scripts/live-check.mjs`:
+  `PASS live-check https://peanutgallery.games passed=111 failed=0 skipped=0`.
+
+Note on `information_schema.role_column_grants`: it returns 0 rows for `anon` on `cards`, as it did
+on 18 September. That is a visibility quirk of the catalog view under this role, not a missing grant
+— the direct privilege test above is what proves the split, in both directions.
 
 ## Decisions
 

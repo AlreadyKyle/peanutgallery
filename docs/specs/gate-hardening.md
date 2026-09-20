@@ -1,6 +1,6 @@
 # Gate hardening: renames, kernel names, links, secret shapes, CI coverage
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -225,6 +225,15 @@ After the change:
 Pending:
 - the first pull request's platform job showing the four new steps green;
 - a `card/*` pull request showing the detect job's guard steps run before any install.
+
+
+2026-09-20, status corrected from agreed to built. The code merged as f0ebbdc (PR 33) and every
+criterion a test can prove is ticked; the two pending lines are both CI observations:
+
+- the first pull request's platform job showing the four new steps green;
+- a `card/*` pull request showing the detect job's guard steps run before any install. No card has
+  run since the merge, so no `card/*` pull request exists to read. This closes with the first
+  unattended card.
 
 ## Decisions
 
