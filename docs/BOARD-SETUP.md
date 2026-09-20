@@ -373,8 +373,6 @@ At /board, press **Go live**. It works once and cannot be undone. Then post.
 
 Copy any of these back to me as you finish:
 
-- "TOTP is enrolled and the test note filed."
-- "Legal text approved." (or the changes)
 - "hello@ works, test mail arrived."
 - "ntfy topic is set up and tested."
 - "healthchecks check is created."
@@ -383,6 +381,7 @@ Copy any of these back to me as you finish:
 - "Oracle instance is up and ssh works."
 - "VPS inputs are set."
 - "delete it" (the day-7 kill line)
+- "raise the numbers" / "split them" / "both" (the funding ceiling, item 10)
 
 ## What I build while you do all this
 
@@ -397,9 +396,9 @@ None of it is blocked by the list above:
 4. Docs readability and a decisions index.
 5. The image adapter, then `/how-it-works` and `/team`. Unblocked as of 19 September: both keys
    are in `.env` and tested.
-6. Write the 18 September production results into the merged specs' Evidence sections and bring
-   `docs/ROADMAP.md`'s status table up to date. It still shows PRs 31–35 as "agreed, in review"
-   although all of them merged.
+6. ~~Write the production results into the merged specs and bring `docs/ROADMAP.md` up to date.~~
+   Done 20 September: every check re-run against production and quoted, ten spec statuses corrected,
+   the roadmap rewritten.
 
 ---
 
