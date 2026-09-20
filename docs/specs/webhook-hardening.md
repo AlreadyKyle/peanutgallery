@@ -1,6 +1,6 @@
 # Webhook hardening: the dry-run gate, unusable sessions, dispute inquiries, reserve alerts
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -74,8 +74,8 @@ Out:
 - [x] The dropped-goal alert fires on an insert and not on a replay.
 - [x] `sign-synthetic-event.ts` refuses to run without `SUPABASE_SECRET_KEY`, and `--wrong-bearer` exits 0 only on 401.
 - [x] `deno check` passes with `npm:stripe@19.3.1`.
-- [ ] The live endpoint lists the five events.
-- [ ] Against the deployed function, the dry run answers 200 and `--wrong-bearer` answers 401.
+- [x] The live endpoint lists the five events.
+- [x] Against the deployed function, the dry run answers 200 and `--wrong-bearer` answers 401.
 
 ## Verification
 
@@ -144,6 +144,21 @@ Run in this order from the repository root unless a step says otherwise.
 - `pnpm verify` after the review changes: exit 0. The output includes `ok | 70 passed (33 steps) | 0 failed`, `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code` and `PASS: secret-scan files=297`.
 
 The last two criteria wait on the production steps.
+
+
+2026-09-20, the two live lines, re-run against production from `main` at ef352a2.
+
+- **The endpoint lists the five events.** `GET /v1/webhook_endpoints/we_1UFd0XICmyTP81VUCeACUWhc`:
+  url `https://lyxndueoeisyqzewflpu.supabase.co/functions/v1/stripe-webhook`, status `enabled`, and
+  five enabled events — `charge.dispute.created`, `charge.dispute.funds_withdrawn`,
+  `charge.refunded`, `charge.updated`, `checkout.session.completed`. That is exactly `WEBHOOK_EVENTS`
+  in `functions/_shared/webhook_events.ts`, with nothing extra.
+- **The dry run answers 200.** `scripts/sign-synthetic-event.ts`: `status 200` and
+  `{"dry_run":true,"parsed":{"event_id":"evt_synthetic_6aaf2b83","session_id":"cs_synthetic_6aaf2b83","amount_total":100,"currency":"usd","studio_pct":20,...},"fee_lookup":"failed","amounts":{"amount_usd":1,"fee_usd":0,"net_usd":1,"studio_pct":20}}`.
+  The fee lookup fails on the synthetic session id, as designed, and the RPC is never called: the
+  pool balance and the ledger row count were unchanged before and after.
+- **A wrong bearer is refused.** `--wrong-bearer`: `status 401`,
+  `{"error":"x-dry-run needs the service key as the bearer"}`, `refused as expected`, exit 0.
 
 ## Decisions
 

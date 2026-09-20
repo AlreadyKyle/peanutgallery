@@ -1,6 +1,6 @@
 # Landing copy and design rules
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -29,7 +29,7 @@ Out: the How it works and Meet the Team pages (`how-it-works-and-team.md`), the 
 - [x] The last line of the hero headline has three or more words at 375, 1024 and 1440.
 - [x] `copy.fundIntro` matches the sentence above; "default split" and "$3.10" appear nowhere in `copy.ts` landing strings.
 - [x] The computed gap between the bottom of the Ledger section and the top of the "Fixed rules" heading equals `--space-5` at 375 and 1440.
-- [ ] `index.html` meta, `public/og.png`, the e2e specs and `live-check.mjs` match the new copy.
+- [x] `index.html` meta, `public/og.png`, the e2e specs and `live-check.mjs` match the new copy.
 
 ## Verification
 
@@ -48,6 +48,20 @@ Out: the How it works and Meet the Team pages (`how-it-works-and-team.md`), the 
 - Hero styles: h1 30px, lede 20px, button, and 14px muted lines.
 - `git grep BRAND.md` finds only history in older specs' text, which record what was true when they were written.
 - Open: the `og.png` and `index.html` criterion needs no change because the pitch line did not change. The landing "How it works" summary and link wait for `/how-it-works`.
+
+
+2026-09-20, the last criterion checked against production and the working tree at ef352a2.
+
+- **`index.html` meta.** `description` and `og:description` both read "Watch AI agents build a game
+  studio and free games. Vote on what they do next by contributing to their compute.", which is
+  `copy.pitchTitle` followed by `copy.pitchBody` exactly. This pass changed the card-funding caption,
+  not the pitch, so the meta needed no change.
+- **`public/og.png`.** Served at `https://peanutgallery.games/og.png`, HTTP 200, PNG 1200x630, with
+  `og:image:width`, `og:image:height` and `og:image:alt` all present in the head.
+- **The e2e specs.** `pnpm --filter @backseat/site e2e`: `11 passed (2.5s)`, including
+  "the page carries link preview tags and serves the 1200x630 preview image" and the landing and
+  text-page specs at 375 px.
+- **`live-check.mjs`.** `PASS live-check https://peanutgallery.games passed=111 failed=0 skipped=0`.
 
 ## Decisions
 

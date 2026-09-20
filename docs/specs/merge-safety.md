@@ -1,6 +1,6 @@
 # Merge safety: the committed range, the git state, errors after merge, liveness
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 
@@ -307,6 +307,11 @@ Criteria and the tests that prove them:
   - `pipeline.test.ts`: each file planted during a session.
 
 Pending: the three live lines.
+
+
+2026-09-20, status corrected from agreed to built. The code merged as 3ab50e8 (PR 37, landed on main
+as PR 38). The three live lines remain: they need a real card to merge through the dispatcher, which
+waits on the VPS cutover.
 
 ## Residual risks
 

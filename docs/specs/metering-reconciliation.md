@@ -1,6 +1,6 @@
 # Metering reconciliation: the ledger records what a session spent
 
-Status: agreed. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -290,6 +290,21 @@ After the fixes:
 The allowlist check applies to this branch's migration and rollback only; the pull request 32 migrations are not in this branch, so their files are left to that branch's tests.
 
 Pending: the production steps above, and both live lines.
+
+
+2026-09-20, the production steps re-checked against the live project from `main` at ef352a2.
+
+- **Step 5, the function.** Exactly one `record_usage` in `public`. `pg_get_functiondef` for the
+  nine-argument signature contains `p_request_id text DEFAULT NULL::text`.
+  `select indexdef from pg_indexes where indexname = 'ledger_request_id_key'` returns
+  `CREATE UNIQUE INDEX ledger_request_id_key ON public.ledger USING btree (request_id) WHERE (request_id IS NOT NULL)`.
+- **Step 6, the API sees it.** `/rest/v1/` lists `/rpc/record_usage` with the nine arguments
+  `p_billed_to, p_cached_tokens, p_card_id, p_input_tokens, p_model, p_output_tokens, p_request_id,
+  p_role_id, p_usd`. No schema reload was needed.
+- **Step 7, the ledger.** `PASS: ledger identity holds over 1 contribution rows and 0 studio ledger
+  rows`; I1 `drift 0.0000`, I2 `drift 0.0000`, I3 `drift 0.0000`.
+- `ledger` holds 0 rows with a `request_id`, which is correct: no agent session has run since the
+  migration was applied. The first unattended card fills them.
 
 ## Decisions
 

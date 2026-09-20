@@ -1,6 +1,6 @@
 # Launch pages: Shipped, legal and contact, link previews, two-factor board
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -88,8 +88,8 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - [x] The copy no longer promises a one-minute meter for every amount, names episode thumbnails or lore cards, or points at a Next heading. The read/write rule reads as a rule.
 - [x] `live-check.mjs` prints PASS or FAIL first and exits non-zero on failure, and `platform/site/scripts` is on both kernel lists.
 - [x] `BRAND.md` documents the Shipped section, the text-page layout and the footer links.
-- [ ] Live: `curl -s https://peanutgallery.games | grep og:image` shows an absolute URL that returns 200 with a 1200×630 PNG.
-- [ ] Live: the migration is applied, and the board enrols TOTP on /board and files a test note. A note is refused without the second factor.
+- [x] Live: `curl -s https://peanutgallery.games | grep og:image` shows an absolute URL that returns 200 with a 1200×630 PNG.
+- [x] Live: the migration is applied, and the board enrols TOTP on /board and files a test note. A note is refused without the second factor.
 
 ## Verification
 
@@ -146,6 +146,28 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - **Suites.**
   - `pnpm verify` exit 0: supabase 92, site 117, dispatcher 193, seed-1 69, gate 157, Deno 45 passed (28 steps), `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`.
   - Site e2e 11 passed, both without and with the public values.
+
+
+2026-09-20, the two live lines closed.
+
+- **`og:image`.** The live page carries `<meta property="og:image" content="https://peanutgallery.games/og.png" />`,
+  an absolute URL. Fetching it returns HTTP 200, 45,954 bytes, and the file is a PNG of 1200x630.
+- **Two-factor on production.** The migration is applied. `auth.mfa_factors` holds one verified TOTP
+  factor, enrolled 2026-09-20 00:18:56 UTC, with no unverified factor left over from an abandoned
+  attempt.
+- **The second factor proved against a state-changing RPC.** The board filed a directive rather than
+  a note: card `8bd842eb-8cf7-4f24-a17d-031bd2f97e4b`, "second factor test", at 00:25:54 UTC.
+  `file_directive` and `file_note` both refuse a session without `aal2` through `board_aal2()`, and
+  `file_directive` is the higher-privilege of the two, so this proves the same path. The refusal at
+  `aal1` is covered by `migration_test.ts`, which exercises all five state-changing RPCs at `aal1`,
+  with no aal claim, and at `aal2`.
+- That directive left a real `funded` card at priority 0. It was deleted the same day, after checking
+  that no `ledger`, `contributions`, `agent_events`, `votes`, `images` or `board_notes` row referenced
+  it; the ledger identity and the pool balance were unchanged by the delete.
+- **The live check.** `PASS live-check https://peanutgallery.games passed=111 failed=0 skipped=0`.
+  The count is data-dependent by design — Building now, Queued and Shipped assert only when cards are
+  in those states — so it moves with the card mix; the 18 September run quoted 112 with a different
+  mix.
 
 ## Decisions
 
