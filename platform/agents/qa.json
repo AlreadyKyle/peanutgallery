@@ -1,6 +1,7 @@
 {
   "name": "QA",
   "title": "QA",
+  "description": "Finds problems in Dust and builds funded fixes as small, tested changes.",
   "species_note": "A thin yellow creature with six small eyes arranged in a ring.",
   "model": "MODEL_BUILDER",
   "budget_share": 0.15,

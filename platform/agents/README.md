@@ -6,7 +6,7 @@ Files: `studio-head.json`, `game-director.json`, `builder-a.json`, `builder-b.js
 
 ## Schema
 
-Every file carries all ten keys. The schema allows no extra keys.
+Every file carries all eleven keys. The schema allows no extra keys.
 
 ```json
 {
@@ -14,10 +14,11 @@ Every file carries all ten keys. The schema allows no extra keys.
   "title": "Role spec",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "title", "species_note", "model", "budget_share", "voice", "prompt_path", "tools", "metrics", "write_access"],
+  "required": ["name", "title", "description", "species_note", "model", "budget_share", "voice", "prompt_path", "tools", "metrics", "write_access"],
   "properties": {
     "name": { "type": "string", "minLength": 1, "description": "Unique across roles; the roles.name column. Equals title until the roster is named at launch." },
     "title": { "type": "string", "minLength": 1, "description": "The role as it appears on the site and the stream." },
+    "description": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\s][^\\n\u2014]*[.]$", "description": "One plain sentence saying what the role does, shown on the Meet the Team page: at most 200 characters, no em dash, ending in a full stop. A role that is not running says so." },
     "species_note": { "type": "string", "minLength": 1, "pattern": "^[^\\n]+$", "description": "One plain line describing the alien: a small, strange, friendly creature. No backstory, no claimed experience." },
     "model": { "type": "string", "enum": ["MODEL_DIRECTOR", "MODEL_BUILDER", "MODEL_HOST"], "description": "The environment variable whose value is the model id. Resolved at seed time." },
     "budget_share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Share of the week's pool. The nine shares sum to 1." },
@@ -56,6 +57,7 @@ The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]`.
 |---|---|---|
 | name | name | as is |
 | title | title | as is |
+| description | description | as is |
 | species_note | species_note | as is |
 | model | model | the value of the named environment variable (`MODEL_DIRECTOR`, `MODEL_BUILDER` or `MODEL_HOST`) |
 | budget_share | budget_share | numeric(6,4) |
@@ -75,7 +77,7 @@ Each prompt states the role's purpose from PLAN.md §3, the kernel, the read/wri
 
 ## Validation
 
-`specs.test.mjs` in this folder checks every spec. It reads the schema out of the fenced block above, so the documented schema is the enforced one, and asserts: each file carries exactly the ten keys with the schema's types, enums and patterns; `prompt_path` is `platform/agents/prompts/<file name>.md` and the file exists; `name` equals `title`; `name` is unique across files; `write_access` is true exactly when `tools` is non-empty; the folder holds exactly the nine launch files; each file carries the launch values in the table above; and the nine `budget_share` values sum to 1. It then reads each prompt file and asserts: every prompt contains the kernel line `No agent with write access`, a `## How the gate works` heading and the sentence that a failed deploy or smoke puts a revert commit on `main`; the prompt of every role with an empty `tools` list contains `You have no write tools`; the Builder A, Builder B and QA prompts contain the literal `check: config <file> <path> == <json>` and `Stop when the acceptance check holds`; the Builder A, Builder B, QA and Platform Builder prompts contain `## Working method`, each of `Understand:`, `Plan:`, `Implement:`, `Verify:` and `Report:`, and `platform/gate/kernel-paths.txt`; and `game-director.md` contains the pillars sentence from the `Seed 1 pillars` line of `docs/PLAN.md` verbatim.
+`specs.test.mjs` in this folder checks every spec. It reads the schema out of the fenced block above, so the documented schema is the enforced one, and asserts: each file carries exactly the eleven keys with the schema's types, lengths, enums and patterns; `prompt_path` is `platform/agents/prompts/<file name>.md` and the file exists; `name` equals `title`; `name` is unique across files; `write_access` is true exactly when `tools` is non-empty; the description of every role with an empty `tools` list says it is `not running yet`; the folder holds exactly the nine launch files; each file carries the launch values in the table above; and the nine `budget_share` values sum to 1. It then reads each prompt file and asserts: every prompt contains the kernel line `No agent with write access`, a `## How the gate works` heading and the sentence that a failed deploy or smoke puts a revert commit on `main`; the prompt of every role with an empty `tools` list contains `You have no write tools`; the Builder A, Builder B and QA prompts contain the literal `check: config <file> <path> == <json>` and `Stop when the acceptance check holds`; the Builder A, Builder B, QA and Platform Builder prompts contain `## Working method`, each of `Understand:`, `Plan:`, `Implement:`, `Verify:` and `Report:`, and `platform/gate/kernel-paths.txt`; and `game-director.md` contains the pillars sentence from the `Seed 1 pillars` line of `docs/PLAN.md` verbatim.
 
 It uses only the Node test runner and has no dependencies. From the repo root:
 
@@ -83,4 +85,4 @@ It uses only the Node test runner and has no dependencies. From the repo root:
 node --test platform/agents/specs.test.mjs
 ```
 
-Expected: 64 tests pass, 0 fail.
+Expected: 67 tests pass, 0 fail.
