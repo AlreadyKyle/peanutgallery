@@ -150,9 +150,9 @@ export function worktreePath(root: string, cardId: string): string {
 }
 
 // Paths no agent may change in any lane: the gate, the dispatcher, the database, the role specs,
-// the workflows, the constitution, and the build and invariant harness of each folder. The same
-// list is platform/gate/kernel-paths.txt, which the gate checks card branches against; a test
-// keeps the two equal.
+// the workflows, the constitution, the board's client code and site settings, and the build,
+// determinism and invariant harness of each folder. The same list is platform/gate/kernel-paths.txt,
+// which the gate checks card branches against; a test keeps the two equal.
 export const KERNEL_PATHS: readonly string[] = [
   '.github',
   'CLAUDE.md',
@@ -171,23 +171,30 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/package.json',
   'platform/site/playwright.config.ts',
   'platform/site/scripts',
+  'platform/site/src/lib/board.ts',
+  'platform/site/src/lib/env.ts',
   'platform/site/vite.config.ts',
   'seed-1/CLAUDE.md',
   'seed-1/bots',
+  'seed-1/index.html',
   'seed-1/netlify.toml',
   'seed-1/package.json',
   'seed-1/scripts',
+  'seed-1/sim/hash.ts',
   'seed-1/sim/invariants.ts',
+  'seed-1/sim/rng.ts',
   'seed-1/tests/bot.test.ts',
   'seed-1/tests/invariants.test.ts',
+  'seed-1/tests/timeline.test.ts',
   'seed-1/tsconfig.json',
   'seed-1/vite.config.ts',
 ];
 
 // File and folder names no agent may create or change at any depth: Claude Code loads a nested
-// CLAUDE.md or .claude folder into later sessions, and a nested package, test or deploy config can
-// override the one the gate relies on. The same list is platform/gate/kernel-names.txt; a test keeps
-// the two equal. * matches any run of characters within one path segment.
+// CLAUDE.md or .claude folder into later sessions, a nested package, test or deploy config can
+// override the one the gate relies on, and a build tool loads its config (PostCSS, Babel, env files)
+// from the folder it builds, running the code in it. The same list is platform/gate/kernel-names.txt;
+// a test keeps the two equal. * matches any run of characters within one path segment.
 export const KERNEL_NAMES: readonly string[] = [
   '.claude',
   'CLAUDE.md',
@@ -198,10 +205,24 @@ export const KERNEL_NAMES: readonly string[] = [
   '.npmrc',
   '.pnpmfile.*',
   'package.json',
+  'pnpm-workspace.yaml',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
   'vite.config.*',
   'vitest.config.*',
   'vitest.workspace.*',
+  'tsconfig*.json',
+  'postcss.config.*',
+  '.postcssrc*',
+  'tailwind.config.*',
+  'babel.config.*',
+  '.babelrc*',
+  '.env*',
   'netlify.toml',
+  '_headers',
+  '_redirects',
 ];
 
 // Names hold letters, digits, dot, underscore, hyphen and * only (the test checks), so the dot is
@@ -223,12 +244,18 @@ export function isKernelPath(file: string): boolean {
   );
 }
 
+// The config lane's folders. They hold data the game reads at runtime and the build copies into
+// dist/ verbatim, so the lane accepts .json files only: a page or script there would be served from
+// the game's origin without the code lane's typecheck and tests.
+export const CONFIG_LANE_PATHS: readonly string[] = ['seed-1/config', 'seed-1/content'];
+export const CONFIG_LANE_EXTENSION = '.json';
+
 // Config lane may touch data only, and only seed-1 has a config lane. Code lane may touch its
 // folder, which for platform is the site alone. An empty list means the lane does not exist for
 // the folder.
 export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
   if (lane === 'code') return folder === 'platform' ? ['platform/site'] : [folder];
-  return folder === 'seed-1' ? ['seed-1/config', 'seed-1/content'] : [];
+  return folder === 'seed-1' ? [...CONFIG_LANE_PATHS] : [];
 }
 
 // The kernel paths that lie inside the allowed paths, named in the session prompt.
@@ -236,9 +263,13 @@ export function protectedPaths(allowed: readonly string[]): string[] {
   return KERNEL_PATHS.filter((kernel) => allowed.some((dir) => under(kernel, dir)));
 }
 
-// Files outside the allowed paths, and kernel files inside them.
+// Files outside the allowed paths, kernel files inside them, and, when the allowed paths are the
+// config lane's, any file that is not .json.
 export function outsideLane(files: readonly string[], allowed: readonly string[]): string[] {
-  return files.filter((file) => !allowed.some((dir) => under(file, dir)) || isKernelPath(file));
+  const configLane = allowed.length > 0 && allowed.every((dir) => CONFIG_LANE_PATHS.includes(dir));
+  return files.filter(
+    (file) => !allowed.some((dir) => under(file, dir)) || isKernelPath(file) || (configLane && !file.endsWith(CONFIG_LANE_EXTENSION)),
+  );
 }
 
 export interface Worktree {

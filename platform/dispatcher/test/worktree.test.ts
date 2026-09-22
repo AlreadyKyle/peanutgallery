@@ -109,6 +109,56 @@ describe('pure helpers', () => {
     ]);
   });
 
+  it('protects the board client, the determinism harness, the game page and every build config', () => {
+    const kernel = [
+      'platform/site/src/lib/board.ts',
+      'platform/site/src/lib/env.ts',
+      'seed-1/index.html',
+      'seed-1/sim/hash.ts',
+      'seed-1/sim/rng.ts',
+      'seed-1/tests/timeline.test.ts',
+      'platform/site/postcss.config.mjs',
+      'seed-1/.postcssrc.json',
+      'seed-1/render/tailwind.config.ts',
+      'seed-1/babel.config.json',
+      'seed-1/.babelrc',
+      'platform/site/tsconfig.json',
+      'seed-1/render/tsconfig.app.json',
+      'seed-1/.env',
+      'seed-1/.env.production.local',
+      'seed-1/public/_headers',
+      'platform/site/public/_redirects',
+      'seed-1/pnpm-workspace.yaml',
+      'seed-1/pnpm-lock.yaml',
+      'seed-1/package-lock.json',
+      'seed-1/npm-shrinkwrap.json',
+      'seed-1/yarn.lock',
+    ];
+    for (const file of kernel) expect(isKernelPath(file), file).toBe(true);
+    for (const file of ['seed-1/render/headers.ts', 'seed-1/content/environment.json', 'seed-1/sim/hashing.ts', 'seed-1/render/postcss.ts']) {
+      expect(isKernelPath(file), file).toBe(false);
+    }
+    expect(outsideLane(['seed-1/sim/hash.ts', 'seed-1/sim/sim.ts', 'seed-1/index.html', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual([
+      'seed-1/sim/hash.ts',
+      'seed-1/index.html',
+    ]);
+    expect(protectedPaths(lanePaths('seed-1', 'code'))).toEqual(expect.arrayContaining(['seed-1/index.html', 'seed-1/sim/hash.ts', 'seed-1/sim/rng.ts', 'seed-1/tests/timeline.test.ts']));
+  });
+
+  it('accepts only .json files in the config lane', () => {
+    const config = lanePaths('seed-1', 'config');
+    expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/content/strings.json', 'seed-1/content/extra/more.json'], config)).toEqual([]);
+    expect(outsideLane(['seed-1/content/page.html', 'seed-1/config/rates.ts', 'seed-1/content/strings.JSON', 'seed-1/content/notes', 'seed-1/content/a.json.js'], config)).toEqual([
+      'seed-1/content/page.html',
+      'seed-1/config/rates.ts',
+      'seed-1/content/strings.JSON',
+      'seed-1/content/notes',
+      'seed-1/content/a.json.js',
+    ]);
+    // The code lane still writes any file in its folder that is not kernel.
+    expect(outsideLane(['seed-1/content/page.html', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual([]);
+  });
+
   it('lets * in a kernel name match any character, a newline included, as the shell glob does', () => {
     expect(isKernelPath('seed-1/vite.config.\n.ts')).toBe(true);
     expect(isKernelPath('seed-1/vitest.config.a\nb')).toBe(true);
@@ -391,17 +441,17 @@ describe('the committed range and the git state', () => {
 
   it('refuses a symlink and a gitlink inside the lane as file_mode', async () => {
     const linked = await fresh('eeeeeeee');
-    await symlink('../../.github', path.join(linked.path, 'seed-1', 'content', 'gh'));
+    await symlink('../../.github', path.join(linked.path, 'seed-1', 'content', 'gh.json'));
     const linkSha = await commitAll(linked.path, 'card');
     expect(await verifyCardCommit(linked.path, { baseSha: base, sha: linkSha, allowed })).toMatchObject({
       ok: false,
       check: 'file_mode',
-      detail: expect.stringContaining('seed-1/content/gh'),
+      detail: expect.stringContaining('seed-1/content/gh.json'),
     });
     await removeWorktree(repo, linked.path, linked.branch);
 
     const gitlink = await fresh('ffffffff');
-    await git(['update-index', '--add', '--cacheinfo', `160000,${base},seed-1/content/sub`], gitlink.path);
+    await git(['update-index', '--add', '--cacheinfo', `160000,${base},seed-1/content/sub.json`], gitlink.path);
     await git([...ident, 'commit', '-q', '-m', 'card'], gitlink.path);
     const subSha = await git(['rev-parse', 'HEAD'], gitlink.path);
     expect(await verifyCardCommit(gitlink.path, { baseSha: base, sha: subSha, allowed })).toMatchObject({
