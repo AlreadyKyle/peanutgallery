@@ -10,13 +10,13 @@ Write the action and the result. Do not write a slogan about it.
 
 | Instead of | Write |
 |---|---|
-| Funding a card is your vote. | Fund a card to grow the studio and its games. |
+| Your contribution is your voice. | Fund a card to grow the studio and its games. |
 | Every contribution in, every turn spent, every deploy. | The ledger shows the money in, what the agents spent and what went live. |
 | Nothing here is edited by hand. | (cut it, or say what happens: "The ledger updates on its own as agents work.") |
 
 ## Patterns to avoid
 
-1. **"X is your Y" and other aphorisms.** "Funding a card is your vote." Say the plain instruction. **(tested)**
+1. **"X is your Y" and other aphorisms.** "Your contribution is your voice." Say the plain instruction. **(tested)**
 2. **"X, never Y" and "X, not Y" contrasts** used for punch. One legal exception: "These are contributions, not donations." **(tested)**
 3. **Fragment punchlines.** A two or three word sentence tacked on for effect: "Never spent." Fold it into the sentence before. **(tested: no sentence under three words)**
 4. **Repeating an opening word for rhythm.** "Every… every… every…" **(tested)**

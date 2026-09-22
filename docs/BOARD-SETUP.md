@@ -171,7 +171,8 @@ and the cutover is done.
 2. **Confirm the studio-wide daily limit on immediate credit.** Besides the $50 a day of immediate
    agent credit per payer, all payers together get at most $500 of immediate agent credit per New
    York day, and credit above that is held 14 days, like any large contribution. $500 is the
-   default. You can change it at /board with your second factor.
+   default. You can change it in the Caps form at /board ("Studio daily limit on immediate
+   credit") with your second factor.
 3. If you chose (a) in step 4, share the site now.
 
 **Tell me:** "keep $500" (or the number you want), then "shared" if you chose (a).
@@ -213,8 +214,9 @@ decision 23).
    first few characters safely if you ask.
 2. **Billing** → buy prepaid credit for the amount I quoted.
 3. Keep **auto-reload off** and the **monthly spend limit at $500**.
-4. At /board, **Record credit purchase** with the amount and the Stripe payout id (second factor).
-   The dispatcher never lets unattended sessions spend more than the credit recorded.
+4. At /board, under **Record a credit purchase**, enter the amount, the Stripe payout id and a
+   one-line reason, then **Record purchase** (second factor). The dispatcher never lets unattended
+   sessions spend more than the credit recorded.
 5. As the meter grows, raise the Console's monthly limit and the monthly cap at /board together.
 
 Console credit lags the pool, so a card can wait for credit while the pool shows money. When that
@@ -326,8 +328,8 @@ A card's funding target no longer depends on the per-card maximum, which now lim
 may spend on one card (`docs/PLAN.md` §10 decision 28). `docs/PLAN.md` §4 Kernel makes spend caps
 a rule no card may edit; it fixes that caps exist, not their values, and §6 Budget throttle keeps
 them in `studio_state`, edited from /board. So the numbers are yours: the caps form at /board sets
-the daily cap, the card maximum, the hourly rate, the daily credit limits and the monthly cap, with
-your second factor. Removing the caps outright is a kernel change I would argue against, because
+the daily cap, the card maximum, the hourly rate, the monthly cap and the studio-wide daily limit on
+immediate credit, with your second factor. Removing the caps outright is a kernel change I would argue against, because
 they are what stops a looping agent draining customer money. Nothing to reply unless you want
 different numbers.
 

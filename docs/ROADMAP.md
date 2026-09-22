@@ -17,7 +17,7 @@ These are two different states.
 2. **The dispatcher runs unattended.**
    - It runs on the Oracle instance, restarts on its own, holds the dispatcher lease, and alerts the board through healthchecks.io and ntfy, with a test alert received on the board's phone.
    - Card sessions run as Claude Managed Agents sessions: no agent-written code runs on the VPS, the repository is mounted read-only, and the dispatcher applies and checks the returned patch itself (PLAN.md §10 decision 25).
-   - Every dispatcher secret and id is present, and provisioning and startup check it: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`), `GITHUB_TOKEN` (the VPS's own fine-grained token, never the Mac's), `GITHUB_READ_TOKEN` (contents read only; a write attempt with it answers 403), `GITHUB_REPO`, `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID_SEED`, `NETLIFY_SITE_ID_PLATFORM`, `STUDIO_ANTHROPIC_API_KEY` (the studio organisation's key, never the founder's), `MANAGED_AGENT_ID`, `MANAGED_ENVIRONMENT_ID`, `MODEL_BUILDER`, `MODEL_DIRECTOR`, `PRICE_TABLE_JSON`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`.
+   - Every dispatcher secret and id is present, and provisioning and startup check it: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`), `GITHUB_TOKEN` (the VPS's own fine-grained token, never the Mac's), `GITHUB_READ_TOKEN` (contents read only; a write attempt with it answers 403), `GITHUB_REPO`, `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID_SEED`, `NETLIFY_SITE_ID_PLATFORM`, `STUDIO_ANTHROPIC_API_KEY` (the studio organisation's key, never the founder's), `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION`, `MANAGED_ENVIRONMENT_ID`, `MODEL_BUILDER`, `MODEL_DIRECTOR`, `PRICE_TABLE_JSON`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`.
    - Console credit bought from a Stripe payout is recorded at /board, and the unattended startup probe passes on it.
    - A card funded by a player builds with no one at the keyboard, billed to the studio.
 3. **The money is safe.** Refunds and disputes reverse cleanly. Credit above $50 a day per payer (keyed on the card fingerprint), or above the studio-wide daily limit, is held for 14 days. A refund of money already spent takes the shortfall from unearmarked money first and alerts the board.
@@ -46,13 +46,13 @@ Seven pull requests built in parallel from the plan of 22 September 2026. A spec
 
 | Work | Spec | Status | Waits on |
 |---|---|---|---|
-| Docs: dateless constitution, backlog, board steps, prompts | `specs/launch-docs.md` | built (docs tests run; the backlog seed and the close-out wait on the merges) | the merge queue |
-| DB: horizons, board RPCs, money fixes, lease, backlog parser, public roles | `launch-db.md` on branch `launch/db` | in review | the merge queue, then its migrations and webhook deploy |
-| Live cards: plain titles and the launch slate | `launch-cards.md` on branch `launch/cards` | in review | the DB merge, then `refresh-cards.ts` |
-| Gate: kernel checks first, kernel list, deny-list holes | `launch-gate.md` on branch `launch/gate` | in review | the merge queue |
-| Dispatcher: throttle, merge safety, metering | `launch-dispatcher.md` on branch `launch/dispatcher` | in review | the merge queue |
-| Managed Agents: unattended sessions, smoke without card code | `launch-managed.md` on branch `launch/managed` | in review | the merge queue; live runs wait on Console credit |
-| Site: honest copy, /how-it-works, /team, /roadmap, board controls | `launch-site.md` on branch `launch/site` | in review | the merge queue, then the roles revoke migration after its deploy |
+| Docs: dateless constitution, backlog, board steps, prompts (#50) | `specs/launch-docs.md` | built (docs tests run; the backlog seed and the close-out wait on the merges) | the merge queue |
+| DB: horizons, board RPCs, money fixes, lease, backlog parser, public roles (#46) | `launch-db.md` on branch `launch/db` | in review | the merge queue, then its migrations and webhook deploy |
+| Live cards: plain titles and the launch slate (#45) | `launch-cards.md` on branch `launch/cards` | in review | the DB merge, then `refresh-cards.ts` |
+| Gate: kernel checks first, kernel list, deny-list holes (#48) | `launch-gate.md` on branch `launch/gate` | in review | the merge queue |
+| Dispatcher: throttle, merge safety, metering (#49) | `launch-dispatcher.md` on branch `launch/dispatcher` | in review | the merge queue |
+| Managed Agents: unattended sessions, smoke without card code | `launch-managed.md` on branch `launch/managed` | being built, no pull request yet | its pull request, then the merge queue; live runs wait on Console credit |
+| Site: honest copy, /how-it-works, /team, /roadmap, board controls (#47) | `launch-site.md` on branch `launch/site` | in review | the merge queue, then the roles revoke migration after its deploy |
 
 Production steps for the batch, each with the board's allow, the studio paused and no Mac dispatcher running: after the DB merge, the migrations up to `20260922000400_public_roles`, the `stripe-webhook` deploy and the anon negative test; after the live-cards merge, `refresh-cards.ts` as a dry run and then applied; after the site deploy is verified, `20260922000500_roles_revoke` and the anon negative test again; at the end, `file-backlog.ts` as a dry run and then applied, the model and price edits to `.env`, the role re-seed, the ledger identity, the live check, an attended probe and the Stripe Payment Link's field label. A close-out pull request then records the results in the specs.
 
