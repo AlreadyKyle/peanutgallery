@@ -28,9 +28,14 @@ function time(iso: string): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
-/** Shipped order: the newest ship first (the latest updated_at), then the newest card. */
+/** When a card shipped: live_at, or updated_at for a row read before live_at existed. */
+export function shippedAt(card: Card): string {
+  return card.live_at ?? card.updated_at;
+}
+
+/** Shipped order: the newest ship first, then the newest card. */
 export function shippedOrder(a: Card, b: Card): number {
-  const shipped = time(b.updated_at) - time(a.updated_at);
+  const shipped = time(shippedAt(b)) - time(shippedAt(a));
   if (shipped !== 0) return shipped;
   return time(b.created_at) - time(a.created_at);
 }

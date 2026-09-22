@@ -1,6 +1,6 @@
 import { copy } from '../lib/copy';
 import { formatInteger, formatUsd } from '../lib/format';
-import type { StudioState } from '../lib/studio';
+import { unavailableLine, type StudioState } from '../lib/studio';
 import { EventList } from './EventList';
 import { Stat } from './Stat';
 
@@ -11,7 +11,7 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
     return <p className="muted">{copy.loadingLedger}</p>;
   }
   if (studio.state !== 'ready') {
-    return <p className="muted">{copy.meterUnavailable}</p>;
+    return <p className="muted">{unavailableLine(studio)}</p>;
   }
   const { totals, missing } = studio.snapshot;
   const tokens = copy.tokensLine

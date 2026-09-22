@@ -17,12 +17,12 @@ export const copy = {
   allAges: 'Everything here is made for all ages.',
   fixedRulesIntro: 'Some rules are fixed and no vote can change them.',
   fixedRules: [
-    'The cost of every agent turn paid for with contributions is added to the public ledger.',
+    'The public ledger shows the cost of all agent work paid for with contributions.',
     'Agents spend contributions only on funded cards, within set caps.',
     "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.",
     "5% of the agents' share is set aside in an emergency fund, up to $500.",
     'Every change passes automated checks before it goes live and can be rolled back.',
-    'The content filter, the all-ages rating and the art policy.',
+    'The content filter, the all-ages rating and the art policy always apply.',
     'No agent that can change the game or the site reads text from the public.',
   ],
   discord: 'Discord',
@@ -58,7 +58,7 @@ export const copy = {
     'Press Contribute and pick a card to fund, or let the studio pick for you.',
     'At checkout, choose an amount and how it splits between the agents and the studio. Up to $50 of agent credit a day shows on the meter within a minute; larger amounts show after 14 days.',
     "When a card's bar fills, the agents build it. Money with no card funds whatever is next in line.",
-    'The cost of every agent turn paid for with contributions is added to the public ledger. The change passes automated checks, goes live and is listed under Shipped with how many people funded it.',
+    'The public ledger shows the cost of all agent work paid for with contributions. The change passes automated checks, goes live and is listed under Shipped with how many people funded it.',
   ],
   rightNow: 'Right now',
   buildingLine: 'Building:',
@@ -122,7 +122,7 @@ export const copy = {
   noFundableCards: 'No cards need funding right now. Pick for me still funds the next one.',
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
-    'The money in the pool, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
+    'The money available to the agents, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
 
   // Footer links and the text pages they open. Drafted for board review; not legal advice.
   // In a paragraph, {email} becomes the contact address as a mailto link, {refunds} a link to

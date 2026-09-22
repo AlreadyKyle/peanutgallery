@@ -29,8 +29,10 @@ export type Card = {
    */
   spent_usd: number;
   created_at: string;
-  /** For a live card, when it shipped: the stage change is its last update. */
+  /** The last change to the card row. A held release or a refund moves it after a card ships. */
   updated_at: string;
+  /** When the card went live; null before it ships. */
+  live_at: string | null;
 };
 
 export type CardFunding = {
@@ -120,6 +122,7 @@ type CardRow = {
   funded_usd: Numeric;
   created_at: string;
   updated_at: string;
+  live_at: string | null;
 };
 
 type SpendRow = {
@@ -214,6 +217,7 @@ function cardFrom(row: CardRow, spend: Record<string, number>): Card {
     spent_usd: spend[row.id] ?? 0,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    live_at: row.live_at ?? null,
   };
 }
 
@@ -296,7 +300,7 @@ export function createSupabaseSource(
         client
           .from('cards')
           .select(
-            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,created_at,updated_at',
+            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,created_at,updated_at,live_at',
           )
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })

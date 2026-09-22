@@ -235,6 +235,12 @@ check_code_clone() {
     echo "$CODE_DIR has a symlink that does not resolve"
     problems=1
   fi
+  # readlink -f accepts a link whose last part is missing, so a dangling link needs its own check.
+  file=$(find "$CODE_DIR" -type l ! -exec test -e {} ';' -print -quit)
+  if [ -n "$file" ]; then
+    echo "$file is a symlink that does not resolve"
+    problems=1
+  fi
   outside=$(printf '%s\n' "$links" | awk -v root="$root" 'NF && index($0, root "/") != 1 && $0 != root { print; exit }')
   if [ -n "$outside" ]; then
     echo "a symlink in $CODE_DIR resolves outside it, to $outside"

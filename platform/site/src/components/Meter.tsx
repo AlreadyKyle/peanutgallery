@@ -1,6 +1,6 @@
 import { copy } from '../lib/copy';
 import { formatUsd } from '../lib/format';
-import type { StudioState } from '../lib/studio';
+import { unavailableLine, type StudioState } from '../lib/studio';
 import { StaleLine } from './StaleNotice';
 import { Stat } from './Stat';
 
@@ -11,7 +11,7 @@ export function Meter({ studio }: { studio: StudioState }) {
     return <p className="muted">{copy.loadingFigures}</p>;
   }
   if (studio.state !== 'ready' || studio.snapshot.pool === null) {
-    return <p className="muted">{copy.meterUnavailable}</p>;
+    return <p className="muted">{unavailableLine(studio)}</p>;
   }
   const pool = studio.snapshot.pool;
   return (

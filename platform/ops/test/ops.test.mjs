@@ -692,6 +692,7 @@ describe('the code clone and the work clone', () => {
     refused((repo) => symlinkSync('/etc', path.join(repo, 'platform', 'ops', 'absolute')), /absolute is an absolute symlink/);
     refused((repo) => symlinkSync('../../..', path.join(repo, 'platform', 'ops', 'escape')), /resolves outside it/);
     refused((repo) => symlinkSync('missing/deeper/target', path.join(repo, 'platform', 'ops', 'unresolved')), /a symlink that does not resolve/);
+    refused((repo) => symlinkSync('missing', path.join(repo, 'platform', 'ops', 'dangling')), /dangling is a symlink that does not resolve/);
     const setuid = fixtureRepo();
     chmodSync(path.join(setuid, 'platform', 'ops', 'Dockerfile.dispatcher'), 0o4755);
     if ((statSync(path.join(setuid, 'platform', 'ops', 'Dockerfile.dispatcher')).mode & 0o4000) !== 0) {

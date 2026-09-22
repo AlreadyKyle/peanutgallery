@@ -396,7 +396,13 @@ async function reverse(
   try {
     result = await deps.reverseContribution(input);
     if (result.found === false) {
-      const credited = await creditSession(deps, `${eventId}.credit`, session);
+      // Credit-then-reverse: a failure crediting is labelled as one, not as the reversal.
+      let credited: Awaited<ReturnType<typeof creditSession>>;
+      try {
+        credited = await creditSession(deps, `${eventId}.credit`, session);
+      } catch (err) {
+        return json(500, { error: "apply_contribution failed", detail: errorMessage(err) });
+      }
       if (credited.status !== "credited") {
         return credited.response;
       }
@@ -510,7 +516,12 @@ async function credit(
     } catch (_err) {
       feeUsd = null;
     }
-    const amounts = computeAmounts(parsed.amount_total, feeUsd ?? 0);
+    let amounts: ReturnType<typeof computeAmounts>;
+    try {
+      amounts = computeAmounts(parsed.amount_total, feeUsd ?? 0);
+    } catch (err) {
+      return json(500, { error: "Invalid amounts", detail: errorMessage(err) });
+    }
     return json(200, {
       dry_run: true,
       parsed,

@@ -4,7 +4,7 @@ import { Meter } from '../components/Meter';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { copy } from '../lib/copy';
-import { useStudio } from '../lib/studio';
+import { unavailableLine, useStudio } from '../lib/studio';
 
 export function Ledger() {
   const studio = useStudio();
@@ -26,7 +26,7 @@ export function Ledger() {
         {studio.state === 'ready' ? (
           <DeployList snapshot={studio.snapshot} />
         ) : (
-          <p className="muted">{studio.state === 'loading' ? copy.loadingDeploys : copy.meterUnavailable}</p>
+          <p className="muted">{studio.state === 'loading' ? copy.loadingDeploys : unavailableLine(studio)}</p>
         )}
       </section>
     </main>

@@ -24,6 +24,7 @@ function card(overrides: Partial<Card> = {}): Card {
     spent_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
     updated_at: '2026-09-14T00:00:00Z',
+    live_at: null,
     ...overrides,
   };
 }
@@ -214,6 +215,7 @@ describe('ShippedList', () => {
       funded_usd: 3,
       spent_usd: 1.234,
       updated_at: '2026-09-15T09:00:00Z',
+      live_at: null,
     }),
     card({
       id: 'newer',
@@ -226,6 +228,7 @@ describe('ShippedList', () => {
       funding_target_usd: 0,
       spent_usd: 0.5,
       updated_at: '2026-09-16T18:30:00Z',
+      live_at: null,
     }),
     card({ id: 'open', title: 'Still open', stage: 'proposed' }),
   ];

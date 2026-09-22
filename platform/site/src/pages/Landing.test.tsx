@@ -32,6 +32,7 @@ const snapshot: Snapshot = {
       spent_usd: 3.2,
       created_at: '2026-09-14T00:00:00Z',
       updated_at: '2026-09-14T00:00:00Z',
+      live_at: null,
     },
     {
       id: 'next1',
@@ -48,6 +49,7 @@ const snapshot: Snapshot = {
       spent_usd: 0,
       created_at: '2026-09-14T00:00:01Z',
       updated_at: '2026-09-14T00:00:01Z',
+      live_at: null,
     },
     {
       id: 'next2',
@@ -64,6 +66,7 @@ const snapshot: Snapshot = {
       spent_usd: 0,
       created_at: '2026-09-14T00:00:02Z',
       updated_at: '2026-09-14T00:00:02Z',
+      live_at: null,
     },
     {
       id: 'studio1',
@@ -80,6 +83,7 @@ const snapshot: Snapshot = {
       spent_usd: 0,
       created_at: '2026-09-14T00:00:03Z',
       updated_at: '2026-09-14T00:00:03Z',
+      live_at: null,
     },
     {
       id: 'queued1',
@@ -96,6 +100,7 @@ const snapshot: Snapshot = {
       spent_usd: 0,
       created_at: '2026-09-14T00:00:04Z',
       updated_at: '2026-09-14T00:00:04Z',
+      live_at: null,
     },
     {
       id: 'live1',
@@ -112,6 +117,7 @@ const snapshot: Snapshot = {
       spent_usd: 1.5,
       created_at: '2026-09-13T00:00:00Z',
       updated_at: '2026-09-15T09:00:00Z',
+      live_at: null,
     },
     {
       id: 'live2',
@@ -128,6 +134,7 @@ const snapshot: Snapshot = {
       spent_usd: 0.75,
       created_at: '2026-09-13T00:00:01Z',
       updated_at: '2026-09-15T11:00:00Z',
+      live_at: null,
     },
   ],
   funding: { next1: { contributors: 3, credited_usd: 18.5 }, live1: { contributors: 2, credited_usd: 3 } },

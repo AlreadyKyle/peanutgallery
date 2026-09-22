@@ -30,6 +30,7 @@ function card(overrides: Partial<Card> = {}): Card {
     spent_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
     updated_at: '2026-09-14T00:00:00Z',
+    live_at: null,
     ...overrides,
   };
 }
@@ -63,6 +64,14 @@ describe('shippedOrder', () => {
       card({ id: 'tie-new', updated_at: '2026-09-15T10:00:00Z', created_at: '2026-09-14T00:00:02Z' }),
     ];
     expect([...cards].sort(shippedOrder).map((c) => c.id)).toEqual(['latest', 'tie-new', 'tie-old', 'first']);
+  });
+
+  it('orders by live_at, so a refund or held release after shipping does not move a card', () => {
+    const cards = [
+      card({ id: 'shipped-early-touched-late', live_at: '2026-09-15T09:00:00Z', updated_at: '2026-09-29T09:00:00Z' }),
+      card({ id: 'shipped-later', live_at: '2026-09-16T09:00:00Z', updated_at: '2026-09-16T09:00:00Z' }),
+    ];
+    expect([...cards].sort(shippedOrder).map((c) => c.id)).toEqual(['shipped-later', 'shipped-early-touched-late']);
   });
 });
 
