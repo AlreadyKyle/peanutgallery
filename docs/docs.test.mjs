@@ -289,8 +289,8 @@ test('every section, decision and appendix citation in the repository lands on a
           if (Number(match[1]) !== 10 || !outline.decisions.includes(Number(n))) problems.push(`${where}: §${match[1]} decision ${n} does not exist`);
         }
         const word = match[4];
-        if (word && !match[2] && !section.headings.some((heading) => heading.startsWith(word))) {
-          problems.push(`${where}: §${match[1]} has no heading starting "${word}"`);
+        if (word && !match[2] && !section.title.startsWith(word) && !section.headings.some((heading) => heading.startsWith(word))) {
+          problems.push(`${where}: §${match[1]} has no title or heading starting "${word}"`);
         }
       }
       for (const match of line.matchAll(/Appendix ([A-Z])\b/g)) {
