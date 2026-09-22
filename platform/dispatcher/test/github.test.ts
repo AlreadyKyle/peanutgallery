@@ -173,12 +173,35 @@ describe('request timeout', () => {
 });
 
 describe('gateStatus', () => {
+  const ACTIONS = { id: 15368, slug: 'github-actions' };
+  const gate = (status: string, conclusion: string | null, app: unknown = ACTIONS) => ({ name: 'gate', status, conclusion, app });
+  const status = async (...runs: unknown[]) => gateStatus({ ...base, fetchFn: mockFetch(200, { check_runs: runs }).fetchFn }, 'sha');
+
   it('maps the gate check-run to pass, fail, pending and missing', async () => {
-    const run = (status: string, conclusion: string | null) => ({ check_runs: [{ name: 'gate', status, conclusion }, { name: 'detect', status: 'completed', conclusion: 'success' }] });
+    const run = (status: string, conclusion: string | null) => ({ check_runs: [gate(status, conclusion), { name: 'detect', status: 'completed', conclusion: 'success', app: ACTIONS }] });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('completed', 'success')).fetchFn }, 'sha')).toEqual({ state: 'pass' });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('completed', 'failure')).fetchFn }, 'sha')).toEqual({ state: 'fail', conclusion: 'failure' });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('in_progress', null)).fetchFn }, 'sha')).toEqual({ state: 'pending' });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, { check_runs: [] }).fetchFn }, 'sha')).toEqual({ state: 'missing' });
+  });
+
+  it('counts only gate runs the GitHub Actions app created', async () => {
+    expect(await status(gate('completed', 'success', { id: 1, slug: 'some-app' }))).toEqual({ state: 'missing' });
+    expect(await status(gate('completed', 'success', null))).toEqual({ state: 'missing' });
+    expect(await status({ name: 'gate', status: 'completed', conclusion: 'success' })).toEqual({ state: 'missing' });
+    expect(await status(gate('completed', 'success', { id: 1, slug: 'some-app' }), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
+  });
+
+  it('fails when one gate run on the sha failed, whatever the others say', async () => {
+    expect(await status(gate('completed', 'success'), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
+    expect(await status(gate('completed', 'failure'), gate('completed', 'success'))).toEqual({ state: 'fail', conclusion: 'failure' });
+    expect(await status(gate('completed', 'success'), gate('completed', 'cancelled'))).toEqual({ state: 'fail', conclusion: 'cancelled' });
+    expect(await status(gate('in_progress', null), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
+  });
+
+  it('passes only when every Actions gate run completed with success', async () => {
+    expect(await status(gate('completed', 'success'), gate('completed', 'success'))).toEqual({ state: 'pass' });
+    expect(await status(gate('completed', 'success'), gate('queued', null))).toEqual({ state: 'pending' });
   });
 
   it('queries check-runs for the exact sha filtered by name', async () => {
