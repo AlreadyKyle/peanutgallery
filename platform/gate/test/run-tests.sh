@@ -138,8 +138,10 @@ printf '{"title":"Dust"}\n' > "$A/seed-1/content/strings.json"
 printf 'docs/PLAN.md\n' > "$T/changed.txt"
 expect "banned: the shipped docs/PLAN.md passes the hashed comparison" 0 '^PASS: banned-phrases files=1' -- bash "$BANNED" --repo-root "$REPO_ROOT" --changed-files-file "$T/changed.txt"
 mkdir -p "$A/docs"
-awk -v mark="$MARK" 'NR == 320 { print "title: " mark; next } { print }' "$REPO_ROOT/docs/PLAN.md" > "$A/docs/PLAN.md"
-expect "banned: hashed term on docs/PLAN.md line 320 fails (no exemption)" 1 '^FAIL: banned-phrases hits=1 first=docs/PLAN.md:320 list=hashed' -- bash "$BANNED" --repo-root "$A" --denylist-dir "$T/lists" "$A/docs/PLAN.md"
+# A line in the middle of the real plan, so the fixture follows the file as it changes length.
+PLAN_MID=$(( $(wc -l < "$REPO_ROOT/docs/PLAN.md" | tr -d ' ') / 2 ))
+awk -v mark="$MARK" -v line="$PLAN_MID" 'NR == line { print "title: " mark; next } { print }' "$REPO_ROOT/docs/PLAN.md" > "$A/docs/PLAN.md"
+expect "banned: hashed term on a middle docs/PLAN.md line fails (no exemption)" 1 "^FAIL: banned-phrases hits=1 first=docs/PLAN.md:$PLAN_MID list=hashed" -- bash "$BANNED" --repo-root "$A" --denylist-dir "$T/lists" "$A/docs/PLAN.md"
 cp "$REPO_ROOT/docs/PLAN.md" "$A/docs/PLAN.md"
 printf 'title: %s\n' "$MARK" >> "$A/docs/PLAN.md"
 PLAN_LAST=$(wc -l < "$A/docs/PLAN.md" | tr -d ' ')
