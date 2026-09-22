@@ -37,9 +37,17 @@ const dateTime = new Intl.DateTimeFormat('en-GB', {
   hourCycle: 'h23',
 });
 
+// en-GB spells September "Sept"; the site writes every month in three letters (DESIGN.md).
+function threeLetterMonth(format: Intl.DateTimeFormat, date: Date): string {
+  return format
+    .formatToParts(date)
+    .map((part) => (part.type === 'month' ? part.value.slice(0, 3) : part.value))
+    .join('');
+}
+
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
-  return Number.isFinite(date.getTime()) ? dateTime.format(date) : iso;
+  return Number.isFinite(date.getTime()) ? threeLetterMonth(dateTime, date) : iso;
 }
 
 const dateOnly = new Intl.DateTimeFormat('en-GB', {
@@ -50,7 +58,7 @@ const dateOnly = new Intl.DateTimeFormat('en-GB', {
 
 export function formatDate(iso: string): string {
   const date = new Date(iso);
-  return Number.isFinite(date.getTime()) ? dateOnly.format(date) : iso;
+  return Number.isFinite(date.getTime()) ? threeLetterMonth(dateOnly, date) : iso;
 }
 
 const clock = new Intl.DateTimeFormat('en-GB', {

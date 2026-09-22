@@ -24,6 +24,7 @@ function card(overrides: Partial<Card>): Card {
     spent_usd: 0,
     created_at: '2026-09-14T00:00:00Z',
     updated_at: '2026-09-14T00:00:00Z',
+    live_at: null,
     ...overrides,
   };
 }

@@ -17,6 +17,51 @@ Sources: `platform/ops/README.md` (Operator inputs, Provision), `docs/specs/vps.
 
 ---
 
+## Start here — your list, in order (updated 22 September)
+
+Everything on this list is free. None of it asks you to spend your own money: the studio runs on
+what players put in. The detailed sections further down are there if a step is unclear.
+
+1. **ntfy on your phone (2 minutes).** Install the free **ntfy** app. Tap **+**, paste (the topic
+   name is already on your Mac's clipboard), tap Subscribe. Tell me "subscribed to ntfy".
+2. **Say yes to two things I was not allowed to do alone.** Reply "yes to the webhook secret and
+   the kill line". I then point the payment alerts at your phone, redeploy the payment webhook with
+   two small error-message fixes from the sweep, and delete the viewer-count kill lines from the
+   plan (they measured a stream we no longer have).
+3. **healthchecks.io (5 minutes, free plan).** Sign up with kyle@clayhouse.studio. Add a check:
+   name `peanutgallery dispatcher`, period **1 minute**, grace **5 minutes**. Copy its ping URL.
+   Open the file `.env.vps` in the peanutgallery folder and add a line
+   `HEALTHCHECK_URL=` followed by that URL. Save.
+4. **GitHub token (3 minutes, free).** Open the pre-filled link in item 7 below. Choose
+   **Only select repositories → peanutgallery**. Press Generate. Copy the token and add a line
+   `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`. Save. Tell me "VPS inputs are set".
+5. **hello@ email (10 minutes, free).** Sign up at improvmx.com (free plan) with
+   peanutgallery.games and forward `hello` to kyle@clayhouse.studio. It shows two MX records; add
+   them in GoDaddy → the domain → DNS. Send a test mail. Tell me "hello@ works".
+6. **Oracle server (15 minutes, Always Free).** Sign up at cloud.oracle.com, home region
+   **Canada Southeast (Toronto)**. It asks for a card to check you are a real person. That check is
+   not a charge. **Stay on the Free Tier. Never press "Upgrade to Pay As You Go".** Then, in the
+   Terminal tab next to this chat, run
+   `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` and sign in in the
+   browser window it opens. Tell me "Oracle is signed in". I build the server from there.
+7. **Four quick calls, one reply each.**
+   - Item 10 below, the card maximum: "raise the numbers", "split them" or "both".
+   - Deploy rows on /ledger show raw test output ("bot: 36000 simulated seconds…"): "hide it" or
+     "keep it".
+   - The footer line "Free games, playable in a browser, built by AI agents." →
+     "AI agents build free games you can play in a browser.": "change it" or "keep it".
+   - Gate hardening, four holes the sweep found (see **Sweep findings** under Open decisions):
+     "fix the gate" or "not now".
+
+**Not now: studio API credit (item 8).** Do not buy any with your own money. The server builds on
+API credit, and that credit is bought only with money players have put in, once Stripe pays it
+out. Until then the agents build on your Mac, on the Max plan you already have.
+
+**Later, with me:** the cutover to the server, the first real player contribution, the launch clip
+and posts, then Go live (Part 4).
+
+---
+
 ## Progress
 
 What is left, in the numbering the sections use. Numbers never change as things finish, so a line
@@ -29,8 +74,8 @@ checked and when.
 | 5 | ntfy topic | **subscribe on your phone** — I made and tested the topic; the webhook secret needs your allow |
 | 6 | healthchecks.io check | waiting on you |
 | 7 | VPS GitHub token | waiting on you — now one pre-filled link |
-| 8 | Studio Anthropic credit | waiting on you |
-| 9 | Day-7 kill line | **needs your OK** — I tried to delete it and the edit is held for your approval |
+| 8 | Studio Anthropic credit | not now — only with player money, once Stripe pays it out |
+| 9 | Viewer-count kill lines (day 7 and day 30) | **needs your yes** — the edit is held for your approval |
 | 10 | Funding target vs agent spend ceiling | **needs your call** |
 | 2b | Oracle sign-up and one sign-in command | waiting on you — I launch the instance by script after it |
 | Part 3 | Hand me the two values | needs 6 and 7 first |
@@ -77,7 +122,7 @@ alerts, so it stays out of chat.
 
 1. Install the **ntfy** app on your phone (App Store / Play Store).
 2. In the app: **+** → paste the topic name (Universal Clipboard carries it from the Mac; if the
-   clipboard has moved on, `cut -d/ -f4 .env.vps | tr -d '\n' | pbcopy` puts it back) → Subscribe. Leave the
+   clipboard has moved on, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy` puts it back) → Subscribe. Leave the
    server as ntfy.sh.
 3. Tell me, and I post a second test so you see it arrive.
 
@@ -141,7 +186,12 @@ link, which leaves one choice to make by hand.
 
 ---
 
-### 8. Studio Anthropic prepaid credit
+### 8. Studio Anthropic prepaid credit — not now, and only with player money
+
+**Rule, 22 September.** Everything the studio spends comes from players, never from you. Buy this
+credit only with money contributions have brought in, after Stripe pays it out, and no more than
+that. Until then, skip this item; the agents keep building on your Mac under the Max plan you
+already pay for. The steps below are for when that money exists.
 
 **Why it blocks.** Unattended cards bill the studio organisation's key, not your Max subscription.
 `STUDIO_ANTHROPIC_API_KEY` is already set in `.env`; the organisation it belongs to just needs money
@@ -246,6 +296,25 @@ must print `provision: done: 0 change(s)`. I quote every check as I go.
 
 ## Open decisions
 
+### Sweep findings — 22 September, need your yes
+
+A read-through of the whole codebase fixed the obvious bugs on its own (`docs/specs/sweep-22-sep.md`).
+These it left for you:
+
+- **Gate holes (kernel, so yours).** A config-only card can break `seed-1/content/strings.json` and
+  still pass, because the config lane never parses it. A file with one NUL byte skips the secret,
+  banned-phrase and runtime scanners. `seed-1/sim/hash.ts` and `rng.ts` are not kernel-protected, so
+  a card could make the determinism check pass trivially. A new root file named like `a=b.txt` is
+  skipped by the banned-phrase scan. Say "fix the gate" and I write one spec for all four.
+- **Deploy rows show raw test output** on /ledger and the landing page. A test pins it, so it looked
+  deliberate. "hide it" or "keep it".
+- **Footer line** is a fragment, which COPY.md warns against: "change it" or "keep it".
+- **Card titles in production** use code names ("Spawn table: mill baseCost 2500 to 2600"). Fixing
+  them writes to the database: "rename them" or "leave them".
+- **"In the gate"** badge: DESIGN.md names it, COPY.md says to say "automated checks". Pick one.
+- **Seed-1 unlock count** can read "13 of 12" after an unlock is removed. That is game code, so it
+  should be a card.
+
 ### Caps: what they are, and the one that is worth changing
 
 **Nothing caps what a supporter can give.** The two numbers on /board are limits on what the *agents*
@@ -321,8 +390,11 @@ I prompt you at each point; the whole thing is about fifteen minutes.
 
 After the cutover, so the same payment proves both the money path and an unattended build.
 
-1. Open https://peanutgallery.games/contribute and pick a card.
-2. Pay a small amount with your own card. I cannot make payments.
+This is a player's contribution, not yours: the first real one after the cutover does the job. If
+you would rather prove it sooner by contributing yourself, that is your call and never required.
+
+1. A player opens https://peanutgallery.games/contribute, picks a card and pays.
+2. I cannot make payments.
 3. I confirm the webhook answered 200, the meter moved, and the card then builds with nobody at the
    keyboard, with `billed_to = 'studio'` ledger rows.
 

@@ -6,6 +6,7 @@ import {
   fundLink,
   groupCards,
   inCategory,
+  shippedAt,
   sourceLabel,
   statusOf,
   type CategoryFilter,
@@ -14,7 +15,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
-import type { StudioState } from '../lib/studio';
+import { unavailableLine, type StudioState } from '../lib/studio';
 
 export function Guarded({
   studio,
@@ -27,7 +28,7 @@ export function Guarded({
     return <p className="muted">{copy.loadingCards}</p>;
   }
   if (studio.state !== 'ready') {
-    return <p className="muted">{copy.meterUnavailable}</p>;
+    return <p className="muted">{unavailableLine(studio)}</p>;
   }
   return <>{children(studio.snapshot)}</>;
 }
@@ -205,7 +206,7 @@ export function shippedCaption(card: Card, snapshot: Snapshot): string {
   }
   const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spent} · ` : '';
   const count = who === null ? '' : `${who} · `;
-  return `${cost}${count}${copy.shippedOn} ${formatDate(card.updated_at)}`;
+  return `${cost}${count}${copy.shippedOn} ${formatDate(shippedAt(card))}`;
 }
 
 /** Live cards, newest first, as rows: what each change cost, who funded it and when it shipped. */

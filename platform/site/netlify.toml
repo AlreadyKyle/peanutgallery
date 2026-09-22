@@ -2,7 +2,7 @@
   command = "pnpm --filter @backseat/site build"
   publish = "dist"
   # Skip the build only when a previous successful build exists, differs, and touched nothing here.
-  ignore = 'test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../pnpm-lock.yaml ../../package.json'
+  ignore = 'test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml ../../tsconfig.base.json'
 
 [build.environment]
   NODE_VERSION = "22"

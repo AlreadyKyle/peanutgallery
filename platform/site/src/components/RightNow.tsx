@@ -3,7 +3,7 @@ import { groupCards } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { formatUsd } from '../lib/format';
 import type { Snapshot } from '../lib/source';
-import type { StudioState } from '../lib/studio';
+import { unavailableLine, type StudioState } from '../lib/studio';
 import { StaleNotice } from './StaleNotice';
 import { Stat } from './Stat';
 
@@ -18,7 +18,7 @@ export function RightNow({ studio }: { studio: StudioState }) {
       <h2 id="right-now">{copy.rightNow}</h2>
       <StaleNotice studio={studio} />
       {studio.state === 'loading' ? <p className="muted">{copy.loadingFigures}</p> : null}
-      {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{copy.meterUnavailable}</p> : null}
+      {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
       {studio.state === 'ready' ? <Ready snapshot={studio.snapshot} /> : null}
     </aside>
   );

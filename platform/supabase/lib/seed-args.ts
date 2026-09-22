@@ -15,9 +15,12 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
   let runValue: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    // pnpm passes the `--` in `pnpm seed -- --week1-test` through to the script.
+    if (arg === "--") continue;
     if (arg === "--week1-test") {
       week1Test = true;
     } else if (arg === "--run") {
+      if (argv[i + 1] === undefined) throw new UsageError("--run needs a value");
       runValue = argv[i + 1];
       i++;
     } else if (arg?.startsWith("--run=")) {

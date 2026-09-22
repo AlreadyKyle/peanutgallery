@@ -196,6 +196,7 @@ code {
 .wordmark {
   display: inline-flex;
   align-items: center;
+  min-height: var(--target);
   gap: var(--space-1);
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
@@ -529,7 +530,7 @@ button.link:hover:not(:disabled) {
 .filters .filter {
   min-height: var(--target);
   padding: 0.25em 1em;
-  border: 1px solid var(--line);
+  border: 1px solid var(--field);
   border-radius: 999px;
   background: var(--paper);
   color: var(--ink);
@@ -632,6 +633,8 @@ button.link:hover:not(:disabled) {
 }
 
 .brief summary {
+  /* Padding, not flex, so the disclosure triangle stays: a 44px target around one line. */
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
   width: fit-content;
   color: var(--muted);
   font-size: var(--size-small);
@@ -726,6 +729,12 @@ button.link:hover:not(:disabled) {
   gap: var(--space-1) var(--space-2);
 }
 
+.footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+}
+
 /* Forms (the board page) ------------------------------------------------- */
 
 .stack {
@@ -790,7 +799,7 @@ legend {
 label.choice {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-1);
   font-weight: var(--weight-body);
 }
 

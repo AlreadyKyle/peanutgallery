@@ -156,7 +156,6 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
       {role === 'board' ? (
         <>
           {secondFactor ? null : <TwoFactor client={client} onVerified={setSecondFactor} />}
-          {secondFactor ? <PauseControls client={client} /> : null}
           <BoardControls client={client} secondFactor={secondFactor} />
         </>
       ) : null}
@@ -339,6 +338,8 @@ function BoardControls({ client, secondFactor }: { client: SupabaseClient; secon
   const studio = useBoardStudioState(client);
   return (
     <>
+      {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
+      {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
       <StudioStatus client={client} studio={studio} canChange={secondFactor} />
       <SessionStatus client={client} />
       {secondFactor ? (
@@ -507,7 +508,7 @@ function SessionStatus({ client }: { client: SupabaseClient }) {
   );
 }
 
-function PauseControls({ client }: { client: SupabaseClient }) {
+function PauseControls({ client, onChanged }: { client: SupabaseClient; onChanged?: () => Promise<void> }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -516,6 +517,7 @@ function PauseControls({ client }: { client: SupabaseClient }) {
     try {
       await setPaused(client, paused);
       setMessage(paused ? 'Agents paused.' : 'Agents resumed.');
+      await onChanged?.();
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {

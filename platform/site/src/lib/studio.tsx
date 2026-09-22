@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Snapshot, StudioSource } from './source';
 import { errorMessage } from './supabase';
+import { copy } from './copy';
 
 export const POLL_MS = 15_000;
 export const REFRESH_DEBOUNCE_MS = 500;
@@ -11,6 +12,11 @@ export type StudioState =
   /** stale: the last refresh failed, so the snapshot on screen may be out of date. */
   | { state: 'ready'; snapshot: Snapshot; stale: boolean }
   | { state: 'error'; message: string };
+
+/** The line shown when figures are missing: not set up yet, or failed to load right now. */
+export function unavailableLine(studio: StudioState): string {
+  return studio.state === 'error' ? copy.partUnavailable : copy.meterUnavailable;
+}
 
 const SourceContext = createContext<StudioSource | null>(null);
 
