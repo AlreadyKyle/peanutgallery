@@ -5,9 +5,11 @@ import {
   agentModes,
   boardStudioState,
   buckets,
+  cancelCard,
   cardStages,
   dispatcherSeenAgoMs,
   enrolTotp,
+  fetchBoardCards,
   fetchBoardRole,
   fileCard,
   fileDirective,
@@ -15,10 +17,16 @@ import {
   folders,
   heartbeat,
   HEARTBEAT_MS,
+  horizons,
+  isCardRole,
   lanes,
+  recordCreditPurchase,
+  resumeCard,
   sendMagicLink,
   sessionExpiry,
   setAgentMode,
+  setCaps,
+  setCardHorizon,
   setLaunched,
   setPaused,
   STUDIO_STATE_POLL_MS,
@@ -26,20 +34,23 @@ import {
   twoFactorState,
   verifyTotp,
   type AgentMode,
+  type BoardCard,
   type BoardRole,
   type BoardStudioState,
+  type Caps,
   type NextCardStage,
   type TotpEnrolment,
   type TwoFactorState,
 } from '../lib/board';
 import { formatClock, formatDateTime, formatUsd } from '../lib/format';
-import type { Role } from '../lib/source';
+import type { Horizon, Role } from '../lib/source';
 import { useStudio } from '../lib/studio';
 import { errorMessage, getClient } from '../lib/supabase';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
 export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
+export const CANCEL_CONFIRM = 'Cancel this card? It is rejected with your reason, and this cannot be undone.';
 
 export function Board() {
   const client = getClient();
@@ -263,8 +274,8 @@ function TwoFactor({
     <section aria-label="Two-factor sign-in">
       <h2>Two-factor sign-in</h2>
       <p>
-        A second factor is needed before you can pause agents, go live, change the agent mode, or file cards,
-        directives and notes.
+        A second factor is needed before you can pause agents, go live, change the agent mode or the caps, record
+        credit, move, cancel or resume cards, or file cards, directives and notes.
       </p>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
@@ -344,7 +355,10 @@ function BoardControls({ client, secondFactor }: { client: SupabaseClient; secon
       <SessionStatus client={client} />
       {secondFactor ? (
         <>
-          <NextCardForm client={client} cardMaxUsd={studio.state?.card_max_usd ?? null} />
+          <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
+          <CreditPurchaseForm client={client} />
+          <CardControls client={client} />
+          <NextCardForm client={client} />
           <DirectiveForm client={client} />
           <NoteForm client={client} />
         </>
@@ -421,6 +435,11 @@ function StudioStatus({
           </p>
           <p>
             Daily cap {formatUsd(state.daily_cap_usd)}. Card maximum {formatUsd(state.card_max_usd)}.
+            {state.agent_hourly_rate_usd === null ? null : ` Hourly rate ${formatUsd(state.agent_hourly_rate_usd)}.`}
+            {state.monthly_cap_usd === null ? null : ` Monthly cap ${formatUsd(state.monthly_cap_usd)}.`}
+            {state.credit_studio_daily_cap_usd === null
+              ? null
+              : ` Studio daily limit on immediate credit ${formatUsd(state.credit_studio_daily_cap_usd)}.`}
           </p>
           {canChange && state.launched_at === null ? (
             <button type="button" disabled={busy} onClick={() => void goLive()}>
@@ -541,8 +560,383 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   );
 }
 
+// The roles that build cards. The directors, the Host, the Scout and the Community agent have no job
+// that runs yet, so they are never offered (lib/board.ts CARD_ROLE_FOLDERS).
 function executors(roles: Role[]): Role[] {
-  return roles.filter((role) => role.write_access && role.state === 'active');
+  return roles.filter(isCardRole);
+}
+
+/** A dollar field: a finite number of zero or more, or null. */
+function dollars(value: string): number | null {
+  if (value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+const CAP_FIELDS = [
+  { key: 'daily_cap_usd', label: 'Daily spend cap (USD)' },
+  { key: 'card_max_usd', label: 'Per-card spend ceiling (USD)' },
+  { key: 'agent_hourly_rate_usd', label: 'Agent hourly rate (USD)' },
+  { key: 'monthly_cap_usd', label: 'Monthly spend cap (USD)' },
+  { key: 'credit_studio_daily_cap_usd', label: 'Studio daily limit on immediate credit (USD)' },
+] as const satisfies readonly { key: keyof Caps; label: string }[];
+
+type CapForm = Record<keyof Caps, string>;
+
+function capFormFrom(state: BoardStudioState | null): CapForm {
+  const text = (value: number | null | undefined) => (value === null || value === undefined ? '' : String(value));
+  return {
+    daily_cap_usd: text(state?.daily_cap_usd),
+    card_max_usd: text(state?.card_max_usd),
+    agent_hourly_rate_usd: text(state?.agent_hourly_rate_usd),
+    monthly_cap_usd: text(state?.monthly_cap_usd),
+    credit_studio_daily_cap_usd: text(state?.credit_studio_daily_cap_usd),
+  };
+}
+
+/** set_caps: every cap at once, with a reason. The database checks each bound and records the change. */
+function CapsForm({
+  client,
+  state,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  state: BoardStudioState | null;
+  onChanged: () => Promise<void>;
+}) {
+  const [edits, setEdits] = useState<Partial<CapForm>>({});
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const form = { ...capFormFrom(state), ...edits };
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const caps = {} as Caps;
+    for (const field of CAP_FIELDS) {
+      const value = dollars(form[field.key]);
+      if (value === null) {
+        setMessage(`${field.label} must be a dollar amount of zero or more.`);
+        return;
+      }
+      caps[field.key] = value;
+    }
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setCaps(client, caps, reason.trim());
+      setMessage('Caps saved.');
+      setEdits({});
+      setReason('');
+      await onChanged();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} aria-label="Set the caps">
+      <h2>Caps</h2>
+      <p>Every cap is saved together, with the reason, and the database checks each bound.</p>
+      {CAP_FIELDS.map((field) => (
+        <label key={field.key}>
+          {field.label}
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            required
+            value={form[field.key]}
+            onChange={(event) => setEdits((previous) => ({ ...previous, [field.key]: event.target.value }))}
+          />
+        </label>
+      ))}
+      <label>
+        Reason
+        <input required value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Save caps
+      </button>
+      {message === '' ? null : <p role="status">{message}</p>}
+    </form>
+  );
+}
+
+/** record_credit_purchase: Console credit bought for the agents, with the Stripe payout that paid for it. */
+function CreditPurchaseForm({ client }: { client: SupabaseClient }) {
+  const [amount, setAmount] = useState('');
+  const [payout, setPayout] = useState('');
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = dollars(amount);
+    if (value === null || value < 0.01) {
+      setMessage('Amount must be at least $0.01.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await recordCreditPurchase(client, { amount_usd: value, stripe_payout_id: payout.trim(), reason: reason.trim() });
+      setMessage(`Credit purchase of ${formatUsd(value)} recorded.`);
+      setAmount('');
+      setPayout('');
+      setReason('');
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} aria-label="Record a credit purchase">
+      <h2>Record a credit purchase</h2>
+      <p>Record Console credit bought for the agents after a Stripe payout. Unattended agents spend only recorded credit.</p>
+      <label>
+        Amount (USD)
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0.01"
+          step="0.01"
+          required
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+        />
+      </label>
+      <label>
+        Stripe payout id
+        <input required value={payout} onChange={(event) => setPayout(event.target.value)} />
+      </label>
+      <label>
+        Reason
+        <input required value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Record purchase
+      </button>
+      {message === '' ? null : <p role="status">{message}</p>}
+    </form>
+  );
+}
+
+const STAGE_WORDS: Record<string, string> = {
+  proposed: 'open for funding',
+  designing: 'in design',
+  voted: 'picked by the board',
+  funded: 'funded',
+  paused: 'paused',
+};
+
+/** The horizon, rank, target, cancel and resume controls for one card. */
+function CardControl({
+  client,
+  card,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  card: BoardCard;
+  onChanged: () => Promise<void>;
+}) {
+  const [horizon, setHorizon] = useState<Horizon>(card.horizon);
+  const [rank, setRank] = useState(card.rank === null ? '' : String(card.rank));
+  const [target, setTarget] = useState(card.funding_target_usd > 0 ? String(card.funding_target_usd) : '');
+  const [estimate, setEstimate] = useState(card.estimate_usd > 0 ? String(card.estimate_usd) : '');
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const idBase = useId();
+
+  function needReason(): string | null {
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return null;
+    }
+    return reason.trim();
+  }
+
+  async function run(action: () => Promise<void>, done: string) {
+    setBusy(true);
+    try {
+      await action();
+      setMessage(done);
+      setReason('');
+      await onChanged();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveHorizon(event: FormEvent) {
+    event.preventDefault();
+    const why = needReason();
+    if (why === null) return;
+    const rankValue = rank.trim() === '' ? null : Number(rank);
+    if (rankValue !== null && (!Number.isInteger(rankValue) || rankValue < 0)) {
+      setMessage('Rank must be a whole number of zero or more.');
+      return;
+    }
+    const targetValue = dollars(target);
+    if (horizon === 'now' && (targetValue === null || targetValue < 0.01)) {
+      setMessage('A card on horizon now needs a funding target of at least $0.01.');
+      return;
+    }
+    await run(
+      () =>
+        setCardHorizon(client, {
+          id: card.id,
+          horizon,
+          rank: rankValue,
+          target_usd: horizon === 'now' ? targetValue : null,
+          reason: why,
+        }),
+      'Card saved.',
+    );
+  }
+
+  async function cancel() {
+    const why = needReason();
+    if (why === null) return;
+    if (!window.confirm(CANCEL_CONFIRM)) return;
+    await run(() => cancelCard(client, card.id, why), 'Card cancelled.');
+  }
+
+  async function resume() {
+    const why = needReason();
+    if (why === null) return;
+    const value = dollars(estimate);
+    if (value === null || value < 0.01) {
+      setMessage('A new estimate of at least $0.01 is required.');
+      return;
+    }
+    await run(() => resumeCard(client, card.id, value, why), 'Card resumed.');
+  }
+
+  return (
+    <li>
+      <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
+        <h3>{card.title}</h3>
+        <p>
+          {STAGE_WORDS[card.stage] ?? card.stage} · horizon {card.horizon}
+          {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
+          {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
+        </p>
+        <label>
+          Horizon
+          <select value={horizon} onChange={(event) => setHorizon(event.target.value as Horizon)}>
+            {horizons.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Rank
+          <input type="number" inputMode="numeric" min="0" step="1" value={rank} onChange={(event) => setRank(event.target.value)} />
+        </label>
+        <label>
+          Funding target (USD)
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            aria-describedby={`${idBase}-target`}
+            value={target}
+            onChange={(event) => setTarget(event.target.value)}
+          />
+        </label>
+        <p id={`${idBase}-target`}>Needed to move a card to now. A card with money cannot leave now.</p>
+        {card.stage === 'paused' ? (
+          <label>
+            New estimate (USD)
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step="0.01"
+              aria-describedby={`${idBase}-estimate`}
+              value={estimate}
+              onChange={(event) => setEstimate(event.target.value)}
+            />
+          </label>
+        ) : null}
+        {card.stage === 'paused' ? (
+          <p id={`${idBase}-estimate`}>At least what the card has already cost.</p>
+        ) : null}
+        <label>
+          Reason
+          <input value={reason} onChange={(event) => setReason(event.target.value)} />
+        </label>
+        <div className="row">
+          <button type="submit" disabled={busy}>
+            Save horizon and rank
+          </button>
+          {card.stage === 'paused' ? (
+            <button type="button" disabled={busy} onClick={() => void resume()}>
+              Resume card
+            </button>
+          ) : null}
+          <button type="button" className="button-secondary" disabled={busy} onClick={() => void cancel()}>
+            Cancel card
+          </button>
+        </div>
+        {message === '' ? null : <p role="status">{message}</p>}
+      </form>
+    </li>
+  );
+}
+
+/** Every card the board can still move, cancel or resume, now first, then the roadmap. */
+function CardControls({ client }: { client: SupabaseClient }) {
+  const [cards, setCards] = useState<BoardCard[] | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      setCards(await fetchBoardCards(client));
+      setLoadError('');
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return (
+    <section aria-label="Cards">
+      <h2>Cards</h2>
+      <p>
+        Move a card between now, next and later, rank it, set its target, cancel it, or resume a paused card with a new
+        estimate. Each change needs a reason and is recorded.
+      </p>
+      {cards === null ? <p role="status">{loadError === '' ? 'Loading the cards.' : loadError}</p> : null}
+      {cards !== null && cards.length === 0 ? <p>No cards to manage.</p> : null}
+      {cards !== null && cards.length > 0 ? (
+        <ul className="board-cards">
+          {cards.map((card) => (
+            <CardControl key={`${card.id}-${card.horizon}-${card.rank}-${card.stage}`} client={client} card={card} onChanged={refresh} />
+          ))}
+        </ul>
+      ) : null}
+      {cards !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
+    </section>
+  );
 }
 
 // file_card and the cards.summary column both cap the summary at 200 characters.
@@ -560,16 +954,12 @@ const emptyCard = {
   stage: 'proposed' as NextCardStage,
   board_reason: '',
   executor_role_id: '',
+  horizon: 'now' as Horizon,
 };
 
-function NextCardForm({
-  client,
-  cardMaxUsd,
-}: {
-  client: SupabaseClient;
-  // From board_studio_state; null until loaded, and file_card still enforces the cap.
-  cardMaxUsd: number | null;
-}) {
+// file_card: a card for Fund what's next (horizon now) or for the roadmap (next or later). The target
+// is not capped by the per-card spend ceiling; the database keeps a sane upper bound.
+function NextCardForm({ client }: { client: SupabaseClient }) {
   const studio = useStudio();
   const roles = studio.state === 'ready' ? executors(studio.snapshot.roles) : [];
   const hintId = useId();
@@ -592,13 +982,14 @@ function NextCardForm({
       setMessage('A public summary is required.');
       return;
     }
-    const target = Number(form.funding_target_usd);
-    const tooHigh = cardMaxUsd !== null && target > cardMaxUsd;
-    if (!Number.isFinite(target) || target < 0.01 || tooHigh) {
+    // A roadmap card may leave the target blank; it gets one when the board moves it to now.
+    const blankTarget = form.funding_target_usd.trim() === '';
+    const target = blankTarget && form.horizon !== 'now' ? 0 : Number(form.funding_target_usd);
+    if (form.horizon === 'now' ? !Number.isFinite(target) || target < 0.01 : !Number.isFinite(target) || target < 0) {
       setMessage(
-        cardMaxUsd === null
+        form.horizon === 'now'
           ? 'Funding target must be at least $0.01.'
-          : `Funding target must be between $0.01 and ${formatUsd(cardMaxUsd)}.`,
+          : 'Funding target must be a dollar amount of zero or more.',
       );
       return;
     }
@@ -620,8 +1011,9 @@ function NextCardForm({
         stage: form.stage,
         executor_role_id: executor,
         board_reason: form.board_reason.trim(),
+        horizon: form.horizon,
       });
-      setMessage(`Next card filed as card ${id.slice(0, 8)}.`);
+      setMessage(`Card filed as card ${id.slice(0, 8)}.`);
       setForm({ ...emptyCard });
     } catch (error) {
       setMessage(errorMessage(error));
@@ -631,12 +1023,22 @@ function NextCardForm({
   }
 
   return (
-    <form className="stack" onSubmit={submit} aria-label="File a Next card">
-      <h2>File a Next card</h2>
+    <form className="stack" onSubmit={submit} aria-label="File a card">
+      <h2>File a card</h2>
       <p>
-        A Next card shows on the site under Fund what's next. Supporters fund it to vote for it;
-        when its bar reaches the target the agents build it.
+        A card on horizon now shows on the site under Fund what's next. Supporters fund it; when its bar
+        reaches the target the agents build it. A card on next or later shows on the roadmap and takes no money.
       </p>
+      <label>
+        Horizon
+        <select value={form.horizon} onChange={(event) => update('horizon', event.target.value as Horizon)}>
+          {horizons.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label>
         Bucket
         <select value={form.bucket} onChange={(event) => update('bucket', event.target.value)}>
@@ -704,16 +1106,15 @@ function NextCardForm({
           onChange={(event) => update('acceptance_test', event.target.value)}
         />
       </label>
-      <p id={hintId}>Config-lane cards need a check: line.</p>
+      <p id={hintId}>Config-lane cards need a check: line. A card on horizon now needs check: lines too.</p>
       <label>
         Funding target (USD)
         <input
           type="number"
           inputMode="decimal"
-          min="0.01"
-          max={cardMaxUsd ?? undefined}
+          min={form.horizon === 'now' ? '0.01' : '0'}
           step="0.01"
-          required
+          required={form.horizon === 'now'}
           value={form.funding_target_usd}
           onChange={(event) => update('funding_target_usd', event.target.value)}
         />
@@ -752,9 +1153,9 @@ function NextCardForm({
           ))}
         </select>
       </label>
-      {roles.length === 0 ? <p>No active roles with write access are loaded.</p> : null}
+      {roles.length === 0 ? <p>No active card roles are loaded.</p> : null}
       <button type="submit" disabled={busy || roles.length === 0}>
-        File Next card
+        File card
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
     </form>
@@ -822,7 +1223,7 @@ function DirectiveForm({ client }: { client: SupabaseClient }) {
   return (
     <form className="stack" onSubmit={submit} aria-label="File a directive">
       <h2>File a directive</h2>
-      <p>A directive enters the queue funded at priority 0, skips the vote and still passes the gate.</p>
+      <p>A directive enters the queue funded at priority 0, skips funding and still passes the gate.</p>
       <label>
         Bucket
         <select value={form.bucket} onChange={(event) => update('bucket', event.target.value)}>
@@ -905,7 +1306,7 @@ function DirectiveForm({ client }: { client: SupabaseClient }) {
           ))}
         </select>
       </label>
-      {roles.length === 0 ? <p>No active roles with write access are loaded.</p> : null}
+      {roles.length === 0 ? <p>No active card roles are loaded.</p> : null}
       <button type="submit" disabled={busy || roles.length === 0}>
         File directive
       </button>
