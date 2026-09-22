@@ -70,11 +70,13 @@ const PUBLIC_CARD_COLUMNS = [
   "folder",
   "funded_usd",
   "funding_target_usd",
+  "horizon",
   "id",
   "intent",
   "lane",
   "live_at",
   "proposer_role_id",
+  "rank",
   "shape",
   "source",
   "stage",
@@ -82,6 +84,24 @@ const PUBLIC_CARD_COLUMNS = [
   "title",
   "updated_at",
   "veto_reason",
+];
+
+/** The keys board_studio_state returns, sorted. */
+const BOARD_STATE_KEYS = [
+  "agent_hourly_rate_usd",
+  "agent_mode",
+  "card_max_usd",
+  "credit_bought_usd",
+  "credit_daily_cap_usd",
+  "credit_spent_usd",
+  "credit_studio_daily_cap_usd",
+  "daily_cap_usd",
+  "dispatcher_seen_at",
+  "launched_at",
+  "monthly_cap_usd",
+  "paused",
+  "paused_at",
+  "paused_by",
 ];
 
 const BOARD_EMAIL = "board@peanutgallery.games";
@@ -198,6 +218,12 @@ Deno.test("migrations on PGlite", {
         "20260921000000_open_goal_funding.sql",
         "20260921000100_public_card_columns.sql",
         "20260921000200_ledger_request_id.sql",
+        "20260922000000_ledger_overhead.sql",
+        "20260922000100_money_fixes.sql",
+        "20260922000200_dispatcher_lease.sql",
+        "20260922000300_backlog.sql",
+        "20260922000400_public_roles.sql",
+        "20260922000500_roles_revoke.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -208,12 +234,12 @@ Deno.test("migrations on PGlite", {
       );
       await db.exec(SHIM);
       // gen_random_uuid() is core Postgres; PGlite ships no pgcrypto build.
-      for (const m of migrations) {
+      // Every migration after the first is written to run twice, so each one
+      // runs again straight after itself, the way a retried apply would. Each
+      // exec is one transaction, as each Management API request is.
+      for (const [index, m] of migrations.entries()) {
         await db.exec(m.sql.replaceAll(PGCRYPTO_LINE, ""));
-      }
-      // Every migration after the first is written to run twice.
-      for (const m of migrations.slice(1)) {
-        await db.exec(m.sql.replaceAll(PGCRYPTO_LINE, ""));
+        if (index > 0) await db.exec(m.sql.replaceAll(PGCRYPTO_LINE, ""));
       }
 
       const tables = await rows<{ table_name: string }>(
@@ -221,12 +247,16 @@ Deno.test("migrations on PGlite", {
       );
       assertEquals(tables.map((r) => r.table_name), [
         "agent_events",
+        "board_actions",
         "board_members",
         "board_notes",
+        "card_patches",
         "cards",
         "contributions",
+        "credit_purchases",
         "decisions",
         "deploys",
+        "dispatcher_lease",
         "images",
         "ledger",
         "pool",
@@ -246,6 +276,7 @@ Deno.test("migrations on PGlite", {
         "public_card_funding",
         "public_card_spend",
         "public_ledger_totals",
+        "public_roles",
         "public_studio",
       ]);
       const columns = await rows<{ column_name: string }>(
@@ -272,15 +303,46 @@ Deno.test("migrations on PGlite", {
       );
       assertEquals(applySignatures, [{
         args:
-          "p_stripe_event_id text, p_contributor_id text, p_display_name text, p_amount_usd numeric, p_net_usd numeric, p_studio_pct integer, p_goal_card_id uuid, p_stripe_session_id text",
+          "p_stripe_event_id text, p_contributor_id text, p_display_name text, p_amount_usd numeric, p_net_usd numeric, p_studio_pct integer, p_goal_card_id uuid, p_stripe_session_id text, p_payer_key text",
       }]);
+      // Every card column added for launch is nullable or defaulted, so the
+      // deployed dispatcher's inserts and the week-1 seed keep working.
+      assertEquals(
+        await rows(
+          `select column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and ((table_name = 'cards' and column_name in ('horizon', 'rank')) or (table_name = 'roles' and column_name = 'description') or (table_name = 'contributions' and column_name = 'payer_key')) order by table_name, column_name`,
+        ),
+        [
+          { column_name: "horizon", data_type: "USER-DEFINED", is_nullable: "NO", column_default: "'now'::card_horizon" },
+          { column_name: "rank", data_type: "integer", is_nullable: "YES", column_default: null },
+          { column_name: "payer_key", data_type: "text", is_nullable: "YES", column_default: null },
+          { column_name: "description", data_type: "text", is_nullable: "YES", column_default: null },
+        ],
+      );
+      assertEquals(
+        await rows(
+          `select column_name, column_default from information_schema.columns where table_schema = 'public' and table_name = 'studio_state' and column_name in ('credit_studio_daily_cap_usd', 'monthly_cap_usd') order by 1`,
+        ),
+        [
+          { column_name: "credit_studio_daily_cap_usd", column_default: "500" },
+          { column_name: "monthly_cap_usd", column_default: "500" },
+        ],
+      );
+      assertEquals(
+        (await rows<{ label: string }>(
+          `select e.enumlabel as label from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'ledger_billing' order by e.enumsortorder`,
+        )).map((r) => r.label),
+        ["studio", "founder", "overhead"],
+      );
       const withoutRls = await rows(
         `select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`,
       );
       assertEquals(withoutRls, []);
 
+      // The steps below pay far more than $500 in one New York day, so the
+      // studio-wide room on immediate credit starts at the $10,000 most set_caps
+      // allows; its own step sets it back to the $500 default.
       await db.exec(
-        `insert into public.studio_state (id) values (1); insert into public.pool (id) values (1); insert into public.stream_state (id) values (1);`,
+        `insert into public.studio_state (id, credit_studio_daily_cap_usd) values (1, 10000); insert into public.pool (id) values (1); insert into public.stream_state (id) values (1);`,
       );
     });
 
@@ -684,41 +746,17 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
-      "founder_credit adds a private founder row and raises the balance",
+      "founder_credit is gone, so nothing but a customer payment raises the pool",
       async () => {
-        const before = await pool();
-        const { id } = await row<{ id: string }>(
-          `select public.founder_credit(50, 'cash', 'Founder') as id`,
-        );
-        const c = await row(
-          `select rail::text as rail, contributor_id, display_name, amount_usd, net_usd, agents_usd, reserve_usd, studio_usd, incident_usd, studio_pct_chosen, kind::text as kind, public, stripe_event_id from public.contributions where id = $1`,
-          [id],
-        );
-        assertEquals(c, {
-          rail: "founder",
-          contributor_id: "founder",
-          display_name: "Founder",
-          amount_usd: "50.0000",
-          net_usd: "50.0000",
-          agents_usd: "50.0000",
-          reserve_usd: "0.0000",
-          studio_usd: "0.0000",
-          incident_usd: "0.0000",
-          studio_pct_chosen: 0,
-          kind: "cash",
-          public: false,
-          stripe_event_id: null,
-        });
-        const after = await pool();
         assertEquals(
-          (Number(after.balance_usd) - Number(before.balance_usd)).toFixed(4),
-          "50.0000",
+          await rows(
+            `select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'founder_credit'`,
+          ),
+          [],
         );
-        assertEquals(after.reserve_usd, before.reserve_usd);
-        assertEquals(after.incident_reserve_usd, before.incident_reserve_usd);
         await refuses(
-          `select public.founder_credit(0, 'cash', 'Founder')`,
-          "p_amount_usd must be above zero",
+          `select public.founder_credit(50, 'cash', 'Founder')`,
+          "does not exist",
         );
       },
     );
@@ -972,6 +1010,75 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
+      "an overhead row is public, names no card and leaves the pool alone, and a founder row stays private",
+      async () => {
+        const before = await pool();
+        const offsets = await identityOffsets();
+        const ledgerBefore = await rows<{ id: string }>(`select id from public.ledger`);
+        const anonTotals = async () => {
+          await db.exec(`set role anon`);
+          try {
+            return await row<Row>(`select * from public.public_ledger_totals`);
+          } finally {
+            await db.exec(`reset role`);
+          }
+        };
+        const totalsBefore = await anonTotals();
+
+        const probe = (requestId: string) =>
+          row<{ r: Row }>(
+            `select public.record_usage(null, $1, 'probe-model-id', 100, 0, 20, 0.0312, 'overhead', $2) as r`,
+            [roleId, requestId],
+          );
+        const first = await probe("probe/overhead/1");
+        assertEquals(await pool(), before);
+        assertEquals(first.r.balance_usd, Number(before.balance_usd));
+        assertEquals(first.r.daily_spent_usd, Number(before.daily_spent_usd));
+        assertEquals(first.r.actual_usd, null);
+        // A retry of the same request writes nothing.
+        const retry = await probe("probe/overhead/1");
+        assertEquals(retry.r.ledger_id, first.r.ledger_id);
+        assertEquals(
+          (await row<{ n: number }>(`select count(*)::int as n from public.ledger where request_id = 'probe/overhead/1'`)).n,
+          1,
+        );
+        await refuses(
+          `select public.record_usage($1, $2, 'probe-model-id', 1, 0, 1, 0.01, 'overhead')`,
+          "An overhead row names no card",
+          [oneoffCardId, roleId],
+        );
+        const founder = await row<{ r: Row }>(
+          `select public.record_usage(null, $1, 'builder-model-id', 1, 0, 1, 0.05, 'founder') as r`,
+          [roleId],
+        );
+        assertEquals(await pool(), before);
+        // Neither kind of row moves the identity, which counts studio rows only.
+        assertEquals(await identityOffsets(), offsets);
+
+        await db.exec(`set role anon`);
+        try {
+          const seen = await rows<{ billed_to: string; usd: string }>(
+            `select billed_to::text as billed_to, usd from public.ledger where id = any($1::uuid[]) order by billed_to`,
+            [[first.r.ledger_id, founder.r.ledger_id]],
+          );
+          assertEquals(seen, [{ billed_to: "overhead", usd: "0.0312" }]);
+          assertEquals(
+            await rows(`select distinct billed_to::text as billed_to from public.ledger order by 1`),
+            [{ billed_to: "overhead" }, { billed_to: "studio" }],
+          );
+        } finally {
+          await db.exec(`reset role`);
+        }
+        const totalsAfter = await anonTotals();
+        assertEquals(totalsAfter, { ...totalsBefore, overhead_usd: "0.0312" });
+
+        // Later steps pin the ledger totals, so the rows this step wrote are taken back out.
+        await db.query(`delete from public.ledger where not (id = any($1::uuid[]))`, [ledgerBefore.map((l) => l.id)]);
+        assertEquals(await pool(), before);
+      },
+    );
+
+    await t.step(
       "a board member can heartbeat, pause, resume, file a directive and file a note",
       async () => {
         await db.exec(
@@ -1119,13 +1226,26 @@ Deno.test("migrations on PGlite", {
             executor: true,
           },
         );
+        // A card filed without a horizon is on now; the eleven-argument call still works.
+        assertEquals(
+          await row(`select horizon::text as horizon, rank from public.cards where id = $1`, [configCard.id]),
+          { horizon: "now", rank: null },
+        );
+        // The platform code lane is closed on now, whichever way the horizon arrives.
+        for (const horizon of ["", ", 'now'"]) {
+          await refuses(
+            `select public.file_card('platform', 'code', 'platform', 'A platform code card', 'Summary.', null, 'No check line is needed on the code lane.', 25, 'voted', $1, ' Board reason '${horizon})`,
+            "The platform code lane is closed until the board has its own site",
+            [roleId],
+          );
+        }
         const codeCard = await row<{ id: string }>(
-          `select public.file_card('platform', 'code', 'platform', 'A platform code card', 'Summary.', null, 'No check line is needed on the code lane.', 25, 'voted', $1, ' Board reason ') as id`,
+          `select public.file_card('platform', 'code', 'platform', 'A platform code card', 'Summary.', null, 'No check line is needed on the code lane.', 25, 'voted', $1, ' Board reason ', 'next') as id`,
           [roleId],
         );
         assertEquals(
           await row(
-            `select stage::text as stage, lane::text as lane, folder::text as folder, intent, board_reason, funding_target_usd, estimate_usd from public.cards where id = $1`,
+            `select stage::text as stage, lane::text as lane, folder::text as folder, intent, board_reason, funding_target_usd, estimate_usd, horizon::text as horizon from public.cards where id = $1`,
             [codeCard.id],
           ),
           {
@@ -1136,8 +1256,20 @@ Deno.test("migrations on PGlite", {
             board_reason: "Board reason",
             funding_target_usd: "25.0000",
             estimate_usd: "25.0000",
+            horizon: "next",
           },
         );
+        // The target is no longer capped by the per-card maximum, which stays the
+        // spend ceiling; $10,000 guards against a mistyped amount.
+        const above = await row<{ id: string }>(
+          `select public.file_card(p_bucket => 'game', p_lane => 'config', p_folder => 'seed-1', p_title => 'A target above the per-card maximum', p_summary => 'Summary.', p_intent => 'Intent', p_acceptance_test => 'check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120', p_funding_target_usd => 26, p_stage => 'proposed', p_executor_role_id => $1, p_board_reason => null, p_horizon => 'later') as id`,
+          [roleId],
+        );
+        assertEquals(
+          await row(`select funding_target_usd, estimate_usd, horizon::text as horizon from public.cards where id = $1`, [above.id]),
+          { funding_target_usd: "26.0000", estimate_usd: "26.0000", horizon: "later" },
+        );
+        await db.query(`delete from public.cards where id = $1`, [above.id]);
 
         const CHECK =
           `'check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120'`;
@@ -1152,8 +1284,13 @@ Deno.test("migrations on PGlite", {
           [roleId],
         );
         await refuses(
-          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 26, 'proposed', $1, null)`,
-          "The funding target must not exceed the per-card maximum of 25.0000",
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 10000.01, 'proposed', $1, null)`,
+          "The funding target must be at most $10,000",
+          [roleId],
+        );
+        await refuses(
+          `select public.file_card('game', 'config', 'seed-1', 'Title', 'Summary.', 'Intent', ${CHECK}, 3, 'proposed', $1, null, null)`,
+          "A horizon is required",
           [roleId],
         );
         await refuses(
@@ -1231,16 +1368,27 @@ Deno.test("migrations on PGlite", {
           "cards_summary_check",
           ["c".repeat(201)],
         );
-        // The ten-argument live-cut signature no longer exists.
+        // Only the twelve-argument signature exists: the ten-argument live-cut one
+        // and the eleven-argument summary one are gone, so no named call is ambiguous.
         assertEquals(
           await rows<{ args: string }>(
             `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'file_card'`,
           ),
           [{
             args:
-              "p_bucket card_bucket, p_lane card_lane, p_folder card_folder, p_title text, p_summary text, p_intent text, p_acceptance_test text, p_funding_target_usd numeric, p_stage card_stage, p_executor_role_id uuid, p_board_reason text",
+              "p_bucket card_bucket, p_lane card_lane, p_folder card_folder, p_title text, p_summary text, p_intent text, p_acceptance_test text, p_funding_target_usd numeric, p_stage card_stage, p_executor_role_id uuid, p_board_reason text, p_horizon card_horizon",
           }],
         );
+        // The deployed /board sends these eleven named arguments; they reach the new function.
+        const named = await row<{ id: string }>(
+          `select public.file_card(p_bucket => 'game', p_lane => 'config', p_folder => 'seed-1', p_title => 'Filed by name', p_summary => 'Summary.', p_intent => 'Intent', p_acceptance_test => ${CHECK}, p_funding_target_usd => 3, p_stage => 'proposed', p_executor_role_id => $1, p_board_reason => null) as id`,
+          [roleId],
+        );
+        assertEquals(
+          await row(`select horizon::text as horizon from public.cards where id = $1`, [named.id]),
+          { horizon: "now" },
+        );
+        await db.query(`delete from public.cards where id = $1`, [named.id]);
         await refuses(
           `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
           "does not exist",
@@ -1312,16 +1460,7 @@ Deno.test("migrations on PGlite", {
         const { s } = await row<{ s: Row }>(
           `select public.board_studio_state() as s`,
         );
-        assertEquals(Object.keys(s).sort(), [
-          "agent_mode",
-          "card_max_usd",
-          "daily_cap_usd",
-          "dispatcher_seen_at",
-          "launched_at",
-          "paused",
-          "paused_at",
-          "paused_by",
-        ]);
+        assertEquals(Object.keys(s).sort(), BOARD_STATE_KEYS);
         assertEquals(s.agent_mode, "attended");
         assertEquals(s.paused, false);
         assertEquals(s.card_max_usd, 25);
@@ -1463,16 +1602,7 @@ Deno.test("migrations on PGlite", {
         const { s } = await row<{ s: Row }>(
           `select public.board_studio_state() as s`,
         );
-        assertEquals(Object.keys(s).sort(), [
-          "agent_mode",
-          "card_max_usd",
-          "daily_cap_usd",
-          "dispatcher_seen_at",
-          "launched_at",
-          "paused",
-          "paused_at",
-          "paused_by",
-        ]);
+        assertEquals(Object.keys(s).sort(), BOARD_STATE_KEYS);
         await db.exec(`select public.set_paused(true)`);
         assertEquals(
           await row(`select paused, paused_by from public.studio_state`),
@@ -1537,6 +1667,185 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
+      "every board RPC added for launch refuses a moderator at aal1 and aal2, an outsider, a board session without the second factor, and anon",
+      async () => {
+        const CHECK = "check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120";
+        const calls: [string, string, unknown[]][] = [
+          ["set_caps", `select public.set_caps(p_daily_cap_usd => 100, p_reason => 'Caps')`, []],
+          ["record_credit_purchase", `select public.record_credit_purchase(10, null, 'Credit')`, []],
+          ["set_card_horizon", `select public.set_card_horizon($1, 'later', 1, 'Park')`, [oneoffCardId]],
+          ["cancel_card", `select public.cancel_card($1, 'Cancel')`, [oneoffCardId]],
+          ["resume_card", `select public.resume_card($1, 1, 'Resume')`, [oneoffCardId]],
+          [
+            "file_card",
+            `select public.file_card('game', 'config', 'seed-1', 'Refused card', 'Summary.', 'Intent', $2, 2, 'proposed', $1, null, 'now')`,
+            [roleId, CHECK],
+          ],
+        ];
+        const state = async () =>
+          await row(
+            `select (select count(*)::int from public.board_actions) as actions, (select count(*)::int from public.credit_purchases) as purchases, (select count(*)::int from public.cards) as cards, (select to_jsonb(s) - 'dispatcher_seen_at' from public.studio_state s where id = 1) as studio, (select jsonb_agg(to_jsonb(c) order by id) from public.cards c) as all_cards`,
+          );
+        const before = await state();
+        const sessions: [string, "aal1" | "aal2" | null, string][] = [
+          [MODERATOR_EMAIL, "aal1", "Board membership is required"],
+          [MODERATOR_EMAIL, "aal2", "Board membership is required"],
+          [OUTSIDER_EMAIL, "aal2", "Board membership is required"],
+          [BOARD_EMAIL, "aal1", "A second factor is required"],
+          [BOARD_EMAIL, null, "A second factor is required"],
+        ];
+        for (const [email, aal, message] of sessions) {
+          await signInAs(email, aal);
+          for (const [name, sql, params] of calls) {
+            await assertRejects(() => db.query(sql, params), Error, message, `${name} as ${email} at ${aal}`);
+          }
+        }
+        await signInAs(null);
+        for (const role of ["anon", "authenticated"]) {
+          await db.exec(`set role ${role}`);
+          try {
+            for (const [name, sql, params] of calls) {
+              if (role === "authenticated") continue;
+              await assertRejects(() => db.query(sql, params), Error, "permission denied", `${name} as ${role}`);
+            }
+            for (const table of ["board_actions", "credit_purchases"]) {
+              await refuses(`select * from public.${table}`, "permission denied");
+              await refuses(`insert into public.${table} (reason) values ('x')`, "permission denied");
+            }
+          } finally {
+            await db.exec(`reset role`);
+          }
+        }
+        assertEquals(await state(), before);
+      },
+    );
+
+    await t.step(
+      "set_caps changes only the caps it names, within their bounds, and records the board's reason",
+      async () => {
+        await signInAs(BOARD_EMAIL, "aal2");
+        const caps = async () =>
+          await row(
+            `select daily_cap_usd, card_max_usd, agent_hourly_rate_usd, monthly_cap_usd, credit_studio_daily_cap_usd from public.studio_state where id = 1`,
+          );
+        const actions = async () => (await row<{ n: number }>(`select count(*)::int as n from public.board_actions`)).n;
+        const start = await caps();
+        const r = (await row<{ r: Row }>(
+          `select public.set_caps(p_daily_cap_usd => 100, p_card_max_usd => 25, p_agent_hourly_rate_usd => 5, p_reason => '  Launch caps ', p_monthly_cap_usd => 500) as r`,
+        )).r;
+        assertEquals(r, {
+          daily_cap_usd: 100,
+          card_max_usd: 25,
+          agent_hourly_rate_usd: 5,
+          monthly_cap_usd: 500,
+          credit_studio_daily_cap_usd: 10000,
+        });
+        const action = await row(
+          `select action, card_id, actor_email, reason, details from public.board_actions order by created_at desc, id limit 1`,
+        );
+        assertEquals(action, {
+          action: "set_caps",
+          card_id: null,
+          actor_email: BOARD_EMAIL,
+          reason: "Launch caps",
+          details: {
+            before: {
+              daily_cap_usd: Number(start.daily_cap_usd),
+              card_max_usd: Number(start.card_max_usd),
+              agent_hourly_rate_usd: Number(start.agent_hourly_rate_usd),
+              monthly_cap_usd: Number(start.monthly_cap_usd),
+              credit_studio_daily_cap_usd: Number(start.credit_studio_daily_cap_usd),
+            },
+            after: r,
+          },
+        });
+
+        // A null cap is left alone.
+        await row(`select public.set_caps(p_card_max_usd => 20, p_reason => 'A lower ceiling') as r`);
+        assertEquals(await caps(), {
+          daily_cap_usd: "100.0000",
+          card_max_usd: "20.0000",
+          agent_hourly_rate_usd: "5.0000",
+          monthly_cap_usd: "500.0000",
+          credit_studio_daily_cap_usd: "10000.0000",
+        });
+
+        const settled = await caps();
+        const count = await actions();
+        const refusals: [string, string][] = [
+          [`select public.set_caps(p_daily_cap_usd => 90)`, "A reason is required"],
+          [`select public.set_caps(p_daily_cap_usd => 90, p_reason => '  ')`, "A reason is required"],
+          [`select public.set_caps(p_reason => 'Nothing')`, "Name at least one cap to change"],
+          [`select public.set_caps(p_daily_cap_usd => -1, p_reason => 'x')`, "A cap must be zero or more"],
+          [`select public.set_caps(p_credit_studio_daily_cap_usd => -1, p_reason => 'x')`, "A cap must be zero or more"],
+          [`select public.set_caps(p_agent_hourly_rate_usd => 0, p_reason => 'x')`, "The hourly rate must be above zero"],
+          [`select public.set_caps(p_monthly_cap_usd => 10000.01, p_reason => 'x')`, "A cap must be at most $10,000"],
+          [`select public.set_caps(p_card_max_usd => 150, p_reason => 'x')`, "The per-card maximum must not exceed the daily cap"],
+          [`select public.set_caps(p_daily_cap_usd => 600, p_reason => 'x')`, "The daily cap must not exceed the monthly cap"],
+          [`select public.set_caps(p_daily_cap_usd => 10, p_reason => 'x')`, "The per-card maximum must not exceed the daily cap"],
+        ];
+        for (const [sql, message] of refusals) {
+          await refuses(sql, message);
+        }
+        assertEquals(await caps(), settled);
+        assertEquals(await actions(), count);
+
+        const { s } = await row<{ s: Row }>(`select public.board_studio_state() as s`);
+        assertEquals(
+          [s.daily_cap_usd, s.card_max_usd, s.agent_hourly_rate_usd, s.monthly_cap_usd, s.credit_daily_cap_usd, s.credit_studio_daily_cap_usd],
+          [100, 20, 5, 500, 50, 10000],
+        );
+      },
+    );
+
+    await t.step(
+      "record_credit_purchase records Console credit the board bought, and /board reads credit bought and spent",
+      async () => {
+        await signInAs(BOARD_EMAIL, "aal2");
+        const { id } = await row<{ id: string }>(
+          `select public.record_credit_purchase(40, '  po_launch_1 ', ' Credit for the first payout ') as id`,
+        );
+        assertEquals(
+          await row(`select amount_usd, stripe_payout_id, reason, created_by from public.credit_purchases where id = $1`, [id]),
+          { amount_usd: "40.0000", stripe_payout_id: "po_launch_1", reason: "Credit for the first payout", created_by: BOARD_EMAIL },
+        );
+        assertEquals(
+          await row(`select action, reason, details from public.board_actions where details->>'credit_purchase_id' = $1`, [id]),
+          {
+            action: "record_credit_purchase",
+            reason: "Credit for the first payout",
+            details: { credit_purchase_id: id, amount_usd: 40, stripe_payout_id: "po_launch_1" },
+          },
+        );
+        const topUp = await row<{ id: string }>(
+          `select public.record_credit_purchase(p_amount_usd => 5.5, p_reason => 'Top up') as id`,
+        );
+        assertEquals(
+          await row(`select stripe_payout_id from public.credit_purchases where id = $1`, [topUp.id]),
+          { stripe_payout_id: null },
+        );
+        for (const [sql, message] of [
+          [`select public.record_credit_purchase(0, null, 'x')`, "The amount must be above zero"],
+          [`select public.record_credit_purchase(null, null, 'x')`, "The amount must be above zero"],
+          [`select public.record_credit_purchase(10000.01, null, 'x')`, "The amount must be at most $10,000"],
+          [`select public.record_credit_purchase(10, 'po_x')`, "A reason is required"],
+        ] as const) {
+          await refuses(sql, message);
+        }
+        const spent = await row<{ usd: string }>(
+          `select coalesce(sum(usd), 0)::text as usd from public.ledger where billed_to in ('studio', 'overhead')`,
+        );
+        const { s } = await row<{ s: Row }>(`select public.board_studio_state() as s`);
+        assertEquals(s.credit_bought_usd, 45.5);
+        assertEquals(s.credit_spent_usd, Number(spent.usd));
+        // A moderator reads the same state.
+        await signInAs(MODERATOR_EMAIL, "aal1");
+        assertEquals((await row<{ s: Row }>(`select public.board_studio_state() as s`)).s.credit_bought_usd, 45.5);
+        await signInAs(BOARD_EMAIL, "aal2");
+      },
+    );
+
+    await t.step(
       "auth.users accepts board accounts only, case-insensitively",
       async () => {
         await refuses(
@@ -1582,6 +1891,7 @@ Deno.test("migrations on PGlite", {
           cached_tokens: 200,
           output_tokens: 321,
           row_count: 4,
+          overhead_usd: "0.0000",
         });
 
         await db.query(
@@ -1600,7 +1910,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on four public tables, the six views and the public columns of cards, and nothing else",
+      "anon holds select on three public tables, the seven views and the public columns of cards, and nothing else",
       async () => {
         const expected = [
           "deploys",
@@ -1611,8 +1921,8 @@ Deno.test("migrations on PGlite", {
           "public_card_funding",
           "public_card_spend",
           "public_ledger_totals",
+          "public_roles",
           "public_studio",
-          "roles",
         ].map((table_name) => ({ table_name, privilege_type: "SELECT" }));
         for (const grantee of ["anon", "authenticated"]) {
           const grants = await rows<
@@ -1711,7 +2021,8 @@ Deno.test("migrations on PGlite", {
 
           const studio = await rows(`select * from public.public_studio`);
           assertEquals(studio.length, 1);
-          assertEquals(Object.keys(studio[0]!), ["launched_at"]);
+          assertEquals(Object.keys(studio[0]!), ["launched_at", "paused"]);
+          assertEquals(studio[0]!.paused, false);
           assertNotEquals(studio[0]!.launched_at, null);
 
           const funding = await rows<{
@@ -1783,6 +2094,55 @@ Deno.test("migrations on PGlite", {
         } finally {
           await db.exec(`reset role`);
         }
+      },
+    );
+
+    await t.step(
+      "anon and authenticated read public_roles, the pause and every card's horizon and rank, and not roles, the lease or the patches",
+      async () => {
+        await db.query(
+          `update public.roles set description = 'Builds funded game cards as small, tested changes to Dust.' where id = $1`,
+          [roleId],
+        );
+        for (const role of ["anon", "authenticated"]) {
+          await db.exec(`set role ${role}`);
+          try {
+            const roles = await rows(`select * from public.public_roles`);
+            assertEquals(roles.length, 1, role);
+            assertEquals(Object.keys(roles[0]!), [
+              "id",
+              "name",
+              "title",
+              "description",
+              "species_note",
+              "avatar_url",
+              "model",
+              "write_access",
+              "state",
+              "hired_at",
+            ]);
+            assertEquals(roles[0]!.description, "Builds funded game cards as small, tested changes to Dust.");
+            for (const table of ["roles", "dispatcher_lease", "card_patches", "board_actions", "credit_purchases"]) {
+              await refuses(`select * from public.${table}`, "permission denied");
+            }
+            // public_roles is a simple view over one table, and no write goes through it.
+            await refuses(`update public.public_roles set model = 'other-model-id'`, "permission denied");
+            await refuses(`update public.public_studio set paused = true`, "permission denied");
+            assertEquals(await row(`select paused from public.public_studio`), { paused: false });
+            await refuses(`select paused_by from public.public_studio`, "does not exist");
+            await refuses(`select paused_at from public.public_studio`, "does not exist");
+            const planned = await rows<{ horizon: string; rank: number | null }>(
+              `select horizon::text as horizon, rank from public.cards where horizon <> 'now'`,
+            );
+            assert(planned.some((c) => c.horizon === "next"), `${role} reads a next card's horizon`);
+          } finally {
+            await db.exec(`reset role`);
+          }
+        }
+        // The description is one plain line of at most 200 characters.
+        await refuses(`update public.roles set description = 'one' || chr(10) || 'two' where id = $1`, "roles_description_check", [roleId]);
+        await refuses(`update public.roles set description = repeat('a', 201) where id = $1`, "roles_description_check", [roleId]);
+        await refuses(`update public.roles set description = '  ' where id = $1`, "roles_description_check", [roleId]);
       },
     );
 
@@ -2631,6 +2991,396 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
+      "the $50 window keys on the card and the email: one card across two emails, or one email across two cards, shares $50",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const offsets = await identityOffsets();
+        const pay = async (event: string, contributor: string, amount: number, payerKey: string | null) =>
+          (await row<{ r: Row }>(
+            `select public.apply_contribution($1, $2, null, $3, $3, 0, null, $4, $5) as r`,
+            [event, contributor, amount, `cs_${event}`, payerKey],
+          )).r;
+        const keyOf = async (event: string) =>
+          (await row<{ k: string }>(`select payer_key as k from public.contributions where stripe_event_id = $1`, [event])).k;
+
+        // One card, two emails: the second payment finds $36 of the day's $50 used.
+        const a = await pay("pk1", "contrib_pk_a", 40, "card:fingerprint-one");
+        assertEquals([a.pool_credit_usd, a.held_usd], [36, 0]);
+        const b = await pay("pk2", "contrib_pk_b", 40, "card:fingerprint-one");
+        assertEquals([b.pool_credit_usd, b.held_usd], [14, 22]);
+        assertEquals(await keyOf("pk2"), "card:fingerprint-one");
+
+        // One email, two cards: the same.
+        const c = await pay("pk3", "contrib_pk_c", 40, "card:fingerprint-two");
+        assertEquals([c.pool_credit_usd, c.held_usd], [36, 0]);
+        const d = await pay("pk4", "contrib_pk_c", 40, "card:fingerprint-three");
+        assertEquals([d.pool_credit_usd, d.held_usd], [14, 22]);
+
+        // A payment with no card fingerprint (Link, for one) keys on the email and shares its window.
+        const e = await pay("pk5", "contrib_pk_c", 10, null);
+        assertEquals([e.pool_credit_usd, e.held_usd], [0, 9]);
+        assertEquals(await keyOf("pk5"), "email:contrib_pk_c");
+        const blank = await pay("pk6", "contrib_pk_e", 10, "  ");
+        assertEquals([blank.pool_credit_usd, blank.held_usd], [9, 0]);
+        assertEquals(await keyOf("pk6"), "email:contrib_pk_e");
+
+        // The deployed webhook's eight named arguments still credit, keyed on the email.
+        const named = (await row<{ r: Row }>(
+          `select public.apply_contribution(p_stripe_event_id => 'pk7', p_contributor_id => 'contrib_pk_f', p_display_name => null, p_amount_usd => 10, p_net_usd => 10, p_studio_pct => 0, p_goal_card_id => null, p_stripe_session_id => 'cs_pk7') as r`,
+        )).r;
+        assertEquals([named.inserted, named.pool_credit_usd], [true, 9]);
+        assertEquals(await keyOf("pk7"), "email:contrib_pk_f");
+
+        await refuses(
+          `select public.apply_contribution('pk8', 'contrib_pk_g', null, 10, 10, 0, null, 'cs_pk8', 'fingerprint-four')`,
+          "p_payer_key must start with card: or email:",
+        );
+        await refuses(
+          `insert into public.contributions (rail, contributor_id, entry) values ('stripe', 'contrib_pk_h', 'payment')`,
+          "contributions_payer_key_check",
+        );
+        // Every payment row carries a key; child rows need none.
+        assertEquals(
+          await rows(`select id from public.contributions where entry = 'payment' and payer_key is null`),
+          [],
+        );
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "the studio-wide room on immediate credit holds what is left once the day's room is used",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const offsets = await identityOffsets();
+        const used = await row<{ usd: string }>(
+          `select coalesce(sum(agents_usd - incident_usd - held_usd), 0)::text as usd from public.contributions
+           where entry = 'payment' and created_at >= (date_trunc('day', now() at time zone 'America/New_York') at time zone 'America/New_York')`,
+        );
+        await db.query(`update public.studio_state set credit_studio_daily_cap_usd = $1::numeric + 30 where id = 1`, [used.usd]);
+        const first = (await row<{ r: Row }>(
+          `select public.apply_contribution('sc1', 'contrib_sc_a', null, 60, 60, 0, null, 'cs_sc1', 'card:studio-room-a') as r`,
+        )).r;
+        // $54 of credit: the payer has $50 of room and the studio $30, so $30 now and $24 held.
+        assertEquals([first.pool_credit_usd, first.held_usd], [30, 24]);
+        const second = (await row<{ r: Row }>(
+          `select public.apply_contribution('sc2', 'contrib_sc_b', null, 5, 5, 0, null, 'cs_sc2', 'card:studio-room-b') as r`,
+        )).r;
+        assertEquals([second.pool_credit_usd, second.held_usd], [0, 4.5]);
+        await db.exec(`update public.studio_state set credit_studio_daily_cap_usd = 10000 where id = 1`);
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "a card off now takes no credit, and a card moves to now only when it meets the definition of ready",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        await signInAs(BOARD_EMAIL, "aal2");
+        const offsets = await identityOffsets();
+        const CHECK = "check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120";
+        const card = async (id: string) =>
+          await row(
+            `select stage::text as stage, horizon::text as horizon, rank, lane::text as lane, funding_target_usd, estimate_usd, funded_usd, acceptance_test, executor_role_id, intent from public.cards where id = $1`,
+            [id],
+          );
+        const lastAction = async (id: string) =>
+          await row(`select action, reason, details from public.board_actions where card_id = $1 order by created_at desc, id desc limit 1`, [id]);
+
+        // A backlog card as file-backlog files it: proposed on later, no target, executor or acceptance test.
+        const backlog = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, intent, stage, horizon, rank)
+           values ('game', 'board', 'goal', 'code', 'seed-1', 'A planned change to Dust', 'A planned change.', 'Not built yet.', 'proposed', 'later', 1) returning id`,
+        );
+        const paid = (await row<{ r: Row }>(
+          `select public.apply_contribution('hz1', 'contrib_hz_a', null, 10, 10, 0, $1, 'cs_hz1') as r`,
+          [backlog.id],
+        )).r;
+        assertEquals([paid.goal_card_id, paid.pool_credit_usd], [null, 9]);
+        assertEquals((await card(backlog.id)).funded_usd, "0.0000");
+
+        const move = (extra = "") => `select public.set_card_horizon(p_card => $1, p_horizon => 'now', p_rank => 2, p_reason => 'Ready for funding'${extra}) as r`;
+        await refuses(move(), "A funding target is required to move a card to now", [backlog.id]);
+        await refuses(move(", p_target_usd => 0"), "The funding target must be above zero", [backlog.id]);
+        await refuses(move(", p_target_usd => 10000.01"), "The funding target must be at most $10,000", [backlog.id]);
+        await refuses(move(", p_target_usd => 3"), "A card on now needs a check: line in its acceptance test", [backlog.id]);
+        await refuses(
+          move(", p_target_usd => 3, p_acceptance_test => $2"),
+          "A card on now needs an executor role",
+          [backlog.id, CHECK],
+        );
+        await db.query(`update public.roles set state = 'retired' where id = $1`, [roleId]);
+        await refuses(
+          move(", p_target_usd => 3, p_acceptance_test => $2, p_executor_role_id => $3"),
+          "The executor must be an active role",
+          [backlog.id, CHECK, roleId],
+        );
+        await db.query(`update public.roles set state = 'active' where id = $1`, [roleId]);
+        // A refused move changes nothing.
+        assertEquals((await card(backlog.id)).horizon, "later");
+
+        const moved = (await row<{ r: Row }>(
+          move(", p_target_usd => 3, p_acceptance_test => $2, p_executor_role_id => $3, p_lane => 'config'"),
+          [backlog.id, CHECK, roleId],
+        )).r;
+        assertEquals(moved, { card_id: backlog.id, horizon: "now", rank: 2, stage: "proposed", funding_target_usd: 3 });
+        assertEquals(await card(backlog.id), {
+          stage: "proposed",
+          horizon: "now",
+          rank: 2,
+          lane: "config",
+          funding_target_usd: "3.0000",
+          estimate_usd: "3.0000",
+          funded_usd: "0.0000",
+          acceptance_test: CHECK,
+          executor_role_id: roleId,
+          intent: "Not built yet.",
+        });
+        assertEquals(await lastAction(backlog.id), {
+          action: "set_card_horizon",
+          reason: "Ready for funding",
+          details: { from_horizon: "later", to_horizon: "now", from_rank: 1, to_rank: 2, from_target_usd: 0, to_target_usd: 3 },
+        });
+
+        // Now a payment reaches its bar and fills it.
+        const filled = (await row<{ r: Row }>(
+          `select public.apply_contribution('hz2', 'contrib_hz_b', null, 10, 10, 0, $1, 'cs_hz2') as r`,
+          [backlog.id],
+        )).r;
+        assertEquals([filled.goal_card_id, filled.goal_stage, filled.goal_funded_usd], [backlog.id, "funded", 9]);
+        // A funded card keeps its horizon; the board cancels it instead.
+        await refuses(
+          `select public.set_card_horizon($1, 'later', 1, 'Park it')`,
+          "Only a card open for funding changes horizon; cancel it with a reason instead",
+          [backlog.id],
+        );
+
+        // An open card with money on its bar stays on now.
+        const open = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money', 'Summary.', 100, 'voted') returning id`,
+        );
+        await row(`select public.apply_contribution('hz3', 'contrib_hz_c', null, 10, 10, 0, $1, 'cs_hz3') as r`, [open.id]);
+        await refuses(
+          `select public.set_card_horizon($1, 'later', 1, 'Park it')`,
+          "A card with money on its bar stays on now; cancel it with a reason instead",
+          [open.id],
+        );
+
+        // An open card whose only money is on hold stays on now until the hold is gone.
+        const held = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money on hold', 'Summary.', 100, 'proposed') returning id`,
+        );
+        await row(`select public.apply_contribution('hz4', 'contrib_hz_d', null, 60, 60, 0, null, 'cs_hz4', 'card:hold-card') as r`);
+        const onHold = (await row<{ r: Row }>(
+          `select public.apply_contribution('hz5', 'contrib_hz_d', null, 10, 10, 0, $1, 'cs_hz5', 'card:hold-card') as r`,
+          [held.id],
+        )).r;
+        assertEquals([onHold.goal_card_id, onHold.pool_credit_usd, onHold.held_usd], [held.id, 0, 9]);
+        assertEquals((await card(held.id)).funded_usd, "0.0000");
+        await refuses(
+          `select public.set_card_horizon($1, 'later', 1, 'Park it')`,
+          "A card with money on hold stays on now; cancel it with a reason instead",
+          [held.id],
+        );
+        // A full refund cancels the hold, and the card can then be parked.
+        await row(`select public.reverse_contribution('hz5r', 'cs_hz5', 'refund', 10) as r`);
+        await row(`select public.set_card_horizon($1, 'later', 4, 'Park it') as r`, [held.id]);
+        assertEquals((await card(held.id)).horizon, "later");
+
+        // A voted card with nothing on it parks, then moves along the backlog.
+        const voted = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A voted card with no money', 'Summary.', 5, 'voted') returning id`,
+        );
+        await row(`select public.set_card_horizon($1, 'later', 3, 'Not yet') as r`, [voted.id]);
+        await row(`select public.set_card_horizon($1, 'next', 1, 'Sooner') as r`, [voted.id]);
+        await row(`select public.set_card_horizon($1, 'next', 0, 'First') as r`, [voted.id]);
+        assertEquals(
+          [(await card(voted.id)).stage, (await card(voted.id)).horizon, (await card(voted.id)).rank],
+          ["voted", "next", 0],
+        );
+        await refuses(
+          `select public.set_card_horizon(p_card => $1, p_horizon => 'later', p_rank => 1, p_reason => 'x', p_target_usd => 3)`,
+          "Card fields are set only when a card moves to now",
+          [voted.id],
+        );
+        await refuses(`select public.set_card_horizon($1, 'later', -1, 'x')`, "The rank must be zero or more", [voted.id]);
+        await refuses(`select public.set_card_horizon($1, 'later', 1, ' ')`, "A reason is required", [voted.id]);
+        await refuses(`select public.set_card_horizon(null, 'later', 1, 'x')`, "A card is required");
+        await refuses(`select public.set_card_horizon($1, null, 1, 'x')`, "A horizon is required", [voted.id]);
+        await refuses(
+          `select public.set_card_horizon($1, 'later', 1, 'x')`,
+          "does not exist",
+          [voted.id.replace(/^[0-9a-f]{8}/, "00000000")],
+        );
+
+        // A release never moves a card off now to funded, though the bar keeps the money the payment named.
+        const parked = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card parked with a hold', 'Summary.', 5, 'proposed') returning id`,
+        );
+        const parkedHold = (await row<{ r: Row }>(
+          `select public.apply_contribution('hz6', 'contrib_hz_d', null, 10, 10, 0, $1, 'cs_hz6', 'card:hold-card') as r`,
+          [parked.id],
+        )).r;
+        assertEquals(parkedHold.held_usd, 9);
+        // Only the service role can put a card with money on hold off now.
+        await db.query(`update public.cards set horizon = 'later' where id = $1`, [parked.id]);
+        await db.exec(
+          `update public.contributions set hold_until = now() - interval '1 minute' where stripe_event_id = 'hz6'`,
+        );
+        const released = (await row<{ r: Row }>(`select public.credit_held_contributions() as r`)).r;
+        assertEquals(released, { released: 1, released_usd: 9 });
+        assertEquals(
+          [(await card(parked.id)).stage, (await card(parked.id)).funded_usd],
+          ["proposed", "9.0000"],
+        );
+
+        // The platform code lane stays closed on now.
+        const platform = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, intent, acceptance_test, executor_role_id, stage, horizon)
+           values ('platform', 'board', 'goal', 'code', 'platform', 'A site change', 'Summary.', 'Intent.', $1, $2, 'proposed', 'next') returning id`,
+          [CHECK, roleId],
+        );
+        await refuses(
+          `select public.set_card_horizon(p_card => $1, p_horizon => 'now', p_rank => null, p_reason => 'Open it', p_target_usd => 3)`,
+          "The platform code lane is closed until the board has its own site",
+          [platform.id],
+        );
+        // A config lane outside seed-1 is refused as file_card refuses it.
+        await refuses(
+          `select public.set_card_horizon(p_card => $1, p_horizon => 'now', p_rank => null, p_reason => 'Open it', p_target_usd => 3, p_lane => 'config')`,
+          "The config lane exists only for seed-1",
+          [platform.id],
+        );
+        assertEquals(await identityOffsets(), offsets);
+      },
+    );
+
+    await t.step(
+      "cancel_card rejects a card no agent is working on, with the board's reason, and refuses the rest",
+      async () => {
+        await signInAs(BOARD_EMAIL, "aal2");
+        const make = async (stage: string) =>
+          (await row<{ id: string }>(
+            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, funded_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 5, 2, $2) returning id`,
+            [`A ${stage} card for cancelling`, stage],
+          )).id;
+        for (const stage of ["proposed", "designing", "voted", "funded", "paused"]) {
+          const id = await make(stage);
+          const r = (await row<{ r: Row }>(`select public.cancel_card($1, '  Out of scope for Dust ') as r`, [id])).r;
+          assertEquals(r, { card_id: id, stage: "rejected", from_stage: stage });
+          assertEquals(
+            await row(`select stage::text as stage, failing_check, funded_usd from public.cards where id = $1`, [id]),
+            { stage: "rejected", failing_check: "cancelled_by_board", funded_usd: "2.0000" },
+          );
+          assertEquals(
+            await row(`select action, actor_email, reason, details from public.board_actions where card_id = $1`, [id]),
+            {
+              action: "cancel_card",
+              actor_email: BOARD_EMAIL,
+              reason: "Out of scope for Dust",
+              details: { from_stage: stage, funded_usd: 2 },
+            },
+          );
+        }
+        for (const stage of ["building", "gated"]) {
+          const id = await make(stage);
+          await refuses(
+            `select public.cancel_card($1, 'Stop it')`,
+            "A building or gated card cannot be cancelled; pause the studio and cancel it once it shows paused",
+            [id],
+          );
+          assertEquals((await row<{ stage: string }>(`select stage::text as stage from public.cards where id = $1`, [id])).stage, stage);
+        }
+        for (const stage of ["live", "rejected"]) {
+          await refuses(`select public.cancel_card($1, 'Stop it')`, `A ${stage} card cannot be cancelled`, [await make(stage)]);
+        }
+        const open = await make("proposed");
+        await refuses(`select public.cancel_card($1, '')`, "A reason is required", [open]);
+        await refuses(`select public.cancel_card(null, 'x')`, "A card is required");
+      },
+    );
+
+    await t.step(
+      "resume_card sends a paused card back to funded with an estimate of at least what it has cost",
+      async () => {
+        await signInAs(BOARD_EMAIL, "aal2");
+        const paused = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, estimate_usd, actual_usd, stage, failing_check) values ('game', 'board', 'oneoff', 'config', 'seed-1', 'A card paused at its ceiling', 1, 1.5, 'paused', 'ceiling') returning id`,
+        );
+        await refuses(
+          `select public.resume_card($1, 1.4, 'Try again')`,
+          "The estimate must be at least the card's cost so far of 1.5000",
+          [paused.id],
+        );
+        await refuses(`select public.resume_card($1, 0, 'Try again')`, "The estimate must be above zero", [paused.id]);
+        await refuses(`select public.resume_card($1, 10000.01, 'Try again')`, "The estimate must be at most $10,000", [paused.id]);
+        await refuses(`select public.resume_card($1, 3, null)`, "A reason is required", [paused.id]);
+        const r = (await row<{ r: Row }>(`select public.resume_card($1, 3, ' More room ') as r`, [paused.id])).r;
+        assertEquals(r, { card_id: paused.id, stage: "funded", estimate_usd: 3 });
+        assertEquals(
+          await row(`select stage::text as stage, estimate_usd, actual_usd from public.cards where id = $1`, [paused.id]),
+          { stage: "funded", estimate_usd: "3.0000", actual_usd: "1.5000" },
+        );
+        assertEquals(
+          (await row(`select reason, details from public.board_actions where card_id = $1 and action = 'resume_card'`, [paused.id])),
+          { reason: "More room", details: { from_estimate_usd: 1, to_estimate_usd: 3, actual_usd: 1.5, failing_check: "ceiling" } },
+        );
+        await refuses(`select public.resume_card($1, 3, 'Again')`, "Only a paused card can be resumed", [paused.id]);
+        const later = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, horizon) values ('game', 'board', 'oneoff', 'config', 'seed-1', 'A paused card off now', 'paused', 'later') returning id`,
+        );
+        await refuses(`select public.resume_card($1, 3, 'Again')`, "Only a card on now can be resumed", [later.id]);
+        const site = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage) values ('platform', 'board', 'oneoff', 'code', 'platform', 'A paused site card', 'paused') returning id`,
+        );
+        await refuses(
+          `select public.resume_card($1, 3, 'Again')`,
+          "The platform code lane is closed until the board has its own site",
+          [site.id],
+        );
+      },
+    );
+
+    await t.step(
+      "a refund of money already spent leaves waiting cards short, and reverse_contribution says by how much",
+      async () => {
+        await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
+        const shipped = await row<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card funded, built and shipped', 10, 'proposed') returning id`,
+        );
+        const paid = (await row<{ r: Row }>(
+          `select public.apply_contribution('sf1', 'contrib_sf', null, 20, 20, 0, $1, 'cs_sf1', 'card:shortfall') as r`,
+          [shipped.id],
+        )).r;
+        assertEquals([paid.pool_credit_usd, paid.goal_stage], [18, "funded"]);
+        // The agents spend the card's money and it ships.
+        await row(`select public.record_usage($1, $2, 'builder-model-id', 10, 0, 10, 18) as r`, [shipped.id, roleId]);
+        await db.query(`update public.cards set stage = 'live' where id = $1`, [shipped.id]);
+        const earmarked = await row<{ usd: string }>(
+          `select coalesce(sum(greatest(c.funded_usd - coalesce(s.spent, 0), 0)), 0)::text as usd
+           from public.cards c left join (select card_id, sum(usd) as spent from public.ledger where billed_to = 'studio' and card_id is not null group by card_id) s on s.card_id = c.id
+           where c.stage in ('funded', 'voted', 'paused')`,
+        );
+        // $5 in the pool names no card.
+        await db.query(`update public.pool set balance_usd = $1::numeric + 5 where id = 1`, [earmarked.usd]);
+        const offsets = await identityOffsets();
+        const refund = (await row<{ r: Row }>(`select public.reverse_contribution('sf1r', 'cs_sf1', 'refund', 20) as r`)).r;
+        // $18 comes off the balance: the $5 that named no card, then $13 of the waiting cards' money.
+        assertEquals(refund.earmarked_usd, Number(earmarked.usd));
+        assertEquals(refund.shortfall_usd, 13);
+        assertEquals(refund.pool_balance_usd, Number((Number(earmarked.usd) - 13).toFixed(4)));
+        assertEquals(refund.goal_stage, "live");
+        assertEquals(await identityOffsets(), offsets);
+
+        // A refund the unassigned money covers leaves no shortfall.
+        await db.query(`update public.pool set balance_usd = $1::numeric + 50 where id = 1`, [earmarked.usd]);
+        await row(`select public.apply_contribution('sf2', 'contrib_sf2', null, 10, 10, 0, null, 'cs_sf2', 'card:shortfall-two') as r`);
+        const covered = (await row<{ r: Row }>(`select public.reverse_contribution('sf2r', 'cs_sf2', 'refund', 10) as r`)).r;
+        assertEquals(covered.shortfall_usd, 0);
+      },
+    );
+
+    await t.step(
       "live_at is stamped when a card goes live and moves with nothing else",
       async () => {
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
@@ -2812,7 +3562,7 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
-      "function privileges: anon none, authenticated the eleven board RPCs, service_role the sixteen, one file_card",
+      "function privileges: anon none, authenticated the sixteen board RPCs, service_role the rest, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -2832,19 +3582,25 @@ Deno.test("migrations on PGlite", {
           "board_heartbeat",
           "board_role",
           "board_studio_state",
+          "cancel_card",
           "file_card",
           "file_directive",
           "file_note",
           "is_board_member",
+          "record_credit_purchase",
+          "resume_card",
           "set_agent_mode",
+          "set_caps",
+          "set_card_horizon",
           "set_launched",
           "set_paused",
         ];
         const service = [
           "apply_contribution",
+          "claim_dispatcher_lease",
           "credit_held_contributions",
-          "founder_credit",
           "record_usage",
+          "release_dispatcher_lease",
           "reverse_contribution",
         ];
         assertEquals(
@@ -2857,7 +3613,7 @@ Deno.test("migrations on PGlite", {
             "set_updated_at",
           ].sort(),
         );
-        // One file_card row: the eleven-argument version, granted like the old one.
+        // One file_card row: the twelve-argument version, granted like the old one.
         assertEquals(privileges.filter((p) => p.proname === "file_card"), [
           {
             proname: "file_card",
@@ -2884,6 +3640,92 @@ Deno.test("migrations on PGlite", {
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
         assertEquals(invoker.map((p) => p.proname), ["set_live_at", "set_updated_at"]);
+      },
+    );
+
+    await t.step(
+      "the dispatcher lease has one holder at a time, and only the service role can take it",
+      async () => {
+        const claim = async (holder: string, ttl = 60) =>
+          (await row<{ ok: boolean }>(`select public.claim_dispatcher_lease($1, $2) as ok`, [holder, ttl])).ok;
+        const release = async (holder: string) =>
+          (await row<{ ok: boolean }>(`select public.release_dispatcher_lease($1) as ok`, [holder])).ok;
+        const lease = async () =>
+          await row<{ holder: string | null; live: boolean | null; claimed_at: Date | null }>(
+            `select holder, expires_at > now() as live, claimed_at from public.dispatcher_lease where id = 1`,
+          );
+        assertEquals((await lease()).holder, null);
+        assertEquals(await claim("vps"), true);
+        assertEquals(await claim("mac"), false);
+        const held = await lease();
+        assertEquals([held.holder, held.live], ["vps", true]);
+        // Renewing keeps the start of the hold.
+        await db.exec(`update public.dispatcher_lease set claimed_at = claimed_at - interval '1 hour' where id = 1`);
+        const started = (await lease()).claimed_at;
+        assertEquals(await claim("vps", 120), true);
+        assertEquals((await lease()).claimed_at?.getTime(), started?.getTime());
+        assertEquals(await release("mac"), false);
+        assertEquals((await lease()).holder, "vps");
+        assertEquals(await release("vps"), true);
+        assertEquals(await lease(), { holder: null, live: null, claimed_at: null });
+        assertEquals(await claim("mac"), true);
+        // An expired lease goes to the next claimant, whose hold starts now.
+        await db.exec(`update public.dispatcher_lease set expires_at = now() - interval '1 second', claimed_at = now() - interval '1 hour' where id = 1`);
+        assertEquals(await claim("vps"), true);
+        const taken = await lease();
+        assertEquals([taken.holder, taken.live], ["vps", true]);
+        assert(Math.abs((taken.claimed_at?.getTime() ?? 0) - Date.now()) < 60_000, "a new hold starts now");
+        assertEquals(await claim("mac"), false);
+        await refuses(`select public.claim_dispatcher_lease('  ', 60)`, "p_holder is required");
+        await refuses(`select public.claim_dispatcher_lease('mac', 0)`, "p_ttl_seconds must be between 1 and 3600");
+        await refuses(`select public.claim_dispatcher_lease('mac', 3601)`, "p_ttl_seconds must be between 1 and 3600");
+        await refuses(`select public.release_dispatcher_lease(null)`, "p_holder is required");
+        await refuses(
+          `update public.dispatcher_lease set holder = 'mac', expires_at = null where id = 1`,
+          "dispatcher_lease_holder_check",
+        );
+        for (const role of ["anon", "authenticated"]) {
+          await db.exec(`set role ${role}`);
+          try {
+            await refuses(`select public.claim_dispatcher_lease('anon-negative-test', 1)`, "permission denied");
+            await refuses(`select public.release_dispatcher_lease('vps')`, "permission denied");
+            await refuses(`update public.dispatcher_lease set expires_at = now() + interval '1 year'`, "permission denied");
+          } finally {
+            await db.exec(`reset role`);
+          }
+        }
+        assertEquals((await lease()).holder, "vps");
+        assertEquals(await release("vps"), true);
+      },
+    );
+
+    await t.step(
+      "card_patches keeps a submitted patch only with its true digest and length, for the service role only",
+      async () => {
+        const patch = "diff --git a/seed-1/config/unlocks.json b/seed-1/config/unlocks.json\n+  { \"id\": \"quiet-rooms\" }\n";
+        const bytes = new TextEncoder().encode(patch);
+        const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+        const base = "0123456789abcdef0123456789abcdef01234567";
+        const insert = `insert into public.card_patches (card_id, base_sha, patch, sha256, bytes, summary) values ($1, $2, $3, $4, $5, 'Adds the quiet rooms unlock') returning id`;
+        const stored = await row<{ id: string }>(insert, [oneoffCardId, base, patch, digest, bytes.length]);
+        assertNotEquals(stored.id, null);
+        await refuses(insert, "card_patches_digest_check", [oneoffCardId, base, patch, digest.replace(/^./, digest[0] === "a" ? "b" : "a"), bytes.length]);
+        await refuses(insert, "card_patches_digest_check", [oneoffCardId, base, patch, digest, bytes.length + 1]);
+        await refuses(insert, "card_patches_base_sha_check", [oneoffCardId, "main", patch, digest, bytes.length]);
+        // An upper-case digest breaks the format check and the digest check alike.
+        await refuses(insert, "violates check constraint \"card_patches_", [oneoffCardId, base, patch, digest.toUpperCase(), bytes.length]);
+        for (const role of ["anon", "authenticated"]) {
+          await db.exec(`set role ${role}`);
+          try {
+            await refuses(`select * from public.card_patches`, "permission denied");
+            await refuses(`delete from public.card_patches`, "permission denied");
+          } finally {
+            await db.exec(`reset role`);
+          }
+        }
+        await db.query(`delete from public.card_patches where id = $1`, [stored.id]);
       },
     );
 
@@ -2959,6 +3801,107 @@ Deno.test("migrations on PGlite", {
         ]);
       },
     );
+  } finally {
+    await db.close();
+  }
+});
+
+// Production applies the launch files one at a time onto a database that already
+// holds payments, cards and roles, with the deployed site, webhook and dispatcher
+// still running the old code, and applies 20260922000500 only after the site
+// reads public_roles (docs/specs/launch-db.md). This walks the same order.
+Deno.test("the launch migrations upgrade a live database in production order", {
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  const db = new PGlite();
+  const LAUNCH = "20260922";
+  const exec = (sql: string) => db.exec(sql.replaceAll(PGCRYPTO_LINE, ""));
+  const one = async <T extends Row = Row>(sql: string, params: unknown[] = []) => {
+    const result = await db.query<T>(sql, params);
+    assert(result.rows.length > 0, `no row for: ${sql}`);
+    return result.rows[0]!;
+  };
+  const asAnon = async <T>(run: () => Promise<T>): Promise<T> => {
+    await db.exec(`set role anon`);
+    try {
+      return await run();
+    } finally {
+      await db.exec(`reset role`);
+    }
+  };
+  try {
+    const migrations = await readMigrations();
+    const earlier = migrations.filter((m) => m.name < LAUNCH);
+    const launch = migrations.filter((m) => m.name >= LAUNCH);
+    assertEquals(launch.map((m) => m.name.slice(0, 14)), [
+      "20260922000000",
+      "20260922000100",
+      "20260922000200",
+      "20260922000300",
+      "20260922000400",
+      "20260922000500",
+    ]);
+    let cardId = "";
+
+    await t.step("the schema before launch holds a payment, a card and a role", async () => {
+      await db.exec(SHIM);
+      for (const m of earlier) await exec(m.sql);
+      await db.exec(
+        `insert into public.studio_state (id) values (1); insert into public.pool (id) values (1); insert into public.stream_state (id) values (1);`,
+      );
+      await db.exec(
+        `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path) values ('Builder A', 'Builder A', 'A small blue creature.', 'builder-model-id', 0.2, 'plain', 'platform/agents/prompts/builder-a.md')`,
+      );
+      cardId = (await one<{ id: string }>(
+        `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card', 'Summary.', 100, 'voted') returning id`,
+      )).id;
+      // The deployed webhook's call: eight named arguments.
+      const paid = (await one<{ r: Row }>(
+        `select public.apply_contribution(p_stripe_event_id => 'evt_up1', p_contributor_id => 'contrib_up', p_display_name => null, p_amount_usd => 10, p_net_usd => 10, p_studio_pct => 0, p_goal_card_id => $1, p_stripe_session_id => 'cs_up1') as r`,
+        [cardId],
+      )).r;
+      assertEquals(paid.goal_card_id, cardId);
+      assertEquals((await asAnon(() => db.query(`select id from public.roles`))).rows.length, 1);
+    });
+
+    await t.step("000000 to 000400 apply one file at a time, and the old callers keep working", async () => {
+      for (const m of launch.slice(0, 5)) {
+        await exec(m.sql);
+      }
+      // The existing payment took its email key.
+      assertEquals(
+        await one(`select payer_key from public.contributions where stripe_event_id = 'evt_up1'`),
+        { payer_key: "email:contrib_up" },
+      );
+      // The existing card is on now, and anon reads the new columns and the old ones.
+      assertEquals(
+        await asAnon(() => one(`select horizon::text as horizon, rank, title from public.cards where id = $1`, [cardId])),
+        { horizon: "now", rank: null, title: "An open card" },
+      );
+      // The deployed webhook's eight named arguments still credit the card.
+      const again = (await one<{ r: Row }>(
+        `select public.apply_contribution(p_stripe_event_id => 'evt_up2', p_contributor_id => 'contrib_up', p_display_name => null, p_amount_usd => 10, p_net_usd => 10, p_studio_pct => 0, p_goal_card_id => $1, p_stripe_session_id => 'cs_up2') as r`,
+        [cardId],
+      )).r;
+      // $10 at 0%: reserve $1, agents $9, the 5% incident share $0.45, credit $8.55.
+      assertEquals([again.inserted, again.goal_card_id, again.pool_credit_usd], [true, cardId, 8.55]);
+      // The deployed site still reads roles, and the new site's view is there too.
+      await asAnon(async () => {
+        assertEquals((await db.query(`select id, title, write_access, state from public.roles`)).rows.length, 1);
+        assertEquals((await db.query(`select id, description from public.public_roles`)).rows.length, 1);
+        assertEquals(await one(`select launched_at, paused from public.public_studio`), { launched_at: null, paused: false });
+      });
+    });
+
+    await t.step("000500, once the site reads public_roles, closes roles to anon and leaves public_roles open", async () => {
+      await exec(launch[5]!.sql);
+      await exec(launch[5]!.sql);
+      await asAnon(async () => {
+        await assertRejects(() => db.query(`select id from public.roles`), Error, "permission denied");
+        assertEquals((await db.query(`select id from public.public_roles`)).rows.length, 1);
+      });
+    });
   } finally {
     await db.close();
   }
