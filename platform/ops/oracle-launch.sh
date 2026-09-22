@@ -90,7 +90,7 @@ else
   IMAGE=$(oci_ compute image list -c "$TENANCY" --operating-system "Canonical Ubuntu" --operating-system-version 24.04 \
     --shape "$SHAPE" --sort-by TIMECREATED --sort-order DESC --raw-output \
     --query "data[?!contains(\"display-name\", 'Minimal')].id | [0]")
-  [ -n "$IMAGE" ] && [ "$IMAGE" != "null" ] || die "no Canonical Ubuntu 24.04 image for $SHAPE in this region"
+  if [ -z "$IMAGE" ] || [ "$IMAGE" = "null" ]; then die "no Canonical Ubuntu 24.04 image for $SHAPE in this region"; fi
   ADS=$(oci_ iam availability-domain list -c "$TENANCY" --query "join(' ', data[].name)" --raw-output)
   # Root takes the same key as ubuntu, so the ops runbook's ssh root@ steps work as written.
   USER_DATA=$(mktemp "${TMPDIR:-/tmp}/oracle-launch.XXXXXX")
@@ -124,7 +124,7 @@ fi
 log "RUNNING: $INSTANCE"
 
 IP=$(oci_ compute instance list-vnics --instance-id "$INSTANCE" --query 'data[0]."public-ip"' --raw-output)
-[ -n "$IP" ] && [ "$IP" != "null" ] || die "the instance has no public IPv4 address"
+if [ -z "$IP" ] || [ "$IP" = "null" ]; then die "the instance has no public IPv4 address"; fi
 
 # --- ssh as ubuntu, then as root -----------------------------------------------------------------
 for user in ubuntu root; do
