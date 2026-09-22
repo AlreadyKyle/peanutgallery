@@ -177,6 +177,10 @@ jobs:
           deno-version: v2.7.13
       - name: Stripe webhook function tests
         run: pnpm test:functions
+      # The end-to-end suite serves a build. This one is only for the suite: the build job builds
+      # and scans the site on its own runner.
+      - name: Build the site for the end-to-end suite
+        run: pnpm --filter @backseat/site build
       - name: Install Chromium for Playwright
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
       - name: Site end-to-end

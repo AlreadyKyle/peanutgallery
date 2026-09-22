@@ -699,6 +699,7 @@ for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:op
   assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
 assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
+assert "workflow: the platform job builds the site for the end-to-end suite before running it" order platform 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 # Card code runs in seed-code and platform only; the build job runs it only in its last step.
 assert "workflow: every ship-gate call names its phase" test "$(grep 'ship-gate.sh' "$WORKFLOW" | grep -vc -- '--phase ')" = 0
