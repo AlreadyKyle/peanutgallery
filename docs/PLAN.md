@@ -282,8 +282,8 @@ Abuse and mitigations. Brigading: account age, one vote per account, quorums, th
 
 | Day | Kill if | Pivot instead |
 |---|---|---|
-| 7 | under 300 peak concurrent, under 25 unique funders, under $500 funded, or board time over 25 hours | drop 24/7; run a weekly two-hour live show |
-| 30 | under 150 average concurrent, under 100 funders, under $2,000 cumulative, or board time over 12 hours a week | drop the meter; run as a public demo |
+| 7 | under 25 unique funders, under $500 funded, or board time over 25 hours | drop 24/7; run a weekly two-hour live show |
+| 30 | under 100 funders, under $2,000 cumulative, or board time over 12 hours a week | drop the meter; run as a public demo |
 | 90 | under $6,000 cumulative, or board time over 10 hours a week | archive; publish the post-mortem; open-source the vote and meter kit |
 
 ## 9. Sources
