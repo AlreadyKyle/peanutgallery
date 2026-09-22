@@ -24,10 +24,7 @@ what players put in. The detailed sections further down are there if a step is u
 
 1. **ntfy on your phone (2 minutes).** Install the free **ntfy** app. Tap **+**, paste (the topic
    name is already on your Mac's clipboard), tap Subscribe. Tell me "subscribed to ntfy".
-2. **Say yes to two things I was not allowed to do alone.** Reply "yes to the webhook secret and
-   the kill line". I then point the payment alerts at your phone, redeploy the payment webhook with
-   two small error-message fixes from the sweep, and delete the viewer-count kill lines from the
-   plan (they measured a stream we no longer have).
+2. ~~Say yes to the webhook secret and the kill line.~~ Done 22 September, see **Done**.
 3. **healthchecks.io (5 minutes, free plan).** Sign up with kyle@clayhouse.studio. Add a check:
    name `peanutgallery dispatcher`, period **1 minute**, grace **5 minutes**. Copy its ping URL.
    Open the file `.env.vps` in the peanutgallery folder and add a line
@@ -71,17 +68,17 @@ checked and when.
 | # | Item | Status |
 |---|---|---|
 | 4 | hello@peanutgallery.games | waiting on you (GoDaddy; no MX records exist yet) |
-| 5 | ntfy topic | **subscribe on your phone** — I made and tested the topic; the webhook secret needs your allow |
+| 5 | ntfy topic | **subscribe on your phone** — topic made and tested; the webhook posts to it |
 | 6 | healthchecks.io check | waiting on you |
 | 7 | VPS GitHub token | waiting on you — now one pre-filled link |
 | 8 | Studio Anthropic credit | not now — only with player money, once Stripe pays it out |
-| 9 | Viewer-count kill lines (day 7 and day 30) | **needs your yes** — the edit is held for your approval |
 | 10 | Funding target vs agent spend ceiling | **needs your call** |
 | 2b | Oracle sign-up and one sign-in command | waiting on you — I launch the instance by script after it |
 | Part 3 | Hand me the two values | needs 6 and 7 first |
 | Part 4 | Cutover, contribution, clip, Go live | later, with me |
 
-Done so far: **4 of 12** — image provider and key; TOTP on /board; legal text review; SSH key (2a).
+Done so far: **5 of 12** — image provider and key; TOTP on /board; legal text review; SSH key (2a);
+the kill lines (9). The webhook secret and redeploy are done too.
 
 ---
 
@@ -126,13 +123,8 @@ alerts, so it stays out of chat.
    server as ntfy.sh.
 3. Tell me, and I post a second test so you see it arrive.
 
-**One allow I need.** The Stripe webhook also posts to this topic, from the Supabase function secret
-`NTFY_TOPIC_URL`. Setting that secret on production was held for your approval. Allow it when I ask,
-or run this yourself at the repository root:
-
-```bash
-set -a; . ./.env; . ./.env.vps; set +a; cd platform && npx supabase secrets set --project-ref lyxndueoeisyqzewflpu NTFY_TOPIC_URL="$NTFY_TOPIC_URL"
-```
+**Webhook alerts: done 22 September.** The Supabase function secret `NTFY_TOPIC_URL` is set, so the
+Stripe webhook posts to this topic too.
 
 **Tell me:** "subscribed to ntfy."
 
@@ -514,3 +506,16 @@ this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/i
 `ssh-keygen -lf ~/.ssh/id_ed25519.pub` prints
 `256 SHA256:1fLWiB1WvhlXXkzbw7/xkUXmRGPsp5NDtozEVZ3ofdk peanutgallery-vps (ED25519)`.
 `oracle-launch.sh` gives the public half to the instance; the private half never leaves the Mac.
+
+### 9. Viewer-count kill lines — DONE 22 September 2026
+
+You said yes. Removed from `docs/PLAN.md` §8: "under 300 peak concurrent" (day 7) and "under 150
+average concurrent" (day 30). Both measured a stream that has left launch scope. The funder, money
+and board-time criteria stay.
+
+### Webhook secret and redeploy — DONE 22 September 2026
+
+You said yes. `NTFY_TOPIC_URL` is set as a Supabase function secret (the Management API answered
+201, and the secret list now names it). `stripe-webhook` was redeployed from `main` at 558b934 with
+the sweep's two error-label fixes ("Deployed Functions."). An unsigned POST answers 400 "Missing
+stripe-signature header", so it still refuses anything Stripe did not sign.
