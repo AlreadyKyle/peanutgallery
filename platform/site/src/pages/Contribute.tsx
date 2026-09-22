@@ -1,5 +1,6 @@
 import { FundingBar, Guarded, fundingCaption } from '../components/Cards';
 import { PageHeader } from '../components/PageHeader';
+import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
 import { CATEGORY_FILTERS, canFund, categoryOf, fundLink, groupCards, type CardCategory } from '../lib/cards';
 import { copy } from '../lib/copy';
@@ -20,6 +21,7 @@ export function Contribute() {
       <PageHeader title={copy.contributeTitle} lede={copy.contributeLede}>
         <StaleNotice studio={studio} />
       </PageHeader>
+      <PausedNotice studio={studio} />
       {env.stripePaymentLinkUrl === '' ? (
         <p>{copy.contributeUnavailable}</p>
       ) : (

@@ -18,6 +18,7 @@ const snapshot: Snapshot = {
   cards: [],
   funding: {},
   launchedAt: null,
+  paused: false,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [],
   deploys: [],
@@ -61,6 +62,19 @@ describe('App routes', () => {
     renderAt('/ledger');
     expect(screen.getByRole('heading', { level: 1, name: 'Ledger' })).toBeTruthy();
     expect(screen.getByText(copy.ledgerLede)).toBeTruthy();
+  });
+
+  it('renders How it works, the team and the roadmap, each with one h1 that names the tab', () => {
+    for (const [path, title] of [
+      ['/how-it-works', copy.howItWorksPage.title],
+      ['/team', copy.team.title],
+      ['/roadmap', copy.roadmap.title],
+    ] as const) {
+      renderAt(path);
+      expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent), path).toEqual([title]);
+      expect(document.title).toBe(`${title} · ${copy.studioName}`);
+      cleanup();
+    }
   });
 
   it('reports an unknown address with a link back home', () => {
@@ -136,7 +150,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
 
 describe('Site chrome', () => {
   it('links Terms, Privacy, Refunds and Contact in the footer of every page', () => {
-    for (const path of ['/', '/ledger', '/contribute', '/terms', '/contact', '/board', '/no-such-page']) {
+    for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/terms', '/contact', '/board', '/no-such-page']) {
       renderAt(path);
       const footer = screen.getByRole('contentinfo');
       const links = within(footer)
@@ -163,6 +177,16 @@ describe('Site chrome', () => {
     expect(mark?.getAttribute('alt')).toBe('');
     expect(within(nav()).queryByRole('link', { name: copy.home })).toBeNull();
     expect(within(nav()).getByRole('link', { name: 'Ledger' }).getAttribute('href')).toBe('/ledger');
+    expect(
+      within(nav())
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      [copy.howItWorksNav, '/how-it-works'],
+      [copy.teamNav, '/team'],
+      [copy.roadmapNav, '/roadmap'],
+      [copy.ledger, '/ledger'],
+    ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByText(copy.footer)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);

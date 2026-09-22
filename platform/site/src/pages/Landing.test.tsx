@@ -27,6 +27,9 @@ const snapshot: Snapshot = {
       shape: 'goal',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 100,
       funded_usd: 100,
       spent_usd: 3.2,
@@ -44,6 +47,9 @@ const snapshot: Snapshot = {
       shape: 'goal',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 100,
       funded_usd: 25,
       spent_usd: 0,
@@ -61,6 +67,9 @@ const snapshot: Snapshot = {
       shape: 'goal',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 50,
       funded_usd: 0,
       spent_usd: 0,
@@ -78,6 +87,9 @@ const snapshot: Snapshot = {
       shape: 'goal',
       bucket: 'platform',
       folder: 'platform',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 10,
       funded_usd: 0,
       spent_usd: 0,
@@ -95,6 +107,9 @@ const snapshot: Snapshot = {
       shape: 'oneoff',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 0,
       funded_usd: 0,
       spent_usd: 0,
@@ -112,6 +127,9 @@ const snapshot: Snapshot = {
       shape: 'goal',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 3,
       funded_usd: 3,
       spent_usd: 1.5,
@@ -129,6 +147,9 @@ const snapshot: Snapshot = {
       shape: 'oneoff',
       bucket: 'game',
       folder: 'seed-1',
+      horizon: 'now',
+      rank: null,
+      executor_role_id: null,
       funding_target_usd: 0,
       funded_usd: 0,
       spent_usd: 0.75,
@@ -139,6 +160,7 @@ const snapshot: Snapshot = {
   ],
   funding: { next1: { contributors: 3, credited_usd: 18.5 }, live1: { contributors: 2, credited_usd: 3 } },
   launchedAt: null,
+  paused: false,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [],
   deploys: [],
@@ -196,7 +218,11 @@ describe('Landing', () => {
     expect(screen.getByText(copy.split)).toBeTruthy();
     expect(screen.getByText(copy.fundIntro)).toBeTruthy();
 
+    // Three short lines and a link to the whole path on /how-it-works.
+    expect(copy.steps).toHaveLength(3);
     for (const step of copy.steps) expect(screen.getByText(step)).toBeTruthy();
+    const how = screen.getByRole('region', { name: copy.howItWorks });
+    expect(within(how).getByRole('link', { name: copy.howItWorksMore }).getAttribute('href')).toBe('/how-it-works');
     expect(screen.getByText(copy.artPolicy)).toBeTruthy();
     expect(screen.getByText(copy.allAges)).toBeTruthy();
     expect(screen.getByText(copy.fixedRulesIntro)).toBeTruthy();
@@ -300,7 +326,7 @@ describe('Landing', () => {
     ]);
   });
 
-  it('filters the fund board by category and explains the next game', async () => {
+  it('filters the fund board by category and shows the studio chip only while it has cards', async () => {
     renderLanding(fakeSource());
     await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(3));
     const filters = screen.getByRole('group', { name: copy.filterLabel });
@@ -310,6 +336,12 @@ describe('Landing', () => {
         .filter((b) => b.getAttribute('aria-pressed') === 'true')
         .map((b) => b.textContent);
     expect(pressed()).toEqual([`${copy.categories.all} 3`]);
+    // No card funds a next game, so its chip is hidden rather than showing 0.
+    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      `${copy.categories.all} 3`,
+      `${copy.categories.game} 2`,
+      `${copy.categories.studio} 1`,
+    ]);
 
     fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.studio} 1` }));
     expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(['A clearer ledger page']);
@@ -317,11 +349,68 @@ describe('Landing', () => {
 
     fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.game} 2` }));
     expect(screen.getAllByRole('progressbar')).toHaveLength(2);
+  });
 
-    fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.next} 0` }));
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.getByText(copy.categoryNotes.next)).toBeTruthy();
-    expect(screen.queryByText(copy.fundEmpty)).toBeNull();
+  it('hides the studio chip when no studio card is open, which is the state at launch', async () => {
+    renderLanding({
+      load: () => Promise.resolve({ ...snapshot, cards: snapshot.cards.filter((card) => card.folder !== 'platform') }),
+      subscribe: () => () => {},
+    });
+    await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(2));
+    const filters = screen.getByRole('group', { name: copy.filterLabel });
+    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      `${copy.categories.all} 2`,
+      `${copy.categories.game} 2`,
+    ]);
+  });
+
+  it('never lists a next or later card as open for funding', async () => {
+    const planned = [
+      { ...snapshot.cards[2]!, id: 'later1', title: 'A planned card', horizon: 'later' as const, funding_target_usd: 0 },
+      { ...snapshot.cards[1]!, id: 'next1b', title: 'A ranked card', horizon: 'next' as const, rank: 1 },
+    ];
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
+    renderLanding({ load: () => Promise.resolve({ ...snapshot, cards: [...snapshot.cards, ...planned] }), subscribe: () => () => {} });
+    await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(3));
+    expect(screen.queryByText('A planned card')).toBeNull();
+    expect(screen.queryByText('A ranked card')).toBeNull();
+    const fund = screen.getByRole('region', { name: copy.fund });
+    expect(within(fund).getAllByText(copy.statusOpen)).toHaveLength(2);
+    expect(within(fund).getAllByRole('link', { name: copy.fundThis }).map((a) => a.getAttribute('href'))).not.toContain(
+      'https://buy.stripe.com/test-link?client_reference_id=later1',
+    );
+  });
+
+  it('says the agents are paused in the Right now panel while the board has paused them', async () => {
+    renderLanding({
+      load: () => Promise.resolve({ ...snapshot, cards: snapshot.cards.filter((card) => card.stage !== 'building'), paused: true }),
+      subscribe: () => () => {},
+    });
+    const panel = screen.getByRole('complementary', { name: copy.rightNow });
+    await waitFor(() => expect(within(panel).getByText(copy.pausedNotice)).toBeTruthy());
+    expect(within(panel).getByText(copy.nowEmptyPaused)).toBeTruthy();
+    expect(within(panel).queryByText(copy.nowEmpty)).toBeNull();
+  });
+
+  it('says nothing about a pause when the studio row did not load', async () => {
+    renderLanding({
+      load: () => Promise.resolve({ ...snapshot, paused: true, missing: ['studio'] }),
+      subscribe: () => () => {},
+    });
+    await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
+    expect(screen.queryByText(copy.pausedNotice)).toBeNull();
+  });
+
+  it('shows In the pool at $0.00 and states the shortfall when agent work has cost more than came in', async () => {
+    renderLanding({
+      load: () => Promise.resolve({ ...snapshot, pool: { ...snapshot.pool!, balance_usd: -1.234 } }),
+      subscribe: () => () => {},
+    });
+    const panel = screen.getByRole('complementary', { name: copy.rightNow });
+    await waitFor(() => expect(within(panel).getByText('$0.00')).toBeTruthy());
+    expect(within(panel).getByText(copy.poolBalance)).toBeTruthy();
+    expect(within(panel).getByText(`${copy.describeAvailable} ${copy.shortfall.replace('{amount}', '$1.23')}`)).toBeTruthy();
+    expect(screen.queryByText(/-\$/)).toBeNull();
   });
 
   it('shows the unavailable line and no figures without a database', () => {

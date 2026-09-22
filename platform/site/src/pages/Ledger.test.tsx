@@ -23,6 +23,7 @@ const snapshot: Snapshot = {
   cards: [],
   funding: {},
   launchedAt: null,
+  paused: false,
   totals: { usd_total: 1.25, input_tokens: 12000, cached_tokens: 3000, output_tokens: 800, row_count: 3 },
   events: [
     { id: 'e1', card_id: cardId, role_id: builderId, type: 'start', created_at: '2026-09-14T01:00:00Z' },
@@ -35,7 +36,6 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       sha: 'b7e1c9a4d2f8e6b0a1c3d5e7f9a2b4c6d8e0f1a2',
       is_green: false,
-      smoke_result: 'fail: version.json sha mismatch',
       created_at: '2026-09-14T02:10:00Z',
     },
     {
@@ -43,11 +43,22 @@ const snapshot: Snapshot = {
       folder: 'seed-1',
       sha: '2775bcb1000a2ebb53a1b03771afb137aae2f50c',
       is_green: true,
-      smoke_result: 'ok: page, config, bot',
       created_at: '2026-09-14T01:20:00Z',
     },
   ],
-  roles: [{ id: builderId, title: 'Builder A', write_access: true, state: 'active' }],
+  roles: [
+    {
+      id: builderId,
+      name: 'Builder A',
+      title: 'Builder A',
+      description: null,
+      species_note: 'A small blue creature with two round antennae and stubby legs.',
+      model: 'claude-sonnet-5',
+      write_access: true,
+      state: 'active',
+      hired_at: '2026-09-14T00:00:00Z',
+    },
+  ],
   cardTitles: { [cardId]: 'Gatherer costs 11' },
   missing: [],
 };
@@ -91,23 +102,20 @@ describe('Ledger', () => {
 
     const deploys = listItems('Deploys');
     expect(deploys).toHaveLength(2);
-    expect(deploys[0]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T02:10:00Z')}Game b7e1c9a failed checks · fail: version.json sha mismatch`,
-    );
-    expect(deploys[1]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks · ok: page, config, bot`,
-    );
+    // A deploy row is the folder, the sha and passed or failed: the smoke bot's raw output is never shown.
+    expect(deploys[0]?.textContent).toBe(`${formatDateTime('2026-09-14T02:10:00Z')}Game b7e1c9a failed checks`);
+    expect(deploys[1]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`);
     expect(screen.queryByText('restored')).toBeNull();
   });
 
-  it('omits the smoke line when a deploy recorded none', async () => {
+  it('never shows raw smoke output even when a deploy row carries it', async () => {
     const deploy = snapshot.deploys[1];
     if (deploy === undefined) throw new Error('fixture has no green deploy');
-    renderLedger(sourceOf({ ...snapshot, deploys: [{ ...deploy, smoke_result: null }] }));
+    const raw = { ...deploy, smoke_result: 'bot: 812 simulated seconds, 13 unlocks, budget 900 s' };
+    renderLedger(sourceOf({ ...snapshot, deploys: [raw] }));
     await waitFor(() => expect(listItems('Deploys')).toHaveLength(1));
-    expect(listItems('Deploys')[0]?.textContent).toBe(
-      `${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`,
-    );
+    expect(listItems('Deploys')[0]?.textContent).toBe(`${formatDateTime('2026-09-14T01:20:00Z')}Game 2775bcb passed checks`);
+    expect(screen.queryByText(/simulated seconds/)).toBeNull();
   });
 
   it('shows the empty lines when the database holds no work or deploys', async () => {

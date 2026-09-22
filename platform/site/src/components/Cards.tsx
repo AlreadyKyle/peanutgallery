@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import {
-  CATEGORY_FILTERS,
   canFund,
   categoryOf,
   fundLink,
@@ -9,6 +8,7 @@ import {
   shippedAt,
   sourceLabel,
   statusOf,
+  visibleFilters,
   type CategoryFilter,
 } from '../lib/cards';
 import { copy } from '../lib/copy';
@@ -90,10 +90,14 @@ function Brief({ intent }: { intent: string | null }) {
   );
 }
 
-/** One card as a box: category and status on top, title and summary, then money and the action pinned to the bottom. */
-function CardBox({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
+/**
+ * One card as a box: category and status on top, title and summary, then money and the action
+ * pinned to the bottom. In example mode (/how-it-works) it renders no link, button or disclosure at
+ * all, whatever canFund or the Payment Link say, so an illustration can never take a payment.
+ */
+export function CardBox({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
   const env = siteEnv();
-  const titleId = `card-title-${card.id}`;
+  const titleId = `${example ? 'example' : 'card'}-title-${card.id}`;
   const status = statusOf(card);
   const caption = fundingCaption(card, snapshot);
   const building = status === 'building' || status === 'gated';
@@ -118,7 +122,7 @@ function CardBox({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
             <p className="card-meta">{caption}</p>
           </>
         ) : null}
-        {!building && env.stripePaymentLinkUrl !== '' && canFund(card) ? (
+        {!example && !building && env.stripePaymentLinkUrl !== '' && canFund(card) ? (
           <a
             className="button button-secondary button-block"
             href={fundLink(env.stripePaymentLinkUrl, card.id)}
@@ -127,7 +131,7 @@ function CardBox({ card, snapshot }: { card: Card; snapshot: Snapshot }) {
             {copy.fundThis}
           </a>
         ) : null}
-        <Brief intent={card.intent} />
+        {example ? null : <Brief intent={card.intent} />}
       </div>
     </li>
   );
@@ -155,20 +159,25 @@ export function BuildingNow({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
-/** Cards open for funding, filtered by what they spend money on. */
+/**
+ * Cards open for funding, filtered by what they spend money on. The studio and next game chips show
+ * only while they have cards; a chip that empties while pressed falls back to All.
+ */
 export function FundBoard({ studio }: { studio: StudioState }) {
-  const [filter, setFilter] = useState<CategoryFilter>('all');
+  const [chosen, setFilter] = useState<CategoryFilter>('all');
   return (
     <Guarded studio={studio}>
       {(snapshot) => {
         const { fund } = groupCards(snapshot.cards);
+        const options = visibleFilters(fund);
+        const filter = options.includes(chosen) ? chosen : 'all';
         const shown = fund.filter((card) => inCategory(card, filter));
         const count = (option: CategoryFilter) => fund.filter((card) => inCategory(card, option)).length;
         const note = filter === 'all' ? null : copy.categoryNotes[filter];
         return (
           <>
             <div className="filters" role="group" aria-label={copy.filterLabel}>
-              {CATEGORY_FILTERS.map((option) => (
+              {options.map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -182,7 +191,7 @@ export function FundBoard({ studio }: { studio: StudioState }) {
             </div>
             {note === null ? null : <p className="muted">{note}</p>}
             {shown.length === 0 ? (
-              filter === 'next' ? null : <p className="muted">{copy.fundEmpty}</p>
+              <p className="muted">{copy.fundEmpty}</p>
             ) : (
               <CardGrid cards={shown} snapshot={snapshot} />
             )}
@@ -209,9 +218,29 @@ export function shippedCaption(card: Card, snapshot: Snapshot): string {
   return `${cost}${count}${copy.shippedOn} ${formatDate(shippedAt(card))}`;
 }
 
+/** One shipped card as a row. In example mode it has no Play the game link. */
+export function ShippedRow({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
+  const env = siteEnv();
+  const titleId = `${example ? 'example' : 'shipped'}-title-${card.id}`;
+  return (
+    <li>
+      <p className="shipped-category">{copy.categories[categoryOf(card)]}</p>
+      <h3 id={titleId}>{card.title}</h3>
+      {blank(card.summary) ? null : <p>{card.summary}</p>}
+      <p className="card-meta">{shippedCaption(card, snapshot)}</p>
+      {!example && env.playUrl !== '' && card.folder === 'seed-1' ? (
+        <p className="small">
+          <a href={env.playUrl} aria-describedby={titleId}>
+            {copy.playTheGame}
+          </a>
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
 /** Live cards, newest first, as rows: what each change cost, who funded it and when it shipped. */
 export function ShippedList({ snapshot }: { snapshot: Snapshot }) {
-  const env = siteEnv();
   const { shipped } = groupCards(snapshot.cards);
   if (shipped.length === 0) return null;
   return (
@@ -219,24 +248,9 @@ export function ShippedList({ snapshot }: { snapshot: Snapshot }) {
       <h2 id="shipped">{copy.shipped}</h2>
       <p className="muted">{copy.shippedIntro}</p>
       <ul className="shipped">
-        {shipped.map((card) => {
-          const titleId = `shipped-title-${card.id}`;
-          return (
-            <li key={card.id}>
-              <p className="shipped-category">{copy.categories[categoryOf(card)]}</p>
-              <h3 id={titleId}>{card.title}</h3>
-              {blank(card.summary) ? null : <p>{card.summary}</p>}
-              <p className="card-meta">{shippedCaption(card, snapshot)}</p>
-              {env.playUrl !== '' && card.folder === 'seed-1' ? (
-                <p className="small">
-                  <a href={env.playUrl} aria-describedby={titleId}>
-                    {copy.playTheGame}
-                  </a>
-                </p>
-              ) : null}
-            </li>
-          );
-        })}
+        {shipped.map((card) => (
+          <ShippedRow key={card.id} card={card} snapshot={snapshot} />
+        ))}
       </ul>
     </section>
   );
