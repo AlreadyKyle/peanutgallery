@@ -8,7 +8,7 @@ The seed is an idle/incremental game. A proposal in this genre is a number, a ru
 
 ## Kernel
 
-Rules that never change (the kernel, PLAN.md §4): the ledger, spend caps, the default 80/20 split and the 10% reserve, the incident reserve, the gate, rollback, the content filter and the all-ages rating, the art policy, the broadcast delay and the kill switch, and the read/write separation. No card, vote, regime or org change edits them at any tier. A card that would breach the kernel is rejected by the gate at proposal time.
+Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps, the default 80/20 split and the 10% reserve, the incident reserve, the gate, rollback, the content filter and the all-ages rating, the art policy, the broadcast delay and the kill switch, and the read/write separation. No card, vote, regime or org change edits them at any tier. A card that would breach the kernel is rejected by the gate at proposal time.
 
 ## Read/write rule
 
@@ -30,11 +30,11 @@ A card's `acceptance_test` is prose followed by one machine line in this form:
 
 `check: config <file> <path> == <json>`
 
-`<file>` is a path from the repo root. `<path>` selects one value: dotted keys walk objects, `[n]` picks an array index, and `[key=value]` picks the array row whose `key` equals `value`. The right side is a JSON value. The week-1 test card reads `check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11`. The dispatcher evaluates the line as false on `main` before your session starts and as true in your worktree after it ends; the smoke test then reads the same value from the served file. A card without a check line relies on the gate and the smoke test alone.
+`<file>` is a path from the repo root. `<path>` selects one value: dotted keys walk objects, `[n]` picks an array index, and `[key=value]` picks the array row whose `key` equals `value`. The right side is a JSON value. The first test card reads `check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11`. The dispatcher evaluates the line as false on `main` before your session starts and as true in your worktree after it ends; the smoke test then reads the same value from the served file. A card without a check line relies on the gate and the smoke test alone.
 
 ## How the gate works
 
-Every change reaches `main` only through the gate. The dispatcher commits your worktree, pushes the branch, opens a pull request and polls the check named `gate`. The gate runs in order and stops at the first failure, naming the step and the detail: a secret scan; the deny-list scan over every string, filename and the commit message, which fails with the term shown; the runtime-token scan for stray debugging and stand-in text; for the code lane, typecheck and unit tests; the headless bot for ten simulated hours on a fixed seed, asserting that no resource goes negative, that every value in the state is a finite number, that at least one unlock lands in every simulated hour, and that the same seed gives the same state hash; then the build. On green the dispatcher squash-merges, Netlify deploys, and a smoke test loads the page, reads the served config and runs the bot for 60 real seconds. A failed deploy or smoke test after the merge takes the change back out: the last green deploy is restored, a revert commit lands on `main`, and the card is rejected with the failing check attached. Nothing appears in Live without a `live` event from the gate.
+Every change reaches `main` only through the gate. The dispatcher commits your work, pushes the branch, opens a pull request and polls the check named `gate`. The gate runs in order and stops at the first failure, naming the step and the detail: a secret scan; the deny-list scan over every string, filename and the commit message, which fails with the term shown; the runtime-token scan for stray debugging and stand-in text; for the code lane, typecheck and unit tests; the headless bot for ten simulated hours on a fixed seed, asserting that no resource goes negative, that every value in the state is a finite number, that at least one unlock lands in every simulated hour, and that the same seed gives the same state hash; then the build. On green the dispatcher squash-merges, Netlify deploys, and a smoke test checks the served build, the served config checks and that every served config file matches the merged commit; it runs no card code. A failed deploy or smoke test after the merge takes the change back out: the last green deploy is restored, a revert commit lands on `main`, and the card is rejected with the failing check attached. Nothing appears in Live without a `live` event from the gate.
 
 ## Working method
 
@@ -42,8 +42,8 @@ Understand: restate the acceptance test in one line, quoting each `check:` line 
 
 ## When to stop
 
-Stop when the acceptance check holds and all invariants pass. Read the card, make the change, then from the worktree run `pnpm --filter @backseat/seed-1 bot -- --config-dir seed-1/config --hours 10 --seed 20260914`, and for the code lane also `pnpm --filter @backseat/seed-1 typecheck` and `pnpm --filter @backseat/seed-1 test`. When the check line is true and every command exits 0, end the session with one short statement of what changed. Do not make further edits, do not run `git` or `gh`, and do not open network connections; the dispatcher commits, pushes and opens the pull request.
+Stop when the acceptance check holds and all invariants pass. Read the card, make the change, then from the worktree run `pnpm --filter @backseat/seed-1 bot -- --config-dir seed-1/config --hours 10 --seed 20260914`, and for the code lane also `pnpm --filter @backseat/seed-1 typecheck` and `pnpm --filter @backseat/seed-1 test`. When the check line is true and every command exits 0, end the session with one short statement of what changed. Do not make further edits, do not commit, push or run `gh`, and do not open network connections; the dispatcher commits, pushes and opens the pull request. The only `git` commands you run are the ones the session's closing instructions name for handing back your work, when it has them.
 
 ## Budget
 
-Every turn is metered to the ledger at list price. A session stops at the turn cap or when its cost reaches 150% of the card estimate or the per-card maximum, whichever comes first; the card then pauses and re-votes. Small, direct edits are the way to stay inside the estimate.
+Every turn is metered to the ledger at list price. A session stops at the turn cap or when its cost reaches 150% of the card estimate or the per-card maximum, whichever comes first; the card then pauses for the board. Small, direct edits are the way to stay inside the estimate.
