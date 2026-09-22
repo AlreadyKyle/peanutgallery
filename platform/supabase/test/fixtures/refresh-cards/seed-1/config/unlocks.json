@@ -1,0 +1,17 @@
+{
+  "unlocks": [
+    { "id": "cart", "name": "Cart", "atTotalDust": 100, "effect": { "type": "unit", "unit": "cart" } },
+    { "id": "mill", "name": "Mill", "atTotalDust": 1000, "effect": { "type": "unit", "unit": "mill" } },
+    { "id": "forge", "name": "Forge", "atTotalDust": 10000, "effect": { "type": "unit", "unit": "forge" } },
+    { "id": "foundry", "name": "Foundry", "atTotalDust": 100000, "effect": { "type": "unit", "unit": "foundry" } },
+    { "id": "sharper-tools", "name": "Sharper tools", "atTotalDust": 500000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "wider-paths", "name": "Wider paths", "atTotalDust": 2000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "steady-hands", "name": "Steady hands", "atTotalDust": 6000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "finer-sieves", "name": "Finer sieves", "atTotalDust": 13000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "longer-days", "name": "Longer days", "atTotalDust": 26000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "stronger-wheels", "name": "Stronger wheels", "atTotalDust": 50000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "bright-lanterns", "name": "Bright lanterns", "atTotalDust": 85000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "deeper-veins", "name": "Deeper veins", "atTotalDust": 130000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "polished-rails", "name": "Polished rails", "atTotalDust": 185000000, "effect": { "type": "multiplier", "value": 1.05 } }
+  ]
+}

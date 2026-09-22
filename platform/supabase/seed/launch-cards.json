@@ -1,0 +1,176 @@
+{
+  "live": [
+    {
+      "id": "cd6fb0a7-8475-4729-b311-f85ad4c7c222",
+      "was": "Spawn table: gatherer baseCost 10 to 11",
+      "title": "The Gatherer's starting price goes from 10 to 11 dust",
+      "summary": "The first of three test runs: an agent changed one price in the game's data, and the change went live after automated checks.",
+      "reason": "Plain title and summary for a shipped test run. What shipped is unchanged."
+    },
+    {
+      "id": "6372e266-7d23-4d1b-90fc-75fdf248149d",
+      "was": "Spawn table: forge baseCost 40000 to 41000",
+      "title": "The Forge's starting price goes from 40,000 to 41,000 dust",
+      "summary": "The second of three test runs: an agent changed one price in the game's data, and the change went live after automated checks.",
+      "reason": "Plain title and summary for a shipped test run. What shipped is unchanged."
+    },
+    {
+      "id": "b38e2d62-300f-4d94-b1e3-d3a593c4607c",
+      "was": "Spawn table: mill baseCost 2500 to 2600",
+      "title": "The Mill's starting price goes from 2,500 to 2,600 dust",
+      "summary": "The third of three test runs: an agent changed one price in the game's data, and the change went live after automated checks.",
+      "reason": "Plain title and summary for a shipped test run. What shipped is unchanged."
+    },
+    {
+      "id": "20aeaa63-34f2-4ac8-a9cc-d48c5d4d11ec",
+      "was": "The unlock list fits any number of unlocks",
+      "title": "The unlock list fits any number of unlocks",
+      "summary": "Earned unlocks fold into one line with the next three below, so the list stays on screen as unlocks are added.",
+      "reason": "Already plain. Listed so the file records every live card."
+    },
+    {
+      "id": "7074706e-002c-48da-a152-5c177da5bbf7",
+      "was": "Save progress and resume on reload",
+      "title": "The game keeps your progress when you reload the page",
+      "summary": "The game saves to the browser every few seconds and when the page is hidden, so a reload keeps your dust.",
+      "reason": "Plain title that says what the player gets. What shipped is unchanged."
+    },
+    {
+      "id": "23b1883a-7844-407a-bd83-f42056d47602",
+      "was": "Game shell: tab title, icon, studio link and all-ages label",
+      "title": "The game's tab shows its name and icon, and the page links to the studio",
+      "summary": "The game tab reads Dust · Peanut Gallery with its own icon, and the page links back to the studio with an all-ages label.",
+      "reason": "Plain title without the inside term game shell. What shipped is unchanged."
+    }
+  ],
+  "open": [
+    {
+      "id": "47aba1dc-78c0-41d9-a40d-c5a68aa23d81",
+      "was": "A fourteenth unlock: Quiet rooms at 300M dust",
+      "title": "Add Quiet rooms, a fourteenth unlock after Polished rails",
+      "summary": "Adds one more unlock at 300 million dust with a 5% production bonus, so players who earn every unlock still have a next goal on screen.",
+      "intent": [
+        "After Polished rails at 185,000,000 lifetime dust the unlock panel says 'Every unlock is open.' Add one multiplier unlock after it: id quiet-rooms, name Quiet rooms, atTotalDust 300000000, effect multiplier 1.05, so a next goal stays on screen.",
+        "On the live config the greedy bot ends ten simulated hours at about 210,700,000 lifetime dust, with Polished rails in the tenth hour, so the bot never reaches the new unlock and every invariant still holds. The unlock list already fits any number of unlocks. Run the bot; stop and report if any invariant fails."
+      ],
+      "acceptance_test": [
+        "unlocks.json gains one row after polished-rails: id quiet-rooms, name Quiet rooms, atTotalDust 300000000, effect multiplier 1.05. No other row changes.",
+        "check: config seed-1/config/unlocks.json unlocks[id=quiet-rooms].name == \"Quiet rooms\"",
+        "check: config seed-1/config/unlocks.json unlocks[id=quiet-rooms].atTotalDust == 300000000",
+        "check: config seed-1/config/unlocks.json unlocks[id=quiet-rooms].effect == {\"type\":\"multiplier\",\"value\":1.05}"
+      ],
+      "lane": "config",
+      "folder": "seed-1",
+      "executor": "Builder A",
+      "funding_target_usd": 0.5,
+      "rank": 2,
+      "reason": "Ready for launch: plain copy, a target set from measured costs, checks false on main, and the bot passes with the change."
+    },
+    {
+      "id": "2c57cf54-c1a4-4693-b8a8-e7a3f8797827",
+      "was": "Cheaper Cart: baseCost 120",
+      "title": "Lower the Cart's starting price from 150 to 120 dust",
+      "summary": "The Cart appears after your first 100 dust but costs 150. A price of 120 lets new players buy one sooner.",
+      "intent": [
+        "The Cart opens at 100 lifetime dust, but its starting price is 150, so its row stays out of reach for a while after it appears. Set its baseCost to 120 so a new player can buy one soon after it opens.",
+        "Early game only. On the live config the greedy bot passes every invariant with this change, and its last unlock lands at 34,318 simulated seconds instead of 34,512, still inside the tenth hour. Run the bot; stop and report if any invariant fails."
+      ],
+      "acceptance_test": [
+        "spawn-table row cart: baseCost changes from 150 to 120. No other value changes.",
+        "check: config seed-1/config/spawn-table.json rows[id=cart].baseCost == 120"
+      ],
+      "lane": "config",
+      "folder": "seed-1",
+      "executor": "Builder A",
+      "funding_target_usd": 0.5,
+      "rank": 3,
+      "reason": "Ready for launch: plain copy, a target set from measured costs, checks false on main, and the bot passes with the change."
+    },
+    {
+      "id": "4e9d0ccf-8b1b-4fb6-bfd5-79bce9269a40",
+      "was": "Rename the Gatherer to Sweeper",
+      "title": "Rename the Gatherer to Sweeper",
+      "summary": "Renames the first unit from Gatherer to Sweeper with a new description. Its price and output stay the same.",
+      "intent": [
+        "The first unit is the Gatherer, described as 'Picks up dust by hand.' Rename it Sweeper and change its description to 'Sweeps dust into a pile.' Display only: the id stays gatherer, so costs, rates, unlocks and saved games are untouched. Run the bot; stop and report if any invariant fails."
+      ],
+      "acceptance_test": [
+        "spawn-table row gatherer: name changes from Gatherer to Sweeper. strings.json unitDescriptions.gatherer carries the new line.",
+        "check: config seed-1/config/spawn-table.json rows[id=gatherer].name == \"Sweeper\"",
+        "check: config seed-1/content/strings.json unitDescriptions.gatherer == \"Sweeps dust into a pile.\""
+      ],
+      "lane": "config",
+      "folder": "seed-1",
+      "executor": "Builder B",
+      "funding_target_usd": 0.5,
+      "rank": 6,
+      "reason": "Ready for launch: plain copy, a target set from measured costs, checks false on main, and the bot passes with the change."
+    }
+  ],
+  "retire": [],
+  "new": [
+    {
+      "title": "Stop the unlock count from showing more unlocks than exist",
+      "summary": "The count above the unlock list counts every unlock in your save, even ones the game no longer has, so it can read 13 of 12. It should count only unlocks that exist.",
+      "intent": [
+        "render/scene.ts fills labels.unlockedCount ('{unlocked} of {total} unlocked') with state.unlocked.length for {unlocked} and the number of rows in config/unlocks.json for {total}. state.unlocked holds every unlock event the player's save recorded, and parseSavedState keeps events whose id the config no longer has. So after a card removes an unlock row, a returning player who had earned them all sees '13 of 12 unlocked', and after a card renames an unlock id they see '14 of 13', because settleUnlocks adds the new id and the old event stays. The '{count} unlocks earned' line below is already right, because layoutUnlockList counts only config rows.",
+        "Count only unlocks that exist. Export a pure earnedUnlockCount(rows, earnedIds) from render/layout.ts that counts the rows whose id is earned, each row once, and use it in layoutUnlockList and for the count. Rename the placeholder so the label in content/strings.json reads '{earned} of {total} unlocked', and fill {earned} with that count. The save format and sim/ do not change, and old saves still load.",
+        "Tests: in tests/layout.test.ts, with the live unlock rows, earned ids holding all 13 live ids plus one id the config does not have give 13, no earned ids give 0, and the count never exceeds the number of rows. tests/render.test.ts checks the {unlocked} placeholder today; make it check {earned}. Run typecheck, test and the bot; stop and report if any is red."
+      ],
+      "acceptance_test": [
+        "tests/layout.test.ts: earnedUnlockCount counts only unlock rows that exist, so all 13 live ids plus one unknown id give 13, none give 0, and the count never exceeds the number of rows. render/scene.ts fills the unlock count from earnedUnlockCount, and tests/render.test.ts checks the {earned} placeholder. pnpm --filter @backseat/seed-1 typecheck, test and bot all exit 0.",
+        "check: config seed-1/content/strings.json labels.unlockedCount == \"{earned} of {total} unlocked\""
+      ],
+      "bucket": "game",
+      "lane": "code",
+      "folder": "seed-1",
+      "executor": "Builder A",
+      "funding_target_usd": 1.5,
+      "rank": 1,
+      "stage": "proposed",
+      "reason": "Bug from the sweep, reproduced against the current game code: after an unlock is removed the count reads 13 of 12."
+    },
+    {
+      "title": "Show how long until the next unlock",
+      "summary": "Beside the next unlock, show about how long it will take at your current rate, so you can decide whether to wait or buy.",
+      "intent": [
+        "The unlock panel shows 'Next: {name} at {amount} dust' and a progress bar, but not how long that will take. Add a pure formatDuration(seconds) to render/format.ts that rounds up to whole seconds and returns '30s' under a minute, '3m 20s' under an hour and '2h 5m' from an hour up. Add a label nextUnlockTime, '{time} to go', to content/strings.json and to the Strings type and LABEL_KEYS in render/strings.ts.",
+        "In render/scene.ts, while an unlock is still locked, show that label filled with formatDuration((next.atTotalDust - state.totalDust) / ratePerSecond(state, config)), right-aligned on the Next line in 12px muted text like the count above it. Hide it when every unlock is open. It must not overlap the Next text for any unlock name in the live config. The sim does not change.",
+        "Tests in tests/render.test.ts: formatDuration gives '1s' for 0.2, '59s' for 59, '1m 0s' for 60, '3m 20s' for 200, '59m 59s' for 3599, '1h 0m' for 3600 and '2h 5m' for 7530, and the live strings parse with nextUnlockTime containing {time}. Run typecheck, test and the bot; stop and report if any is red."
+      ],
+      "acceptance_test": [
+        "tests/render.test.ts: formatDuration gives 1s for 0.2, 59s for 59, 1m 0s for 60, 3m 20s for 200, 59m 59s for 3599, 1h 0m for 3600 and 2h 5m for 7530, and labels.nextUnlockTime parses with {time}. render/scene.ts shows the time to the next unlock on the Next line and hides it when every unlock is open. pnpm --filter @backseat/seed-1 typecheck, test and bot all exit 0.",
+        "check: config seed-1/content/strings.json labels.nextUnlockTime == \"{time} to go\""
+      ],
+      "bucket": "game",
+      "lane": "code",
+      "folder": "seed-1",
+      "executor": "Builder B",
+      "funding_target_usd": 1.5,
+      "rank": 4,
+      "stage": "proposed",
+      "reason": "Launch slate: a small change that shows players how far away their next goal is."
+    },
+    {
+      "title": "Show how much dust each strike adds",
+      "summary": "Each tap on Strike shows the dust it added, rising from the button for a moment, so new players see what striking does.",
+      "intent": [
+        "A strike adds one to two seconds of production (strikeYield in sim/sim.ts), but nothing on screen shows the gain apart from the total going up. Add a label strikeGain, '+{amount}', to content/strings.json and to the Strings type and LABEL_KEYS in render/strings.ts.",
+        "In render/scene.ts, on each strike, take the dust added as the new state's dust minus the old state's dust, and show the label filled with formatDust of that amount just above the Strike button, in 16px bold text in the accent colour. The text rises about 30px and fades out over about 0.8 seconds, then is destroyed, so fast tapping never leaves text behind. The sim does not change.",
+        "Tests: tests/render.test.ts checks that the live strings parse with labels.strikeGain containing {amount}. Run typecheck, test and the bot; stop and report if any is red."
+      ],
+      "acceptance_test": [
+        "tests/render.test.ts checks that labels.strikeGain parses with {amount}. render/scene.ts shows the added dust above the Strike button on each strike, rising and fading within a second, and destroys each text when its fade ends. pnpm --filter @backseat/seed-1 typecheck, test and bot all exit 0.",
+        "check: config seed-1/content/strings.json labels.strikeGain == \"+{amount}\""
+      ],
+      "bucket": "game",
+      "lane": "code",
+      "folder": "seed-1",
+      "executor": "Builder B",
+      "funding_target_usd": 1.5,
+      "rank": 5,
+      "stage": "proposed",
+      "reason": "Launch slate: a small change so the first thing a new player taps shows what it did."
+    }
+  ]
+}
