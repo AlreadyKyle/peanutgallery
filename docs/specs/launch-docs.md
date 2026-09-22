@@ -18,12 +18,13 @@ numbers, and the Platform Builder claimed to change the card system.
 In: `docs/PLAN.md`, `docs/BACKLOG.md` (new), `docs/ROADMAP.md`, `docs/BOARD-SETUP.md`,
 `docs/docs.test.mjs`, `CLAUDE.md`, `README.md`, the nine prompts under `platform/agents/prompts/`,
 the `docs/PLAN.md` line fixture in `platform/gate/test/run-tests.sh`, one "Docs tests" step in the
-platform job of `.github/workflows/gate.yml`, run 2 in `docs/specs/week1-runs.md`, and one line of
-`docs/specs/site-truth-pass.md` that named the footer credit's studio without quoting the credit.
+platform job of `.github/workflows/gate.yml`, run 2 in `docs/specs/week1-runs.md`, one line of
+`docs/specs/site-truth-pass.md` that named the footer credit's studio without quoting the credit,
+and the "vote" example in `docs/COPY.md`.
 
 Out: the agent JSON files, `platform/agents/README.md` and `platform/agents/specs.test.mjs` (the DB
-workstream owns them), the example in `docs/COPY.md` (the site workstream), every schema, script,
-dispatcher, gate and site change (their own pull requests), and production.
+workstream owns them), every schema, script, dispatcher, gate and site change (their own pull
+requests), and production.
 
 ## Behaviour
 
@@ -83,7 +84,7 @@ work.
 - [x] The Seed 1 pillars line is unchanged and the Game Director prompt still carries it (`specs.test.mjs`, 64 of 64).
 - [x] The gate fixture injects its marker on a line that exists, the middle of PLAN.md (gate tests, 213 passed).
 - [x] ROADMAP rows naming a spec path show the spec's own status (test: "every ROADMAP row").
-- [ ] CI's platform job runs a green "Docs tests" step on this pull request.
+- [x] CI's platform job runs a green "Docs tests" step on this pull request (gate run 35796053515, quoted under Evidence).
 - [ ] With launch/db on main, the parser test runs instead of skipping and passes (waits on: the launch/db merge).
 - [ ] `file-backlog` prints next 6 and later 40, seed-1 2 and platform 44 as a dry run, and then files them (waits on: the launch/db merge, its migrations, and the board's allow).
 
@@ -95,6 +96,7 @@ work.
 - `pnpm --filter @backseat/gate test`
 - The launch/db parser over `docs/BACKLOG.md`: a copy of `platform/supabase/lib/backlog.ts` from the `launch/db` worktree, placed at that path, then `node --test --test-name-pattern=parser docs/docs.test.mjs`, then removed.
 - After push: the pull request's gate run shows the platform job's "Docs tests" step green.
+- Each other launch branch merged into this one on a throwaway local branch, then `node --test docs/docs.test.mjs` (and, for `launch/db`, `node --test platform/agents/specs.test.mjs`; for `launch/gate`, `bash platform/gate/test/run-tests.sh`), so the tests hold once the merge queue lands.
 - (waits on: the launch/db merge) the same docs test on the rebased branch runs the parser test rather than skipping it.
 - (waits on: the launch/db merge and the board's allow) `pnpm --filter @backseat/supabase file-backlog` as a dry run, the counts quoted and matched to this spec, then `-- --apply` with the inserted count quoted.
 
@@ -108,7 +110,13 @@ work.
 - `pnpm --filter @backseat/gate test`: `PASS: gate tests passed=213`.
 - `bash platform/gate/banned-phrases.sh --repo-root . docs README.md CLAUDE.md platform/agents`: `PASS: banned-phrases files=57 paths=61 message=no`. `bash platform/gate/runtime-token-deny.sh --repo-root . --folder platform`: `PASS: runtime-token-deny files=47`.
 - Actions minutes for the ROADMAP standing fact, read-only from the jobs API on 22 September 2026, each job rounded up to a whole minute: `runs 104 by workflow {'gate': 104} billed minutes 512 median 5 max 7 first 2026-09-14T13:19:29Z last 2026-09-22T22:26:12Z`.
-- `pnpm verify` and the CI step are quoted in the pull request.
+- The pull request's gate run 35796053515 at 806e12e, read with `gh api …/actions/runs/35796053515/jobs`: the platform job `success`, its step 12 "Docs tests" `success`.
+- Each other launch branch merged into this one on a throwaway local branch, then deleted:
+  - `launch/db` (0770c28): `node --test docs/docs.test.mjs` 15 tests, 15 pass, 0 skipped, so the parser test ran on the real parser and passed; `node --test platform/agents/specs.test.mjs` 67 of 67; `vitest run test/backlog.test.ts` 11 of 11.
+  - `launch/gate` (d11e296): merges cleanly; docs tests 14 pass, 1 skipped; `bash platform/gate/test/run-tests.sh` `PASS: gate tests passed=348`, the PLAN.md fixture included; the "Docs tests" step is still in the platform job.
+  - `launch/site` (80aa165): docs tests 14 pass, 1 skipped, so its `copy.ts` fixed rules name every kernel item they must; `README.md` conflicts (both sides edited the opening paragraph and four glossary lines), and this branch's side is the one to keep.
+  - `launch/dispatcher` (0b81f55), `launch/cards` (097a085) and `launch/managed` (4a8bb42, work in progress): merge cleanly; docs tests 14 pass, 1 skipped.
+- `pnpm verify` is quoted in the pull request.
 
 ## Production steps (need the board's allow)
 
@@ -168,3 +176,5 @@ where it went: built (kept in PLAN), a BACKLOG.md entry, or superseded by a numb
 - 2026-09-22: the kernel line in the prompts keeps "No card, vote, regime or org change edits them", mirroring PLAN.md's verbatim kernel paragraph; the vote bans are on "re-vote", "wins the vote" and start days instead.
 - 2026-09-22: the crosswalk above names the kick-off plan's sections in brackets, "§4 (Cards)", because a section number followed by a capitalised name is read as a citation of today's plan, which the docs test checks against today's headings.
 - 2026-09-22: `platform/agents/README.md` and `specs.test.mjs` are left to launch/db, which owns the role JSON; their "PLAN.md §3" and "§4" citations resolve as they stand.
+- 2026-09-22: the "vote" example in `docs/COPY.md` is replaced here, because `docs/` is this workstream's and the site pull request left it; it stays an example of the "X is your Y" pattern to avoid.
+- 2026-09-22: `MANAGED_AGENT_VERSION` joins the dispatcher's required unattended values in ROADMAP criterion 2 and Appendix A, and `SESSION_MAX_MINUTES` the optional ones, following the dispatcher config on `launch/managed` and `launch/dispatcher`; the set_caps wording names the one daily credit limit the board can change (the studio-wide one), since the $50 per payer is not a /board control.
