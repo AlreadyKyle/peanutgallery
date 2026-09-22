@@ -84,12 +84,18 @@ Before each apply, pause the studio from /board and make sure no dispatcher is r
 
 ## Evidence
 
-`pnpm verify` at the head of this branch exits 0; its last lines:
+`pnpm verify` on this branch exits 0. Its test totals and last lines:
 
 ```
+platform/supabase test:       Tests  184 passed (184)
+seed-1 test:       Tests  77 passed (77)
+platform/site test:       Tests  163 passed (163)
+platform/dispatcher test:       Tests  374 passed (374)
+platform/gate test: PASS: gate tests passed=213
+ok | 79 passed (63 steps) | 0 failed
 GATE PASS folder=platform lane=code
 $ bash platform/gate/secret-scan.sh --tracked
-PASS: secret-scan files=332
+PASS: secret-scan files=343
 $ node --test docs/docs.test.mjs
 ℹ tests 4
 ℹ pass 4
