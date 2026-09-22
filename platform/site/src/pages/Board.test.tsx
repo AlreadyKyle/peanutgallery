@@ -677,6 +677,45 @@ describe('Board card controls', () => {
     ]);
   });
 
+  it('re-ranks a card already on now without sending a target, which set_card_horizon refuses there', async () => {
+    fake.cards = [card({ id: 'k1', title: 'Open now', horizon: 'now', funding_target_usd: '3.0000' })];
+    await renderBoard();
+    await flush();
+    const form = cardForm('Open now');
+    expect(form.queryByLabelText('Funding target (USD)')).toBeNull();
+    expect(form.getByText('A card with money on its bar stays on now; cancel it instead.')).toBeTruthy();
+    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '1' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First in line.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Save horizon and rank' }));
+    await flush();
+    expect(callsNamed('set_card_horizon').map((call) => call.args)).toEqual([
+      { p_card: 'k1', p_horizon: 'now', p_rank: 1, p_reason: 'First in line.' },
+    ]);
+  });
+
+  it('offers horizon and rank only on cards still open for funding', async () => {
+    fake.cards = [
+      card({ id: 'f1', title: 'Funded one', stage: 'funded', funded_usd: '2.0000' }),
+      card({ id: 'p2', title: 'Paused two', stage: 'paused' }),
+    ];
+    await renderBoard();
+    await flush();
+    for (const [title, line] of [
+      ['Funded one', 'A funded card can only be cancelled.'],
+      ['Paused two', 'A paused card can only be cancelled or resumed.'],
+    ] as const) {
+      const form = cardForm(title);
+      expect(form.queryByLabelText('Horizon')).toBeNull();
+      expect(form.queryByLabelText('Rank')).toBeNull();
+      expect(form.queryByRole('button', { name: 'Save horizon and rank' })).toBeNull();
+      expect(form.getByRole('button', { name: 'Cancel card' })).toBeTruthy();
+      expect(form.getByText(line)).toBeTruthy();
+    }
+    fireEvent.submit(screen.getByRole('form', { name: 'Card Funded one' }));
+    await flush();
+    expect(callsNamed('set_card_horizon')).toHaveLength(0);
+  });
+
   it('cancels a card only after the confirm, with the reason', async () => {
     fake.cards = [card({ id: 'x1', title: 'Retire me' })];
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);

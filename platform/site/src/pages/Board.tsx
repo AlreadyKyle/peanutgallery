@@ -17,9 +17,11 @@ import {
   folders,
   heartbeat,
   HEARTBEAT_MS,
+  HORIZON_STAGES,
   horizons,
   isCardRole,
   lanes,
+  movesToNow,
   recordCreditPurchase,
   resumeCard,
   sendMagicLink,
@@ -756,6 +758,9 @@ function CardControl({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const idBase = useId();
+  // Horizon and rank change only while the card is open for funding; the target only on a move to now.
+  const movable = HORIZON_STAGES.includes(card.stage);
+  const settableTarget = movable && card.horizon !== 'now';
 
   function needReason(): string | null {
     if (reason.trim() === '') {
@@ -781,6 +786,7 @@ function CardControl({
 
   async function saveHorizon(event: FormEvent) {
     event.preventDefault();
+    if (!movable) return;
     const why = needReason();
     if (why === null) return;
     const rankValue = rank.trim() === '' ? null : Number(rank);
@@ -788,8 +794,10 @@ function CardControl({
       setMessage('Rank must be a whole number of zero or more.');
       return;
     }
+    // Only a move to now takes a target; a card already on now keeps the target it has.
+    const toNow = movesToNow(card, horizon);
     const targetValue = dollars(target);
-    if (horizon === 'now' && (targetValue === null || targetValue < 0.01)) {
+    if (toNow && (targetValue === null || targetValue < 0.01)) {
       setMessage('A card on horizon now needs a funding target of at least $0.01.');
       return;
     }
@@ -799,7 +807,7 @@ function CardControl({
           id: card.id,
           horizon,
           rank: rankValue,
-          target_usd: horizon === 'now' ? targetValue : null,
+          target_usd: toNow ? targetValue : null,
           reason: why,
         }),
       'Card saved.',
@@ -833,33 +841,41 @@ function CardControl({
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
           {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
         </p>
-        <label>
-          Horizon
-          <select value={horizon} onChange={(event) => setHorizon(event.target.value as Horizon)}>
-            {horizons.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Rank
-          <input type="number" inputMode="numeric" min="0" step="1" value={rank} onChange={(event) => setRank(event.target.value)} />
-        </label>
-        <label>
-          Funding target (USD)
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            aria-describedby={`${idBase}-target`}
-            value={target}
-            onChange={(event) => setTarget(event.target.value)}
-          />
-        </label>
-        <p id={`${idBase}-target`}>Needed to move a card to now. A card with money cannot leave now.</p>
+        {movable ? (
+          <label>
+            Horizon
+            <select value={horizon} onChange={(event) => setHorizon(event.target.value as Horizon)}>
+              {horizons.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {movable ? (
+          <label>
+            Rank
+            <input type="number" inputMode="numeric" min="0" step="1" value={rank} onChange={(event) => setRank(event.target.value)} />
+          </label>
+        ) : null}
+        {settableTarget ? (
+          <label>
+            Funding target (USD)
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              aria-describedby={`${idBase}-target`}
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+            />
+          </label>
+        ) : null}
+        {settableTarget ? <p id={`${idBase}-target`}>Needed to move the card to now.</p> : null}
+        {movable && card.horizon === 'now' ? <p>A card with money on its bar stays on now; cancel it instead.</p> : null}
+        {movable ? null : <p>A {STAGE_WORDS[card.stage] ?? card.stage} card can only be cancelled{card.stage === 'paused' ? ' or resumed' : ''}.</p>}
         {card.stage === 'paused' ? (
           <label>
             New estimate (USD)
@@ -882,9 +898,11 @@ function CardControl({
           <input value={reason} onChange={(event) => setReason(event.target.value)} />
         </label>
         <div className="row">
-          <button type="submit" disabled={busy}>
-            Save horizon and rank
-          </button>
+          {movable ? (
+            <button type="submit" disabled={busy}>
+              Save horizon and rank
+            </button>
+          ) : null}
           {card.stage === 'paused' ? (
             <button type="button" disabled={busy} onClick={() => void resume()}>
               Resume card

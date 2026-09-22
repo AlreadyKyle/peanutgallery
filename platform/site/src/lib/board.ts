@@ -82,6 +82,16 @@ export type BoardCard = {
 
 /** The stages /board lists: every card the board can still move, cancel or resume. */
 export const BOARD_CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'paused'] as const;
+/** The stages set_card_horizon accepts: a card still open for funding. A funded or paused card can only be cancelled or resumed. */
+export const HORIZON_STAGES: readonly string[] = ['proposed', 'designing', 'voted'];
+
+/**
+ * Whether saving this horizon moves the card to now. Only that move takes a funding target:
+ * set_card_horizon refuses card fields on any other save, a card already on now included.
+ */
+export function movesToNow(card: { horizon: Horizon }, horizon: Horizon): boolean {
+  return horizon === 'now' && card.horizon !== 'now';
+}
 export const BOARD_CARD_COLUMNS =
   'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at';
 
@@ -257,9 +267,10 @@ export async function fileCard(client: SupabaseClient, card: NextCard): Promise<
 }
 
 /**
- * Moves a card between horizons and sets its rank. Moving to now needs a funding target, and the
- * database refuses a card that does not meet the definition of ready, or a card with money that
- * would leave now.
+ * Moves a card between horizons and sets its rank. Moving to now needs a funding target, and only
+ * that move sends one (see movesToNow). The database refuses a card that does not meet the
+ * definition of ready, a card that is no longer open for funding, or a card with money that would
+ * leave now.
  */
 export async function setCardHorizon(
   client: SupabaseClient,
