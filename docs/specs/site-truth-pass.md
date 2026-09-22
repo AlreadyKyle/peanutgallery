@@ -77,7 +77,7 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
   - `img-src 'self' data:`: the mark, the favicons and the preview image are same-origin; the /board QR code from Supabase MFA enrolment is a `data:` URL.
   - `font-src 'self'`: the site uses the system font stacks and loads no web font.
   - `connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co`: `/version.json` (freshness) is same-origin; the REST, auth and realtime traffic goes to the `VITE_SUPABASE_URL` host over https and wss.
-  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`: no plugins, no `<base>`, and the /board forms submit through JavaScript. The Payment Link, Play, Discord and Clayhouse are links, which `connect-src` and `form-action` do not govern.
+  - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`: no plugins, no `<base>`, and the /board forms submit through JavaScript. The Payment Link, Play, Discord and the footer's "Created by Clayhouse" credit are links, which `connect-src` and `form-action` do not govern.
 - The report-only policy blocks nothing and has no reporting endpoint, so the live check is how a report is seen (below). The full policy is enforced only after both:
   - clean live checks against https://peanutgallery.games, with no Content Security Policy report on any route; and
   - a manual /board two-factor enrolment by a board member with DevTools open, in Chromium and in Safari, with no report in either console. That path, with the `data:` QR code and the auth calls, is the one the live check cannot reach. Each run is recorded in this spec's Evidence with the date, the browser and its version, and the console result.
