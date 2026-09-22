@@ -41,9 +41,14 @@ describe('judge', () => {
     expect(judge('attended', noTools, events(noTools), ok)).toBe('init line lists no tools');
   });
 
-  it('fails when a forbidden tool name appears anywhere in the stream', () => {
-    const withWeb = [...attendedRaw.slice(0, 1), attendedRaw[1]!.replace('Reading the spawn table before changing it.', 'Tools: Read, WebFetch, mcp__github__create_issue'), ...attendedRaw.slice(2)];
-    expect(judge('attended', withWeb, events(withWeb), ok)).toBe('forbidden tool names in the stream: WebFetch, mcp__github__create_issue');
+  it('fails when the init line lists a forbidden tool', () => {
+    const withWeb = attendedRaw.map((line) => line.replace('"tools":["Bash","Edit","Glob","Grep","Read","Write"]', '"tools":["Read","WebFetch","Task","mcp__github__create_issue"]'));
+    expect(judge('attended', withWeb, events(withWeb), ok)).toBe('forbidden tools in the init line: WebFetch, Task, mcp__github__create_issue');
+  });
+
+  it('reads tool names from the init line only, so a reply that names a tool it lacks passes', () => {
+    const named = [...attendedRaw.slice(0, 1), attendedRaw[1]!.replace('Reading the spawn table before changing it.', 'Tools: Read. No WebFetch, WebSearch, Agent or mcp__github__create_issue here.'), ...attendedRaw.slice(2)];
+    expect(judge('attended', named, events(named), ok)).toBeNull();
   });
 
   it('fails when the init line registers a memory path', () => {
@@ -66,10 +71,10 @@ describe('verdict', () => {
   // What the image, the command line and the environment decide comes out the same on every start.
   it('marks failures that cannot change on retry as fatal', () => {
     const noTools = unattendedRaw.map((line) => line.replace('"tools":["Bash","Edit","Glob","Grep","Read","Write"]', '"tools":[]'));
-    const withWeb = [...unattendedRaw.slice(0, 1), unattendedRaw[1]!.replace('Reading the spawn table before changing it.', 'Tools: Read, WebSearch'), ...unattendedRaw.slice(2)];
+    const withWeb = unattendedRaw.map((line) => line.replace('"tools":["Bash","Edit","Glob","Grep","Read","Write"]', '"tools":["Read","WebSearch"]'));
     const withMemory = [unattendedRaw[0]!.replace('"mcp_servers":[]', '"memory_paths":["<home>/.claude/memory/MEMORY.md"],"mcp_servers":[]'), ...unattendedRaw.slice(1)];
     expect(verdict('unattended', noTools, events(noTools), ok)).toEqual({ reason: 'init line lists no tools', fatal: true });
-    expect(verdict('unattended', withWeb, events(withWeb), ok)).toEqual({ reason: 'forbidden tool names in the stream: WebSearch', fatal: true });
+    expect(verdict('unattended', withWeb, events(withWeb), ok)).toEqual({ reason: 'forbidden tools in the init line: WebSearch', fatal: true });
     expect(verdict('unattended', withMemory, events(withMemory), ok)).toEqual({ reason: 'memory paths registered for the session: <home>/.claude/memory/MEMORY.md', fatal: true });
     expect(verdict('unattended', attendedRaw, events(attendedRaw), ok)).toEqual({ reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', fatal: true });
     expect(verdict('attended', unattendedRaw, events(unattendedRaw), ok)).toEqual({ reason: 'apiKeySource is ANTHROPIC_API_KEY; attended mode runs on the subscription, not on a key', fatal: true });
@@ -81,6 +86,25 @@ describe('verdict', () => {
     expect(verdict('unattended', ['warning: not a stream line'], [], ok)).toEqual({ reason: 'no system init line in the stream', fatal: false });
     const errored = unattendedRaw.map((line) => line.replace('"result":"The gatherer baseCost is now 11 and the check line holds."', '"result":"API Error: 529 overloaded"'));
     expect(verdict('unattended', errored, events(errored), { ...ok, isError: true })).toEqual({ reason: 'session ended in error: API Error: 529 overloaded', fatal: false });
+  });
+});
+
+// Claude Code writes an API error as an assistant turn on the model "<synthetic>" with no usage, and
+// ends with an error result.
+const API_ERROR_LINES = [
+  '{"type":"assistant","message":{"id":"4f1d2c3b-aaaa-4bbb-8ccc-000000000001","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Credit balance is too low"}],"stop_reason":"stop_sequence","stop_sequence":"","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"isApiErrorMessage":true}',
+  '{"type":"result","subtype":"success","is_error":true,"num_turns":1,"result":"Credit balance is too low","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"modelUsage":{}}',
+];
+
+describe('an API error in the probe', () => {
+  it('is transient, and its <synthetic> turn is never metered or named as a missing model', () => {
+    const raw = [attendedRaw[0]!, ...API_ERROR_LINES];
+    const errored = { ...ok, turns: 1, numTurns: 1, isError: true };
+    expect(verdict('attended', raw, events(raw), errored)).toEqual({ reason: 'session ended in error: Credit balance is too low', fatal: false });
+    const unattended = [unattendedRaw[0]!, ...API_ERROR_LINES];
+    expect(verdict('unattended', unattended, events(unattended), errored)).toEqual({ reason: 'session ended in error: Credit balance is too low', fatal: false });
+    const metering = probeMetering(parsePriceTable('{"claude-sonnet-5":{"input":3,"output":15,"cache_read":0.3,"cache_write_5m":3.75,"cache_write_1h":6}}'), events(raw));
+    expect(metering).toMatchObject({ rows: [], fallbackModels: [], turnModels: [] });
   });
 });
 

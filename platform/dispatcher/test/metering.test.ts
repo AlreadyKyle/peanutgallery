@@ -90,6 +90,7 @@ describe('SessionMeter on the recorded probe', () => {
       mismatch: false,
       anomaly: false,
       zeroedFields: [],
+      premiumTiers: [],
     });
     expect(ledgerTotal(rows)).toBe(0.0343);
     expect(end.totalCostUsd).toBe(0.05404125);
@@ -197,7 +198,7 @@ describe('SessionMeter', () => {
   it('prices an unknown turn at the fallback rates and says so', () => {
     const sessionMeter = new SessionMeter(LIVE, 'test');
     const turn = sessionMeter.addTurn({ model: 'mystery-model', usage: usage(100), contentChars: 0, thinking: false });
-    expect(turn).toEqual({ fallback: true, row: { model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 100, usd: 0.003, request_id: 'test/turn/1' } });
+    expect(turn).toEqual({ fallback: true, premium: null, row: { model: 'mystery-model', input_tokens: 1000, cached_tokens: 0, output_tokens: 100, usd: 0.003, request_id: 'test/turn/1' } });
     expect(sessionMeter.settle(null)).toMatchObject({ fallbackModels: ['mystery-model'], turnModels: ['mystery-model'] });
   });
 
@@ -240,6 +241,7 @@ describe('SessionMeter', () => {
       mismatch: true,
       anomaly: false,
       zeroedFields: [],
+      premiumTiers: [],
     });
   });
 
@@ -313,7 +315,7 @@ describe('SessionMeter', () => {
   });
 
   it('writes nothing for a session that reported nothing, or whose estimate equals what was recorded', () => {
-    expect(new SessionMeter(LIVE, 'test').settle(null)).toEqual({ basis: 'estimate', rows: [], fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] });
+    expect(new SessionMeter(LIVE, 'test').settle(null)).toEqual({ basis: 'estimate', rows: [], fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [], premiumTiers: [] });
     const sessionMeter = new SessionMeter(LIVE, 'test');
     committed(sessionMeter, 'claude-sonnet-5', usage(10), 30);
     // A result line with no modelUsage: no request was in flight, and 30 characters is the 10 tokens reported.

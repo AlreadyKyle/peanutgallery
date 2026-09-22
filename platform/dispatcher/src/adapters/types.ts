@@ -39,8 +39,10 @@ export type AgentEvent =
   | { type: 'start'; sessionId: string | null; model: string | null; tools: string[]; apiKeySource: string | null }
   // contentChars is the length of the turn's text, thinking and tool input, so a meter can estimate
   // output tokens the stream under-reports; thinking is true when the turn had a thinking block,
-  // whose text Claude Code does not write.
-  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number; thinking: boolean }
+  // whose text Claude Code does not write. requestId, when the adapter has one (a Managed Agents
+  // span.model_request_end event id), is the ledger row's request id, so a replayed request is
+  // recorded once; without it the meter names the row itself.
+  | { type: 'turn_usage'; turn: number; model: string; usage: TurnUsage; contentChars: number; thinking: boolean; requestId?: string | null }
   // Content on a line for a turn whose usage was already emitted, so the estimate still counts it;
   // outputTokens is the increase in the id's reported output, and thinking is true only the first
   // time the id shows a thinking block.
