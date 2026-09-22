@@ -26,8 +26,8 @@ Out:
 ## Behaviour
 
 **Order of checks.** Every step that runs no card code comes before the first step that does.
-- `detect` installs nothing. On a `card/*` branch it restores `platform/gate` from the base commit and then runs four checks: the kernel guard, the symlink and submodule check, and the new lane check. On every event it then runs the scans phase for each selected folder: secret scan, deny-list and runtime-token scan.
-- `seed-code` and `platform` install and run the checks phase: typecheck and tests, card code. The platform job then runs the gate, agent, ops, function and end-to-end suites as before. The `seed-config` job is gone, because the config lane has no checks phase.
+- `detect` installs nothing. On a `card/*` branch it restores `platform/gate` from the base commit and then runs three checks: the kernel guard, the symlink and submodule check, and the new lane check. On every event it then runs the scans phase for each selected folder: secret scan, deny-list and runtime-token scan.
+- `seed-code` and `platform` install and run the checks phase: typecheck and tests, card code. The platform job then runs the gate, agent, ops, function and end-to-end suites as before. It builds the site once more, only so the end-to-end suite has something to serve. The `seed-config` job is gone, because the config lane has no checks phase.
 - `build` is a new job on a fresh runner that never runs card tests. On a card branch it restores `platform/gate` and then every kernel file from the base commit (`restore-kernel.sh`). It installs with `--ignore-scripts` and no dependency cache, since a cache can be written by a run that ran card tests. It builds each selected folder and scans every built file, and only then runs the headless bot, the one step here that runs card code.
 - `gate` requires `detect`, then every job `detect` selected, `build` included. It runs unless the run was cancelled.
 
@@ -93,7 +93,7 @@ Card tests, the headless bot and the end-to-end suite all run card code. The bot
 - [x] `gateStatus` ignores a `gate` run from another app, fails when any Actions `gate` run failed or was cancelled, and passes only when all passed.
 - [x] Both `netlify.toml` ignore commands skip `card/*` branches, with or without a cached build, and build a board branch's preview, a branch that only starts like `card`, and main with no cached build.
 - [x] A clean install with `--ignore-scripts` builds both folders, the builds scan clean, and the bot runs.
-- [ ] This pull request's own gate run shows the new `detect` scans and the `build` job green.
+- [x] This pull request's own gate run shows the new `detect` scans and the `build` job green.
 - [ ] A card pull request after merge shows the lane check, the kernel restore and the bot in the `build` job green, and no Netlify deploy preview (waits on: the first card run after merge).
 - [ ] Both Netlify sites' build settings read back, and any existing deploy preview of a `card/*` branch deleted (waits on: the board's allow for the Netlify read and delete).
 
@@ -138,7 +138,7 @@ Each failure is the hole under test. Examples:
 - `FAIL netlify: seed-1/netlify.toml skips a card branch's deploy preview`
 
 After the change:
-- `pnpm --filter @backseat/gate test`: `PASS: gate tests passed=347` (213 before).
+- `pnpm --filter @backseat/gate test`: `PASS: gate tests passed=348` (213 before).
 - `pnpm --filter @backseat/dispatcher test`: `Tests  379 passed (379)`. New tests: "protects the board client, the determinism harness, the game page and every build config", "accepts only .json files in the config lane", "counts only gate runs the GitHub Actions app created", "fails when one gate run on the sha failed, whatever the others say", "passes only when every Actions gate run completed with success".
 - `pnpm test:docs`: `pass 4`; `pnpm test:agents` and `pnpm test:ops` (`pass 41`) pass.
 
@@ -159,6 +159,29 @@ GATE PASS folder=seed-1 lane=code phase=bot
 
 Clean install. An export of `main` installed with `pnpm install --frozen-lockfile --ignore-scripts --config.side-effects-cache=false` built seed-1 (`postbuild: copied config and content, wrote version.json`) and the site. The bot then ran (`state hash 4b268106c8053ca8`), and the new scan over both builds printed `PASS: runtime-token-deny files=10`.
 
+This pull request's first gate run (#48, run 35793958086). It changes root files, so every job ran:
+- `detect` scanned both folders with nothing installed: `PASS: secret-scan files=334`, `PASS: banned-phrases files=103 paths=118 message=yes`, `PASS: runtime-token-deny files=42`, then `GATE PASS folder=seed-1 lane=code phase=scans` and `GATE PASS folder=platform lane=code phase=scans`.
+- `build`, on a fresh runner with no cache, installed with `--ignore-scripts`. It then printed:
+  - `gate: step=build package=@backseat/seed-1 ok 6s` and `PASS: runtime-token-deny files=6`
+  - `gate: step=build package=@backseat/site ok 7s` and `PASS: runtime-token-deny files=4`
+  - `PASS: headless-bot simulatedSeconds=36000 unlocks=13 finalTotalDust=210706643.11118117 stateHash=4b268106c8053ca8`
+- `seed-code` passed.
+- `platform` failed at the end-to-end suite: `Error: The directory "dist" does not exist. Did you build your project?` The suite had served the build the old ship gate left in that job. The fix is the platform job's own build step before the suite, with a gate test that pins the order.
+
+The second run, at a8ef416 (run 35794424681), was green in every job. Every check run on the sha came from `github-actions` with conclusion `success`.
+- `build`:
+  - `GATE PASS folder=seed-1 lane=code phase=build`
+  - `GATE PASS folder=platform lane=code phase=build`
+  - `PASS: headless-bot simulatedSeconds=36000 unlocks=13 finalTotalDust=210706643.11118117 stateHash=4b268106c8053ca8`
+  - `GATE PASS folder=seed-1 lane=code phase=bot`
+- `seed-code`: `Tests  77 passed (77)`, then `GATE PASS folder=seed-1 lane=code phase=checks`.
+- `platform`:
+  - `Tests  379 passed (379)`, `Tests  146 passed (146)` and `Tests  163 passed (163)`, then `GATE PASS folder=platform lane=code phase=checks`
+  - `PASS: gate tests passed=348`
+  - `71 passed (47 steps) | 0 failed`
+  - the end-to-end suite: `11 passed (4.6s)`
+- `gate`: `gate passed`.
+
 Bundle scan cost. The code view over the two built bundles took 95 seconds and flagged eight library strings (the language names and the object-to-string text). Read as plain text for the unfinished-work markers, the same bundles take under a second and flag nothing. That is why a bundle gets the marker list only.
 
 `pnpm verify`: exit 0. The counts:
@@ -166,7 +189,7 @@ Bundle scan cost. The code view over the two built bundles took 95 seconds and f
 - seed-1 `Tests  77 passed (77)`
 - site `Tests  163 passed (163)`
 - dispatcher `Tests  379 passed (379)`
-- gate `PASS: gate tests passed=347`
+- gate `PASS: gate tests passed=348`
 - agents `tests 64, pass 64`
 - ops `tests 41, pass 41, skipped 0`
 - deno `ok | 71 passed (47 steps) | 0 failed`
