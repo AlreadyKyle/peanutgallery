@@ -383,7 +383,7 @@ const SHELL_SCRIPTS = readdirSync(OPS_DIR).filter((name) => name.endsWith('.sh')
 
 describe('shell scripts', () => {
   test('parse with bash -n (the entrypoint with sh -n too)', () => {
-    assert.deepEqual(SHELL_SCRIPTS.sort(), ['deploy.sh', 'dispatcher-entrypoint.sh', 'make-dispatcher-env.sh', 'provision.sh']);
+    assert.deepEqual(SHELL_SCRIPTS.sort(), ['deploy.sh', 'dispatcher-entrypoint.sh', 'make-dispatcher-env.sh', 'oracle-launch.sh', 'provision.sh']);
     for (const script of SHELL_SCRIPTS) {
       const run = spawnSync('bash', ['-n', path.join(OPS_DIR, script)], { encoding: 'utf8' });
       assert.equal(run.status, 0, `${script}: ${run.stderr}`);

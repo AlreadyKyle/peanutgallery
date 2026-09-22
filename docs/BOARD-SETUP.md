@@ -8,8 +8,8 @@ Sources: `platform/ops/README.md` (Operator inputs, Provision), `docs/specs/vps.
 
 **Two rules.**
 
-1. **Never paste a key, token or ping URL into the chat.** They go in `.env` or in an `export` in a
-   terminal. I can read `.env` and run commands; I can never type a secret for you.
+1. **Never paste a key, token or ping URL into the chat.** They go in `.env`, in `.env.vps`, or in an
+   `export` in a terminal. I can read `.env` and run commands; I can never type a secret for you.
 2. **If a screen does not match these words,** the provider changed its UI. Tell me what you see
    rather than guessing — I will not be able to tell from the result that you picked the wrong thing.
 
@@ -25,18 +25,18 @@ checked and when.
 
 | # | Item | Status |
 |---|---|---|
-| 4 | hello@peanutgallery.games | waiting on you |
-| 5 | ntfy topic | waiting on you |
+| 4 | hello@peanutgallery.games | waiting on you (GoDaddy; no MX records exist yet) |
+| 5 | ntfy topic | **subscribe on your phone** — I made and tested the topic; the webhook secret needs your allow |
 | 6 | healthchecks.io check | waiting on you |
-| 7 | VPS GitHub token | waiting on you |
+| 7 | VPS GitHub token | waiting on you — now one pre-filled link |
 | 8 | Studio Anthropic credit | waiting on you |
-| 9 | Day-7 kill line decision | waiting on you |
+| 9 | Day-7 kill line | **needs your OK** — I tried to delete it and the edit is held for your approval |
 | 10 | Funding target vs agent spend ceiling | **needs your call** |
-| 2a–2d | Oracle instance | waiting on you |
-| Part 3 | Hand me the four values | needs 5, 6, 7 and 2b first |
+| 2b | Oracle sign-up and one sign-in command | waiting on you — I launch the instance by script after it |
+| Part 3 | Hand me the two values | needs 6 and 7 first |
 | Part 4 | Cutover, contribution, clip, Go live | later, with me |
 
-Done so far: **3 of 12** — image provider and key; TOTP on /board; legal text review.
+Done so far: **4 of 12** — image provider and key; TOTP on /board; legal text review; SSH key (2a).
 
 ---
 
@@ -48,10 +48,16 @@ Done so far: **3 of 12** — image provider and key; TOTP on /board; legal text 
 
 **Do this.**
 
-1. Go to wherever peanutgallery.games mail and DNS live (the registrar or mail host, not Netlify).
-2. Create `hello@peanutgallery.games` as a mailbox, or as an alias that forwards to
-   kyle@clayhouse.studio. An alias is enough.
+I checked on 22 September: the domain's DNS is at **GoDaddy** (`ns45/ns46.domaincontrol.com`) and
+it has **no MX records at all**, so every message to any @peanutgallery.games address bounces today.
+Any forwarder needs an account in your name, so this one stays yours.
+
+1. Sign in at GoDaddy → the domain → **Email forwarding** (if GoDaddy offers it on this domain), or
+   use a free forwarder such as ImprovMX, which gives you two MX records to add in GoDaddy's DNS.
+2. Forward `hello@peanutgallery.games` to kyle@clayhouse.studio. An alias is enough.
 3. Send it a test message from another address and confirm it arrives.
+
+After you tell me, I check the MX records with `dig` and record them here.
 
 **Tell me:** "hello@ works, test mail arrived."
 
@@ -62,29 +68,28 @@ Done so far: **3 of 12** — image provider and key; TOTP on /board; legal text 
 **Why it blocks.** The dispatcher's alert unit posts here when it fails for good, and the Stripe
 webhook posts here too. Without it, an unattended failure is silent.
 
+**What I did, 22 September.** Generated an unguessable topic without printing it, saved the URL as
+`NTFY_TOPIC_URL` in `.env.vps` at the repository root (gitignored, mode 0600), and posted a test to
+it: HTTP 200. The topic name is on your Mac's clipboard. Anyone who knows it can read and post your
+alerts, so it stays out of chat.
+
 **Do this.**
 
-1. Generate an unguessable topic name:
+1. Install the **ntfy** app on your phone (App Store / Play Store).
+2. In the app: **+** → paste the topic name (Universal Clipboard carries it from the Mac; if the
+   clipboard has moved on, `cut -d/ -f4 .env.vps | tr -d '\n' | pbcopy` puts it back) → Subscribe. Leave the
+   server as ntfy.sh.
+3. Tell me, and I post a second test so you see it arrive.
 
-   ```bash
-   echo "pg-$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 20)"
-   ```
+**One allow I need.** The Stripe webhook also posts to this topic, from the Supabase function secret
+`NTFY_TOPIC_URL`. Setting that secret on production was held for your approval. Allow it when I ask,
+or run this yourself at the repository root:
 
-2. Install the **ntfy** app on your phone (App Store / Play Store).
-3. In the app: **+** → paste the topic name exactly → Subscribe. Leave the server as ntfy.sh.
-4. Your URL is `https://ntfy.sh/<that topic>`. Keep it. Anyone who knows the topic can read your
-   alerts and post to them, so treat it like a password — do not paste it in chat.
-5. Test it from the Mac (replace the URL):
+```bash
+set -a; . ./.env; . ./.env.vps; set +a; cd platform && npx supabase secrets set --project-ref lyxndueoeisyqzewflpu NTFY_TOPIC_URL="$NTFY_TOPIC_URL"
+```
 
-   ```bash
-   curl -d "peanut gallery test" https://ntfy.sh/<your-topic>
-   ```
-
-   The phone should buzz within a second or two.
-
-**Done when.** The test notification arrived on your phone.
-
-**Tell me:** "ntfy topic is set up and tested." (Not the URL — that comes in Part 3.)
+**Tell me:** "subscribed to ntfy."
 
 ---
 
@@ -101,7 +106,8 @@ the timings, so use these exactly.
    - **Period: 1 minute**
    - **Grace time: 5 minutes**
 3. Under Notification methods, confirm your email is on and gets this check.
-4. Copy the ping URL. It looks like `https://hc-ping.com/<uuid>`. Keep it out of chat.
+4. Copy the ping URL. It looks like `https://hc-ping.com/<uuid>`. Put it in `.env.vps` (Part 3).
+   Keep it out of chat.
 
 **Note.** The period is 1 minute, not 5. The dispatcher pings every tick, and an earlier note of
 mine said 5 — `platform/ops/README.md` is the version of record.
@@ -115,21 +121,21 @@ mine said 5 — `platform/ops/README.md` is the version of record.
 **Why it blocks.** The VPS clones and pushes with its own token, never your Mac's. The provisioning
 script refuses a token equal to the Mac's `GITHUB_TOKEN`, so this must be a new one.
 
+No API creates a fine-grained token, so this stays yours, but GitHub now takes the settings in the
+link, which leaves one choice to make by hand.
+
 **Do this.**
 
-1. GitHub → your avatar → **Settings** → **Developer settings** → **Personal access tokens** →
-   **Fine-grained tokens** → **Generate new token**.
-2. Name: `peanutgallery-vps`.
-3. **Resource owner: AlreadyKyle.**
-4. Repository access: **Only select repositories** → `peanutgallery`. Nothing else.
-5. Repository permissions — set exactly these four and nothing more:
-   - **Contents: Read and write**
-   - **Pull requests: Read and write**
-   - **Checks: Read-only**
-   - **Metadata: Read-only** (GitHub adds this on its own)
-   - **Workflows: no access.** Leave it alone.
-6. Expiry: pick a date you will remember; rotation is documented in `platform/ops/README.md`.
-7. Generate, and copy the token. It is shown once. Keep it out of chat.
+1. Open this link. It fills in the name, owner AlreadyKyle, a 366-day expiry, and exactly the
+   permissions the VPS needs — Contents read and write, Pull requests read and write, Checks read
+   (Metadata read is added by GitHub):
+
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
+
+2. The one thing to choose: Repository access → **Only select repositories** → `peanutgallery`.
+3. Check the permissions list shows those four and nothing else — no Workflows. Change the expiry if
+   you want; rotation is in `platform/ops/README.md`.
+4. Generate, and copy the token. It is shown once. Put it in `.env.vps` (Part 3). Keep it out of chat.
 
 **Tell me:** "VPS GitHub token is created."
 
@@ -161,8 +167,11 @@ in it. This is studio money, not pool money.
 The day-7 kill line in the docs reads "under 300 peak concurrent". It was a stream number, and the
 stream has left launch scope, so nothing measures it any more.
 
-**Tell me:** "delete it", or give me the site-first number you want instead. I delete it if you say
-nothing.
+You said nothing, so on 22 September I went to delete it from `docs/PLAN.md` (the day-7 row keeps
+its other three criteria). The edit was held for your approval, because it changes a kill criterion.
+The day-30 row has the same problem: "under 150 average concurrent" is also a stream number.
+
+**Tell me:** "delete it" (day 7 only), "delete both", or the site-first numbers you want instead.
 
 ---
 
@@ -178,101 +187,60 @@ anyone giving any amount. Detail and the options are below in this file under **
 
 ---
 
-## Part 2 — The Oracle instance. Longest item, do it in one sitting.
+## Part 2 — The Oracle instance. Your part is a sign-up and one command.
 
 **Why it blocks.** Live criterion 2 is the dispatcher running unattended on a server. Today it runs
 on your Mac, billed to you. Any Ubuntu 24.04 host works; Oracle's free tier is what the runbook was
 written against.
 
-### 2a. Make an SSH key first — you do not have one
+**What changed, 22 September.** The console walk-through is gone. `platform/ops/oracle-launch.sh`
+(spec `docs/specs/oracle-launch.md`) builds the network, launches the instance, and keeps retrying
+every availability domain while Oracle says "Out of capacity" — the free Ampere tier's usual answer,
+which by hand meant clicking Create again for hours. It checks the firewall is TCP 22 only, proves
+ssh, and can rebuild the box the same way later. The SSH key (2a) is made, so all that is left is
+the account, which only you can create.
 
-I checked: `~/.ssh` has no public key at all. Oracle asks for one while creating the instance, so do
-this before anything else.
+### 2b. Sign up, then sign in once from the terminal
 
-```bash
-ssh-keygen -t ed25519 -C "peanutgallery-vps" -f ~/.ssh/id_ed25519
-```
+1. cloud.oracle.com → **Start for free**. **Home region: Canada Southeast (Toronto),
+   `ca-toronto-1`.** Montreal (`ca-montreal-1`) is the accepted alternative. The home region cannot
+   be changed later. Stop once you reach the console home page; create nothing there.
+2. In the **Terminal tab inside Claude**, run:
 
-- It asks for a passphrase. Leaving it empty is simplest. If you set one, also run
-  `ssh-add --apple-use-keychain ~/.ssh/id_ed25519` afterwards, or provisioning will stop to ask for
-  it repeatedly.
-- Then print the public half:
+   ```bash
+   oci session authenticate --region ca-toronto-1 --profile-name peanutgallery
+   ```
 
-  ```bash
-  cat ~/.ssh/id_ed25519.pub
-  ```
+   A browser window opens; sign in with the Oracle account. The CLI is already installed. No API key
+   is created, and the sign-in lasts 24 hours with refresh, which covers a long capacity wait.
 
-- Copy that whole single line, `ssh-ed25519 ...` through the comment at the end. That is the public
-  key; it is safe to paste into Oracle. The file without `.pub` is the private key and never leaves
-  the Mac.
+**Tell me:** "Oracle is signed in."
 
-### 2b. Create the instance
-
-1. cloud.oracle.com → **Start for free** (or sign in if you have an account).
-2. **Home region: Canada Southeast (Toronto), `ca-toronto-1`.** Montreal (`ca-montreal-1`) is the
-   accepted alternative. The home region cannot be changed later, so get it right at sign-up.
-3. Main menu → **Compute** → **Instances** → **Create instance**.
-4. Name: `peanutgallery-dispatcher`.
-5. **Image and shape** → Change image → **Canonical Ubuntu** → **24.04** → Select image.
-6. Change shape → **Ampere** → **VM.Standard.A1.Flex** → **4 OCPUs**, **24 GB** memory. That is the
-   whole Always Free Ampere allowance and what the runbook sizes against.
-7. Networking: keep the default VCN and subnet it offers to create. Make sure **Assign a public
-   IPv4 address** is yes.
-8. **Add SSH keys** → **Paste public keys** → paste the line from 2a.
-9. No root password, no other changes. **Create.**
-10. Wait for the state to go orange → **RUNNING**, then copy the **Public IP address**.
-
-**If you get "Out of capacity".** It is common on the free Ampere tier. Try another availability
-domain in the same region, or retry in a few hours. If it keeps failing, tell me — any Ubuntu 24.04
-host works unchanged, including a cheap paid instance elsewhere.
-
-### 2c. Confirm the firewall
-
-The dispatcher publishes no port. It needs inbound **TCP 22 only**, outbound everything.
-
-1. Networking → **Virtual cloud networks** → your VCN → **Subnets** → your subnet → **Security
-   Lists** → the default list.
-2. Ingress rules: there should be one for TCP port 22 from `0.0.0.0/0`. That is Oracle's default.
-3. Add nothing else. Leave the instance's own pre-installed iptables rules alone — I handle ufw
-   inside provisioning.
-
-### 2d. Prove you can reach it
-
-```bash
-ssh ubuntu@<the public IP> 'echo ok'
-```
-
-Type `yes` at the fingerprint prompt the first time. You want to see `ok`.
-
-**Tell me:** "Oracle instance is up and ssh works."
+Then I run the script, with your allow, and quote the `RUNNING` state, the address and both
+`ssh … ok` lines. If capacity never frees up, any Ubuntu 24.04 host works unchanged, including a
+cheap paid instance elsewhere — that would be your call, because it costs money.
 
 ---
 
-## Part 3 — Hand me the four values. Two minutes, and it never touches the chat.
+## Part 3 — Hand me the two values. Two minutes, and it never touches the chat.
 
-I need the four values from items 5, 6, 7 and 2b together. They go into an `export` in a terminal,
-and I run the script that reads them in that same shell.
-
-**Use the Terminal tab inside Claude** — the one beside this conversation — because I can run
-commands in that same shell and see the result without the values ever appearing in chat. If you use
-Terminal.app or iTerm instead, tell me which, and whether you would rather run the one command
-yourself while I read its output.
+The address comes from my script and the ntfy URL is already in `.env.vps`. What is left are the
+healthchecks ping URL (item 6) and the VPS GitHub token (item 7). Open `.env.vps` at the repository
+root in any editor and add two lines under the one that is there:
 
 ```bash
-export VPS_IP=203.0.113.10 \
-       VPS_GITHUB_TOKEN=github_pat_... \
-       HEALTHCHECK_URL=https://hc-ping.com/... \
-       NTFY_TOPIC_URL=https://ntfy.sh/...
+VPS_GITHUB_TOKEN=github_pat_...
+HEALTHCHECK_URL=https://hc-ping.com/...
 ```
 
-Substitute your real values. No quotes needed unless a value has a space, and none of these do.
+Substitute your real values, no quotes. The file is gitignored and readable only by you.
 
 **Tell me:** "VPS inputs are set."
 
-Then I take over: I write the env file with `platform/ops/make-dispatcher-env.sh` (it prints key
-names, never values), upload it to the server as root-only 0600, install the ntfy URL for the alert
-unit, and run `provision.sh` twice — the second run must print `provision: done: 0 change(s)`. I
-quote every check as I go.
+Then I take over: I load `.env.vps` into the shell and write the env file with
+`platform/ops/make-dispatcher-env.sh` (it prints key names, never values), upload it to the server as
+root-only 0600, install the ntfy URL for the alert unit, and run `provision.sh` twice — the second run
+must print `provision: done: 0 change(s)`. I quote every check as I go.
 
 ---
 
@@ -374,13 +342,13 @@ At /board, press **Go live**. It works once and cannot be undone. Then post.
 Copy any of these back to me as you finish:
 
 - "hello@ works, test mail arrived."
-- "ntfy topic is set up and tested."
+- "subscribed to ntfy."
 - "healthchecks check is created."
 - "VPS GitHub token is created."
 - "Studio credit is loaded."
-- "Oracle instance is up and ssh works."
+- "Oracle is signed in."
 - "VPS inputs are set."
-- "delete it" (the day-7 kill line)
+- "delete it" / "delete both" (the kill lines, item 9)
 - "raise the numbers" / "split them" / "both" (the funding ceiling, item 10)
 
 ## What I build while you do all this
@@ -466,3 +434,11 @@ covered it.
   else. 1 row deleted, HTTP 200.
 - After: the card is gone, 9 cards remain, queue depth 0, 6 live. `ledger` still 65 rows and the pool
   still $0.5019 — the delete touched no money.
+
+### 2a. SSH key for the VPS — DONE 22 September 2026
+
+Nothing left for you here. `~/.ssh` had no key pair, so I made one with no passphrase, the default
+this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/id_ed25519`.
+`ssh-keygen -lf ~/.ssh/id_ed25519.pub` prints
+`256 SHA256:1fLWiB1WvhlXXkzbw7/xkUXmRGPsp5NDtozEVZ3ofdk peanutgallery-vps (ED25519)`.
+`oracle-launch.sh` gives the public half to the instance; the private half never leaves the Mac.
