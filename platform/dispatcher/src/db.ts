@@ -67,7 +67,9 @@ export interface Deploy {
 }
 
 // Who pays for a turn: the founder's subscription in attended mode, the pool in unattended mode.
-export type Billing = 'studio' | 'founder';
+// 'overhead' is the unattended startup probe's spend: public, paid from the studio share, never
+// taken from the pool (20260922000000_ledger_overhead.sql).
+export type Billing = 'studio' | 'founder' | 'overhead';
 
 // card_id and role_id are null for spend that belongs to no card: the startup probe. request_id
 // names the row on the dispatcher's side, so a retried write is recorded once; null writes a row

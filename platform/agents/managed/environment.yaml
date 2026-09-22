@@ -1,0 +1,28 @@
+# The one cloud environment every unattended card session runs in (docs/specs/launch-managed.md).
+# Anthropic hosts one container per session; the dispatcher on the VPS never runs the card's code.
+#
+# Networking is deny-by-default. The only egress is the public package registries, so the agent can
+# run `pnpm install` from the lockfile and the gate's own commands; no other host, no MCP server. The
+# repository reaches the container through the session's github_repository resource, served by
+# Anthropic's git proxy with a read-only token that never enters the container.
+#
+# What this protects and what it does not: it keeps card code in the container from fetching
+# arbitrary payloads or reaching third parties. It is not a confidentiality control for the
+# repository. The same card code runs in CI with the full checkout, the repository stays private as a
+# GitHub setting, and no secret lives in it.
+#
+# pnpm is preinstalled at the root package.json's packageManager version. `managed:apply` creates or
+# updates this environment by name and prints its id for MANAGED_ENVIRONMENT_ID; unattended startup
+# refuses to run unless the environment the API returns matches this file.
+name: peanutgallery-cards
+description: Containers for Peanut Gallery card sessions; package registries only.
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_package_managers: true
+    allow_mcp_servers: false
+    allowed_hosts: []
+  packages:
+    npm:
+      - pnpm@11.0.9

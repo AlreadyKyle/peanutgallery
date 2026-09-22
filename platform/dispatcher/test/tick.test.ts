@@ -187,8 +187,9 @@ describe('tick', () => {
 
   it('sets the stuck limit from every bounded wait in the pipeline', () => {
     // 60 session + 15 git (three network git calls at 5) + 1 pull request head + 20 gate + 1 merge state
-    // + 2 × (10 deploy + 5 smoke) for this card and one ahead of it on the merge lock + 2 retries + 10 margin.
-    expect(stuckAfterMs(60)).toBe(139 * 60_000);
+    // + 2 × (10 deploy + 15 smoke, the gate at the merge sha included) for this card and one ahead of it
+    // on the merge lock + 2 retries + 10 margin.
+    expect(stuckAfterMs(60)).toBe(159 * 60_000);
   });
 
   it('skips vetoed cards, community cards and cards without an executor', async () => {

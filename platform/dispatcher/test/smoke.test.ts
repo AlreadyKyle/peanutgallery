@@ -1,12 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseChecks } from '../src/acceptance.js';
-import { childEnv } from '../src/adapters/claude-cli.js';
-import { runSmoke, servedPath, type BotExec, type BotExecOptions } from '../src/smoke.js';
+import type { GateStatus } from '../src/github.js';
+import { gitBlobId, mergedServedFiles, parseLsTree, runSmoke, servedPath, type MergedFile } from '../src/smoke.js';
+import { AGENT_EMAIL, git } from '../src/worktree.js';
 import { hangingFetch, mockFetch, type Reply } from './helpers/mock-fetch.js';
 
 const BASE = 'https://site.local';
 const SHA = 'merge-sha-0123456789';
 const PAGE = '<!doctype html><meta name="build-sha" content="merge-sha-0123456789">';
+const SPAWN = `${JSON.stringify({ rows: [{ id: 'gatherer', name: 'Gatherer', baseCost: 11, rate: 0.2 }] }, null, 2)}\n`;
+const STRINGS = '{"title":"Dust"}\n';
 
 type Pages = Record<string, Reply>;
 
@@ -16,8 +23,20 @@ function fetchFor(pages: Pages) {
 
 const GOOD: Pages = {
   '/': { status: 200, text: PAGE },
-  '/version.json': { status: 200, json: { sha: SHA, builtAt: '2026-09-14T15:00:00.000Z' } },
-  '/config/spawn-table.json': { status: 200, json: { rows: [{ id: 'gatherer', name: 'Gatherer', baseCost: 11, rate: 0.2 }] } },
+  '/version.json': { status: 200, json: { sha: SHA, builtAt: 'build time' } },
+  '/config/spawn-table.json': { status: 200, text: SPAWN },
+  '/content/strings.json': { status: 200, text: STRINGS },
+};
+
+const MERGED: MergedFile[] = [
+  { path: 'seed-1/config/spawn-table.json', route: '/config/spawn-table.json', mode: '100644', blob: gitBlobId(Buffer.from(SPAWN)) },
+  { path: 'seed-1/content/strings.json', route: '/content/strings.json', mode: '100644', blob: gitBlobId(Buffer.from(STRINGS)) },
+];
+
+const PASS: GateStatus = { state: 'pass' };
+const gateIs = (status: GateStatus) => async () => status;
+const noFiles = async (): Promise<MergedFile[]> => {
+  throw new Error('a platform card lists no served files');
 };
 
 describe('servedPath', () => {
@@ -29,12 +48,27 @@ describe('servedPath', () => {
   });
 });
 
-describe('runSmoke build check', () => {
-  const base = { sha: SHA, folder: 'platform' as const, checks: [], botRoot: '/unused', botSeconds: 60, retryDelayMs: 1 };
+describe('gitBlobId', () => {
+  it('is the id git gives the same bytes', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-blob-'));
+    try {
+      const file = path.join(dir, 'x.json');
+      await writeFile(file, SPAWN, 'utf8');
+      const id = execFileSync('git', ['hash-object', file], { stdio: 'pipe' }).toString().trim();
+      expect(gitBlobId(Buffer.from(SPAWN))).toBe(id);
+      expect(gitBlobId(Buffer.from(`${SPAWN} `))).not.toBe(id);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
 
-  it('passes for a platform deploy that serves the merge sha', async () => {
+describe('runSmoke build check', () => {
+  const base = { sha: SHA, folder: 'platform' as const, checks: [], mergedFiles: noFiles, gate: gateIs(PASS), retryDelayMs: 1 };
+
+  it('passes for a platform deploy that serves the merge sha with the gate green there', async () => {
     const { fetchFn, calls } = fetchFor(GOOD);
-    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn })).toEqual({ ok: true, summary: 'pass: build merge-sh served' });
+    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn })).toEqual({ ok: true, summary: 'pass: build merge-sh served; gate green at the merge sha' });
     expect(calls.map((c) => c.url)).toEqual([`${BASE}/`, `${BASE}/version.json`]);
   });
 
@@ -58,7 +92,7 @@ describe('runSmoke build check', () => {
       if (pageReads === 2) throw new TypeError('fetch failed');
       return GOOD['/'];
     });
-    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn })).toEqual({ ok: true, summary: 'pass: build merge-sh served' });
+    expect((await runSmoke({ ...base, baseUrl: BASE, fetchFn })).ok).toBe(true);
     expect(pageReads).toBe(3);
     const failing = fetchFor({ ...GOOD, '/': { status: 503, text: '' } });
     expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn: failing.fetchFn })).toEqual({ ok: false, summary: 'fail: GET / returned 503' });
@@ -72,91 +106,125 @@ describe('runSmoke build check', () => {
   });
 });
 
-describe('runSmoke config check', () => {
-  const checks = parseChecks('check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11');
-  const base = { sha: SHA, folder: 'seed-1' as const, checks, botRoot: '/unused', botSeconds: 60, retryDelayMs: 1 };
+describe('runSmoke gate at the merge sha', () => {
+  const base = { sha: SHA, folder: 'platform' as const, checks: [], mergedFiles: noFiles, retryDelayMs: 1, baseUrl: BASE };
 
-  it('fails before the bot runs when the served config does not satisfy the check', async () => {
+  it('fails when the gate concluded anything but success', async () => {
+    expect(await runSmoke({ ...base, fetchFn: fetchFor(GOOD).fetchFn, gate: gateIs({ state: 'fail', conclusion: 'failure' }) })).toEqual({
+      ok: false,
+      summary: 'fail: the gate at the merge sha concluded failure',
+    });
+  });
+
+  it('is no verdict, and throws, when the gate is still running or missing when the wait ends', async () => {
+    await expect(runSmoke({ ...base, fetchFn: fetchFor(GOOD).fetchFn, gate: gateIs({ state: 'pending' }) })).rejects.toThrow('the gate at the merge sha merge-sh was still pending when the smoke wait ended');
+    await expect(runSmoke({ ...base, fetchFn: fetchFor(GOOD).fetchFn, gate: gateIs({ state: 'missing' }) })).rejects.toThrow('still missing');
+  });
+
+  it('checks the gate only after the served build passes', async () => {
+    let asked = 0;
+    const result = await runSmoke({
+      ...base,
+      fetchFn: fetchFor({ ...GOOD, '/': { status: 404, text: '' } }).fetchFn,
+      gate: async () => {
+        asked += 1;
+        return PASS;
+      },
+    });
+    expect(result.ok).toBe(false);
+    expect(asked).toBe(0);
+  });
+});
+
+describe('runSmoke seed config', () => {
+  const checks = parseChecks('check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11');
+  const base = { sha: SHA, folder: 'seed-1' as const, checks, mergedFiles: async () => MERGED, gate: gateIs(PASS), retryDelayMs: 1, baseUrl: BASE };
+
+  it('passes when the checks hold and every served file equals the merge commit, byte for byte, and runs no card code', async () => {
+    const { fetchFn, calls } = fetchFor(GOOD);
+    expect(await runSmoke({ ...base, fetchFn })).toEqual({
+      ok: true,
+      summary: 'pass: build merge-sh served; 1 config check(s) hold; 2 served file(s) match the merge commit; gate green at the merge sha',
+    });
+    expect(calls.map((c) => c.url)).toEqual([`${BASE}/`, `${BASE}/version.json`, `${BASE}/config/spawn-table.json`, `${BASE}/config/spawn-table.json`, `${BASE}/content/strings.json`]);
+  });
+
+  it('fails before the byte check when the served config does not satisfy the check', async () => {
     const pages: Pages = { ...GOOD, '/config/spawn-table.json': { status: 200, json: { rows: [{ id: 'gatherer', baseCost: 10 }] } } };
-    const { fetchFn, calls } = fetchFor(pages);
-    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn })).toEqual({
+    expect(await runSmoke({ ...base, fetchFn: fetchFor(pages).fetchFn })).toEqual({
       ok: false,
       summary: 'fail: served /config/spawn-table.json does not satisfy check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11',
     });
-    expect(calls.map((c) => c.url)).toEqual([`${BASE}/`, `${BASE}/version.json`, `${BASE}/config/spawn-table.json`]);
   });
 
-  it('fails when the checked route is missing or not JSON', async () => {
-    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn: fetchFor({ ...GOOD, '/config/spawn-table.json': { status: 404, text: '' } }).fetchFn })).toEqual({
+  it('fails when one served byte differs from the merge commit, even where the checked value holds', async () => {
+    const pages: Pages = { ...GOOD, '/config/spawn-table.json': { status: 200, text: SPAWN.replace('\n}', '}') } };
+    expect(await runSmoke({ ...base, fetchFn: fetchFor(pages).fetchFn })).toEqual({ ok: false, summary: 'fail: served /config/spawn-table.json differs from seed-1/config/spawn-table.json at the merge commit merge-sh' });
+    expect(await runSmoke({ ...base, fetchFn: fetchFor({ ...GOOD, '/content/strings.json': { status: 404, text: '' } }).fetchFn })).toEqual({ ok: false, summary: 'fail: GET /content/strings.json returned 404' });
+  });
+
+  it('fails on a served folder entry that is not a regular file at the merge commit', async () => {
+    const symlink: MergedFile = { path: 'seed-1/config/link.json', route: '/config/link.json', mode: '120000', blob: gitBlobId(Buffer.from('/etc/passwd')) };
+    expect(await runSmoke({ ...base, mergedFiles: async () => [...MERGED, symlink], fetchFn: fetchFor(GOOD).fetchFn })).toEqual({
       ok: false,
-      summary: 'fail: GET /config/spawn-table.json returned 404',
-    });
-    expect(await runSmoke({ ...base, baseUrl: BASE, fetchFn: fetchFor({ ...GOOD, '/config/spawn-table.json': { status: 200, text: '{' } }).fetchFn })).toEqual({
-      ok: false,
-      summary: 'fail: GET /config/spawn-table.json is not JSON',
+      summary: 'fail: seed-1/config/link.json at the merge commit is not a regular file (mode 120000)',
     });
   });
 
-  it('stops at the build check for a seed deploy whose sha differs, before any config or bot request', async () => {
+  it('stops at the build check for a seed deploy whose sha differs, before any config request', async () => {
     const { fetchFn, calls } = fetchFor({ ...GOOD, '/version.json': { status: 200, json: { sha: 'older' } } });
-    expect((await runSmoke({ ...base, baseUrl: BASE, fetchFn })).ok).toBe(false);
+    expect((await runSmoke({ ...base, fetchFn })).ok).toBe(false);
     expect(calls).toHaveLength(2);
   });
 });
 
-describe('runSmoke headless bot', () => {
-  const checks = parseChecks('check: config seed-1/config/spawn-table.json rows[id=gatherer].baseCost == 11');
-  const pages: Pages = { ...GOOD, '/config/unlocks.json': { status: 200, json: { unlocks: [] } } };
-  // The dispatcher's own environment on the VPS: the secrets its env file carries.
-  const SECRETS: Record<string, string> = {
-    GITHUB_TOKEN: 'secret-github-token',
-    SUPABASE_SERVICE_ROLE_KEY: 'secret-service-role',
-    SUPABASE_SECRET_KEY: 'secret-supabase-key',
-    STUDIO_ANTHROPIC_API_KEY: 'secret-studio-key',
-    NETLIFY_AUTH_TOKEN: 'secret-netlify-token',
-    NTFY_TOPIC_URL: 'https://ntfy.sh/secret-topic',
-  };
-  const saved: Record<string, string | undefined> = {};
-  beforeEach(() => {
-    for (const [name, value] of Object.entries(SECRETS)) {
-      saved[name] = process.env[name];
-      process.env[name] = value;
-    }
+describe('mergedServedFiles', () => {
+  let dir: string;
+  let origin: string;
+  let repo: string;
+  let sha: string;
+  const saved = { GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM };
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-smoke-'));
+    process.env.GIT_CONFIG_GLOBAL = path.join(dir, 'gitconfig');
+    process.env.GIT_CONFIG_NOSYSTEM = '1';
+    await writeFile(process.env.GIT_CONFIG_GLOBAL, '', 'utf8');
+    origin = path.join(dir, 'origin.git');
+    await git(['init', '-q', '--bare', '--initial-branch=main', origin], dir);
+    const work = path.join(dir, 'work');
+    await git(['init', '-q', '--initial-branch=main', work], dir);
+    await mkdir(path.join(work, 'seed-1', 'config'), { recursive: true });
+    await mkdir(path.join(work, 'seed-1', 'content'), { recursive: true });
+    await mkdir(path.join(work, 'seed-1', 'sim'), { recursive: true });
+    await writeFile(path.join(work, 'seed-1', 'config', 'spawn-table.json'), SPAWN, 'utf8');
+    await writeFile(path.join(work, 'seed-1', 'content', 'strings.json'), STRINGS, 'utf8');
+    await writeFile(path.join(work, 'seed-1', 'sim', 'index.ts'), 'export {};\n', 'utf8');
+    await git(['add', '-A'], work);
+    await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'merge'], work);
+    await git(['push', '-q', origin, 'main'], work);
+    sha = await git(['rev-parse', 'HEAD'], work);
+    repo = path.join(dir, 'repo');
+    await git(['init', '-q', '--initial-branch=main', repo], dir);
+    await git(['remote', 'add', 'origin', origin], repo);
   });
-  afterEach(() => {
+
+  afterAll(async () => {
     for (const [name, value] of Object.entries(saved)) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
+    await rm(dir, { recursive: true, force: true });
   });
 
-  it("runs the bot with the agent session's allowlisted environment and none of the dispatcher's secrets", async () => {
-    const runs: Array<{ file: string; args: string[]; options: BotExecOptions }> = [];
-    const exec: BotExec = async (file, args, options) => {
-      runs.push({ file, args, options });
-      return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=12\n' };
-    };
-    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, retryDelayMs: 1, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
-    expect(result).toEqual({ ok: true, summary: 'pass: build merge-sh served; 1 config check(s) hold; bot: 36000 simulated seconds, 12 unlocks, budget 60 s' });
-    expect(runs).toHaveLength(1);
-    const { file, args, options } = runs[0]!;
-    expect(file).toBe('node');
-    expect(args.slice(0, 2)).toEqual(['platform/gate/headless-bot/run.mjs', '--config-dir']);
-    expect(args.slice(-2)).toEqual(['--repo-root', '/repo']);
-    expect(options.cwd).toBe('/repo');
-    expect(options.env).toEqual(childEnv(process.env));
-    expect(options.env.PATH).toBe(process.env.PATH);
-    for (const [name, value] of Object.entries(SECRETS)) {
-      expect(options.env, name).not.toHaveProperty(name);
-      expect(Object.values(options.env)).not.toContain(value);
-    }
+  it('fetches main and lists the served folders at the merge commit with their blob ids', async () => {
+    expect(await mergedServedFiles(repo, sha, {})).toEqual(MERGED);
   });
 
-  it('fails the smoke when the bot exits non-zero', async () => {
-    const exec: BotExec = async () => {
-      throw new Error('Command failed: node platform/gate/headless-bot/run.mjs\nFAIL: headless-bot');
-    };
-    const result = await runSmoke({ sha: SHA, folder: 'seed-1', checks, botRoot: '/repo', botSeconds: 60, retryDelayMs: 1, baseUrl: BASE, fetchFn: fetchFor(pages).fetchFn, exec });
-    expect(result).toEqual({ ok: false, summary: 'fail: headless bot failed on the served config: Command failed: node platform/gate/headless-bot/run.mjs' });
+  it('parses ls-tree output, paths with spaces included', () => {
+    expect(parseLsTree('100644 blob abc\tseed-1/config/a b.json\u0000120000 blob def\tseed-1/config/l\u0000')).toEqual([
+      { mode: '100644', type: 'blob', object: 'abc', path: 'seed-1/config/a b.json' },
+      { mode: '120000', type: 'blob', object: 'def', path: 'seed-1/config/l' },
+    ]);
   });
 });

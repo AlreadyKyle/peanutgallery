@@ -1,7 +1,6 @@
 # Build-context filter for Dockerfile.dispatcher, whose context is platform/ops at a commit (deploy.sh
 # and provision.sh pipe `git archive <sha>:platform/ops` to docker build). BuildKit reads
 # <Dockerfile name>.dockerignore from the Dockerfile's directory. The image needs the entrypoint and
-# the managed settings and nothing else, so everything else is excluded.
+# nothing else, so everything else is excluded.
 *
 !dispatcher-entrypoint.sh
-!managed-settings.json

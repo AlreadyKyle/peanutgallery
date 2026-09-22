@@ -65,8 +65,10 @@ export function roleTools(role: Role): string[] {
 }
 
 // The -p prompt is the card, its money, its design spec when it has one, and the definition of
-// done. The role prompt file is appended to the system prompt by the adapter, and the CLAUDE.md
-// files are read by Claude Code from the worktree.
+// done. The role prompt file is appended to the system prompt by the adapter. Attended, Claude Code
+// reads the CLAUDE.md files from the worktree; unattended, the managed adapter puts the role prompt
+// and the root and folder CLAUDE.md at the base commit in the session's system prompt, and adds its
+// own finishing section after this prompt.
 export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceilingUsd: number): string {
   const designSpec = card.design_spec_url?.trim();
   const locked = protectedPaths(allowedPaths);
@@ -154,6 +156,8 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     folder: card.folder,
     maxTurns: deps.sessionMaxTurns,
     maxBudgetUsd: remaining,
+    roleId: role.id,
+    allowedPaths: lanePaths(card.folder, card.lane),
   };
   try {
     await deps.adapter.preflight(spec);
@@ -192,6 +196,9 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   // Who paid. An unattended session bills the pool only once its init line shows the studio key; until
   // then, and for a session on the wrong account, the spend is recorded as the founder's.
   const account: Account = { billedTo: 'founder', verified: false, started: false, apiKeySource: null };
+  // The managed adapter writes its own ledger rows (one per model request, then runtime and settle
+  // rows to the platform's list cost), so the session records none and settles nothing.
+  let adapterMetered = false;
   let end: EndEvent | null = null;
   const record = (row: MeterRow) =>
     retry(
@@ -212,6 +219,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       case 'start': {
         // The refusal is decided, and the session interrupted, before anything is written.
         const refusal = startRefusal(deps.adapter.mode, event);
+        adapterMetered = event.ledger === 'adapter';
         account.started = true;
         account.apiKeySource = event.apiKeySource;
         if (!billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
@@ -235,7 +243,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
         if (zeroUsage(event.usage) && event.contentChars === 0 && !event.thinking) return;
         const { row, fallback } = meter.addTurn(event);
         let actual: number | null = null;
-        if (!zeroUsage(event.usage)) {
+        if (!zeroUsage(event.usage) && !adapterMetered) {
           try {
             actual = (await record(row)).actual_usd;
             meter.commit(row);
@@ -289,7 +297,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     clearInterval(watch);
     clearTimeout(wallClock);
     deps.stopSignal.removeEventListener('abort', onStop);
-    await settle({ card, role, deps, meter, end, record, account, turns });
+    if (!adapterMetered) await settle({ card, role, deps, meter, end, record, account, turns });
   }
 
   if (state.aborted) return { outcome: state.aborted.outcome, detail: state.aborted.detail, turns: result.turns };

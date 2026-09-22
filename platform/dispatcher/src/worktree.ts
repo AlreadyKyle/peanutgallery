@@ -278,25 +278,6 @@ export async function createWorktree(repoRoot: string, root: string, cardId: str
   });
 }
 
-export function smokeWorktreePath(root: string, cardId: string): string {
-  return path.join(root, `smoke-${shortId(cardId)}`);
-}
-
-// A detached checkout of a merge commit, for the smoke test's headless bot.
-export async function createSmokeWorktree(repoRoot: string, root: string, cardId: string, sha: string, authEnv: NodeJS.ProcessEnv): Promise<string> {
-  return repoLock.run(async () => {
-    const target = smokeWorktreePath(root, cardId);
-    await mkdir(root, { recursive: true });
-    if (existsSync(target)) {
-      await removeWorktreeUnlocked(repoRoot, target, null);
-    }
-    await git(['worktree', 'prune'], repoRoot);
-    await fetchMain(repoRoot, authEnv);
-    await git(['worktree', 'add', '--detach', target, `${sha}^{commit}`], repoRoot);
-    return target;
-  });
-}
-
 export async function removeWorktree(repoRoot: string, target: string, branch: string | null): Promise<void> {
   await repoLock.run(() => removeWorktreeUnlocked(repoRoot, target, branch));
 }

@@ -41,9 +41,20 @@ export interface DispatcherConfig {
   // The studio organisation's key for unattended sessions; null in attended mode, where the
   // value is ignored. Never the founder's ANTHROPIC_API_KEY, which the dispatcher does not read.
   studioAnthropicApiKey: string | null;
+  // Unattended mode only (null or absent in attended mode): the Managed Agents agent, its pinned
+  // version and the environment every card session runs in, and the read-only GitHub token sessions
+  // clone the repository with (docs/specs/launch-managed.md).
+  managed?: ManagedConfig | null;
   // Optional board alerts: pinged every tick, and posted to when a card needs a human.
   healthcheckUrl: string | null;
   ntfyTopicUrl: string | null;
+}
+
+export interface ManagedConfig {
+  agentId: string;
+  agentVersion: number;
+  environmentId: string;
+  readToken: string;
 }
 
 // A missing or malformed value cannot fix itself on a restart, so it is fatal: the process exits
@@ -117,6 +128,31 @@ export function studioApiKeyEnv(env: Env, mode: AgentMode): string | null {
   return requireEnv(env, STUDIO_KEY);
 }
 
+// Fine-grained personal access tokens start with this. Unattended mode runs on no other kind, since a
+// classic or OAuth token cannot be limited to this repository and its permissions.
+export const FINE_GRAINED_PREFIX = 'github_pat_';
+
+// Required in unattended mode, null in attended mode. The read token must differ from the write
+// token in either mode, and in unattended mode both must be fine-grained tokens. Startup then proves
+// the read token cannot write (adapters/read-token.ts).
+export function managedEnv(env: Env, mode: AgentMode, githubToken: string): ManagedConfig | null {
+  const read = env.GITHUB_READ_TOKEN?.trim();
+  if (read && read === githubToken) throw new ConfigError('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN: sessions clone with a token that cannot write');
+  if (mode !== 'unattended') return null;
+  const readToken = requireEnv(env, 'GITHUB_READ_TOKEN');
+  const agentId = requireEnv(env, 'MANAGED_AGENT_ID');
+  const version = Number(requireEnv(env, 'MANAGED_AGENT_VERSION'));
+  if (!Number.isInteger(version) || version < 1) throw new ConfigError('MANAGED_AGENT_VERSION must be a positive integer');
+  const environmentId = requireEnv(env, 'MANAGED_ENVIRONMENT_ID');
+  for (const [name, token] of [
+    ['GITHUB_TOKEN', githubToken],
+    ['GITHUB_READ_TOKEN', readToken],
+  ] as const) {
+    if (!token.startsWith(FINE_GRAINED_PREFIX)) throw new ConfigError(`${name} must be a fine-grained personal access token (${FINE_GRAINED_PREFIX}...) in unattended mode`);
+  }
+  return { agentId, agentVersion: version, environmentId, readToken };
+}
+
 // parsePriceTable is shared with code that is not configuration, so its plain errors are
 // rethrown here as ConfigError with the same message.
 export function priceTableEnv(env: Env): PriceTable {
@@ -179,12 +215,13 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
   const priceTable = priceTableEnv(env);
   pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
   const roots = rootsEnv(env, codeRoot);
+  const githubToken = requireEnv(env, 'GITHUB_TOKEN');
   return {
     ...roots,
     agentMode,
     supabaseUrl: requireEnv(env, 'SUPABASE_URL'),
     supabaseServiceRoleKey: requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY'),
-    githubToken: requireEnv(env, 'GITHUB_TOKEN'),
+    githubToken,
     githubRepo,
     netlifyAuthToken: requireEnv(env, 'NETLIFY_AUTH_TOKEN'),
     netlifySiteIdSeed: requireEnv(env, 'NETLIFY_SITE_ID_SEED'),
@@ -204,6 +241,7 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
     boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
     studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),
+    managed: managedEnv(env, agentMode, githubToken),
     healthcheckUrl: optionalHttpsUrlEnv(env, 'HEALTHCHECK_URL'),
     ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
   };
