@@ -102,18 +102,21 @@ available_X = balance − studio reserve − Σ holds, plus the incident reserve
 
 ## Evidence
 
-`pnpm verify` at the worktree root exits 0. Its dispatcher lines:
+`pnpm verify` at the worktree root exits 0 on the branch (run on 85407b9, the spec commit before this evidence was added). Its dispatcher lines:
 
 ```
 platform/dispatcher test:  Test Files  30 passed (30)
 platform/dispatcher test:       Tests  453 passed (453)
 ```
 
-and its closing checks:
+and its other checks:
 
 ```
+platform/gate test: PASS: gate tests passed=213
+ok | 71 passed (47 steps) | 0 failed
+GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
-PASS: secret-scan files=332
+PASS: secret-scan files=340
 ℹ pass 4
 ℹ fail 0
 ```
