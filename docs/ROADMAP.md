@@ -70,6 +70,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/merge-safety.md` | built | the three live lines, which need a card merged through the dispatcher |
 | `specs/site-truth-pass.md` | built | /board two-factor enrolment watched in Chromium and Safari with DevTools open and no CSP report |
 | `specs/ops-separation.md` | built | the production steps, which need the VPS |
+| `specs/oracle-launch.md` | built | the live run and a rerun, after the board signs up at Oracle and signs in with `oci session authenticate` |
 
 ## Agreed, in review
 
