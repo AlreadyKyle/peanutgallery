@@ -125,6 +125,13 @@ export async function waitForGate(opts: GitHubOptions, sha: string, poll: PollOp
   return status;
 }
 
+// Closes a pull request the dispatcher will not merge. A pull request already closed or merged is
+// left as it is.
+export async function closePullRequest(opts: GitHubOptions, number: number): Promise<void> {
+  const result = await request(opts, 'PATCH', `/repos/${opts.repo}/pulls/${number}`, { state: 'closed' });
+  if (result.status !== 200) throw new Error(`github close pull request ${number}: http ${result.status} ${apiMessage(result.json)}`.trim());
+}
+
 export interface PullState {
   headSha: string | null;
   merged: boolean;

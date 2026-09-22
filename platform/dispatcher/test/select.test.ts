@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SESSION_SOURCES, eligible, orderCards, selectCard, type SelectableCard } from '../src/select.js';
+import { SESSION_SOURCES, closedLane, orderCards, runnable, runnableInOrder, type SelectableCard } from '../src/select.js';
 
 function card(overrides: Partial<SelectableCard> & { id: string }): SelectableCard {
   return {
@@ -11,28 +11,37 @@ function card(overrides: Partial<SelectableCard> & { id: string }): SelectableCa
     severity: null,
     director_stance: 'neutral',
     executor_role_id: 'role-builder-a',
+    horizon: 'now',
+    folder: 'seed-1',
+    lane: 'config',
     ...overrides,
   };
 }
 
-describe('eligible', () => {
-  it('requires stage funded, no veto, an executor and a covered estimate', () => {
-    expect(eligible(card({ id: 'a' }), 50, 0)).toBe(true);
-    expect(eligible(card({ id: 'a', stage: 'voted' }), 50, 0)).toBe(false);
-    expect(eligible(card({ id: 'a', director_stance: 'vetoed' }), 50, 0)).toBe(false);
-    expect(eligible(card({ id: 'a', executor_role_id: null }), 50, 0)).toBe(false);
-    expect(eligible(card({ id: 'a', estimate_usd: 51 }), 50, 0)).toBe(false);
+describe('runnable', () => {
+  it('requires stage funded, no veto and an executor', () => {
+    expect(runnable(card({ id: 'a' }))).toBe(true);
+    expect(runnable(card({ id: 'a', stage: 'voted' }))).toBe(false);
+    expect(runnable(card({ id: 'a', director_stance: 'vetoed' }))).toBe(false);
+    expect(runnable(card({ id: 'a', executor_role_id: null }))).toBe(false);
   });
   it('accepts board, agent and decision sources and refuses community cards', () => {
     expect(SESSION_SOURCES).toEqual(['board', 'agent', 'decision']);
-    for (const source of SESSION_SOURCES) {
-      expect(eligible(card({ id: 'a', source }), 50, 0)).toBe(true);
-    }
-    expect(eligible(card({ id: 'a', source: 'community' }), 50, 0)).toBe(false);
+    for (const source of SESSION_SOURCES) expect(runnable(card({ id: 'a', source }))).toBe(true);
+    expect(runnable(card({ id: 'a', source: 'community' }))).toBe(false);
   });
-  it('lets an S1 card draw on the incident reserve', () => {
-    expect(eligible(card({ id: 'a', estimate_usd: 60, severity: 's1' }), 50, 20)).toBe(true);
-    expect(eligible(card({ id: 'a', estimate_usd: 60, severity: 's2' }), 50, 20)).toBe(false);
+  it('runs only horizon now cards', () => {
+    expect(runnable(card({ id: 'a', horizon: 'next' }))).toBe(false);
+    expect(runnable(card({ id: 'a', horizon: 'later' }))).toBe(false);
+  });
+  it('keeps the platform code lane closed and every other lane open', () => {
+    expect(closedLane({ folder: 'platform', lane: 'code' })).toBe(true);
+    expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code' }))).toBe(false);
+    expect(runnable(card({ id: 'a', folder: 'seed-1', lane: 'code' }))).toBe(true);
+    expect(runnable(card({ id: 'a', folder: 'seed-1', lane: 'config' }))).toBe(true);
+  });
+  it('leaves money to the throttle: an estimate above any pool is still runnable', () => {
+    expect(runnable(card({ id: 'a', estimate_usd: 1_000_000 }))).toBe(true);
   });
 });
 
@@ -48,25 +57,16 @@ describe('orderCards', () => {
   });
 });
 
-describe('selectCard', () => {
-  it('returns the first eligible card in order', () => {
-    const chosen = selectCard(
-      [
-        card({ id: 'directive', priority: 0, estimate_usd: 80 }),
-        card({ id: 'old', created_at: '2026-09-14T10:00:00.000Z' }),
-        card({ id: 'new', created_at: '2026-09-14T11:00:00.000Z' }),
-      ],
-      50,
-      0,
-    );
-    expect(chosen?.id).toBe('old');
-  });
-  it('passes over a community card even when it is first in order', () => {
-    const chosen = selectCard([card({ id: 'public', priority: 0, source: 'community' }), card({ id: 'board', priority: 100 })], 50, 0);
-    expect(chosen?.id).toBe('board');
-  });
-  it('returns null when nothing fits', () => {
-    expect(selectCard([card({ id: 'a', estimate_usd: 100 })], 50, 0)).toBeNull();
-    expect(selectCard([], 50, 0)).toBeNull();
+describe('runnableInOrder', () => {
+  it('drops cards that may not run and orders the rest', () => {
+    const cards = [
+      card({ id: 'public', priority: 0, source: 'community' }),
+      card({ id: 'late', priority: 100, created_at: '2026-09-14T13:00:00.000Z' }),
+      card({ id: 'site', priority: 0, folder: 'platform', lane: 'code' }),
+      card({ id: 'early', priority: 100, created_at: '2026-09-14T10:00:00.000Z' }),
+      card({ id: 'parked', priority: 0, horizon: 'later' }),
+    ];
+    expect(runnableInOrder(cards).map((c) => c.id)).toEqual(['early', 'late']);
+    expect(runnableInOrder([])).toEqual([]);
   });
 });

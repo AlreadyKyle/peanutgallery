@@ -1,14 +1,28 @@
-// The Appendix A loop, one tick: read studio_state, check the board session, read the pool, apply
-// the throttle, select the card, claim it, and start its pipeline in the background. The heartbeat
-// and the healthcheck ping follow a tick that completed, so a dispatcher whose ticks keep failing
-// stops pinging. A halted dispatcher claims nothing and does not ping.
+// The Appendix A loop, one tick: hold the dispatcher lease, read studio_state, check the board
+// session, read the pool, apply the throttle, select the card, claim it with its session budget, and
+// start its pipeline in the background. The heartbeat and the healthcheck ping follow a tick that
+// completed while holding the lease, so a dispatcher whose ticks keep failing, or that another
+// dispatcher has locked out, stops pinging. A halted dispatcher claims nothing and does not ping.
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
-import type { Card, Db } from './db.js';
+import type { SessionBudgets } from './budgets.js';
+import type { Card, Db, Pool, StudioState } from './db.js';
 import { haltReason } from './halt.js';
 import { errorMessage, type Logger } from './log.js';
-import { selectCard } from './select.js';
-import { available, canStart, concurrency, newYorkDate, spentToday, type SleepReason } from './throttle.js';
+import { runnableInOrder } from './select.js';
+import {
+  HOLD_STAGES,
+  canStart,
+  concurrency,
+  newYorkDate,
+  newYorkMonth,
+  newYorkMonthStart,
+  planStart,
+  spentToday,
+  type MoneyReason,
+  type MoneyState,
+  type SleepReason,
+} from './throttle.js';
 import { shortId } from './worktree.js';
 
 export interface TickDeps {
@@ -18,6 +32,11 @@ export interface TickDeps {
   maxConcurrency: number;
   // Card id to the time its pipeline started, for cards this process is running.
   running: Map<string, Date>;
+  // The session budget of each card this process is running.
+  budgets: SessionBudgets;
+  // This process's name on the dispatcher lease, and how long each claim holds it.
+  leaseHolder: string;
+  leaseTtlSeconds: number;
   // How long a card may stay in the pipeline before the board is alerted.
   stuckAfterMs: number;
   now: () => Date;
@@ -26,21 +45,38 @@ export interface TickDeps {
   alert: Alerter;
 }
 
+// Each claim holds the lease this long; the tick renews it every DISPATCHER_TICK_MS, so it lapses only
+// after several ticks in a row have failed to reach the database. claim_dispatcher_lease takes at most
+// an hour.
+export const LEASE_TTL_MAX_SECONDS = 3600;
+
+export function leaseTtlSeconds(tickMs: number): number {
+  return Math.min(LEASE_TTL_MAX_SECONDS, Math.max(300, Math.ceil((5 * tickMs) / 1000)));
+}
+
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'no_eligible_card' | 'mode_mismatch' | 'halted' }
+  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
 export async function tick(deps: TickDeps): Promise<TickOutcome> {
+  // Only the lease holder ticks: a second dispatcher (the Mac beside the VPS) claims nothing, writes
+  // no heartbeat and sends no ping, so the healthcheck shows that the working one is not this one.
+  if (!(await deps.db.claimLease(deps.leaseHolder, deps.leaseTtlSeconds))) {
+    deps.log.warn('tick', 'another dispatcher holds the lease; claiming nothing', { holder: deps.leaseHolder });
+    await deps.alert.notifyOnce(`lease:${deps.leaseHolder}`, 'Another dispatcher holds the dispatcher lease, so this one claims no card. Stop one of them.');
+    return { action: 'sleep', reason: 'lease_held' };
+  }
+  deps.alert.forget(`lease:${deps.leaseHolder}`);
   await watchStuckCards(deps);
-  const outcome = await evaluate(deps);
+  const halted = haltReason() !== null;
+  const outcome: TickOutcome = halted ? { action: 'sleep', reason: 'halted' } : await evaluate(deps);
   await heartbeat(deps);
-  if (!(outcome.action === 'sleep' && outcome.reason === 'halted')) await deps.alert.ping();
+  if (!halted) await deps.alert.ping();
   return outcome;
 }
 
 async function evaluate(deps: TickDeps): Promise<TickOutcome> {
-  if (haltReason()) return { action: 'sleep', reason: 'halted' };
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
   if (studio.agent_mode !== deps.mode) {
@@ -49,35 +85,104 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   }
   const boardSessionActive = await checkBoardSession(deps);
   const pool = await deps.db.getPool();
-  const funded = await deps.db.listFundedCards();
-  const reserved = await reservedEstimates(deps.db);
-  const availableUsd = available(pool.balance_usd, studio.studio_reserve_usd, reserved);
+  const cards = await deps.db.listCardsInStages([...HOLD_STAGES, 'building']);
+  const runnable = runnableInOrder(cards);
   const decision = canStart({
     paused: studio.paused,
     mode: deps.mode,
     boardSessionActive,
-    balanceUsd: pool.balance_usd,
-    dailySpentUsd: spentToday(pool, deps.now()),
-    dailyCapUsd: studio.daily_cap_usd,
-    availableUsd,
-    smallestEstimateUsd: smallestEstimate(funded),
+    fundedCount: cards.filter((card) => card.stage === 'funded').length,
+    runnableCount: runnable.length,
     running: deps.running.size,
     concurrency: concurrency(pool.balance_usd, studio.agent_hourly_rate_usd, deps.mode, deps.maxConcurrency),
   });
-  if (!decision.ok) {
-    if (decision.reason === 'daily_cap') {
-      const day = newYorkDate(deps.now());
-      await deps.alert.notifyOnce(`daily_cap:${day}`, `The daily cap of $${studio.daily_cap_usd.toFixed(2)} stopped the agents for ${day}.`);
-    }
-    return { action: 'sleep', reason: decision.reason };
+  if (!decision.ok) return { action: 'sleep', reason: decision.reason };
+
+  // An attended session is billed to the founder, so the pool bounds nothing: its budget is the card
+  // ceiling alone (session.ts).
+  if (deps.mode === 'attended') return claimAndStart(deps, runnable[0]!, Number.POSITIVE_INFINITY);
+
+  const money = await moneyState(deps, studio, pool, cards);
+  await creditShortfall(deps, studio, pool, money);
+  let first: Stopped | null = null;
+  for (const card of runnable) {
+    const plan = planStart(money, card);
+    if (plan.ok) return claimAndStart(deps, card, plan.budgetUsd);
+    first ??= { reason: plan.reason, card, needUsd: plan.needUsd, creditUsd: plan.bounds.creditUsd };
   }
-  // An attended session is billed to the founder, so no estimate is too large for the pool.
-  const budgetUsd = deps.mode === 'attended' ? Number.POSITIVE_INFINITY : availableUsd;
-  const card = selectCard(funded, budgetUsd, pool.incident_reserve_usd);
-  if (!card) return { action: 'sleep', reason: 'no_eligible_card' };
+  await alertMoney(deps, studio, money, first!);
+  return { action: 'sleep', reason: first!.reason };
+}
+
+async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
+  const now = deps.now();
+  const [spent, creditPurchasedUsd, studioSpend] = await Promise.all([
+    deps.db.cardSpend(cards.map((card) => card.id)),
+    deps.db.creditPurchasedUsd(),
+    deps.db.studioSpend(newYorkMonthStart(now)),
+  ]);
+  return {
+    balanceUsd: pool.balance_usd,
+    studioReserveUsd: studio.studio_reserve_usd,
+    incidentReserveUsd: pool.incident_reserve_usd,
+    cardMaxUsd: studio.card_max_usd,
+    dailyCapUsd: studio.daily_cap_usd,
+    spentTodayUsd: spentToday(pool, now),
+    monthlyCapUsd: studio.monthly_cap_usd,
+    spentThisMonthUsd: studioSpend.sinceUsd,
+    creditPurchasedUsd,
+    creditSpentUsd: studioSpend.totalUsd,
+    cards,
+    spent,
+    running: deps.budgets.remaining(),
+  };
+}
+
+// The pool runs ahead of the Console credit whenever money arrives between purchases. The board is
+// told once per purchase total, so the next purchase can raise the alert again.
+async function creditShortfall(deps: TickDeps, studio: StudioState, pool: Pool, money: MoneyState): Promise<void> {
+  const creditLeft = money.creditPurchasedUsd - money.creditSpentUsd;
+  const poolAgentMoney = pool.balance_usd - studio.studio_reserve_usd;
+  if (poolAgentMoney <= creditLeft) return;
+  await deps.alert.notifyOnce(
+    `credit_short:${money.creditPurchasedUsd.toFixed(4)}`,
+    `Console credit needed: the pool holds $${poolAgentMoney.toFixed(2)} for the agents but $${Math.max(0, creditLeft).toFixed(2)} of Console credit is left. Buy credit and record it on /board.`,
+  );
+}
+
+// The first runnable card in order that the money stopped, and why.
+interface Stopped {
+  reason: MoneyReason;
+  card: Card;
+  needUsd: number;
+  // The Console credit left once the running sessions' budgets are covered.
+  creditUsd: number;
+}
+
+async function alertMoney(deps: TickDeps, studio: StudioState, money: MoneyState, first: Stopped): Promise<void> {
+  const now = deps.now();
+  if (first.reason === 'daily_cap') {
+    const day = newYorkDate(now);
+    await deps.alert.notifyOnce(`daily_cap:${day}`, `The daily cap of $${studio.daily_cap_usd.toFixed(2)} stopped the agents for ${day}.`);
+  } else if (first.reason === 'monthly_cap') {
+    const month = newYorkMonth(now);
+    const message =
+      studio.monthly_cap_usd === null
+        ? 'studio_state has no monthly cap, so no unattended card starts. Set the monthly cap on /board.'
+        : `The monthly cap of $${studio.monthly_cap_usd.toFixed(2)} stopped the agents for ${month}.`;
+    await deps.alert.notifyOnce(`monthly_cap:${month}`, message);
+  } else if (first.reason === 'console_credit') {
+    await deps.alert.notifyOnce(
+      `console_credit:${money.creditPurchasedUsd.toFixed(4)}`,
+      `Console credit needed: card ${shortId(first.card.id)} needs $${first.needUsd.toFixed(2)} and $${Math.max(0, first.creditUsd).toFixed(2)} of Console credit is left once running sessions are covered. Buy credit and record it on /board.`,
+    );
+  }
+}
+
+async function claimAndStart(deps: TickDeps, card: Card, budgetUsd: number): Promise<TickOutcome> {
   const claimed = await deps.db.claimCard(card.id);
   if (!claimed) return { action: 'claim_lost', cardId: card.id };
-  startCard(deps, claimed);
+  startCard(deps, claimed, budgetUsd);
   return { action: 'started', cardId: claimed.id };
 }
 
@@ -112,25 +217,16 @@ async function checkBoardSession(deps: TickDeps): Promise<boolean> {
   return deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now());
 }
 
-// Estimates of cards already building or gated stay reserved until they reach a terminal stage.
-async function reservedEstimates(db: Db): Promise<number> {
-  const cards = await db.listCardsInStages(['building', 'gated']);
-  return cards.reduce((total, card) => total + card.estimate_usd, 0);
-}
-
-function smallestEstimate(cards: readonly Card[]): number | null {
-  if (cards.length === 0) return null;
-  return Math.min(...cards.map((card) => card.estimate_usd));
-}
-
-function startCard(deps: TickDeps, card: Card): void {
+function startCard(deps: TickDeps, card: Card, budgetUsd: number): void {
   deps.running.set(card.id, deps.now());
-  deps.log.info('tick', `card ${card.id} claimed`, { title: card.title, lane: card.lane, estimate: card.estimate_usd });
+  deps.budgets.start(card.id, budgetUsd);
+  deps.log.info('tick', `card ${card.id} claimed`, { title: card.title, lane: card.lane, estimate: card.estimate_usd, budget: Number.isFinite(budgetUsd) ? budgetUsd : 'ceiling' });
   deps
     .runCard(card)
     .catch((error: unknown) => deps.log.error('tick', `card ${card.id} pipeline threw`, { error: errorMessage(error) }))
     .finally(() => {
       deps.running.delete(card.id);
+      deps.budgets.finish(card.id);
       deps.alert.forget(`stuck:${card.id}`);
     });
 }

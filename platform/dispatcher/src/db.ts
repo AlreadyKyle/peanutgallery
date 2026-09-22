@@ -12,6 +12,9 @@ export interface StudioState {
   card_max_usd: number;
   agent_hourly_rate_usd: number;
   studio_reserve_usd: number;
+  // The monthly spend cap that mirrors the Console limit; null when studio_state has no such column,
+  // which unattended mode treats as a cap of zero.
+  monthly_cap_usd: number | null;
 }
 
 export interface Pool {
@@ -37,6 +40,10 @@ export interface Card {
   design_spec_url: string | null;
   estimate_usd: number;
   actual_usd: number;
+  // The money credited to the card's bar.
+  funded_usd: number;
+  // now, next or later; a database without the column reads as now, its default.
+  horizon: string;
   severity: string | null;
   director_stance: string;
   stage: string;
@@ -67,7 +74,9 @@ export interface Deploy {
 }
 
 // Who pays for a turn: the founder's subscription in attended mode, the pool in unattended mode.
-export type Billing = 'studio' | 'founder';
+// overhead is studio-key spend that belongs to no card (the unattended startup probe): public, and
+// never taken from the pool.
+export type Billing = 'studio' | 'founder' | 'overhead';
 
 // card_id and role_id are null for spend that belongs to no card: the startup probe. request_id
 // names the row on the dispatcher's side, so a retried write is recorded once; null writes a row
@@ -112,8 +121,20 @@ export interface DeployInput {
   smoke_result: string;
 }
 
+// What the studio key has spent: every studio and overhead ledger row, and those since a moment.
+export interface StudioSpend {
+  totalUsd: number;
+  sinceUsd: number;
+}
+
 export interface Db {
   getStudioState(): Promise<StudioState>;
+  // Pauses the studio, as the board's pause does; a studio already paused keeps who paused it.
+  pauseStudio(by: string, now: Date): Promise<void>;
+  // The dispatcher lease (claim_dispatcher_lease): true while this holder has it, renewed for
+  // ttlSeconds on every claim. Only the holder ticks.
+  claimLease(holder: string, ttlSeconds: number): Promise<boolean>;
+  releaseLease(holder: string): Promise<void>;
   // Every tick writes studio_state.dispatcher_seen_at so /board can show how long ago the
   // dispatcher was alive.
   dispatcherHeartbeat(now: Date): Promise<void>;
@@ -121,8 +142,17 @@ export interface Db {
   boardSessionActive(ttlMinutes: number, now: Date): Promise<boolean>;
   listFundedCards(): Promise<Card[]>;
   listCardsInStages(stages: string[]): Promise<Card[]>;
+  getCard(id: string): Promise<Card | null>;
   claimCard(id: string): Promise<Card | null>;
   updateCard(id: string, patch: CardPatch): Promise<void>;
+  // Writes the patch only while the card is in one of the expected stages; false when it was not,
+  // so a stage the board set in the meantime is never overwritten.
+  updateCardIf(id: string, expectedStages: readonly string[], patch: CardPatch): Promise<boolean>;
+  // Each card's studio-billed spend (public_card_spend), for the cards named; a card with none is absent.
+  cardSpend(cardIds: readonly string[]): Promise<Map<string, number>>;
+  // The Console credit the board has recorded buying (credit_purchases).
+  creditPurchasedUsd(): Promise<number>;
+  studioSpend(since: Date): Promise<StudioSpend>;
   getRole(id: string): Promise<Role>;
   // Roles that are not retired.
   listActiveRoles(): Promise<Role[]>;
@@ -171,6 +201,8 @@ export function toCard(row: Row): Card {
     design_spec_url: optionalText(row, 'design_spec_url'),
     estimate_usd: num(row, 'estimate_usd'),
     actual_usd: num(row, 'actual_usd'),
+    funded_usd: num(row, 'funded_usd'),
+    horizon: text(row, 'horizon') || 'now',
     severity: optionalText(row, 'severity'),
     director_stance: text(row, 'director_stance'),
     stage: text(row, 'stage'),
@@ -233,6 +265,13 @@ export function fetchWithTimeout(fetchFn: typeof fetch, timeoutMs: number): type
   };
 }
 
+// Rows per page when a read needs every row.
+export const PAGE_ROWS = 1000;
+
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
 export interface SupabaseDbOptions {
   fetchFn?: typeof fetch;
   timeoutMs?: number;
@@ -244,6 +283,17 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     global: { fetch: fetchWithTimeout(options.fetchFn ?? fetch, options.timeoutMs ?? SUPABASE_TIMEOUT_MS) },
   });
   const rows = (data: unknown): Row[] => (Array.isArray(data) ? (data as Row[]) : []);
+  // Reads every row of a query PAGE_ROWS at a time, since PostgREST caps each answer.
+  const pages = async (query: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, op: string): Promise<Row[]> => {
+    const all: Row[] = [];
+    for (let from = 0; ; from += PAGE_ROWS) {
+      const { data, error } = await query(from, from + PAGE_ROWS - 1);
+      if (error) fail(op, error);
+      const page = rows(data);
+      all.push(...page);
+      if (page.length < PAGE_ROWS) return all;
+    }
+  };
 
   return {
     async getStudioState() {
@@ -257,7 +307,24 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         card_max_usd: num(row, 'card_max_usd'),
         agent_hourly_rate_usd: num(row, 'agent_hourly_rate_usd'),
         studio_reserve_usd: num(row, 'studio_reserve_usd'),
+        monthly_cap_usd: row.monthly_cap_usd === null || row.monthly_cap_usd === undefined ? null : num(row, 'monthly_cap_usd'),
       };
+    },
+
+    async pauseStudio(by, now) {
+      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString() }).eq('id', 1).eq('paused', false);
+      if (error) fail('studio_state pause', error);
+    },
+
+    async claimLease(holder, ttlSeconds) {
+      const { data, error } = await client.rpc('claim_dispatcher_lease', { p_holder: holder, p_ttl_seconds: ttlSeconds });
+      if (error) fail('claim_dispatcher_lease', error);
+      return data === true;
+    },
+
+    async releaseLease(holder) {
+      const { error } = await client.rpc('release_dispatcher_lease', { p_holder: holder });
+      if (error) fail('release_dispatcher_lease', error);
     },
 
     async dispatcherHeartbeat(now) {
@@ -299,6 +366,12 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return rows(data).map(toCard);
     },
 
+    async getCard(id) {
+      const { data, error } = await client.from('cards').select('*').eq('id', id).maybeSingle();
+      if (error) fail('card', error);
+      return data ? toCard(data as Row) : null;
+    },
+
     // The claim is one conditional UPDATE: only a card still in stage funded moves to building,
     // so two dispatchers racing for the same card cannot both win. commit_sha is cleared, so a sha
     // from an earlier run never marks this run as merged.
@@ -312,6 +385,42 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async updateCard(id, patch) {
       const { error } = await client.from('cards').update(patch).eq('id', id);
       if (error) fail('update card', error);
+    },
+
+    async updateCardIf(id, expectedStages, patch) {
+      const { data, error } = await client.from('cards').update(patch).eq('id', id).in('stage', [...expectedStages]).select('id');
+      if (error) fail('update card', error);
+      return rows(data).length === 1;
+    },
+
+    async cardSpend(cardIds) {
+      const spend = new Map<string, number>();
+      if (cardIds.length === 0) return spend;
+      const { data, error } = await client.from('public_card_spend').select('card_id, spent_usd').in('card_id', [...cardIds]);
+      if (error) fail('public_card_spend', error);
+      for (const row of rows(data)) spend.set(text(row, 'card_id'), num(row, 'spent_usd'));
+      return spend;
+    },
+
+    async creditPurchasedUsd() {
+      const all = await pages((from, to) => client.from('credit_purchases').select('amount_usd').order('created_at').order('id').range(from, to), 'credit_purchases');
+      return round4(all.reduce((total, row) => total + num(row, 'amount_usd'), 0));
+    },
+
+    async studioSpend(since) {
+      const all = await pages(
+        (from, to) => client.from('ledger').select('usd, created_at').in('billed_to', ['studio', 'overhead']).order('created_at').order('id').range(from, to),
+        'ledger studio spend',
+      );
+      const start = since.getTime();
+      let totalUsd = 0;
+      let sinceUsd = 0;
+      for (const row of all) {
+        const usd = num(row, 'usd');
+        totalUsd += usd;
+        if (Date.parse(text(row, 'created_at')) >= start) sinceUsd += usd;
+      }
+      return { totalUsd: round4(totalUsd), sinceUsd: round4(sinceUsd) };
     },
 
     async getRole(id) {
@@ -351,7 +460,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async sumLedger(cardId) {
       const { data, error } = await client.from('ledger').select('usd').eq('card_id', cardId);
       if (error) fail('ledger sum', error);
-      return Math.round(rows(data).reduce((total, row) => total + num(row, 'usd'), 0) * 10_000) / 10_000;
+      return round4(rows(data).reduce((total, row) => total + num(row, 'usd'), 0));
     },
 
     async insertEvent(cardId, roleId, type, payload) {
