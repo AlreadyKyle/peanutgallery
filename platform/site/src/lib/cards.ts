@@ -1,5 +1,5 @@
 import { copy } from './copy';
-import type { Card } from './source';
+import type { Card, Horizon } from './source';
 
 export type CardStatus = 'building' | 'gated' | 'queued' | 'picked' | 'open' | 'shipped';
 
@@ -40,6 +40,14 @@ export function shippedOrder(a: Card, b: Card): number {
   return time(b.created_at) - time(a.created_at);
 }
 
+/**
+ * A card on horizon now: the only kind that takes money, shows a funding bar or runs. Next and
+ * later cards are the roadmap, planned and not built, and never appear as open for funding.
+ */
+export function isRunnable(card: Card): boolean {
+  return card.horizon === 'now';
+}
+
 export type CardGroups = {
   /** Building or in the gate, in server order. */
   now: Card[];
@@ -51,14 +59,39 @@ export type CardGroups = {
   shipped: Card[];
 };
 
+/** Building, funding and queued hold horizon now cards only; a live card is shipped whatever its horizon. */
 export function groupCards(cards: readonly Card[]): CardGroups {
+  const runnable = cards.filter(isRunnable);
   const elsewhere = (card: Card) =>
     NOW_STAGES.has(card.stage) || card.stage === QUEUED_STAGE || card.stage === SHIPPED_STAGE;
   return {
-    now: cards.filter((card) => NOW_STAGES.has(card.stage)),
-    fund: cards.filter((card) => !elsewhere(card)).sort(fundOrder),
-    queued: cards.filter((card) => card.stage === QUEUED_STAGE),
+    now: runnable.filter((card) => NOW_STAGES.has(card.stage)),
+    fund: runnable.filter((card) => !elsewhere(card)).sort(fundOrder),
+    queued: runnable.filter((card) => card.stage === QUEUED_STAGE),
     shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
+  };
+}
+
+/** Roadmap order: ranked cards first, lowest rank first, then the oldest. */
+export function plannedOrder(a: Card, b: Card): number {
+  if (a.rank !== b.rank) {
+    if (a.rank === null) return 1;
+    if (b.rank === null) return -1;
+    return a.rank - b.rank;
+  }
+  if (a.created_at === b.created_at) return 0;
+  return a.created_at < b.created_at ? -1 : 1;
+}
+
+export type PlannedHorizon = Exclude<Horizon, 'now'>;
+export const PLANNED_HORIZONS: readonly PlannedHorizon[] = ['next', 'later'];
+
+/** The roadmap: cards on horizon next or later that have not shipped, each horizon in plannedOrder. */
+export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Card[]> {
+  const open = cards.filter((card) => card.stage !== SHIPPED_STAGE);
+  return {
+    next: open.filter((card) => card.horizon === 'next').sort(plannedOrder),
+    later: open.filter((card) => card.horizon === 'later').sort(plannedOrder),
   };
 }
 
@@ -78,6 +111,17 @@ export function categoryOf(card: Card): CardCategory {
 
 export function inCategory(card: Card, filter: CategoryFilter): boolean {
   return filter === 'all' || categoryOf(card) === filter;
+}
+
+/**
+ * The category chips to show for these cards: All and Dust always, The studio and Next game only
+ * while at least one card is in them. The platform code lane is closed at launch, so the studio
+ * chip stays hidden until the board files studio cards again.
+ */
+export function visibleFilters(cards: readonly Card[]): CategoryFilter[] {
+  return CATEGORY_FILTERS.filter(
+    (filter) => filter === 'all' || filter === 'game' || cards.some((card) => inCategory(card, filter)),
+  );
 }
 
 export function isFullyFunded(card: Card): boolean {

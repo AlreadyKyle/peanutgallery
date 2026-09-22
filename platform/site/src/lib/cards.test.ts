@@ -7,9 +7,12 @@ import {
   groupCards,
   inCategory,
   isFullyFunded,
+  isRunnable,
+  plannedCards,
   shippedOrder,
   sourceLabel,
   statusOf,
+  visibleFilters,
 } from './cards';
 import { copy } from './copy';
 import type { Card } from './source';
@@ -25,6 +28,9 @@ function card(overrides: Partial<Card> = {}): Card {
     shape: 'goal',
     bucket: 'game',
     folder: 'seed-1',
+    horizon: 'now',
+    rank: null,
+    executor_role_id: null,
     funding_target_usd: 0,
     funded_usd: 0,
     spent_usd: 0,
@@ -161,3 +167,47 @@ describe('sourceLabel', () => {
     expect(sourceLabel('mystery')).toBe('mystery');
   });
 });
+
+describe('horizons', () => {
+  it('keeps next and later cards out of building, funding and the queue, and never open for funding', () => {
+    const cards = [
+      card({ id: 'now-open', stage: 'proposed', funding_target_usd: 3 }),
+      card({ id: 'later-open', stage: 'proposed', horizon: 'later' }),
+      card({ id: 'next-picked', stage: 'voted', horizon: 'next', funding_target_usd: 3 }),
+      card({ id: 'next-funded', stage: 'funded', horizon: 'next' }),
+      card({ id: 'next-building', stage: 'building', horizon: 'next' }),
+      card({ id: 'next-live', stage: 'live', horizon: 'next' }),
+    ];
+    const groups = groupCards(cards);
+    expect(groups.fund.map((c) => c.id)).toEqual(['now-open']);
+    expect(groups.queued).toEqual([]);
+    expect(groups.now).toEqual([]);
+    // A live card is a record of what shipped, whatever horizon it was filed on.
+    expect(groups.shipped.map((c) => c.id)).toEqual(['next-live']);
+    expect(isRunnable(cards[1]!)).toBe(false);
+  });
+
+  it('lists the roadmap by horizon, ranked cards first, lowest rank first, then the oldest', () => {
+    const cards = [
+      card({ id: 'n-unranked-old', horizon: 'next', created_at: '2026-09-14T00:00:01Z' }),
+      card({ id: 'n-2', horizon: 'next', rank: 2 }),
+      card({ id: 'n-1', horizon: 'next', rank: 1 }),
+      card({ id: 'n-unranked-new', horizon: 'next', created_at: '2026-09-14T00:00:09Z' }),
+      card({ id: 'l-1', horizon: 'later', rank: 1 }),
+      card({ id: 'l-live', horizon: 'later', stage: 'live' }),
+      card({ id: 'now', horizon: 'now' }),
+    ];
+    const planned = plannedCards(cards);
+    expect(planned.next.map((c) => c.id)).toEqual(['n-1', 'n-2', 'n-unranked-old', 'n-unranked-new']);
+    expect(planned.later.map((c) => c.id)).toEqual(['l-1']);
+  });
+});
+
+describe('visibleFilters', () => {
+  it('always shows All and Dust, and The studio and Next game only while they have cards', () => {
+    expect(visibleFilters([card({ folder: 'seed-1' })])).toEqual(['all', 'game']);
+    expect(visibleFilters([])).toEqual(['all', 'game']);
+    expect(visibleFilters([card({ folder: 'platform' })])).toEqual(['all', 'game', 'studio']);
+  });
+});
+
