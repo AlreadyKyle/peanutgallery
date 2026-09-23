@@ -1,8 +1,8 @@
 # Peanut Gallery
 
-Peanut Gallery is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is how supporters choose what gets built: when a card's bar is full, the dispatcher starts a Claude Code session that builds the change, the gate checks it, and it ships to the live game or site. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
+Peanut Gallery is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is how supporters choose what gets built: when a card's bar is full, the dispatcher starts an agent session that builds the change, the gate checks it, and it ships to the live game. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
 
-Backseat is the working name. The package names (`@backseat/*`) and parts of `docs/PLAN.md` still use it.
+Backseat is the working name. The package names (`@backseat/*`) still use it.
 
 ## Where each piece runs
 
@@ -12,7 +12,7 @@ Backseat is the working name. The package names (`@backseat/*`) and parts of `do
 | Game | https://peanutgallery-seed-1.netlify.app | Netlify site `peanutgallery-seed-1`, base `seed-1`. Phaser 3 and Vite. |
 | Database | Supabase project `lyxndueoeisyqzewflpu` | Postgres holds the money logic (crediting, usage, reversals, the daily hold), the `stripe-webhook` edge function, and pg_cron, which releases held credit hourly. |
 | Payments | Stripe | A Payment Link with a split dropdown, and a webhook to the edge function. |
-| Dispatcher | The founder's Mac, attended | Moves to a VPS on Oracle Cloud Always Free in Toronto at the phase 5 cutover (`docs/specs/vps.md`). The image, units and runbook are merged; the cutover is pending. |
+| Dispatcher | The founder's Mac, attended | Moves to a VPS on Oracle Cloud Always Free in Toronto at the cutover (`docs/specs/vps.md`), where unattended card sessions run as Claude Managed Agents sessions. The image, units and runbook are merged; the cutover is on the launch checklist in `docs/ROADMAP.md`. |
 | Gate | GitHub Actions workflow `gate` | Runs on every pull request and every push to `main`. |
 
 The repository is private. `main` has no branch protection; the dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha.
@@ -26,21 +26,21 @@ The repository is private. `main` has no branch protection; the dispatcher merge
 - `platform/agents`: the nine role specs (JSON) and their prompts.
 - `platform/ops`: the dispatcher's Docker image, systemd units, provisioning and deploy scripts, and the VPS runbook.
 - `seed-1`: Dust, with its simulation, config, content, renderer, bot and tests. It never imports from `platform/`.
-- `docs`: the plan, the roadmap and the specs.
+- `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`), the board's steps (`BOARD-SETUP.md`) and the specs.
 
 ## How a card ships
 
 This is what `platform/dispatcher/src/pipeline.ts` does with one card.
 
-1. **Funded.** A card reaches stage `funded`: its bar fills from contributions, or the board files it as a directive.
+1. **Funded.** A card on horizon `now` reaches stage `funded`: its bar fills from contributions, or the board files it as a directive.
 2. **Claimed.** On its one-minute tick the dispatcher checks that the studio is not paused and that its mode matches `studio_state`. In attended mode it needs a board member signed in at `/board`; in unattended mode the pool and the caps must cover the card. Then it claims the card and sets it to `building`.
-3. **Session.** It creates a git worktree from `origin/main` on branch `card/<id>-<lane>`. If the card has a `check:` line, the check must be false before the session. A Claude Code session with the card, the CLAUDE.md files and the role prompt makes the change, and every turn is metered to the ledger. Afterwards the check must be true.
+3. **Session.** If the card has a `check:` line, the check must be false before the session. In attended mode a Claude Code session on the founder's Mac makes the change in a worktree on branch `card/<id>-<lane>`; in unattended mode a Claude Managed Agents session makes it against a read-only copy of the repository and hands back a patch, which the dispatcher applies in its own worktree on that branch. The session gets the card, the CLAUDE.md files and the role prompt, and every turn is metered to the ledger. Afterwards the check must be true.
 4. **Lane check.** Any change outside the card's lane, or to a kernel path, rejects the card.
 5. **Pull request.** The dispatcher commits the lane's paths, pushes `card/<id>-<lane>`, opens a pull request and sets the card to `gated`.
 6. **Gate.** It waits for the `gate` check on the head sha. A failure rejects the card.
-7. **Merge.** It squash-merges, passing the head sha, so a head that moved is refused.
+7. **Merge.** It re-reads the pause and the card, then squash-merges, passing the head sha, so a head that moved is refused. If `main` moved since the card's base, the card goes back to be gated again.
 8. **Deploy.** It waits for the Netlify deploy of the merge commit.
-9. **Smoke.** It checks that the deployed page's `version.json` names the merge commit and that the card's check holds on the served config. For the game it also runs the bot for 60 seconds.
+9. **Smoke.** It checks that the deployed page's `version.json` names the merge commit, that the card's check holds on the served config, that each served config file matches the merge commit, and that the gate is green at the merge sha. It runs no card code.
 10. **Live, or rolled back.** On a pass it records a green deploy and the card goes `live`. When the deploy fails, a revert commit goes on `main`. When the smoke test fails, the last green deploy is restored first, then the revert commit is written. Either way the card is rejected with the failing check.
 
 ## Prerequisites
@@ -96,23 +96,24 @@ Per package:
 ## Reading order
 
 1. `docs/ROADMAP.md`: what stands between today and live, and the standing facts.
-2. `docs/PLAN.md`, the sections the work touches: §4 the mechanics and the kernel, §5 the money, §6 Build 1 and the architecture, Appendix A the technical spec.
+2. `docs/PLAN.md`, the sections the work touches: §4 the mechanics, the work definitions and the kernel, §5 the money, §6 the architecture, §10 the decisions, Appendix A the technical spec. `docs/BACKLOG.md` lists what is planned and not built.
 3. The specs under `docs/specs/` that the work touches.
 
 ## Glossary
 
 - **Board.** Kyle and whoever joins him. The board acts through `/board`: pause, the agent mode, Go live, directives, cards and notes.
-- **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a lane, a folder, an executor role and a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused).
-- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` only.
+- **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a funding target, a lane, a folder, an executor role, a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused) and a horizon (now, next, later).
+- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` only, and that lane is closed until the board has its own site (PLAN.md §4 Work).
+- **Horizon and backlog.** Only a card on `now` can take money or run. `next` and `later` are the backlog: planned, not built, listed on /roadmap and seeded from `docs/BACKLOG.md`.
 - **Gate.** The checks a change passes before it merges: `platform/gate/ship-gate.sh` run by the `gate` workflow. It covers the secret scan, the deny-list, the runtime-token scan, typecheck and tests, the headless bot and the build.
-- **Kernel.** The rules no card or role change can edit (PLAN.md §4). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.
+- **Kernel.** The rules no card or role change can edit (PLAN.md §4 Kernel). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.
 - **Pool.** Customer money available for agent compute, in `pool.balance_usd`. There is no founding budget.
 - **Reserve.** 10% of every contribution after Stripe's fee, taken before the split. Agents never spend it; it covers disputes first.
 - **Emergency fund.** The site's name for the incident reserve: 5% of the agents' share of each contribution, until it holds $500, for urgent bug fixes.
-- **Attended and unattended.** Attended: sessions run on the founder's subscription only while a board member is signed in at `/board`, billed to the founder. Unattended: sessions run with no one present on the studio's API key (`STUDIO_ANTHROPIC_API_KEY`), billed to the studio and paid from the pool.
+- **Attended and unattended.** Attended: Claude Code sessions run on the founder's subscription only while a board member is signed in at `/board`, billed to the founder. Unattended: Claude Managed Agents sessions run with no one present on the studio's own Anthropic organization (`STUDIO_ANTHROPIC_API_KEY`), billed to the studio and paid from the pool, within the Console credit bought from Stripe payouts.
 - **Directive.** A card the board forces to stage `funded` at priority 0. It skips funding and still passes the gate.
 - **Founder-billed and studio-billed.** Every ledger row's `billed_to`. Founder-billed rows are attended work, tracked privately and never taken from the pool. Studio-billed rows are paid from the pool and shown on the public ledger.
 - **Held.** Agent credit above $50 per contributor per New York day, held 14 days before it reaches the pool (`docs/specs/refunds-and-holds.md`).
 - **D1–D3.** The first three board directives, built by agents through the pipeline (`docs/specs/week1-runs.md`): D1 the unlock list that fits any count, D2 save and resume, D3 the game shell (tab title, icon, studio link and all-ages label).
-- **Live cut.** The smallest set of features needed to go live, replacing Build 1's week framing (`docs/specs/live-cut.md`): the money loop, funding a card to choose it, unattended mode, and what is building and what is next on the site.
-- **`studio_state`.** The single row of studio settings and status: pause, the agent mode, the spend caps, the launch time, the daily credit limit and hold length, and the dispatcher's heartbeat. The board sets pause, the agent mode and Go live from `/board`.
+- **Live cut.** The smallest set of features needed to go live (`docs/specs/live-cut.md`): the money loop, funding a card, unattended mode, and what is building and what is next on the site. `docs/ROADMAP.md` is the current checklist.
+- **`studio_state`.** The single row of studio settings and status: pause, the agent mode, the spend caps, the launch time, the daily credit limits and hold length, and the dispatcher's heartbeat. The board sets pause, the agent mode, the caps and Go live from `/board`.

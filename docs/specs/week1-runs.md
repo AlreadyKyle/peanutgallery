@@ -41,7 +41,7 @@ Every directive's acceptance test names the commands the gate runs. The dispatch
 
 ## Acceptance criteria
 
-- [x] Three consecutive week-1 runs each reach `live` within 15 minutes of the card insert (run 1, inserted before the board session existed, within 15 minutes of its claim), with ledger rows all `billed_to = 'founder'`, a new green `deploys` row, and the changed value served in `https://peanutgallery-seed-1.netlify.app/config/spawn-table.json`.
+- [x] Three consecutive week-1 runs each reach `live` within 15 minutes of the card insert (runs 1 and 2, each inserted while no board session existed, within 15 minutes of their claim), with ledger rows all `billed_to = 'founder'`, a new green `deploys` row, and the changed value served in `https://peanutgallery-seed-1.netlify.app/config/spawn-table.json`.
 - [x] `pool.balance_usd` is unchanged by the three runs and the directives.
 - [x] D1, D2 and D3 each reach `live` through the pipeline (PR merged by the dispatcher on a green gate).
 - [x] A reload of the live game keeps progress; the unlock list stays on screen at 30 unlocks in the D1 test.
@@ -76,7 +76,7 @@ Every directive's acceptance test names the commands the gate runs. The dispatch
 - `curl -s https://peanutgallery-seed-1.netlify.app/config/spawn-table.json` returned `{ "id": "gatherer", "name": "Gatherer", "baseCost": 11, "rate": 0.2 }`, and `version.json` serves `6394a99b…`.
 - `select balance_usd from pool` returned `0.5019` before and after.
 
-**Run 2** (card 6372e266, forge 40000 to 41000, 16 September 2026). Inserted 15 September at 04:27 UTC, claimed 01:55:06 when the board signed in, live 01:56:39: 1 min 33 s from claim. Stage `live`, `actual_usd` 0.0582, every ledger row `founder`.
+**Run 2** (card 6372e266, forge 40000 to 41000, 16 September 2026). Inserted 15 September at 04:27 UTC, after the board session of run 1 had ended, so it waited for the next one: claimed 16 September 01:55:06 when the board signed in, live 01:56:39, 1 min 33 s from claim. Like run 1 it is measured from its claim, not its insert. Stage `live`, `actual_usd` 0.0582, every ledger row `founder`.
 
 **Run 3** (card b38e2d62, mill 2500 to 2600). Inserted 01:57:39, live 01:59:39: **2 minutes from insert**, the bar as written. Stage `live`, `actual_usd` 0.0330, every ledger row `founder`.
 
@@ -112,4 +112,5 @@ Every directive's acceptance test names the commands the gate runs. The dispatch
 - 2026-09-15: the favicon is `seed-1/render/favicon.svg` linked from `index.html`, not a file in `seed-1/public/`: `publicDir` is off in the protected `seed-1/vite.config.ts`, so that folder is never served (board, with the plan of 15 September 2026).
 - 2026-09-15: the directives are filed by `scripts/file-directives.ts` from reviewed text rather than typed into the /board form. The script runs the dispatcher's pre-check and deletes the Next card D2 replaces only while it holds no money.
 - 2026-09-15: run 1's card was inserted at 02:10 UTC, before any board session existed, so its 15 minutes run from its claim. Runs 2 and 3 are measured from insert.
+- 2026-09-22: correction to the entry above. Run 2's card was inserted on 15 September at 04:27 UTC and claimed on 16 September at 01:55 UTC, when the board next signed in, so run 2 is measured from its claim like run 1. Only run 3 is measured from insert (2 minutes).
 - 2026-09-15: no dispatcher change is needed for the code-lane directives: pnpm 11 installs a card worktree's dependencies on its first `pnpm --filter` run (a fresh worktree ran `seed-1` test, 69 passed, and typecheck, exit 0).

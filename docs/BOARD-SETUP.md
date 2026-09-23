@@ -1,252 +1,122 @@
 # Board setup: everything that needs Kyle
 
-Every item that blocks the studio, in the order that unblocks the most work soonest. Each one says
-why it blocks, exactly what to do, how you know it worked, and what to tell me afterwards.
+Every step that only the board can take, in the order that gets the studio to Go live. Each one
+says why it is needed, exactly what to do, how you know it worked, and what to tell me afterwards.
 
-Sources: `platform/ops/README.md` (Operator inputs, Provision), `docs/specs/vps.md`,
-`docs/specs/launch-pages.md`, `.env.example`, `docs/ROADMAP.md`.
+Sources: `docs/ROADMAP.md` (the launch checklist), `docs/PLAN.md` §10 (the decisions),
+`platform/ops/README.md` (the VPS runbook), `docs/specs/vps.md`, `.env.example`.
 
 **Two rules.**
 
-1. **Never paste a key, token or ping URL into the chat.** They go in `.env`, in `.env.vps`, or in an
-   `export` in a terminal. I can read `.env` and run commands; I can never type a secret for you.
+1. **Never paste a key, token, email address or ping URL into the chat.** They go in `.env`, in
+   `.env.vps`, or in an `export` in a terminal. I can read `.env` and run commands; I can never type
+   a secret for you.
 2. **If a screen does not match these words,** the provider changed its UI. Tell me what you see
-   rather than guessing — I will not be able to tell from the result that you picked the wrong thing.
+   rather than guessing, because I cannot tell from the result that the wrong thing was picked.
 
-**How to reply.** Each item ends with a line in quotes. Sending me that line is all I need.
+**How to reply.** Each step ends with a line in quotes. Sending me that line is all I need.
 
----
-
-## Start here — your list, in order (updated 22 September)
-
-Everything on this list is free. None of it asks you to spend your own money: the studio runs on
-what players put in. The detailed sections further down are there if a step is unclear.
-
-1. **ntfy on your phone (2 minutes).** Install the free **ntfy** app. Tap **+**, paste (the topic
-   name is already on your Mac's clipboard), tap Subscribe. Tell me "subscribed to ntfy".
-2. ~~Say yes to the webhook secret and the kill line.~~ Done 22 September, see **Done**.
-3. **healthchecks.io (5 minutes, free plan).** Sign up with kyle@clayhouse.studio. Add a check:
-   name `peanutgallery dispatcher`, period **1 minute**, grace **5 minutes**. Copy its ping URL.
-   Open the file `.env.vps` in the peanutgallery folder and add a line
-   `HEALTHCHECK_URL=` followed by that URL. Save.
-4. **GitHub token (3 minutes, free).** Open the pre-filled link in item 7 below. Choose
-   **Only select repositories → peanutgallery**. Press Generate. Copy the token and add a line
-   `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`. Save. Tell me "VPS inputs are set".
-5. **hello@ email (10 minutes, free).** Sign up at improvmx.com (free plan) with
-   peanutgallery.games and forward `hello` to kyle@clayhouse.studio. It shows two MX records; add
-   them in GoDaddy → the domain → DNS. Send a test mail. Tell me "hello@ works".
-6. **Oracle server (15 minutes, Always Free).** Sign up at cloud.oracle.com, home region
-   **Canada Southeast (Toronto)**. It asks for a card to check you are a real person. That check is
-   not a charge. **Stay on the Free Tier. Never press "Upgrade to Pay As You Go".** Then, in the
-   Terminal tab next to this chat, run
-   `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` and sign in in the
-   browser window it opens. Tell me "Oracle is signed in". I build the server from there.
-7. **Four quick calls, one reply each.**
-   - Item 10 below, the card maximum: "raise the numbers", "split them" or "both".
-   - Deploy rows on /ledger show raw test output ("bot: 36000 simulated seconds…"): "hide it" or
-     "keep it".
-   - The footer line "Free games, playable in a browser, built by AI agents." →
-     "AI agents build free games you can play in a browser.": "change it" or "keep it".
-   - Gate hardening, four holes the sweep found (see **Sweep findings** under Open decisions):
-     "fix the gate" or "not now".
-
-**Not now: studio API credit (item 8).** Do not buy any with your own money. The server builds on
-API credit, and that credit is bought only with money players have put in, once Stripe pays it
-out. Until then the agents build on your Mac, on the Max plan you already have.
-
-**Later, with me:** the cutover to the server, the first real player contribution, the launch clip
-and posts, then Go live (Part 4).
+**Everything here is free.** None of it asks you to spend your own money: the studio runs on what
+players put in (`docs/PLAN.md` §10 decision 35).
 
 ---
 
-## Progress
+## Your steps, in order
 
-What is left, in the numbering the sections use. Numbers never change as things finish, so a line
-you wrote down stays valid. Finished items move to **Done** at the bottom of this file, with what was
-checked and when.
+This list replaces the item numbers used before 22 September 2026. The **Done** entries at the
+bottom keep their old numbers.
 
-| # | Item | Status |
-|---|---|---|
-| 4 | hello@peanutgallery.games | waiting on you (GoDaddy; no MX records exist yet) |
-| 5 | ntfy topic | **subscribe on your phone** — topic made and tested; the webhook posts to it |
-| 6 | healthchecks.io check | waiting on you |
-| 7 | VPS GitHub token | waiting on you — now one pre-filled link |
-| 8 | Studio Anthropic credit | not now — only with player money, once Stripe pays it out |
-| 10 | Funding target vs agent spend ceiling | **needs your call** |
-| 2b | Oracle sign-up and one sign-in command | waiting on you — I launch the instance by script after it |
-| Part 3 | Hand me the two values | needs 6 and 7 first |
-| Part 4 | Cutover, contribution, clip, Go live | later, with me |
+### 1. hello@ email (10 minutes, free)
 
-Done so far: **5 of 12** — image provider and key; TOTP on /board; legal text review; SSH key (2a);
-the kill lines (9). The webhook secret and redeploy are done too.
-
----
-
-## Part 1 — Quick ones. Any order, none depends on another.
-
-### 4. hello@peanutgallery.games — live criterion 4
-
-**Why it blocks.** The Contact page already links this address. Right now mail to it goes nowhere.
+**Why.** The Contact page links hello@peanutgallery.games (live criterion 4). I checked on
+22 September: the domain's DNS is at GoDaddy (`ns45/ns46.domaincontrol.com`) and it has no MX
+records, so mail to any @peanutgallery.games address bounces today. A forwarder needs an account in
+your name, so this one is yours.
 
 **Do this.**
 
-I checked on 22 September: the domain's DNS is at **GoDaddy** (`ns45/ns46.domaincontrol.com`) and
-it has **no MX records at all**, so every message to any @peanutgallery.games address bounces today.
-Any forwarder needs an account in your name, so this one stays yours.
+1. Sign up at improvmx.com on the free plan with the domain peanutgallery.games, and forward
+   `hello` to your own inbox.
+2. ImprovMX shows two MX records and an SPF record (a TXT record). Add all three in GoDaddy → the
+   domain → DNS.
+3. Send a test message to hello@peanutgallery.games from another address and confirm it arrives.
 
-1. Sign in at GoDaddy → the domain → **Email forwarding** (if GoDaddy offers it on this domain), or
-   use a free forwarder such as ImprovMX, which gives you two MX records to add in GoDaddy's DNS.
-2. Forward `hello@peanutgallery.games` to kyle@clayhouse.studio. An alias is enough.
-3. Send it a test message from another address and confirm it arrives.
-
-After you tell me, I check the MX records with `dig` and record them here.
+Then I check the MX and SPF records with `dig` and record them here.
 
 **Tell me:** "hello@ works, test mail arrived."
 
----
+### 2. Alerts and GitHub access (15 minutes, free)
 
-### 5. ntfy topic — one of four VPS inputs
+**Why.** Once the dispatcher runs on the server, these are how you hear that something failed, and
+how the server and the agent sessions reach the repository with no more access than they need.
 
-**Why it blocks.** The dispatcher's alert unit posts here when it fails for good, and the Stripe
-webhook posts here too. Without it, an unattended failure is silent.
+**a. healthchecks.io.**
 
-**What I did, 22 September.** Generated an unguessable topic without printing it, saved the URL as
-`NTFY_TOPIC_URL` in `.env.vps` at the repository root (gitignored, mode 0600), and posted a test to
-it: HTTP 200. The topic name is on your Mac's clipboard. Anyone who knows it can read and post your
-alerts, so it stays out of chat.
+1. Sign up at healthchecks.io with your own email, on the free plan.
+2. Add a check named `peanutgallery dispatcher`, **period 1 minute**, **grace 5 minutes**. The ops
+   runbook fixes these timings, so use them exactly.
+3. Under notification methods, confirm your email gets this check.
+4. Copy the ping URL (`https://hc-ping.com/<uuid>`). Open `.env.vps` in the peanutgallery folder
+   and add a line `HEALTHCHECK_URL=` followed by it. Save.
 
-**Do this.**
+**b. ntfy on your phone.** The topic exists and the Stripe webhook already posts to it (see
+**Done**), but your phone is not subscribed yet, so an unattended failure would not reach you.
 
-1. Install the **ntfy** app on your phone (App Store / Play Store).
-2. In the app: **+** → paste the topic name (Universal Clipboard carries it from the Mac; if the
-   clipboard has moved on, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy` puts it back) → Subscribe. Leave the
-   server as ntfy.sh.
-3. Tell me, and I post a second test so you see it arrive.
+1. Install the free **ntfy** app (App Store or Play Store).
+2. In the app: **+** → paste the topic name → Subscribe, leaving the server as ntfy.sh. If the
+   topic name is no longer on your clipboard, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy`
+   in the Terminal tab puts it back. Anyone who knows the topic can read and post your alerts, so it
+   stays out of chat.
+3. Tell me, and I post a test so you see it arrive. The cutover repeats that test from the server.
 
-**Webhook alerts: done 22 September.** The Supabase function secret `NTFY_TOPIC_URL` is set, so the
-Stripe webhook posts to this topic too.
+**c. Three fine-grained GitHub tokens.** Each is for the peanutgallery repository only, and all
+three must be different. No API creates one, but GitHub takes the settings in a link, so each link
+below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permissions. For each one:
 
-**Tell me:** "subscribed to ntfy."
+- the one thing to choose by hand is Repository access → **Only select repositories** →
+  `peanutgallery`;
+- check the permissions list shows exactly what is written here (GitHub adds Metadata read on its
+  own) and **no Workflows**;
+- the token is shown once; copy it straight into the file named, never into chat.
 
----
-
-### 6. healthchecks.io check — one of four VPS inputs
-
-**Why it blocks.** It is how you find out the VPS dispatcher stopped pinging. The ops runbook fixes
-the timings, so use these exactly.
-
-**Do this.**
-
-1. Sign up at healthchecks.io with **kyle@clayhouse.studio**.
-2. Add a check:
-   - Name: `peanutgallery dispatcher`
-   - **Period: 1 minute**
-   - **Grace time: 5 minutes**
-3. Under Notification methods, confirm your email is on and gets this check.
-4. Copy the ping URL. It looks like `https://hc-ping.com/<uuid>`. Put it in `.env.vps` (Part 3).
-   Keep it out of chat.
-
-**Note.** The period is 1 minute, not 5. The dispatcher pings every tick, and an earlier note of
-mine said 5 — `platform/ops/README.md` is the version of record.
-
-**Tell me:** "healthchecks check is created."
-
----
-
-### 7. Fine-grained GitHub token for the VPS — one of four VPS inputs
-
-**Why it blocks.** The VPS clones and pushes with its own token, never your Mac's. The provisioning
-script refuses a token equal to the Mac's `GITHUB_TOKEN`, so this must be a new one.
-
-No API creates a fine-grained token, so this stays yours, but GitHub now takes the settings in the
-link, which leaves one choice to make by hand.
-
-**Do this.**
-
-1. Open this link. It fills in the name, owner AlreadyKyle, a 366-day expiry, and exactly the
-   permissions the VPS needs — Contents read and write, Pull requests read and write, Checks read
-   (Metadata read is added by GitHub):
+1. **The server's token** (the dispatcher on the VPS): Contents read and write, Pull requests read
+   and write, Checks read. No Actions, no Workflows. If you already made it from the old item 7
+   link, it is right as it is.
 
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
 
-2. The one thing to choose: Repository access → **Only select repositories** → `peanutgallery`.
-3. Check the permissions list shows those four and nothing else — no Workflows. Change the expiry if
-   you want; rotation is in `platform/ops/README.md`.
-4. Generate, and copy the token. It is shown once. Put it in `.env.vps` (Part 3). Keep it out of chat.
+   Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`.
+2. **The read-only token for agent sessions** (it mounts the repository into each Managed Agents
+   session): Contents read only.
 
-**Tell me:** "VPS GitHub token is created."
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-read&description=Peanut+Gallery+agent+sessions,+read+only&target_name=AlreadyKyle&expires_in=366&contents=read
 
----
+   Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. Before the cutover I prove it
+   cannot write: a push with it must answer 403, and the unattended startup refuses to run otherwise.
+3. **The Mac's token** (attended runs on your Mac): the same permissions as the server's token.
 
-### 8. Studio Anthropic prepaid credit — not now, and only with player money
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
 
-**Rule, 22 September.** Everything the studio spends comes from players, never from you. Buy this
-credit only with money contributions have brought in, after Stripe pays it out, and no more than
-that. Until then, skip this item; the agents keep building on your Mac under the Max plan you
-already pay for. The steps below are for when that money exists.
+   In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
+   is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
+   repository on your account and has no Workflows limit. You can keep the gh sign-in for your own
+   use; it just must not be the value in `.env`. Unattended mode refuses a token that is not
+   fine-grained, and attended mode warns about one.
 
-**Why it blocks.** Unattended cards bill the studio organisation's key, not your Max subscription.
-`STUDIO_ANTHROPIC_API_KEY` is already set in `.env`; the organisation it belongs to just needs money
-in it. This is studio money, not pool money.
+**Tell me:** "healthchecks check is created", "subscribed to ntfy" and "tokens are set".
 
-**Do this.**
+### 3. Oracle sign-in (15 minutes, Always Free)
 
-1. console.anthropic.com → sign in → switch to the **studio** organisation (the one that key belongs
-   to, never your personal one). If you are unsure which it is, open Settings → API keys in each
-   organisation and find the key whose prefix matches the one in `.env` — I can print you the first
-   few characters safely if you ask.
-2. **Billing** → buy prepaid credit.
-3. Turn **auto-reload off**.
-4. Set a **monthly spend limit of $500**, which is the guardrail the ops runbook assumes.
-5. Amount is your call. For scale: the six shipped cards cost $0.82 in total.
-
-**Tell me:** "Studio credit is loaded."
-
----
-
-### 9. One decision, one reply
-
-The day-7 kill line in the docs reads "under 300 peak concurrent". It was a stream number, and the
-stream has left launch scope, so nothing measures it any more.
-
-You said nothing, so on 22 September I went to delete it from `docs/PLAN.md` (the day-7 row keeps
-its other three criteria). The edit was held for your approval, because it changes a kill criterion.
-The day-30 row has the same problem: "under 150 average concurrent" is also a stream number.
-
-**Tell me:** "delete it" (day 7 only), "delete both", or the site-first numbers you want instead.
-
----
-
-### 10. Funding target vs agent spend ceiling — your call, 19 September
-
-**What you saw.** "Daily cap $100.00. Card maximum $25.00." on /board.
-
-**What those two numbers actually are.** Agent burn limits, not contribution limits. Nothing stops
-anyone giving any amount. Detail and the options are below in this file under **Open decisions**.
-
-**Tell me:** which of the three options, and any numbers you want changed.
-
-
----
-
-## Part 2 — The Oracle instance. Your part is a sign-up and one command.
-
-**Why it blocks.** Live criterion 2 is the dispatcher running unattended on a server. Today it runs
-on your Mac, billed to you. Any Ubuntu 24.04 host works; Oracle's free tier is what the runbook was
-written against.
-
-**What changed, 22 September.** The console walk-through is gone. `platform/ops/oracle-launch.sh`
-(spec `docs/specs/oracle-launch.md`) builds the network, launches the instance, and keeps retrying
-every availability domain while Oracle says "Out of capacity" — the free Ampere tier's usual answer,
-which by hand meant clicking Create again for hours. It checks the firewall is TCP 22 only, proves
-ssh, and can rebuild the box the same way later. The SSH key (2a) is made, so all that is left is
-the account, which only you can create.
-
-### 2b. Sign up, then sign in once from the terminal
+**Why.** Live criterion 2 is the dispatcher running unattended on a server. `platform/ops/oracle-launch.sh`
+(spec `docs/specs/oracle-launch.md`) builds the network, launches the instance and keeps retrying
+every availability domain while Oracle says "Out of capacity", the free Ampere tier's usual answer.
+It checks the firewall is TCP 22 only and proves ssh. The SSH key is made (see **Done**), so all
+that is left is the account, which only you can create.
 
 1. cloud.oracle.com → **Start for free**. **Home region: Canada Southeast (Toronto),
    `ca-toronto-1`.** Montreal (`ca-montreal-1`) is the accepted alternative. The home region cannot
-   be changed later. Stop once you reach the console home page; create nothing there.
+   be changed later. It asks for a card to check you are a real person; that check is not a charge.
+   **Stay on the Free Tier.** Stop once you reach the console home page; create nothing there.
 2. In the **Terminal tab inside Claude**, run:
 
    ```bash
@@ -256,148 +126,227 @@ the account, which only you can create.
    A browser window opens; sign in with the Oracle account. The CLI is already installed. No API key
    is created, and the sign-in lasts 24 hours with refresh, which covers a long capacity wait.
 
-**Tell me:** "Oracle is signed in."
-
 Then I run the script, with your allow, and quote the `RUNNING` state, the address and both
 `ssh … ok` lines. If capacity never frees up, any Ubuntu 24.04 host works unchanged, including a
-cheap paid instance elsewhere — that would be your call, because it costs money.
+paid instance elsewhere; that would be your call, because it costs money.
+
+**Idle reclaim, your choice.** Oracle stops an Always Free instance after 7 days in which its CPU
+(at the 95th percentile), network and memory all stay under 20%. Once card sessions run as Managed
+Agents, the dispatcher on this box mostly waits, so Oracle will probably stop it at some point. If it
+does, the healthchecks.io ping stops and you get an email. Start it again from the Oracle console
+(Compute → Instances → `peanutgallery-dispatcher` → Start), or tell me and I rerun the launch
+script; the dispatcher starts on boot. The only way to remove reclaim is upgrading the account to
+Pay As You Go, which stays $0 inside the Always Free limits but puts your card on file. My default
+is to stay on the Free Tier and restart if it happens. It is on **Open decisions** below.
+
+**Tell me:** "Oracle is signed in."
+
+### 4. Your call: how does the first player arrive?
+
+**Why.** Contributions are already open: the Contribute button is live, and Go live only stamps
+the launch time. The money-first order (`docs/PLAN.md` §10 decision 23) needs a player's
+contribution and a Stripe payout before the cutover, and your own money never counts. Nothing tells
+anyone the site exists yet, so someone has to.
+
+- **(a) Share it quietly before Go live. My recommendation**, because it is the kick-off plan's own
+  approach: the board posts from the day the page is live, and contributions before launch pre-load
+  the pool. Share it through the Discord server the site already links, your own posts, or an
+  invite to people you name. The site says the agents are paused until the studio resumes them. The
+  formal announcement (the Reddit posts, the Show HN and the X thread) still waits for the clip and
+  Go live.
+- **(b) Go live and announce first**, with the studio still paused. The cost: the studio is
+  announced when it cannot build anything until the payout clears, credit is bought and the cutover
+  is done, and the rule that posts wait for the clip has to change, because the clip needs a card to
+  ship after the cutover.
+
+**Tell me:** "share quietly" or "announce first".
+
+### 5. Contributions open, with the studio paused
+
+**Why.** Player money can arrive from now on, but no agent spends it until the credit is bought
+and the cutover is done.
+
+1. The studio stays paused at /board. The site's paused notice follows Pause and Resume on its own,
+   so no copy change is needed at the cutover.
+2. **Confirm the studio-wide daily limit on immediate credit.** Besides the $50 a day of immediate
+   agent credit per payer, all payers together get at most $500 of immediate agent credit per New
+   York day, and credit above that is held 14 days, like any large contribution. $500 is the
+   default. You can change it in the Caps form at /board ("Studio daily limit on immediate
+   credit") with your second factor.
+3. If you chose (a) in step 4, share the site now.
+
+**Tell me:** "keep $500" (or the number you want), then "shared" if you chose (a).
+
+### 6. The first payout
+
+**Why.** Console credit is bought only from money Stripe has paid out (`docs/PLAN.md` §10
+decision 23).
+
+1. In the Stripe Dashboard, confirm payouts are turned on and the bank account is verified.
+2. Wait for the first payout that includes a player's contribution.
+
+**Tell me:** "payouts are on", and later "the first payout arrived".
+
+### 7. Console credit, after this payout and after every payout from now on
+
+**Why.** Unattended cards bill the studio organisation's key, not your Max subscription.
+`STUDIO_ANTHROPIC_API_KEY` is already set in `.env`; the organisation it belongs to needs credit.
+
+**How much.** I work it out and quote it before you buy:
+
+1. In the Stripe Dashboard, open the payout and note when the latest charge it includes was made.
+   That time is the cutoff.
+2. I run
+   `select coalesce(sum(agents_usd - held_usd), 0) from contributions where created_at <= '<cutoff>'`:
+   the agent share, incident reserve included, of everything paid out so far, with refunds and
+   disputes netted out and money still held left out until it is released.
+3. The purchase is that figure minus the credit already bought (the purchases recorded at /board).
+4. Fees, currency conversion and HST on the purchase, and overhead (the startup probe's model use
+   and session time), come from the studio share, never from the agent money.
+5. If the amount is below the Console's minimum purchase, wait for the next payout. Never add your
+   own money.
+
+**Do this.**
+
+1. console.anthropic.com → sign in → switch to the **studio** organisation (the one that key
+   belongs to, never your personal one). If you are unsure which it is, open Settings → API keys in
+   each organisation and find the key whose prefix matches the one in `.env`; I can print you the
+   first few characters safely if you ask.
+2. **Billing** → buy prepaid credit for the amount I quoted.
+3. Keep **auto-reload off** and the **monthly spend limit at $500**.
+4. At /board, under **Record a credit purchase**, enter the amount, the Stripe payout id and a
+   one-line reason, then **Record purchase** (second factor). The dispatcher never lets unattended
+   sessions spend more than the credit recorded.
+5. As the meter grows, raise the Console's monthly limit and the monthly cap at /board together.
+
+Console credit lags the pool, so a card can wait for credit while the pool shows money. When that
+happens the dispatcher pauses the studio and alerts "Console credit needed", and the next payout's
+purchase clears it.
+
+**Tell me:** "credit bought and recorded".
+
+### 8. Cutover and soak (about fifteen minutes with me, then a day)
+
+I prompt you at each point.
+
+1. You: **Pause** at /board.
+2. Me: stop the Mac dispatcher and confirm no dispatcher process is left.
+3. Me: create or update the managed agent and environment with the studio key and quote their ids;
+   write the server's env file with `platform/ops/make-dispatcher-env.sh` (it prints key names,
+   never values), upload it root-only, and run `provision.sh` twice. The second run must print
+   `provision: done: 0 change(s)`.
+4. You: set the agent mode to **unattended** at /board (second factor).
+5. Me: start the service and quote the journal's `startup probe passed` line. The probe is a small
+   Managed Agents session, billed as overhead from the studio share.
+6. You: confirm /board shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
+7. Me: post a test alert to ntfy from the server. You: confirm it arrived on your phone.
+8. You: **Resume**.
+9. Me: restart test and reboot test, then stop the service and wait out the grace so healthchecks
+   emails you, which proves the alert path. Start it again.
+10. A 24-hour soak with no restart loop and no unexpected alert. I quote the results.
+
+Then the first player-funded card builds with nobody at the keyboard, billed to the studio, which
+closes live criterion 2.
+
+**Tell me:** "ready for the cutover".
+
+### 9. Name a moderator
+
+**Why.** A second person who can pause the studio (and hold the kill switch once the stream
+exists).
+
+1. Add a line `MODERATOR_EMAIL=` with their address to `.env` yourself, never in chat.
+2. Me: re-run the seed (`pnpm --filter @backseat/supabase seed`, safe to run again) and quote its
+   `board_members` line with the address redacted.
+3. The moderator signs in at /board by magic link and sees the pause control. Sign-in is refused
+   until that row exists.
+
+**Tell me:** "moderator email is in .env".
+
+### 10. The launch clip
+
+Record the screen as a real card goes from open to shipped, with the change visible in Dust. I
+draft the posts in `docs/launch/`; you edit them so they sound like you. The posting is yours.
+
+**Tell me:** "clip recorded".
+
+### 11. Go live
+
+At /board, press **Go live**. It works once and cannot be undone. Then post, in the order in
+`docs/specs/announcement.md`.
 
 ---
 
-## Part 3 — Hand me the two values. Two minutes, and it never touches the chat.
+## Standing items, outside the order
 
-The address comes from my script and the ntfy URL is already in `.env.vps`. What is left are the
-healthchecks ping URL (item 6) and the VPS GitHub token (item 7). Open `.env.vps` at the repository
-root in any editor and add two lines under the one that is there:
+- **Console credit after every payout** (step 7), recorded at /board each time.
+- **HST review at $15k.** When cumulative contributions reach $15,000, review GST/HST
+  registration. Registration is required past the $30,000 small-supplier threshold, and Stripe tiers
+  with named benefits are sales, so register before tiers ship (`docs/PLAN.md` §5 Canada admin). An
+  automatic alert is a backlog entry; until it exists I mention the total when it gets close.
+- **Delete `KEYS.md`.** The OpenAI and Gemini keys you put in `KEYS.md` are in `.env` (see
+  **Done**, item 1). Before you delete it I confirm both are set in `.env` by their length only,
+  never printing them, and quote the result. Then delete `KEYS.md` from the main checkout yourself.
+  It is untracked, so the deletion cannot be undone; `.gitignore` keeps it out of the repository
+  either way.
 
-```bash
-VPS_GITHUB_TOKEN=github_pat_...
-HEALTHCHECK_URL=https://hc-ping.com/...
-```
+## What only you can do
 
-Substitute your real values, no quotes. The file is gitignored and readable only by you.
-
-**Tell me:** "VPS inputs are set."
-
-Then I take over: I load `.env.vps` into the shell and write the env file with
-`platform/ops/make-dispatcher-env.sh` (it prints key names, never values), upload it to the server as
-root-only 0600, install the ntfy URL for the alert unit, and run `provision.sh` twice — the second run
-must print `provision: done: 0 change(s)`. I quote every check as I go.
+- The ImprovMX account and the GoDaddy MX and SPF records.
+- The healthchecks.io account.
+- Subscribing to the ntfy topic on your phone.
+- The three fine-grained GitHub tokens.
+- The Oracle account and `oci session authenticate`.
+- The call on how the first player arrives, and the share if you choose it.
+- Confirming Stripe payouts and the bank account, and the studio-wide daily credit limit.
+- Buying Console credit after each payout and recording it at /board.
+- Naming a moderator.
+- The launch clip.
+- Go live.
+- Deleting the local `KEYS.md`.
+- Reviewing HST registration at $15k.
 
 ---
 
 ## Open decisions
 
-### Sweep findings — 22 September, need your yes
+### Kill-condition pivots
 
-A read-through of the whole codebase fixed the obvious bugs on its own (`docs/specs/sweep-22-sep.md`).
-These it left for you:
+The funder, money and board-time kill conditions stay, counted from Go live (`docs/PLAN.md` §8).
+Their pivots ("drop 24/7; run a weekly two-hour live show", "drop the meter; run as a public demo",
+"archive; publish the post-mortem; open-source the vote and meter kit") were written for a streamed
+studio. **Tell me:** "keep the pivots", or the pivots you want for a site-first studio.
 
-- **Gate holes (kernel, so yours).** A config-only card can break `seed-1/content/strings.json` and
-  still pass, because the config lane never parses it. A file with one NUL byte skips the secret,
-  banned-phrase and runtime scanners. `seed-1/sim/hash.ts` and `rng.ts` are not kernel-protected, so
-  a card could make the determinism check pass trivially. A new root file named like `a=b.txt` is
-  skipped by the banned-phrase scan. Say "fix the gate" and I write one spec for all four.
-- **Deploy rows show raw test output** on /ledger and the landing page. A test pins it, so it looked
-  deliberate. "hide it" or "keep it".
-- **Footer line** is a fragment, which COPY.md warns against: "change it" or "keep it".
-- **Card titles in production** use code names ("Spawn table: mill baseCost 2500 to 2600"). Fixing
-  them writes to the database: "rename them" or "leave them".
-- **"In the gate"** badge: DESIGN.md names it, COPY.md says to say "automated checks". Pick one.
-- **Seed-1 unlock count** can read "13 of 12" after an unlock is removed. That is game code, so it
-  should be a card.
+### Oracle Pay As You Go
 
-### Caps: what they are, and the one that is worth changing
+Only if Oracle actually reclaims the instance (step 3). **Tell me:** "upgrade Oracle" if you would
+rather put a card on file than restart it by hand.
 
-**Nothing caps what a supporter can give.** The two numbers on /board are limits on what the *agents*
-may spend, and they appear on /board only. The public site says one sentence about them: "Agents
-spend contributions only on funded cards, within set caps."
+### The card maximum (old item 10): resolved by the launch batch
 
-| Number | What it limits | Where |
-|---|---|---|
-| Daily cap $100 | API money the agents may burn in a day, as `min(pool balance, $100)` | `throttle.ts`, `tick.ts` |
-| Card maximum $25 | agent spend on one card, as `min(1.5 × estimate, $25)` | `session.ts:59` |
-| Card maximum $25, again | **the funding target a card may ask for** | `Board.tsx:594` and `file_card` in `20260915000000_live_cut.sql:226` |
+A card's funding target no longer depends on the per-card maximum, which now limits only what agents
+may spend on one card (`docs/PLAN.md` §10 decision 28). `docs/PLAN.md` §4 Kernel makes spend caps
+a rule no card may edit; it fixes that caps exist, not their values, and §6 Budget throttle keeps
+them in `studio_state`, edited from /board. So the numbers are yours: the caps form at /board sets
+the daily cap, the card maximum, the hourly rate, the monthly cap and the studio-wide daily limit on
+immediate credit, with your second factor. Removing the caps outright is a kernel change I would argue against, because
+they are what stops a looping agent draining customer money. Nothing to reply unless you want
+different numbers.
 
-The daily cap is not binding today: the pool holds $0.50, and the cap is the lower of the balance and
-$100, so the balance is what stops the agents. For scale, the six shipped cards cost $0.82 in total.
+### The sweep's findings of 22 September: where each went
 
-**Where you are right.** The third row. `card_max_usd` does double duty: it caps agent spend *and*
-caps what a card may ask the community for. `file_card` refuses a target above it server-side with
-"The funding target must not exceed the per-card maximum". So no card can ask for more than $25 —
-that is a real ceiling on community money per card, and it is the thing worth fixing.
-
-**Where the framing is off.** A supporter can already give any amount. Above $50 per contributor per
-day the excess is *held* for 14 days and then credited, per `docs/specs/refunds-and-holds.md` — a
-$120 contribution credits $50 now and $70 on release. That is chargeback protection, not a refusal.
-
-**What the kernel actually fixes.** `docs/PLAN.md:139` puts "spend caps" among the rules no card,
-vote, regime or org change may edit. It fixes that caps *exist*, not what they are set to:
-`PLAN.md:237` says "Caps live in `studio_state` and are edited from the board; the environment values
-are the initial seeds", and `PLAN.md:151` lists spend caps as a board control needing the second
-factor. So the numbers are yours to change; removing the caps outright is a kernel change and I would
-argue against it — they are what stops a looping agent draining the pool, and the pool is customer
-money.
-
-**Three options.**
-
-1. **Raise the numbers.** A minute's work at /board, needs your TOTP, no code. Fixes the $25 ask
-   ceiling by moving it. Both meanings move together, so the agents' per-card burn ceiling rises with
-   it.
-2. **Split the two meanings** *(what I would do)*. A card's funding target stops being bounded by the
-   agents' spend ceiling. The community can fund a card at any size; the agents still cannot burn
-   more than a bounded amount building it. Needs a spec, a migration to `file_card`, and a /board
-   change. It also needs one decision from you: what happens to money raised above what a card costs
-   to build — it goes to the pool and funds later cards, but the site has to say so plainly.
-3. **Both.** Split them, and set the new ceiling where you want it.
-
-My recommendation is 2, with the agent ceilings left where they are: at $0.14 a card so far, $25 is
-about 180 times what a card costs, so it constrains nothing except the ask.
-
----
-
-## Part 4 — Later, with me. Nothing to do yet.
-
-These come after Part 3 and after I finish two pieces of my own work: agent sessions under a
-separate user, and the API-key proxy that keeps the studio key out of agent sessions. The roadmap
-requires both before any unattended card runs.
-
-### A. Cutover
-
-I prompt you at each point; the whole thing is about fifteen minutes.
-
-1. You: **Pause** at /board.
-2. Me: stop the Mac dispatcher, confirm no dispatcher process is left.
-3. You: set the agent mode to **unattended** at /board. This needs your second factor, which is why
-   item 2 comes first.
-4. Me: start the service, then read the journal for `startup probe passed` with
-   `"apiKeySource":"ANTHROPIC_API_KEY"`, and quote it.
-5. You: confirm /board shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
-6. You: **Resume**.
-7. Me: restart test, reboot test, then stop the service and wait out the grace so healthchecks emails
-   you — that proves the alert path. Start it again.
-8. Then a 24-hour soak with no restart loop and no unexpected alert. I quote the results.
-
-### B. One real contribution — closes live criteria 1 and 2 together
-
-After the cutover, so the same payment proves both the money path and an unattended build.
-
-This is a player's contribution, not yours: the first real one after the cutover does the job. If
-you would rather prove it sooner by contributing yourself, that is your call and never required.
-
-1. A player opens https://peanutgallery.games/contribute, picks a card and pays.
-2. I cannot make payments.
-3. I confirm the webhook answered 200, the meter moved, and the card then builds with nobody at the
-   keyboard, with `billed_to = 'studio'` ledger rows.
-
-### C. Launch clip and posts
-
-I draft the posts in `docs/launch/`. You record the screen clip and edit the drafts so they sound
-like you. The posting is yours.
-
-### D. Go live
-
-At /board, press **Go live**. It works once and cannot be undone. Then post.
+- The four gate holes (the config lane skipping the strings check, a NUL byte hiding a file from the
+  scanners, `seed-1/sim/hash.ts` and `rng.ts` unprotected, a root file named like `a=b`): the gate
+  pull request, branch `launch/gate`.
+- The footer line, the raw test output on deploy rows and "In the gate": the site pull request,
+  branch `launch/site`. The footer becomes the full sentence you were offered, "AI agents build free
+  games you can play in a browser."
+- Card titles in production: the live-cards pull request, branch `launch/cards`, applied after it
+  merges with the titles quoted before and after.
+- The seed-1 unlock count reading "13 of 12": a game card on now, filed by the live-cards pull
+  request.
+- The ledger-identity race and the null-session refund edge, which need a migration or a production
+  read: the backlog entry "Two rare accounting edge cases".
 
 ---
 
@@ -406,59 +355,48 @@ At /board, press **Go live**. It works once and cannot be undone. Then post.
 Copy any of these back to me as you finish:
 
 - "hello@ works, test mail arrived."
-- "subscribed to ntfy."
 - "healthchecks check is created."
-- "VPS GitHub token is created."
-- "Studio credit is loaded."
+- "subscribed to ntfy."
+- "tokens are set."
 - "Oracle is signed in."
-- "VPS inputs are set."
-- "delete it" / "delete both" (the kill lines, item 9)
-- "raise the numbers" / "split them" / "both" (the funding ceiling, item 10)
-
-## What I build while you do all this
-
-None of it is blocked by the list above:
-
-1. Strip the stream and every date or deadline you did not set from PLAN, ROADMAP and the agent
-   prompts.
-2. Backlog core: Now/Next/Later on cards, board reorder/park/cancel/resume, the public `/roadmap`
-   page, and the after-live items filed as real Later cards.
-3. `docs/PIPELINE.md` and the unwired links: a board alert when a card ships, a way to resume
-   orphaned cards, refunds on shipped cards.
-4. Docs readability and a decisions index.
-5. The image adapter, then `/how-it-works` and `/team`. Unblocked as of 19 September: both keys
-   are in `.env` and tested.
-6. ~~Write the production results into the merged specs and bring `docs/ROADMAP.md` up to date.~~
-   Done 20 September: every check re-run against production and quoted, ten spec statuses corrected,
-   the roadmap rewritten.
+- "share quietly" / "announce first"
+- "keep $500" (or a number) and "shared"
+- "payouts are on" / "the first payout arrived"
+- "credit bought and recorded"
+- "ready for the cutover"
+- "moderator email is in .env"
+- "clip recorded"
+- "keep the pivots" (or the pivots you want)
+- "upgrade Oracle" (only if reclaims happen)
 
 ---
 
 ## Done
 
-Newest last. Each entry says what was checked, not just that it happened.
+Newest last. Each entry says what was checked, not just that it happened. The numbers are the item
+numbers used before 22 September 2026.
 
-### 1. Image provider and key — DONE 19 September 2026
+### 1. Image provider and key: DONE 19 September 2026
 
-Nothing left for you here.
+Nothing left for you here, except deleting `KEYS.md` (see **Standing items**).
 
 You put both keys in `KEYS.md`. I copied them into `.env` (`OPENAI_API_KEY` and
 `GOOGLE_AI_API_KEY`), which is gitignored, and tested both against the live APIs before writing
 them:
 
-- **OpenAI** — `GET /v1/models` returned HTTP 200, 124 models visible, including `gpt-image-1`,
+- **OpenAI**: `GET /v1/models` returned HTTP 200, 124 models visible, including `gpt-image-1`,
   `gpt-image-2` and `gpt-image-2.5`.
-- **Gemini** — `GET /v1beta/models` returned HTTP 200, 58 models visible, including
+- **Gemini**: `GET /v1beta/models` returned HTTP 200, 58 models visible, including
   `gemini-2.5-flash-image`, `gemini-3-pro-image` and `gemini-3.1-flash-image`. The key's `AQ.`
   prefix is not the `AIza` form AI Studio usually hands out, but it authenticates on both the
   `key=` query parameter and the `x-goog-api-key` header, so it is fine.
 
-**How I'll use them, unless you say otherwise.** The adapter takes OpenAI as its default with Gemini
-behind the same interface, so either can be swapped without touching callers. When I generate the
-nine team avatars I'll run a first pass through both providers and put them side by side at /board,
-so you approve on what they actually look like rather than on a provider name.
+**How they will be used (updated 22 September 2026).** The agent avatars are drawn in code as SVG
+instead (`docs/PLAN.md` §10 decision 27), so the image adapter is a backlog entry ("Image adapter
+for studio pictures"): OpenAI first with Gemini behind the same interface, only for studio
+imagery, behind a board review queue. The keys stay in `.env` for it.
 
-### 2. TOTP on /board — DONE 20 September 2026
+### 2. TOTP on /board: DONE 20 September 2026
 
 Nothing left for you here.
 
@@ -466,14 +404,11 @@ Nothing left for you here.
   with no abandoned unverified factor left behind.
 - **The second factor proved against a state-changing RPC.** You filed a directive rather than a
   note: card `8bd842eb-8cf7-4f24-a17d-031bd2f97e4b`, "second factor test", at 00:25:54 UTC. That is
-  stronger evidence than the note the spec names — `file_directive` is the top-tier board RPC, and
-  like `file_note` it refuses a session without `aal2`. I will record it that way in the Evidence
-  section of `docs/specs/launch-pages.md` in the docs pull request, rather than asking you to repeat
-  it as a note.
-- **Open loose end from it:** that directive is a real card, `funded` at priority 0, first in the
-  dispatcher's queue. See **Open decisions** below.
+  stronger evidence than the note the spec names: `file_directive` is the top-tier board RPC, and
+  like `file_note` it refuses a session without `aal2`. It is recorded that way in the Evidence
+  section of `docs/specs/launch-pages.md`.
 
-### 3. Legal text review — DONE 20 September 2026
+### 3. Legal text review: DONE 20 September 2026
 
 You said the text is fine and only needed to be Ontario/Canada. I checked all four pages in
 `platform/site/src/lib/copy.ts` and it already was, in both places it matters:
@@ -483,10 +418,10 @@ You said the text is fine and only needed to be Ontario/Canada. I checked all fo
 - Terms, "Law": "These terms are governed by the laws of Ontario and the laws of Canada that apply
   there."
 
-No other jurisdiction appears anywhere in Terms, Privacy, Refunds or Contact — no US state, no EU,
+No other jurisdiction appears anywhere in Terms, Privacy, Refunds or Contact: no US state, no EU,
 no named regulator. Nothing to change, so nothing was changed.
 
-### The "second factor test" directive — RESOLVED 20 September 2026
+### The "second factor test" directive: RESOLVED 20 September 2026
 
 Deleted. It was card `8bd842eb-8cf7-4f24-a17d-031bd2f97e4b`, left `funded` at priority 0 by the
 second-factor test, and it would have been first in the queue once the dispatcher ran and money
@@ -497,9 +432,9 @@ covered it.
 - Deleted with the id, title, stage and `actual_usd = 0` all in the filter, so it could match nothing
   else. 1 row deleted, HTTP 200.
 - After: the card is gone, 9 cards remain, queue depth 0, 6 live. `ledger` still 65 rows and the pool
-  still $0.5019 — the delete touched no money.
+  still $0.5019; the delete touched no money.
 
-### 2a. SSH key for the VPS — DONE 22 September 2026
+### 2a. SSH key for the VPS: DONE 22 September 2026
 
 Nothing left for you here. `~/.ssh` had no key pair, so I made one with no passphrase, the default
 this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/id_ed25519`.
@@ -507,13 +442,19 @@ this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/i
 `256 SHA256:1fLWiB1WvhlXXkzbw7/xkUXmRGPsp5NDtozEVZ3ofdk peanutgallery-vps (ED25519)`.
 `oracle-launch.sh` gives the public half to the instance; the private half never leaves the Mac.
 
-### 9. Viewer-count kill lines — DONE 22 September 2026
+### 5. ntfy topic: made and tested 22 September 2026
 
-You said yes. Removed from `docs/PLAN.md` §8: "under 300 peak concurrent" (day 7) and "under 150
-average concurrent" (day 30). Both measured a stream that has left launch scope. The funder, money
-and board-time criteria stay.
+Generated an unguessable topic without printing it, saved the URL as `NTFY_TOPIC_URL` in `.env.vps`
+at the repository root (gitignored, mode 0600), and posted a test to it: HTTP 200. Subscribing your
+phone is still open (step 2b).
 
-### Webhook secret and redeploy — DONE 22 September 2026
+### 9. Viewer-count kill lines: DONE 22 September 2026
+
+You said yes. Removed from `docs/PLAN.md` §8: "under 300 peak concurrent" and "under 150 average
+concurrent", the 7-day and 30-day lines' stream numbers. The funder, money and board-time criteria
+stay; the dateless rewrite of 22 September counts them from Go live.
+
+### Webhook secret and redeploy: DONE 22 September 2026
 
 You said yes. `NTFY_TOPIC_URL` is set as a Supabase function secret (the Management API answered
 201, and the secret list now names it). `stripe-webhook` was redeployed from `main` at 558b934 with

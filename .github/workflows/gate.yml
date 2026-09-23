@@ -172,6 +172,8 @@ jobs:
         run: pnpm test:agents
       - name: Ops tests
         run: pnpm test:ops
+      - name: Docs tests
+        run: pnpm test:docs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.7.13
