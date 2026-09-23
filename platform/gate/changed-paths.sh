@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# changed-paths.sh: which folders a change touches and which lane it belongs to.
+# changed-paths.sh: which folders a change touches, which lane it belongs to, and which of the
+# platform job's slower steps it can affect.
 #
 # usage: changed-paths.sh [--list | --check-modes | --check-lane <branch>] [--repo-root d] <base-ref> <head-ref>
 #
@@ -8,12 +9,23 @@
 # detection is off whatever the repository's config says, so a renamed file lists both its old
 # and new names, and a kernel file moved into a config folder is still seen. Submodule changes are
 # never ignored, whatever .gitmodules says.
-# Output: seed=true|false platform=true|false lane=config|code
-#   seed      a changed file lies under seed-1/, or outside both folders (workspace-level change)
-#   platform  a changed file lies under platform/, or outside both folders
+# Output: seed=true|false platform=true|false lane=config|code site=true|false functions=true|false
+#   seed      a changed file lies under seed-1/, or outside seed-1/, platform/ and docs/ (a
+#             workspace-level change)
+#   platform  a changed file lies under platform/ or docs/, or is workspace-level. The docs tests, the
+#             agent spec tests and the supabase tests read docs/, and the seed-1 checks do not.
 #   lane      config only when every changed file is a .json file under seed-1/config/ or
 #             seed-1/content/: the build copies those folders into the game verbatim, and the config
 #             lane runs no typecheck or tests
+#   site      the site's build or its end-to-end suite may change: a changed file under
+#             platform/site/ or platform/agents/ (the suite reads the role specs), or under platform/
+#             outside the folders named below, or workspace-level. Changes only under seed-1/, docs/,
+#             platform/dispatcher/, platform/ops/ or platform/supabase/ leave it false.
+#   functions the Deno tests of platform/supabase/functions may change: a changed file under
+#             platform/supabase/, or under platform/ outside the folders named below, or
+#             workspace-level. Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/,
+#             platform/site/ or platform/agents/ leave it false.
+# A path no rule names sets every flag, so a new folder is never skipped by mistake.
 # --list prints the changed files, one per line, instead. Paths are not quoted for non-ASCII bytes;
 # git still quotes a path holding a tab, newline, double quote or backslash, and kernel-guard.sh
 # fails a quoted line.
@@ -169,6 +181,8 @@ fi
 
 SEED=false
 PLATFORM=false
+SITE=false
+FUNCTIONS=false
 LANE=code
 if [ -n "$FILES" ]; then
   LANE=config
@@ -176,11 +190,14 @@ if [ -n "$FILES" ]; then
     case "$f" in
       seed-1/config/*.json|seed-1/content/*.json) SEED=true ;;
       seed-1/*) SEED=true; LANE=code ;;
-      platform/*) PLATFORM=true; LANE=code ;;
-      *) SEED=true; PLATFORM=true; LANE=code ;;
+      docs/*|platform/dispatcher/*|platform/ops/*) PLATFORM=true; LANE=code ;;
+      platform/site/*|platform/agents/*) PLATFORM=true; SITE=true; LANE=code ;;
+      platform/supabase/*) PLATFORM=true; FUNCTIONS=true; LANE=code ;;
+      platform/*) PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;
+      *) SEED=true; PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;
     esac
   done <<EOF_FILES
 $FILES
 EOF_FILES
 fi
-echo "seed=$SEED platform=$PLATFORM lane=$LANE"
+echo "seed=$SEED platform=$PLATFORM lane=$LANE site=$SITE functions=$FUNCTIONS"

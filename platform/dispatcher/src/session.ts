@@ -5,12 +5,13 @@
 // The session's dollar budget is the card's remaining ceiling. In unattended mode the tick also
 // passes the budget the throttle allowed (throttle.ts planStart), and the session stops at the lower
 // of the two: reaching the ceiling is outcome ceiling, reaching the throttle's budget first is outcome
-// budget. An API error that says the Console credit or spend limit ran out is credit_exhausted.
+// budget. An API error that says the Console credit or spend limit ran out is credit_exhausted; one that
+// says the organisation reached its usage tier's monthly cap is tier_cap (credit.ts).
 import { randomUUID } from 'node:crypto';
 import { SessionPaused, type AgentAdapter, type AgentEvent, type AgentMode, type EndEvent, type SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
 import type { Alerter } from './alert.js';
-import { creditExhausted } from './credit.js';
+import { spendRefusal } from './credit.js';
 import type { Billing, Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
 import { SessionMeter, isSyntheticModel, type MeterRow } from './metering.js';
@@ -29,6 +30,8 @@ export type SessionOutcome =
   | 'insufficient_balance'
   // An API error said the Console credit or spend limit ran out.
   | 'credit_exhausted'
+  // An API error said the organisation reached its usage tier's monthly cap.
+  | 'tier_cap'
   | 'turn_cap'
   | 'board_session_lapsed'
   | 'paused_by_board'
@@ -250,7 +253,10 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   // turn of its own.
   let recentText: string[] = [];
   const creditCheck = (text: string) => {
-    if (creditExhausted(text)) abort('credit_exhausted', `the API refused the studio key for credit: ${text.split('\n')[0]?.slice(0, 300) ?? ''}`);
+    const refusal = spendRefusal(text);
+    const line = text.split('\n')[0]?.slice(0, 300) ?? '';
+    if (refusal === 'tier_cap') abort('tier_cap', `the API refused the studio key at its usage tier's monthly cap: ${line}`);
+    else if (refusal === 'credit') abort('credit_exhausted', `the API refused the studio key for credit: ${line}`);
   };
 
   let turns = 0;
