@@ -33,6 +33,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Alerter } from '../alert.js';
+import { REFUSAL_CHECK, spendRefusal } from '../credit.js';
 import type { Db } from '../db.js';
 import { StartupError } from '../exit-code.js';
 import { haltDispatcher } from '../halt.js';
@@ -410,6 +411,8 @@ class SessionDriver {
         this.answered.add(event.custom_tool_use_id);
         return;
       case 'session.error': {
+        // The whole error object, so a field the SDK's types do not name yet (an error code such as
+        // enforced_spend_limit_reached) still reaches session.ts's credit check.
         const message = `session error: ${JSON.stringify(event.error)}`;
         this.errors.push(message);
         await this.opts.onEvent({ type: 'error', message });
@@ -795,10 +798,13 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     try {
       session = await this.createCardSession(spec, baseSha, system, cents);
     } catch (error) {
-      // As an event first, so a refusal for want of credit is seen for what it is.
+      // As an event first, so a refusal for want of credit, or at the usage tier's monthly cap, is seen
+      // for what it is (session.ts pauses the studio on it). The message keeps the API's whole answer,
+      // its error code included.
       const message = `the Managed Agents session could not be created: ${errorMessage(error)}`;
       await onEvent({ type: 'error', message });
-      throw new SessionPaused('managed_api', message);
+      const refusal = spendRefusal(message);
+      throw new SessionPaused(refusal ? REFUSAL_CHECK[refusal] : 'managed_api', message);
     }
     const sessionId = session.id;
     const meter = this.meter(sessionId, spec.model, this.billing('card', { card_id: spec.cardId, role_id: spec.roleId ?? '' }));

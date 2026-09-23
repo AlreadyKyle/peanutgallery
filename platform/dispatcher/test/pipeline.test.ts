@@ -1165,6 +1165,35 @@ describe('runCardPipeline', () => {
     expect(db.claims).toBe(0);
   });
 
+  it("pauses the studio and the card, keeping its money, when the API says the usage tier's monthly cap is reached", async () => {
+    const c = card();
+    db.studio.agent_mode = 'unattended';
+    db.cards = [{ ...c, stage: 'building' }];
+    const tierError =
+      'the Managed Agents session could not be created: 429 {"type":"error","error":{"type":"rate_limit_error","message":"You have reached your API usage limits: your organization has crossed its monthly API usage threshold."},"error_code":"enforced_spend_limit_reached"}';
+    const adapter = new FakeAdapter(
+      async (_spec, emit, signal) => {
+        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+        await emit({ type: 'error', message: tierError });
+        await untilAborted(signal, 200);
+      },
+      { mode: 'unattended' },
+    );
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'usage_tier_cap', actual_usd: 0 });
+    expect(db.studio.paused).toBe(true);
+    expect(db.pausedBy).toBe('dispatcher: usage tier cap reached (card 4c2f5a1e)');
+    expect(db.ledger).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(alert.messages[0]).toBe(
+      "Usage tier cap reached: card 4c2f5a1e stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. The studio is paused. Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.",
+    );
+    expect(alert.messages[1]).toMatch(/^Card 4c2f5a1e paused \(usage_tier_cap\): /);
+    expect(alert.messages).toHaveLength(2);
+  });
+
   it('gives the session the budget the tick set, and sends the card back to funded when that budget is gone', async () => {
     const c = card();
     db.cards = [{ ...c, stage: 'building' }];

@@ -7,9 +7,11 @@ import {
   holdUsd,
   newYorkDate,
   newYorkMonth,
+  monthStartIn,
   newYorkMonthStart,
   planStart,
   spentToday,
+  tierMonthStart,
   type MoneyCard,
   type MoneyState,
   type StartConditions,
@@ -35,6 +37,8 @@ function money(overrides: Partial<MoneyState> = {}): MoneyState {
     spentTodayUsd: 0,
     monthlyCapUsd: 500,
     spentThisMonthUsd: 0,
+    tierCapUsd: null,
+    spentThisTierMonthUsd: 0,
     creditPurchasedUsd: 1000,
     creditSpentUsd: 0,
     cards: [],
@@ -70,6 +74,38 @@ describe('New York calendar', () => {
     // Still September in New York.
     expect(newYorkMonth(new Date('2026-10-01T02:00:00.000Z'))).toBe('2026-09');
     expect(newYorkMonthStart(new Date('2026-10-01T02:00:00.000Z')).toISOString()).toBe('2026-09-01T04:00:00.000Z');
+  });
+
+  it('starts a month at local midnight in any zone, across a daylight-saving change on the 1st', () => {
+    // Daylight time ends at 2 a.m. local on Sunday 1 November 2026; midnight is still daylight time.
+    expect(monthStartIn(new Date('2026-11-01T12:00:00.000Z'), 'America/New_York').toISOString()).toBe('2026-11-01T04:00:00.000Z');
+    expect(monthStartIn(new Date('2026-11-01T12:00:00.000Z'), 'America/Los_Angeles').toISOString()).toBe('2026-11-01T07:00:00.000Z');
+    expect(monthStartIn(new Date('2026-12-15T12:00:00.000Z'), 'America/Los_Angeles').toISOString()).toBe('2026-12-01T08:00:00.000Z');
+    expect(monthStartIn(new Date('2026-09-22T15:00:00.000Z'), 'UTC').toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    expect(monthStartIn(new Date('2026-09-22T15:00:00.000Z'), 'Asia/Tokyo').toISOString()).toBe('2026-08-31T15:00:00.000Z');
+  });
+});
+
+describe('tierMonthStart', () => {
+  it('starts at midnight UTC once the month has turned everywhere from UTC to Pacific', () => {
+    expect(tierMonthStart(new Date('2026-09-22T15:00:00.000Z')).toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    expect(tierMonthStart(new Date('2026-10-01T07:00:00.000Z')).toISOString()).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('keeps counting a month that has not yet turned in New York or Los Angeles, so the window never starts after the reset', () => {
+    // 1 October 03:00 UTC is still 30 September in New York: back to New York's start of September.
+    expect(tierMonthStart(new Date('2026-10-01T03:00:00.000Z')).toISOString()).toBe('2026-09-01T04:00:00.000Z');
+    // 06:59 UTC: October in New York, still September in Los Angeles.
+    expect(tierMonthStart(new Date('2026-10-01T06:59:59.000Z')).toISOString()).toBe('2026-09-01T07:00:00.000Z');
+  });
+
+  it('never starts after the month start in UTC, New York or Los Angeles', () => {
+    for (const iso of ['2026-10-01T00:30:00.000Z', '2026-10-01T04:30:00.000Z', '2026-10-01T09:00:00.000Z', '2026-11-01T05:30:00.000Z', '2026-12-31T23:59:00.000Z']) {
+      const now = new Date(iso);
+      for (const zone of ['UTC', 'America/New_York', 'America/Los_Angeles']) {
+        expect(tierMonthStart(now).getTime(), `${iso} ${zone}`).toBeLessThanOrEqual(monthStartIn(now, zone).getTime());
+      }
+    }
   });
 });
 
@@ -211,6 +247,31 @@ describe('planStart', () => {
     it('starts nothing when studio_state has no monthly cap', () => {
       const x = moneyCard({ id: 'x' });
       expect(planStart(money({ monthlyCapUsd: null, cards: [x] }), x)).toMatchObject({ ok: false, reason: 'monthly_cap' });
+    });
+  });
+
+  describe('usage tier cap', () => {
+    it('adds no bound when the board has reported no tier cap', () => {
+      const x = moneyCard({ id: 'x', estimate_usd: 10, funded_usd: 10 });
+      const plan = planStart(money({ tierCapUsd: null, spentThisTierMonthUsd: 10_000, cards: [x] }), x);
+      expect(plan).toMatchObject({ ok: true, budgetUsd: 15 });
+      expect(plan.bounds.tierUsd).toBe(Number.POSITIVE_INFINITY);
+    });
+    it('starts nothing once the tier month spend reaches the cap, even with the monthly cap above it', () => {
+      const x = moneyCard({ id: 'x', estimate_usd: 1, funded_usd: 1 });
+      expect(planStart(money({ monthlyCapUsd: 1000, tierCapUsd: 500, spentThisTierMonthUsd: 500, cards: [x] }), x)).toMatchObject({ ok: false, reason: 'tier_cap', bounds: { tierUsd: 0 } });
+    });
+    it('bounds the budget by what is left under the cap, less what running sessions may still spend', () => {
+      const x = moneyCard({ id: 'x', estimate_usd: 2, funded_usd: 2 });
+      expect(planStart(money({ monthlyCapUsd: 1000, tierCapUsd: 500, spentThisTierMonthUsd: 497, cards: [x] }), x)).toMatchObject({ ok: true, budgetUsd: 3 });
+      const building = moneyCard({ id: 'b', stage: 'building' });
+      const state = money({ monthlyCapUsd: 1000, tierCapUsd: 500, spentThisTierMonthUsd: 497, cards: [building, x], running: new Map([['b', 2]]) });
+      expect(planStart(state, x)).toMatchObject({ ok: false, reason: 'tier_cap', bounds: { tierUsd: 1 } });
+    });
+    it('counts the tier month, which can hold spend the New York month no longer does', () => {
+      // Early on the 1st the monthly cap has reset but the tier window still holds last month's spend.
+      const x = moneyCard({ id: 'x', estimate_usd: 2, funded_usd: 2 });
+      expect(planStart(money({ monthlyCapUsd: 500, spentThisMonthUsd: 0, tierCapUsd: 500, spentThisTierMonthUsd: 499.5, cards: [x] }), x)).toMatchObject({ ok: false, reason: 'tier_cap' });
     });
   });
 

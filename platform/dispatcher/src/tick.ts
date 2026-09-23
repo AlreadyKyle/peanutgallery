@@ -19,6 +19,7 @@ import {
   newYorkMonthStart,
   planStart,
   spentToday,
+  tierMonthStart,
   type MoneyReason,
   type MoneyState,
   type SleepReason,
@@ -114,13 +115,11 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   return { action: 'sleep', reason: first!.reason };
 }
 
+// Two reads, both summed in the database: each card's studio spend (public_card_spend) and the spend
+// totals (studio_spend_totals), so a tick never downloads the ledger.
 async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
   const now = deps.now();
-  const [spent, creditPurchasedUsd, studioSpend] = await Promise.all([
-    deps.db.cardSpend(cards.map((card) => card.id)),
-    deps.db.creditPurchasedUsd(),
-    deps.db.studioSpend(newYorkMonthStart(now)),
-  ]);
+  const [spent, totals] = await Promise.all([deps.db.cardSpend(cards.map((card) => card.id)), deps.db.spendTotals(newYorkMonthStart(now), tierMonthStart(now))]);
   return {
     balanceUsd: pool.balance_usd,
     studioReserveUsd: studio.studio_reserve_usd,
@@ -129,9 +128,11 @@ async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards
     dailyCapUsd: studio.daily_cap_usd,
     spentTodayUsd: spentToday(pool, now),
     monthlyCapUsd: studio.monthly_cap_usd,
-    spentThisMonthUsd: studioSpend.sinceUsd,
-    creditPurchasedUsd,
-    creditSpentUsd: studioSpend.totalUsd,
+    spentThisMonthUsd: totals.monthUsd,
+    tierCapUsd: studio.anthropic_tier_cap_usd,
+    spentThisTierMonthUsd: totals.tierUsd,
+    creditPurchasedUsd: totals.creditPurchasedUsd,
+    creditSpentUsd: totals.spentUsd,
     cards,
     spent,
     running: deps.budgets.remaining(),
@@ -171,6 +172,13 @@ async function alertMoney(deps: TickDeps, studio: StudioState, money: MoneyState
         ? 'studio_state has no monthly cap, so no unattended card starts. Set the monthly cap on /board.'
         : `The monthly cap of $${studio.monthly_cap_usd.toFixed(2)} stopped the agents for ${month}.`;
     await deps.alert.notifyOnce(`monthly_cap:${month}`, message);
+  } else if (first.reason === 'tier_cap' && studio.anthropic_tier_cap_usd !== null) {
+    // Once per tier month as the throttle counts it, so the next month can raise it again.
+    const since = tierMonthStart(now).toISOString();
+    await deps.alert.notifyOnce(
+      `tier_cap:${since}`,
+      `The usage tier cap of $${studio.anthropic_tier_cap_usd.toFixed(2)} a month stopped the agents: the studio key has spent $${money.spentThisTierMonthUsd.toFixed(2)} since ${since}. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.`,
+    );
   } else if (first.reason === 'console_credit') {
     await deps.alert.notifyOnce(
       `console_credit:${money.creditPurchasedUsd.toFixed(4)}`,

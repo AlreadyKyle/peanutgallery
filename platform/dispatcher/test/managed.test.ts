@@ -23,6 +23,9 @@ import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
 import { mockFetch, type Reply } from './helpers/mock-fetch.js';
 
+// The usage tier cap's message, as the rate-limits page gives it.
+const TIER_MESSAGE = 'You have reached your API usage limits: your organization has crossed its monthly API usage threshold.';
+
 const TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }));
 const CONFIG_LANE = lanePaths('seed-1', 'config');
 const SPAWN = `${JSON.stringify({ rows: [{ id: 'gatherer', name: 'Gatherer', baseCost: 10, rate: 0.2 }] }, null, 2)}\n`;
@@ -479,6 +482,31 @@ describe('a card session', () => {
     expect(h.db.ledger).toEqual([]);
   });
 
+  it("pauses the card as usage_tier_cap, keeping the API's error code in the event, when the create meets the usage tier's cap", async () => {
+    const h = harness();
+    // Built by the SDK itself, so the message is worded as the real client words it.
+    h.client.failCreate = Anthropic.APIError.generate(429, { type: 'error', error: { type: 'rate_limit_error', message: TIER_MESSAGE }, error_code: 'enforced_spend_limit_reached' }, undefined, new Headers());
+    const events: AgentEvent[] = [];
+    const error = await h.adapter.run(spec(), (event) => void events.push(event), new AbortController().signal).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'usage_tier_cap' });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'error', message: expect.stringMatching(/^the Managed Agents session could not be created: 429 .*enforced_spend_limit_reached/) });
+    expect(h.db.ledger).toEqual([]);
+  });
+
+  it('pauses the card as console_credit when the create is refused for credit', async () => {
+    const h = harness();
+    h.client.failCreate = Anthropic.APIError.generate(
+      400,
+      { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.' } },
+      undefined,
+      new Headers(),
+    );
+    const error = await h.adapter.run(spec(), () => undefined, new AbortController().signal).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ failingCheck: 'console_credit' });
+  });
+
   it('pauses the card as stream_lost, after settling and archiving the session, when its event stream cannot be held', async () => {
     const h = harness();
     h.client.failStream = new Error('socket hang up');
@@ -763,5 +791,33 @@ describe('runAgentSession on the managed adapter', () => {
     expect(h.client.sessions_).toEqual([]);
     expect(h.db.ledger).toEqual([]);
     expect(h.alert.messages).toEqual([]);
+  });
+
+  it("ends as tier_cap when the session create meets the usage tier's cap, so the pipeline pauses the studio", async () => {
+    const h = harness();
+    h.db.studio.agent_mode = 'unattended';
+    h.client.failCreate = Anthropic.APIError.generate(429, { type: 'error', error: { type: 'rate_limit_error', message: TIER_MESSAGE } }, undefined, new Headers());
+    const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
+    expect(run.outcome).toBe('tier_cap');
+    expect(h.db.ledger).toEqual([]);
+  });
+
+  it('ends as tier_cap when a running session reports the cap in a session.error event, keeping its error code', async () => {
+    const h = harness();
+    h.db.studio.agent_mode = 'unattended';
+    h.client.react = (session, event) => {
+      if (event.type === 'user.message') {
+        session.emit(
+          { type: 'session.status_running' },
+          // error_code is a field the SDK's session.error types do not name; the adapter keeps it.
+          { type: 'session.error', error: { type: 'model_request_failed_error', message: 'model request failed', retry_status: { type: 'terminal' }, error_code: 'enforced_spend_limit_reached' } as never },
+        );
+      }
+      if (event.type === 'user.interrupt') session.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } });
+    };
+    const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
+    expect(run.outcome).toBe('tier_cap');
+    expect(sentTypes(h.client)).toContain('user.interrupt');
+    expect(h.db.events.some((e) => e.type === 'error' && String(e.payload.message).includes('enforced_spend_limit_reached'))).toBe(true);
   });
 });

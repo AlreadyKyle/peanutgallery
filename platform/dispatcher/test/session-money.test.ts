@@ -157,6 +157,23 @@ describe('API errors', () => {
     expect(result.outcome).toBe('credit_exhausted');
   });
 
+  it("stops as tier_cap on an adapter error event about the usage tier's monthly cap, never as credit", async () => {
+    const { result } = await run(
+      async (_spec, emit, signal) => {
+        await emit(startEvent(undefined, STUDIO_KEY));
+        await emit({
+          type: 'error',
+          message: 'the Managed Agents session could not be created: 429 {"type":"error","error":{"type":"rate_limit_error","message":"You have reached your API usage limits: your organization has crossed its monthly API usage threshold."},"error_code":"enforced_spend_limit_reached"}',
+        });
+        await untilAborted(signal, 200);
+      },
+      {},
+      { mode: 'unattended' },
+    );
+    expect(result.outcome).toBe('tier_cap');
+    expect(result.detail).toMatch(/^the API refused the studio key at its usage tier's monthly cap: the Managed Agents session could not be created: 429 /);
+  });
+
   it('does not treat the agent writing about credit in its own reply as an API error', async () => {
     const { result } = await run(async (_spec, emit) => {
       await emit(startEvent());

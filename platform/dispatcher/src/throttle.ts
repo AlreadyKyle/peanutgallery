@@ -14,9 +14,9 @@
 // - a gated, live or rejected card holds nothing.
 // available_X = balance − studio reserve − Σ holds of the other cards; an S1 card may add the incident
 // reserve. X starts when what it still needs, max(estimate_X − spent_X, 0), fits available_X, what is
-// left of the daily cap, what is left of the monthly cap, and the Console credit left. Its session
-// budget is the smallest of those and its remaining ceiling, so the card ceiling bounds the budget and
-// never the selection.
+// left of the daily cap, what is left of the monthly cap, what is left under the usage tier's monthly
+// cap when the board has reported one, and the Console credit left. Its session budget is the smallest
+// of those and its remaining ceiling, so the card ceiling bounds the budget and never the selection.
 //
 // The daily cap is measured against the day-start balance (the balance plus today's spend), so
 // spending does not shrink the cap as the day goes on: min(day-start balance, cap) − spent today is
@@ -31,7 +31,7 @@ export function billingFor(mode: AgentMode): 'studio' | 'founder' {
   return mode === 'attended' ? 'founder' : 'studio';
 }
 
-export type MoneyReason = 'daily_cap' | 'monthly_cap' | 'console_credit' | 'insufficient_balance';
+export type MoneyReason = 'daily_cap' | 'monthly_cap' | 'tier_cap' | 'console_credit' | 'insufficient_balance';
 
 export type SleepReason = 'paused' | 'no_board_session' | 'no_funded_cards' | 'no_eligible_card' | 'concurrency' | MoneyReason;
 
@@ -84,18 +84,39 @@ export function newYorkMonth(now: Date): string {
   return newYorkDate(now).slice(0, 7);
 }
 
+// The time zone's offset from UTC at an instant, in milliseconds (negative west of Greenwich).
+function zoneOffsetMs(instantMs: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(instantMs));
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+  return wall - Math.floor(instantMs / 1000) * 1000;
+}
+
+// The instant the zone's current month began: midnight on the 1st, local time. The offset is read at
+// UTC midnight and again at the first guess, so a daylight-saving change on the 1st (at 2 a.m. local,
+// after midnight) cannot move it.
+export function monthStartIn(now: Date, timeZone: string): Date {
+  const local = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const [year, month] = local.slice(0, 7).split('-').map(Number) as [number, number];
+  const midnightUtc = Date.UTC(year, month - 1, 1);
+  const guess = midnightUtc - zoneOffsetMs(midnightUtc, timeZone);
+  return new Date(midnightUtc - zoneOffsetMs(guess, timeZone));
+}
+
 // The instant New York's current month began: midnight on the 1st, New York time.
 export function newYorkMonthStart(now: Date): Date {
-  const [year, month] = newYorkMonth(now).split('-').map(Number) as [number, number];
-  const midnightUtc = Date.UTC(year, month - 1, 1);
-  // New York's offset at that midnight, read five hours after it in UTC (still the 1st in New York,
-  // and never across a daylight-saving change, which happens at 2 a.m. local).
-  const probe = new Date(midnightUtc + 5 * 60 * 60_000);
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: NEW_YORK, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(probe);
-  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const wall = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'));
-  const offsetMs = wall - probe.getTime();
-  return new Date(midnightUtc - offsetMs);
+  return monthStartIn(now, NEW_YORK);
+}
+
+// Where the throttle starts counting the month the usage tier's cap applies to. Anthropic's rate-limits
+// page does not say which time zone its month turns in, so the window starts at the earliest of the
+// current month's starts in UTC, New York and Los Angeles. That counts at least the organisation's
+// month whether it turns at midnight UTC, Eastern or Pacific; in the hours on the 1st before every one
+// of those has turned, it also counts the month just ending, which can only stop a card early.
+export const TIER_MONTH_ZONES: readonly string[] = ['UTC', NEW_YORK, 'America/Los_Angeles'];
+
+export function tierMonthStart(now: Date): Date {
+  return new Date(Math.min(...TIER_MONTH_ZONES.map((zone) => monthStartIn(now, zone).getTime())));
 }
 
 // daily_spent_usd resets only when usage is recorded, so a row from an earlier day has spent
@@ -126,6 +147,11 @@ export interface MoneyState {
   // null when studio_state carries no monthly cap: nothing may start until the board sets one.
   monthlyCapUsd: number | null;
   spentThisMonthUsd: number;
+  // The monthly cap of the studio organisation's Anthropic usage tier, as the board reported it from
+  // the Console's Limits page (studio_state.anthropic_tier_cap_usd), and every studio and overhead
+  // ledger row since tierMonthStart. null adds no bound: the monthly cap and the Console limit remain.
+  tierCapUsd: number | null;
+  spentThisTierMonthUsd: number;
   // Console credit bought, and every studio and overhead ledger row ever written against it.
   creditPurchasedUsd: number;
   creditSpentUsd: number;
@@ -156,9 +182,11 @@ export function runningHoldUsd(state: MoneyState): number {
 export interface MoneyBounds {
   // balance − studio reserve − the other cards' holds, plus the incident reserve for an S1 card.
   availableUsd: number;
-  // Each cap less its spend so far and what the running sessions may still spend.
+  // Each cap less its spend so far and what the running sessions may still spend. tierUsd is
+  // Infinity when no tier cap is set.
   dailyUsd: number;
   monthlyUsd: number;
+  tierUsd: number;
   // The Console credit bought, less every studio and overhead row, less the running sessions' budgets.
   creditUsd: number;
 }
@@ -171,6 +199,7 @@ export function moneyBounds(state: MoneyState, x: MoneyCard): MoneyBounds {
     availableUsd: round4(state.balanceUsd - state.studioReserveUsd - others + incident),
     dailyUsd: round4(state.dailyCapUsd - state.spentTodayUsd - running),
     monthlyUsd: state.monthlyCapUsd === null ? 0 : round4(state.monthlyCapUsd - state.spentThisMonthUsd - running),
+    tierUsd: state.tierCapUsd === null ? Number.POSITIVE_INFINITY : round4(state.tierCapUsd - state.spentThisTierMonthUsd - running),
     creditUsd: round4(state.creditPurchasedUsd - state.creditSpentUsd - running),
   };
 }
@@ -184,9 +213,10 @@ export function planStart(state: MoneyState, x: MoneyCard): StartPlan {
   const fits = (limit: number) => limit > 0 && needUsd <= limit;
   if (!fits(bounds.dailyUsd)) return { ok: false, reason: 'daily_cap', needUsd, bounds };
   if (!fits(bounds.monthlyUsd)) return { ok: false, reason: 'monthly_cap', needUsd, bounds };
+  if (!fits(bounds.tierUsd)) return { ok: false, reason: 'tier_cap', needUsd, bounds };
   if (!fits(bounds.creditUsd)) return { ok: false, reason: 'console_credit', needUsd, bounds };
   if (!fits(bounds.availableUsd)) return { ok: false, reason: 'insufficient_balance', needUsd, bounds };
   const ceilingLeft = round4(ceilingUsd(x.estimate_usd, state.cardMaxUsd) - x.actual_usd);
-  const budgetUsd = round4(Math.min(ceilingLeft, bounds.availableUsd, bounds.dailyUsd, bounds.monthlyUsd, bounds.creditUsd));
+  const budgetUsd = round4(Math.min(ceilingLeft, bounds.availableUsd, bounds.dailyUsd, bounds.monthlyUsd, bounds.tierUsd, bounds.creditUsd));
   return { ok: true, budgetUsd, needUsd, bounds };
 }

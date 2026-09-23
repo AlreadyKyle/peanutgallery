@@ -141,6 +141,42 @@ describe('tick', () => {
     expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'started', cardId: card().id });
   });
 
+  it('reads the spend totals once a tick, from the New York month start and the tier month start', async () => {
+    const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
+    db.cards = [card()];
+    expect((await tick(deps(db, [], { mode: 'unattended', runCard: stillRunning }))).action).toBe('started');
+    // NOW is 14 September 2026: New York's month began at 04:00 UTC, UTC's at midnight.
+    expect(db.spendTotalsCalls).toEqual([['2026-09-01T04:00:00.000Z', '2026-09-01T00:00:00.000Z']]);
+  });
+
+  it('stays below the usage tier cap the board reported, counting the tier month, and alerts once', async () => {
+    const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
+    db.studio.monthly_cap_usd = 500;
+    db.studio.anthropic_tier_cap_usd = 100;
+    const row = (id: string, created_at: string, billed_to: 'studio' | 'overhead' | 'founder', usd: number) =>
+      ({ id, created_at, billed_to, card_id: null, role_id: null, model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd, request_id: id }) as const;
+    db.ledger = [
+      // Inside the tier month (from 1 September 00:00 UTC) but before New York's month began.
+      row('l1', '2026-09-01T02:00:00.000Z', 'studio', 60),
+      row('l2', '2026-09-10T12:00:00.000Z', 'overhead', 39),
+      // Founder rows are not the studio key's spend.
+      row('l3', '2026-09-10T12:00:00.000Z', 'founder', 500),
+      row('l4', '2026-08-31T12:00:00.000Z', 'studio', 400),
+    ];
+    db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
+    const alert = new RecordingAlerter();
+    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    expect(alert.messages).toEqual([
+      'The usage tier cap of $100.00 a month stopped the agents: the studio key has spent $99.00 since 2026-09-01T00:00:00.000Z. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.',
+    ]);
+    // No tier cap reported: the monthly cap alone bounds the month.
+    db.studio.anthropic_tier_cap_usd = null;
+    expect(await tick(deps(db, [], { mode: 'unattended', alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
+  });
+
   it('runs no platform code card and no card off horizon now', async () => {
     const db = new FakeDb();
     db.cards = [card({ id: 'site', folder: 'platform', lane: 'code' }), card({ id: 'later', horizon: 'later' })];

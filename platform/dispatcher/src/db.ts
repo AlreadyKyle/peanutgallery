@@ -15,6 +15,9 @@ export interface StudioState {
   // The monthly spend cap that mirrors the Console limit; null when studio_state has no such column,
   // which unattended mode treats as a cap of zero.
   monthly_cap_usd: number | null;
+  // The monthly cap of the studio organisation's Anthropic usage tier, as the board reported it; null
+  // when unset or when studio_state has no such column, which adds no bound (throttle.ts).
+  anthropic_tier_cap_usd: number | null;
 }
 
 export interface Pool {
@@ -121,10 +124,18 @@ export interface DeployInput {
   smoke_result: string;
 }
 
-// What the studio key has spent: every studio and overhead ledger row, and those since a moment.
-export interface StudioSpend {
-  totalUsd: number;
-  sinceUsd: number;
+// The Console credit bought and what the studio key has spent against it, summed in the database by
+// studio_spend_totals (20260923000100_spend_totals.sql), so a tick reads four numbers instead of the
+// whole ledger.
+export interface SpendTotals {
+  // Every credit_purchases row.
+  creditPurchasedUsd: number;
+  // Every studio and overhead ledger row ever written.
+  spentUsd: number;
+  // Those rows since the month start the throttle's monthly cap counts from (New York).
+  monthUsd: number;
+  // Those rows since the start of the usage tier's month as the throttle counts it (tierMonthStart).
+  tierUsd: number;
 }
 
 export interface Db {
@@ -150,13 +161,12 @@ export interface Db {
   updateCardIf(id: string, expectedStages: readonly string[], patch: CardPatch): Promise<boolean>;
   // Each card's studio-billed spend (public_card_spend), for the cards named; a card with none is absent.
   cardSpend(cardIds: readonly string[]): Promise<Map<string, number>>;
-  // The Console credit the board has recorded buying (credit_purchases).
-  creditPurchasedUsd(): Promise<number>;
-  studioSpend(since: Date): Promise<StudioSpend>;
+  spendTotals(monthStart: Date, tierStart: Date): Promise<SpendTotals>;
   getRole(id: string): Promise<Role>;
   // Roles that are not retired.
   listActiveRoles(): Promise<Role[]>;
   recordUsage(input: UsageInput): Promise<RecordUsageResult>;
+  // Every ledger row of the card, whoever it was billed to (card_ledger_usd).
   sumLedger(cardId: string): Promise<number>;
   insertEvent(cardId: string, roleId: string | null, type: AgentEventType, payload: Record<string, unknown>): Promise<void>;
   // The payload of the card's newest event whose payload step is the given one, or null.
@@ -265,11 +275,16 @@ export function fetchWithTimeout(fetchFn: typeof fetch, timeoutMs: number): type
   };
 }
 
-// Rows per page when a read needs every row.
-export const PAGE_ROWS = 1000;
-
 function round4(value: number): number {
   return Math.round(value * 10_000) / 10_000;
+}
+
+// A number the database returned, or an error naming the function: a null or missing total is never
+// read as zero.
+function total(row: Row, key: string, op: string): number {
+  const value = row[key];
+  if (value === null || value === undefined) throw new Error(`db ${op}: no ${key}`);
+  return round4(num(row, key));
 }
 
 export interface SupabaseDbOptions {
@@ -283,17 +298,6 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     global: { fetch: fetchWithTimeout(options.fetchFn ?? fetch, options.timeoutMs ?? SUPABASE_TIMEOUT_MS) },
   });
   const rows = (data: unknown): Row[] => (Array.isArray(data) ? (data as Row[]) : []);
-  // Reads every row of a query PAGE_ROWS at a time, since PostgREST caps each answer.
-  const pages = async (query: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, op: string): Promise<Row[]> => {
-    const all: Row[] = [];
-    for (let from = 0; ; from += PAGE_ROWS) {
-      const { data, error } = await query(from, from + PAGE_ROWS - 1);
-      if (error) fail(op, error);
-      const page = rows(data);
-      all.push(...page);
-      if (page.length < PAGE_ROWS) return all;
-    }
-  };
 
   return {
     async getStudioState() {
@@ -308,6 +312,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         agent_hourly_rate_usd: num(row, 'agent_hourly_rate_usd'),
         studio_reserve_usd: num(row, 'studio_reserve_usd'),
         monthly_cap_usd: row.monthly_cap_usd === null || row.monthly_cap_usd === undefined ? null : num(row, 'monthly_cap_usd'),
+        anthropic_tier_cap_usd: row.anthropic_tier_cap_usd === null || row.anthropic_tier_cap_usd === undefined ? null : num(row, 'anthropic_tier_cap_usd'),
       };
     },
 
@@ -402,25 +407,18 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return spend;
     },
 
-    async creditPurchasedUsd() {
-      const all = await pages((from, to) => client.from('credit_purchases').select('amount_usd').order('created_at').order('id').range(from, to), 'credit_purchases');
-      return round4(all.reduce((total, row) => total + num(row, 'amount_usd'), 0));
-    },
-
-    async studioSpend(since) {
-      const all = await pages(
-        (from, to) => client.from('ledger').select('usd, created_at').in('billed_to', ['studio', 'overhead']).order('created_at').order('id').range(from, to),
-        'ledger studio spend',
-      );
-      const start = since.getTime();
-      let totalUsd = 0;
-      let sinceUsd = 0;
-      for (const row of all) {
-        const usd = num(row, 'usd');
-        totalUsd += usd;
-        if (Date.parse(text(row, 'created_at')) >= start) sinceUsd += usd;
-      }
-      return { totalUsd: round4(totalUsd), sinceUsd: round4(sinceUsd) };
+    async spendTotals(monthStart, tierStart) {
+      const op = 'studio_spend_totals';
+      const { data, error } = await client.rpc(op, { p_month_start: monthStart.toISOString(), p_tier_start: tierStart.toISOString() });
+      if (error) fail(op, error);
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) fail(op, null);
+      const row = data as Row;
+      return {
+        creditPurchasedUsd: total(row, 'credit_purchased_usd', op),
+        spentUsd: total(row, 'spent_usd', op),
+        monthUsd: total(row, 'month_usd', op),
+        tierUsd: total(row, 'tier_usd', op),
+      };
     },
 
     async getRole(id) {
@@ -457,10 +455,13 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       };
     },
 
+    // Summed in the database: a select of the rows would stop at PostgREST's row cap and undercount a
+    // card with more model requests than that.
     async sumLedger(cardId) {
-      const { data, error } = await client.from('ledger').select('usd').eq('card_id', cardId);
-      if (error) fail('ledger sum', error);
-      return round4(rows(data).reduce((total, row) => total + num(row, 'usd'), 0));
+      const op = 'card_ledger_usd';
+      const { data, error } = await client.rpc(op, { p_card_id: cardId });
+      if (error) fail(op, error);
+      return total({ usd: data as unknown }, 'usd', op);
     },
 
     async insertEvent(cardId, roleId, type, payload) {

@@ -224,6 +224,7 @@ Deno.test("migrations on PGlite", {
         "20260922000300_backlog.sql",
         "20260922000400_public_roles.sql",
         "20260922000500_roles_revoke.sql",
+        "20260923000100_spend_totals.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -3609,11 +3610,13 @@ Deno.test("migrations on PGlite", {
         ];
         const service = [
           "apply_contribution",
+          "card_ledger_usd",
           "claim_dispatcher_lease",
           "credit_held_contributions",
           "record_usage",
           "release_dispatcher_lease",
           "reverse_contribution",
+          "studio_spend_totals",
         ];
         assertEquals(
           privileges.map((p) => p.proname),
@@ -3781,6 +3784,102 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
+      "studio_spend_totals and card_ledger_usd sum the ledger in SQL for the service role only, and the tier cap is optional and positive",
+      async () => {
+        // Everything here is rolled back, so later steps see the database as it was.
+        await db.exec(`begin`);
+        try {
+          const totals = async (monthStart: string, tierStart: string) =>
+            (await row<{ t: Record<string, number> }>(
+              `select public.studio_spend_totals($1::timestamptz, $2::timestamptz) as t`,
+              [monthStart, tierStart],
+            )).t;
+          const MONTH = "2100-01-01T05:00:00Z";
+          const TIER = "2100-01-01T00:00:00Z";
+          const before = await totals(MONTH, TIER);
+          assertEquals([before.month_usd, before.tier_usd], [0, 0]);
+          const cardBefore = Number((await row<{ usd: string }>(`select public.card_ledger_usd($1) as usd`, [oneoffCardId])).usd);
+          const insert = (billedTo: string, usd: number, createdAt: string, cardId: string | null) =>
+            db.query(
+              `insert into public.ledger (card_id, model, usd, billed_to, created_at) values ($1, 'builder-class', $2, $3::public.ledger_billing, $4::timestamptz)`,
+              [cardId, usd, billedTo, createdAt],
+            );
+          // Before both starts, between them (tier month only), after both, a founder row, and
+          // an overhead row with no card.
+          await insert("studio", 2, "2099-12-31T12:00:00Z", oneoffCardId);
+          await insert("studio", 1.5, "2100-01-01T02:00:00Z", oneoffCardId);
+          await insert("studio", 0.75, "2100-01-10T12:00:00Z", oneoffCardId);
+          await insert("overhead", 0.25, "2100-01-10T12:00:00Z", null);
+          await insert("founder", 9, "2100-01-10T12:00:00Z", oneoffCardId);
+          await db.query(`insert into public.credit_purchases (amount_usd, reason, created_by) values (12.5, 'Test credit', 'board@peanutgallery.games')`);
+          const after = await totals(MONTH, TIER);
+          assertEquals(
+            {
+              credit: Number((after.credit_purchased_usd - before.credit_purchased_usd).toFixed(4)),
+              spent: Number((after.spent_usd - before.spent_usd).toFixed(4)),
+              month: after.month_usd,
+              tier: after.tier_usd,
+            },
+            { credit: 12.5, spent: 4.5, month: 1, tier: 2.5 },
+          );
+          // Every row of the card, the founder's included, as sumLedger always read it.
+          const cardAfter = Number((await row<{ usd: string }>(`select public.card_ledger_usd($1) as usd`, [oneoffCardId])).usd);
+          assertEquals(Number((cardAfter - cardBefore).toFixed(4)), 13.25);
+          // A null start is refused as null, never read as zero.
+          assertEquals((await row(`select public.studio_spend_totals(null, now()) as t`)).t, null);
+          // The service role reads through row level security; anon and authenticated cannot call either.
+          await db.exec(`set role service_role`);
+          try {
+            assertEquals((await totals(MONTH, TIER)).tier_usd, 2.5);
+          } finally {
+            await db.exec(`reset role`);
+          }
+          const grants = await row(
+            `select has_function_privilege('anon', 'public.studio_spend_totals(timestamptz, timestamptz)', 'execute') as anon_totals,
+                    has_function_privilege('authenticated', 'public.studio_spend_totals(timestamptz, timestamptz)', 'execute') as authenticated_totals,
+                    has_function_privilege('service_role', 'public.studio_spend_totals(timestamptz, timestamptz)', 'execute') as service_totals,
+                    has_function_privilege('anon', 'public.card_ledger_usd(uuid)', 'execute') as anon_card,
+                    has_function_privilege('authenticated', 'public.card_ledger_usd(uuid)', 'execute') as authenticated_card,
+                    has_function_privilege('service_role', 'public.card_ledger_usd(uuid)', 'execute') as service_card`,
+          );
+          assertEquals(grants, {
+            anon_totals: false,
+            authenticated_totals: false,
+            service_totals: true,
+            anon_card: false,
+            authenticated_card: false,
+            service_card: true,
+          });
+          // Each refusal inside a savepoint, since an error aborts the transaction around it.
+          for (const role of ["anon", "authenticated"]) {
+            for (const sql of [`select public.studio_spend_totals(now(), now())`, `select public.card_ledger_usd(gen_random_uuid())`]) {
+              await db.exec(`savepoint refused`);
+              await db.exec(`set role ${role}`);
+              await refuses(sql, "permission denied");
+              await db.exec(`rollback to savepoint refused`);
+              await db.exec(`reset role`);
+            }
+          }
+          // The index the totals read.
+          assertEquals(
+            await rows(`select indexdef from pg_indexes where schemaname = 'public' and indexname = 'ledger_billed_created_idx'`),
+            [{ indexdef: "CREATE INDEX ledger_billed_created_idx ON public.ledger USING btree (billed_to, created_at) INCLUDE (usd)" }],
+          );
+          // The tier cap: null by default, positive when set.
+          assertEquals(await row(`select anthropic_tier_cap_usd from public.studio_state where id = 1`), { anthropic_tier_cap_usd: null });
+          await db.exec(`update public.studio_state set anthropic_tier_cap_usd = 500 where id = 1`);
+          assertEquals(Number((await row<{ c: string }>(`select anthropic_tier_cap_usd as c from public.studio_state where id = 1`)).c), 500);
+          await db.exec(`savepoint tier`);
+          await refuses(`update public.studio_state set anthropic_tier_cap_usd = 0 where id = 1`, "studio_state_anthropic_tier_cap_check");
+          await db.exec(`rollback to savepoint tier`);
+        } finally {
+          await db.exec(`rollback`);
+        }
+        assertEquals(await row(`select anthropic_tier_cap_usd from public.studio_state where id = 1`), { anthropic_tier_cap_usd: null });
+      },
+    );
+
+    await t.step(
       "the request-id rollback restores the eight-argument record_usage, and the migration applies again after it",
       async () => {
         const args = async () =>
@@ -3845,7 +3944,8 @@ Deno.test("the launch migrations upgrade a live database in production order", {
   try {
     const migrations = await readMigrations();
     const earlier = migrations.filter((m) => m.name < LAUNCH);
-    const launch = migrations.filter((m) => m.name >= LAUNCH);
+    // The launch files only; later files have tests of their own.
+    const launch = migrations.filter((m) => m.name.startsWith(LAUNCH));
     assertEquals(launch.map((m) => m.name.slice(0, 14)), [
       "20260922000000",
       "20260922000100",

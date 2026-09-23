@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PAGE_ROWS, createSupabaseDb, fetchWithTimeout, toCard, type UsageInput } from '../src/db.js';
+import { createSupabaseDb, fetchWithTimeout, toCard, type UsageInput } from '../src/db.js';
 import { NOW } from './helpers/fake-db.js';
 import { mockFetch } from './helpers/mock-fetch.js';
 
@@ -159,32 +159,42 @@ describe('createSupabaseDb queries', () => {
     expect(seen).toHaveLength(1);
   });
 
-  it('sums every page of the Console credit bought and of the studio and overhead ledger', async () => {
-    const seen: URL[] = [];
-    const fetchFn = (async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      seen.push(url);
-      const first = (url.searchParams.get('offset') ?? '0') === '0';
-      const rows =
-        url.pathname === '/rest/v1/credit_purchases'
-          ? first
-            ? Array.from({ length: PAGE_ROWS }, () => ({ amount_usd: '0.0100' }))
-            : [{ amount_usd: '5' }]
-          : first
-            ? Array.from({ length: PAGE_ROWS }, (_row, i) => ({ usd: '0.0010', created_at: i === 0 ? '2026-08-31T12:00:00.000Z' : '2026-09-02T12:00:00.000Z' }))
-            : [{ usd: '2', created_at: '2026-09-10T12:00:00.000Z' }];
-      return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }) as typeof fetch;
+  it('reads the Console credit bought and the studio spend totals from one database function, never the ledger rows', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) =>
+      method === 'POST' && url.endsWith('/rest/v1/rpc/studio_spend_totals')
+        ? { status: 200, json: { credit_purchased_usd: 15, spent_usd: 3.00004, month_usd: '2.9990', tier_usd: 2.5 } }
+        : undefined,
+    );
     const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
-    expect(await db.creditPurchasedUsd()).toBe(15);
-    expect(await db.studioSpend(new Date('2026-09-01T04:00:00.000Z'))).toEqual({ totalUsd: 3, sinceUsd: 2.999 });
-    const ledger = seen.filter((url) => url.pathname === '/rest/v1/ledger');
-    expect(ledger).toHaveLength(2);
-    expect(ledger[0]?.searchParams.get('billed_to')).toBe('in.(studio,overhead)');
-    expect(ledger.map((url) => [url.searchParams.get('offset'), url.searchParams.get('limit')])).toEqual([
-      ['0', String(PAGE_ROWS)],
-      [String(PAGE_ROWS), String(PAGE_ROWS)],
-    ]);
+    const monthStart = new Date('2026-09-01T04:00:00.000Z');
+    const tierStart = new Date('2026-09-01T00:00:00.000Z');
+    expect(await db.spendTotals(monthStart, tierStart)).toEqual({ creditPurchasedUsd: 15, spentUsd: 3, monthUsd: 2.999, tierUsd: 2.5 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toEqual({ p_month_start: '2026-09-01T04:00:00.000Z', p_tier_start: '2026-09-01T00:00:00.000Z' });
+    expect(calls.some((call) => call.url.includes('/rest/v1/ledger') || call.url.includes('/rest/v1/credit_purchases'))).toBe(false);
+  });
+
+  it('refuses spend totals the function did not return, rather than reading them as zero', async () => {
+    const missing = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/studio_spend_totals') ? { status: 200, json: { credit_purchased_usd: 15, spent_usd: 3, month_usd: null, tier_usd: 1 } } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: missing.fetchFn }).spendTotals(NOW, NOW)).rejects.toThrow('db studio_spend_totals: no month_usd');
+    const none = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/studio_spend_totals') ? { status: 200, text: 'null' } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: none.fetchFn }).spendTotals(NOW, NOW)).rejects.toThrow('db studio_spend_totals');
+    const refused = mockFetch((method, url) =>
+      method === 'POST' && url.endsWith('/rpc/studio_spend_totals') ? { status: 404, json: { code: 'PGRST202', message: 'Could not find the function public.studio_spend_totals' } } : undefined,
+    );
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: refused.fetchFn }).spendTotals(NOW, NOW)).rejects.toThrow(
+      'db studio_spend_totals: Could not find the function public.studio_spend_totals',
+    );
+  });
+
+  it("sums a card's ledger rows in the database, so a card with more rows than one answer holds is not undercounted", async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rest/v1/rpc/card_ledger_usd') ? { status: 200, json: 1234.56789 } : undefined));
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.sumLedger('card-1')).toBe(1234.5679);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toEqual({ p_card_id: 'card-1' });
+    const none = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/card_ledger_usd') ? { status: 200, text: 'null' } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: none.fetchFn }).sumLedger('card-1')).rejects.toThrow('db card_ledger_usd: no usd');
   });
 
   it('reads a card with no horizon column as horizon now, and a studio with no monthly cap as null', async () => {
@@ -194,6 +204,14 @@ describe('createSupabaseDb queries', () => {
     expect((await createSupabaseDb('https://db.local', 'service-role', { fetchFn: state.fetchFn }).getStudioState()).monthly_cap_usd).toBeNull();
     const capped = mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json: { paused: false, monthly_cap_usd: '500.0000' } } : undefined));
     expect((await createSupabaseDb('https://db.local', 'service-role', { fetchFn: capped.fetchFn }).getStudioState()).monthly_cap_usd).toBe(500);
+  });
+
+  it('reads the usage tier cap, and a studio without one, or before the column exists, as null', async () => {
+    const studio = (json: unknown) =>
+      createSupabaseDb('https://db.local', 'service-role', { fetchFn: mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json } : undefined)).fetchFn }).getStudioState();
+    expect((await studio({ paused: false })).anthropic_tier_cap_usd).toBeNull();
+    expect((await studio({ paused: false, anthropic_tier_cap_usd: null })).anthropic_tier_cap_usd).toBeNull();
+    expect((await studio({ paused: false, anthropic_tier_cap_usd: '500.0000' })).anthropic_tier_cap_usd).toBe(500);
   });
 
   it('clears commit_sha when it claims a card', async () => {
