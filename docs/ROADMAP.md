@@ -33,7 +33,7 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 
 ## The order from here
 
-1. **Merge the launch batch** (below), in the order DB, live cards, gate, dispatcher, Managed Agents, site, docs, each on a green gate at its head sha, with its production steps run after it merges.
+1. **The launch batch** (below) is merged, and its production steps are run as each merged. Before the cutover, fix the Managed Agents stream-loss item below.
 2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Oracle sign-in, after which the instance is launched by script.
 3. **Board steps 4 and 5**: the call on how the first player arrives, and contributions open with the studio paused.
 4. **Board steps 6 and 7**: the first Stripe payout, then Console credit bought from it and recorded at /board.
@@ -46,13 +46,15 @@ Seven pull requests built in parallel from the plan of 22 September 2026. A spec
 
 | Work | Spec | Status | Waits on |
 |---|---|---|---|
-| Docs: dateless constitution, backlog, board steps, prompts (#50) | `specs/launch-docs.md` | built (docs tests run; the backlog seed and the close-out wait on the merges) | the merge queue |
-| DB: horizons, board RPCs, money fixes, lease, backlog parser, public roles (#46) | `launch-db.md` on branch `launch/db` | in review | the merge queue, then its migrations and webhook deploy |
-| Live cards: plain titles and the launch slate (#45) | `launch-cards.md` on branch `launch/cards` | in review | the DB merge, then `refresh-cards.ts` |
-| Gate: kernel checks first, kernel list, deny-list holes (#48) | `launch-gate.md` on branch `launch/gate` | in review | the merge queue |
-| Dispatcher: throttle, merge safety, metering (#49) | `launch-dispatcher.md` on branch `launch/dispatcher` | in review | the merge queue |
-| Managed Agents: unattended sessions, smoke without card code | `launch-managed.md` on branch `launch/managed` | being built, no pull request yet | its pull request, then the merge queue; live runs wait on Console credit |
-| Site: honest copy, /how-it-works, /team, /roadmap, board controls (#47) | `launch-site.md` on branch `launch/site` | in review | the merge queue, then the roles revoke migration after its deploy |
+| Docs: dateless constitution, backlog, board steps, prompts (#50) | `specs/launch-docs.md` | built (the backlog seed runs after this merges) | `file-backlog.ts` against production |
+| DB: horizons, board RPCs, money fixes, lease, backlog parser, public roles (#46) | `specs/launch-db.md` | built (migrations up to `20260922000400` applied, anon negative test PASS) | the roles revoke and webhook deploy after the site deploy |
+| Live cards: plain titles and the launch slate (#45) | `specs/launch-cards.md` | built (`refresh-cards.ts` applied: 8 updated, 3 inserted) | nothing |
+| Gate: kernel checks first, kernel list, deny-list holes (#48) | `specs/launch-gate.md` | built | a card branch run through the gate |
+| Dispatcher: throttle, merge safety, metering (#49) | `specs/launch-dispatcher.md` | built | the cutover |
+| Managed Agents: unattended sessions, smoke without card code (#51) | `specs/launch-managed.md` | built | Console credit and the cutover; the fix below before it |
+| Site: honest copy, /how-it-works, /team, /roadmap, board controls (#47) | `specs/launch-site.md` | built | the live check on production |
+
+**Fix before the cutover.** The Managed Agents adapter must stop and settle a session whose event stream is lost: send `user.interrupt`, poll until the session is no longer running, settle and archive it, and reset the reconnect count after a connect that delivered events (found in the finish review of 23 September 2026; `platform/dispatcher/src/adapters/managed.ts` around the `stream_lost` stop). Nothing reaches this code until the dispatcher runs unattended.
 
 Production steps for the batch, each with the board's allow, the studio paused and no Mac dispatcher running: after the DB merge, the migrations up to `20260922000400_public_roles`, the `stripe-webhook` deploy and the anon negative test; after the live-cards merge, `refresh-cards.ts` as a dry run and then applied; after the site deploy is verified, `20260922000500_roles_revoke` and the anon negative test again; at the end, `file-backlog.ts` as a dry run and then applied, the model and price edits to `.env`, the role re-seed, the ledger identity, the live check, an attended probe and the Stripe Payment Link's field label. A close-out pull request then records the results in the specs.
 
