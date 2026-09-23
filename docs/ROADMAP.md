@@ -25,6 +25,7 @@ These are two different states.
    - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@peanutgallery.games receives mail.
    - /how-it-works, /team and /roadmap are live.
    - Link previews render, and the board's own site requires a second factor.
+   - The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).
    - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items on /roadmap.
    - The site shows a notice while the studio is paused.
 5. **The board has pressed Go live.** The launch clip and the post drafts exist.
