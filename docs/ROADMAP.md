@@ -22,7 +22,7 @@ These are two different states.
    - A card funded by a player builds with no one at the keyboard, billed to the studio.
 3. **The money is safe.** Refunds and disputes reverse cleanly. Credit above $50 a day per payer (keyed on the card fingerprint), or above the studio-wide daily limit, is held for 14 days. A refund of money already spent takes the shortfall from unearmarked money first and alerts the board.
 4. **The site is ready for strangers.**
-   - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@peanutgallery.games receives mail.
+   - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@clayhouse.studio receives mail.
    - /how-it-works, /team and /roadmap are live.
    - Link previews render, and /board requires a second factor.
    - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items on /roadmap.
