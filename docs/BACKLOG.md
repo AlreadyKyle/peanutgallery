@@ -239,13 +239,13 @@ everything else, in the order the board would take it.
 - summary: From time to time the Studio Head proposes three ideas that no number asked for.
 - intent: A scheduled Studio Head session writes three proposals outside the metrics, filed as proposed cards for the board like any other. Needs a job that runs the directors. It is not built yet.
 
-### Scout agent for outside tools and trends
+### Biz Dev agent for outside tools and trends
 - bucket: agents
 - folder: platform
 - horizon: later
 - rank: 22
 - summary: An agent that follows new models, tools and game trends, and proposes trials that are measured, then kept or undone.
-- intent: The Scout reads outside text and has no write tools. It files evidenced cards (model releases and pricing, tools, engine updates, comparable projects, genre trends) and trial cards that adopt a tool on one role, measure it, then keep or revert it; its score is its hit rate. It is not built yet.
+- intent: Biz Dev reads outside text and has no write tools, and it never contacts anyone. It files evidenced cards (model releases and pricing, tools, engine updates, comparable projects, genre trends) and trial cards that adopt a tool on one role, measure it, then keep or revert it; its score is its hit rate. It is built last and is not built yet.
 
 ### Community agent and the Lore page
 - bucket: agents
