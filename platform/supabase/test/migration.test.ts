@@ -1077,3 +1077,367 @@ describe("ledger-request-id rollback", () => {
     );
   });
 });
+
+// The launch migrations (docs/specs/launch-db.md). Stamps are fixed so the new
+// enum value is committed before any file uses it, and the roles revoke waits
+// in its own file until the site reads public_roles.
+
+const LAUNCH_FILES = {
+  overhead: "20260922000000_ledger_overhead.sql",
+  money: "20260922000100_money_fixes.sql",
+  lease: "20260922000200_dispatcher_lease.sql",
+  backlog: "20260922000300_backlog.sql",
+  roles: "20260922000400_public_roles.sql",
+  revoke: "20260922000500_roles_revoke.sql",
+} as const;
+
+function launchFile(name: string): string {
+  const path = resolve(MIGRATIONS_DIR, name);
+  expect(existsSync(path), name).toBe(true);
+  return readFileSync(path, "utf8");
+}
+
+const overheadSql = launchFile(LAUNCH_FILES.overhead);
+const moneySql = launchFile(LAUNCH_FILES.money);
+const leaseSql = launchFile(LAUNCH_FILES.lease);
+const backlogSql = launchFile(LAUNCH_FILES.backlog);
+const rolesSql = launchFile(LAUNCH_FILES.roles);
+const revokeSql = launchFile(LAUNCH_FILES.revoke);
+
+/** The board-RPC preamble every launch board RPC opens with: membership first, then the second factor. */
+const BOARD_PREAMBLE = `  if public.board_role() is distinct from 'board'::public.board_role then\n    raise exception 'Board membership is required';\n  end if;\n${AAL2_CHECK}`;
+
+/** A function block with each [after, before] pair swapped back; each after must appear exactly once. */
+function undo(block: string, pairs: [string, string][]): string {
+  let body = block;
+  for (const [after, before] of pairs) {
+    expect(body.split(after), after).toHaveLength(2);
+    body = body.replace(after, before);
+  }
+  return body;
+}
+
+const APPLY_V9_TYPES = "text, text, text, numeric, numeric, integer, uuid, text, text";
+const FILE_CARD_V12_TYPES = `${NEW_FILE_CARD_TYPES}, public.card_horizon`;
+const NY_MIDNIGHT = "(date_trunc('day', now() at time zone 'America/New_York') at time zone 'America/New_York')";
+const CLOSED_LANE = "The platform code lane is closed until the board has its own site";
+
+describe("launch migrations: order", () => {
+  it("carry 14-digit stamps in the fixed order, after every earlier file", () => {
+    const names: string[] = Object.values(LAUNCH_FILES);
+    for (const name of names) expect(name).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect([...names].sort()).toEqual(names);
+    expect(names[0]! > LEDGER_REQUEST_ID_FILE).toBe(true);
+  });
+
+  it("add the overhead label alone, so no file uses it in the transaction that adds it", () => {
+    expect(withoutComments(overheadSql)).toBe("alter type public.ledger_billing add value if not exists 'overhead';");
+    for (const text of [founderBilling, ledgerRequestId]) expect(text).not.toContain("'overhead'");
+  });
+});
+
+describe("money-fixes migration", () => {
+  it("sets a lock timeout first and drops founder_credit", () => {
+    expect(withoutComments(moneySql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(moneySql).toContain("drop function if exists public.founder_credit(numeric, public.contribution_kind, text);");
+    expect(moneySql).not.toContain("create or replace function public.founder_credit(");
+  });
+
+  it("keeps the request-id record_usage except that an overhead row names no card and leaves the pool alone", () => {
+    const block = functionBlockIn(moneySql, "record_usage");
+    expect(
+      undo(block, [
+        [
+          "  if p_billed_to = 'overhead'::public.ledger_billing and p_card_id is not null then\n    raise exception 'An overhead row names no card';\n  end if;\n",
+          "",
+        ],
+        [
+          "  if p_billed_to in ('founder'::public.ledger_billing, 'overhead'::public.ledger_billing) then\n",
+          "  if p_billed_to = 'founder'::public.ledger_billing then\n",
+        ],
+      ]),
+    ).toBe(functionBlockIn(ledgerRequestId, "record_usage"));
+    const skip = block.indexOf("if p_billed_to in ('founder'::public.ledger_billing, 'overhead'::public.ledger_billing) then");
+    expect(block.slice(skip, block.indexOf("else", skip))).not.toContain("update public.pool");
+  });
+
+  it("shows anon studio and overhead rows and never founder rows, with overhead in its own total", () => {
+    expect(moneySql).toContain("drop policy if exists ledger_public_read on public.ledger;");
+    expect(moneySql).toContain(
+      "create policy ledger_public_read on public.ledger for select to anon, authenticated using (billed_to in ('studio', 'overhead'));",
+    );
+    for (const column of ["usd_total", "row_count"]) {
+      expect(moneySql).toMatch(new RegExp(`filter \\(where billed_to = 'studio'\\)[^\\n]* as ${column}`));
+    }
+    expect(moneySql).toContain("coalesce(sum(usd) filter (where billed_to = 'overhead'), 0)::numeric(12,4) as overhead_usd");
+    expect(moneySql).toContain("  from public.ledger\n  where billed_to in ('studio', 'overhead');");
+    expect(moneySql).toContain("revoke all on table public.public_ledger_totals from anon, authenticated;");
+    expect(moneySql).toContain("grant select on public.public_ledger_totals to anon, authenticated;");
+  });
+
+  it("adds the payer key, backfills payments with their email key, then requires one on every payment", () => {
+    const column = moneySql.indexOf("alter table public.contributions add column if not exists payer_key text;");
+    const backfill = moneySql.indexOf(
+      "update public.contributions set payer_key = 'email:' || contributor_id where entry = 'payment' and payer_key is null;",
+    );
+    const check = moneySql.indexOf("add constraint contributions_payer_key_check");
+    expect(column).toBeGreaterThan(0);
+    expect(backfill).toBeGreaterThan(column);
+    expect(check).toBeGreaterThan(backfill);
+    expect(moneySql).toContain("check (entry <> 'payment' or (payer_key is not null and payer_key ~ '^(card|email):.+$'));");
+    expect(moneySql).toContain("alter table public.contributions drop constraint if exists contributions_payer_key_check;");
+    expect(moneySql).toContain(
+      "create index if not exists contributions_payer_day_idx on public.contributions (payer_key, created_at) where entry = 'payment';",
+    );
+  });
+
+  it("adds the studio-wide daily room and the monthly cap, both defaulting to $500", () => {
+    expect(moneySql).toContain(
+      "alter table public.studio_state add column if not exists credit_studio_daily_cap_usd numeric(12,4) not null default 500;",
+    );
+    expect(moneySql).toContain("alter table public.studio_state add column if not exists monthly_cap_usd numeric(12,4) not null default 500;");
+  });
+
+  it("creates board_actions and credit_purchases with row level security and nothing for anon or authenticated", () => {
+    for (const table of ["board_actions", "credit_purchases"]) {
+      expect(moneySql).toContain(`create table if not exists public.${table} (`);
+      expect(moneySql).toContain(`alter table public.${table} enable row level security;`);
+      expect(moneySql).toContain(`revoke all on table public.${table} from anon, authenticated;`);
+      expect(moneySql).toContain(`grant all on table public.${table} to service_role;`);
+      expect(moneySql).not.toMatch(new RegExp(`create policy \\w+ on public\\.${table} `));
+    }
+  });
+
+  it("opens set_caps and record_credit_purchase with the board preamble, records each action and grants them to authenticated only", () => {
+    for (const [name, types] of [
+      ["set_caps", "numeric, numeric, numeric, text, numeric, numeric"],
+      ["record_credit_purchase", "numeric, text, text"],
+    ] as const) {
+      const block = functionBlockIn(moneySql, name);
+      expect(block, name).toContain(`begin\n${BOARD_PREAMBLE}`);
+      expect(block, name).not.toContain("board_role() is null");
+      expect(block, name).toContain("security definer");
+      expect(block, name).toContain("set search_path = public");
+      expect(block, name).toContain(`insert into public.board_actions (action, card_id, actor_email, reason, details)\n  values ('${name}',`);
+      expect(block, name).toContain("raise exception 'A reason is required';");
+      expect(moneySql).toContain(`revoke all on function public.${name}(${types}) from public, anon;`);
+      expect(moneySql).toContain(`grant execute on function public.${name}(${types}) to authenticated, service_role;`);
+    }
+    const caps = functionBlockIn(moneySql, "set_caps");
+    for (const message of [
+      "Name at least one cap to change",
+      "A cap must be zero or more",
+      "The hourly rate must be above zero",
+      "A cap must be at most $10,000",
+      "The per-card maximum must not exceed the daily cap",
+      "The daily cap must not exceed the monthly cap",
+    ]) {
+      expect(caps, message).toContain(`raise exception '${message}'`);
+    }
+  });
+
+  it("gives board_studio_state every cap and the credit bought and spent", () => {
+    const block = functionBlockIn(moneySql, "board_studio_state");
+    expect(block).toContain("if not public.is_board_member() then");
+    for (const key of ["agent_hourly_rate_usd", "monthly_cap_usd", "credit_daily_cap_usd", "credit_studio_daily_cap_usd", "daily_cap_usd", "card_max_usd"]) {
+      expect(block, key).toContain(`'${key}', ${key}`);
+    }
+    expect(block).toContain("'credit_bought_usd', (select coalesce(sum(amount_usd), 0) from public.credit_purchases)");
+    expect(block).toContain("'credit_spent_usd', (select coalesce(sum(usd), 0) from public.ledger where billed_to in ('studio', 'overhead'))");
+  });
+
+  it("drops the eight-argument apply_contribution and changes only the payer key and the studio-wide room", () => {
+    const drop = moneySql.indexOf("drop function if exists public.apply_contribution(text, text, text, numeric, numeric, integer, uuid, text);");
+    expect(drop).toBeGreaterThan(0);
+    expect(moneySql.indexOf("create or replace function public.apply_contribution(")).toBeGreaterThan(drop);
+    const block = functionBlockIn(moneySql, "apply_contribution");
+    expect(
+      undo(block, [
+        ["  p_stripe_session_id text default null,\n  p_payer_key text default null\n) returns jsonb", "  p_stripe_session_id text default null\n) returns jsonb"],
+        ["  v_daily_cap numeric(12,4);\n  v_studio_cap numeric(12,4);\n", "  v_daily_cap numeric(12,4);\n"],
+        ["  v_used numeric(12,4);\n  v_studio_used numeric(12,4);\n  v_payer text;\n", "  v_used numeric(12,4);\n"],
+        [
+          "  v_payer := coalesce(nullif(btrim(p_payer_key), ''), 'email:' || p_contributor_id);\n  if v_payer !~ '^(card|email):.+$' then\n    raise exception 'p_payer_key must start with card: or email:';\n  end if;\n",
+          "",
+        ],
+        [
+          "credit_hold_days, credit_studio_daily_cap_usd\n  into v_reserve_pct, v_incident_pct, v_incident_cap, v_daily_cap, v_hold_days, v_studio_cap\n",
+          "credit_hold_days\n  into v_reserve_pct, v_incident_pct, v_incident_cap, v_daily_cap, v_hold_days\n",
+        ],
+        [
+          "  -- Read after the pool lock, so two payments from one payer take turns and\n  -- the second sees the first. A payer is the card behind the payment or the\n  -- email: the day's window counts every payment that shares either one, so a\n  -- second email on the same card and a second card on the same email share\n  -- one $50. The studio-wide room counts every payment today. Refunds do not\n  -- free room.\n",
+          "  -- Read after the pool lock, so two payments from one contributor take turns\n  -- and the second sees the first. Refunds do not free room.\n",
+        ],
+        ["  where (payer_key = v_payer or contributor_id = p_contributor_id)\n", "  where contributor_id = p_contributor_id\n"],
+        [
+          `  select coalesce(sum(agents_usd - incident_usd - held_usd), 0) into v_studio_used\n  from public.contributions\n  where entry = 'payment'\n    and created_at >= ${NY_MIDNIGHT};\n  v_held := greatest(0, v_credit - least(greatest(0, v_daily_cap - v_used), greatest(0, v_studio_cap - v_studio_used)));\n`,
+          "  v_held := greatest(0, v_credit - greatest(0, v_daily_cap - v_used));\n",
+        ],
+        ["held_usd, hold_until, payer_key\n", "held_usd, hold_until\n"],
+        ["v_held, v_hold_until, v_payer\n", "v_held, v_hold_until\n"],
+      ]),
+    ).toBe(functionBlockIn(openFunding, "apply_contribution"));
+    expect(moneySql).toContain(`revoke all on function public.apply_contribution(${APPLY_V9_TYPES}) from public, anon, authenticated;`);
+    expect(moneySql).toContain(`grant execute on function public.apply_contribution(${APPLY_V9_TYPES}) to service_role;`);
+  });
+
+  it("keeps reverse_contribution's arithmetic and adds the earmarked money and the shortfall to its result", () => {
+    const block = functionBlockIn(moneySql, "reverse_contribution");
+    const report = block.slice(block.indexOf("\n  -- Money on the bars of cards waiting"), block.indexOf("\n\n  return jsonb_build_object(") + 1);
+    expect(report).toContain("where c.stage in ('funded', 'voted', 'paused');");
+    expect(report).toContain("v_shortfall := greatest(v_earmarked - (v_balance - coalesce(v_studio_reserve, 0)), 0);");
+    expect(
+      undo(block, [
+        ["  v_incident_after numeric(12,4);\n  v_studio_reserve numeric(12,4);\n  v_earmarked numeric(12,4);\n  v_shortfall numeric(12,4);\n", "  v_incident_after numeric(12,4);\n"],
+        [report, ""],
+        ["    'goal_target_usd', v_goal_target,\n    'earmarked_usd', v_earmarked,\n    'shortfall_usd', v_shortfall\n", "    'goal_target_usd', v_goal_target\n"],
+      ]),
+    ).toBe(functionBlockIn(openFunding, "reverse_contribution"));
+  });
+});
+
+describe("dispatcher-lease migration", () => {
+  it("keeps the lease in one private row that only the service role's functions change", () => {
+    expect(withoutComments(leaseSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(leaseSql).toContain("create table if not exists public.dispatcher_lease (\n  id integer primary key check (id = 1),");
+    expect(leaseSql).toContain("insert into public.dispatcher_lease (id) values (1) on conflict (id) do nothing;");
+    for (const table of ["dispatcher_lease", "card_patches"]) {
+      expect(leaseSql).toContain(`alter table public.${table} enable row level security;`);
+      expect(leaseSql).toContain(`revoke all on table public.${table} from anon, authenticated;`);
+      expect(leaseSql).not.toMatch(new RegExp(`create policy \\w+ on public\\.${table} `));
+    }
+    for (const [name, types] of [["claim_dispatcher_lease", "text, integer"], ["release_dispatcher_lease", "text"]] as const) {
+      const block = functionBlockIn(leaseSql, name);
+      expect(block, name).toContain("returns boolean");
+      expect(block, name).toContain("security definer");
+      expect(leaseSql).toContain(`revoke all on function public.${name}(${types}) from public, anon, authenticated;`);
+      expect(leaseSql).toContain(`grant execute on function public.${name}(${types}) to service_role;`);
+    }
+  });
+
+  it("claims in one conditional update, so two claimants never both win", () => {
+    const block = functionBlockIn(leaseSql, "claim_dispatcher_lease");
+    expect(block).toContain("    and (holder is null or holder = p_holder or expires_at <= now());");
+    expect(block.match(/update public\.dispatcher_lease/g)).toHaveLength(1);
+  });
+
+  it("stores a patch only with its true digest and length", () => {
+    expect(leaseSql).toContain("sha256 = encode(sha256(convert_to(patch, 'UTF8')), 'hex')");
+    expect(leaseSql).toContain("bytes = octet_length(convert_to(patch, 'UTF8'))");
+  });
+});
+
+describe("backlog migration", () => {
+  it("adds the horizon enum and column, defaulting to now, and a rank", () => {
+    expect(withoutComments(backlogSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(backlogSql).toContain("create type public.card_horizon as enum ('now', 'next', 'later');");
+    expect(backlogSql).toContain("when duplicate_object then null;");
+    expect(backlogSql).toContain("alter table public.cards add column if not exists horizon public.card_horizon not null default 'now';");
+    expect(backlogSql).toContain("alter table public.cards add column if not exists rank integer;");
+  });
+
+  it("re-grants the public card columns with horizon and rank, and nothing withheld", () => {
+    const start = backlogSql.indexOf("grant select (");
+    const grant = backlogSql.slice(start, backlogSql.indexOf(GRANT_END, start) + GRANT_END.length);
+    const columns = grant.slice("grant select (".length, -GRANT_END.length).split(",").map((c) => c.trim());
+    expect(columns).toEqual([...grantedCardColumns(), "horizon", "rank"]);
+    for (const column of WITHHELD_CARD_COLUMNS) expect(columns).not.toContain(column);
+    expect(backlogSql.indexOf("revoke all on public.cards from anon, authenticated;")).toBeLessThan(start);
+  });
+
+  it("drops the eleven-argument file_card and adds p_horizon last, uncapped by the per-card maximum", () => {
+    const drop = backlogSql.indexOf(`drop function if exists public.file_card(${NEW_FILE_CARD_TYPES});`);
+    expect(drop).toBeGreaterThan(0);
+    expect(backlogSql.indexOf("create or replace function public.file_card(")).toBeGreaterThan(drop);
+    const block = functionBlockIn(backlogSql, "file_card");
+    expect(block).toContain(`begin\n${BOARD_PREAMBLE}`);
+    expect(block).not.toContain("card_max_usd");
+    expect(
+      undo(block, [
+        ["  p_board_reason text,\n  p_horizon public.card_horizon default 'now'\n) returns uuid", "  p_board_reason text\n) returns uuid"],
+        ["declare\n  v_id uuid;\n", "declare\n  v_card_max numeric(12,4);\n  v_id uuid;\n"],
+        [
+          "  if p_horizon is null then\n    raise exception 'A horizon is required';\n  end if;\n",
+          "  select card_max_usd into v_card_max from public.studio_state where id = 1;\n  if not found then\n    raise exception 'studio_state row 1 is missing';\n  end if;\n",
+        ],
+        [
+          "  if p_funding_target_usd > 10000 then\n    raise exception 'The funding target must be at most $10,000';\n  end if;\n",
+          "  if p_funding_target_usd > v_card_max then\n    raise exception 'The funding target must not exceed the per-card maximum of %', v_card_max;\n  end if;\n",
+        ],
+        [`  if p_horizon = 'now' and p_folder = 'platform' and p_lane = 'code' then\n    raise exception '${CLOSED_LANE}';\n  end if;\n`, ""],
+        ["    confidence, proposer_role_id, stage, horizon\n", "    confidence, proposer_role_id, stage\n"],
+        ["    'low', null, p_stage, p_horizon\n", "    'low', null, p_stage\n"],
+        [
+          "  insert into public.board_actions (action, card_id, actor_email, reason, details)\n  values ('file_card', v_id, auth.email(), coalesce(nullif(btrim(p_board_reason), ''), 'No reason given'), jsonb_build_object(\n    'horizon', p_horizon,\n    'stage', p_stage,\n    'funding_target_usd', round(p_funding_target_usd, 4)\n  ));\n",
+          "",
+        ],
+      ]),
+    ).toBe(functionBlockIn(boardTwoFactor, "file_card"));
+    expect(backlogSql).toContain(`revoke all on function public.file_card(${FILE_CARD_V12_TYPES}) from public, anon;`);
+    expect(backlogSql).toContain(`grant execute on function public.file_card(${FILE_CARD_V12_TYPES}) to authenticated, service_role;`);
+  });
+
+  it("credits a card only on now, and a release moves only a card on now to funded", () => {
+    expect(
+      undo(functionBlockIn(backlogSql, "apply_contribution"), [
+        ["and stage in ('proposed', 'designing', 'voted') and horizon = 'now' for update;", "and stage in ('proposed', 'designing', 'voted') for update;"],
+      ]),
+    ).toBe(functionBlockIn(moneySql, "apply_contribution"));
+    expect(
+      undo(functionBlockIn(backlogSql, "credit_held_contributions"), [
+        ["        and stage in ('proposed', 'voted')\n        and horizon = 'now'\n", "        and stage in ('proposed', 'voted')\n"],
+      ]),
+    ).toBe(functionBlockIn(refunds, "credit_held_contributions"));
+  });
+
+  it("opens set_card_horizon, cancel_card and resume_card with the board preamble, records each and grants them to authenticated only", () => {
+    for (const [name, types] of [
+      ["set_card_horizon", "uuid, public.card_horizon, integer, text, numeric, text, uuid, public.card_lane, text"],
+      ["cancel_card", "uuid, text"],
+      ["resume_card", "uuid, numeric, text"],
+    ] as const) {
+      const block = functionBlockIn(backlogSql, name);
+      expect(block, name).toContain(`begin\n${BOARD_PREAMBLE}`);
+      expect(block, name).not.toContain("board_role() is null");
+      expect(block, name).toContain("security definer");
+      expect(block, name).toContain(`values ('${name}', p_card, auth.email(), btrim(p_reason),`);
+      expect(block, name).toContain("from public.cards where id = p_card for update;");
+      expect(backlogSql).toContain(`revoke all on function public.${name}(${types}) from public, anon;`);
+      expect(backlogSql).toContain(`grant execute on function public.${name}(${types}) to authenticated, service_role;`);
+    }
+    expect(functionBlockIn(backlogSql, "set_card_horizon")).toContain(CLOSED_LANE);
+    expect(functionBlockIn(backlogSql, "resume_card")).toContain(CLOSED_LANE);
+    expect(functionBlockIn(backlogSql, "cancel_card")).toContain("if v_card.stage not in ('proposed', 'designing', 'voted', 'funded', 'paused') then");
+  });
+});
+
+describe("public-roles migration", () => {
+  it("adds a one-line roles.description and public_roles with the site's columns", () => {
+    expect(rolesSql).toContain("alter table public.roles add column if not exists description text;");
+    expect(rolesSql).toContain(
+      "create or replace view public.public_roles with (security_invoker = false) as\n  select id, name, title, description, species_note, avatar_url, model, write_access, state, hired_at\n  from public.roles;",
+    );
+  });
+
+  it("adds paused to public_studio, last, and never paused_by or paused_at", () => {
+    expect(rolesSql).toContain(
+      "create or replace view public.public_studio with (security_invoker = false) as\n  select launched_at, paused from public.studio_state where id = 1;",
+    );
+    expect(withoutComments(rolesSql)).not.toMatch(/paused_(by|at)/);
+  });
+
+  it("revokes everything on both views before granting select, and revokes nothing on roles", () => {
+    expect(rolesSql).toContain("revoke all on table public.public_roles, public.public_studio from anon, authenticated;");
+    expect(rolesSql).toContain("grant select on public.public_roles to anon, authenticated;");
+    expect(rolesSql).toContain("grant select on public.public_studio to anon, authenticated;");
+    expect(withoutComments(rolesSql)).not.toMatch(/(revoke|grant)[^;]* on (table )?public\.roles[ ;]/);
+  });
+});
+
+describe("roles-revoke migration", () => {
+  it("revokes anon and authenticated on roles and does nothing else", () => {
+    expect(withoutComments(revokeSql)).toBe(
+      [LOCK_TIMEOUT, "revoke all on table public.roles from anon, authenticated;", "notify pgrst, 'reload schema';"].join("\n"),
+    );
+  });
+});

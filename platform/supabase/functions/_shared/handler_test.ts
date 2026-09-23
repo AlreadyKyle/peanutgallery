@@ -8,7 +8,7 @@ import {
   type WebhookEvent,
 } from "./handler.ts";
 import { WEBHOOK_EVENTS } from "./webhook_events.ts";
-import type { Amounts } from "./split.ts";
+import { type Amounts, sha256Hex } from "./split.ts";
 import type { Parsed } from "./session.ts";
 
 const SERVICE_KEY = "service-role-key-for-tests";
@@ -117,7 +117,7 @@ const REVERSED = {
 
 interface Fake {
   deps: HandlerDeps;
-  applied: { parsed: Parsed; amounts: Amounts }[];
+  applied: { parsed: Parsed; amounts: Amounts; payerKey: string }[];
   feeLookups: string[];
   sessionLookups: string[];
   reversals: ReversalInput[];
@@ -128,7 +128,7 @@ function fake(
   overrides: Partial<
     Pick<
       HandlerDeps,
-      | "lookupFee"
+      | "lookupCharge"
       | "findSession"
       | "applyContribution"
       | "reverseContribution"
@@ -153,16 +153,16 @@ function fake(
       }
       return Promise.resolve(event);
     },
-    lookupFee: (sessionId) => {
+    lookupCharge: (sessionId) => {
       feeLookups.push(sessionId);
-      return Promise.resolve(0.29);
+      return Promise.resolve({ fee_usd: 0.29, card_fingerprint: null });
     },
     findSession: (paymentIntentId) => {
       sessionLookups.push(paymentIntentId);
       return Promise.resolve(paidSession());
     },
-    applyContribution: (parsed, amounts) => {
-      applied.push({ parsed, amounts });
+    applyContribution: (parsed, amounts, payerKey) => {
+      applied.push({ parsed, amounts, payerKey });
       return Promise.resolve({ inserted: true, contribution_id: "c1" });
     },
     reverseContribution: (input) => {
@@ -379,7 +379,7 @@ Deno.test("handler credits a paid session through apply_contribution", async () 
 });
 
 Deno.test("handler defers a completed session whose fee is not available yet", async () => {
-  const { deps, applied } = fake({ lookupFee: () => Promise.resolve(null) });
+  const { deps, applied } = fake({ lookupCharge: () => Promise.resolve(null) });
   const { status, body } = await call(deps, post());
   assertEquals(status, 200);
   assertEquals(body, {
@@ -489,7 +489,7 @@ Deno.test("charge.updated answers 500 when the session lookup throws", async () 
 
 Deno.test("charge.updated answers 500 when the fee is still missing so Stripe retries", async () => {
   const { deps, applied } = fake(
-    { lookupFee: () => Promise.resolve(null) },
+    { lookupCharge: () => Promise.resolve(null) },
     chargeUpdatedEvent(),
   );
   const { status, body } = await call(deps, post());
@@ -504,6 +504,7 @@ Deno.test("dry run on charge.updated finds the session and never calls the RPC",
   assertEquals(status, 200);
   assertEquals(body.dry_run, true);
   assertEquals(body.fee_lookup, "ok");
+  assertEquals(body.payer, "email");
   assertEquals((body.parsed as Parsed).event_id, "evt_handler_charge");
   assertEquals(sessionLookups, ["pi_handler_1"]);
   assertEquals(applied.length, 0);
@@ -511,7 +512,7 @@ Deno.test("dry run on charge.updated finds the session and never calls the RPC",
 
 Deno.test("handler answers 500 when the fee lookup throws", async () => {
   const { deps, applied } = fake({
-    lookupFee: () => Promise.reject(new Error("No such checkout session")),
+    lookupCharge: () => Promise.reject(new Error("No such checkout session")),
   });
   const { status, body } = await call(deps, post());
   assertEquals(status, 500);
@@ -556,7 +557,7 @@ Deno.test("dry run verifies, parses, looks the fee up and never calls the RPC", 
 
 Deno.test("dry run reports a failed fee lookup and computes on a zero fee", async () => {
   const { deps, applied } = fake({
-    lookupFee: () => Promise.reject(new Error("No such checkout session")),
+    lookupCharge: () => Promise.reject(new Error("No such checkout session")),
   });
   const { status, body } = await call(deps, post(DRY_RUN_HEADERS));
   assertEquals(status, 200);
@@ -569,7 +570,7 @@ Deno.test("dry run reports a failed fee lookup and computes on a zero fee", asyn
   });
   assertEquals(applied.length, 0);
 
-  const missing = fake({ lookupFee: () => Promise.resolve(null) });
+  const missing = fake({ lookupCharge: () => Promise.resolve(null) });
   const res = await call(missing.deps, post(DRY_RUN_HEADERS));
   assertEquals(res.body.fee_lookup, "failed");
   assertEquals(missing.applied.length, 0);
@@ -732,7 +733,7 @@ Deno.test("a refund of a payment never credited credits it first, then reverses 
 Deno.test("a refund of a payment whose fee is still missing answers 500 so Stripe retries", async () => {
   const { deps, applied } = fake(
     {
-      lookupFee: () => Promise.resolve(null),
+      lookupCharge: () => Promise.resolve(null),
       reverseContribution: () => Promise.resolve({ found: false, inserted: false }),
     },
     refundedEvent(),
@@ -1065,4 +1066,47 @@ Deno.test("the reversal message warns when the 10% reserve or the emergency fund
   });
   assert(!healthy.includes("below zero"));
   assert(!reversalMessage("refund", "ch_1", REVERSED).includes("below zero"));
+});
+
+Deno.test("a card payment keys the $50 window on its hashed fingerprint, and a Link payment on the email", async () => {
+  const card = fake({
+    lookupCharge: () => Promise.resolve({ fee_usd: 0.29, card_fingerprint: "Xt5EWLLDS7FJjR1c" }),
+  });
+  const paid = await call(card.deps, post());
+  assertEquals(paid.status, 200);
+  assertEquals(card.applied.length, 1);
+  assertEquals(card.applied[0]!.payerKey, `card:${await sha256Hex("Xt5EWLLDS7FJjR1c")}`);
+  assertEquals(card.applied[0]!.amounts.fee_usd, 0.29);
+
+  // Link, and any method without a card, reports no fingerprint.
+  const link = fake();
+  await call(link.deps, post());
+  assertEquals(link.applied[0]!.payerKey, `email:${link.applied[0]!.parsed.contributor_id}`);
+  assertEquals(link.applied[0]!.parsed.contributor_id, await sha256Hex("board@peanutgallery.games"));
+
+  // The same holds when charge.updated credits the session.
+  const updated = fake(
+    { lookupCharge: () => Promise.resolve({ fee_usd: 0.29, card_fingerprint: "Xt5EWLLDS7FJjR1c" }) },
+    chargeUpdatedEvent(),
+  );
+  await call(updated.deps, post());
+  assertEquals(updated.applied[0]!.payerKey, `card:${await sha256Hex("Xt5EWLLDS7FJjR1c")}`);
+
+  // A dry run says which key it would use, and never the key.
+  const dry = fake({
+    lookupCharge: () => Promise.resolve({ fee_usd: 0.29, card_fingerprint: "Xt5EWLLDS7FJjR1c" }),
+  });
+  const shown = await call(dry.deps, post(DRY_RUN_HEADERS));
+  assertEquals(shown.body.payer, "card");
+  assert(!JSON.stringify(shown.body).includes("Xt5EWLLDS7FJjR1c"));
+  assertEquals(dry.applied, []);
+});
+
+Deno.test("the reversal message says when waiting cards are left short, and by how much", () => {
+  const short = reversalMessage("refund", "ch_1", { ...REVERSED, earmarked_usd: 30, shortfall_usd: 13 });
+  assert(short.includes("cards waiting for the agents are short by $13.00 until new money arrives"));
+  for (const shortfall_usd of [0, undefined]) {
+    const whole = reversalMessage("refund", "ch_1", { ...REVERSED, earmarked_usd: 30, shortfall_usd });
+    assert(!whole.includes("short by"), String(shortfall_usd));
+  }
 });

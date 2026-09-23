@@ -1,6 +1,7 @@
 {
   "name": "Builder A",
   "title": "Builder A",
+  "description": "Builds funded game cards as small, tested changes to Dust, taking turns with Builder B.",
   "species_note": "A small blue creature with two round antennae and stubby legs.",
   "model": "MODEL_BUILDER",
   "budget_share": 0.20,
