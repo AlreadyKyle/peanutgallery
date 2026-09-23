@@ -1,6 +1,6 @@
 # Legal copy: numbered terms versions, the refund policy and the wind-down rule
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Built on main after home-and-design (#64). The layout-balance pull request is dropped: home ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. The cross-PR contracts it relies on are in Decisions under "Reconciled with the series".
 
@@ -71,7 +71,7 @@ Out, and what each waits on:
 - [x] When the versions read fails, times out, returns no row or lists a version newer than the bundle's newest, the Terms and Refunds pages show the bundled words with the cannot-confirm notice and the contact address.
 - [x] Every Payment Link rendered on /, /roadmap and /contribute has links to /terms and /refunds and the age condition in the same card, or on /contribute the agreement line directly under the first choice.
 - [x] No page says "display name", Privacy carries the new sentence and `privacyUpdated`, and the webhook credits a session carrying a `displayname` field with `display_name` null.
-- [ ] Production, in order with the board's allow: a dump that `pg_restore --list` reads, the first migration, the privilege read-back (both false), the anon negative test and ledger identity PASS, stripe-webhook deployed from main; after the site deploy of the merge sha, a second dump, the second migration, and the live check PASS showing "Version 2, in force since", /terms/1, /refunds/1, /terms/3 not found and the agreement lines on / and /contribute.
+- [x] Production, in order with the board's allow: a dump that `pg_restore --list` reads, the first migration, the privilege read-back (both false), the anon negative test and ledger identity PASS, stripe-webhook deployed from main; after the site deploy of the merge sha, a second dump, the second migration, and the live check PASS showing "Version 2, in force since", /terms/1, /refunds/1, /terms/3 not found and the agreement lines on / and /contribute.
 
 ## Verification
 
@@ -106,7 +106,7 @@ The studio stays paused throughout.
 
 ## Evidence
 
-Built on `launch/legal-copy` from main at e629119. The production lines of Verification and the production steps are the ship stage's and are not run here; the studio stays paused.
+Built on `launch/legal-copy` from main at e629119, merged as #68 (e14019b). The production lines of Verification and the production steps ran at the ship stage, quoted under "Production" at the end of this section; the studio stayed paused throughout.
 
 `pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0 (rerun after the review's fixes):
 
@@ -213,6 +213,59 @@ version-file.test.ts, old join:  × writes into an absolute outDir as given, not
 ```
 
 All pass after the fixes, in the verify and e2e runs above. Screenshots of /terms, /terms/1, /refunds/1, /team, /roadmap, /contribute and /ledger at 375 and 1440, loading (every data request held) and loaded, were looked at: the Terms pages differ only in the line under the lede, every title stays under the top bar while loading, and the agreement line on /contribute sits under the first choice with the section gap before "Or pick a card".
+
+### Production, 23 September 2026
+
+Before the merge, `main` (04368fb) merged into the branch, `pnpm verify` exit 0 (site 382 tests, supabase 273, dispatcher 619, gate 508), `E2E_PORT=4437 pnpm --filter @backseat/site e2e` 112 passed, 5 skipped, and the gate green at the head sha 07acbd0 (build, detect, gate, platform, seed-code all pass). The merge fell on 23 September 2026, so `privacyUpdated` stayed.
+
+1. `select paused, launched_at from public.studio_state` read `[{"paused":true,"launched_at":null}]`. `pg_dump` wrote `~/peanutgallery-dumps/pre-legal-copy-20260923T213117Z.dump` (593363 bytes, mode 600); `pg_restore --list` exit 0, 956 lines.
+2. `20260924100000_terms_versions.sql` at 07acbd0, wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`. Read back:
+
+```
+select version, posted_at from public.terms_versions order by version
+[{"version":1,"posted_at":"2026-09-23 01:32:51+00"}]
+select has_table_privilege('service_role', 'public.terms_versions', 'insert'), has_function_privilege('anon', 'public.terms_version_at(timestamptz)', 'execute'), …
+[{"sr_insert":false,"anon_exec":false,"anon_tbl_select":false,"anon_view_select":true,"anon_view_insert":false,"rls":true,"triggers":"{terms_versions_append_only,terms_versions_no_truncate}","at_now":1,"at_before":null}]
+```
+
+3. `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` and `… scripts/ledger-identity.ts`, both exit 0:
+
+```
+ok   terms_versions                 expected refused  actual refused  42501 permission denied for table terms_versions
+ok   public_terms_versions          expected readable actual readable 1 row(s) returned
+ok   public_terms_versions(insert)  expected refused  actual refused  42501 permission denied for view public_terms_versions
+ok   public_terms_versions(update)  expected refused  actual refused  42501 permission denied for view public_terms_versions
+ok   rpc terms_version_at           expected refused  actual refused  42501 permission denied for function terms_version_at
+PASS: anon access matches the RLS contract
+PASS: ledger identity holds over 1 contribution rows and 0 studio ledger rows
+```
+
+4. `gh pr merge 68 --squash --match-head-commit 07acbd0… --delete-branch`: merged 2026-09-23T21:32:17Z as e14019b.
+5. `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api` from `platform/` on e14019b: "Deployed Functions."; read back `{"slug":"stripe-webhook","version":13,"status":"ACTIVE","updated_at":"2026-09-23T21:32:31.148Z","verify_jwt":false}`.
+6. The public site published e14019b (`/version.json`: `{"sha":"e14019b2b035c7136632114498e815b4f133af1b","builtAt":"2026-09-23T21:32:37.406Z"}`); the board site's build was cancelled for no content change, as expected. `node platform/site/scripts/live-check.mjs`:
+
+```
+PASS live-check https://peanutgallery.games passed=221 failed=0 skipped=0
+PASS /terms shows "Version 1, in force since 22 Sep 2026 at 21:32 Toronto time."
+PASS /terms/2 is the not found page: ["Not found"]
+```
+
+7. A second dump, `~/peanutgallery-dumps/pre-legal-copy-v2-20260923T213428Z.dump` (597281 bytes, mode 600; `pg_restore --list` exit 0, 967 lines, the `terms_versions` table, view, triggers and row security listed), studio still paused. `20260924100100_terms_version_2.sql` at e14019b in one request: `HTTP 201 []`. Read back `[{"version":1,"posted_at":"2026-09-23 01:32:51+00"},{"version":2,"posted_at":"2026-09-23 21:34:48.452621+00"}]`.
+8. The live check again, then the anon negative test and the ledger identity again (both PASS, the same lines as step 3):
+
+```
+PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0
+PASS home: 6 Payment Links, each with the agreement
+PASS /contribute: the agreement line under the first choice covers every Payment Link
+PASS /terms shows "Version 2, in force since 23 Sep 2026 at 17:34 Toronto time."
+PASS /terms lists the earlier versions ["/terms/1"]
+PASS /refunds/1 shows ["Refunds, version 1"]
+PASS /terms/3 is the not found page: ["Not found"]
+PASS 375px /terms/1 one h1: ["Terms, version 1"]
+PASS 375px /refunds/1 one h1: ["Refunds, version 1"]
+```
+
+Screenshots of the live /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /privacy at 375 and 1440 were looked at: version 2's words with its since line and version 1 listed with its range, the version pages with their range and link to the version in force, the agreement line under every Fund this card and under the first choice on /contribute, and Privacy's new sentence with "Last updated 23 September 2026."
 
 ## Decisions
 
