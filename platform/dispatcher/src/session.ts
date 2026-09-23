@@ -189,6 +189,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     folder: card.folder,
     maxTurns: deps.sessionMaxTurns,
     maxBudgetUsd: budget,
+    spentUsd: priorUsd,
     roleId: role.id,
     allowedPaths: lanePaths(card.folder, card.lane),
   };

@@ -15,8 +15,15 @@
 //   the repository's .env files and the dispatcher's own code; Edit and Write are allowed only in the
 //   worktree.
 // Dependencies are installed before the session, outside it, so the session never needs the network.
+//
+// Claude Code 2.1.280 changed how it writes the macOS sandbox profile (docs/specs/carry-over.md): it
+// resolves every path through symlinks, allows reading everywhere, denies each denyRead folder,
+// re-allows each allowRead path, and then denies again every denyRead folder that sits inside an
+// allowRead path. A path re-allowed inside that folder, the repository's .git above all, is then
+// denied once more. 2.1.139 wrote no second deny. So every path here is resolved through symlinks
+// first, as Claude Code resolves them, and allowRead never lists a path that holds a denied folder.
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -80,12 +87,60 @@ export const HOME_DENY: readonly string[] = [
   '.npmrc',
 ];
 
-// The settings an attended session runs with.
-export function attendedSettings(paths: SandboxPaths): Record<string, unknown> {
-  const worktree = path.resolve(paths.worktree);
-  const repoRoot = path.resolve(paths.repoRoot);
-  const home = path.resolve(paths.home);
-  const tmpdir = path.resolve(paths.tmpdir);
+// A path with every symlink in it resolved, the way Claude Code resolves sandbox paths. A path that
+// does not exist yet keeps its missing tail on its nearest existing folder, resolved.
+export type PathResolver = (target: string) => string;
+
+export const realPath: PathResolver = (target) => {
+  const absolute = path.resolve(target);
+  const tail: string[] = [];
+  let existing = absolute;
+  for (;;) {
+    try {
+      return path.join(realpathSync.native(existing), ...tail);
+    } catch {
+      const parent = path.dirname(existing);
+      if (parent === existing) return absolute;
+      tail.unshift(path.basename(existing));
+      existing = parent;
+    }
+  }
+};
+
+// True when child is parent or inside it.
+function within(child: string, parent: string): boolean {
+  return child === parent || child.startsWith(parent === path.sep ? parent : `${parent}${path.sep}`);
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
+}
+
+// The settings an attended session runs with. resolve is realPath outside tests.
+export function attendedSettings(paths: SandboxPaths, resolve: PathResolver = realPath): Record<string, unknown> {
+  const real = (target: string) => resolve(path.resolve(target));
+  const worktree = real(paths.worktree);
+  const repoRoot = real(paths.repoRoot);
+  const home = real(paths.home);
+  const tmpdir = real(paths.tmpdir);
+  const denyRead = unique([home, repoRoot]);
+  const reopen = [
+    worktree,
+    // The worktree's git data lives in the repository's .git (worktrees/<card> and the objects), so
+    // the card's scripts can run git; it holds no credential (the dispatcher passes its token in
+    // git's environment, never in a file).
+    path.join(repoRoot, '.git'),
+    path.join(home, 'Library', 'pnpm', 'store'),
+    path.join(home, '.cache', 'node', 'corepack'),
+    path.join(home, 'Library', 'Caches', 'node', 'corepack'),
+    tmpdir,
+  ].map(real);
+  // A path that holds a denied folder is left out: 2.1.280 would deny that folder again after it, and
+  // with it the git data re-allowed inside. Leaving it out only ever allows less. It is the temp folder
+  // when the repository sits in it, as the sandbox check's scratch clone does.
+  const allowRead = unique(reopen.filter((allow) => !denyRead.some((deny) => within(deny, allow))));
+  // The repository's rules name it as given and as resolved, since a tool may be handed either.
+  const repoRules = unique([absoluteRulePath(paths.repoRoot), absoluteRulePath(repoRoot)]);
   return {
     sandbox: {
       enabled: true,
@@ -95,33 +150,28 @@ export function attendedSettings(paths: SandboxPaths): Record<string, unknown> {
       // No host at all. The one socket allowed is tsx's own IPC folder, which the seed's bot command
       // line (tsx) listens on to talk to its child. Inside the sandbox Claude Code sets TMPDIR to its
       // own /tmp/claude-<uid> (/private/tmp on macOS), so tsx's folder is there; the dispatcher's own
-      // temp folder is listed too.
+      // temp folder is listed too, as given and as resolved.
       network: {
         allowedDomains: [],
-        allowUnixSockets: [`/tmp/claude-${paths.uid}/tsx-${paths.uid}`, `/private/tmp/claude-${paths.uid}/tsx-${paths.uid}`, path.join(tmpdir, `tsx-${paths.uid}`)],
+        allowUnixSockets: unique([
+          `/tmp/claude-${paths.uid}/tsx-${paths.uid}`,
+          `/private/tmp/claude-${paths.uid}/tsx-${paths.uid}`,
+          path.join(path.resolve(paths.tmpdir), `tsx-${paths.uid}`),
+          path.join(tmpdir, `tsx-${paths.uid}`),
+        ]),
       },
       filesystem: {
-        denyRead: [home, repoRoot],
-        allowRead: [
-          worktree,
-          // The worktree's git data lives in the repository's .git (worktrees/<card> and the objects),
-          // so the card's scripts can run git; it holds no credential (the dispatcher passes its token
-          // in git's environment, never in a file).
-          path.join(repoRoot, '.git'),
-          path.join(home, 'Library', 'pnpm', 'store'),
-          path.join(home, '.cache', 'node', 'corepack'),
-          path.join(home, 'Library', 'Caches', 'node', 'corepack'),
-          tmpdir,
-        ],
-        allowWrite: [worktree, tmpdir],
+        denyRead,
+        allowRead,
+        allowWrite: unique([worktree, tmpdir]),
       },
     },
     permissions: {
       deny: [
         ...HOME_DENY.map((relative) => `Read(~/${relative})`),
-        `Read(${absoluteRulePath(repoRoot)}/.env*)`,
-        `Read(${absoluteRulePath(repoRoot)}/platform/dispatcher/**)`,
-        `Edit(${absoluteRulePath(repoRoot)}/.git/**)`,
+        ...repoRules.map((root) => `Read(${root}/.env*)`),
+        ...repoRules.map((root) => `Read(${root}/platform/dispatcher/**)`),
+        ...repoRules.map((root) => `Edit(${root}/.git/**)`),
       ],
     },
   };

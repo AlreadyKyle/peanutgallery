@@ -97,8 +97,9 @@ export const BOARD_CARD_COLUMNS =
 
 /**
  * The roles that build cards, and the folder each builds in. Only these are offered as a card's
- * executor. The directors, the Host, the Scout and the Community agent have no job that runs yet:
- * note triage, card drafting, the report, the stream and scouting are backlog cards.
+ * executor. Every other role (the directors, the Game Designer, the Host, Biz Dev, the Community
+ * agent and the rest of the roster) has no job that runs yet: note triage, card drafting, grading,
+ * the report, the stream and outside research are backlog cards.
  */
 export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
   'Builder A': 'seed-1',

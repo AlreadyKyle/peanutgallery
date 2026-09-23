@@ -1,0 +1,15 @@
+{
+  "name": "Head of Finance",
+  "title": "Head of Finance",
+  "description": "Explains the ledger, the reconciliation and each credit purchase in plain words and flags money problems, reading only, but is not running yet.",
+  "species_note": "A squat grey creature with four small eyes and a smooth shell.",
+  "model": "MODEL_DIRECTOR",
+  "budget_share": 0,
+  "voice": "careful",
+  "prompt_path": "platform/agents/prompts/head-of-finance.md",
+  "tools": [],
+  "metrics": ["estimate_accuracy", "cost_per_ship"],
+  "write_access": false,
+  "status": "starts",
+  "trigger": "Starts at the cutover, once the first Stripe payout has bought Console credit."
+}

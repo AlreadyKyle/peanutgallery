@@ -280,6 +280,11 @@ At /board, press **Go live**. It works once and cannot be undone. Then post, in 
 ## Standing items, outside the order
 
 - **Console credit after every payout** (step 7), recorded at /board each time.
+- **Claude Code on the Mac: 2.1.280 or newer.** Attended sessions need it, because 2.1.139 refuses
+  `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision 36).
+  `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
+  (`pnpm --filter @backseat/dispatcher sandbox:check --positive`) on a new version before any card
+  runs on it.
 - **HST review at $15k.** When cumulative contributions reach $15,000, review GST/HST
   registration. Registration is required past the $30,000 small-supplier threshold, and Stripe tiers
   with named benefits are sales, so register before tiers ship (`docs/PLAN.md` §5 Canada admin). An
@@ -460,3 +465,12 @@ You said yes. `NTFY_TOPIC_URL` is set as a Supabase function secret (the Managem
 201, and the secret list now names it). `stripe-webhook` was redeployed from `main` at 558b934 with
 the sweep's two error-label fixes ("Deployed Functions."). An unsigned POST answers 400 "Missing
 stripe-signature header", so it still refuses anything Stripe did not sign.
+
+### Claude Code 2.1.280 on the Mac: DONE 23 September 2026
+
+The Mac's Claude Code went from 2.1.139 to 2.1.280, because 2.1.139 refuses `claude-opus-5-5`
+("Claude Code 2.1.139 does not support this model; version 2.1.280 or newer is required").
+`claude --version` prints `2.1.280 (Claude Code)`. The attended sandbox check first failed on 2.1.280,
+because the seed tests could not read the repository's git data, and passes after the carry-over fix:
+`PASS: attended sandbox`, seed-1 tests `77 passed (77)`, with the check's clone in the temp folder and
+again with it under your home folder (`docs/specs/carry-over.md`).

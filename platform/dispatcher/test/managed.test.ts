@@ -35,6 +35,7 @@ const FAST: Partial<ManagedTimings> = {
   interruptGraceMs: 300,
   statusWaitMs: 60,
   statusPollMs: 5,
+  stopWaitMs: 200,
   outputTries: 3,
   outputDelayMs: 1,
   reconnectTries: 3,
@@ -170,6 +171,7 @@ function spec(overrides: Partial<SessionSpec> = {}): SessionSpec {
     folder: 'seed-1',
     maxTurns: 60,
     maxBudgetUsd: 3,
+    spentUsd: 0,
     roleId: 'role-builder-a',
     allowedPaths: CONFIG_LANE,
     ...overrides,
@@ -519,6 +521,109 @@ describe('a card session', () => {
   });
 });
 
+describe('a session the dispatcher stops reading', () => {
+  const REQUEST = { input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+
+  it('interrupts a session whose stream drops after the prompt, reads it until it is not running, then settles and archives it and pauses the card', async () => {
+    const h = harness();
+    const retrieved: string[] = [];
+    const retrieve = h.client.sessions.retrieve;
+    h.client.sessions.retrieve = async (id: string) => {
+      const snapshot = await retrieve(id);
+      retrieved.push(snapshot.status);
+      return snapshot;
+    };
+    h.client.react = (session, event, client) => {
+      if (event.type === 'user.message') {
+        session.cost = { cents: 3, activeSeconds: 60 };
+        session.emit({ type: 'session.status_running' }, { type: 'span.model_request_end', id: 'sevt_before_drop', is_error: false, model_request_start_id: 'x', model_usage: REQUEST });
+        // The connection goes, and no stream can be opened again.
+        client.failStream = new Error('socket hang up');
+        session.drop();
+      }
+      // The platform takes a moment to stop the session after the interrupt.
+      if (event.type === 'user.interrupt') setTimeout(() => session.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } }), 20);
+    };
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'stream_lost', message: expect.stringMatching(/the event stream dropped 4 times/) });
+    expect(sentTypes(h.client)).toEqual(['user.message', 'user.interrupt']);
+    expect(retrieved[0]).toBe('running');
+    expect(retrieved.at(-1)).toBe('idle');
+    expect(h.client.last.archived).toBe(true);
+    expect(h.db.ledger.map((row) => row.request_id)).toEqual(['sevt_before_drop', `${h.client.last.id}/runtime`, `${h.client.last.id}/settle`]);
+    expect(ledgerTotal(h.db)).toBe(0.03);
+  });
+
+  it('interrupts again, and settles, a session still running when the drain after an interrupt runs out', async () => {
+    const h = harness();
+    const controller = new AbortController();
+    let interrupts = 0;
+    h.client.react = (session, event) => {
+      if (event.type === 'user.message') {
+        session.cost = { cents: 2, activeSeconds: 30 };
+        session.emit({ type: 'session.status_running' }, { type: 'span.model_request_end', id: 'sevt_drain', is_error: false, model_request_start_id: 'x', model_usage: REQUEST });
+        setTimeout(() => controller.abort('wall_clock'), 5);
+      }
+      // The first interrupt is not honoured before the drain runs out; the second is.
+      if (event.type === 'user.interrupt' && (interrupts += 1) === 2) session.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } });
+    };
+    const { result } = await run(h, spec(), controller);
+    expect(sentTypes(h.client)).toEqual(['user.message', 'user.interrupt', 'user.interrupt']);
+    expect(result).toMatchObject({ killed: true, killReason: 'wall_clock', endSubtype: 'interrupted' });
+    expect(h.client.last.archived).toBe(true);
+    expect(ledgerTotal(h.db)).toBe(0.02);
+  });
+
+  it('leaves a session that will not stop unarchived for recovery, and still pauses the card', async () => {
+    const h = harness();
+    h.client.react = (session, event, client) => {
+      if (event.type !== 'user.message') return;
+      session.emit({ type: 'session.status_running' });
+      client.failStream = new Error('socket hang up');
+      session.drop();
+    };
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ failingCheck: 'stream_lost' });
+    expect(sentTypes(h.client)).toEqual(['user.message', 'user.interrupt']);
+    expect(h.client.last.archived).toBe(false);
+    expect(h.lines.some((line) => line.includes('left for recovery to settle'))).toBe(true);
+  });
+
+  it('starts the reconnect count again after a connect that brought new events, so a stream that drops now and then is not lost', async () => {
+    const h = harness();
+    let first = true;
+    h.client.react = (session, event) => {
+      if (event.type !== 'user.message') return;
+      if (!first) {
+        session.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } });
+        return;
+      }
+      first = false;
+      session.cost = { cents: 5, activeSeconds: 60 };
+      // Five requests, each followed by a dropped connection: more drops than reconnectTries (3).
+      let step = 0;
+      const next = () => {
+        step += 1;
+        if (step <= 5) {
+          session.emit({ type: 'span.model_request_end', id: `sevt_flaky_${step}`, is_error: false, model_request_start_id: 'x', model_usage: REQUEST });
+          session.drop();
+          setTimeout(next, 25);
+        } else {
+          session.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } });
+        }
+      };
+      session.emit({ type: 'session.status_running' });
+      setTimeout(next, 5);
+    };
+    const { result } = await run(h);
+    expect(h.client.streamsOpened).toBeGreaterThan(4);
+    expect(result.endSubtype).toBe('no_patch');
+    expect(h.db.ledger.filter((row) => row.request_id?.startsWith('sevt_flaky_')).map((row) => row.request_id)).toEqual([1, 2, 3, 4, 5].map((n) => `sevt_flaky_${n}`));
+    expect(h.client.last.archived).toBe(true);
+  });
+});
+
 describe('orphan sessions', () => {
   // A card session a crashed dispatcher left running: two requests metered by nobody, and a patch the
   // agent submitted that no one answered.
@@ -582,6 +687,32 @@ describe('orphan sessions', () => {
     expect(session.archived).toBe(true);
     expect(h.client.sessions_).toHaveLength(2);
     expect(result).toMatchObject({ endSubtype: 'success' });
+  });
+
+  it("lowers the new session's budget by what the settled orphan added to the card's spend", async () => {
+    const h = harness();
+    const patch = await costPatch();
+    await orphan(h, patch, { submitted: false });
+    const react = h.client.react;
+    runsFixture(h.client, patch);
+    const fixture = h.client.react;
+    h.client.react = async (s, event, client) => {
+      await react(s, event, client);
+      await fixture(s, event, client);
+    };
+    await run(h, spec({ maxBudgetUsd: 3, spentUsd: 0 }));
+    // The orphan settled at 0.07 USD on this card, so the session may spend 2.93 USD less one request.
+    expect(h.client.last.params.budget).toEqual({ type: 'limit', max_list_cost: { amount: String(budgetCents(2.93, MARGIN)), currency: 'USD' } });
+    expect(budgetCents(2.93, MARGIN)).toBeLessThan(budgetCents(3, MARGIN));
+  });
+
+  it('starts no session when the card cannot be read after its orphans are settled', async () => {
+    const h = harness();
+    h.db.cards = [];
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'card_spend' });
+    expect(h.client.sessions_).toEqual([]);
   });
 
   it("applies the patch an orphan submitted instead of paying for a second session", async () => {

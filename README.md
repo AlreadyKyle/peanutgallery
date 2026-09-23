@@ -23,7 +23,7 @@ The repository is private. `main` has no branch protection; the dispatcher merge
 - `platform/dispatcher`: the Node service that claims funded cards, runs agent sessions, and merges, deploys, smoke-tests and rolls back.
 - `platform/gate`: `ship-gate.sh` and its scans, the deny-lists, the headless bot runner and the kernel path list.
 - `platform/supabase`: migrations, the `stripe-webhook` function, the seed and the operator scripts.
-- `platform/agents`: the nine role specs (JSON) and their prompts.
+- `platform/agents`: the sixteen role specs (JSON) and their prompts.
 - `platform/ops`: the dispatcher's Docker image, systemd units, provisioning and deploy scripts, and the VPS runbook.
 - `seed-1`: Dust, with its simulation, config, content, renderer, bot and tests. It never imports from `platform/`.
 - `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`), the board's steps (`BOARD-SETUP.md`) and the specs.

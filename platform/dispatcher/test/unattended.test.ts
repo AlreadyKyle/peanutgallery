@@ -58,10 +58,11 @@ describe('UnattendedAdapter', () => {
 
   it('refuses web, sub-agent and MCP tools named in a role, in either naming', async () => {
     const adapter = new UnattendedAdapter(options());
-    const spec = { cardId: 'c', worktree: '/w', prompt: 'p', systemPromptFile: null, model: 'builder-class', folder: 'seed-1' as const, maxTurns: 60, maxBudgetUsd: 3, allowedPaths: ['seed-1/config'] };
+    const spec = { cardId: 'c', worktree: '/w', prompt: 'p', systemPromptFile: null, model: 'builder-class', folder: 'seed-1' as const, maxTurns: 60, maxBudgetUsd: 3, spentUsd: 0, allowedPaths: ['seed-1/config'] };
     await expect(adapter.preflight({ ...spec, roleTools: ['Read', 'WebFetch'] })).rejects.toThrow('excluded tools: WebFetch');
     await expect(adapter.preflight({ ...spec, roleTools: ['web_search'] })).rejects.toThrow('excluded tools: web_search');
     await expect(adapter.preflight({ ...spec, roleTools: ['Read'], allowedPaths: [] })).rejects.toThrow('lane paths');
+    await expect(adapter.preflight({ ...spec, roleTools: ['Read'], spentUsd: undefined })).rejects.toThrow("the card's spend its budget was worked out from");
     await expect(adapter.preflight({ ...spec, roleTools: ['Read', 'Edit', 'Bash'] })).resolves.toBeUndefined();
   });
 });
