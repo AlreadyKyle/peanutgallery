@@ -7,6 +7,7 @@
 import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { reconcile } from "../../../ops/jobs/controller.mjs";
+import { applyContributionArgs, reverseContributionArgs } from "./handler.ts";
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
@@ -805,6 +806,16 @@ Deno.test("the terms stamp", OPTS, async () => {
     // No argument lets a caller choose a version.
     const args = (await s.row<{ a: string }>(`select pg_get_function_identity_arguments('public.apply_contribution'::regproc) as a`)).a;
     assert(!/version/.test(args), args);
+    // The webhook's own arguments (handler.ts, sent as they are by index.ts) name exactly each RPC's
+    // parameters, and its session time stamps the payment.
+    const params = async (fn: string) => (await s.row<{ n: string[] }>(`select proargnames as n from pg_proc where oid = $1::regproc`, [fn])).n;
+    const parsed = { event_id: "evt_t5", session_id: "cs_t5", amount_total: 100, currency: "usd", studio_pct: 0, display_name: null, contributor_id: "contrib_t5", goal_card_id: null, session_created_at: between };
+    const sent = applyContributionArgs(parsed, { amount_usd: 1, fee_usd: 0, net_usd: 1 }, "email:payer_t5");
+    assertEquals(Object.keys(sent), await params("public.apply_contribution"));
+    const keys = Object.keys(sent);
+    const viaWebhook = (await s.row<{ r: Row }>(`select public.apply_contribution(${keys.map((k, i) => `${k} => $${i + 1}`).join(", ")}) as r`, keys.map((k) => sent[k]))).r;
+    assertEquals(viaWebhook.terms_version, 1);
+    assertEquals(Object.keys(reverseContributionArgs({ event_id: "evt_t5r", session_id: "cs_t5", kind: "refund", kind_total_usd: 1 })), await params("public.reverse_contribution"));
     // Only a payment row carries a stamp.
     await s.refuses(
       `insert into public.contributions (entry, parent_id, rail, contributor_id, terms_version) select 'adjustment', id, 'stripe', 'x', 1 from public.contributions where stripe_event_id = 'evt_t1'`,

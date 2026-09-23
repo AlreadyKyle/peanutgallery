@@ -107,6 +107,40 @@ export interface HandlerDeps {
   serviceKey: string;
 }
 
+/**
+ * apply_contribution's named arguments, which index.ts sends as they are. p_session_created_at is
+ * the Checkout Session's created time, so the payment is stamped with the Terms version it was given
+ * under (docs/specs/money-logic.md).
+ */
+export function applyContributionArgs(
+  parsed: Parsed,
+  amounts: Amounts,
+  payer: string,
+): Record<string, unknown> {
+  return {
+    p_stripe_event_id: parsed.event_id,
+    p_contributor_id: parsed.contributor_id,
+    p_display_name: parsed.display_name,
+    p_amount_usd: amounts.amount_usd,
+    p_net_usd: amounts.net_usd,
+    p_studio_pct: parsed.studio_pct,
+    p_goal_card_id: parsed.goal_card_id,
+    p_stripe_session_id: parsed.session_id,
+    p_payer_key: payer,
+    p_session_created_at: parsed.session_created_at,
+  };
+}
+
+/** reverse_contribution's named arguments, which index.ts sends as they are. */
+export function reverseContributionArgs(input: ReversalInput): Record<string, unknown> {
+  return {
+    p_stripe_event_id: input.event_id,
+    p_stripe_session_id: input.session_id,
+    p_kind: input.kind,
+    p_kind_total_usd: input.kind_total_usd,
+  };
+}
+
 export function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status,
