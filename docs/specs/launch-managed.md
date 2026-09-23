@@ -174,31 +174,34 @@ The Oracle Always Free box is now mostly idle, which is the pattern Oracle recla
 
 The card-session fixture `test/fixtures/managed-session.json` is derived from the Managed Agents documentation's event shapes, not recorded from a live session. No live session has run: the studio organization has no credit.
 
-`pnpm verify` at the worktree root exited 0. The result lines:
+`pnpm verify` at the worktree root, in the foreground, exited 0 (`verify exit=0`). The result lines:
 
 ```
 platform/supabase test:       Tests  146 passed (146)
 seed-1 test:       Tests  77 passed (77)
 platform/site test:       Tests  163 passed (163)
-platform/dispatcher test:       Tests  463 passed (463)
+platform/dispatcher test:  Test Files  31 passed (31)
+platform/dispatcher test:       Tests  475 passed (475)
 platform/gate test: PASS: gate tests passed=213
 $ node --test platform/agents/specs.test.mjs        ℹ pass 64  ℹ fail 0
 $ node --test platform/ops/test/ops.test.mjs        ℹ pass 44  ℹ fail 0
 $ deno test ... platform/supabase/functions         ok | 71 passed (47 steps) | 0 failed
 GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
-PASS: secret-scan files=331
+PASS: secret-scan files=350
 $ node --test docs/docs.test.mjs                    ℹ pass 4  ℹ fail 0
 ```
 
-`bash platform/gate/secret-scan.sh --working-tree`, which also covers the files this change adds before they are committed: `PASS: secret-scan files=350`.
+`pnpm --filter @backseat/dispatcher typecheck` is the first step of that run and passed (`tsc -p tsconfig.json --noEmit`, no output), against `@anthropic-ai/sdk` 0.128.0, the current release (`npm view @anthropic-ai/sdk version` prints `0.128.0`).
 
-The files this change adds or rewrites, run alone:
+The files this change adds or rewrites, run alone (`npx vitest run` over the managed, managed-meter, managed-config, patch, recovery-managed, smoke, unattended, startup, attended, factory and config tests):
 
 ```
  Test Files  11 passed (11)
-      Tests  158 passed (158)
+      Tests  167 passed (167)
 ```
+
+The CI audit in `ops.test.mjs` also passes against the gate workstream's `gate.yml` (`origin/launch/gate`), which sets `persist-credentials: false` on every checkout the same way: `✔ gate.yml reads contents only, persists no checkout credential and uses no secret`.
 
 Criteria to tests:
 - Agent and environment files, and the `managed:apply` planner: `managed-config.test.ts` (the `agent.yaml`, `environment.yaml` and `managed:apply` groups).
