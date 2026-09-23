@@ -141,10 +141,16 @@ export interface SpendTotals {
   tierUsd: number;
 }
 
+// Why the studio is paused (studio_state.pause_reason): Console credit needed, the usage tier cap,
+// an incident (a failed revert), or the board's own pause.
+export type PauseReason = 'awaiting_credit' | 'spend_limit' | 'incident' | 'board';
+
 export interface Db {
   getStudioState(): Promise<StudioState>;
-  // Pauses the studio, as the board's pause does; a studio already paused keeps who paused it.
-  pauseStudio(by: string, now: Date): Promise<void>;
+  // Pauses the studio, as the board's pause does, with the reason the public sees
+  // (studio_state.pause_reason, docs/specs/money-logic.md); a studio already paused keeps who
+  // paused it and why.
+  pauseStudio(by: string, now: Date, reason: PauseReason): Promise<void>;
   // The dispatcher lease (claim_dispatcher_lease): true while this holder has it, renewed for
   // ttlSeconds on every claim. Only the holder ticks.
   claimLease(holder: string, ttlSeconds: number): Promise<boolean>;
@@ -320,8 +326,8 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       };
     },
 
-    async pauseStudio(by, now) {
-      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString() }).eq('id', 1).eq('paused', false);
+    async pauseStudio(by, now, reason) {
+      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason }).eq('id', 1).eq('paused', false);
       if (error) fail('studio_state pause', error);
     },
 

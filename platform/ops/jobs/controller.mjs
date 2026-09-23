@@ -12,8 +12,12 @@
 //   holds no key that could replay it);
 // - each charge's refunded total matches the refund rows, and each dispute that withdrew funds has
 //   dispute rows; a dispute Stripe closed as won is put back with record_dispute_reinstated;
+// - every fee Stripe charged or returned on a dispute is booked with record_stripe_fee, once per
+//   balance transaction (a replay books nothing); the fee Stripe keeps on a refund or dispute is on
+//   the refund or dispute row itself (docs/specs/money-logic.md);
 // - what Stripe holds for each payment (the charge less its fee, refunds and dispute movements) equals
-//   the net the books carry, so every fee Stripe kept is booked (an adjustment row fixes a gap);
+//   the net the books carry, so every fee Stripe kept is booked (an adjustment row fixes a gap); a
+//   payment whose dispute fee this run booked is compared on the next run;
 // - each paid payout's balance transactions sum to its amount;
 // - the webhook events Stripe could not deliver in the last 30 days;
 // - the Console credit bought covers the studio and overhead spend, and Stripe's balance covers the
@@ -23,7 +27,8 @@
 //   bucket up to the role caps (0 until the operations pull request), plus overhead spent since the
 //   last purchase, less the credit left; never more than the agent money Stripe has paid out and not
 //   yet converted, plus the overhead. Agent money is agents less the incident share less any hold,
-//   so the reserve, the incident fund and held money are never in it;
+//   so the reserve, the incident fund and held money are never in it, and the board's own test
+//   payment (board_test in controller_figures) is left out;
 // - the Minimum balance figure: the 10% reserve, plus held money, plus the Stripe fees on the last
 //   30 days' charges (what Stripe would keep if every one were refunded);
 // - the newest paid payout, whose id the board's Needs you inbox fills into the credit purchase form
@@ -159,6 +164,7 @@ export function reconcile({ identity, figures, stripe, now }) {
   const refunds = [];
   const disputesMissing = [];
   const reinstate = [];
+  const fees = [];
   const attention = [];
   const unbooked = [];
   const disputesByCharge = new Map();
@@ -200,6 +206,10 @@ export function reconcile({ identity, figures, stripe, now }) {
         }
         disputeFlow += movement.amount / 100 / movementRate;
         disputeFees += movement.fee / 100 / movementRate;
+        // Stripe's dispute fee (and its return on a win) is booked once per balance transaction.
+        if (movement.fee !== 0 && typeof movement.id === 'string') {
+          fees.push({ ref: movement.id, session_id: session.id, fee_usd: round4(movement.fee / 100 / movementRate) });
+        }
       }
     }
     // A payment whose won dispute is put back in this run is compared on the next, once its
@@ -233,7 +243,8 @@ export function reconcile({ identity, figures, stripe, now }) {
   for (const session of paidSessions) {
     const family = familyOf.get(session.id);
     const charge = chargeByIntent.get(id(session.payment_intent));
-    if (family && charge && paidOutCharges.has(charge.id)) paidOutAgentUsd += Number(family.agent_money_usd);
+    // The board's own test payment is booked apart and never buys the agents' credit.
+    if (family && charge && paidOutCharges.has(charge.id) && family.board_test !== true) paidOutAgentUsd += Number(family.agent_money_usd);
   }
   paidOutAgentUsd = round4(paidOutAgentUsd);
 
@@ -298,6 +309,7 @@ export function reconcile({ identity, figures, stripe, now }) {
     mismatches,
     checks,
     reinstate,
+    fees,
     attention,
     figures: {
       credit_purchase_usd: purchase,
@@ -372,15 +384,42 @@ export async function runController({ env, fetchFn = fetch, now = new Date(), dr
     }
   }
   const refused = reinstated.filter((r) => !r.done && !r.dry_run);
-  const checks = [...result.checks, { name: 'disputes_reinstated', ok: refused.length === 0, detail: `${reinstated.length} won dispute(s) to put back`, items: refused }];
-  const mismatches = result.mismatches + refused.length;
+
+  // Every dispute fee Stripe reports is booked; record_stripe_fee inserts only the first time. A
+  // payment whose fee this run booked was compared against books read before it, so its
+  // stripe_costs_booked line waits for the next run. A refusal is a mismatch for the board.
+  const feesBooked = [];
+  for (const fee of result.fees) {
+    if (dryRun) {
+      feesBooked.push({ ...fee, inserted: false, dry_run: true });
+      continue;
+    }
+    try {
+      const done = await db.rpc('record_stripe_fee', { p_ref: fee.ref, p_stripe_session_id: fee.session_id, p_fee_usd: fee.fee_usd });
+      feesBooked.push({ ...fee, inserted: done?.inserted === true, found: done?.found !== false });
+    } catch (error) {
+      feesBooked.push({ ...fee, inserted: false, error: error.message });
+    }
+  }
+  const justBooked = new Set(feesBooked.filter((f) => f.inserted).map((f) => f.session_id));
+  const feeRefusals = feesBooked.filter((f) => f.error !== undefined || f.found === false);
+  const checks = [
+    ...result.checks.map((c) => {
+      if (c.name !== 'stripe_costs_booked' || justBooked.size === 0) return c;
+      const items = c.items.filter((item) => !justBooked.has(item.session));
+      return { ...c, ok: items.length === 0, detail: items.length === 0 ? 'what Stripe holds for each payment matches the books' : `${items.length} to look at`, items };
+    }),
+    { name: 'disputes_reinstated', ok: refused.length === 0, detail: `${reinstated.length} won dispute(s) to put back`, items: refused },
+    { name: 'stripe_fees_booked', ok: feeRefusals.length === 0, detail: `${feesBooked.length} dispute fee(s) Stripe reported`, items: feeRefusals },
+  ];
+  const mismatches = checks.reduce((total, c) => total + c.items.length, 0);
   const row = {
     job: 'reconcile',
     started_at: startedAt,
     ok: mismatches === 0,
     mismatches,
     checks,
-    figures: { ...result.figures, reinstated },
+    figures: { ...result.figures, reinstated, fees_booked: feesBooked },
   };
   const final = { ...result, ok: row.ok, mismatches, checks };
   if (!dryRun) {

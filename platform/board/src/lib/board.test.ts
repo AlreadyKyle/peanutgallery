@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { boardCardOrder, cardRoleFolder, isCardRole, studioStateFrom, type BoardCard, type Role } from './board';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { boardCardOrder, cancelCard, cardRoleFolder, isCardRole, PAUSE_REASONS, setPaused, studioStateFrom, type BoardCard, type Role } from './board';
 import { BOARD_AUTH_OPTIONS } from './supabase';
 
 function role(title: string, overrides: Partial<Role> = {}): Role {
@@ -83,5 +84,38 @@ describe('boardCardOrder', () => {
       card('next-1', 'next', 1),
     ];
     expect([...cards].sort(boardCardOrder).map((c) => c.id)).toEqual(['now-old', 'now-new', 'next-1', 'next-2', 'next-unranked', 'later']);
+  });
+});
+
+// docs/specs/money-logic.md: the pause reason and what a cancellation moved.
+describe('pause and cancel', () => {
+  function client(data: unknown = null) {
+    const calls: { name: string; args: Record<string, unknown> }[] = [];
+    const rpc = (name: string, args: Record<string, unknown>) => {
+      calls.push({ name, args });
+      return Promise.resolve({ data, error: null });
+    };
+    return { calls, client: { rpc } as unknown as SupabaseClient };
+  }
+
+  it('sends p_reason only with a pause that is not the default, and never with a resume', async () => {
+    const { calls, client: c } = client();
+    await setPaused(c, true);
+    await setPaused(c, true, 'board');
+    await setPaused(c, true, 'spend_limit');
+    await setPaused(c, false, 'incident');
+    expect(calls.map((call) => call.args)).toEqual([
+      { p_paused: true },
+      { p_paused: true },
+      { p_paused: true, p_reason: 'spend_limit' },
+      { p_paused: false },
+    ]);
+    expect(PAUSE_REASONS.map((r) => r.value)).toEqual(['board', 'incident', 'awaiting_credit', 'spend_limit']);
+  });
+
+  it('returns how much unspent money a cancellation moved, and 0 when it names none', async () => {
+    expect(await cancelCard(client({ card_id: 'x', moved_usd: 2.5 }).client, 'x', 'why')).toBe(2.5);
+    expect(await cancelCard(client({ card_id: 'x' }).client, 'x', 'why')).toBe(0);
+    expect(await cancelCard(client(null).client, 'x', 'why')).toBe(0);
   });
 });

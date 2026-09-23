@@ -1891,7 +1891,8 @@ describe("board-site migration", () => {
   it("is probed by anon-negative-test: the new RPC refused to anon, the flag readable on public_studio", () => {
     const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
     expect(script).toContain('["board_needs_you", {}]');
-    expect(script).toContain('const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open";');
+    // money-logic.md adds pause_reason after the lane flag.
+    expect(script).toMatch(/const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open[,"]/);
   });
 });
 
@@ -1968,5 +1969,126 @@ describe("terms-versions migrations", () => {
     expect(block("RPC_PROBES")).toContain('["terms_version_at", { p_at: "2000-01-01T00:00:00Z" }]');
     expect(script).toContain('relation: "public_terms_versions(insert)"');
     expect(script).toContain('relation: "public_terms_versions(update)"');
+  });
+});
+
+// docs/specs/money-logic.md: one waterfall, allocations, supporter numbers, the terms stamp and the
+// fees Stripe keeps.
+const MONEY_LOGIC_FILE = "20260924200000_money_logic.sql";
+const moneyLogicSql = launchFile(MONEY_LOGIC_FILE);
+const MONEY_LOGIC_TABLES = ["contribution_allocations", "supporters", "board_test_payments"];
+// The public functions that place money through the waterfall.
+const PLACES_MONEY = [
+  "apply_contribution",
+  "credit_held_contributions",
+  "reverse_contribution",
+  "record_dispute_reinstated",
+  "record_adjustment",
+  "cancel_card",
+  "waterfall_sweep",
+];
+
+describe("money-logic migration", () => {
+  it("comes straight after the terms-versions files and sets a lock timeout first", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(MONEY_LOGIC_FILE);
+    expect(at).toBeGreaterThan(0);
+    expect(names[at - 1]).toBe(TERMS_VERSION_2_FILE);
+    expect(withoutComments(moneyLogicSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+  });
+
+  it("drops the nine-argument apply_contribution and the one-argument set_paused before creating their successors", () => {
+    const body = withoutComments(moneyLogicSql);
+    const dropApply = body.indexOf(`drop function if exists public.apply_contribution(${APPLY_V9_TYPES});`);
+    expect(dropApply).toBeGreaterThan(0);
+    expect(body.indexOf("create or replace function public.apply_contribution(")).toBeGreaterThan(dropApply);
+    expect(functionBlockIn(moneyLogicSql, "apply_contribution")).toContain("  p_payer_key text default null,\n  p_session_created_at timestamptz default null\n) returns jsonb");
+    const dropPause = body.indexOf("drop function if exists public.set_paused(boolean);");
+    expect(dropPause).toBeGreaterThan(0);
+    expect(body.indexOf("create or replace function public.set_paused(p_paused boolean, p_reason text default null) returns void")).toBeGreaterThan(dropPause);
+    expect(body).toContain(`grant execute on function public.apply_contribution(${APPLY_V9_TYPES}, timestamptz) to service_role;`);
+    expect(body).toContain("grant execute on function public.set_paused(boolean, text) to authenticated, service_role;");
+  });
+
+  it("keeps the three new tables behind row level security, select-only for the service role and nothing for anyone else", () => {
+    const body = withoutComments(moneyLogicSql);
+    const tables = [...MONEY_LOGIC_TABLES].sort().map((t) => `public.${t}`).join(", ");
+    for (const table of MONEY_LOGIC_TABLES) expect(body).toContain(`alter table public.${table} enable row level security;`);
+    const revoke = body.indexOf(`revoke all on ${tables} from anon, authenticated, service_role;`);
+    expect(revoke).toBeGreaterThan(0);
+    expect(body.indexOf(`grant select on ${tables} to service_role;`)).toBeGreaterThan(revoke);
+    for (const table of MONEY_LOGIC_TABLES) {
+      expect(body.match(new RegExp(`grant (insert|update|delete|all)[^;]*public\\.${table}`, "g")), table).toBeNull();
+    }
+  });
+
+  it("takes the money lock before any row lock, and locks cards before the pool, in every public function that places money", () => {
+    for (const name of PLACES_MONEY) {
+      const block = functionBlockIn(moneyLogicSql, name);
+      const lock = block.indexOf("perform money.money_lock();");
+      expect(lock, name).toBeGreaterThan(0);
+      const firstRowLock = block.search(/for update|money\.lock_money_cards\(/);
+      expect(firstRowLock, name).toBeGreaterThan(lock);
+      const cards = block.indexOf("perform money.lock_money_cards(");
+      const pool = block.search(/from public\.pool where id = 1 for update/);
+      expect(cards, name).toBeGreaterThan(lock);
+      expect(pool, name).toBeGreaterThan(cards);
+      expect(block, name).not.toMatch(/from public\.cards[^;]*for update/);
+    }
+    expect(moneyLogicSql).toContain("perform pg_advisory_xact_lock(7240926200000);");
+  });
+
+  it("schedules waterfall_sweep every five minutes with pg_cron, only where pg_cron ships", () => {
+    expect(moneyLogicSql).toContain(
+      "do $$\nbegin\n  if not exists (select 1 from pg_available_extensions where name = 'pg_cron') then\n    raise notice 'pg_cron is not available; waterfall_sweep is not scheduled';\n    return;\n  end if;\n  create extension if not exists pg_cron with schema pg_catalog;\n  perform cron.schedule('waterfall-sweep', '*/5 * * * *', 'select public.waterfall_sweep()');\nend $$;",
+    );
+    expect(withoutComments(moneyLogicSql)).toContain("grant execute on function public.waterfall_sweep() to service_role;");
+  });
+
+  it("runs the append-only loop over the three new tables only, and never drops terms_versions' triggers", () => {
+    expect(moneyLogicSql).toContain("foreach v_table in array array['contribution_allocations', 'supporters', 'board_test_payments'] loop");
+    expect(moneyLogicSql).not.toMatch(/drop trigger if exists terms_versions_/);
+  });
+
+  it("keeps its helpers in the money schema, which no API role may use, with only the views' four readers executable", () => {
+    const body = withoutComments(moneyLogicSql);
+    expect(body).toContain("create schema if not exists money;");
+    expect(body).toContain("revoke all on schema money from public, anon, authenticated, service_role;");
+    expect(body).not.toMatch(/grant usage on schema money to (anon|authenticated|service_role)/);
+    expect(body).toContain("revoke all on all functions in schema money from public, anon, authenticated, service_role;");
+    expect(body.match(/grant execute on function money\.[^;]*;/g)).toEqual([
+      "grant execute on function money.payment_counts(uuid), money.not_on_card_usd(), money.board_test_usd(), money.funding_order()\n  to anon, authenticated, service_role;",
+    ]);
+  });
+
+  it("mirrors the dispatcher's runnable() in money.card_takes_money, the one predicate", () => {
+    const select = readFileSync(resolve(MIGRATIONS_DIR, "..", "..", "dispatcher", "src", "select.ts"), "utf8");
+    expect(select).toContain("export const SESSION_SOURCES: readonly string[] = ['board', 'agent', 'decision'];");
+    expect(moneyLogicSql).toContain("    and c.source in ('board', 'agent', 'decision')\n");
+    expect(moneyLogicSql).toContain("    and c.director_stance <> 'vetoed'\n    and c.source in ('board', 'agent', 'decision')\n    and c.executor_role_id is not null\n    and not (c.folder = 'platform' and c.lane = 'code' and not coalesce(p_lane_open, false))\n");
+    expect(select).toContain("money.card_takes_money in platform/supabase/migrations/20260924200000_money_logic.sql mirrors");
+  });
+
+  it("ends by checking the ledger identity, rolling back if it does not hold, then reloads the schema", () => {
+    const body = withoutComments(moneyLogicSql);
+    const check = body.indexOf("raise exception 'money_logic: the ledger identity does not hold after the migration: %', v_identity;");
+    expect(check).toBeGreaterThan(body.indexOf("foreach v_table in array array['contribution_allocations'"));
+    expect(body.split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("is probed by anon-negative-test: the tables refused, the views readable, the functions and the schema refused", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    for (const table of MONEY_LOGIC_TABLES) expect(block("PRIVATE_TABLES")).toContain(`"${table}"`);
+    for (const view of ["public_money", "public_stopped_cards", "public_card_funding"]) expect(block("PUBLIC_RELATIONS")).toContain(`"${view}"`);
+    expect(script).toContain('const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open,pause_reason";');
+    expect(block("RPC_PROBES")).toContain('["record_stripe_fee", { p_ref: "anon-negative-test", p_stripe_session_id: "", p_fee_usd: 0 }]');
+    expect(block("RPC_PROBES")).toContain('["set_paused", { p_paused: false, p_reason: "anon-negative-test" }]');
+    expect(block("RPC_PROBES")).toContain('["waterfall_sweep", {}]');
+    expect(script).toContain('const MONEY_SCHEMA = "money";');
+    expect(script).toContain("await db.schema(MONEY_SCHEMA).rpc(");
   });
 });

@@ -439,6 +439,7 @@ describe('runCardPipeline', () => {
     );
     expect(db.studio.paused).toBe(true);
     expect(db.pausedBy).toBe('dispatcher: the revert of card 4c2f5a1e failed');
+    expect(db.pauseReason).toBe('incident');
   });
 
   it('still restores, reverts and alerts when the database fails during the rollback', async () => {
@@ -1168,6 +1169,7 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'console_credit', actual_usd: 0 });
     expect(db.studio.paused).toBe(true);
     expect(db.pausedBy).toBe('dispatcher: Console credit needed (card 4c2f5a1e)');
+    expect(db.pauseReason).toBe('awaiting_credit');
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages).toEqual([
@@ -1213,6 +1215,7 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'usage_tier_cap', actual_usd: 0 });
     expect(db.studio.paused).toBe(true);
     expect(db.pausedBy).toBe('dispatcher: usage tier cap reached (card 4c2f5a1e)');
+    expect(db.pauseReason).toBe('spend_limit');
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages[0]).toBe(

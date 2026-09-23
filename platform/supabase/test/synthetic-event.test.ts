@@ -31,6 +31,8 @@ describe("syntheticEvent", () => {
     const session = (event.data as { object: Record<string, unknown> }).object;
     expect(session).toMatchObject({
       id: "cs_synthetic_abc",
+      // The session's created time, which the webhook passes as p_session_created_at (money-logic.md).
+      created: 1700000000,
       amount_total: 250,
       currency: "usd",
       payment_status: "paid",

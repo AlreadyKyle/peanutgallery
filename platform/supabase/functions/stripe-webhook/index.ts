@@ -12,9 +12,11 @@ import Stripe from "npm:stripe@19.3.1";
 import type { Amounts } from "../_shared/split.ts";
 import { type ChargeFacts, chargeFromSession, type Parsed } from "../_shared/session.ts";
 import {
+  applyContributionArgs,
   type CheckoutSession,
   createHandler,
   type ReversalInput,
+  reverseContributionArgs,
 } from "../_shared/handler.ts";
 import { STRIPE_API_VERSION } from "../_shared/stripe_api_version.ts";
 
@@ -93,12 +95,7 @@ async function rpc(
 function reverseContribution(
   input: ReversalInput,
 ): Promise<Record<string, unknown>> {
-  return rpc("reverse_contribution", {
-    p_stripe_event_id: input.event_id,
-    p_stripe_session_id: input.session_id,
-    p_kind: input.kind,
-    p_kind_total_usd: input.kind_total_usd,
-  });
+  return rpc("reverse_contribution", reverseContributionArgs(input));
 }
 
 async function notify(message: string): Promise<void> {
@@ -117,17 +114,7 @@ function applyContribution(
   amounts: Amounts,
   payerKey: string,
 ): Promise<Record<string, unknown>> {
-  return rpc("apply_contribution", {
-    p_stripe_event_id: parsed.event_id,
-    p_contributor_id: parsed.contributor_id,
-    p_display_name: parsed.display_name,
-    p_amount_usd: amounts.amount_usd,
-    p_net_usd: amounts.net_usd,
-    p_studio_pct: parsed.studio_pct,
-    p_goal_card_id: parsed.goal_card_id,
-    p_stripe_session_id: parsed.session_id,
-    p_payer_key: payerKey,
-  });
+  return rpc("apply_contribution", applyContributionArgs(parsed, amounts, payerKey));
 }
 
 Deno.serve(createHandler({

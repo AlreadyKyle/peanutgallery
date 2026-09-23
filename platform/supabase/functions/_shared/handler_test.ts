@@ -1,10 +1,12 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
+  applyContributionArgs,
   type CheckoutSession,
   createHandler,
   type HandlerDeps,
   type ReversalInput,
   reversalMessage,
+  reverseContributionArgs,
   type WebhookEvent,
 } from "./handler.ts";
 import { WEBHOOK_EVENTS } from "./webhook_events.ts";
@@ -36,6 +38,7 @@ function completedEvent(
           { key: "split", type: "dropdown", dropdown: { value: "8020" } },
         ],
         payment_intent: null,
+        created: 1789905600,
         ...session,
       },
     },
@@ -376,6 +379,11 @@ Deno.test("handler credits a paid session through apply_contribution", async () 
   });
   assertEquals(applied[0]!.parsed.event_id, "evt_handler_1");
   assertEquals(applied[0]!.parsed.studio_pct, 20);
+  // The Terms stamp's time comes from the signed event's session (money-logic.md), and reaches
+  // apply_contribution as p_session_created_at.
+  assertEquals(applied[0]!.parsed.session_created_at, "2026-09-20T12:00:00.000Z");
+  const { parsed, amounts, payerKey } = applied[0]!;
+  assertEquals(applyContributionArgs(parsed, amounts, payerKey).p_session_created_at, "2026-09-20T12:00:00.000Z");
 });
 
 Deno.test("handler credits a session that carries a displayname field exactly as before, with no name", async () => {
@@ -426,6 +434,10 @@ Deno.test("charge.updated with a balance transaction credits the paid checkout s
   assertEquals(applied.length, 1);
   assertEquals(applied[0]!.parsed.session_id, "cs_handler_1");
   assertEquals(applied[0]!.parsed.event_id, "evt_handler_charge");
+  // charge.updated stamps from the session the webhook retrieved, never from the charge.
+  assertEquals(applied[0]!.parsed.session_created_at, "2026-09-20T12:00:00.000Z");
+  const { parsed, amounts, payerKey } = applied[0]!;
+  assertEquals(applyContributionArgs(parsed, amounts, payerKey).p_session_created_at, "2026-09-20T12:00:00.000Z");
   assertEquals(applied[0]!.amounts, {
     amount_usd: 1,
     fee_usd: 0.29,
@@ -1128,4 +1140,49 @@ Deno.test("the reversal message says when waiting cards are left short, and by h
     const whole = reversalMessage("refund", "ch_1", { ...REVERSED, earmarked_usd: 30, shortfall_usd });
     assert(!whole.includes("short by"), String(shortfall_usd));
   }
+});
+
+Deno.test("the RPC arguments: apply_contribution gets every parsed field and the session's created time; reverse_contribution gets the reversal", () => {
+  const parsed: Parsed = {
+    event_id: "evt_args",
+    session_id: "cs_args",
+    amount_total: 500,
+    currency: "usd",
+    studio_pct: 20,
+    display_name: null,
+    contributor_id: "contrib_args",
+    goal_card_id: "7f1c1d8e-0000-4000-8000-000000000001",
+    session_created_at: "2026-09-20T12:00:00.000Z",
+  };
+  const amounts: Amounts = { amount_usd: 5, fee_usd: 0.45, net_usd: 4.55 };
+  assertEquals(applyContributionArgs(parsed, amounts, "payer_args"), {
+    p_stripe_event_id: "evt_args",
+    p_contributor_id: "contrib_args",
+    p_display_name: null,
+    p_amount_usd: 5,
+    p_net_usd: 4.55,
+    p_studio_pct: 20,
+    p_goal_card_id: "7f1c1d8e-0000-4000-8000-000000000001",
+    p_stripe_session_id: "cs_args",
+    p_payer_key: "payer_args",
+    p_session_created_at: "2026-09-20T12:00:00.000Z",
+  });
+  // A session with no created time is sent as null, so the payment is stamped with no version.
+  const untimed = applyContributionArgs({ ...parsed, session_created_at: null }, amounts, "payer_args");
+  assert(Object.hasOwn(untimed, "p_session_created_at"));
+  assertEquals(untimed.p_session_created_at, null);
+  assertEquals(reverseContributionArgs({ event_id: "evt_rev", session_id: "cs_args", kind: "dispute", kind_total_usd: 5 }), {
+    p_stripe_event_id: "evt_rev",
+    p_stripe_session_id: "cs_args",
+    p_kind: "dispute",
+    p_kind_total_usd: 5,
+  });
+});
+
+Deno.test("index.ts sends each RPC the shared arguments and builds none of its own", async () => {
+  const index = await Deno.readTextFile(new URL("../stripe-webhook/index.ts", import.meta.url));
+  assert(index.includes(`rpc("apply_contribution", applyContributionArgs(parsed, amounts, payerKey))`), "apply_contribution");
+  assert(index.includes(`rpc("reverse_contribution", reverseContributionArgs(input))`), "reverse_contribution");
+  assertEquals([...index.matchAll(/\brpc\("/g)].length, 2, "no other RPC call");
+  assertEquals(index.match(/\bp_[a-z_]+\s*:/g), null, "no argument is named in index.ts");
 });

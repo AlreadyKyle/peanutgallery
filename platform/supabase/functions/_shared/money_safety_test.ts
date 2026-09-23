@@ -33,7 +33,8 @@ create publication supabase_realtime;
 const BOARD_EMAIL = "board@peanutgallery.games";
 const MODERATOR_EMAIL = "mod@peanutgallery.games";
 const OUTSIDER_EMAIL = "someone@peanutgallery.games";
-const APPEND_ONLY = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs"];
+// money-logic.md adds contribution_allocations, supporters and board_test_payments to the guard.
+const APPEND_ONLY = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments"];
 
 type Row = Record<string, unknown>;
 
@@ -261,16 +262,19 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       // The dispute event replayed after the win reverses nothing.
       const again = (await row<{ r: Row }>(REVERSE, ["evt_d_withdrawn", "cs_d", "dispute", 10])).r;
       assertEquals([again.inserted, again.reversed_usd], [false, 0]);
-      // A refund after the win reverses all of it, and the payment's columns sum to zero.
+      // A refund after the win reverses all of it, and the payment's columns sum to zero,
+      // except that net and studio carry the 0.59 fee Stripe kept on the refund.
+      // Superseded (money-logic.md, the pro-rata refund-row net): a refund row's net is
+      // minus the whole amount reversed, and the fee part comes off the studio share.
       const refund = (await row<{ r: Row }>(REVERSE, ["evt_d_refund", "cs_d", "refund", 10])).r;
-      assertEquals([refund.inserted, refund.reversed_usd, refund.fully_reversed], [true, 10, true]);
+      assertEquals([refund.inserted, refund.reversed_usd, refund.fully_reversed, refund.kept_fee_usd], [true, 10, true, 0.59]);
       assertEquals(
         await row(
-          `select sum(amount_usd) as amount, sum(net_usd) as net, sum(reserve_usd) as reserve, sum(agents_usd) as agents, sum(incident_usd) as incident, sum(held_usd) as held
+          `select sum(amount_usd) as amount, sum(net_usd) as net, sum(reserve_usd) as reserve, sum(agents_usd) as agents, sum(studio_usd) as studio, sum(incident_usd) as incident, sum(held_usd) as held
            from public.contributions where id = $1 or parent_id = $1`,
           [paid.contribution_id],
         ),
-        { amount: "0.0000", net: "0.0000", reserve: "0.0000", agents: "0.0000", incident: "0.0000", held: "0.0000" },
+        { amount: "0.0000", net: "-0.5900", reserve: "0.0000", agents: "0.0000", studio: "-0.5900", incident: "0.0000", held: "0.0000" },
       );
       assertEquals((await identity()).holds, true);
       for (const role of ["anon", "authenticated"]) {
@@ -282,12 +286,18 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
     // payment's release, a dispute, the win and a refund after it: the refund takes off only what the
     // card holds, and the bar never goes below zero.
     await t.step("a won dispute puts a goal payment back on its card, so a later refund leaves the bar at zero, not below", async () => {
+      // A card takes money only when the dispatcher could start it (money-logic.md): it names an executor.
+      const executor = (await row<{ id: string }>(
+        `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path) values ('Builder A', 'Builder A', 'A small blue creature.', 'builder-model-id', 0.2, 'plain', 'platform/agents/prompts/builder-a.md') returning id`,
+      )).id;
       const card = (await row<{ id: string }>(
-        `insert into public.cards (bucket, source, shape, lane, folder, title, stage, estimate_usd, funding_target_usd) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card', 'voted', 100, 100) returning id`,
+        `insert into public.cards (bucket, source, shape, lane, folder, title, stage, estimate_usd, funding_target_usd, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card', 'voted', 100, 100, $1) returning id`,
+        [executor],
       )).id;
       const bar = async () => {
         const funded = Number((await row<{ f: string }>(`select funded_usd as f from public.cards where id = $1`, [card])).f);
-        const view = (await rows<{ credited_usd: string; contributors: number }>(`select credited_usd, contributors from public.public_card_funding where card_id = $1`, [card]))[0];
+        const view = (await rows<{ credited_usd: string; contributors: number; on_card_usd: string }>(`select credited_usd, contributors, on_card_usd from public.public_card_funding where card_id = $1`, [card]))[0];
+        assertEquals(Number(view?.on_card_usd ?? 0), funded, "on_card_usd is the bar");
         return { funded, credited: Number(view?.credited_usd ?? 0), contributors: view?.contributors ?? 0 };
       };
       // Hold all but $5 of it, releasable at once.
@@ -305,7 +315,10 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       const dispute = (await row<{ r: Row }>(REVERSE, ["evt_g_dispute", "cs_g", "dispute", 10])).r;
       assertEquals(dispute.inserted, true);
       const disputed = await bar();
-      assertEquals(disputed.credited, disputed.funded);
+      // Superseded (money-logic.md): a fully disputed payment no longer counts toward
+      // public_card_funding (money.payment_counts), while the bar keeps the part the
+      // reserve covered.
+      assertEquals([disputed.credited, disputed.contributors], [0, 0]);
       assert(disputed.funded >= 0 && disputed.funded < credit, `the dispute took the card's money: ${JSON.stringify(disputed)}`);
       assertEquals((await identity()).holds, true);
 
@@ -362,14 +375,15 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       await signInAs(null);
     });
 
-    await t.step("ledger_identity reads the three lines in one statement and names the drift", async () => {
+    // money-logic.md adds I4 (allocations per payment) and I5 (bars per card), each a count.
+    await t.step("ledger_identity reads the five lines in one statement and names the drift", async () => {
       const holding = await identity();
       assertEquals(holding.holds, true);
-      assertEquals(holding.lines.map((l) => l.name), ["I1", "I2", "I3"]);
+      assertEquals(holding.lines.map((l) => l.name), ["I1", "I2", "I3", "I4", "I5"]);
       await db.exec(`update public.pool set balance_usd = balance_usd + 1 where id = 1`);
       const drifting = await identity();
       assertEquals(drifting.holds, false);
-      assertEquals(drifting.lines.map((l) => [l.name, Number(l.drift), l.holds]), [["I1", 0, true], ["I2", 1, false], ["I3", 0, true]]);
+      assertEquals(drifting.lines.map((l) => [l.name, Number(l.drift), l.holds]), [["I1", 0, true], ["I2", 1, false], ["I3", 0, true], ["I4", 0, true], ["I5", 0, true]]);
       await db.exec(`update public.pool set balance_usd = balance_usd - 1 where id = 1`);
       assertEquals((await identity()).holds, true);
     });
@@ -404,8 +418,11 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       });
       // A second run of the file keeps a password the board set.
       await db.exec(`alter role peanutgallery_backup with password 'fixture-password'`);
-      const file = (await readMigrations()).find((m) => m.name === "20260923000010_backup_role.sql")!;
+      const all = await readMigrations();
+      const file = all.find((m) => m.name === "20260923000010_backup_role.sql")!;
       await db.exec(file.sql);
+      // The file replaces ledger_identity and controller_figures; money-logic's versions come back.
+      await db.exec(all.find((m) => m.name === "20260924200000_money_logic.sql")!.sql);
       assertEquals((await row(`select rolpassword is not null as kept from pg_authid where rolname = 'peanutgallery_backup'`)).kept, true);
     });
 
@@ -425,7 +442,9 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       const adjusted = figures.families.find((f: Row) => f.session_id === "cs_nodec");
       // The payment's net 0.66, less the 0.33 fee booked, plus the 1.00 correction.
       assertEquals([adjusted.adjusted_net_usd, adjusted.books_net_usd], [0.67, 1.33]);
-      assertEquals(disputed.books_net_usd, 0);
+      // The fee Stripe kept on the refund, booked on its row (money-logic.md).
+      assertEquals(disputed.books_net_usd, -0.59);
+      assertEquals(figures.families.map((f: Row) => f.board_test), figures.families.map(() => false));
       assert(Number((await row<{ n: string }>(`select public.ops_database_size() as n`)).n) > 0);
       for (const role of ["anon", "authenticated"]) {
         await asRole(role, async () => {

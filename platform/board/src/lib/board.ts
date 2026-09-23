@@ -249,8 +249,24 @@ export async function heartbeat(client: SupabaseClient): Promise<Date> {
   return at;
 }
 
-export async function setPaused(client: SupabaseClient, paused: boolean): Promise<void> {
-  unwrap(await client.rpc('set_paused', { p_paused: paused }));
+/**
+ * Why the studio is paused (studio_state.pause_reason, docs/specs/money-logic.md), as the board
+ * picks it. The public sees the reason and never who paused or when. board is the default.
+ */
+export const PAUSE_REASONS = [
+  { value: 'board', label: 'Paused by the board' },
+  { value: 'incident', label: 'A problem we are checking' },
+  { value: 'awaiting_credit', label: "Waiting for a payout to buy the agents' credit" },
+  { value: 'spend_limit', label: 'The monthly spend limit' },
+] as const;
+
+export type PauseReason = (typeof PAUSE_REASONS)[number]['value'];
+
+/** set_paused: p_reason goes only with a pause that is not the default board one. */
+export async function setPaused(client: SupabaseClient, paused: boolean, reason: PauseReason = 'board'): Promise<void> {
+  const args: Record<string, unknown> = { p_paused: paused };
+  if (paused && reason !== 'board') args.p_reason = reason;
+  unwrap(await client.rpc('set_paused', args));
 }
 
 export async function fileDirective(client: SupabaseClient, d: Directive): Promise<string> {
@@ -312,9 +328,15 @@ export async function setCardHorizon(
   unwrap(await client.rpc('set_card_horizon', args));
 }
 
-/** Rejects a card with the board's reason. Only an open, funded or paused card can be cancelled. */
-export async function cancelCard(client: SupabaseClient, id: string, reason: string): Promise<void> {
-  unwrap(await client.rpc('cancel_card', { p_card: id, p_reason: reason }));
+/**
+ * Rejects a card with the board's reason. Only an open, funded or paused card can be cancelled. Its
+ * unspent money moves at once to the next cards in line (docs/specs/money-logic.md); the result is
+ * how much moved.
+ */
+export async function cancelCard(client: SupabaseClient, id: string, reason: string): Promise<number> {
+  const result = unwrap<{ moved_usd?: unknown }>(await client.rpc('cancel_card', { p_card: id, p_reason: reason }));
+  const moved = Number(result?.moved_usd ?? 0);
+  return Number.isFinite(moved) ? moved : 0;
 }
 
 /** Moves a paused card back to funded with a new estimate of at least what it has already cost. */

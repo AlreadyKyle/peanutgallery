@@ -1,6 +1,6 @@
 # Money logic: one waterfall, allocations, supporter numbers, the terms stamp and the fees Stripe keeps
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Part of the launch series, built on the merge of legal-copy (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). The cross-PR contracts it relies on are in its Decisions under "Reconciled with the series".
 
@@ -34,7 +34,8 @@ In:
   - append-only triggers on the new tables, identity lines I4 and I5, and a closing identity check;
   - a `board_test` flag in `controller_figures`;
   - the public reads: `public_money`, `public_card_funding`, `public_stopped_cards`, `public_studio.pause_reason`.
-- **The webhook** passes the Checkout Session's `created` time.
+- **The webhook** passes the Checkout Session's `created` time; both RPCs' arguments are built in `_shared/handler.ts`, where the tests read them.
+- **The backup and restore**: the Mac backup dumps the `money` schema with `public`, and `platform/ops/after-restore.sql` makes what the migrations make outside the dumped schemas (the sign-in trigger on `auth.users`, Realtime's tables, the backup login's grants and both pg_cron jobs), run by both restore runbooks.
 - **The Controller** books dispute fees through `record_stripe_fee` and leaves the board's test payment out of the agent money a credit purchase may use.
 - **The dispatcher**: `pauseStudio` writes its reason.
 - **`ledger-identity.ts`** (lib and script) with I4 and I5, and **`anon-negative-test.ts`** covering the new tables, functions and views.
@@ -86,7 +87,7 @@ A card whose bar reaches its target moves from proposed or voted to funded. A pa
 
 **Why the studio is paused.** `studio_state.pause_reason` is one of `awaiting_credit`, `spend_limit`, `incident` or `board`. `set_paused` takes an optional reason, `board` by default; the board site offers all four. The dispatcher writes its own: Console credit needed is `awaiting_credit`, the usage tier cap is `spend_limit`, a failed revert is `incident`. A pause written with no reason is `board`. Resuming clears it. The migration backfills production's pause as `awaiting_credit` while `launched_at` is null and no Console credit purchase is recorded, else `board`. It never says who paused or when.
 
-**Guards.** `contribution_allocations`, `supporters` and `board_test_payments` are append-only like the other money tables, and service_role can only read them. Every function that places money takes one transaction-scoped advisory lock, then locks the cards it may touch in id order, then the pool (`record_usage` locks one card then the pool, so they cannot deadlock). The migration ends by checking `ledger_identity()` and rolls back entirely if it does not hold.
+**Guards.** `contribution_allocations`, `supporters` and `board_test_payments` are append-only like the other money tables, and service_role can only read them. No API role has USAGE on the `money` schema, so none can call a money function by name; the four read-only helpers the public views call (`payment_counts`, `not_on_card_usd`, `board_test_usd`, `funding_order`) carry EXECUTE for the API roles, because Postgres checks a view's function calls against the role reading the view. Every function that places money takes one transaction-scoped advisory lock, then locks the cards it may touch in id order, then the pool (`record_usage` locks one card then the pool, so they cannot deadlock). The migration ends by checking `ledger_identity()` and rolls back entirely if it does not hold.
 
 **The ledger identity** gains I4 (every payment's allocations equal its family's credit) and I5 (every card's bar equals its allocations). `ledger-identity.ts` checks the same lines. A shortfall is not an identity failure: it is reported in `public_money` and the webhook's existing shortfall alert.
 
@@ -117,52 +118,52 @@ The other reads:
 ## Acceptance criteria
 
 Migration:
-- [ ] The migration applies on PGlite after every earlier file. On a fixture in production's state of 23 September 2026 (one unrefunded board test payment, every bar $0, paused by the board, `launched_at` null, no credit purchase) it books $0.5019 to `board_test`, creates no supporter, sets `pause_reason` to `awaiting_credit`, and `ledger_identity()` holds. A drift forged before the apply makes the whole migration roll back.
-- [ ] After the migration, the deployed webhook's call with nine named arguments and the deployed board site's `set_paused({p_paused})` still resolve.
+- [x] The migration applies on PGlite after every earlier file. On a fixture in production's state of 23 September 2026 (one unrefunded board test payment, every bar $0, paused by the board, `launched_at` null, no credit purchase) it books $0.5019 to `board_test`, creates no supporter, sets `pause_reason` to `awaiting_credit`, and `ledger_identity()` holds. A drift forged before the apply makes the whole migration roll back.
+- [x] After the migration, the deployed webhook's call with nine named arguments and the deployed board site's `set_paused({p_paused})` still resolve.
 
 The waterfall:
-- [ ] `money.card_takes_money` is false for a vetoed card, a community card, a card with no executor, a platform code card in the closed lane, a full card, a card off now, and a live, building, gated, rejected or paused card; it is true for a proposed, designing or voted card with room and for a funded card below its target. `public_money.funding_order` lists exactly the cards that take money, in rank order (unranked last, then oldest, then id), with their room.
-- [ ] A payment naming a card that takes money credits it up to its target; the rest fills `funding_order`'s cards in order, each up to its target; the remainder goes to Not on a card yet. Each placement is one allocation row, a payment's rows sum to its credit to 0.0001, and a proposed or voted card whose bar reaches its target is funded.
-- [ ] A payment naming no card starts at step 2. A payment naming a card that takes no money starts at step 2, with `requested_card_id` set to that card and `goal_card_id` null.
-- [ ] Released held money and a won dispute's reinstatement enter at step 1, or at step 2 when their card no longer takes money (a cancelled card included); a positive board adjustment enters at step 2 and a negative one unwinds.
+- [x] `money.card_takes_money` is false for a vetoed card, a community card, a card with no executor, a platform code card in the closed lane, a full card, a card off now, and a live, building, gated, rejected or paused card; it is true for a proposed, designing or voted card with room and for a funded card below its target. `public_money.funding_order` lists exactly the cards that take money, in rank order (unranked last, then oldest, then id), with their room.
+- [x] A payment naming a card that takes money credits it up to its target; the rest fills `funding_order`'s cards in order, each up to its target; the remainder goes to Not on a card yet. Each placement is one allocation row, a payment's rows sum to its credit to 0.0001, and a proposed or voted card whose bar reaches its target is funded.
+- [x] A payment naming no card starts at step 2. A payment naming a card that takes no money starts at step 2, with `requested_card_id` set to that card and `goal_card_id` null.
+- [x] Released held money and a won dispute's reinstatement enter at step 1, or at step 2 when their card no longer takes money (a cancelled card included); a positive board adjustment enters at step 2 and a negative one unwinds.
 
 Spend, refunds and releases:
-- [ ] A card with payments of $1 then $2 that spends $1.50 leaves the first payment $0 unspent there and the second $1.50.
-- [ ] A refund or dispute unwinds only that payment's allocations, newest first, each place giving up only that payment's unspent money there, and the spent remainder comes off Not on a card yet and is returned in `shortfall_usd`. A refund of a Pick for me payment, of an overflow payment, and of a payment whose money was released, moved by a cancellation or reinstated each lowers every bar it reached by exactly its unspent allocation there, and no bar goes below zero.
-- [ ] `waterfall_sweep()` is scheduled every five minutes. It moves a live or rejected card's unspent money in at step 2, newest money first (a live card with studio spend releases only its unspent part); it makes a designing card that filled funded once it is voted; it drains Not on a card yet onto cards that take money, oldest payment first; a second sweep with nothing new moves nothing.
-- [ ] `cancel_card` cancels a proposed, designing, voted, funded or paused card that holds money: the card is rejected, its unspent money moves at once to the next cards in line, and the result returns the amount moved. It still refuses building and gated cards.
+- [x] A card with payments of $1 then $2 that spends $1.50 leaves the first payment $0 unspent there and the second $1.50.
+- [x] A refund or dispute unwinds only that payment's allocations, newest first, each place giving up only that payment's unspent money there, and the spent remainder comes off Not on a card yet and is returned in `shortfall_usd`. A refund of a Pick for me payment, of an overflow payment, and of a payment whose money was released, moved by a cancellation or reinstated each lowers every bar it reached by exactly its unspent allocation there, and no bar goes below zero.
+- [x] `waterfall_sweep()` is scheduled every five minutes. It moves a live or rejected card's unspent money in at step 2, newest money first (a live card with studio spend releases only its unspent part); it makes a designing card that filled funded once it is voted; it drains Not on a card yet onto cards that take money, oldest payment first; a second sweep with nothing new moves nothing.
+- [x] `cancel_card` cancels a proposed, designing, voted, funded or paused card that holds money: the card is rejected, its unspent money moves at once to the next cards in line, and the result returns the amount moved. It still refuses building and gated cards.
 
 Not on a card yet:
-- [ ] Not on a card yet equals the pool balance less the unspent bars and the board test money. A card spending past its bar, a directive's spend and metering after a release each lower it; below zero its negative part is `public_money.short_usd`, equal to `reverse_contribution`'s `shortfall_usd`, which no longer returns `earmarked_usd`. The drain never moves more than Not on a card yet less the studio reserve less building cards' remaining ceiling beyond their bars, so after an overrun a newly opened card receives only what is left.
+- [x] Not on a card yet equals the pool balance less the unspent bars and the board test money. A card spending past its bar, a directive's spend and metering after a release each lower it; below zero its negative part is `public_money.short_usd`, equal to `reverse_contribution`'s `shortfall_usd`, which no longer returns `earmarked_usd`. The drain never moves more than Not on a card yet less the studio reserve less building cards' remaining ceiling beyond their bars, so after an overrun a newly opened card receives only what is left.
 
 The fees Stripe keeps:
-- [ ] A refund or dispute row's net is minus the whole amount reversed, the fee part comes off the studio share, and net = reserve + agents + studio still holds. For the production test payment ($1.00, net $0.7338), a full refund's row has net −1.0000 and studio −0.3983. A reinstatement puts the whole row back.
-- [ ] `record_stripe_fee` books a dispute fee as net −fee and studio −fee once per balance transaction (a replay inserts nothing; a negative fee books it back), and the Controller calls it for every dispute fee Stripe reports. On fixtures built from the database's rows, `stripe_costs_booked` passes after a partial then a full refund, and after a dispute, its reinstatement and its fee.
+- [x] A refund or dispute row's net is minus the whole amount reversed, the fee part comes off the studio share, and net = reserve + agents + studio still holds. For the production test payment ($1.00, net $0.7338), a full refund's row has net −1.0000 and studio −0.3983. A reinstatement puts the whole row back.
+- [x] `record_stripe_fee` books a dispute fee as net −fee and studio −fee once per balance transaction (a replay inserts nothing; a negative fee books it back), and the Controller calls it for every dispute fee Stripe reports. On fixtures built from the database's rows, `stripe_costs_booked` passes after a partial then a full refund, and after a dispute, its reinstatement and its fee.
 
 The terms stamp:
-- [ ] `apply_contribution` stamps the latest version posted at or before the session's `created` time, treats a future time as now, and stamps null with no time or no posted version; no argument lets a caller choose a version. The webhook sends `p_session_created_at` from the session's `created` for both `checkout.session.completed` and `charge.updated`.
+- [x] `apply_contribution` stamps the latest version posted at or before the session's `created` time, treats a future time as now, and stamps null with no time or no posted version; no argument lets a caller choose a version. The webhook sends `p_session_created_at` from the session's `created` for both `checkout.session.completed` and `charge.updated`.
 
 The board's test payment:
-- [ ] The board's test payment reaches no card and not Not on a card yet (through drains, releases and sweeps), gets no supporter number, is in no money-in column of `public_money` (on the production-shaped fixture `payments` is 0 and `board_test_usd` is 0.5019), is flagged in `controller_figures` and left out of the Controller's paid-out agent money, and its refund removes its `board_test` allocation.
+- [x] The board's test payment reaches no card and not Not on a card yet (through drains, releases and sweeps), gets no supporter number, is in no money-in column of `public_money` (on the production-shaped fixture `payments` is 0 and `board_test_usd` is 0.5019), is flagged in `controller_figures` and left out of the Controller's paid-out agent money, and its refund removes its `board_test` allocation.
 
 Supporter numbers:
-- [ ] Each contributor gets one number, sequential from 1 with no gaps, kept across later payments. It is founding when `launched_at` is null or later than the first payment's Checkout Session time, and not founding otherwise.
+- [x] Each contributor gets one number, sequential from 1 with no gaps, kept across later payments. It is founding when `launched_at` is null or later than the first payment's Checkout Session time, and not founding otherwise.
 
 Why the studio is paused:
-- [ ] `set_paused(true, reason)` stores the reason, `board` when none is given, and refuses an unknown one; `set_paused(false)` clears it; a pause written directly with no reason is `board`; the dispatcher's credit, tier-cap and revert pauses write `awaiting_credit`, `spend_limit` and `incident`. `public_studio.pause_reason` is null while not paused, and the view shows neither `paused_by` nor `paused_at`.
+- [x] `set_paused(true, reason)` stores the reason, `board` when none is given, and refuses an unknown one; `set_paused(false)` clears it; a pause written directly with no reason is `board`; the dispatcher's credit, tier-cap and revert pauses write `awaiting_credit`, `spend_limit` and `incident`. `public_studio.pause_reason` is null while not paused, and the view shows neither `paused_by` nor `paused_at`.
 
 Public reads:
-- [ ] `public_money`'s columns equal the SQL in Behaviour, and its identity holds after each of: a payment, a partial refund, a dispute with its reinstatement, a Stripe fee row and a board correction. `reconciled_at` and `last_run_ok` are null before the first reconcile run and follow the latest one after.
-- [ ] `money.payment_counts` is false for the board's test payment and for a fully refunded or fully disputed payment, and true again after a reinstatement. `public_card_funding.contributors` counts only payers with a counted payment that reached the card, a shipped card keeps its funders and total after the sweep, and `on_card_usd` equals the bar.
-- [ ] `public_stopped_cards` lists the rejected and paused cards on now, and each rejected card's moves (destination card or Not on a card yet, and amount) sum to the unspent money it released.
+- [x] `public_money`'s columns equal the SQL in Behaviour, and its identity holds after each of: a payment, a partial refund, a dispute with its reinstatement, a Stripe fee row and a board correction. `reconciled_at` and `last_run_ok` are null before the first reconcile run and follow the latest one after.
+- [x] `money.payment_counts` is false for the board's test payment and for a fully refunded or fully disputed payment, and true again after a reinstatement. `public_card_funding.contributors` counts only payers with a counted payment that reached the card, a shipped card keeps its funders and total after the sweep, and `on_card_usd` equals the bar.
+- [x] `public_stopped_cards` lists the rejected and paused cards on now, and each rejected card's moves (destination card or Not on a card yet, and amount) sum to the unspent money it released.
 
 Guards and kernel checks:
-- [ ] UPDATE, DELETE and TRUNCATE on `contribution_allocations`, `supporters` and `board_test_payments` are refused for every role; service_role can select and not insert them; no API role can execute a `money` function. Every public function that places money takes the money lock before any row lock and locks cards before the pool (static test).
-- [ ] `ledger_identity()` returns I1 to I5 and holds through every test sequence, and a forged allocation row makes it name the line that drifts. `ledger-identity.ts` checks the same lines.
-- [ ] Anon can read each public view, is refused with 42501 on the three new tables and every new public function, and cannot reach the `money` schema; `anon-negative-test.ts` covers all of them with probes that change nothing even if a grant were wrong. No public view has a contributor id, email, name, session or a supporter's single payment.
+- [x] UPDATE, DELETE and TRUNCATE on `contribution_allocations`, `supporters` and `board_test_payments` are refused for every role; service_role can select and not insert them; no API role can call a `money` function (the schema is refused, and only the views' four read-only helpers carry EXECUTE). Every public function that places money takes the money lock before any row lock and locks cards before the pool (static test).
+- [x] `ledger_identity()` returns I1 to I5 and holds through every test sequence, and a forged allocation row makes it name the line that drifts. `ledger-identity.ts` checks the same lines.
+- [x] Anon can read each public view, is refused with 42501 on the three new tables and every new public function, and cannot reach the `money` schema; `anon-negative-test.ts` covers all of them with probes that change nothing even if a grant were wrong. No public view has a contributor id, email, name, session or a supporter's single payment.
 
 The board site:
-- [ ] The cancel confirmation says the card's unspent money goes to the next cards in line, and Pause offers the four reasons with the default sending only `p_paused`.
+- [x] The cancel confirmation says the card's unspent money goes to the next cards in line, and Pause offers the four reasons with the default sending only `p_paused`.
 
 Production:
 - [ ] Production: a pg_dump is taken and listed before the apply; after it, `ledger_identity()` holds with I1 to I5, `cron.job` lists `waterfall-sweep */5 * * * *`, `anon-negative-test.ts` and `ledger-identity.ts` print PASS, and the new `stripe-webhook` version is deployed.
@@ -176,6 +177,7 @@ Production:
 - `pnpm --filter @backseat/supabase test`
 - `pnpm --filter @backseat/dispatcher test`
 - `pnpm --filter @backseat/board test`
+- `BOARD_E2E_PORT=<a free port> pnpm --filter @backseat/board e2e`
 - Production, after the production steps, each quoted:
   - `select public.ledger_identity()` holds, with I1 to I5;
   - `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` prints PASS;
@@ -200,13 +202,136 @@ Production:
 Board items (listed, not blocking):
 - Refund the $1 test payment in Stripe before the cutover (BOARD-SETUP step 12). Until then it is booked apart and funds nothing; the fee Stripe keeps on it is booked to the studio share automatically.
 - Create `STRIPE_READ_KEY` (BOARD-SETUP step 4) so the Controller can run; until its first passing reconcile, `last_run_ok` is null.
+- The restore drill (BOARD-SETUP step 19) on a Mac backup taken after this migration is live, with `after-restore.sql`: it needs the offline key.
 
 ## Evidence
 
-Added when the status moves to built or done.
+Built on `launch/money-logic` from `launch/legal-copy` at ba1b30d (stacked on legal-copy, which had not merged). The production lines of Verification and the production steps are the ship stage's and are not run here: no migration is applied, no function is deployed, the studio stays paused.
+
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+
+```
+platform/board test:       Tests  71 passed (71)
+platform/supabase test:       Tests  286 passed (286)
+platform/site test:       Tests  379 passed (379)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+ℹ tests 117   ℹ pass 117   ℹ fail 0        (test:agents)
+ℹ tests 124   ℹ pass 124   ℹ fail 0        (test:ops)
+ok | 97 passed (106 steps) | 0 failed (20s)  (test:functions)
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=550
+ℹ tests 15    ℹ pass 15    ℹ fail 0        (test:docs)
+ℹ tests 6     ℹ pass 6     ℹ fail 0        (test:rename)
+verify exit 0
+```
+
+`pnpm test:functions`, `pnpm test:ops`, `pnpm --filter @backseat/supabase test`, `pnpm --filter @backseat/dispatcher test` and `pnpm --filter @backseat/board test` are the lines above. The Controller's new tests in `platform/ops/test/jobs.test.mjs`: the refund row carrying the fee leaves no gap; a new dispute fee is booked once and its payment waits a run; a replayed fee books nothing and leaves no gap; a refused fee is the `stripe_fees_booked` mismatch; the board's test payment is left out of the paid-out agent money.
+
+`deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/money_logic_test.ts`
+
+```
+  on production's state of 23 September 2026 it books the test payment apart, numbers nobody and says why the studio is paused ... ok
+  a forged drift rolls it back: update public.pool set balance_usd = balance_usd + 1 where id = 1 ... ok
+  a forged drift rolls it back: update public.cards set funded_usd = 1 ... ok
+migration: production's state upgrades, and a forged drift rolls the whole file back ... ok
+migration: the deployed webhook's nine named arguments and the deployed board's set_paused({p_paused}) still resolve ... ok
+  money.card_takes_money: the one predicate, and funding_order lists exactly its cards in rank order with their room ... ok
+  a payment fills its named card to its target, then funding_order's cards in order, then Not on a card yet ... ok
+  a payment naming no card, or a card that takes no money, starts at step 2 and keeps the card it asked for ... ok
+  released holds and reinstatements enter at step 1, or step 2 once their card takes no money; adjustments enter at step 2 or unwind ... ok
+the waterfall ... ok
+  a card's oldest money is spent first: $1 then $2 with $1.50 spent leaves $0 and $1.50 unspent ... ok
+  a refund or dispute unwinds only its payment's allocations, newest first, only unspent money, and the spent rest is a shortfall ... ok
+  a refund after a release, a cancellation's move and a reinstatement lowers every bar it reached by its unspent money there ... ok
+  waterfall_sweep releases live and rejected cards' unspent money newest first, promotes, drains oldest first, then rests ... ok
+  waterfall_sweep releases a card the dispatcher rejected directly: its unspent money moves on at step 2 and its spent money stays on the bar ... ok
+  cancel_card cancels a card holding money, moves its unspent money to the next cards in line, and refuses building and gated cards ... ok
+spend, refunds and releases ... ok
+Not on a card yet, the shortfall and the drain cap ... ok
+  a refund or dispute row's net is the whole amount reversed and the fee comes off the studio share; a reinstatement puts it all back ... ok
+  record_stripe_fee books a dispute fee once per balance transaction, a returned fee back, and refuses the rest ... ok
+  the Controller's stripe_costs_booked passes on the database's own rows after refunds, a dispute, its fee and the win ... ok
+the fees Stripe keeps ... ok
+the terms stamp ... ok
+the board's test payment is kept apart ... ok
+supporter numbers ... ok
+why the studio is paused ... ok
+  public_money's columns add up after a payment, a partial refund, a dispute and its win, a Stripe fee row and a board correction ... ok
+  payment_counts, public_card_funding and public_stopped_cards ... ok
+public reads ... ok
+  the three new tables are append-only for every role, and service_role may only read them ... ok
+  no API role can call a money function: the schema is refused, and only the views' four readers carry EXECUTE ... ok
+  ledger_identity returns I1 to I5, and a forged allocation row names the lines that drift ... ok
+  anon reads every public view, and no public view has a contributor, an email, a name, a session or one payment ... ok
+guards and kernel checks ... ok
+ok | 12 passed (22 steps) | 0 failed
+```
+
+The board site's e2e, on port 4461: `BOARD_E2E_PORT=4461 pnpm --filter @backseat/board e2e`
+
+```
+  ✓  5 … the page keeps 16 px between stacked controls for a moderator, and the focused pause reason clears the buttons, at 375, 768 and 1440 px
+  ✓  6 … the page keeps 16 px between stacked controls for a board member at aal2, and the focused pause reason clears the buttons, at 375, 768 and 1440 px
+  6 passed (3.4s)
+```
+
+The public site did not change, so no site e2e or screenshots are part of this change.
+
+### Review fixes
+
+Each new test fails on the code it guards, run with the fix undone:
+- the sweep's loop narrowed to `stage in ('live')`: `waterfall_sweep releases a card the dispatcher rejected directly … FAILED`, `11 passed (21 steps) | 1 failed (1 step)`;
+- `p_session_created_at` dropped from `applyContributionArgs`: `handler_test.ts` and `money_logic_test.ts` fail (`Test failed`);
+- `backup-mac.sh` as it was (`--schema=public` alone): `schema.sql and data.sql name public and every schema a migration creates` fails with `actual: [ 'public' ], expected: [ 'money', 'public' ]`;
+- the runbook as it was, and `after-restore.sql` with any one of its waterfall-sweep, sign-in trigger, Realtime or auth-grant lines removed: `after-restore.sql makes everything the migrations make outside the dumped schemas …` fails each time;
+- `styles.css` as it was: both board e2e rhythm tests fail, naming `Pause and resume: label then div.row`, `Pause and resume: div.row then p`, `Studio status: button then fieldset` and `Studio status: fieldset then p`.
+
+Measured in the e2e build at 375, 768 and 1440 px, for a moderator and for a board member at aal2: before, the Pause reason select sat 0 px above the buttons and the status line 0 px below them (the focus ring's bottom ran into the buttons), and Studio's Go live button and Agent mode fieldset were 0 px apart; after, every stacked pair in every section is 16 px apart, but a subheading 8 px over its list and a legend 4 px over its choices, as designed. Screenshots were looked at before and after.
+
+A local restore drill, since no scratch Supabase project exists (the real drill is BOARD-SETUP step 19): every migration applied to PGlite 0.5.8 served over the Postgres wire protocol, a money history (named and unnamed payments, spend, a refund, a directly rejected card, a sweep), then `backup-mac.sh`'s own `pg_dump` lines as `peanutgallery_backup` with Homebrew's pg_dump 18.6, the runbook's `psql --single-transaction --variable ON_ERROR_STOP=1` restore into a fresh copy, and `after-restore.sql` without its two pg_cron lines (PGlite ships no pg_cron). The data went in as INSERTs because the wire server takes no `COPY FROM STDIN`.
+
+```
+schema.sql: 214376 bytes; pg_dump --schema-only --quote-all-identifiers --schema=public --schema=money
+[public and money] restore exit 0
+[public and money] before step 4's trigger: a non-board sign-up is accepted without the trigger
+[public and money] after-restore.sql (no pg_cron) exit 0
+[public and money] after-restore.sql (no pg_cron) again: exit 0
+[public and money] Realtime tables: cards,deploys,pool; the backup login reads auth.users: t
+[public and money] ledger_identity()->>'holds': true
+[public and money] identity equals the source's, but for checked_at: true
+[public and money] money rows 16 (source 16)
+[public and money] waterfall_sweep() on the copy: {"promoted": 0, "drained_usd": 0, "released_usd": 0.0000, "released_cards": 0}
+[public and money] a non-board sign-up: ERROR:  Sign-in is limited to board accounts
+
+[public only (before the fix)] restore exit 3
+psql:schema-public-only.sql:3062: ERROR:  schema "money" does not exist
+```
 
 ## Decisions
 
+- 2026-09-23, build (decided with sensible defaults, as the board ordered; none changes a kernel rule):
+  - Postgres checks the functions a view calls against the role reading the view, even for a view that runs as its owner, so `public_money`, `public_card_funding` and `public_stopped_cards` could not call a `money` helper that anon cannot execute. The four read-only helpers they call carry EXECUTE for anon, authenticated and service_role; no API role has USAGE on the schema, so none can call any money function by name (PostgREST refuses the schema, and SQL answers "permission denied for schema money"), and none of the four writes. The criterion is amended to say so.
+  - The closing identity check runs only when `pool` row 1 exists. A fresh database (the tests, before their seed) has no money to check; production has the row, so the check always runs there.
+  - A refund or dispute row's kept fee is the amount reversed less the sum of its pro-rata reserve, agents and studio shares, rather than less its pro-rata net, so net = reserve + agents + studio holds exactly for every row whatever the rounding; the two differ by at most 0.0002, and on the production payment both give studio -0.3983.
+  - `record_stripe_fee` places no money and moves no pool figure, so it takes no lock; `cancel_card` and `waterfall_sweep` lock the pool after the cards like every other function that places money, though neither changes it, so the lock order is one rule.
+  - `set_paused` refuses an unknown reason only on a pause; a resume ignores any reason and clears it.
+  - Two small helpers keep the one-predicate rule readable: `money.lane_open()` (the platform code lane flag) and `money.is_board_test(payment)`.
+  - `apply_contribution` keeps every key it returned and adds `terms_version`, `requested_card_id`, `supporter_number`, `founding`, `allocations` and `not_on_card_usd`; a replay returns the stored row's figures and allocations.
+  - The Controller books every dispute fee Stripe reports through `record_stripe_fee` in its run, records what it booked as `fees_booked` in the run's figures, and waits a run before comparing a payment whose fee it just booked. The pure reconciliation still names that payment's gap, so a dry run shows it. A refused or unknown booking is the new check `stripe_fees_booked`.
+  - The board site's Pause gains a select labelled "Pause reason"; after a cancel it says how much unspent money moved on.
+  - `public_stopped_cards` is the one public view that reads `cards`, and it reads only columns anon already selects; the migration test's "no view reads cards" rule is rewritten to that.
+  - `contributions.terms_version` references `terms_versions`, so a plain `truncate terms_versions` is now refused by that foreign key, and a cascading one by the append-only guard.
+  - The pg_cron schedule is proven by the static test and the production check: PGlite ships no pg_cron, so the PGlite tests call `waterfall_sweep()` directly.
+
+- 2026-09-23, review fixes (decided with sensible defaults, as the board ordered; none changes a kernel rule):
+  - The Mac backup's `schema.sql` and `data.sql` name `public` and `money`: `pg_dump --schema` dumps nothing a named schema depends on, so a dump of `public` alone failed to restore at its first view that calls a money helper. A static test holds both lines to every schema the migrations create.
+  - What the migrations make outside the dumped schemas is in one file, `platform/ops/after-restore.sql`, safe to run twice, which both restore runbooks run after the dumps: the review named the `waterfall-sweep` job, and the same gap had also lost the trigger that limits sign-in to board accounts (the local drill accepted a non-board sign-up on a restored copy), Realtime's tables and the backup login's grants on `auth` and `supabase_migrations`. A static test checks the file against every `cron.schedule`, trigger outside the dumped schemas, Realtime table and such grant in the migrations. One file rather than lines in the runbook, so a restore is one command and the test reads one place.
+  - The webhook's RPC arguments are built by `applyContributionArgs` and `reverseContributionArgs` in `_shared/handler.ts`; `index.ts` sends them as they are, a static test holds it to that, and the PGlite test checks their names against each RPC's parameters.
+  - On the board site, a label, row, fieldset or button placed straight in a section carries the 16 px space below it that a paragraph does. The same rule fixes Studio's Go live button and Agent mode fieldset, which had the same zero gaps as Pause.
+  - The drill against a scratch Supabase project stays the board's step 19, since it needs the offline key; this change ran the same dumps and restore locally (Evidence).
 - 2026-09-23, Trimmed (board: "better to be simple and delete than add more convoluted bespoke"; good normal modern standards): 76 criteria became 25. Every Problem outcome is kept, and so is the money kernel: the waterfall, allocations, refund unwinding across every card reached, the fee Stripe keeps, idempotent fee booking, append-only money tables, RLS and select-only grants, the dump before the production write, `anon-negative-test.ts` and the ledger identity. Cut:
   - the operations bucket at 0% (the old waterfall step 2, the `operations` destination, the `terms_versions` zero check, `money.operations_unspent`, and `public_money`'s `operations_usd`, `operations_pct` and `operations_since`), because it shipped switched off. The waterfall is now named card, ranked cards, Not on a card yet. What depended on it is listed in the build plan's Contracts;
   - the immediate drains in `file_card`, `set_card_horizon` and `resume_card` and before every placement (the five-minute sweep drains), so those three functions are not redefined, and `skip locked` in step 2;

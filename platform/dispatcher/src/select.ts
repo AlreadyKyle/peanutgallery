@@ -32,6 +32,9 @@ export function closedLane(card: Pick<SelectableCard, 'folder' | 'lane'>, platfo
 
 // A card a session may be started for: funded, on horizon now, from a write-safe source, not
 // vetoed, with an executor, and not in a closed lane.
+// money.card_takes_money in platform/supabase/migrations/20260924200000_money_logic.sql mirrors
+// these conditions (plus the stage and the room under the target), so money never waits on a card
+// the dispatcher would never start; a change to either changes both in the same pull request.
 export function runnable(card: SelectableCard, platformLaneOpen = false): boolean {
   if (card.stage !== 'funded') return false;
   if (card.horizon !== 'now') return false;

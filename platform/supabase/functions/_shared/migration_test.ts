@@ -107,7 +107,8 @@ const BOARD_STATE_KEYS = [
 ];
 
 /** The tables 20260923000020_append_only.sql guards, each with a <table>_append_only trigger. */
-const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs"];
+// money-logic.md adds its three tables to the guard; terms_versions keeps its own triggers.
+const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments"];
 
 /** SQL that turns every append-only row trigger off or back on (fixture writes only). */
 function setAppendOnly(state: "disable" | "enable"): string {
@@ -144,6 +145,39 @@ Deno.test("migrations on PGlite", {
 
   async function refuses(sql: string, message: string, params: unknown[] = []) {
     await assertRejects(() => db.query(sql, params), Error, message);
+  }
+
+  /**
+   * SQL that removes the contributions matching a where clause, with their
+   * allocations and supporter numbers, for steps that undo a fixture payment
+   * (docs/specs/money-logic.md: allocations and supporters reference them).
+   */
+  function forget(where: string): string {
+    const ids = `select id from public.contributions where ${where}`;
+    return `delete from public.contribution_allocations where payment_id in (${ids}) or entry_id in (${ids});
+      delete from public.supporters where first_payment_id in (${ids});
+      delete from public.contributions where ${where};`;
+  }
+
+  /**
+   * Stops every card that takes money from taking more (a fixture write), so a
+   * step's payments reach only the cards it opens. money-logic.md's waterfall
+   * sends credit beyond a card's target, and a payment naming no card, to the
+   * cards that take money in rank order, so an earlier step's open card would
+   * otherwise take it.
+   */
+  async function quietCards() {
+    await db.exec(
+      `update public.cards c set director_stance = 'vetoed' where money.card_takes_money(c, true)`,
+    );
+  }
+
+  /** A goal card that takes money: on now, with a target, an executor and a board source. */
+  async function openGoal(title: string, target: number, stage = "proposed", lane = "config"): Promise<string> {
+    return (await row<{ id: string }>(
+      `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', $4, 'seed-1', $1, $2, $3, $5) returning id`,
+      [title, target, stage, lane, roleId],
+    )).id;
   }
 
   /**
@@ -242,6 +276,7 @@ Deno.test("migrations on PGlite", {
         "20260924000000_board_site.sql",
         "20260924100000_terms_versions.sql",
         "20260924100100_terms_version_2.sql",
+        "20260924200000_money_logic.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -274,8 +309,10 @@ Deno.test("migrations on PGlite", {
         "board_actions",
         "board_members",
         "board_notes",
+        "board_test_payments",
         "card_patches",
         "cards",
+        "contribution_allocations",
         "contributions",
         "controller_runs",
         "credit_purchases",
@@ -290,6 +327,7 @@ Deno.test("migrations on PGlite", {
         "standing_costs",
         "stream_state",
         "studio_state",
+        "supporters",
         "terms_versions",
         "votes",
       ]);
@@ -302,7 +340,9 @@ Deno.test("migrations on PGlite", {
         "public_card_funding",
         "public_card_spend",
         "public_ledger_totals",
+        "public_money",
         "public_roles",
+        "public_stopped_cards",
         "public_studio",
         "public_terms_versions",
       ]);
@@ -328,9 +368,10 @@ Deno.test("migrations on PGlite", {
       const applySignatures = await rows(
         `select pg_get_function_identity_arguments(p.oid) as args from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'apply_contribution'`,
       );
+      // money-logic.md adds p_session_created_at last and drops the nine-argument signature.
       assertEquals(applySignatures, [{
         args:
-          "p_stripe_event_id text, p_contributor_id text, p_display_name text, p_amount_usd numeric, p_net_usd numeric, p_studio_pct integer, p_goal_card_id uuid, p_stripe_session_id text, p_payer_key text",
+          "p_stripe_event_id text, p_contributor_id text, p_display_name text, p_amount_usd numeric, p_net_usd numeric, p_studio_pct integer, p_goal_card_id uuid, p_stripe_session_id text, p_payer_key text, p_session_created_at timestamp with time zone",
       }]);
       // Every card column added for launch is nullable or defaulted, so the
       // deployed dispatcher's inserts and the week-1 seed keep working.
@@ -371,6 +412,11 @@ Deno.test("migrations on PGlite", {
       await db.exec(
         `insert into public.studio_state (id, credit_studio_daily_cap_usd) values (1, 10000); insert into public.pool (id) values (1); insert into public.stream_state (id) values (1);`,
       );
+      // The builder every money step's goal cards name as their executor: a card
+      // takes money only when the dispatcher could start it (docs/specs/money-logic.md).
+      roleId = (await row<{ id: string }>(
+        `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path, tools_json, write_access) values ('Builder A', 'Builder A', 'A small blue creature.', 'builder-model-id', 0.2, 'plain', 'platform/agents/prompts/builder-a.md', '["Read"]', true) returning id`,
+      )).id;
     });
 
     await t.step(
@@ -462,7 +508,7 @@ Deno.test("migrations on PGlite", {
           "0.4856",
         );
         await db.exec(
-          `delete from public.contributions where stripe_session_id = 'cs_s';
+          `${forget("stripe_session_id = 'cs_s'")}
            update public.pool set balance_usd = ${before.balance_usd}, reserve_usd = ${before.reserve_usd}, incident_reserve_usd = ${before.incident_reserve_usd} where id = 1;`,
         );
       },
@@ -471,10 +517,7 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a goal card's bar rises by the net amount and an open decision of matching size is assigned",
       async () => {
-        const goal = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'code', 'seed-1', 'A goal card with a 100 target', 100, 'voted') returning id`,
-        );
-        goalCardId = goal.id;
+        goalCardId = await openGoal("A goal card with a 100 target", 100, "voted", "code");
         await db.exec(
           `insert into public.decisions (size, title, config_key) values ('small', 'Name the first unit', 'spawn.gatherer.name')`,
         );
@@ -517,55 +560,64 @@ Deno.test("migrations on PGlite", {
           [goalCardId],
         );
         assertEquals(contribution, { goal: true, decided: true });
+        // The card keeps room under its target; the steps below open their own cards.
+        await quietCards();
       },
     );
 
     await t.step(
       "a voted goal that reaches its target moves to funded with the estimate seeded from the target",
       async () => {
-        const voted = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A voted goal with a 1 target', 1, 'voted') returning id`,
-        );
-        votedGoalId = voted.id;
+        votedGoalId = await openGoal("A voted goal with a 1 target", 1, "voted");
         const before = await pool();
         const first = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_e', 'contrib_e', null, 2.00, 1.65, 0, $1) as r`,
           [votedGoalId],
         )).r;
-        // net 1.65 at 0%: reserve 0.1650, agents 1.4850, incident 0.0743, credit 1.4107 >= target 1.
+        // net 1.65 at 0%: reserve 0.1650, agents 1.4850, incident 0.0743, credit 1.4107.
+        // Superseded (money-logic.md, uncapped bars): a card takes money up to its
+        // target, 1.0000, and the rest goes on down the waterfall, here to Not on a
+        // card yet, since no other card takes money.
         assertEquals(first.pool_credit_usd, 1.4107);
         assertEquals(first.goal_stage, "funded");
-        assertEquals(first.goal_funded_usd, 1.4107);
+        assertEquals(first.goal_funded_usd, 1);
+        assertEquals(first.allocations, [
+          { destination: "card", card_id: votedGoalId, amount_usd: 1, step: 1 },
+          { destination: "unassigned", card_id: null, amount_usd: 0.4107, step: 3 },
+        ]);
         assertEquals(
           await row(
             `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
             [votedGoalId],
           ),
-          { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "funded" },
+          { funded_usd: "1.0000", estimate_usd: "1.0000", stage: "funded" },
         );
         const second = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_f', 'contrib_f', null, 1.00, 0.71, 20, $1) as r`,
           [votedGoalId],
         )).r;
         // net 0.71 at 20%: agents 0.5112, incident 0.0256, credit 0.4856. The card
-        // is funded, so it is no longer open: the money funds the pool, not the bar.
+        // is full, so it takes no money: the payment keeps the card it asked for in
+        // requested_card_id and names none, and its credit starts at step 2.
         assertEquals(second.inserted, true);
         assertEquals(second.pool_credit_usd, 0.4856);
         assertEquals(second.goal_card_id, null);
+        assertEquals(second.requested_card_id, votedGoalId);
         assertEquals(second.goal_stage, null);
         assertEquals(second.goal_funded_usd, null);
         assertEquals(
           await row(
-            `select goal_card_id from public.contributions where stripe_event_id = 'evt_f'`,
+            `select goal_card_id, requested_card_id = $1 as requested from public.contributions where stripe_event_id = 'evt_f'`,
+            [votedGoalId],
           ),
-          { goal_card_id: null },
+          { goal_card_id: null, requested: true },
         );
         assertEquals(
           await row(
             `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
             [votedGoalId],
           ),
-          { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "funded" },
+          { funded_usd: "1.0000", estimate_usd: "1.0000", stage: "funded" },
         );
         // The pool still rose by both credits.
         const after = await pool();
@@ -576,7 +628,8 @@ Deno.test("migrations on PGlite", {
 
         // A proposed card flips too, and an estimate that was already set is left alone.
         const proposed = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, estimate_usd, stage) values ('game', 'board', 'goal', 'code', 'seed-1', 'A proposed goal with a 1 target', 1, 0.5, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, estimate_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'code', 'seed-1', 'A proposed goal with a 1 target', 1, 0.5, 'proposed', $1) returning id`,
+          [roleId],
         );
         const third = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_g', 'contrib_g', null, 2.00, 1.65, 0, $1) as r`,
@@ -588,7 +641,7 @@ Deno.test("migrations on PGlite", {
             `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
             [proposed.id],
           ),
-          { funded_usd: "1.4107", estimate_usd: "0.5000", stage: "funded" },
+          { funded_usd: "1.0000", estimate_usd: "0.5000", stage: "funded" },
         );
       },
     );
@@ -596,9 +649,7 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a replay names the card stored on the payment, even after the card has closed",
       async () => {
-        const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A voted goal that closes before a replay', 100, 'voted') returning id`,
-        );
+        const card = { id: await openGoal("A voted goal that closes before a replay", 100, "voted") };
         const start = await pool();
         const paid = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_rp1', 'contrib_rp', null, 2.00, 1.65, 0, $1, 'cs_rp') as r`,
@@ -623,29 +674,31 @@ Deno.test("migrations on PGlite", {
         assertEquals(pooled.inserted, false);
         assertEquals(pooled.goal_card_id, null);
         await db.exec(
-          `delete from public.contributions where stripe_session_id = 'cs_rp';
-           update public.cards set funded_usd = 0 where id = '${card.id}';
+          `${forget("stripe_session_id = 'cs_rp'")}
+           update public.cards set funded_usd = 0, director_stance = 'vetoed' where id = '${card.id}';
            update public.pool set balance_usd = ${start.balance_usd}, reserve_usd = ${start.reserve_usd}, incident_reserve_usd = ${start.incident_reserve_usd}, held_usd = ${start.held_usd} where id = 1;`,
         );
       },
     );
 
     await t.step(
-      "only an open goal is credited: live, funded and building goals send the money to the pool",
+      "only a card that takes money is credited: live and building goals send it on, and a funded goal below its target takes it",
       async () => {
-        for (const stage of ["live", "funded", "building"]) {
-          const card = await row<{ id: string }>(
-            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 1, $2) returning id`,
-            [`A ${stage} goal with a 1 target`, stage],
-          );
+        // Superseded (money-logic.md): a funded card below its target (after a
+        // refund) takes money again at steps 1 and 2; live and building cards
+        // never do, and their payments keep the card they asked for in
+        // requested_card_id.
+        for (const stage of ["live", "building"]) {
+          const card = await openGoal(`A ${stage} goal with a 1 target`, 1, stage);
           const before = await pool();
           const { r } = await row<{ r: Row }>(
             `select public.apply_contribution($1, $2, null, 2.00, 1.65, 0, $3) as r`,
-            [`evt_h_${stage}`, `contrib_h_${stage}`, card.id],
+            [`evt_h_${stage}`, `contrib_h_${stage}`, card],
           );
           assertEquals(r.inserted, true, stage);
           assertEquals(r.pool_credit_usd, 1.4107, stage);
           assertEquals(r.goal_card_id, null, stage);
+          assertEquals(r.requested_card_id, card, stage);
           assertEquals(r.goal_stage, null, stage);
           assertEquals(r.goal_funded_usd, null, stage);
           assertEquals(
@@ -659,7 +712,7 @@ Deno.test("migrations on PGlite", {
           assertEquals(
             await row(
               `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
-              [card.id],
+              [card],
             ),
             { funded_usd: "0.0000", estimate_usd: "0.0000", stage },
           );
@@ -670,24 +723,30 @@ Deno.test("migrations on PGlite", {
             stage,
           );
         }
+        const funded = await openGoal("A funded goal below its 1 target", 1, "funded");
+        const paid = (await row<{ r: Row }>(
+          `select public.apply_contribution('evt_h_funded', 'contrib_h_funded', null, 2.00, 1.65, 0, $1) as r`,
+          [funded],
+        )).r;
+        assertEquals(paid.goal_card_id, funded);
+        assertEquals(paid.goal_stage, "funded");
+        assertEquals(paid.goal_funded_usd, 1);
 
-        // A designing card is open: its bar rises, and only proposed or voted flips to funded.
-        const designing = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A designing goal with a 1 target', 1, 'designing') returning id`,
-        );
+        // A designing card is open: its bar rises to its target, and only proposed or voted flips to funded.
+        const designing = await openGoal("A designing goal with a 1 target", 1, "designing");
         const { r } = await row<{ r: Row }>(
           `select public.apply_contribution('evt_h_designing', 'contrib_h_designing', null, 2.00, 1.65, 0, $1) as r`,
-          [designing.id],
+          [designing],
         );
-        assertEquals(r.goal_card_id, designing.id);
+        assertEquals(r.goal_card_id, designing);
         assertEquals(r.goal_stage, "designing");
-        assertEquals(r.goal_funded_usd, 1.4107);
+        assertEquals(r.goal_funded_usd, 1);
         assertEquals(
           await row(
             `select funded_usd, estimate_usd, stage::text as stage from public.cards where id = $1`,
-            [designing.id],
+            [designing],
           ),
-          { funded_usd: "1.4107", estimate_usd: "1.0000", stage: "designing" },
+          { funded_usd: "1.0000", estimate_usd: "1.0000", stage: "designing" },
         );
       },
     );
@@ -791,10 +850,7 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "record_usage meters the ledger, resets the day and charges the card",
       async () => {
-        const role = await row<{ id: string }>(
-          `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path, tools_json, write_access) values ('Builder A', 'Builder A', 'A small blue creature.', 'builder-model-id', 0.2, 'plain', 'platform/agents/prompts/builder-a.md', '["Read"]', true) returning id`,
-        );
-        roleId = role.id;
+        // roleId is the builder the first step added.
         await db.exec(
           `update public.pool set day = date '2020-01-01', daily_spent_usd = 9 where id = 1`,
         );
@@ -1960,7 +2016,9 @@ Deno.test("migrations on PGlite", {
           "public_card_funding",
           "public_card_spend",
           "public_ledger_totals",
+          "public_money",
           "public_roles",
+          "public_stopped_cards",
           "public_studio",
           "public_terms_versions",
         ].map((table_name) => ({ table_name, privilege_type: "SELECT" }));
@@ -2011,13 +2069,20 @@ Deno.test("migrations on PGlite", {
           `select relacl::text as acl from pg_class where oid = 'public.cards'::regclass`,
         );
         assert(!/(^|[{,])(anon|authenticated)=/.test(acl.acl), `no table-level entry for anon or authenticated: ${acl.acl}`);
-        // No view reads cards, so no view can hand a withheld column to anon.
+        // Superseded (money-logic.md, "no view reads cards"): public_stopped_cards
+        // is the one view that reads cards, and every cards column it reads is one
+        // anon already selects, so no view can hand a withheld column to anon.
         assertEquals(
           await rows(
             `select view_name from information_schema.view_table_usage where table_schema = 'public' and table_name = 'cards'`,
           ),
-          [],
+          [{ view_name: "public_stopped_cards" }],
         );
+        const read = await rows<{ column_name: string }>(
+          `select distinct column_name from information_schema.view_column_usage where view_name = 'public_stopped_cards' and table_name = 'cards' order by 1`,
+        );
+        assert(read.length > 0, "public_stopped_cards reads cards columns");
+        for (const { column_name } of read) assert(PUBLIC_CARD_COLUMNS.includes(column_name), `public_stopped_cards reads ${column_name}`);
       },
     );
 
@@ -2061,7 +2126,8 @@ Deno.test("migrations on PGlite", {
 
           const studio = await rows(`select * from public.public_studio`);
           assertEquals(studio.length, 1);
-          assertEquals(Object.keys(studio[0]!), ["launched_at", "paused", "platform_lane_open"]);
+          assertEquals(Object.keys(studio[0]!), ["launched_at", "paused", "platform_lane_open", "pause_reason"]);
+          assertEquals(studio[0]!.pause_reason, null);
           assertEquals(studio[0]!.platform_lane_open, false);
           assertEquals(studio[0]!.paused, false);
           assertNotEquals(studio[0]!.launched_at, null);
@@ -2070,26 +2136,31 @@ Deno.test("migrations on PGlite", {
             card_id: string;
             contributors: number;
             credited_usd: string;
+            on_card_usd: string;
           }>(`select * from public.public_card_funding`);
-          // Four goal cards received money while open: the 100-target card, the
-          // voted card (its second payment arrived after it was funded and went to
-          // the pool), the proposed card and the designing card.
-          assertEquals(funding.length, 4);
+          // Five goal cards took money: the 100-target card, the voted card (up to
+          // its 1 target; its second payment arrived once it was full and went on
+          // down the waterfall), the proposed card, the funded card below its target
+          // and the designing card (money-logic.md).
+          assertEquals(funding.length, 5);
           assertEquals(Object.keys(funding[0]!).sort(), [
             "card_id",
             "contributors",
             "credited_usd",
+            "on_card_usd",
           ]);
           const byCard = new Map(funding.map((f) => [f.card_id, f]));
           assertEquals(byCard.get(goalCardId), {
             card_id: goalCardId,
             contributors: 1,
             credited_usd: "1.4107",
+            on_card_usd: "1.4107",
           });
           assertEquals(byCard.get(votedGoalId), {
             card_id: votedGoalId,
             contributors: 1,
-            credited_usd: "1.4107",
+            credited_usd: "1.0000",
+            on_card_usd: "1.0000",
           });
 
           await refuses(
@@ -2192,8 +2263,9 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "public_card_funding counts a contributor who funds one card twice once",
       async () => {
+        await quietCards();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded twice by one contributor', 100, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded twice by one contributor', 100, 'proposed', '${roleId}') returning id`,
         );
         const first = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_i', 'contrib_i', null, 2.00, 1.65, 0, $1) as r`,
@@ -2221,11 +2293,12 @@ Deno.test("migrations on PGlite", {
             card_id: string;
             contributors: number;
             credited_usd: string;
+            on_card_usd: string;
           }>(`select * from public.public_card_funding where card_id = $1`, [
             card.id,
           ]);
           assertEquals(funding, [
-            { card_id: card.id, contributors: 1, credited_usd: credited },
+            { card_id: card.id, contributors: 1, credited_usd: credited, on_card_usd: credited },
           ]);
         } finally {
           await db.exec(`reset role`);
@@ -2263,11 +2336,12 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a $120 payment credits $50 today, holds the rest, and the release credits it once after 14 days",
       async () => {
+        await quietCards();
         // The incident reserve at its cap keeps the agents share whole as pool credit.
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded past the daily hold', 100, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded past the daily hold', 100, 'proposed', '${roleId}') returning id`,
         );
         const before = await pool();
         const first = (await row<{ r: Row }>(
@@ -2349,11 +2423,24 @@ Deno.test("migrations on PGlite", {
           { held_usd: "-58.0000", amount_usd: "0.0000" },
           { held_usd: "-9.0000", amount_usd: "0.0000" },
         ]);
+        // Superseded (money-logic.md, uncapped bars): the release enters the
+        // waterfall at step 1, so the card takes 50 up to its 100 target and the
+        // other 17 goes on to Not on a card yet.
         const funded = await row(
           `select stage::text as stage, funded_usd from public.cards where id = $1`,
           [card.id],
         );
-        assertEquals(funded, { stage: "funded", funded_usd: "117.0000" });
+        assertEquals(funded, { stage: "funded", funded_usd: "100.0000" });
+        assertEquals(
+          await rows(
+            `select a.destination::text as destination, a.amount_usd, a.step from public.contribution_allocations a join public.contributions r on r.id = a.entry_id where r.entry = 'release' and a.payment_id in (select id from public.contributions where stripe_event_id in ('evt_hold1', 'evt_hold2')) order by a.seq`,
+          ),
+          [
+            { destination: "card", amount_usd: "50.0000", step: 1 },
+            { destination: "unassigned", amount_usd: "8.0000", step: 3 },
+            { destination: "unassigned", amount_usd: "9.0000", step: 3 },
+          ],
+        );
         await refuses(
           `insert into public.contributions (entry, parent_id, rail, contributor_id) select 'release', id, 'stripe', 'x' from public.contributions where stripe_event_id = 'evt_hold1'`,
           "contributions_one_release",
@@ -2365,11 +2452,12 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a refund cancels the hold first, follows Stripe's cumulative total and a replay changes nothing",
       async () => {
+        await quietCards();
         // The incident reserve at its cap keeps the agents share whole as pool credit.
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card whose funding is refunded', 50, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card whose funding is refunded', 50, 'proposed', '${roleId}') returning id`,
         );
         const pay = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_r', 'contrib_r', null, 100.00, 100.00, 0, $1, 'cs_r') as r`,
@@ -2491,11 +2579,12 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a dispute draws the reserve first and only the rest comes off the pool and the bar",
       async () => {
+        await quietCards();
         // The incident reserve at its cap keeps the agents share whole as pool credit.
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed payment', 30, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed payment', 30, 'proposed', '${roleId}') returning id`,
         );
         await row(
           `select public.apply_contribution('evt_dp', 'contrib_dp', null, 20.00, 20.00, 0, $1, 'cs_dp') as r`,
@@ -2554,12 +2643,13 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "below the incident cap at a 20% studio share, a refund and a dispute keep the payment's proportions",
       async () => {
+        await quietCards();
         await db.exec(
           `update public.pool set incident_reserve_usd = 0, reserve_usd = 100 where id = 1`,
         );
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded below the incident cap', 100, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card funded below the incident cap', 100, 'proposed', '${roleId}') returning id`,
         );
         const pay = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_w', 'contrib_w', null, 40.00, 40.00, 20, $1, 'cs_w') as r`,
@@ -2668,10 +2758,11 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a refund before and after the hold's release returns every column to zero",
       async () => {
+        await quietCards();
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card refunded around a release', 200, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card refunded around a release', 200, 'proposed', '${roleId}') returning id`,
         );
         const before = await pool();
         const pay = (await row<{ r: Row }>(
@@ -2735,12 +2826,13 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a dispute on a payment with money still held cancels the hold and covers only the credited part",
       async () => {
+        await quietCards();
         await db.exec(
           `update public.pool set incident_reserve_usd = 500, reserve_usd = 1000 where id = 1`,
         );
         const offsets = await identityOffsets();
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed hold', 200, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed hold', 200, 'proposed', '${roleId}') returning id`,
         );
         const pay = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_dh', 'contrib_dh', null, 100.00, 100.00, 0, $1, 'cs_dh') as r`,
@@ -2892,9 +2984,10 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a dispute on held money with a short reserve cancels the hold, covers what the reserve holds and takes the rest off the pool and the bar",
       async () => {
+        await quietCards();
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed hold and a short reserve', 200, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card with a disputed hold and a short reserve', 200, 'proposed', '${roleId}') returning id`,
         );
         const pay = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_ds', 'contrib_ds', null, 100.00, 100.00, 0, $1, 'cs_ds') as r`,
@@ -3118,6 +3211,7 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "a card off now takes no credit, and a card moves to now only when it meets the definition of ready",
       async () => {
+        await quietCards();
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         await signInAs(BOARD_EMAIL, "aal2");
         const offsets = await identityOffsets();
@@ -3139,7 +3233,7 @@ Deno.test("migrations on PGlite", {
           `select public.apply_contribution('hz1', 'contrib_hz_a', null, 10, 10, 0, $1, 'cs_hz1') as r`,
           [backlog.id],
         )).r;
-        assertEquals([paid.goal_card_id, paid.pool_credit_usd], [null, 9]);
+        assertEquals([paid.goal_card_id, paid.requested_card_id, paid.pool_credit_usd], [null, backlog.id, 9]);
         assertEquals((await card(backlog.id)).funded_usd, "0.0000");
 
         const move = (extra = "") => `select public.set_card_horizon(p_card => $1, p_horizon => 'now', p_rank => 2, p_reason => 'Ready for funding'${extra}) as r`;
@@ -3185,12 +3279,13 @@ Deno.test("migrations on PGlite", {
           details: { from_horizon: "later", to_horizon: "now", from_rank: 1, to_rank: 2, from_target_usd: 0, to_target_usd: 3 },
         });
 
-        // Now a payment reaches its bar and fills it.
+        // Now a payment reaches its bar and fills it, up to its target (superseded,
+        // money-logic.md: bars were uncapped); the other 6 goes on down the waterfall.
         const filled = (await row<{ r: Row }>(
           `select public.apply_contribution('hz2', 'contrib_hz_b', null, 10, 10, 0, $1, 'cs_hz2') as r`,
           [backlog.id],
         )).r;
-        assertEquals([filled.goal_card_id, filled.goal_stage, filled.goal_funded_usd], [backlog.id, "funded", 9]);
+        assertEquals([filled.goal_card_id, filled.goal_stage, filled.goal_funded_usd], [backlog.id, "funded", 3]);
         // A funded card keeps its horizon; the board cancels it instead.
         await refuses(
           `select public.set_card_horizon($1, 'later', 1, 'Park it')`,
@@ -3200,7 +3295,8 @@ Deno.test("migrations on PGlite", {
 
         // An open card with money on its bar stays on now.
         const open = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money', 'Summary.', 100, 'voted') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money', 'Summary.', 100, 'voted', $1) returning id`,
+          [roleId],
         );
         await row(`select public.apply_contribution('hz3', 'contrib_hz_c', null, 10, 10, 0, $1, 'cs_hz3') as r`, [open.id]);
         await refuses(
@@ -3211,7 +3307,8 @@ Deno.test("migrations on PGlite", {
 
         // An open card whose only money is on hold stays on now until the hold is gone.
         const held = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money on hold', 'Summary.', 100, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'An open card with money on hold', 'Summary.', 100, 'proposed', $1) returning id`,
+          [roleId],
         );
         await row(`select public.apply_contribution('hz4', 'contrib_hz_d', null, 60, 60, 0, null, 'cs_hz4', 'card:hold-card') as r`);
         const onHold = (await row<{ r: Row }>(
@@ -3256,9 +3353,12 @@ Deno.test("migrations on PGlite", {
           [voted.id.replace(/^[0-9a-f]{8}/, "00000000")],
         );
 
-        // A release never moves a card off now to funded, though the bar keeps the money the payment named.
+        // A release never moves a card off now to funded. Superseded (money-logic.md,
+        // card-columns-and-open-funding.md's release to the named card whatever its
+        // stage): a card off now takes no money, so the release enters at step 2.
         const parked = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card parked with a hold', 'Summary.', 5, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, summary, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card parked with a hold', 'Summary.', 5, 'proposed', $1) returning id`,
+          [roleId],
         );
         const parkedHold = (await row<{ r: Row }>(
           `select public.apply_contribution('hz6', 'contrib_hz_d', null, 10, 10, 0, $1, 'cs_hz6', 'card:hold-card') as r`,
@@ -3274,7 +3374,13 @@ Deno.test("migrations on PGlite", {
         assertEquals(released, { released: 1, released_usd: 9 });
         assertEquals(
           [(await card(parked.id)).stage, (await card(parked.id)).funded_usd],
-          ["proposed", "9.0000"],
+          ["proposed", "0.0000"],
+        );
+        assertEquals(
+          await rows(
+            `select a.step from public.contribution_allocations a join public.contributions r on r.id = a.entry_id where r.entry = 'release' and r.parent_id = (select id from public.contributions where stripe_event_id = 'hz6')`,
+          ),
+          [{ step: 2 }],
         );
 
         // The platform code lane stays closed on now.
@@ -3299,18 +3405,19 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "cancel_card rejects a card no agent is working on, with the board's reason, and refuses the rest",
+      "cancel_card rejects a card no agent is working on, with the board's reason, moves its unspent money on, and refuses the rest",
       async () => {
+        await quietCards();
         await signInAs(BOARD_EMAIL, "aal2");
-        const make = async (stage: string, funded = 0) =>
+        const make = async (stage: string) =>
           (await row<{ id: string }>(
-            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, funded_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 5, $3, $2) returning id`,
-            [`A ${stage} card for cancelling (${funded})`, stage, funded],
+            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 5, $2, $3) returning id`,
+            [`A ${stage} card for cancelling`, stage, roleId],
           )).id;
         for (const stage of ["proposed", "designing", "voted", "funded", "paused"]) {
           const id = await make(stage);
           const r = (await row<{ r: Row }>(`select public.cancel_card($1, '  Out of scope for Dust ') as r`, [id])).r;
-          assertEquals(r, { card_id: id, stage: "rejected", from_stage: stage });
+          assertEquals(r, { card_id: id, stage: "rejected", from_stage: stage, moved_usd: 0, moved_to: [] });
           assertEquals(
             await row(`select stage::text as stage, failing_check, funded_usd from public.cards where id = $1`, [id]),
             { stage: "rejected", failing_check: "cancelled_by_board", funded_usd: "0.0000" },
@@ -3321,16 +3428,22 @@ Deno.test("migrations on PGlite", {
               action: "cancel_card",
               actor_email: BOARD_EMAIL,
               reason: "Out of scope for Dust",
-              details: { from_stage: stage, funded_usd: 0 },
+              details: { from_stage: stage, funded_usd: 0, moved_usd: 0, moved_to: [] },
             },
           );
-          const funded = await make(stage, 2);
-          await refuses(
-            `select public.cancel_card($1, 'Stop it')`,
-            "A card holding supporters' money cannot be cancelled; refund its supporters first",
-            [funded],
+          // Superseded (money-logic.md, launch-db.md's "cancel refuses money"): a card
+          // holding supporters' money is cancelled too, and its unspent money moves at
+          // once to the next cards in line (here none takes money, so Not on a card yet).
+          const funded = await make("proposed");
+          await row(`select public.apply_contribution($1, $2, null, 2, 2, 0, $3) as r`, [`evt_cancel_${stage}`, `contrib_cancel_${stage}`, funded]);
+          await db.query(`update public.cards set stage = $2 where id = $1`, [funded, stage]);
+          const moved = (await row<{ r: Row }>(`select public.cancel_card($1, 'Stop it') as r`, [funded])).r;
+          assertEquals(moved.moved_usd, 1.8, stage);
+          assertEquals(moved.moved_to, [{ destination: "unassigned", card_id: null, amount_usd: 1.8, step: 3 }], stage);
+          assertEquals(
+            await row(`select stage::text as stage, funded_usd from public.cards where id = $1`, [funded]),
+            { stage: "rejected", funded_usd: "0.0000" },
           );
-          assertEquals((await row<{ stage: string }>(`select stage::text as stage from public.cards where id = $1`, [funded])).stage, stage);
         }
         for (const stage of ["building", "gated"]) {
           const id = await make(stage);
@@ -3347,6 +3460,7 @@ Deno.test("migrations on PGlite", {
         const open = await make("proposed");
         await refuses(`select public.cancel_card($1, '')`, "A reason is required", [open]);
         await refuses(`select public.cancel_card(null, 'x')`, "A card is required");
+        await quietCards();
       },
     );
 
@@ -3392,50 +3506,57 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "a refund of money already spent leaves waiting cards short, and reverse_contribution says by how much",
+      "a refund of money already spent leaves Not on a card yet short, and reverse_contribution says by how much",
       async () => {
+        // Superseded (money-logic.md, refunds-and-holds.md's earmarked shortfall):
+        // the shortfall is the negative part of Not on a card yet, the pool balance
+        // less every card's unspent bar, and earmarked_usd is gone.
+        await quietCards();
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const shipped = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card funded, built and shipped', 10, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card funded, built and shipped', 10, 'proposed', '${roleId}') returning id`,
         );
         const paid = (await row<{ r: Row }>(
           `select public.apply_contribution('sf1', 'contrib_sf', null, 20, 20, 0, $1, 'cs_sf1', 'card:shortfall') as r`,
           [shipped.id],
         )).r;
-        assertEquals([paid.pool_credit_usd, paid.goal_stage], [18, "funded"]);
-        // The agents spend the card's money and it ships.
+        // 18 of credit: 10 fills the card, 8 goes to Not on a card yet.
+        assertEquals([paid.pool_credit_usd, paid.goal_stage, paid.goal_funded_usd], [18, "funded", 10]);
+        // The agents spend 18 on the card, past its bar, and it ships.
         await row(`select public.record_usage($1, $2, 'builder-model-id', 10, 0, 10, 18) as r`, [shipped.id, roleId]);
         await db.query(`update public.cards set stage = 'live' where id = $1`, [shipped.id]);
-        const earmarked = await row<{ usd: string }>(
-          `select coalesce(sum(greatest(c.funded_usd - coalesce(s.spent, 0), 0)), 0)::text as usd
-           from public.cards c left join (select card_id, sum(usd) as spent from public.ledger where billed_to = 'studio' and card_id is not null group by card_id) s on s.card_id = c.id
-           where c.stage in ('funded', 'voted', 'paused')`,
-        );
-        // $5 in the pool names no card.
-        await db.query(`update public.pool set balance_usd = $1::numeric + 5 where id = 1`, [earmarked.usd]);
+        // $5 of the pool is Not on a card yet (a fixture write).
+        await db.exec(`update public.pool set balance_usd = balance_usd - money.not_on_card_usd() + 5 where id = 1`);
+        const before = await pool();
         const offsets = await identityOffsets();
         const refund = (await row<{ r: Row }>(`select public.reverse_contribution('sf1r', 'cs_sf1', 'refund', 20) as r`)).r;
-        // $18 comes off the balance: the $5 that named no card, then $13 of the waiting cards' money.
-        assertEquals(refund.earmarked_usd, Number(earmarked.usd));
+        // $18 comes off the balance and the card gives up nothing, since all its money
+        // was spent: Not on a card yet goes from 5 to -13.
+        assertEquals("earmarked_usd" in refund, false);
+        assertEquals(refund.not_on_card_usd, -13);
         assertEquals(refund.shortfall_usd, 13);
-        assertEquals(refund.pool_balance_usd, Number((Number(earmarked.usd) - 13).toFixed(4)));
+        assertEquals(refund.pool_balance_usd, Number((Number(before.balance_usd) - 18).toFixed(4)));
         assertEquals(refund.goal_stage, "live");
+        assertEquals(refund.goal_funded_usd, 10);
+        assertEquals(await row(`select not_on_card_usd, short_usd from public.public_money`), { not_on_card_usd: "0.0000", short_usd: "13.0000" });
         assertEquals(await identityOffsets(), offsets);
 
-        // A refund the unassigned money covers leaves no shortfall.
-        await db.query(`update public.pool set balance_usd = $1::numeric + 50 where id = 1`, [earmarked.usd]);
+        // A refund Not on a card yet covers leaves no shortfall.
+        await db.exec(`update public.pool set balance_usd = balance_usd - money.not_on_card_usd() + 50 where id = 1`);
         await row(`select public.apply_contribution('sf2', 'contrib_sf2', null, 10, 10, 0, null, 'cs_sf2', 'card:shortfall-two') as r`);
         const covered = (await row<{ r: Row }>(`select public.reverse_contribution('sf2r', 'cs_sf2', 'refund', 10) as r`)).r;
         assertEquals(covered.shortfall_usd, 0);
+        assertEquals(covered.not_on_card_usd, 50);
       },
     );
 
     await t.step(
       "live_at is stamped when a card goes live and moves with nothing else",
       async () => {
+        await quietCards();
         await db.exec(`update public.pool set incident_reserve_usd = 500 where id = 1`);
         const card = await row<{ id: string }>(
-          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card that ships with money held', 200, 'proposed') returning id`,
+          `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, stage, executor_role_id) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card that ships with money held', 200, 'proposed', '${roleId}') returning id`,
         );
         const pay = (await row<{ r: Row }>(
           `select public.apply_contribution('evt_la', 'contrib_la', null, 100.00, 100.00, 0, $1, 'cs_la') as r`,
@@ -3464,7 +3585,10 @@ Deno.test("migrations on PGlite", {
         await db.query(`update public.cards set stage = 'live' where id = $1`, [card.id]);
         assertEquals((await liveAt())?.toISOString(), pinned);
 
-        // Money pledged while the card was open still reaches its bar on release.
+        // Superseded (money-logic.md, card-columns-and-open-funding.md's release to
+        // the named card whatever its stage): money pledged while the card was open
+        // enters the waterfall on release, and a live card takes no money, so it
+        // goes on to Not on a card yet and the bar keeps what it had.
         await db.exec(
           `update public.contributions set hold_until = now() - interval '1 minute' where stripe_event_id = 'evt_la'`,
         );
@@ -3477,7 +3601,7 @@ Deno.test("migrations on PGlite", {
             `select funded_usd, stage::text as stage from public.cards where id = $1`,
             [card.id],
           ),
-          { funded_usd: "90.0000", stage: "live" },
+          { funded_usd: "50.0000", stage: "live" },
         );
         assertEquals((await liveAt())?.toISOString(), pinned);
 
@@ -3663,7 +3787,7 @@ Deno.test("migrations on PGlite", {
           await db.exec(`set role ${role}`);
           try {
             const studio = await rows(`select * from public.public_studio`);
-            assertEquals(Object.keys(studio[0]!), ["launched_at", "paused", "platform_lane_open"]);
+            assertEquals(Object.keys(studio[0]!), ["launched_at", "paused", "platform_lane_open", "pause_reason"]);
             assertEquals(studio[0]!.platform_lane_open, true);
             await refuses(`update public.public_studio set platform_lane_open = false`, "permission denied");
             await refuses(`update public.studio_state set platform_lane_open = false`, "permission denied");
@@ -3859,11 +3983,13 @@ Deno.test("migrations on PGlite", {
           "ledger_identity",
           "ops_database_size",
           "record_dispute_reinstated",
+          "record_stripe_fee",
           "record_usage",
           "release_dispatcher_lease",
           "reverse_contribution",
           "studio_spend_totals",
           "terms_version_at",
+          "waterfall_sweep",
         ];
         assertEquals(
           privileges.map((p) => p.proname),
@@ -3874,6 +4000,7 @@ Deno.test("migrations on PGlite", {
             "restrict_auth_users_to_board",
             "set_live_at",
             "set_updated_at",
+            "studio_pause_reason",
           ].sort(),
         );
         // One file_card row: the twelve-argument version, granted like the old one.
@@ -3898,13 +4025,13 @@ Deno.test("migrations on PGlite", {
         }
         // Every function authenticated may run is security definer, so the board's
         // RPCs read cards with the owner's rights and the column grants do not
-        // limit them. The three trigger functions, and terms_version_at, which only
+        // limit them. The four trigger functions, and terms_version_at, which only
         // the service role and security definer functions call, run with the
         // caller's rights.
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "terms_version_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "studio_pause_reason", "terms_version_at"]);
       },
     );
 
@@ -4016,7 +4143,10 @@ Deno.test("migrations on PGlite", {
         await refuses(`update public.terms_versions set posted_at = now() where version = 1`, "terms_versions is append-only: UPDATE of posted_at is refused");
         await refuses(`update public.terms_versions set version = 3 where version = 2`, "terms_versions is append-only: UPDATE of version is refused");
         await refuses(`delete from public.terms_versions where version = 2`, "terms_versions is append-only: DELETE is refused");
-        await refuses(`truncate public.terms_versions`, "terms_versions is append-only: TRUNCATE is refused");
+        // contributions.terms_version references it (money-logic.md), so a plain
+        // truncate is refused by that foreign key, and one that cascades by the guard.
+        await refuses(`truncate public.terms_versions`, "cannot truncate a table referenced in a foreign key constraint");
+        await refuses(`truncate public.terms_versions cascade`, "is append-only: TRUNCATE is refused");
         await db.exec(`update public.terms_versions set posted_at = posted_at where version = 1`);
         await refuses(`insert into public.terms_versions (version) values (0)`, "terms_versions_version_check");
         await refuses(`insert into public.terms_versions (version) values (10000)`, "terms_versions_version_check");

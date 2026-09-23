@@ -65,6 +65,8 @@ const fake = vi.hoisted(() => ({
   factors: [] as FakeFactor[],
   goodCode: '123456',
   mfaCalls: [] as { name: string; args: Record<string, unknown> | undefined }[],
+  // What cancel_card returns (docs/specs/money-logic.md): the amount it moved on.
+  cancelResult: null as Record<string, unknown> | null,
 }));
 
 vi.mock('./lib/supabase', async (importOriginal) => {
@@ -143,6 +145,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         set_launched: fake.launchedAt,
         set_agent_mode: null,
         set_paused: null,
+        cancel_card: fake.cancelResult,
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         file_directive: '4f2c9d1e-7b3a-4e6f-8a90-1c2d3e4f5a6b',
         file_note: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d',
@@ -295,6 +298,7 @@ beforeEach(() => {
     card_max_usd: 25,
   };
   fake.cards = [];
+  fake.cancelResult = null;
   fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
@@ -366,6 +370,31 @@ describe('Board signed in as a board member', () => {
       { p_paused: false },
     ]);
     expect(screen.getByText('Agents resumed.')).toBeTruthy();
+  });
+
+  it('offers the four pause reasons, sends p_reason only for one that is not the default, and never on resume', async () => {
+    await renderBoard();
+    const select = screen.getByLabelText('Pause reason') as HTMLSelectElement;
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['board', 'Paused by the board'],
+      ['incident', 'A problem we are checking'],
+      ['awaiting_credit', "Waiting for a payout to buy the agents' credit"],
+      ['spend_limit', 'The monthly spend limit'],
+    ]);
+    expect(select.value).toBe('board');
+    fireEvent.change(select, { target: { value: 'incident' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
+    await flush();
+    fireEvent.change(select, { target: { value: 'board' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
+    await flush();
+    expect(callsNamed('set_paused').map((call) => call.args)).toEqual([
+      { p_paused: true, p_reason: 'incident' },
+      { p_paused: false },
+      { p_paused: true },
+    ]);
   });
 
   it('files a card with the contract argument names and only the card roles as executors', async () => {
@@ -728,6 +757,23 @@ describe('Board card controls', () => {
     fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
     await flush();
     expect(callsNamed('cancel_card').map((call) => call.args)).toEqual([{ p_card: 'x1', p_reason: 'No longer makes sense.' }]);
+    // The confirmation says where the card's money goes (docs/specs/money-logic.md).
+    expect(CANCEL_CONFIRM).toBe(
+      'Cancel this card? It is rejected with your reason, its unspent money goes to the next cards in line, and this cannot be undone.',
+    );
+  });
+
+  it('says how much unspent money a cancellation moved on', async () => {
+    fake.cards = [card({ id: 'x2', title: 'Holds money' })];
+    fake.cancelResult = { card_id: 'x2', stage: 'rejected', from_stage: 'voted', moved_usd: 1.8, moved_to: [] };
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderBoard();
+    await flush();
+    const form = cardForm('Holds money');
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Out of scope.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    await flush();
+    expect(form.getByText('Card cancelled. $1.80 of unspent money moved to the next cards in line.')).toBeTruthy();
   });
 
   it('resumes a paused card with a new estimate, and offers resume on paused cards only', async () => {

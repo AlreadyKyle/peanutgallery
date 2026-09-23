@@ -33,6 +33,9 @@ const PRIVATE_TABLES = [
   "card_patches",
   "controller_runs",
   "terms_versions",
+  "contribution_allocations",
+  "supporters",
+  "board_test_payments",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -47,6 +50,8 @@ const PUBLIC_RELATIONS = [
   "public_card_spend",
   "public_roles",
   "public_terms_versions",
+  "public_money",
+  "public_stopped_cards",
 ];
 
 // cards is granted column by column (docs/specs/card-columns-and-open-funding.md).
@@ -58,10 +63,10 @@ const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank";
 const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "*"];
 const PERMISSION_DENIED = "42501";
 
-// public_studio shows whether the studio is paused and whether the platform
-// code lane is open (docs/specs/board-site.md), and never who paused it or
-// when; those columns are not in the view at all (42703).
-const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open";
+// public_studio shows whether the studio is paused, why (docs/specs/money-logic.md)
+// and whether the platform code lane is open (docs/specs/board-site.md), and never
+// who paused it or when; those columns are not in the view at all (42703).
+const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open,pause_reason";
 const STUDIO_COLUMNS_ABSENT = ["paused_by", "paused_at"];
 const UNDEFINED_COLUMN = "42703";
 
@@ -72,7 +77,11 @@ const PUBLIC_ROLE_COLUMNS = "id,name,title,description,species_note,avatar_url,m
 // dispute id that is not one. terms_version_at only reads, and a time before
 // every version answers null. The three money-safety readers take no argument
 // and write nothing (docs/specs/money-safety.md); a wrong grant would only let
-// the call run, which this reports without printing what it returned.
+// the call run, which this reports without printing what it returned. The
+// money-logic calls (docs/specs/money-logic.md): record_stripe_fee with a
+// reference that is not a balance transaction; set_paused's two-argument form
+// from a caller who is no board member; waterfall_sweep, which takes no
+// argument and would only do what pg_cron does every five minutes.
 const NO_CARD = "00000000-0000-4000-8000-000000000000";
 const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["claim_dispatcher_lease", { p_holder: "anon-negative-test", p_ttl_seconds: 0 }],
@@ -90,7 +99,15 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["record_adjustment", { p_parent_id: NO_CARD, p_net_usd: 0, p_studio_usd: 0, p_agents_usd: 0, p_reserve_usd: 0, p_reason: null }],
   ["redact_contribution_name", { p_contribution_id: NO_CARD, p_reason: null }],
   ["terms_version_at", { p_at: "2000-01-01T00:00:00Z" }],
+  ["record_stripe_fee", { p_ref: "anon-negative-test", p_stripe_session_id: "", p_fee_usd: 0 }],
+  ["set_paused", { p_paused: false, p_reason: "anon-negative-test" }],
+  ["waterfall_sweep", {}],
 ];
+
+// The money schema holds the waterfall's helpers and is not exposed: PostgREST refuses any request
+// that names it (PGRST106) before a function is looked up.
+const MONEY_SCHEMA = "money";
+const SCHEMA_NOT_EXPOSED = "PGRST106";
 
 type Actual = "refused" | "readable" | "empty" | "error";
 
@@ -222,6 +239,17 @@ async function main(): Promise<void> {
 
   for (const [name, rpcArgs] of RPC_PROBES) {
     outcomes.push({ relation: `rpc ${name}`, expected: "refused", ...(await probeRpc(db, name, rpcArgs)) });
+  }
+
+  // Content-Profile: money. board_test_usd only reads, so even an exposed schema would change nothing.
+  {
+    const { error } = await db.schema(MONEY_SCHEMA).rpc("board_test_usd", {});
+    outcomes.push({
+      relation: `schema ${MONEY_SCHEMA}`,
+      expected: "refused",
+      actual: error ? (error.code === SCHEMA_NOT_EXPOSED || error.code === PERMISSION_DENIED ? "refused" : "error") : "readable",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : "the call ran",
+    });
   }
 
   const failures = outcomes.filter((o) => o.expected !== o.actual);

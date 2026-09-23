@@ -29,17 +29,24 @@ function base64url(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-/** A stored session for a board member at aal1, the way supabase-js keeps one after the magic link. */
-async function signIn(page: Page) {
+/** A verified authenticator app, for a session at aal2. */
+const TOTP_FACTOR = { id: 'f-verified', factor_type: 'totp', status: 'verified', friendly_name: '', created_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z' };
+
+/**
+ * A stored session for a board member, the way supabase-js keeps one after the magic link (aal1), or
+ * after its second factor too (aal2).
+ */
+async function signIn(page: Page, aal: 'aal1' | 'aal2' = 'aal1') {
   const now = Math.floor(Date.now() / 1000);
-  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal: 'aal1', amr: [{ method: 'otp', timestamp: now }], exp: now + 3600, session_id: 's-1' };
+  const amr = aal === 'aal2' ? [{ method: 'totp', timestamp: now }, { method: 'otp', timestamp: now }] : [{ method: 'otp', timestamp: now }];
+  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal, amr, exp: now + 3600, session_id: 's-1' };
   const session = {
     access_token: `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url(payload)}.c2lnbmF0dXJl`,
     refresh_token: 'e2e-refresh',
     token_type: 'bearer',
     expires_in: 3600,
     expires_at: now + 3600,
-    user: { id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] },
+    user: { id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: aal === 'aal2' ? [TOTP_FACTOR] : [] },
   };
   await page.addInitScript(([key, value]) => window.localStorage.setItem(key!, value!), [storageKey, JSON.stringify(session)]);
 }
@@ -80,18 +87,29 @@ const studio = {
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
-async function answerSupabase(page: Page, seen: string[]) {
+const roles = [{ id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' }];
+const cards = [
+  { id: 'c-e2e', title: 'An e2e card', stage: 'proposed', horizon: 'now', rank: 1, folder: 'seed-1', lane: 'config', funding_target_usd: 5, funded_usd: 2, estimate_usd: 3, created_at: '2026-09-20T00:00:00Z' },
+];
+
+async function answerSupabase(page: Page, seen: string[], { role = 'board', aal2 = false }: { role?: 'board' | 'moderator'; aal2?: boolean } = {}) {
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     switch (url.pathname) {
       case '/auth/v1/user':
-        return json({ id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] });
+        return json({ id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: aal2 ? [TOTP_FACTOR] : [] });
       case '/auth/v1/factors':
         return json({ id: 'f-e2e', type: 'totp', friendly_name: '', totp: { qr_code: QR_SVG, secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/e2e' } });
       case '/rest/v1/rpc/board_role':
-        return json('board');
+        return json(role);
+      case '/rest/v1/rpc/set_paused':
+        return route.fulfill({ status: 204, body: '' });
+      case '/rest/v1/public_roles':
+        return json(roles);
+      case '/rest/v1/cards':
+        return json(cards);
       case '/rest/v1/rpc/board_heartbeat':
         return json(new Date().toISOString());
       case '/rest/v1/rpc/board_studio_state':
@@ -169,3 +187,61 @@ test('a connection to any host but the Supabase project is refused', async ({ pa
   expect(outcomes).toEqual(['refused', 'refused']);
   await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
 });
+
+/**
+ * Each pair of stacked controls placed straight in a section, and what follows them, with the space
+ * between them: the forms' rhythm is 16 px. A subheading sits 8 px over its list by design.
+ */
+async function sectionGaps(page: Page): Promise<{ where: string; gap: number }[]> {
+  return page.locator('main section').evaluateAll((sections) =>
+    sections.flatMap((section) => {
+      const shown = [...section.children].filter((el) => el.getBoundingClientRect().height > 0);
+      return shown.slice(1).flatMap((next, i) => {
+        const before = shown[i]!;
+        const gap = next.getBoundingClientRect().top - before.getBoundingClientRect().bottom;
+        if (gap < -1 || before.tagName === 'H3') return [];
+        const name = (el: Element) => `${el.tagName.toLowerCase()}${el.className ? `.${el.className}` : ''}`;
+        return [{ where: `${section.getAttribute('aria-label')}: ${name(before)} then ${name(next)}`, gap: Math.round(gap * 100) / 100 }];
+      });
+    }),
+  );
+}
+
+for (const [who, role, aal] of [
+  ['a moderator', 'moderator', 'aal1'],
+  ['a board member at aal2', 'board', 'aal2'],
+] as const) {
+  test(`the page keeps 16 px between stacked controls for ${who}, and the focused pause reason clears the buttons, at 375, 768 and 1440 px`, async ({ page }) => {
+    const reports = await watchPolicy(page);
+    const seen: string[] = [];
+    await answerSupabase(page, seen, { role, aal2: aal === 'aal2' });
+    await signIn(page, aal);
+    for (const width of [375, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      if (role === 'board') await expect(page.getByText('An e2e card').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Pause agents' }).click();
+      await expect(page.getByRole('region', { name: 'Pause and resume' }).getByRole('status')).toHaveText('Agents paused.');
+      const tight = (await sectionGaps(page)).filter(({ gap }) => gap < 15.5);
+      expect(tight, `${width} px`).toEqual([]);
+
+      // Reached from the keyboard, the select shows its focus ring, which must end above the buttons.
+      await page.getByLabel('Pause reason').focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      const ring = await page.getByLabel('Pause reason').evaluate((select) => {
+        const style = getComputedStyle(select);
+        const row = select.closest('label')!.nextElementSibling!;
+        return {
+          visible: select.matches(':focus-visible'),
+          clearance: row.getBoundingClientRect().top - (select.getBoundingClientRect().bottom + parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)),
+        };
+      });
+      expect(ring.visible, `${width} px`).toBe(true);
+      expect(ring.clearance, `${width} px`).toBeGreaterThanOrEqual(8);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${width} px`).toBe(false);
+    }
+    expect(seen).toContain('POST /rest/v1/rpc/set_paused');
+    expect(reports).toEqual([]);
+  });
+}
