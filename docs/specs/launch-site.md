@@ -26,7 +26,7 @@ Out: the migrations, the RPCs and their refusals (DB); the dispatcher's lane clo
 
 **/roadmap.** Cards on horizon `next` and `later`, grouped by horizon then category, in rank order, each labelled "Planned and not built yet", with no bar, status or fund link. This is the only page where a planned card's own title may name voting.
 
-**/board.** After the second factor: a caps form (daily cap, per-card spend ceiling, hourly rate, monthly cap, studio daily limit on immediate credit, and a reason), a credit purchase form (amount, Stripe payout id, reason), one form per card in stages proposed, designing, voted, funded and paused (horizon, rank, target, reason; save, cancel after a confirm, and resume with a new estimate on a paused card), and the file card form with a horizon field and no client-side cap on the target. Executors are the roles that build cards; the directors and the Host are never offered.
+**/board.** After the second factor: a caps form (daily cap, per-card spend ceiling, hourly rate, monthly cap, studio daily limit on immediate credit, and a reason), a credit purchase form (amount, Stripe payout id, reason), one form per card in stages proposed, designing, voted, funded and paused (a reason on every action; horizon and rank on a card still open for funding, with a funding target only when the save moves the card to now; cancel after a confirm; resume with a new estimate on a paused card), and the file card form with a horizon field and no client-side cap on the target. Executors are the roles that build cards; the directors and the Host are never offered.
 
 **Security headers.** `netlify.toml` enforces `frame-ancestors 'none'; connect-src 'self' https://<project>.supabase.co wss://<project>.supabase.co`; the full policy stays report-only. This blocks script on the site from sending data to any other host. It does not stop a same-origin call to Supabase; the closed platform code lane does that until the board has its own site.
 
@@ -36,7 +36,7 @@ Out: the migrations, the RPCs and their refusals (DB); the dispatcher's lane clo
 - `cards.horizon`, `cards.rank` and `cards.executor_role_id` readable by anon.
 - `public_studio (launched_at, paused)`.
 - `public_roles (id, name, title, description, species_note, model, write_access, state, hired_at)`.
-- `set_card_horizon(p_card, p_horizon, p_rank, p_reason, p_target_usd)`, with `p_target_usd` sent only when moving to now.
+- `set_card_horizon(p_card, p_horizon, p_rank, p_reason, p_target_usd)`, with `p_target_usd` sent only when the save moves a card to now from next or later. As built on `launch/db`, it refuses card fields on any other save and changes horizon only on a proposed, designing or voted card.
 - `cancel_card(p_card, p_reason)` and `resume_card(p_card, p_estimate_usd, p_reason)`.
 - `set_caps(p_daily_cap_usd, p_card_max_usd, p_agent_hourly_rate_usd, p_monthly_cap_usd, p_credit_studio_daily_cap_usd, p_reason)`.
 - `record_credit_purchase(p_amount_usd, p_stripe_payout_id, p_reason)`.
@@ -57,6 +57,7 @@ Out: the migrations, the RPCs and their refusals (DB); the dispatcher's lane clo
 - [x] /team shows running roles by the derived rule, no model or hired date for a role that does not run, live cards shipped per running role, and an avatar named by each species note; the same note always draws the same avatar.
 - [x] /roadmap lists next and later cards by horizon and category in rank order, labelled planned, with no bar, status or link.
 - [x] /board sends set_caps, record_credit_purchase, set_card_horizon, cancel_card (after a confirm) and resume_card with the contract argument names, requires a reason, and files a card with `p_horizon`, with a target above the card maximum accepted.
+- [x] /board sends a funding target only when a save moves a card to now, and offers horizon and rank only on a card still open for funding; a funded or paused card offers cancel, and resume when paused.
 - [x] No site query targets the `roles` table.
 - [x] The routes /how-it-works, /team and /roadmap render one h1 that names the tab, are in the nav, and have no horizontal overflow at 375 and 1440 px.
 - [x] Every route loads its data under the enforced policy with no report, and a connection to another host is refused.
@@ -74,7 +75,26 @@ Out: the migrations, the RPCs and their refusals (DB); the dispatcher's lane clo
 
 ## Evidence
 
-Run on commit 64ccc7d, before this spec was added.
+Rerun on commit 72116d6, after the /board horizon fix below.
+
+- `pnpm verify`, exit 0:
+  ```
+  platform/supabase test:       Tests  146 passed (146)
+  seed-1 test:       Tests  77 passed (77)
+  platform/site test:  Test Files  21 passed (21)
+  platform/site test:       Tests  225 passed (225)
+  platform/dispatcher test:       Tests  374 passed (374)
+  platform/gate test: PASS: gate tests passed=213
+  ok | 71 passed (47 steps) | 0 failed (1s)
+  GATE PASS folder=seed-1 lane=code
+  GATE PASS folder=platform lane=code
+  PASS: secret-scan files=351
+  ```
+- `E2E_PORT=4193 pnpm --filter @backseat/site e2e`, exit 0: `25 passed (9.7s)`.
+- `node scripts/live-check.mjs http://127.0.0.1:4194 --allow-no-data` against `vite preview` of a build with the public Payment Link, Discord and play values and no database values: `PASS live-check http://127.0.0.1:4194 passed=135 failed=0 skipped=6`, the same six SKIP lines as below.
+- The /board horizon fix: `src/pages/Board.test.tsx` ("re-ranks a card already on now without sending a target, which set_card_horizon refuses there"; "offers horizon and rank only on cards still open for funding").
+
+First run, on commit 64ccc7d, before this spec was added.
 
 - `pnpm verify`, exit 0:
   ```
@@ -138,4 +158,5 @@ Run on commit 64ccc7d, before this spec was added.
 - 22 September 2026: whether a role runs is derived, not labelled. A role runs when it builds cards (`CARD_ROLE_FOLDERS` in `lib/board.ts`) in a folder the dispatcher runs at launch (`OPEN_FOLDERS`, `seed-1` only). The Platform Builder is therefore not running yet while the platform code lane is closed, beside the directors, the Host, the Scout and Community. The public_roles contract has no column for this, so the site mirrors the rule the dispatcher and the RPCs enforce.
 - 22 September 2026: `connect-src` is enforced, because the e2e run loads every route under the production headers with no report. The rest of the policy stays report-only under the conditions in `docs/specs/site-truth-pass.md`. This supersedes that spec's "only frame-ancestors is enforced" for `connect-src`.
 - 22 September 2026: the art-policy line names the avatars as drawn by code. This supersedes the keep-reason for "such as agent avatars" in `docs/specs/site-truth-pass.md`.
+- 22 September 2026: /board follows set_card_horizon as built on `launch/db`: a funding target goes only with a move to now, and horizon and rank are offered only on a card still open for funding. Re-ranking a card already on now sent its target and was refused, and funded and paused cards offered a save the database always refuses.
 - 22 September 2026: the legal pages' "Last updated" line is 22 September 2026, the date the Terms and Privacy text changed. If this merges on a later date, it moves to that date.
