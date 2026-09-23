@@ -101,6 +101,8 @@ export class FakeDb implements Db {
   events: EventRow[] = [];
   deploys: Deploy[] = [];
   claims = 0;
+  // The stages each listCardsInStages call asked for.
+  stagesRead: string[][] = [];
   heartbeats: Date[] = [];
   heartbeatError: Error | null = null;
   // Console credit the board has recorded buying; ample by default so money tests set it.
@@ -182,11 +184,11 @@ export class FakeDb implements Db {
   async boardSessionActive() {
     return this.boardActive;
   }
-  async listFundedCards() {
-    return this.cards.filter((c) => c.stage === 'funded').map((c) => ({ ...c }));
-  }
-  // dispatcher_cards: the executor's pause is read from its role, as the view joins it.
+  // dispatcher_cards holds every stage (agent_system_test.ts reads a card at each one), so the fake
+  // filters by the stages asked for alone; the executor's pause is read from its role, as the view
+  // joins it.
   async listCardsInStages(stages: string[]) {
+    this.stagesRead.push([...stages]);
     return this.cards
       .filter((c) => stages.includes(c.stage))
       .map((c) => ({ ...c, executor_paused: c.executor_paused || this.roles.some((r) => r.id === c.executor_role_id && r.paused) }));

@@ -160,6 +160,14 @@ describe('createSupabaseDb queries', () => {
     expect(plain).toMatchObject({ needs_approval: false, approved: false, board_vetoed: false, executor_paused: false });
   });
 
+  it("reads startup recovery's building and gated cards from dispatcher_cards, which holds every stage", async () => {
+    const { fetchFn, seen } = rest([{ id: 'g', stage: 'gated', commit_sha: null, failing_check: 'merge_unknown' }]);
+    const cards = await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).listCardsInStages(['building', 'gated']);
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/dispatcher_cards');
+    expect(seen[0]?.url.searchParams.get('stage')).toBe('in.(building,gated)');
+    expect(cards.map((c) => [c.id, c.stage])).toEqual([['g', 'gated']]);
+  });
+
   it('calls the job queue and card functions with their arguments', async () => {
     const { fetchFn, calls } = mockFetch((method, url) => {
       if (method !== 'POST') return undefined;

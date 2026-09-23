@@ -4015,6 +4015,7 @@ Deno.test("migrations on PGlite", {
         const service = [
           "apply_contribution",
           "card_approved",
+          "card_ceiling_resumed",
           "card_content_hash",
           "card_content_hash_of",
           "card_ledger_usd",

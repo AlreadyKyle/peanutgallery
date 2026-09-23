@@ -308,6 +308,22 @@ Deno.test("criterion 2: a hashed field changes only through a board RPC, which r
       assertEquals(await s.isPublic(id), true);
       // The rule's half is criterion 8, which checks the approval after a top-up.
     });
+
+    await t.step("dispatcher_cards reads a card at every stage, so a tick sees the hold stages and startup recovery sees building and gated cards", async () => {
+      await s.signInAs(null);
+      const staged = await s.card("Every stage", { source: "board" });
+      const stages = (await s.rows<{ stage: string }>(`select unnest(enum_range(null::public.card_stage))::text as stage`)).map((r) => r.stage);
+      assert(stages.includes("gated") && stages.includes("building"), JSON.stringify(stages));
+      for (const stage of stages) {
+        await s.db.query(`update public.cards set stage = $2::public.card_stage where id = $1`, [staged, stage]);
+        const seen = await s.rows<{ stage: string }>(`select stage::text as stage from public.dispatcher_cards where id = $1`, [staged]);
+        assertEquals(seen, [{ stage }], `dispatcher_cards at ${stage}`);
+      }
+      // Recovery's own read: building and gated, each with the approval columns.
+      await s.db.query(`update public.cards set stage = 'gated' where id = $1`, [staged]);
+      const recovery = await s.rows(`select stage::text as stage, needs_approval, approved from public.dispatcher_cards where id = $1 and stage in ('building', 'gated')`, [staged]);
+      assertEquals(recovery, [{ stage: "gated", needs_approval: false, approved: false }]);
+    });
   } finally {
     await s.close();
   }
@@ -849,6 +865,40 @@ Deno.test("criterion 8: resume by rule, once per card, topping the bar up from m
       await s.signInAs(BOARD_EMAIL, "aal1");
       const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
       assertEquals(needs.rule_blocked.map((c) => [c.id, c.why]), [[id, "resumed_before"], [maxed, "card_max"]]);
+      await s.identity();
+    });
+
+    await t.step("a card the board resumed from its ceiling pause, paused at its ceiling again, is never resumed by the rule and is listed in Needs you", async () => {
+      await s.signInAs(null);
+      const card = await s.card("Board resumed it", { source: "board", horizon: "now", target: 1 });
+      await s.pay("board-resumed", 1, card);
+      await s.db.query(`update public.cards set stage = 'building' where id = $1`, [card]);
+      await s.spend(card, 1.5);
+      await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [card]);
+      // The board resumes the first ceiling pause itself, before the rule does.
+      await s.signInAs(BOARD_EMAIL, "aal2");
+      await s.db.query(`select public.resume_card($1, 2, 'More room')`, [card]);
+      await s.signInAs(null);
+      const action = await s.row<{ d: Row }>(`select details as d from public.board_actions where action = 'resume_card' and card_id = $1`, [card]);
+      assertEquals(action.d.failing_check, "ceiling");
+      await s.db.query(`update public.cards set stage = 'building' where id = $1`, [card]);
+      await s.spend(card, 1.5);
+      await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [card]);
+      const before = await s.cardRow(card);
+      const allocations = (await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n;
+      // There is money not on a card yet, and $4.50 is under the $5 maximum, so only the earlier resume blocks it.
+      const due = (await s.row<{ r: { resumed: number; results: Row[] } }>(`select public.resume_due_by_rule() as r`)).r;
+      assertEquals(due.resumed, 0);
+      assertEquals(due.results.filter((r) => r.card_id === card), []);
+      assertEquals((await s.row<{ r: Row }>(`select public.resume_card_by_rule($1) as r`, [card])).r.blocked, "resumed_before");
+      assertEquals(await s.cardRow(card), before);
+      assertEquals((await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n, allocations);
+      assertEquals((await s.rows(`select 1 from public.agent_events where card_id = $1 and payload_json ->> 'step' in ('resume_rule', 'ceiling_top_up')`, [card])).length, 0);
+
+      await s.signInAs(BOARD_EMAIL, "aal1");
+      const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
+      assertEquals(needs.rule_blocked.filter((c) => c.id === card).map((c) => c.why), ["resumed_before"]);
+      await s.signInAs(null);
       await s.identity();
     });
 
