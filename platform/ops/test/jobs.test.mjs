@@ -84,6 +84,7 @@ function fakeFetch(account = ACCOUNT, overrides = {}) {
     if (url.pathname === '/rest/v1/rpc/ledger_identity') return json(200, account.identity);
     if (url.pathname === '/rest/v1/rpc/controller_figures') return json(200, account.figures);
     if (url.pathname === '/rest/v1/rpc/record_dispute_reinstated') return json(200, { found: true, inserted: true, reinstated_usd: 10 });
+    if (url.pathname === '/rest/v1/rpc/record_stripe_fee') return json(200, { found: true, inserted: true, replay: false });
     if (url.pathname === '/rest/v1/rpc/ops_database_size') return json(200, 52428800);
     if (url.pathname === '/rest/v1/controller_runs') return new Response(null, { status: 201 });
     if (url.origin === 'https://api.github.com') return json(200, { usageItems: [{ product: 'actions', sku: 'Actions Linux', unitType: 'Minutes', quantity: 812 }] });
@@ -333,6 +334,23 @@ describe('the Controller reconciliation', () => {
     assert.equal(result.checks.find((c) => c.name === 'refunds_booked').items[0].stripe_refunded_usd, 3);
   });
 
+  test('finds no gap when the refund row carries the fee Stripe kept (docs/specs/money-logic.md)', () => {
+    // Family b's $2 refund row has net -2.0000: 4.6204 - 2 = 2.6204, what Stripe holds, with no adjustment.
+    const family = ACCOUNT.figures.families[1];
+    assert.deepEqual([family.refunded_usd, family.adjusted_net_usd, family.books_net_usd], [2, 0, 2.6204]);
+    const result = reconcile({ identity: ACCOUNT.identity, figures: ACCOUNT.figures, stripe: stripeData(), now: NOW });
+    assert.equal(result.checks.find((c) => c.name === 'stripe_costs_booked').ok, true);
+    assert.deepEqual(result.fees, []);
+  });
+
+  test('leaves the board test payment out of the paid-out agent money a credit purchase may use', () => {
+    const figures = clone(ACCOUNT.figures);
+    figures.families[0].board_test = true;
+    const result = reconcile({ identity: ACCOUNT.identity, figures, stripe: stripeData(), now: NOW });
+    // Only family b's 1.755 counts; family a's 6.4356 is the board's own money.
+    assert.equal(result.figures.credit_purchase.paid_out_agent_money_usd, 1.755);
+  });
+
   test('asks for an adjustment when Stripe kept a fee the books do not carry', () => {
     const account = clone(ACCOUNT);
     account.figures.families[1].books_net_usd = 2.7722;
@@ -378,6 +396,9 @@ describe('the Controller reconciliation', () => {
     Object.assign(after.figures.families[0], { reinstated_usd: 10, books_net_usd: 9.4088 });
     const next = reconcile({ identity: after.identity, figures: after.figures, stripe: stripeData(after), now: NOW });
     assert.deepEqual(next.reinstate, []);
+    // The run books the dispute fee through record_stripe_fee (docs/specs/money-logic.md); until it
+    // is in the books, the gap below names it.
+    assert.deepEqual(next.fees, [{ ref: 'txn_fixture_dispute', session_id: 'cs_fixture_a', fee_usd: 15 }]);
     const costs = next.checks.find((c) => c.name === 'stripe_costs_booked').items;
     assert.deepEqual(costs.map((item) => [item.books_net_usd, item.stripe_net_usd]), [[9.4088, -5.5912]]);
     assert.match(costs[0].fix, /record an adjustment of net -15\.0000, studio -15\.0000/);
@@ -448,6 +469,58 @@ describe('the Controller run', () => {
     assert.match(alert.body, /webhook_delivered: \{"event":"evt_fixture_lost"/);
     assert.equal(alert.headers.Title, 'Peanut Gallery Controller');
     assert.ok(calls.some((call) => call.url === 'https://hc-ping.com/fixture-controller/fail'));
+  });
+
+  // A dispute on payment a: its row takes the whole $10 as net (9.4088 - 10 = -0.5912), and Stripe
+  // also kept its 20.55 CAD (15 USD) dispute fee on balance transaction txn_fixture_dispute.
+  function disputedAccount() {
+    const account = clone(ACCOUNT);
+    account.disputes = [
+      {
+        id: 'dp_fixture_lost', object: 'dispute', amount: 1000, currency: 'usd', charge: 'ch_fixture_a', payment_intent: 'pi_fixture_a', status: 'lost',
+        balance_transactions: [{ id: 'txn_fixture_dispute', object: 'balance_transaction', type: 'adjustment', amount: -1370, fee: 2055, net: -3425, currency: 'cad', exchange_rate: 1.37 }],
+      },
+    ];
+    Object.assign(account.figures.families[0], { disputed_usd: 10, books_net_usd: -0.5912 });
+    return account;
+  }
+
+  test('books a new dispute fee once and compares its payment on the next run', async () => {
+    const account = disputedAccount();
+    const { fetchFn, calls } = fakeFetch(account);
+    const row = await runController({ env: CONTROLLER_ENV, fetchFn, now: NOW, out: sink() });
+    const booked = calls.filter((call) => call.url.endsWith('/rpc/record_stripe_fee'));
+    assert.deepEqual(booked.map((call) => JSON.parse(call.body)), [{ p_ref: 'txn_fixture_dispute', p_stripe_session_id: 'cs_fixture_a', p_fee_usd: 15 }]);
+    // The books were read before the fee was booked, so payment a waits for the next run.
+    assert.equal(row.checks.find((c) => c.name === 'stripe_costs_booked').ok, true);
+    assert.equal(row.checks.find((c) => c.name === 'stripe_fees_booked').ok, true);
+    assert.deepEqual(row.figures.fees_booked, [{ ref: 'txn_fixture_dispute', session_id: 'cs_fixture_a', fee_usd: 15, inserted: true, found: true }]);
+    assert.equal(row.ok, true);
+  });
+
+  test('a replayed dispute fee books nothing and, once in the books, leaves no gap', async () => {
+    const account = disputedAccount();
+    Object.assign(account.figures.families[0], { adjusted_net_usd: -15, books_net_usd: -15.5912 });
+    const { fetchFn, calls } = fakeFetch(account, {
+      'POST https://fixture.supabase.local/rest/v1/rpc/record_stripe_fee': () =>
+        new Response(JSON.stringify({ found: true, inserted: false, replay: true }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    });
+    const row = await runController({ env: CONTROLLER_ENV, fetchFn, now: NOW, out: sink() });
+    assert.equal(calls.filter((call) => call.url.endsWith('/rpc/record_stripe_fee')).length, 1);
+    assert.equal(row.checks.find((c) => c.name === 'stripe_costs_booked').ok, true);
+    assert.equal(row.ok, true);
+  });
+
+  test('a refused dispute fee is a mismatch, and its payment still shows the gap', async () => {
+    const account = disputedAccount();
+    const { fetchFn } = fakeFetch(account, {
+      'POST https://fixture.supabase.local/rest/v1/rpc/record_stripe_fee': () =>
+        new Response(JSON.stringify({ message: 'p_fee_usd must be above zero and at most $100 either way' }), { status: 400, headers: { 'content-type': 'application/json' } }),
+    });
+    const row = await runController({ env: CONTROLLER_ENV, fetchFn, now: NOW, out: sink() });
+    assert.equal(row.ok, false);
+    assert.equal(row.checks.find((c) => c.name === 'stripe_fees_booked').ok, false);
+    assert.equal(row.checks.find((c) => c.name === 'stripe_costs_booked').ok, false);
   });
 
   test('a dry run reads everything and writes, reinstates and alerts nothing', async () => {
