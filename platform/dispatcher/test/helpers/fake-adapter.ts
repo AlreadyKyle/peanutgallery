@@ -20,6 +20,8 @@ export interface FakeOptions extends FakeEnd {
   // The result line's modelUsage in place of the emitted turns' totals.
   modelUsage?: ModelUsage[];
   resultOnAbort?: boolean;
+  // The result line's final message: a role job's typed answer (docs/specs/agent-workflows.md).
+  result?: string | ((spec: SessionSpec) => string);
 }
 
 export class FakeAdapter implements AgentAdapter {
@@ -63,7 +65,7 @@ export class FakeAdapter implements AgentAdapter {
       isError,
       totalCostUsd: null,
       numTurns: turns,
-      result: '',
+      result: typeof this.end.result === 'function' ? this.end.result(spec) : (this.end.result ?? ''),
       usage: null,
       modelUsage: this.end.modelUsage ?? [...totals.values()],
       permissionDenials: [],
