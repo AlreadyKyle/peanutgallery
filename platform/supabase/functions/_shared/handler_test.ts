@@ -36,6 +36,7 @@ function completedEvent(
           { key: "split", type: "dropdown", dropdown: { value: "8020" } },
         ],
         payment_intent: null,
+        created: 1789905600,
         ...session,
       },
     },
@@ -376,6 +377,8 @@ Deno.test("handler credits a paid session through apply_contribution", async () 
   });
   assertEquals(applied[0]!.parsed.event_id, "evt_handler_1");
   assertEquals(applied[0]!.parsed.studio_pct, 20);
+  // The Terms stamp's time comes from the signed event's session (money-logic.md).
+  assertEquals(applied[0]!.parsed.session_created_at, "2026-09-20T12:00:00.000Z");
 });
 
 Deno.test("handler credits a session that carries a displayname field exactly as before, with no name", async () => {
@@ -426,6 +429,8 @@ Deno.test("charge.updated with a balance transaction credits the paid checkout s
   assertEquals(applied.length, 1);
   assertEquals(applied[0]!.parsed.session_id, "cs_handler_1");
   assertEquals(applied[0]!.parsed.event_id, "evt_handler_charge");
+  // charge.updated stamps from the session the webhook retrieved, never from the charge.
+  assertEquals(applied[0]!.parsed.session_created_at, "2026-09-20T12:00:00.000Z");
   assertEquals(applied[0]!.amounts, {
     amount_usd: 1,
     fee_usd: 0.29,

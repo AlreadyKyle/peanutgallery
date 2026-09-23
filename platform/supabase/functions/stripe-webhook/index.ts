@@ -127,6 +127,8 @@ function applyContribution(
     p_goal_card_id: parsed.goal_card_id,
     p_stripe_session_id: parsed.session_id,
     p_payer_key: payerKey,
+    // The Terms stamp's time, from Stripe's session (docs/specs/money-logic.md).
+    p_session_created_at: parsed.session_created_at,
   });
 }
 

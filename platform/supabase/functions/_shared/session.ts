@@ -60,6 +60,8 @@ export interface SessionLike {
   metadata: Record<string, string> | null;
   custom_fields: CustomField[];
   payment_intent: string | PaymentIntentLike | null;
+  /** When Stripe created the Checkout Session, in Unix seconds. */
+  created?: number | null;
 }
 
 export interface Parsed {
@@ -71,6 +73,19 @@ export interface Parsed {
   display_name: string | null;
   contributor_id: string;
   goal_card_id: string | null;
+  /**
+   * The Checkout Session's created time from Stripe, as ISO 8601, or null when it is missing or not
+   * a positive whole number of seconds. apply_contribution stamps the payment with the Terms version
+   * posted at or before it (docs/specs/money-logic.md); the client never supplies it.
+   */
+  session_created_at: string | null;
+}
+
+/** ISO 8601 from a positive whole number of Unix seconds, else null. */
+export function sessionCreatedAt(created: unknown): string | null {
+  if (typeof created !== "number" || !Number.isInteger(created) || created <= 0) return null;
+  const at = new Date(created * 1000);
+  return Number.isFinite(at.getTime()) ? at.toISOString() : null;
 }
 
 export function customFieldValue(
@@ -119,6 +134,7 @@ export async function parseSession(
       session.client_reference_id,
       session.metadata?.goal_card_id,
     ),
+    session_created_at: sessionCreatedAt(session.created),
   };
 }
 

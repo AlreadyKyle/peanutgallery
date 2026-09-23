@@ -6,6 +6,7 @@ import {
   customFieldValue,
   feeFromSession,
   parseSession,
+  sessionCreatedAt,
   type SessionLike,
 } from "./session.ts";
 import { sha256Hex } from "./split.ts";
@@ -65,6 +66,16 @@ Deno.test("parseSession maps the split dropdown and stores no name, even when a 
   assertEquals(parsed.currency, "usd");
   assertEquals(parsed.studio_pct, 30);
   assertEquals(parsed.display_name, null);
+});
+
+Deno.test("parseSession passes the session's created time as ISO, and null when it is missing or not whole seconds", async () => {
+  assertEquals((await parseSession("evt_c1", session({ created: 1789905600 }))).session_created_at, "2026-09-20T12:00:00.000Z");
+  assertEquals((await parseSession("evt_c2", session())).session_created_at, null);
+  assertEquals((await parseSession("evt_c3", session({ created: null }))).session_created_at, null);
+  for (const created of [0, -5, 1.5, Number.NaN]) {
+    assertEquals((await parseSession("evt_c4", session({ created }))).session_created_at, null, String(created));
+  }
+  assertEquals(sessionCreatedAt("1789905600"), null);
 });
 
 Deno.test("parseSession defaults a missing split to 20 and an empty name to null", async () => {

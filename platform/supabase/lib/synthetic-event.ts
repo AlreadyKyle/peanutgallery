@@ -21,6 +21,7 @@ export function syntheticEvent(nonce: string, amountCents: number, split: string
       object: {
         id: `cs_synthetic_${nonce}`,
         object: "checkout.session",
+        created: createdSeconds,
         amount_total: amountCents,
         currency: "usd",
         payment_status: "paid",
