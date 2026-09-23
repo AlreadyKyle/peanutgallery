@@ -4,7 +4,7 @@ import { formatAmount, formatDateTime, formatDay, formatUsd } from './lib/format
 import {
   CONSOLE_BILLING_URL,
   CONTACT_EMAIL,
-  KERNEL_PULLS_URL,
+  BOARD_PULLS_URL,
   STRIPE_DISPUTES_URL,
   STRIPE_PAYOUT_SETTINGS_URL,
   dueItems,
@@ -191,7 +191,8 @@ export function NeedsYou({
           within 14 days of the contribution.
         </li>
         <li>
-          Kernel pull requests wait for your merge: <a href={KERNEL_PULLS_URL}>open kernel pull requests</a>.
+          Every pull request that is not from a card branch waits for your merge:{' '}
+          <a href={BOARD_PULLS_URL}>open pull requests not from a card branch</a>.
         </li>
       </ul>
     </section>

@@ -6,9 +6,14 @@ import { toNumber } from './format';
 // empty. The duties with nothing to read (refund email, kernel pull requests) are standing lines
 // under the list, never a count.
 
-/** The repository's open pull requests that carry the kernel label: the ones only the board merges. */
-export const KERNEL_PULLS_URL = 'https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+label%3Akernel';
-export const KERNEL_LABEL = 'kernel';
+/**
+ * The repository's open pull requests from any branch but a card branch: the ones only the board
+ * merges. The dispatcher merges only the card/* branches it opens, on a green gate; every other pull
+ * request (board work, HR's text changes, the Claude Code pin, a dependency update) changes a kernel
+ * path or is the board's to judge. GitHub's head: qualifier matches the start of the branch name, so
+ * -head:card/ leaves out exactly the card branches, and no one has to remember to label anything.
+ */
+export const BOARD_PULLS_URL = 'https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F';
 export const CONTACT_EMAIL = 'hello@peanutgallery.games';
 export const STRIPE_DISPUTES_URL = 'https://dashboard.stripe.com/disputes';
 export const CONSOLE_BILLING_URL = 'https://console.anthropic.com/settings/billing';

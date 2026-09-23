@@ -10,7 +10,7 @@ import {
   STUDIO_STATE_POLL_MS,
 } from './lib/board';
 import { formatClock, formatDateTime } from './lib/format';
-import { KERNEL_PULLS_URL } from './lib/needs';
+import { BOARD_PULLS_URL } from './lib/needs';
 import { NOTHING_NEEDS_YOU } from './NeedsYou';
 
 type RpcCall = { name: string; args: Record<string, unknown> | undefined };
@@ -974,8 +974,9 @@ describe('Board Needs you inbox', () => {
     expect(within(inbox).getByText(/No Controller run yet, so there is no credit or Minimum balance figure\./)).toBeTruthy();
     expect(within(inbox).getByRole('link', { name: "Stripe's disputes" }).getAttribute('href')).toBe('https://dashboard.stripe.com/disputes');
     expect(within(inbox).getByRole('link', { name: 'hello@peanutgallery.games' }).getAttribute('href')).toBe('mailto:hello@peanutgallery.games');
-    expect(within(inbox).getByRole('link', { name: 'open kernel pull requests' }).getAttribute('href')).toBe(KERNEL_PULLS_URL);
-    expect(KERNEL_PULLS_URL).toBe('https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+label%3Akernel');
+    expect(within(inbox).getByRole('link', { name: 'open pull requests not from a card branch' }).getAttribute('href')).toBe(BOARD_PULLS_URL);
+    expect(BOARD_PULLS_URL).toBe('https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F');
+    expect(decodeURIComponent(new URL(BOARD_PULLS_URL).searchParams.get('q') ?? '')).toBe('is:pr is:open -head:card/');
     expect(callsNamed('board_needs_you')).toEqual([{ name: 'board_needs_you', args: undefined }]);
   });
 
