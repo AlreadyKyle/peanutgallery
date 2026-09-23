@@ -101,9 +101,9 @@ Per package:
 
 ## Glossary
 
-- **Board.** Kyle and whoever joins him. The board acts through `/board`: pause, the agent mode, Go live, directives, cards and notes.
+- **Board.** Kyle and whoever joins him. The board acts through its own site (`platform/board`, not linked from the public site): the Needs you inbox, pause, the agent mode, Go live, directives, cards, notes, the caps and credit purchases.
 - **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a funding target, a lane, a folder, an executor role, a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused) and a horizon (now, next, later).
-- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` only, and that lane is closed until the board has its own site (PLAN.md §4 Work).
+- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` outside its kernel paths only, and that lane opens when the board sets `studio_state.platform_lane_open` once its own site is live (PLAN.md §4 Work).
 - **Horizon and backlog.** Only a card on `now` can take money or run. `next` and `later` are the backlog: planned, not built, listed on /roadmap and seeded from `docs/BACKLOG.md`.
 - **Gate.** The checks a change passes before it merges: `platform/gate/ship-gate.sh` run by the `gate` workflow. It covers the secret scan, the deny-list, the runtime-token scan, typecheck and tests, the headless bot and the build.
 - **Kernel.** The rules no card or role change can edit (PLAN.md §4 Kernel). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.

@@ -6,8 +6,8 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to the VPS. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 4, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
-- **Go live** is the board pressing Go live at /board, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
+- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to the VPS. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 21, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
+- **Go live** is the board pressing Go live on the board's own site, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
 
 ## What "live" means
 
@@ -24,7 +24,7 @@ These are two different states.
 4. **The site is ready for strangers.**
    - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@peanutgallery.games receives mail.
    - /how-it-works, /team and /roadmap are live.
-   - Link previews render, and /board requires a second factor.
+   - Link previews render, and the board's own site requires a second factor.
    - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items on /roadmap.
    - The site shows a notice while the studio is paused.
 5. **The board has pressed Go live.** The launch clip and the post drafts exist.
@@ -34,11 +34,9 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 ## The order from here
 
 1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
-2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Oracle sign-in, after which the instance is launched by script.
-3. **Board steps 4 and 5**: the call on how the first player arrives, and contributions open with the studio paused.
-4. **Board steps 6 and 7**: the first Stripe payout, then Console credit bought from it and recorded at /board.
-5. **Board step 8, the cutover and soak.** Closes criterion 2 once a player's card builds unattended.
-6. **Board steps 9 to 11**: a moderator, the launch clip, Go live.
+2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 12), in order: the hello@ mailbox, the board's sign-in email through Resend, the Oracle account, the backup key, the Stripe read-only key, the GitHub tokens, healthchecks.io, the Discord webhooks, the Netlify plan check, the ntfy subscription, the business contact for the Terms and the Claude Code pin.
+3. **Board section B** (steps 13 to 19), before the announcement: the Stripe settings, retiring the full Stripe key, the legal pages, passkeys, a moderator, the first sign-in on the board's own site and the studio daily credit limit.
+4. **Board section C** (steps 20 to 25), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live.
 
 ## The launch batch (22 September 2026)
 
@@ -90,7 +88,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/week1-runs.md` | built | criterion 6, a player's contribution credited (criterion 1 above) |
 | `specs/live-cut.md` | built | criterion 7, an unattended build, at the cutover |
 | `specs/unattended-mode.md` | built | the unattended probe and a funded card with no board session, at the cutover |
-| `specs/vps.md` | built | the cutover and soak (board step 8) |
+| `specs/vps.md` | built | the cutover and soak (board step 24) |
 | `specs/ops-separation.md` | built | the production steps, which need the VPS |
 | `specs/oracle-launch.md` | built | the live run and a rerun, after the board signs in with `oci session authenticate` |
 | `specs/stripe-late-fee.md` | built | `charge.updated` crediting a fresh payment, on the next real contribution |
@@ -104,6 +102,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the VPS jobs' first runs and the backups repository |
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
+| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the first sign-ins (board steps 17 and 18), then `platform_lane_open` |
 
 ### Draft
 
@@ -115,6 +114,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 
 - **Production.**
   - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
+  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and peanutgallery.games/board is a plain not found page.
   - Supabase project `lyxndueoeisyqzewflpu`.
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
   - The dispatcher runs attended on the founder's Mac until the cutover.
