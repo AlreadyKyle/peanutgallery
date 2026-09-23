@@ -53,8 +53,10 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   if (view === null) return <p className="status-line">{unavailableLine(studio)}</p>;
   const { fund, now } = view.groups;
   const paused = pausedSentence(view.snapshot);
+  // The 16px pause glyph marks the sentence beside it; it is not a column that could leave dead space
+  // beside a long reason, so the layout audit leaves the pair alone (DESIGN.md, No dead space).
   return (
-    <p className="status-line">
+    <p className="status-line" data-balance={paused === null ? undefined : 'ignore'}>
       {paused === null ? null : <Glyph name="pause" />}
       <span>
         {fund.length === 0 ? copy.status.openNone : <Count n={fund.length} words={copy.status.open} />}
