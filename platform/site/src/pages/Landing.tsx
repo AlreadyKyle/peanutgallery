@@ -6,6 +6,7 @@ import { Glyph } from '../components/Glyph';
 import { LiveUpdates } from '../components/LiveUpdates';
 import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
+import { MoreLink } from '../components/MoreLink';
 import { TeamStrip } from '../components/TeamStrip';
 import { plannedCards } from '../lib/cards';
 import { copy } from '../lib/copy';
@@ -125,6 +126,9 @@ function TeamSection({ view }: { view: HomeView }) {
       <section className="section" aria-labelledby="team">
         <h2 id="team">{copy.team.title}</h2>
         <TeamStrip roles={roles} asleep={paused(snapshot)} />
+        <p className="more">
+          <MoreLink to="/team">{copy.team.meetAll}</MoreLink>
+        </p>
       </section>
     </div>
   );
@@ -174,7 +178,7 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
         </>
       )}
       <p className="more">
-        <Link to="/ledger">{copy.fullLedger}</Link>
+        <MoreLink to="/ledger">{copy.fullLedger}</MoreLink>
       </p>
     </section>
   );

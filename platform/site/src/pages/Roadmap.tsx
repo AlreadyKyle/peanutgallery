@@ -48,7 +48,9 @@ export function Roadmap() {
         ))
       ) : (
         <div className="band">
-          <p className="muted">{studio.state === 'loading' ? roadmap.loading : unavailableLine(studio)}</p>
+          <p className="muted" aria-busy={studio.state === 'loading' ? 'true' : undefined}>
+            {studio.state === 'loading' ? roadmap.loading : unavailableLine(studio)}
+          </p>
         </div>
       )}
     </main>

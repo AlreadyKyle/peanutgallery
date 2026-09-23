@@ -10,7 +10,11 @@ import { Stat } from './Stat';
 // line here is visual only: a reader scrolling to the money sees it beside the figures.
 export function Meter({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
-    return <p className="muted">{legal.loadingFigures}</p>;
+    return (
+      <p className="muted" aria-busy="true">
+        {legal.loadingFigures}
+      </p>
+    );
   }
   if (studio.state !== 'ready' || studio.snapshot.pool === null) {
     return <p className="muted">{unavailableLine(studio)}</p>;

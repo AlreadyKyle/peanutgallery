@@ -1,5 +1,6 @@
 import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
+import { SUPABASE_URL } from './fixture-env';
 import { DEFAULT_STUDIO, expect, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
 
@@ -7,7 +8,8 @@ import { LIVE_STUDIO } from './live-studio';
 // with realistic data, nothing leaves dead space. scripts/layout-audit.mjs holds the checks: no
 // element past the viewport, no seam between bands, side-by-side blocks within max(160px, 35%) of
 // each other, no run of empty space over 240px inside a band, grids that fill every row, card rows
-// that line up with no hollow over 80px, buttons on one line, no orphaned glyph and a one-row top bar.
+// that line up with no hollow over 80px, headings spaced from the block above at least as far as that
+// block from its own, buttons on one line, no orphaned glyph and a one-row top bar.
 const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
 
 async function audit(page: Page, path: string): Promise<string[]> {
@@ -58,11 +60,50 @@ auditRoutes(
   ['/'],
 );
 
+// While the data loads the page may be short, but its title holds still: the signal plate does not
+// grow to fill the window and set the title at its foot, only to jump back when the data arrives.
+// The title moves by no more than the header's own content under it changes (a notice or a version
+// line that arrives with the data).
+for (const width of [375, 768, 1440]) {
+  test(`every title holds still while the data loads, at ${width}px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 900 });
+    let release = () => {};
+    let held = Promise.resolve();
+    await page.route(`${SUPABASE_URL}/rest/v1/**`, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    const measure = () =>
+      page.evaluate(() => {
+        const h1 = document.querySelector('main h1')!;
+        const hero = h1.parentElement!;
+        return { top: h1.getBoundingClientRect().top, under: hero.getBoundingClientRect().bottom - h1.getBoundingClientRect().bottom };
+      });
+    const moved: string[] = [];
+    for (const path of ROUTES) {
+      held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.goto(path);
+      await page.evaluate(() => document.fonts.ready);
+      const loading = await measure();
+      release();
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelector('[aria-busy="true"]') === null, undefined, { timeout: 5_000 }).catch(() => {});
+      const loaded = await measure();
+      const shift = Math.abs(loaded.top - loading.top);
+      if (shift > Math.abs(loaded.under - loading.under) + 1) moved.push(`${path}: the title moved ${Math.round(shift)}px`);
+    }
+    expect(moved).toEqual([]);
+  });
+}
+
 // The audit bites: a page with each kind of gap planted in it gets a finding for each.
 test('finds each planted gap', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.setContent(`<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
-    <header class="topbar" style="height:60px;background:#1a2fc8"></header>
+    <header class="topbar" style="height:60px;background:#111111"></header>
     <main>
       <div class="band" style="padding:40px;background:#fff">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
@@ -75,6 +116,9 @@ test('finds each planted gap', async ({ page }) => {
         <p style="margin-top:400px">A block far below it.</p>
       </div>
       <div class="band" style="padding:40px;background:#fff">
+        <p style="margin:0 0 40px">A block.</p>
+        <p style="margin:0 0 8px">A caption that hugs the heading below it.</p>
+        <h2 style="margin:0 0 16px">The next section</h2>
         <ul class="card-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;list-style:none;padding:0">
           <li style="border:2px solid #111;height:80px">One</li><li style="border:2px solid #111;height:80px">Two</li>
           <li style="border:2px solid #111;height:80px">Three</li><li style="border:2px solid #111;height:80px">Four</li>
@@ -86,7 +130,7 @@ test('finds each planted gap', async ({ page }) => {
     <footer class="site-footer" style="height:60px;background:#111"></footer>
   </body></html>`);
   const findings = await page.evaluate(auditLayout, LIMITS);
-  for (const kind of ['balance:', 'hollow:', 'grid fill:', 'overflow:', 'seam:']) {
+  for (const kind of ['balance:', 'hollow:', 'grid fill:', 'overflow:', 'seam:', 'rhythm:']) {
     expect(findings.some((line) => line.startsWith(kind)), `${kind} in ${JSON.stringify(findings)}`).toBe(true);
   }
 });

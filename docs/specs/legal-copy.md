@@ -22,6 +22,7 @@ In:
 - **The read (kernel).** `platform/site/src/lib/terms.ts` (new) reads `public_terms_versions` once per visit with a 5-second timeout, only on the Terms and Refunds pages, and works out which version to show. The snapshot (`source.ts`, `studio.tsx`) does not change.
 - **Pages (kernel).** /terms and /refunds show the version in force and list earlier ones; /terms/:version and /refunds/:version show one posted version. `TextPage.tsx` gains a `{terms}` link token, a status line under the lede and a title for a version page; the not found page moves to `components/NotFound.tsx`; `App.tsx` routes the two version paths; `netlify.toml` serves `/terms/*` and `/refunds/*` with `force` like the other kernel paths. `format.ts` gains `formatPostedAt`.
 - **Every path to checkout (kernel).** `Contribute.tsx`: the agreement line directly under the first choice (`legal.pickForMe`, "Fund the next card in line" on main). `Funding.tsx`: a short agreement line under every live Fund this card link.
+- **Loading and spacing (from the review).** Every loading line on the site carries `aria-busy="true"` and one `styles.css` rule keeps the signal plate from growing while one is on the page; `scripts/layout-audit.mjs` gains a rhythm check; `vite.config.ts` writes `version.json` only into the build's own folder.
 - **Privacy.** The display-name sentence is replaced; the page keeps its own date.
 - **The webhook.** `parseSession` stops reading the `displayname` custom field; `sanitizeDisplayName`, `DISPLAY_NAME_MAX` and their tests go.
 - **Kernel lists, rename, tests, live check.** `terms.ts`, `terms-versions.ts`, `terms.test.ts` and `NotFound.tsx` join `kernel-paths.txt` and `KERNEL_PATHS`; `scripts/rename.mjs` treats `terms-versions.ts` as history; `anon-negative-test.ts` and `live-check.mjs` cover the new relations and pages (the anon test's write probes through the view insert version 0 and update no row, so even a wrong grant posts nothing); /terms/1 and /refunds/1 join the routes of `design.spec.ts` and `layout-balance.spec.ts`.
@@ -43,7 +44,7 @@ Out, and what each waits on:
 
 **Words.** `terms-versions.ts` holds each version's number and its Terms and Refunds words. A posted version's words are never edited: it is a kernel file, and a rename leaves it alone. The `{email}` token renders the current contact address in every version.
 
-**The pages.** /terms shows the version in force: the newest version that is both posted and in the site's bundle. Under the lede: "Version 2, in force since <time>." (the time from `posted_at`). After the sections, "Earlier versions" lists each earlier posted version, newest first, as "Version 1, in force from <time> until <time>", linking /terms/1. /refunds does the same, linking /refunds/n. /terms/n and /refunds/n show version n, titled "Terms, version n" or "Refunds, version n", with "Version n, in force from <time> until <time>. It applies to contributions whose checkout started in that time." and a link to the version in force; the version in force shows its since line instead. A version that is not posted, not in the bundle, or not a whole number from 1 to 9999 is the not found page. A successful read is kept for the rest of the visit, so moving between /terms, /refunds and a version page reads once; a failed one is tried again on the next page. While the read runs the page says "Loading the terms." When the read fails, does not answer within 5 seconds, returns no row, or lists a version newer than the bundle's newest, the page shows the newest bundled words (on /terms/n, version n when bundled) with the notice that it cannot confirm which version is in force and the contact address.
+**The pages.** /terms shows the version in force: the newest version that is both posted and in the site's bundle. Under the lede: "Version 2, in force since <time>." (the time from `posted_at`). After the sections, "Earlier versions" lists each earlier posted version, newest first, as "Version 1, in force from <time> until <time>", linking /terms/1. /refunds does the same, linking /refunds/n. /terms/n and /refunds/n show version n, titled "Terms, version n" or "Refunds, version n", with "Version n, in force from <time> until <time>. It applies to contributions whose checkout started in that time." and a link to the version in force; the version in force shows its since line instead. On /terms/n and /refunds/n the Terms and Refunds links in the words go to /terms/n and /refunds/n, the words that applied with version n; /terms and /refunds, and the agreement lines, link the pages in force. A version that is not posted, not in the bundle, or not a whole number from 1 to 9999 is the not found page. A successful read is kept for the rest of the visit, so moving between /terms, /refunds and a version page reads once; a failed one is tried again on the next page. While the read runs the page is drawn whole with the words it expects (the newest bundled version; on /terms/n, version n) and says "Loading the terms." under the lede where the version line goes, so only that line changes when the read answers. When the read fails, does not answer within 5 seconds, returns no row, or lists a version newer than the bundle's newest, the page shows the newest bundled words (on /terms/n, version n when bundled) with the notice that it cannot confirm which version is in force and the contact address.
 
 **Times.** Every posted time shows as a date and clock time in Toronto time, the same for every reader: "22 Sep 2026 at 21:32 Toronto time". One version's end is the next one's start.
 
@@ -77,7 +78,7 @@ Out, and what each waits on:
 - `pnpm verify` at the repository root, with `platform/site/dist-e2e` and `platform/board/dist-e2e` deleted first.
 - `E2E_PORT=4391 pnpm --filter @backseat/site e2e`
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts platform/supabase/functions/_shared/session_test.ts platform/supabase/functions/_shared/split_test.ts`
-- `pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts`
+- `pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts src/version-file.test.ts`
 - `TZ=UTC pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx` and the same with `TZ=Pacific/Auckland`.
 - `node --test scripts/rename.test.mjs`
 - Once, quoted in Evidence: version 1's entry equals `legal.terms` and `legal.refunds` from `git show 7540073:platform/site/src/lib/legal.ts` (a one-off tsx comparison).
@@ -107,17 +108,17 @@ The studio stays paused throughout.
 
 Built on `launch/legal-copy` from main at e629119. The production lines of Verification and the production steps are the ship stage's and are not run here; the studio stays paused.
 
-`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0 (rerun after the review's fixes):
 
 ```
 platform/board test:       Tests  67 passed (67)
 platform/supabase test:       Tests  273 passed (273)
-platform/site test:       Tests  379 passed (379)
+platform/site test:       Tests  383 passed (383)
 seed-1 test:       Tests  77 passed (77)
 platform/dispatcher test:       Tests  619 passed (619)
 platform/gate test: PASS: gate tests passed=508
 ℹ tests 117   ℹ pass 117   ℹ fail 0        (test:agents)
-ok | 82 passed (84 steps) | 0 failed (6s)  (test:functions)
+ok | 82 passed (84 steps) | 0 failed (5s)  (test:functions)
 GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
 PASS: secret-scan files=547
@@ -126,11 +127,11 @@ PASS: secret-scan files=547
 verify exit 0
 ```
 
-The site e2e, on port 4437 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4437 pnpm --filter @backseat/site e2e`
+The site e2e, on port 4463 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4463 pnpm --filter @backseat/site e2e`
 
 ```
   5 skipped
-  105 passed (2.3m)
+  112 passed (2.9m)
 exit 0
 ```
 
@@ -148,11 +149,11 @@ ok | 27 passed (71 steps) | 0 failed (16s)
 
 The handler test "handler credits a session that carries a displayname field exactly as before, with no name" runs in `test:functions` above.
 
-`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts`
+`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts src/version-file.test.ts`
 
 ```
- Test Files  8 passed (8)
-      Tests  130 passed (130)
+ Test Files  9 passed (9)
+      Tests  134 passed (134)
 ```
 
 `TZ=UTC` and `TZ=Pacific/Auckland pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx`
@@ -160,10 +161,10 @@ The handler test "handler credits a session that carries a displayname field exa
 ```
 TZ=UTC
  Test Files  2 passed (2)
-      Tests  24 passed (24)
+      Tests  26 passed (26)
 TZ=Pacific/Auckland
  Test Files  2 passed (2)
-      Tests  24 passed (24)
+      Tests  26 passed (26)
 ```
 
 `node --test scripts/rename.test.mjs`
@@ -197,6 +198,22 @@ The two failures are `public_terms_versions`, which production does not have unt
 
 Screenshots of /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /privacy at 375 and 1440, with production data and the versions answered as after both migrations, were looked at; one fix came of it (the cannot-confirm notice's link became its own column at 375px, now one span).
 
+The review's fixes, each with a test that fails before it (run against the old code, then the new):
+
+```
+Legal.test.tsx, old pages:  × say they are loading under the lede ... newest bundled words already drawn
+                            × link {refunds} and {terms} to the same version's pages
+                            × say they are loading under the lede ... that version's words already drawn
+text-pages.spec.ts, old:    Expected: "/refunds/1"  Received: "/refunds"
+                            /terms: the title moved  Received: 410.53125 (375px), 468.921875 (768px), 499.3125 (1440px)
+layout-balance.spec.ts, old styles and loading lines:
+  "/contribute rhythm: h2.choices-heading \"Or pick a card\" sits 16px under p.muted.small ..., which sits 40px under the block before it" (375, 768, 1440)
+  "/team: the title moved 451px", "/roadmap: the title moved 451px", "/contribute: the title moved 92px", "/ledger: the title moved 61px" (1440)
+version-file.test.ts, old join:  × writes into an absolute outDir as given, not under the root
+```
+
+All pass after the fixes, in the verify and e2e runs above. Screenshots of /terms, /terms/1, /refunds/1, /team, /roadmap, /contribute and /ledger at 375 and 1440, loading (every data request held) and loaded, were looked at: the Terms pages differ only in the line under the lede, every title stays under the top bar while loading, and the agreement line on /contribute sits under the first choice with the section gap before "Or pick a card".
+
 ## Decisions
 
 - 2026-09-23, Trimmed (board: "better to be simple and delete than add more convoluted bespoke"; good normal modern standards): 23 criteria became 9. Cut: the sha256 of every version held in the bundle, the migration and production with a three-way agreement test and a migration that raises on a mismatch (a posted version is protected by the kernel guard and the rename's history list instead); drafts, `post_terms_version` with its six refusals and the `refuse_terms_change` trigger with its session flag (a version is posted by inserting its row in its own migration after the site is live, and the existing append-only guard `refuse_money_change` keeps rows unchanged); `operations_pct` on each version and on each entry (the operations bucket ships at 0%, so it is removed; money-logic's zero constraint on it and its waterfall read of it go with it, and operations-share adds the percentage when one exists); `created_at`; the per-version "changed" line; the separate "database is ahead of the bundle" page state (folded into the one cannot-confirm notice); the criteria for where the status line renders, for routes.tsx not claiming /terms/:x (already true through `KERNEL_SEGMENTS`), for netlify `force` parity (the existing headers test), for sample cards carrying no line and for kernel imports (existing tests); the dependency on the layout-balance gate module (dropped; home's `layout-balance.spec.ts` runs instead) and the seven-width list (the widths `design.spec.ts` already runs); the separate docs criterion and the PLAN §4 and §8 edits (money-logic and §5 own them); the version-3 contingency (legal.ts's `terms` and `refunds` read identical at 7540073, main and launch/home on 23 September 2026). Kept whole: every Problem outcome, the RLS and privileges, append-only rows, the anon negative test, the ledger identity, the dumps before each production write, and the stamp function money-logic uses.
@@ -219,6 +236,12 @@ Screenshots of /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /priva
   - `privacyUpdated` reads "Last updated 23 September 2026.", the day the Privacy sentence changed; production step 1 moves it to the merge day if that is later.
   - The live check reads `public_terms_versions` over REST with the publishable key from `netlify.toml`, as the site does, to know which version /terms must show.
   - `legal.ts` no longer carries the studio name, but stays in the rename's tier 1 list (harmless, and the next string may bring it back).
+- 2026-09-23, from the review of the built branch (defaults taken without the board):
+  - A version page's `{terms}` and `{refunds}` links go to that version's pages (`TextPage`'s `version`, passed to `LinkedText`), in every state of the page, so a reader checking version 1 is not sent to version 2's refund rules. The pages in force and the agreement lines keep /terms and /refunds.
+  - While the versions read runs, /terms and /refunds draw the newest bundled words and /terms/n version n's, with "Loading the terms." under the lede in place of the version line. A short loading page let the signal plate fill the window with the title at its foot, then jump 411 to 499px when the words arrived. In the minutes between a deploy and its version's post, the loading state shows the newer words for as long as the read takes, marked as loading; the answered page shows the version in force.
+  - The same jump happened on every page whose loading state is short (/team and /roadmap by 300 to 450px, /contribute and /ledger by up to 92px, on main before this change). One rule in `styles.css` fixes the class: while anything in `main` carries `aria-busy="true"`, the last band takes the spare height instead of the signal plate. Every loading line now carries `aria-busy="true"` (Meter, Guarded, LedgerSummary, the ledger's deploys, /team, /roadmap and the guide's team). `layout-balance.spec.ts` holds every data request on every route and fails when a title moves by more than its header's own content changes.
+  - The agreement line on /contribute sits `--space-1` under the first choice and carries the choice's `--space-4` before "Or pick a card" (it had 40px above and 16px below, and read as the caption of the card list). `scripts/layout-audit.mjs` gains a rhythm check for the class: a heading sits at least as far below the block before it as that block sits below its own predecessor. It finds only this line on every route before the fix, and nothing after.
+  - A screenshot build with an absolute `--outDir` had written `version.json` under `platform/site/private/tmp/…`, because `vite.config.ts` joined the root with the output folder, and it was committed. It is removed, the plugin resolves the folder (`src/version-file.test.ts`), and `platform/site/.gitignore` ignores `version.json`.
 - 2026-09-23 (the board's default): the Ontario disclosure is published with the operator's name, Kyle Smith, an individual in Ontario, and hello@clayhouse.studio only. No mailing address or phone was supplied, and none is invented. BOARD-SETUP step 10 asks for them and says what their absence risks: if a contribution over $50 is a consumer internet agreement, a supporter not given every required disclosure may cancel within 7 days, or within 30 days when no copy of the agreement was delivered within 15 days. The lawyer question in BOARD-SETUP D settles whether the Act applies.
 - 2026-09-23: Versions are whole numbers, never dates: the time a version takes effect is known only when it is posted, and the page shows that time from `posted_at`.
 - 2026-09-23: A version is posted after the site carrying it is live, so no page shows words that are not in force and no contribution is stamped with words the site did not show. The minutes between the deploy and the post show the older version, which is the one in force.
