@@ -1,6 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
-import { PageHeader } from '../components/PageHeader';
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
   agentModes,
   boardStudioState,
@@ -11,6 +10,7 @@ import {
   enrolTotp,
   fetchBoardCards,
   fetchBoardRole,
+  fetchCardRoles,
   fileCard,
   fileDirective,
   fileNote,
@@ -19,7 +19,6 @@ import {
   HEARTBEAT_MS,
   HORIZON_STAGES,
   horizons,
-  isCardRole,
   lanes,
   movesToNow,
   recordCreditPurchase,
@@ -40,19 +39,22 @@ import {
   type BoardRole,
   type BoardStudioState,
   type Caps,
+  type Horizon,
   type NextCardStage,
+  type Role,
   type TotpEnrolment,
   type TwoFactorState,
-} from '../lib/board';
-import { formatClock, formatDateTime, formatUsd } from '../lib/format';
-import type { Horizon, Role } from '../lib/source';
-import { useStudio } from '../lib/studio';
-import { errorMessage, getClient } from '../lib/supabase';
+} from './lib/board';
+import { formatClock, formatDateTime, formatUsd } from './lib/format';
+import type { CreditDraft } from './lib/needs';
+import { errorMessage, getClient } from './lib/supabase';
+import { NeedsYou } from './NeedsYou';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
 export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
 export const CANCEL_CONFIRM = 'Cancel this card? It is rejected with your reason, and this cannot be undone.';
+export const FILLED_FROM_CONTROLLER = "Filled in from the Controller's figure. Check it against the Console receipt, then record it.";
 
 export function Board() {
   const client = getClient();
@@ -67,10 +69,10 @@ export function Board() {
 
   return (
     <main>
-      <PageHeader
-        title="Board"
-        lede="Private controls for the board. Sign-in is limited to board accounts."
-      />
+      <div className="hero">
+        <h1>Board</h1>
+        <p className="lede">Private controls for the board. Sign-in is limited to board accounts.</p>
+      </div>
       {client === null || session === null ? (
         <SignIn client={client} />
       ) : (
@@ -166,12 +168,7 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
       ) : null}
       {/* The moderator's pause works at aal1; the board's needs the second factor. */}
       {role === 'moderator' ? <PauseControls client={client} /> : null}
-      {role === 'board' ? (
-        <>
-          {secondFactor ? null : <TwoFactor client={client} onVerified={setSecondFactor} />}
-          <BoardControls client={client} secondFactor={secondFactor} />
-        </>
-      ) : null}
+      {role === 'board' ? <BoardControls client={client} secondFactor={secondFactor} onVerified={setSecondFactor} /> : null}
     </>
   );
 }
@@ -344,13 +341,54 @@ function useBoardStudioState(client: SupabaseClient): StudioLoad {
   return { state, loadError, refresh };
 }
 
-// Board members only; moderators never mount this, so they never load the studio state. The status
-// and the heartbeat run at aal1, so attended dispatcher runs keep a board session; everything that
-// changes state waits for the second factor.
-function BoardControls({ client, secondFactor }: { client: SupabaseClient; secondFactor: boolean }) {
+// The roles that build cards, loaded once for the card and directive forms. Every other role, the
+// directors, the Host, Biz Dev and the Community agent among them, has no job that runs yet, so none
+// is offered (lib/board.ts CARD_ROLE_FOLDERS).
+function useCardRoles(client: SupabaseClient): { roles: Role[]; loadError: string } {
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loadError, setLoadError] = useState('');
+  useEffect(() => {
+    let live = true;
+    fetchCardRoles(client)
+      .then((next) => {
+        if (live) setRoles(next);
+      })
+      .catch((error: unknown) => {
+        if (live) setLoadError(errorMessage(error));
+      });
+    return () => {
+      live = false;
+    };
+  }, [client]);
+  return { roles, loadError };
+}
+
+// Board members only; moderators never mount this, so they never load the studio state. The first
+// thing on the page is the Needs you inbox. The inbox, the status and the heartbeat run at aal1, so
+// attended dispatcher runs keep a board session; everything that changes state waits for the second
+// factor.
+function BoardControls({
+  client,
+  secondFactor,
+  onVerified,
+}: {
+  client: SupabaseClient;
+  secondFactor: boolean;
+  onVerified: (verified: boolean) => void;
+}) {
   const studio = useBoardStudioState(client);
+  const [draft, setDraft] = useState<CreditDraft | null>(null);
+  const creditForm = useRef<HTMLFormElement | null>(null);
+
+  function fillCredit(next: CreditDraft) {
+    setDraft({ ...next });
+    creditForm.current?.scrollIntoView?.({ block: 'start' });
+  }
+
   return (
     <>
+      <NeedsYou client={client} canRecord={secondFactor} onFillCredit={fillCredit} />
+      {secondFactor ? null : <TwoFactor client={client} onVerified={onVerified} />}
       {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
       <StudioStatus client={client} studio={studio} canChange={secondFactor} />
@@ -358,13 +396,22 @@ function BoardControls({ client, secondFactor }: { client: SupabaseClient; secon
       {secondFactor ? (
         <>
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
-          <CreditPurchaseForm client={client} />
+          <CreditPurchaseForm client={client} draft={draft} formRef={creditForm} />
           <CardControls client={client} />
-          <NextCardForm client={client} />
-          <DirectiveForm client={client} />
-          <NoteForm client={client} />
+          <SecondFactorForms client={client} />
         </>
       ) : null}
+    </>
+  );
+}
+
+function SecondFactorForms({ client }: { client: SupabaseClient }) {
+  const { roles, loadError } = useCardRoles(client);
+  return (
+    <>
+      <NextCardForm client={client} roles={roles} rolesError={loadError} />
+      <DirectiveForm client={client} roles={roles} rolesError={loadError} />
+      <NoteForm client={client} />
     </>
   );
 }
@@ -442,7 +489,11 @@ function StudioStatus({
             {state.credit_studio_daily_cap_usd === null
               ? null
               : ` Studio daily limit on immediate credit ${formatUsd(state.credit_studio_daily_cap_usd)}.`}
+            {state.anthropic_tier_cap_usd === null
+              ? ' No usage tier cap.'
+              : ` Usage tier cap ${formatUsd(state.anthropic_tier_cap_usd)}.`}
           </p>
+          <p>Studio code lane: {state.platform_lane_open ? 'open' : 'closed'}.</p>
           {canChange && state.launched_at === null ? (
             <button type="button" disabled={busy} onClick={() => void goLive()}>
               Go live
@@ -562,12 +613,6 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   );
 }
 
-// The roles that build cards. Every other role, the directors, the Host, Biz Dev and the Community
-// agent among them, has no job that runs yet, so none is offered (lib/board.ts CARD_ROLE_FOLDERS).
-function executors(roles: Role[]): Role[] {
-  return roles.filter(isCardRole);
-}
-
 /** A dollar field: a finite number of zero or more, or null. */
 function dollars(value: string): number | null {
   if (value.trim() === '') return null;
@@ -575,13 +620,17 @@ function dollars(value: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+type RequiredCap = Exclude<keyof Caps, 'anthropic_tier_cap_usd'>;
+
 const CAP_FIELDS = [
   { key: 'daily_cap_usd', label: 'Daily spend cap (USD)' },
   { key: 'card_max_usd', label: 'Per-card spend ceiling (USD)' },
   { key: 'agent_hourly_rate_usd', label: 'Agent hourly rate (USD)' },
   { key: 'monthly_cap_usd', label: 'Monthly spend cap (USD)' },
   { key: 'credit_studio_daily_cap_usd', label: 'Studio daily limit on immediate credit (USD)' },
-] as const satisfies readonly { key: keyof Caps; label: string }[];
+] as const satisfies readonly { key: RequiredCap; label: string }[];
+
+export const TIER_CAP_LABEL = 'Anthropic usage tier monthly cap (USD)';
 
 type CapForm = Record<keyof Caps, string>;
 
@@ -593,6 +642,7 @@ function capFormFrom(state: BoardStudioState | null): CapForm {
     agent_hourly_rate_usd: text(state?.agent_hourly_rate_usd),
     monthly_cap_usd: text(state?.monthly_cap_usd),
     credit_studio_daily_cap_usd: text(state?.credit_studio_daily_cap_usd),
+    anthropic_tier_cap_usd: text(state?.anthropic_tier_cap_usd),
   };
 }
 
@@ -610,11 +660,12 @@ function CapsForm({
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const tierHintId = useId();
   const form = { ...capFormFrom(state), ...edits };
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const caps = {} as Caps;
+    const caps = { anthropic_tier_cap_usd: null } as Caps;
     for (const field of CAP_FIELDS) {
       const value = dollars(form[field.key]);
       if (value === null) {
@@ -622,6 +673,15 @@ function CapsForm({
         return;
       }
       caps[field.key] = value;
+    }
+    // Blank removes the usage tier cap; a value must be above zero.
+    if (form.anthropic_tier_cap_usd.trim() !== '') {
+      const tier = dollars(form.anthropic_tier_cap_usd);
+      if (tier === null || tier <= 0) {
+        setMessage(`${TIER_CAP_LABEL} must be above zero, or blank for none.`);
+        return;
+      }
+      caps.anthropic_tier_cap_usd = tier;
     }
     if (reason.trim() === '') {
       setMessage('A reason is required.');
@@ -660,6 +720,19 @@ function CapsForm({
         </label>
       ))}
       <label>
+        {TIER_CAP_LABEL}
+        <input
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.01"
+          aria-describedby={tierHintId}
+          value={form.anthropic_tier_cap_usd}
+          onChange={(event) => setEdits((previous) => ({ ...previous, anthropic_tier_cap_usd: event.target.value }))}
+        />
+      </label>
+      <p id={tierHintId}>The monthly limit the Console's Limits page shows for the studio organisation. Leave it blank for none.</p>
+      <label>
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
@@ -671,13 +744,32 @@ function CapsForm({
   );
 }
 
-/** record_credit_purchase: Console credit bought for the agents, with the Stripe payout that paid for it. */
-function CreditPurchaseForm({ client }: { client: SupabaseClient }) {
+/**
+ * record_credit_purchase: Console credit bought for the agents, with the Stripe payout that paid for
+ * it. The Needs you inbox fills it from the Controller's figure; the board still presses Record.
+ */
+function CreditPurchaseForm({
+  client,
+  draft,
+  formRef,
+}: {
+  client: SupabaseClient;
+  draft: CreditDraft | null;
+  formRef: RefObject<HTMLFormElement | null>;
+}) {
   const [amount, setAmount] = useState('');
   const [payout, setPayout] = useState('');
   const [reason, setReason] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (draft === null) return;
+    setAmount(String(draft.amount_usd));
+    setPayout(draft.stripe_payout_id);
+    setReason(draft.reason);
+    setMessage(FILLED_FROM_CONTROLLER);
+  }, [draft]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -701,7 +793,7 @@ function CreditPurchaseForm({ client }: { client: SupabaseClient }) {
   }
 
   return (
-    <form className="stack" onSubmit={submit} aria-label="Record a credit purchase">
+    <form className="stack" onSubmit={submit} aria-label="Record a credit purchase" ref={formRef}>
       <h2>Record a credit purchase</h2>
       <p>Record Console credit bought for the agents after a Stripe payout. Unattended agents spend only recorded credit.</p>
       <label>
@@ -977,9 +1069,7 @@ const emptyCard = {
 
 // file_card: a card for Fund what's next (horizon now) or for the roadmap (next or later). The target
 // is not capped by the per-card spend ceiling; the database keeps a sane upper bound.
-function NextCardForm({ client }: { client: SupabaseClient }) {
-  const studio = useStudio();
-  const roles = studio.state === 'ready' ? executors(studio.snapshot.roles) : [];
+function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; roles: Role[]; rolesError: string }) {
   const hintId = useId();
   const summaryHintId = useId();
   const summaryCountId = useId();
@@ -1171,7 +1261,7 @@ function NextCardForm({ client }: { client: SupabaseClient }) {
           ))}
         </select>
       </label>
-      {roles.length === 0 ? <p>No active card roles are loaded.</p> : null}
+      {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
       <button type="submit" disabled={busy || roles.length === 0}>
         File card
       </button>
@@ -1192,9 +1282,7 @@ const emptyDirective = {
   executor_role_id: '',
 };
 
-function DirectiveForm({ client }: { client: SupabaseClient }) {
-  const studio = useStudio();
-  const roles = studio.state === 'ready' ? executors(studio.snapshot.roles) : [];
+function DirectiveForm({ client, roles, rolesError }: { client: SupabaseClient; roles: Role[]; rolesError: string }) {
   const [form, setForm] = useState({ ...emptyDirective });
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -1324,7 +1412,7 @@ function DirectiveForm({ client }: { client: SupabaseClient }) {
           ))}
         </select>
       </label>
-      {roles.length === 0 ? <p>No active card roles are loaded.</p> : null}
+      {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
       <button type="submit" disabled={busy || roles.length === 0}>
         File directive
       </button>

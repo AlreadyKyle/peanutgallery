@@ -1,0 +1,37 @@
+# The board's own site (docs/specs/board-site.md): a second free Netlify site, base platform/board,
+# served at its own *.netlify.app address with no custom domain and no DNS record. Nothing on the
+# public site links to it. Every file in this folder is kernel (platform/gate/kernel-paths.txt), so
+# no card-built code is ever served beside the board's session.
+[build]
+  command = "pnpm --filter @backseat/board build"
+  publish = "dist"
+  # A card/* branch never builds (no card changes this folder, and its pull request opens before the
+  # gate runs); a dependabot/* branch builds no preview, and main builds after the merge. Otherwise
+  # skip the build only when a previous successful build exists, differs, and touched nothing this
+  # site's build reads: this folder and the workspace files.
+  ignore = 'case "$HEAD" in card/*|dependabot/*) exit 0 ;; esac; test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml ../../tsconfig.base.json'
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Public values only. Secrets never go here.
+  VITE_SUPABASE_URL = "https://lyxndueoeisyqzewflpu.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_-i-BKWMS4TmEfSldTE9b7g_UMBRV2wh"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers on every path. The whole policy is enforced: the script, the stylesheet and the
+# images are this site's own, the one data: image is the QR code Supabase Auth returns for setting up
+# an authenticator app, and the page connects to the Supabase project alone, over https (the board
+# opens no realtime socket). No inline script runs. The site asks search engines not to index it.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-Robots-Tag = "noindex, nofollow"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://lyxndueoeisyqzewflpu.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
