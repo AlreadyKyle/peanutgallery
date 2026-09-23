@@ -4,7 +4,7 @@ import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
-import { BuildingNow, FundBoard, QueuedList, ShippedList } from './Cards';
+import { BuildingNow, CardBox, FundBoard, QueuedList, ShippedList, ShippedRow } from './Cards';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -19,6 +19,9 @@ function card(overrides: Partial<Card> = {}): Card {
     shape: 'goal',
     bucket: 'game',
     folder: 'seed-1',
+    horizon: 'now',
+    rank: null,
+    executor_role_id: null,
     funding_target_usd: 10,
     funded_usd: 0,
     spent_usd: 0,
@@ -35,6 +38,7 @@ function snapshot(cards: Card[], funding: Snapshot['funding'] = {}): Snapshot {
     cards,
     funding,
     launchedAt: null,
+    paused: false,
     totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
     events: [],
     deploys: [],
@@ -286,3 +290,34 @@ describe('ShippedList', () => {
     expect(container.innerHTML).toBe('');
   });
 });
+
+describe('example mode', () => {
+  it('renders a fundable card with no link, button or disclosure even with a Payment Link set', () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    const open = card({ id: 'e1', title: 'Fundable', intent: 'Do the thing.', funding_target_usd: 10, funded_usd: 2 });
+    const { container } = render(
+      <ul>
+        <CardBox card={open} snapshot={snapshot([open])} example />
+      </ul>,
+    );
+    expect(screen.getByRole('progressbar')).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(container.querySelector('details')).toBeNull();
+    expect(container.innerHTML).not.toContain('client_reference_id');
+    expect(container.innerHTML).not.toContain(STRIPE);
+  });
+
+  it('renders a shipped row with no Play the game link', () => {
+    vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
+    const live = card({ id: 'l1', title: 'Shipped one', stage: 'live' });
+    render(
+      <ul>
+        <ShippedRow card={live} snapshot={snapshot([live])} example />
+      </ul>,
+    );
+    expect(screen.getByRole('heading', { level: 3, name: 'Shipped one' })).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});
+

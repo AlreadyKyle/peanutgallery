@@ -1,18 +1,25 @@
 import { defineConfig } from '@playwright/test';
+import { E2E_BUILD_ENV, E2E_ORIGIN, E2E_PORT } from './e2e/fixture-env';
 
-const origin = 'http://127.0.0.1:4173';
+// The e2e run builds its own copy of the site into dist-e2e with the fixture values, then serves it
+// with `vite preview`, which sends netlify.toml's headers (vite.config.ts). The port comes from
+// E2E_PORT (default 4173), and a busy port fails the run instead of silently testing another
+// worktree's build: reuseExistingServer is off and the port is strict.
+const vite = 'node node_modules/vite/bin/vite.js';
 
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   use: {
-    baseURL: origin,
+    baseURL: E2E_ORIGIN,
     browserName: 'chromium',
     viewport: { width: 375, height: 812 },
   },
   webServer: {
-    command: 'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4173 --strictPort',
-    url: origin,
-    reuseExistingServer: true,
+    command: `${vite} build --outDir dist-e2e --emptyOutDir --logLevel warn && ${vite} preview --outDir dist-e2e --host 127.0.0.1 --port ${E2E_PORT} --strictPort`,
+    url: E2E_ORIGIN,
+    env: E2E_BUILD_ENV,
+    reuseExistingServer: false,
+    timeout: 120_000,
   },
 });

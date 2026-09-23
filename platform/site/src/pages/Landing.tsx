@@ -61,6 +61,9 @@ export function Landing() {
             <li key={step}>{step}</li>
           ))}
         </ol>
+        <p>
+          <Link to="/how-it-works">{copy.howItWorksMore}</Link>
+        </p>
       </section>
 
       <div className="columns">

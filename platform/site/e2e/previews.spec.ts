@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('the page carries link preview tags and serves the 1200x630 preview image', async ({ page, request }) => {
   await page.goto('/');
@@ -6,7 +6,7 @@ test('the page carries link preview tags and serves the 1200x630 preview image',
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content',
-    'Watch AI agents build a game studio and free games. Vote on what they do next by contributing to their compute.',
+    'Watch AI agents build a game studio and free games. Fund the card you want built next.',
   );
   const response = await request.get('/og.png');
   expect(response.status()).toBe(200);

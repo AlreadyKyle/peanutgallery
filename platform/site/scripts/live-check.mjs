@@ -6,19 +6,22 @@
 // baseUrl defaults to https://peanutgallery.games. Both forms work: the @playwright/test import
 // resolves from this file's folder, so the working directory does not matter.
 //
-// Every route (the landing, contribute, ledger, the four text pages, /board and a missing page) at
-// 375px and 1440px: status 200, one h1, no horizontal overflow, the footer's Terms, Privacy, Refunds
-// and Contact links, no console errors and no Content Security Policy report. The landing's h2
-// order, read from the page: Building now, Queued and Shipped appear only when cards are in those
-// stages. The Right now panel, the fund links, the category filters and /contribute's choices. Assets, og:image as an absolute URL, and
+// Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
+// pages, /board and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
+// the footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
+// Policy report. The landing's h2 order, read from the page: Building now, Queued and Shipped appear
+// only when cards are in those stages. The Right now panel, the fund links, the category filters and
+// /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
+// draws every agent; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. The www redirect runs only against production. The
-// security headers from netlify.toml, the report-only policy's full value included, run against any
-// address that is not local, because vite preview does not send them.
+// security headers from netlify.toml, the enforced and report-only policies' full values included,
+// run against any address that is not local; a local `vite preview` sends them too
+// (vite.config.ts), so they are checked there when present.
 //
-// The report-only policy blocks nothing, so the only sign it would break the site is a report. Every
-// page listens for securitypolicyviolation, which fires for enforced and report-only policies alike,
-// and any report fails the run whatever the console printed. Enforcing the full policy waits on clean
-// runs against production (docs/specs/site-truth-pass.md).
+// frame-ancestors and connect-src are enforced; the rest of the policy is report-only and blocks
+// nothing, so the only sign it would break the site is a report. Every page listens for
+// securitypolicyviolation, which fires for enforced and report-only policies alike, and any report
+// fails the run whatever the console printed (docs/specs/site-truth-pass.md, docs/specs/launch-site.md).
 //
 // The data checks need the site to reach its database. A local build without the Supabase values
 // has none; --allow-no-data turns those checks into SKIP lines instead of failures.
@@ -32,7 +35,20 @@ const args = process.argv.slice(2);
 const allowNoData = args.includes('--allow-no-data');
 const BASE = (args.find((arg) => !arg.startsWith('--')) ?? PRODUCTION).replace(/\/+$/, '');
 
-const ROUTES = ['/', '/contribute', '/ledger', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page'];
+const ROUTES = [
+  '/',
+  '/contribute',
+  '/ledger',
+  '/how-it-works',
+  '/team',
+  '/roadmap',
+  '/terms',
+  '/privacy',
+  '/refunds',
+  '/contact',
+  '/board',
+  '/no-such-page',
+];
 const FOOTER_LINKS = [
   ['Terms', '/terms'],
   ['Privacy', '/privacy'],
@@ -48,12 +64,15 @@ const REPORT_ONLY_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
   "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
   "object-src 'none'; base-uri 'self'; form-action 'self'";
+const ENFORCED_POLICY =
+  "frame-ancestors 'none'; " +
+  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
   ['x-content-type-options', 'nosniff'],
   ['referrer-policy', 'strict-origin-when-cross-origin'],
   ['permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
-  ['content-security-policy', "frame-ancestors 'none'"],
+  ['content-security-policy', ENFORCED_POLICY],
   ['content-security-policy-report-only', REPORT_ONLY_POLICY],
 ];
 
@@ -205,8 +224,11 @@ try {
       const box = await main.getByRole('link', { name: 'Fund this card' }).first().boundingBox();
       check((box?.height ?? 0) >= 44, `Fund button height ${box?.height}`);
     }
+    // The studio and next game chips show only while they have cards (none at launch).
     const filters = page.getByRole('group', { name: 'Show cards for' });
-    for (const label of ['Dust', 'The studio', 'Next game', 'All']) {
+    const chips = (await filters.getByRole('button').allTextContents()).map((text) => text.replace(/\s*\d+$/, ''));
+    check(chips[0] === 'All' && chips[1] === 'Dust', `category chips ${JSON.stringify(chips)}`);
+    for (const label of [...chips.slice(1), 'All']) {
       await filters.getByRole('button', { name: new RegExp(`^${label}`) }).click();
       const bars = await main.getByRole('progressbar').count();
       const pressed = (await filters.locator('[aria-pressed="true"]').textContent()) ?? '';
@@ -235,8 +257,31 @@ try {
       check(false, `Payment Link fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  await open(page, '/how-it-works');
+  const how = await page.content();
+  const examples = await page.locator('figure.example').count();
+  const labels = await page.locator('figure.example figcaption').allTextContents();
+  check(examples === 6 && labels.every((label) => label.startsWith('Example')), `/how-it-works ${examples} labelled examples`);
+  check(!/buy\.stripe\.com|client_reference_id/.test(how), '/how-it-works carries no Payment Link and no client_reference_id');
+  check((await page.locator('figure.example a, figure.example button').count()) === 0, '/how-it-works examples have no link or button');
+
+  await open(page, '/team');
+  if (!hasData) {
+    noData('/team agents and avatars');
+  } else {
+    const avatars = await page.getByRole('main').locator('svg.avatar[role="img"]').count();
+    const named = await page.getByRole('main').locator('svg.avatar title').allTextContents();
+    check(avatars > 0 && named.length === avatars && named.every((note) => note.trim() !== ''), `/team ${avatars} avatars, each named`);
+    check((await page.getByText('claude-opus', { exact: false }).count()) === 0, '/team shows no model for a role that does not run');
+  }
+
+  await open(page, '/roadmap');
+  const roadmap = page.getByRole('main');
+  check((await roadmap.getByRole('progressbar').count()) === 0, '/roadmap shows no funding bar');
+  check((await roadmap.getByRole('link').count()) === 0, '/roadmap has no fund link');
+
   await page.waitForTimeout(500);
-  checkPolicy(reports, 'landing and contribute interactions');
+  checkPolicy(reports, 'landing, contribute, how it works, team and roadmap interactions');
   await page.close();
 
   for (const asset of ['/favicon.ico', '/peanut.png', '/version.json']) {
@@ -257,11 +302,12 @@ try {
     skip(`og:image points at ${new URL(ogImage).origin}, not ${BASE}; ${BASE}/og.png was checked instead`);
   }
 
-  if (LOCAL.test(BASE)) {
-    skip('security headers: a local preview does not send them');
+  const probe = await fetch(`${BASE}/`);
+  if (LOCAL.test(BASE) && probe.headers.get('content-security-policy') === null) {
+    skip('security headers: this local server does not send them');
   } else {
-    // The landing, and a route served through the SPA rewrite.
-    for (const path of ['/', '/ledger']) {
+    // The landing, and routes served through the SPA rewrite.
+    for (const path of ['/', '/ledger', '/team']) {
       const response = await fetch(BASE + path);
       for (const [name, expected] of SECURITY_HEADERS) {
         const actual = response.headers.get(name);

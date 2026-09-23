@@ -1,6 +1,6 @@
 # Peanut Gallery
 
-Peanut Gallery is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is the vote: when a card's bar is full, the dispatcher starts a Claude Code session that builds the change, the gate checks it, and it ships to the live game or site. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
+Peanut Gallery is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is how supporters choose what gets built: when a card's bar is full, the dispatcher starts a Claude Code session that builds the change, the gate checks it, and it ships to the live game or site. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
 
 Backseat is the working name. The package names (`@backseat/*`) and parts of `docs/PLAN.md` still use it.
 
@@ -105,14 +105,14 @@ Per package:
 - **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a lane, a folder, an executor role and a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused).
 - **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` only.
 - **Gate.** The checks a change passes before it merges: `platform/gate/ship-gate.sh` run by the `gate` workflow. It covers the secret scan, the deny-list, the runtime-token scan, typecheck and tests, the headless bot and the build.
-- **Kernel.** The rules no card, vote or role change can edit (PLAN.md §4). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.
+- **Kernel.** The rules no card or role change can edit (PLAN.md §4). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.
 - **Pool.** Customer money available for agent compute, in `pool.balance_usd`. There is no founding budget.
 - **Reserve.** 10% of every contribution after Stripe's fee, taken before the split. Agents never spend it; it covers disputes first.
 - **Emergency fund.** The site's name for the incident reserve: 5% of the agents' share of each contribution, until it holds $500, for urgent bug fixes.
 - **Attended and unattended.** Attended: sessions run on the founder's subscription only while a board member is signed in at `/board`, billed to the founder. Unattended: sessions run with no one present on the studio's API key (`STUDIO_ANTHROPIC_API_KEY`), billed to the studio and paid from the pool.
-- **Directive.** A card the board forces to stage `funded` at priority 0. It skips the vote and still passes the gate.
+- **Directive.** A card the board forces to stage `funded` at priority 0. It skips funding and still passes the gate.
 - **Founder-billed and studio-billed.** Every ledger row's `billed_to`. Founder-billed rows are attended work, tracked privately and never taken from the pool. Studio-billed rows are paid from the pool and shown on the public ledger.
 - **Held.** Agent credit above $50 per contributor per New York day, held 14 days before it reaches the pool (`docs/specs/refunds-and-holds.md`).
 - **D1–D3.** The first three board directives, built by agents through the pipeline (`docs/specs/week1-runs.md`): D1 the unlock list that fits any count, D2 save and resume, D3 the game shell (tab title, icon, studio link and all-ages label).
-- **Live cut.** The smallest set of features needed to go live, replacing Build 1's week framing (`docs/specs/live-cut.md`): the money loop, fund-a-card voting, unattended mode, and what is building and what is next on the site.
+- **Live cut.** The smallest set of features needed to go live, replacing Build 1's week framing (`docs/specs/live-cut.md`): the money loop, funding a card to choose it, unattended mode, and what is building and what is next on the site.
 - **`studio_state`.** The single row of studio settings and status: pause, the agent mode, the spend caps, the launch time, the daily credit limit and hold length, and the dispatcher's heartbeat. The board sets pause, the agent mode and Go live from `/board`.

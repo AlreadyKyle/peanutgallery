@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('board renders the sign-in form at 375 px without horizontal overflow', async ({ page }) => {
   await page.goto('/board');

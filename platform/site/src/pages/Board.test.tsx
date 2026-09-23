@@ -8,9 +8,9 @@ import {
   STUDIO_STATE_POLL_MS,
 } from '../lib/board';
 import { formatClock, formatDateTime } from '../lib/format';
-import type { Snapshot, StudioSource } from '../lib/source';
+import type { Role, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
-import { Board, GO_LIVE_CONFIRM } from './Board';
+import { Board, CANCEL_CONFIRM, GO_LIVE_CONFIRM } from './Board';
 
 type RpcCall = { name: string; args: Record<string, unknown> | undefined };
 
@@ -23,6 +23,23 @@ type FakeStudio = {
   dispatcher_seen_at: string | null;
   daily_cap_usd: number;
   card_max_usd: number;
+  agent_hourly_rate_usd?: number;
+  monthly_cap_usd?: number;
+  credit_studio_daily_cap_usd?: number;
+};
+
+type FakeCard = {
+  id: string;
+  title: string;
+  stage: string;
+  horizon: string | null;
+  rank: number | null;
+  folder: string;
+  lane: string;
+  funding_target_usd: string;
+  funded_usd: string;
+  estimate_usd: string;
+  created_at: string;
 };
 
 const fake = vi.hoisted(() => ({
@@ -33,6 +50,8 @@ const fake = vi.hoisted(() => ({
   seenAt: '2026-09-14T12:00:00Z',
   launchedAt: '2026-09-14T12:00:00Z',
   studio: {} as FakeStudio,
+  cards: [] as FakeCard[],
+  selects: [] as { table: string; columns: string; filters: string[] }[],
   calls: [] as { name: string; args: Record<string, unknown> | undefined }[],
   // Supabase Auth MFA: the session's assurance level, the account's factors and every MFA call.
   aal: 'aal2' as 'aal1' | 'aal2',
@@ -118,21 +137,60 @@ vi.mock('../lib/supabase', async (importOriginal) => {
       };
       return Promise.resolve({ data: data[name] ?? null, error: null });
     },
+    from: (table: string) => {
+      const record = { table, columns: '', filters: [] as string[] };
+      fake.selects.push(record);
+      const builder = {
+        select(columns: string) {
+          record.columns = columns;
+          return builder;
+        },
+        in(column: string, values: string[]) {
+          record.filters.push(`in ${column} ${values.join(',')}`);
+          return builder;
+        },
+        order(column: string) {
+          record.filters.push(`order ${column}`);
+          return builder;
+        },
+        returns() {
+          return Promise.resolve({ data: table === 'cards' ? [...fake.cards] : [], error: null });
+        },
+      };
+      return builder;
+    },
   };
   return { ...original, getClient: () => (fake.noClient ? null : client) };
 });
+
+function role(id: string, title: string, write_access: boolean): Role {
+  return {
+    id,
+    name: title,
+    title,
+    description: null,
+    species_note: 'A small blue creature with two round antennae and stubby legs.',
+    model: 'claude-sonnet-5',
+    write_access,
+    state: 'active',
+    hired_at: '2026-09-14T00:00:00Z',
+  };
+}
 
 const snapshot: Snapshot = {
   pool: null,
   cards: [],
   funding: {},
   launchedAt: null,
+  paused: false,
   totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
   events: [],
   deploys: [],
   roles: [
-    { id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' },
-    { id: 'r-host', title: 'Host', write_access: false, state: 'active' },
+    role('r-builder-a', 'Builder A', true),
+    role('r-director', 'Game Director', true),
+    role('r-platform', 'Platform Builder', true),
+    role('r-host', 'Host', false),
   ],
   cardTitles: {},
   missing: [],
@@ -178,7 +236,19 @@ function mfaCallsNamed(name: string): RpcCall[] {
   return fake.mfaCalls.filter((call) => call.name === name);
 }
 
-const STATE_CHANGING_RPCS = ['set_paused', 'set_launched', 'set_agent_mode', 'file_card', 'file_directive', 'file_note'];
+const STATE_CHANGING_RPCS = [
+  'set_paused',
+  'set_launched',
+  'set_agent_mode',
+  'file_card',
+  'file_directive',
+  'file_note',
+  'set_caps',
+  'record_credit_purchase',
+  'set_card_horizon',
+  'cancel_card',
+  'resume_card',
+];
 
 /** Every control that needs aal2 is absent. */
 function expectNoSecondFactorControls() {
@@ -186,18 +256,24 @@ function expectNoSecondFactorControls() {
   expect(screen.queryByRole('button', { name: 'Resume agents' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
   expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'File a Next card' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'File a card' })).toBeNull();
   expect(screen.queryByRole('form', { name: 'File a directive' })).toBeNull();
   expect(screen.queryByRole('form', { name: 'File a note' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'Set the caps' })).toBeNull();
+  expect(screen.queryByRole('form', { name: 'Record a credit purchase' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
 }
 
 function expectSecondFactorControls() {
   expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Go live' })).toBeTruthy();
   expect(screen.getByRole('group', { name: 'Agent mode' })).toBeTruthy();
-  expect(screen.getByRole('form', { name: 'File a Next card' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'File a card' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a directive' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a note' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'Set the caps' })).toBeTruthy();
+  expect(screen.getByRole('form', { name: 'Record a credit purchase' })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'Cards' })).toBeTruthy();
   expect(screen.queryByRole('region', { name: 'Two-factor sign-in' })).toBeNull();
 }
 
@@ -229,6 +305,8 @@ beforeEach(() => {
     daily_cap_usd: 100,
     card_max_usd: 25,
   };
+  fake.cards = [];
+  fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
   fake.factors = [{ id: 'f-1', factor_type: 'totp', status: 'verified' }];
@@ -301,11 +379,13 @@ describe('Board signed in as a board member', () => {
     expect(screen.getByText('Agents resumed.')).toBeTruthy();
   });
 
-  it('files a Next card with the contract argument names and only write roles as executors', async () => {
+  it('files a card with the contract argument names and only the card roles as executors', async () => {
     await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'File a Next card' }));
+    const form = within(screen.getByRole('form', { name: 'File a card' }));
     const executor = form.getByLabelText('Executor') as HTMLSelectElement;
-    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A']);
+    // The directors and the Host build no cards, so they are never offered.
+    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A', 'Platform Builder']);
+    expect((form.getByLabelText('Horizon') as HTMLSelectElement).value).toBe('now');
 
     fireEvent.change(form.getByLabelText('Bucket'), { target: { value: 'game' } });
     fireEvent.change(form.getByLabelText('Lane'), { target: { value: 'code' } });
@@ -320,7 +400,7 @@ describe('Board signed in as a board member', () => {
     });
     fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '10' } });
     fireEvent.change(form.getByLabelText('Reason (optional)'), { target: { value: 'Player favourite.' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'File a Next card' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
     await flush();
 
     expect(callsNamed('file_card').map((call) => call.args)).toEqual([
@@ -336,16 +416,33 @@ describe('Board signed in as a board member', () => {
         p_stage: 'proposed',
         p_executor_role_id: 'r-builder-a',
         p_board_reason: 'Player favourite.',
+        p_horizon: 'now',
       },
     ]);
-    expect(screen.getByText('Next card filed as card 1a2b3c4d.')).toBeTruthy();
+    expect(screen.getByText('Card filed as card 1a2b3c4d.')).toBeTruthy();
+  });
+
+  it('files a roadmap card on horizon later with no target', async () => {
+    await renderBoard();
+    const formElement = screen.getByRole('form', { name: 'File a card' });
+    const form = within(formElement);
+    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'later' } });
+    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Free picks' } });
+    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: 'Choose the next card without paying.' } });
+    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Not built yet.' } });
+    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'Planned.' } });
+    expect((form.getByLabelText('Funding target (USD)') as HTMLInputElement).required).toBe(false);
+    fireEvent.submit(formElement);
+    await flush();
+    const [call] = callsNamed('file_card');
+    expect(call?.args).toMatchObject({ p_title: 'Free picks', p_funding_target_usd: 0, p_horizon: 'later' });
   });
 
   it('files a directive with the contract argument names and only write roles as executors', async () => {
     await renderBoard();
     const form = within(screen.getByRole('form', { name: 'File a directive' }));
     const executor = form.getByLabelText('Executor') as HTMLSelectElement;
-    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A']);
+    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A', 'Platform Builder']);
 
     fireEvent.change(form.getByLabelText('Bucket'), { target: { value: 'qa' } });
     fireEvent.change(form.getByLabelText('Lane'), { target: { value: 'code' } });
@@ -387,30 +484,29 @@ describe('Board signed in as a board member', () => {
     expect(screen.getByText('Note filed.')).toBeTruthy();
   });
 
-  it('refuses a Next card target above the card maximum loaded from the database', async () => {
+  it('accepts a funding target above the per-card spend ceiling, which caps spend and not the target', async () => {
     fake.studio.card_max_usd = 10;
     await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'File a Next card' });
+    const formElement = screen.getByRole('form', { name: 'File a card' });
     const form = within(formElement);
     const target = form.getByLabelText('Funding target (USD)');
-    expect(target.getAttribute('max')).toBe('10');
+    expect(target.getAttribute('max')).toBeNull();
 
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Too big' } });
+    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Bigger' } });
     fireEvent.change(form.getByLabelText('Public summary'), { target: { value: 'A big change.' } });
-    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Costs too much.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'It loads.' } });
+    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Costs more.' } });
+    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
     fireEvent.change(target, { target: { value: '12' } });
     fireEvent.submit(formElement);
     await flush();
 
-    expect(form.getByText('Funding target must be between $0.01 and $10.00.')).toBeTruthy();
     expect(screen.getByText('Daily cap $100.00. Card maximum $10.00.')).toBeTruthy();
-    expect(callsNamed('file_card')).toHaveLength(0);
+    expect(callsNamed('file_card').map((call) => call.args?.p_funding_target_usd)).toEqual([12]);
   });
 
   it('refuses a blank public summary before calling the database', async () => {
     await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'File a Next card' });
+    const formElement = screen.getByRole('form', { name: 'File a card' });
     const form = within(formElement);
     fireEvent.change(form.getByLabelText('Title'), { target: { value: 'No summary' } });
     fireEvent.change(form.getByLabelText('Public summary'), { target: { value: '   ' } });
@@ -426,7 +522,7 @@ describe('Board signed in as a board member', () => {
 
   it('caps the public summary at 200 characters, explains it and counts as you type', async () => {
     await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'File a Next card' }));
+    const form = within(screen.getByRole('form', { name: 'File a card' }));
     const summary = form.getByLabelText('Public summary') as HTMLInputElement;
     expect(summary.required).toBe(true);
     expect(summary.maxLength).toBe(200);
@@ -437,6 +533,229 @@ describe('Board signed in as a board member', () => {
     fireEvent.change(summary, { target: { value: 'Twelve chars' } });
     expect(form.getByText('12 / 200')).toBeTruthy();
     expect(form.queryByText('0 / 200')).toBeNull();
+  });
+});
+
+function card(overrides: Partial<FakeCard>): FakeCard {
+  return {
+    id: '5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
+    title: 'Rename the Gatherer',
+    stage: 'proposed',
+    horizon: 'now',
+    rank: null,
+    folder: 'seed-1',
+    lane: 'config',
+    funding_target_usd: '2.0000',
+    funded_usd: '0.0000',
+    estimate_usd: '0.0000',
+    created_at: '2026-09-15T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function cardForm(title: string) {
+  return within(screen.getByRole('form', { name: `Card ${title}` }));
+}
+
+describe('Board caps and credit', () => {
+  it('shows every cap board_studio_state returns and saves them all with set_caps and a reason', async () => {
+    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500 };
+    await renderBoard();
+    expect(
+      screen.getByText(
+        'Daily cap $100.00. Card maximum $25.00. Hourly rate $4.00. Monthly cap $500.00. Studio daily limit on immediate credit $500.00.',
+      ),
+    ).toBeTruthy();
+    const formElement = screen.getByRole('form', { name: 'Set the caps' });
+    const form = within(formElement);
+    expect((form.getByLabelText('Daily spend cap (USD)') as HTMLInputElement).value).toBe('100');
+    fireEvent.change(form.getByLabelText('Monthly spend cap (USD)'), { target: { value: '400' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(form.getByText('A reason is required.')).toBeTruthy();
+    expect(callsNamed('set_caps')).toHaveLength(0);
+
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: ' Match the Console limit. ' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(callsNamed('set_caps').map((call) => call.args)).toEqual([
+      {
+        p_daily_cap_usd: 100,
+        p_card_max_usd: 25,
+        p_agent_hourly_rate_usd: 4,
+        p_monthly_cap_usd: 400,
+        p_credit_studio_daily_cap_usd: 500,
+        p_reason: 'Match the Console limit.',
+      },
+    ]);
+    expect(form.getByText('Caps saved.')).toBeTruthy();
+  });
+
+  it('asks for a cap board_studio_state does not return instead of sending a blank', async () => {
+    await renderBoard();
+    const formElement = screen.getByRole('form', { name: 'Set the caps' });
+    const form = within(formElement);
+    expect((form.getByLabelText('Agent hourly rate (USD)') as HTMLInputElement).value).toBe('');
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Tighten.' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(form.getByText('Agent hourly rate (USD) must be a dollar amount of zero or more.')).toBeTruthy();
+    expect(callsNamed('set_caps')).toHaveLength(0);
+  });
+
+  it('records a credit purchase with the contract argument names', async () => {
+    await renderBoard();
+    const formElement = screen.getByRole('form', { name: 'Record a credit purchase' });
+    const form = within(formElement);
+    fireEvent.change(form.getByLabelText('Amount (USD)'), { target: { value: '42.5' } });
+    fireEvent.change(form.getByLabelText('Stripe payout id'), { target: { value: ' po_123 ' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First payout.' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(callsNamed('record_credit_purchase').map((call) => call.args)).toEqual([
+      { p_amount_usd: 42.5, p_stripe_payout_id: 'po_123', p_reason: 'First payout.' },
+    ]);
+    expect(form.getByText('Credit purchase of $42.50 recorded.')).toBeTruthy();
+  });
+});
+
+describe('Board card controls', () => {
+  it('lists every card the board can still move, now first, then by rank', async () => {
+    fake.cards = [
+      card({ id: 'a', title: 'Later card', horizon: 'later', stage: 'proposed', created_at: '2026-09-15T00:00:00Z' }),
+      card({ id: 'b', title: 'Next ranked two', horizon: 'next', rank: 2 }),
+      card({ id: 'c', title: 'Next ranked one', horizon: 'next', rank: 1 }),
+      card({ id: 'd', title: 'Open now', horizon: 'now', stage: 'voted' }),
+      card({ id: 'e', title: 'Old row', horizon: null, stage: 'paused' }),
+    ];
+    await renderBoard();
+    await flush();
+    const cards = screen.getByRole('region', { name: 'Cards' });
+    expect(within(cards).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'Open now',
+      'Old row',
+      'Next ranked one',
+      'Next ranked two',
+      'Later card',
+    ]);
+    expect(fake.selects).toEqual([
+      {
+        table: 'cards',
+        columns: 'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at',
+        filters: ['in stage proposed,designing,voted,funded,paused', 'order created_at'],
+      },
+    ]);
+    expect(cardForm('Next ranked one').getByText('open for funding · horizon next · rank 1 · seed-1 config · $0.00 of $2.00')).toBeTruthy();
+  });
+
+  it('moves a card to now with its rank and target, and to later without a target', async () => {
+    fake.cards = [card({ id: 'n1', title: 'Planned', horizon: 'next', funding_target_usd: '0' })];
+    await renderBoard();
+    await flush();
+    const form = cardForm('Planned');
+    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'now' } });
+    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '3' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Ready.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Save horizon and rank' }));
+    await flush();
+    expect(form.getByText('A card on horizon now needs a funding target of at least $0.01.')).toBeTruthy();
+    expect(callsNamed('set_card_horizon')).toHaveLength(0);
+
+    fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '3' } });
+    fireEvent.click(form.getByRole('button', { name: 'Save horizon and rank' }));
+    await flush();
+    await flush();
+    const after = cardForm('Planned');
+    fireEvent.change(after.getByLabelText('Horizon'), { target: { value: 'later' } });
+    fireEvent.change(after.getByLabelText('Rank'), { target: { value: '' } });
+    fireEvent.change(after.getByLabelText('Reason'), { target: { value: 'Not yet.' } });
+    fireEvent.click(after.getByRole('button', { name: 'Save horizon and rank' }));
+    await flush();
+    expect(callsNamed('set_card_horizon').map((call) => call.args)).toEqual([
+      { p_card: 'n1', p_horizon: 'now', p_rank: 3, p_reason: 'Ready.', p_target_usd: 3 },
+      { p_card: 'n1', p_horizon: 'later', p_rank: null, p_reason: 'Not yet.' },
+    ]);
+  });
+
+  it('re-ranks a card already on now without sending a target, which set_card_horizon refuses there', async () => {
+    fake.cards = [card({ id: 'k1', title: 'Open now', horizon: 'now', funding_target_usd: '3.0000' })];
+    await renderBoard();
+    await flush();
+    const form = cardForm('Open now');
+    expect(form.queryByLabelText('Funding target (USD)')).toBeNull();
+    expect(form.getByText('A card with money on its bar stays on now; cancel it instead.')).toBeTruthy();
+    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '1' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First in line.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Save horizon and rank' }));
+    await flush();
+    expect(callsNamed('set_card_horizon').map((call) => call.args)).toEqual([
+      { p_card: 'k1', p_horizon: 'now', p_rank: 1, p_reason: 'First in line.' },
+    ]);
+  });
+
+  it('offers horizon and rank only on cards still open for funding', async () => {
+    fake.cards = [
+      card({ id: 'f1', title: 'Funded one', stage: 'funded', funded_usd: '2.0000' }),
+      card({ id: 'p2', title: 'Paused two', stage: 'paused' }),
+    ];
+    await renderBoard();
+    await flush();
+    for (const [title, line] of [
+      ['Funded one', 'A funded card can only be cancelled.'],
+      ['Paused two', 'A paused card can only be cancelled or resumed.'],
+    ] as const) {
+      const form = cardForm(title);
+      expect(form.queryByLabelText('Horizon')).toBeNull();
+      expect(form.queryByLabelText('Rank')).toBeNull();
+      expect(form.queryByRole('button', { name: 'Save horizon and rank' })).toBeNull();
+      expect(form.getByRole('button', { name: 'Cancel card' })).toBeTruthy();
+      expect(form.getByText(line)).toBeTruthy();
+    }
+    fireEvent.submit(screen.getByRole('form', { name: 'Card Funded one' }));
+    await flush();
+    expect(callsNamed('set_card_horizon')).toHaveLength(0);
+  });
+
+  it('cancels a card only after the confirm, with the reason', async () => {
+    fake.cards = [card({ id: 'x1', title: 'Retire me' })];
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await renderBoard();
+    await flush();
+    const form = cardForm('Retire me');
+    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    await flush();
+    expect(form.getByText('A reason is required.')).toBeTruthy();
+    expect(confirm).not.toHaveBeenCalled();
+
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'No longer makes sense.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    await flush();
+    expect(confirm).toHaveBeenCalledWith(CANCEL_CONFIRM);
+    expect(callsNamed('cancel_card')).toHaveLength(0);
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    await flush();
+    expect(callsNamed('cancel_card').map((call) => call.args)).toEqual([{ p_card: 'x1', p_reason: 'No longer makes sense.' }]);
+  });
+
+  it('resumes a paused card with a new estimate, and offers resume on paused cards only', async () => {
+    fake.cards = [
+      card({ id: 'p1', title: 'Paused one', stage: 'paused', estimate_usd: '0.5000', funded_usd: '2.0000' }),
+      card({ id: 'o1', title: 'Open one' }),
+    ];
+    await renderBoard();
+    await flush();
+    expect(cardForm('Open one').queryByRole('button', { name: 'Resume card' })).toBeNull();
+    const form = cardForm('Paused one');
+    expect((form.getByLabelText('New estimate (USD)') as HTMLInputElement).value).toBe('0.5');
+    fireEvent.change(form.getByLabelText('New estimate (USD)'), { target: { value: '0.8' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Credit topped up.' } });
+    fireEvent.click(form.getByRole('button', { name: 'Resume card' }));
+    await flush();
+    expect(callsNamed('resume_card').map((call) => call.args)).toEqual([
+      { p_card: 'p1', p_estimate_usd: 0.8, p_reason: 'Credit topped up.' },
+    ]);
   });
 });
 
@@ -523,7 +842,7 @@ describe('Board two-factor sign-in', () => {
     const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
     expect(
       within(step).getByText(
-        'A second factor is needed before you can pause agents, go live, change the agent mode, or file cards, directives and notes.',
+        'A second factor is needed before you can pause agents, go live, change the agent mode or the caps, record credit, move, cancel or resume cards, or file cards, directives and notes.',
       ),
     ).toBeTruthy();
     expectNoSecondFactorControls();
@@ -618,7 +937,7 @@ describe('Board signed in as the moderator', () => {
     expect(screen.queryByText(/^Board session:/)).toBeNull();
     expect(screen.queryByRole('form', { name: 'File a directive' })).toBeNull();
     expect(screen.queryByRole('form', { name: 'File a note' })).toBeNull();
-    expect(screen.queryByRole('form', { name: 'File a Next card' })).toBeNull();
+    expect(screen.queryByRole('form', { name: 'File a card' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
     expect(callsNamed('board_heartbeat')).toHaveLength(0);
