@@ -175,11 +175,13 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
 ];
 
 /**
- * The whole path of a contribution: six steps, each a short text beside the real component that
- * shows it, in example mode. A visual uses a real public record where one exists and made-up
+ * The whole path of a contribution: six steps, each a short text with the real component that shows
+ * it under it, in example mode. A visual uses a real public record where one exists and made-up
  * figures, labelled so, where none does. Then where the money goes, holds and refunds, and the rules.
- * Three bands (DESIGN.md, Bands): the heading and the paused notice on ink, the steps and their
- * examples on paper, and the money and the rules on ink. The all-ages line is in every footer.
+ * Three bands (DESIGN.md, Bands): the heading and the paused notice on the signal plate, the steps
+ * and their examples on paper, and the money and the rules on ink. Each step stacks its text over its
+ * example at every width, so a short text never floats beside a tall card. The all-ages line is in
+ * every footer.
  */
 export function HowItWorks() {
   const studio = useStudio();

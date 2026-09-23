@@ -97,6 +97,15 @@ p {
   margin: 0 0 var(--space-2);
 }
 
+/* Running text avoids a lone word on its last line. */
+p,
+li,
+dd,
+.member-job,
+.row-body {
+  text-wrap: pretty;
+}
+
 p:last-child {
   margin-bottom: 0;
 }
@@ -166,6 +175,44 @@ code {
   fill: currentColor;
 }
 
+/* The Funded glyph is a tiny full funding bar: the coin fill inside a currentColor outline. It and
+   the coin mark are the only fixed fills; every other glyph draws in currentColor. */
+.glyph-money {
+  fill: var(--coin);
+}
+
+/* A suit: a 20px tile in the suit's colour holding its glyph in paper, with the ink label beside
+   it. On paper and the work face only: the signal and ink bands reset the tile to transparent, so
+   there the suit is the paper glyph and label. A suit colour is never a face, edge, text or amount. */
+.suit-tile {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--radius-tile);
+  color: var(--paper);
+}
+
+.suit-tile .glyph {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+[data-suit='game'] > .suit-tile {
+  background: var(--suit-tile-game);
+}
+
+[data-suit='studio'] > .suit-tile {
+  background: var(--suit-tile-studio);
+}
+
+/* Live green: only the Live glyph (and the stamp's edge). The word stays in the text colour; the
+   signal and ink bands reset the mark to currentColor. */
+[data-state='live'] > .glyph {
+  color: var(--live-mark);
+}
+
 /* The coin mark: an ink rim, the coin fill and one inner ink ring. Only beside a dollar figure and
    on Contribute. */
 .coin {
@@ -195,9 +242,10 @@ code {
 
 /* Bands -------------------------------------------------------------------
    A page whose main holds bands is a stack of full-bleed sections. Their colour comes only from
-   their position: odd ink, even paper. The top bar shares the first band's ink and the footer is
-   the opposite of the last band. No page sets a band colour; these positional rules are the only
-   ones that do. */
+   their position among the bands drawn: band 1 is the signal plate (the top bar shares it), even
+   bands are paper, and odd bands from 3 are ink. The footer takes the next position: ink after an
+   even last band, paper after an odd one, never signal. Band 2 is always paper, so signal never
+   touches ink. No page sets a band colour; these positional rules are the only ones that do. */
 
 main:has(> .band) {
   display: flex;
@@ -206,9 +254,14 @@ main:has(> .band) {
   padding: 0;
 }
 
-/* The last band takes any height the page has left, so its ground runs down to the footer. */
-main > .band:last-child {
+/* On a page shorter than the window, the signal plate takes the height left over and sets its
+   heading at its foot, so a short page reads as a title plate over its text, never as an empty
+   field above the footer. On a longer page it grows by nothing. */
+main > .band:first-child {
+  display: flex;
+  flex-direction: column;
   flex-grow: 1;
+  justify-content: flex-end;
 }
 
 /* A page that is not wide keeps each band's blocks to the reading measure. */
@@ -216,7 +269,9 @@ main:not(.wide) > .band > * {
   max-width: var(--measure);
 }
 
+/* flow-root, so no child margin opens a strip of page ground between two grounds. */
 main > .band {
+  display: flow-root;
   max-width: none;
   padding-block: var(--band-pad);
   padding-inline: max(var(--gutter), calc((100% - var(--wrap)) / 2));
@@ -231,8 +286,13 @@ main > .band {
   margin-bottom: 0;
 }
 
-main > .band:nth-child(odd),
-.page:has(> main > .band:first-child) > .topbar,
+main > .band:nth-child(even),
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+main > .band:nth-child(2n + 3),
 .page:has(> main > .band:last-child:nth-child(even)) > .site-footer {
   background: var(--ink);
   color: var(--paper);
@@ -248,19 +308,46 @@ main > .band:nth-child(odd),
   --outline-hover: var(--ink-hover);
   --outline-press: var(--ink-hover);
   --quiet-fg: var(--muted-on-ink);
+  --quiet-edge: var(--field);
   --mark-filter: invert(1);
+  --suit-tile-game: transparent;
+  --suit-tile-studio: transparent;
+  --live-mark: currentColor;
 }
 
-main > .band:nth-child(even),
-.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer {
-  background: var(--paper);
-  color: var(--ink);
+main > .band:first-child,
+.page:has(> main > .band:first-child) > .topbar {
+  background: var(--signal);
+  color: var(--paper);
+  --text-muted: var(--muted-on-signal);
+  --hairline: var(--line-on-signal);
+  --focus-colour: var(--paper);
+  --primary-bg: var(--paper);
+  --primary-fg: var(--ink);
+  --primary-hover: var(--paper-hover);
+  --primary-press: var(--paper-hover);
+  --outline-bg: var(--signal);
+  --outline-fg: var(--paper);
+  --outline-hover: var(--signal-deep);
+  --outline-press: var(--signal-press);
+  --coin-hover: var(--coin-up);
+  --quiet-fg: var(--muted-on-signal);
+  --quiet-edge: var(--muted-on-signal);
+  --mark-filter: invert(1);
+  --suit-tile-game: transparent;
+  --suit-tile-studio: transparent;
+  --live-mark: currentColor;
 }
 
 /* The change of ground is the only divider between bands. */
 .page:has(> main > .band) > .topbar,
 .page:has(> main > .band) > .site-footer {
   border: 0;
+}
+
+/* Band 1 sits close under the top bar it shares a ground with. */
+main > .band:first-child {
+  padding-top: var(--space-2);
 }
 
 /* Top bar ---------------------------------------------------------------
@@ -345,7 +432,7 @@ nav a.active {
 }
 
 @media (max-width: 22.49rem) {
-  .nav-play {
+  .topbar-row .nav-play {
     display: none;
   }
 
@@ -522,16 +609,18 @@ button.button-secondary:active:not(:disabled) {
   background: var(--coin);
 }
 
+/* Hover and press: --coin-down on paper and ink, --coin-up on the signal band (coin-down measures
+   2.84 against signal). */
 .button.btn-coin:hover,
 .button.btn-coin:active {
-  background: var(--coin-down);
+  background: var(--coin-hover);
 }
 
 /* The quiet state: a button with nothing to do yet ("Up to date"). It keeps focus. */
 .button.button-quiet,
 .button.button-quiet:hover,
 .button.button-quiet:active {
-  border-color: var(--field);
+  border-color: var(--quiet-edge);
   background: transparent;
   color: var(--quiet-fg);
   cursor: default;
@@ -643,7 +732,9 @@ button.link:hover:not(:disabled) {
   border-style: dashed;
 }
 
-/* Paused: a 6px ink-hatched strip along the top edge, inside the border. */
+/* Picked: a 6px signal ribbon inside the top edge. Paused: a 6px ink hatch in the same slot (the two
+   never meet). Both are backgrounds, so forced colours drop them; the word and glyph carry the state. */
+.card[data-face='picked']::before,
 .card[data-face='paused']::before {
   content: '';
   position: absolute;
@@ -652,6 +743,13 @@ button.link:hover:not(:disabled) {
   right: 0;
   height: 6px;
   border-radius: calc(var(--radius-card) - 2px) calc(var(--radius-card) - 2px) 0 0;
+}
+
+.card[data-face='picked']::before {
+  background: var(--signal);
+}
+
+.card[data-face='paused']::before {
   background: repeating-linear-gradient(-45deg, var(--ink) 0 1.5px, transparent 1.5px 5px);
 }
 
@@ -661,7 +759,7 @@ button.link:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-1);
   margin-bottom: var(--space-2);
   font-size: var(--size-small);
   font-weight: var(--weight-strong);
@@ -677,7 +775,8 @@ button.link:hover:not(:disabled) {
    plain tag. */
 .tag-stamp {
   padding: 0.125rem 0.5rem;
-  border: 2px solid currentColor;
+  margin-block: -0.25rem;
+  border: 2px solid var(--live-mark);
   border-radius: var(--radius);
   transform: rotate(-3deg);
 }
@@ -829,7 +928,8 @@ button.link:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Pick for me: the primary action's fill until the /contribute block replaces it. */
+/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names no
+   card until the waterfall's order is public (docs/specs/home-and-design.md). */
 .choice-primary {
   margin-bottom: var(--space-4);
   border-color: var(--primary-bg);
@@ -887,6 +987,13 @@ button.link:hover:not(:disabled) {
   cursor: pointer;
 }
 
+/* The same room as a closed brief, on a card that has none. */
+.brief-slot {
+  height: 1lh;
+  margin-top: var(--space-2);
+  font-size: var(--size-small);
+}
+
 .brief p {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-2);
@@ -925,8 +1032,25 @@ button.link:hover:not(:disabled) {
   gap: 0.125rem var(--space-2);
 }
 
-.rail .row-time {
+.rail .row-time,
+.row-rail {
   white-space: nowrap;
+}
+
+.row-rail {
+  font-weight: var(--weight-strong);
+}
+
+/* A row's second line: its suit, its state and what it cost, in one wrapping line. */
+.row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem var(--space-2);
+}
+
+.row-meta .tag {
+  font-weight: var(--weight-strong);
 }
 
 .row-body {
@@ -947,12 +1071,6 @@ button.link:hover:not(:disabled) {
   text-wrap: pretty;
 }
 
-.row-title .tag {
-  margin-right: 0.25rem;
-  font-weight: var(--weight-strong);
-  vertical-align: -0.125rem;
-}
-
 /* A small muted label above a list of rows. */
 .rows-heading {
   margin: var(--space-3) 0 var(--space-1);
@@ -970,32 +1088,37 @@ button.link:hover:not(:disabled) {
   box-shadow: inset 3px 0 0 currentColor;
 }
 
-/* Paused notice: one plain line, 600, with the pause glyph (two bars in currentColor). No box. */
+/* The paused notice and the status line: one line of text beside the pause glyph, which never
+   wraps onto a line of its own. The notice is kernel (PausedNotice.tsx), so it draws the glyph in
+   CSS: two 3px bars in currentColor, the same shape as the pause glyph. No box. */
 .notice,
-.status-line.is-paused {
+.status-line {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 0.5rem;
   max-width: var(--measure);
-  font-weight: var(--weight-strong);
 }
 
 .notice {
-  margin: 0 0 var(--space-3);
+  font-weight: var(--weight-strong);
 }
 
-.notice::before,
-.status-line.is-paused::before {
+.notice::before {
   content: '';
   flex: none;
-  width: 0.75rem;
-  height: 0.8rem;
-  border-inline: 0.25rem solid currentColor;
+  width: 0.5625rem;
+  height: 0.6875rem;
+  margin: calc((1lh - 0.6875rem) / 2) 0.1875rem 0;
+  border-inline: 0.1875rem solid currentColor;
 }
 
-/* The status line: one true sentence from data, its figures at 600. */
-.status-line {
-  max-width: var(--measure);
+.status-line > .glyph {
+  margin-top: calc((1lh - 1rem) / 2);
+}
+
+.status-line > span {
+  flex: 1;
+  min-width: 0;
 }
 
 .status-line strong {
@@ -1029,11 +1152,14 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-small);
 }
 
-/* How it works: six steps, each a short text beside the real component that shows it. The visual
-   sits in a dashed frame with its Example label, so it never reads as something to act on. */
+/* How it works: six steps, each a short text with the real component that shows it under it, held
+   to the reading measure. Stacked at every width, so a short text never floats beside a tall
+   example. The visual sits in a dashed frame with its Example label, so it never reads as something
+   to act on. */
 .how-steps {
   display: grid;
   gap: var(--space-5);
+  max-width: var(--measure);
   margin: 0;
   padding: 0;
   counter-reset: how-step;
@@ -1041,7 +1167,7 @@ button.link:hover:not(:disabled) {
 
 .how-step {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   counter-increment: how-step;
 }
 
@@ -1083,7 +1209,9 @@ button.link:hover:not(:disabled) {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* The team: one plain row per agent (never a bordered tile, which would read as a card). */
+/* The team: one plain row per agent (never a bordered tile, which would read as a card). On a
+   phone the avatar floats beside the name and the text wraps under it, so a long roster stays short
+   and no empty column runs down beside the text; from 48rem it sits on top. */
 .team-grid {
   display: grid;
   gap: var(--space-4) var(--space-3);
@@ -1091,8 +1219,12 @@ button.link:hover:not(:disabled) {
 }
 
 .agent {
-  display: flex;
-  flex-direction: column;
+  display: flow-root;
+}
+
+.agent > .avatar {
+  float: left;
+  margin: 0 var(--space-2) var(--space-1) 0;
 }
 
 /* The facts line sits at the bottom of each row, so the lines align across a row of agents. */
@@ -1103,9 +1235,8 @@ button.link:hover:not(:disabled) {
 
 .agent .avatar {
   display: block;
-  width: 6rem;
+  width: 4rem;
   height: auto;
-  margin-bottom: var(--space-2);
 }
 
 .agent h3 {
@@ -1152,7 +1283,7 @@ button.link:hover:not(:disabled) {
 }
 
 /* On an ink band an avatar sits on a paper disc and draws unchanged. */
-main > .band:nth-child(odd) .avatar {
+main > .band:nth-child(2n + 3) .avatar {
   border-radius: 50%;
   background: var(--paper);
 }
@@ -1344,18 +1475,27 @@ input[type='radio'] {
   font-size: var(--size-small);
 }
 
+/* The palette and the pairings: a chip beside its name, value, job and measured ratio. */
 .swatches {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.swatch {
+  display: flex;
+  align-items: flex-start;
   gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--size-small);
 }
 
 .swatch-chip {
-  display: flex;
-  align-items: center;
-  min-height: 3.5rem;
-  padding: 0 var(--space-2);
-  border: 1px solid currentColor;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid var(--ink);
   border-radius: var(--radius);
   font-size: var(--size-lead);
   font-weight: var(--weight-bold);
@@ -1368,34 +1508,30 @@ input[type='radio'] {
   border-radius: var(--radius-tile);
 }
 
-.face-grid {
+.swatch-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.swatch code {
+  font-weight: var(--weight-strong);
+}
+
+/* The card faces, in two groups by anatomy, each a card grid with its notes under it. */
+.face-notes {
   display: grid;
-  gap: var(--space-4) var(--space-3);
+  gap: 0.25rem;
+  margin-top: var(--space-2);
 }
 
-.face-grid .card-grid {
-  grid-template-columns: minmax(0, 1fr);
-  margin: 0;
-}
-
-.face-grid > .demo {
-  grid-template-rows: 1fr auto;
+.face-notes .caption {
   margin: 0;
 }
 
 .coin-large .coin {
   width: 4rem;
   height: 4rem;
-}
-
-.swatch dl {
-  margin: var(--space-1) 0 0;
-  font-size: var(--size-small);
-  font-variant-numeric: tabular-nums;
-}
-
-.swatch dd {
-  margin: 0;
 }
 
 .bar-samples {
@@ -1418,9 +1554,9 @@ input[type='radio'] {
 }
 
 .glyph-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-  gap: var(--space-1) var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
   font-size: var(--size-small);
 }
 
@@ -1506,6 +1642,14 @@ input[type='radio'] {
     background: Highlight;
     border-inline-end-color: CanvasText;
   }
+
+  .glyph-money {
+    fill: CanvasText;
+  }
+
+  .suit-tile {
+    border: 1px solid CanvasText;
+  }
 }
 
 /* Home ---------------------------------------------------------------------- */
@@ -1522,23 +1666,30 @@ input[type='radio'] {
   margin-top: var(--space-3);
 }
 
+.hero .live-updates {
+  margin-top: var(--space-2);
+}
+
 /* A phone shows the first three cards until the viewer presses Show all. */
-.show-all {
-  margin-top: var(--space-3);
-}
-
-.home-columns {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.home-columns > .section {
-  margin-bottom: 0;
+.show-all,
+.show-more {
+  margin-top: var(--space-2);
 }
 
 .money-split {
   max-width: var(--measure);
   margin-top: var(--space-2);
+}
+
+/* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
+   nothing leaves an empty column. */
+.pair {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pair > .section {
+  margin-bottom: 0;
 }
 
 /* Wider screens ------------------------------------------------------------ */
@@ -1549,13 +1700,23 @@ input[type='radio'] {
   }
 }
 
+/* Below 30rem the live-updates row stacks full width, so no button is left alone on a line. */
+@media (max-width: 29.99rem) {
+  .live-updates {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (min-width: 48rem) {
-  .card-grid,
-  .team-grid,
-  .team-strip,
-  .guide-grid,
-  .face-grid {
+  .guide-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The team strip: one row, one column per member. */
+  .team-strip {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .show-all {
@@ -1567,40 +1728,108 @@ input[type='radio'] {
     align-items: baseline;
   }
 
-  .how-step {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: center;
-    gap: var(--space-4);
-  }
-
-  /* Text and visual alternate sides from one step to the next. */
-  .how-step:nth-child(even) .how-text {
-    order: 2;
-  }
-
   .member .avatar {
     width: 4.5rem;
     height: 4.5rem;
   }
+
+  .agent {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .agent .avatar {
+    float: none;
+    width: 6rem;
+    margin: 0 0 var(--space-2);
+  }
+}
+
+/* From 48rem to 64rem a strip member's avatar sits over its name, so the job keeps a readable width. */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  .member {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
 }
 
 @media (min-width: 64rem) {
-  .card-grid,
-  .team-grid,
-  .team-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .face-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .home-columns {
+  .pair {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     align-items: start;
   }
 
+  .pair:has(> :only-child) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pair.rules-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .example {
     padding: var(--space-3);
+  }
+}
+
+/* The fill rule: a card grid (and the team's grid and any .fill-grid) never leaves an empty cell and
+   never hides a real card. Two columns from 48rem are four tracks, three from 72rem are six (below
+   72rem a third column squeezes card text until a short card is left hollow beside a long one); an
+   odd last card at two columns takes the row, and at three columns the last two or four share their
+   rows in halves. One card keeps the reading measure. The order (the money's order) never changes. */
+@media (min-width: 48rem) and (max-width: 71.99rem) {
+  .card-grid,
+  .team-grid,
+  .fill-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .card-grid > *,
+  .team-grid > *,
+  .fill-grid > * {
+    grid-column: span 2;
+  }
+
+  .card-grid:has(> :last-child:nth-child(2n + 3)) > :last-child,
+  .team-grid:has(> :last-child:nth-child(2n + 3)) > :last-child,
+  .fill-grid:has(> :last-child:nth-child(2n + 3)) > :last-child {
+    grid-column: span 4;
+  }
+}
+
+@media (min-width: 72rem) {
+  .card-grid,
+  .team-grid,
+  .fill-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .card-grid > *,
+  .team-grid > *,
+  .fill-grid > * {
+    grid-column: span 2;
+  }
+
+  .card-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
+  .team-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
+  .fill-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
+  .card-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4),
+  .team-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4),
+  .fill-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4) {
+    grid-column: span 3;
+  }
+}
+
+@media (min-width: 48rem) {
+  .card-grid:has(> :only-child),
+  .team-grid:has(> :only-child),
+  .fill-grid:has(> :only-child) {
+    grid-template-columns: minmax(0, var(--measure));
+  }
+
+  .card-grid:has(> :only-child) > *,
+  .team-grid:has(> :only-child) > * > *,
+  .fill-grid:has(> :only-child) > * {
+    grid-column: auto;
   }
 }

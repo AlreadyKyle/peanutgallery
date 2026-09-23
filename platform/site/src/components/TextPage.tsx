@@ -62,8 +62,9 @@ function TextBlock({ id, section }: { id: string; section: TextSection }) {
 }
 
 /**
- * The text-page layout: one h1 and a lede on the first (ink) band, then sections that each open with
- * an h2 on the second (paper) band, all held to the reading measure. `name` prefixes the heading ids; `extra` sections follow the page's own.
+ * The text-page layout: one h1 and a lede on the first band (the signal plate), then sections that
+ * each open with an h2 on the second (paper) band, all held to the reading measure. `name` prefixes
+ * the heading ids; `extra` sections follow the page's own.
  */
 export function TextPage({
   name,

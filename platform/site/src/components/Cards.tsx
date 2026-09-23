@@ -6,7 +6,7 @@ import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
 import { shippedMeta, type SpecRow } from './Funding';
-import { Glyph, STATE_TAGS, SUITS } from './Glyph';
+import { Glyph, StateTag, SUITS, SuitTag } from './Glyph';
 
 // The card groups, in the platform code lane. Each card is drawn by Card.tsx; its money (the bar,
 // the spec rows, what a card spent and the Fund this card link) comes from Funding.tsx, kernel.
@@ -51,9 +51,13 @@ export function FilterChip({
   onPress: () => void;
 }) {
   return (
-    <button type="button" className="filter" aria-pressed={pressed} onClick={onPress}>
+    <button type="button" className="filter" aria-pressed={pressed} onClick={onPress} data-suit={option === 'all' ? undefined : option}>
       {pressed ? <Glyph name="check" /> : null}
-      {option === 'all' ? null : <Glyph name={SUITS[option].glyph} />}
+      {option === 'all' ? null : (
+        <span className="suit-tile">
+          <Glyph name={SUITS[option].glyph} />
+        </span>
+      )}
       {copy.categories[option]} <span className="filter-count">{count}</span>
     </button>
   );
@@ -125,7 +129,7 @@ export function FundBoard({
   );
 }
 
-/** Funded cards waiting for the agents, as rows: the suit in the rail, the title beside it. */
+/** Funded cards waiting for the agents, as rail rows: the suit in the rail, the title beside it. */
 export function QueuedList({ cards }: { cards: Card[] }) {
   return (
     <section className="section" aria-labelledby="queued">
@@ -138,7 +142,9 @@ export function QueuedList({ cards }: { cards: Card[] }) {
           <ul className="rows rail">
             {cards.map((card) => (
               <li key={card.id}>
-                <SuitCell card={card} />
+                <span className="row-rail">
+                  <SuitTag suit={categoryOf(card)} />
+                </span>
                 <div className="row-body">
                   <span className="row-strong">{card.title}</span>
                 </div>
@@ -151,34 +157,23 @@ export function QueuedList({ cards }: { cards: Card[] }) {
   );
 }
 
-function SuitCell({ card }: { card: Card }) {
-  const suit = SUITS[categoryOf(card)];
-  return (
-    <span className="row-time with-glyph">
-      <Glyph name={suit.glyph} />
-      {suit.label}
-    </span>
-  );
-}
-
 /**
- * One shipped card as a rail row: the day it shipped in the rail, then the Live tag and its title,
- * then what it cost and who funded it (Funding.tsx, kernel).
+ * One shipped card as a rail row: the day it shipped in the rail, then its title, then its suit, the
+ * Live tag and what it cost and who funded it (Funding.tsx, kernel).
  */
 export function ShippedRow({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
-  const live = STATE_TAGS.live;
   return (
     <li>
       <span className="row-time">{formatDate(shippedAt(card))}</span>
       <div className="row-body">
         <h3 className="row-title" id={`${example ? 'example' : 'shipped'}-title-${card.id}`}>
-          <span className="tag" data-state="live">
-            <Glyph name={live.glyph} />
-            {live.word}
-          </span>{' '}
           {card.title}
         </h3>
-        <p className="card-meta">{shippedMeta(card, snapshot, sourceLabel(card.source))}</p>
+        <p className="row-meta">
+          <SuitTag suit={categoryOf(card)} />
+          <StateTag face="live" />
+          <span className="card-meta">{shippedMeta(card, snapshot, sourceLabel(card.source))}</span>
+        </p>
       </div>
     </li>
   );
@@ -206,7 +201,9 @@ export function ShippedList({ cards, snapshot }: { cards: Card[]; snapshot: Snap
 export function PlannedRow({ card, detail = false }: { card: Card; detail?: boolean }) {
   return (
     <li>
-      <SuitCell card={card} />
+      <span className="row-rail">
+        <SuitTag suit={categoryOf(card)} />
+      </span>
       <div className="row-body">
         <h3 className="row-title">{card.title}</h3>
         {!detail || blank(card.summary) ? null : <p>{card.summary}</p>}

@@ -99,12 +99,12 @@ for (const viewport of WIDTHS) {
       await onlyOneH1(page, 'Roadmap');
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Next', 'Later']);
-      await expect(page.getByRole('region', { name: 'Next', exact: true }).getByRole('heading', { level: 4 })).toHaveText([
+      await expect(page.getByRole('region', { name: 'Next', exact: true }).getByRole('heading', { level: 3 })).toHaveText([
         'Choose the next card without paying',
         'The Studio Head drafts cards from the roadmap',
         'Board on its own site',
       ]);
-      await expect(page.getByRole('region', { name: 'Later', exact: true }).getByRole('heading', { level: 4 })).toHaveText([
+      await expect(page.getByRole('region', { name: 'Later', exact: true }).getByRole('heading', { level: 3 })).toHaveText([
         'A second area in Dust',
         'Image adapter for studio pictures',
       ]);

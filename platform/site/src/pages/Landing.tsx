@@ -16,10 +16,11 @@ import { runsCards } from '../lib/roster';
 import type { Snapshot } from '../lib/source';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
-// Home, in the board's order (DESIGN.md, Home), on bands: what the studio is and its state (ink);
-// what is building, what to fund and what is queued, the only band with cards (paper); the team
-// (ink); what shipped and what is planned next (paper); where the money goes (ink). A band with
-// nothing to show is not drawn, and the bands after it take their colour from their new place.
+// Home, in the board's order (DESIGN.md, Home), on bands: what the studio is and its state (the
+// signal plate); what is building, what to fund and what is queued, the only band with cards
+// (paper); the team (ink); what shipped and what is planned next (paper); where the money goes
+// (ink). A band with nothing to show is not drawn, and the bands after it take their colour from
+// their new place.
 
 /** Home shows the latest three shipped cards, the next three planned and the five latest agent actions. */
 export const HOME_SHIPPED = 3;
@@ -55,7 +56,8 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   const { fund, now } = view.groups;
   const isPaused = paused(view.snapshot);
   return (
-    <p className={isPaused ? 'status-line is-paused' : 'status-line'}>
+    <p className="status-line">
+      {isPaused ? <Glyph name="pause" /> : null}
       <span>
         {fund.length === 0 ? copy.status.openNone : <Count n={fund.length} words={copy.status.open} />}
         {now.length === 0 ? null : (
@@ -135,7 +137,7 @@ function RoadmapSection({ view }: { view: HomeView }) {
   if (shipped.length === 0 && next.length === 0) return null;
   return (
     <div className="band">
-      <div className="home-columns">
+      <div className="pair">
         <ShippedList cards={shipped} snapshot={view.snapshot} />
         <PlannedNext cards={next} />
       </div>

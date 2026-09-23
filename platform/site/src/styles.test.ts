@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { brotliDecompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { COLOUR_PAIRS, COLOUR_TOKENS, MARK_PAIRS } from './lib/colour';
 import { contrast } from './lib/contrast';
 
 // DESIGN.md is the style guide; these tests keep the stylesheets to it. tokens.css holds every token
@@ -20,10 +21,11 @@ function rem(token: string): number {
   return Number(match[1]);
 }
 
+/** A colour token's six-digit hex from tokens.css, following an alias such as --suit-studio: var(--signal). */
 function hex(token: string): string {
-  const match = tokens.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`));
+  const match = tokens.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6}|var\\((--[a-z-]+)\\))`));
   if (!match) throw new Error(`${token} is not a six-digit hex colour`);
-  return match[1]!;
+  return match[2] === undefined ? match[1]! : hex(match[2]);
 }
 
 type Rule = { selector: string; body: string; media: string };
@@ -66,6 +68,55 @@ function rules(css: string): Rule[] {
 }
 
 const ALL_RULES = [...rules(tokens), ...rules(styles)];
+
+// Tokens that alias a colour for a role (the studio suit is the signal) are colours too; the role
+// tokens (--primary-bg and the rest) name no colour of their own.
+const ROLES = ['--text-muted', '--hairline', '--focus-colour', '--primary-bg', '--primary-fg', '--primary-hover', '--primary-press', '--outline-bg', '--outline-fg', '--outline-hover', '--outline-press', '--coin-hover', '--quiet-fg', '--quiet-edge', '--suit-tile-game', '--suit-tile-studio', '--live-mark'];
+
+// Colour vision (Machado 2009 at severity 1.0 on linear sRGB), then CIE76 delta-E in CIELAB (D65).
+const CVD_MODES = ['normal', 'protan', 'deutan', 'tritan'] as const;
+type CvdMode = (typeof CVD_MODES)[number];
+const MACHADO: Record<CvdMode, number[][]> = {
+  normal: [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ],
+  protan: [
+    [0.152286, 1.052583, -0.204868],
+    [0.114503, 0.786281, 0.099216],
+    [-0.003882, -0.048116, 1.051998],
+  ],
+  deutan: [
+    [0.367322, 0.860646, -0.227968],
+    [0.280085, 0.672501, 0.047413],
+    [-0.01182, 0.04294, 0.968881],
+  ],
+  tritan: [
+    [1.255528, -0.076749, -0.178779],
+    [-0.078411, 0.930809, 0.147602],
+    [0.004733, 0.691367, 0.3039],
+  ],
+};
+
+function lab(colour: string, mode: CvdMode): number[] {
+  const linear = [1, 3, 5].map((i) => {
+    const v = parseInt(colour.slice(i, i + 2), 16) / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const [r, g, b] = MACHADO[mode].map((row) => Math.min(1, Math.max(0, row[0]! * linear[0]! + row[1]! * linear[1]! + row[2]! * linear[2]!)));
+  const x = (0.4124 * r! + 0.3576 * g! + 0.1805 * b!) / 0.95047;
+  const y = 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  const z = (0.0193 * r! + 0.1192 * g! + 0.9505 * b!) / 1.08883;
+  const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+}
+
+function deltaE(a: string, b: string, mode: CvdMode): number {
+  const [p, q] = [lab(a, mode), lab(b, mode)];
+  return Math.hypot(p[0]! - q[0]!, p[1]! - q[1]!, p[2]! - q[2]!);
+}
+
 const selectorsOf = (rule: Rule) => rule.selector.split(',').map((s) => s.trim().replace(/\s+/g, ' '));
 
 describe('tokens.css', () => {
@@ -224,67 +275,133 @@ describe('plain and readable', () => {
   });
 });
 
-describe('contrast (WCAG 2.x), measured from tokens.css', () => {
-  it('on paper and the work face: ink at least 7, muted 4.5, field 3; ink on the coin at least 7', () => {
-    for (const ground of ['--paper', '--work']) {
-      expect(contrast(hex('--ink'), hex(ground)), `ink on ${ground}`).toBeGreaterThanOrEqual(7);
-      expect(contrast(hex('--muted'), hex(ground)), `muted on ${ground}`).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(hex('--field'), hex(ground)), `field on ${ground}`).toBeGreaterThanOrEqual(3);
+describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
+  it('lists every colour token of tokens.css in lib/colour.ts, and nothing else', () => {
+    const defined = [...tokens.matchAll(/^\s*(--[a-z-]+):\s*(#[0-9a-fA-F]{6}|var\(--[a-z-]+\));/gm)]
+      .filter((m) => m[2]!.startsWith('#') || !ROLES.includes(m[1]!))
+      .map((m) => m[1]!)
+      .filter((name) => !name.startsWith('--creature-'));
+    expect(COLOUR_TOKENS.map((token) => token.name).sort()).toEqual(defined.sort());
+  });
+
+  for (const pair of COLOUR_PAIRS) {
+    const label = `${pair.fg} on ${pair.bg}`;
+    if (pair.banned) {
+      it(`keeps ${label} below ${pair.floor}, so a rule keeps it off the page`, () => {
+        expect(contrast(hex(pair.fg), hex(pair.bg))).toBeLessThan(pair.floor);
+      });
+    } else if (pair.floor > 0) {
+      it(`measures ${label} at ${pair.floor} or better`, () => {
+        expect(contrast(hex(pair.fg), hex(pair.bg))).toBeGreaterThanOrEqual(pair.floor);
+      });
     }
-    expect(contrast(hex('--ink'), hex('--coin'))).toBeGreaterThanOrEqual(7);
-    expect(contrast(hex('--ink'), hex('--coin-down'))).toBeGreaterThanOrEqual(4.5);
+  }
+
+  it('keeps every pair of marks at least 25 delta-E apart under normal vision, protanopia, deuteranopia and tritanopia', () => {
+    for (const [a, b] of MARK_PAIRS) {
+      for (const mode of CVD_MODES) {
+        expect(deltaE(hex(a), hex(b), mode), `${a} vs ${b}, ${mode}`).toBeGreaterThanOrEqual(25);
+      }
+    }
   });
 
-  it('on ink: paper at least 7, muted-on-ink 4.5 on ink and ink-hover, field 3, the coins 3, and the press fills', () => {
-    const ink = hex('--ink');
-    expect(contrast(hex('--paper'), ink)).toBeGreaterThanOrEqual(7);
-    expect(contrast(hex('--muted-on-ink'), ink)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(hex('--muted-on-ink'), hex('--ink-hover'))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(hex('--field'), ink)).toBeGreaterThanOrEqual(3);
-    expect(contrast(hex('--coin'), ink)).toBeGreaterThanOrEqual(3);
-    expect(contrast(hex('--coin-down'), ink)).toBeGreaterThanOrEqual(3);
-    expect(contrast(ink, hex('--paper-hover'))).toBeGreaterThanOrEqual(7);
-    expect(contrast(hex('--paper'), hex('--ink-hover'))).toBeGreaterThanOrEqual(7);
-  });
-
-  it('draws the change marker at 3:1 or better on paper, work and ink (currentColor: ink, ink, paper)', () => {
+  it('draws the change marker at 3:1 or better on paper, work, signal and ink (currentColor: ink, ink, paper, paper)', () => {
     expect(contrast(hex('--ink'), hex('--paper'))).toBeGreaterThanOrEqual(3);
     expect(contrast(hex('--ink'), hex('--work'))).toBeGreaterThanOrEqual(3);
+    expect(contrast(hex('--paper'), hex('--signal'))).toBeGreaterThanOrEqual(3);
     expect(contrast(hex('--paper'), hex('--ink'))).toBeGreaterThanOrEqual(3);
   });
 
-  it('never sets the coin as a text colour', () => {
-    const offenders = ALL_RULES.filter((rule) => /(^|[;\s])color:\s*var\(--coin/.test(rule.body)).map((rule) => rule.selector);
-    expect(offenders).toEqual([]);
+  it('never gives text a colour: coin, signal, suit and live stay out of color:, but for the Live mark, and the suit tile glyph is paper', () => {
+    const coloured = /(^|[;\s])color:\s*var\(--(coin|signal|suit|live)/;
+    expect(ALL_RULES.filter((rule) => coloured.test(rule.body)).map((rule) => rule.selector)).toEqual(["[data-state='live'] > .glyph"]);
+    expect(ALL_RULES.find((rule) => rule.selector === "[data-state='live'] > .glyph")?.body).toMatch(/color:\s*var\(--live-mark\)/);
+    expect(ALL_RULES.find((rule) => rule.selector === '.suit-tile')?.body).toMatch(/color:\s*var\(--paper\)/);
+  });
+
+  it('uses amber only for money: Contribute, the funding bar, the coin mark and the Funded glyph', () => {
+    const amber = rules(styles)
+      .filter((rule) => /var\(--coin(-down|-up|-hover)?\)/.test(rule.body))
+      .flatMap(selectorsOf);
+    expect(amber.sort()).toEqual(
+      [
+        '.coin-face',
+        '.glyph-money',
+        '.funding-bar-fill',
+        '.button.btn-coin',
+        '.button.btn-coin:hover',
+        '.button.btn-coin:active',
+        'main > .band:first-child',
+        '.page:has(> main > .band:first-child) > .topbar',
+      ].sort(),
+    );
+    // The signal plate's only amber is the hover it gives Contribute there.
+    const signal = rules(styles).find((rule) => rule.selector.startsWith('main > .band:first-child'));
+    expect(signal?.body.match(/var\(--coin[a-z-]*\)/g)).toEqual(['var(--coin-up)']);
+    expect(tokens).toMatch(/--coin-hover:\s*var\(--coin-down\)/);
+  });
+
+  it('draws every glyph in currentColor, but the Funded glyph and the coin mark, which are money', () => {
+    const fills = ALL_RULES.filter((rule) => /(^|[;\s])fill:\s*var\(--/.test(rule.body)).map((rule) => rule.selector);
+    expect(fills.filter((selector) => /glyph|coin/.test(selector)).sort()).toEqual(['.coin-face', '.glyph-money']);
+    for (const selector of ['.glyph-line', '.glyph-fill']) {
+      expect(ALL_RULES.find((rule) => rule.selector === selector)?.body).toMatch(/currentColor/);
+    }
+  });
+
+  it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
+    const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
+    expect(gradients).toEqual([".card[data-face='paused']::before"]);
+    const shadows = ALL_RULES.filter((rule) => /(box|text)-shadow:/.test(rule.body)).map((rule) => rule.selector);
+    expect(shadows).toEqual(['.changed']);
   });
 });
 
 describe('bands', () => {
-  const INK_GROUND = [
-    'main > .band:nth-child(odd)',
-    '.page:has(> main > .band:first-child) > .topbar',
-    '.page:has(> main > .band:last-child:nth-child(even)) > .site-footer',
-  ];
+  const SIGNAL_GROUND = ['main > .band:first-child', '.page:has(> main > .band:first-child) > .topbar'];
+  const INK_GROUND = ['main > .band:nth-child(2n + 3)', '.page:has(> main > .band:last-child:nth-child(even)) > .site-footer'];
   const PAPER_GROUND = ['main > .band:nth-child(even)', '.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer'];
+  const block = (selectors: string[]) => ALL_RULES.find((rule) => selectorsOf(rule).join('|') === selectors.join('|'));
+  const grounded = (token: string) =>
+    ALL_RULES.filter(
+      (rule) =>
+        new RegExp(`(^|[;\\s])background:\\s*var\\(--${token}\\)`).test(rule.body) &&
+        selectorsOf(rule).some((s) => /(\.band(:[a-z-]+\([^)]*\))*|\.site-footer|\.topbar)$/.test(s)),
+    ).flatMap(selectorsOf);
 
-  it('colours bands only by their position, with no per-page band colour class', () => {
-    const inkGround = ALL_RULES.filter((rule) => /(^|[;\s])background:\s*var\(--ink\)/.test(rule.body));
-    expect(inkGround.flatMap(selectorsOf)).toEqual(INK_GROUND);
-    const paperBands = ALL_RULES.filter((rule) => selectorsOf(rule).some((s) => /(\.band(:[a-z-]+\([^)]*\))*|\.site-footer|\.topbar)$/.test(s)) && /(^|[;\s])background:\s*var\(--paper\)/.test(rule.body));
-    expect(paperBands.flatMap(selectorsOf)).toEqual(PAPER_GROUND);
+  it('colours bands only by their position: band 1 signal, even bands paper, odd bands from 3 ink, the footer the next', () => {
+    expect(grounded('signal')).toEqual(SIGNAL_GROUND);
+    expect(grounded('ink')).toEqual(INK_GROUND);
+    expect(grounded('paper')).toEqual(PAPER_GROUND);
+    // Band 2 is always paper, so the signal plate never touches ink; the footer is never signal.
+    expect(SIGNAL_GROUND.some((s) => s.includes('site-footer'))).toBe(false);
     const classes = [...both.matchAll(/\.([a-z][a-z0-9-]*)/gi)].map((m) => m[1]!);
-    expect(classes.filter((name) => /band-|-band|on-ink|ink-|dark/.test(name) && name !== 'band')).toEqual([]);
+    expect(classes.filter((name) => /band-|-band|on-ink|on-signal|ink-|dark/.test(name) && name !== 'band')).toEqual([]);
   });
 
-  it('turns the focus ring paper in an ink band: 3px at a 2px offset, in the focus role colour', () => {
+  it('resets the roles on the signal plate and on ink, and turns the focus ring paper there: 3px at a 2px offset', () => {
     const focus = ALL_RULES.find((rule) => rule.selector === ':focus-visible');
     expect(focus?.body).toMatch(/outline:\s*3px solid var\(--focus-colour\)/);
     expect(focus?.body).toMatch(/outline-offset:\s*2px/);
-    const ink = ALL_RULES.find((rule) => selectorsOf(rule).join('|') === INK_GROUND.join('|'));
-    expect(ink?.body).toMatch(/--focus-colour:\s*var\(--paper\)/);
-    expect(ink?.body).toMatch(/--text-muted:\s*var\(--muted-on-ink\)/);
-    expect(ink?.body).toMatch(/--hairline:\s*var\(--line-on-ink\)/);
-    expect(tokens).toMatch(/--focus-colour:\s*var\(--ink\)/);
+    expect(tokens).toMatch(/--focus-colour:\s*var\(--signal\)/);
+    expect(tokens).toMatch(/--primary-bg:\s*var\(--signal\)/);
+    const signal = block(SIGNAL_GROUND)?.body ?? '';
+    const ink = block(INK_GROUND)?.body ?? '';
+    for (const body of [signal, ink]) {
+      expect(body).toMatch(/--focus-colour:\s*var\(--paper\)/);
+      expect(body).toMatch(/--suit-tile-game:\s*transparent/);
+      expect(body).toMatch(/--suit-tile-studio:\s*transparent/);
+      expect(body).toMatch(/--live-mark:\s*currentColor/);
+      expect(body).toMatch(/--primary-bg:\s*var\(--paper\)/);
+      expect(body).toMatch(/--mark-filter:\s*invert\(1\)/);
+    }
+    expect(signal).toMatch(/--text-muted:\s*var\(--muted-on-signal\)/);
+    expect(signal).toMatch(/--hairline:\s*var\(--line-on-signal\)/);
+    expect(signal).toMatch(/--coin-hover:\s*var\(--coin-up\)/);
+    expect(signal).toMatch(/--quiet-edge:\s*var\(--muted-on-signal\)/);
+    expect(ink).toMatch(/--text-muted:\s*var\(--muted-on-ink\)/);
+    expect(ink).toMatch(/--hairline:\s*var\(--line-on-ink\)/);
+    expect(ink).not.toMatch(/--coin-hover/);
   });
 
   it('draws the change marker and the pressed border in currentColor, never var(--ink)', () => {
@@ -302,19 +419,40 @@ describe('bands', () => {
     }
   });
 
-  it('keeps Contribute ink on coin in an ink band: it sets its own colour after the link rules, and no band rule repaints links', () => {
+  it('keeps Contribute ink on coin on every ground: it sets its own colour after the link rules, and no band rule repaints links', () => {
     const coin = rules(styles).find((rule) => rule.selector.startsWith('.button.btn-coin,'));
     expect(coin?.body).toMatch(/color:\s*var\(--ink\)/);
     expect(styles.indexOf('.button.btn-coin')).toBeGreaterThan(styles.indexOf('\na {'));
-    const repaint = ALL_RULES.filter((rule) => selectorsOf(rule).some((s) => /nth-child\(odd\)[^,]*\ba\b/.test(s)) && /(^|[;\s])color:/.test(rule.body));
+    const repaint = ALL_RULES.filter(
+      (rule) => selectorsOf(rule).some((s) => /(nth-child\([^)]*\)|first-child)[^,]*\ba\b/.test(s)) && /(^|[;\s])color:/.test(rule.body),
+    );
     expect(repaint).toEqual([]);
   });
 
-  it('marks each band edge with a CanvasText rule and keeps the peanut unfiltered under forced colours', () => {
+  it('marks each band edge with a CanvasText rule, keeps the peanut unfiltered, and keeps the money glyph and suit tiles legible under forced colours', () => {
     const forced = ALL_RULES.filter((rule) => rule.media.includes('forced-colors: active'));
     expect(forced.find((rule) => rule.selector.includes('main > .band + .band'))?.body).toMatch(/border-top:\s*1px solid CanvasText/);
     expect(forced.find((rule) => rule.selector === '.mark')?.body).toMatch(/filter:\s*none/);
     expect(forced.find((rule) => rule.selector === '.funding-bar-fill')?.body).toMatch(/forced-color-adjust:\s*none[\s\S]*background:\s*Highlight/);
+    expect(forced.find((rule) => rule.selector === '.glyph-money')?.body).toMatch(/fill:\s*CanvasText/);
+    expect(forced.find((rule) => rule.selector === '.suit-tile')?.body).toMatch(/border:\s*1px solid CanvasText/);
+  });
+});
+
+describe('no dead space (DESIGN.md)', () => {
+  it('fills every row of a card grid, a team grid and a fill grid: two columns from 48rem, three from 72rem, never a hidden card', () => {
+    const fill = rules(styles).filter((rule) => /grid-column:\s*span [34]/.test(rule.body));
+    expect(fill.length).toBeGreaterThanOrEqual(2);
+    for (const rule of fill) for (const s of selectorsOf(rule)) expect(s).toMatch(/:has\(> :last-child:nth-child\((2n \+ 3|3n \+ 2|3n \+ 4)\)\)/);
+    expect(styles).toMatch(/@media \(min-width: 72rem\) \{\s*\.card-grid,/);
+  });
+
+  it('draws the team strip as one row, one column per member, from 48rem', () => {
+    expect(ALL_RULES.find((rule) => rule.selector === '.team-strip' && rule.media.includes('48rem'))?.body).toMatch(/grid-auto-flow:\s*column/);
+  });
+
+  it('lets one block of a pair take the row alone, so nothing leaves an empty column', () => {
+    expect(ALL_RULES.find((rule) => rule.selector === '.pair:has(> :only-child)')?.body).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
   });
 });
 

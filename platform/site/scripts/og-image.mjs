@@ -3,12 +3,15 @@
 // usage: node platform/site/scripts/og-image.mjs          (from the repository root)
 //        pnpm --filter @backseat/site exec node scripts/og-image.mjs
 //
-// The image is typographic and uses the site's own stylesheet: the colours, fonts, weights, type
-// scale and spacing all come from src/styles.css, and the wordmark is the site's .wordmark with
-// the peanut mark. The words come from src/lib/copy.ts (studio name and pitch line) and the
-// address from index.html's og:url. Only the frame is laid out here. Chromium comes from
-// @playwright/test, a site devDependency, so run `playwright install chromium` first if needed.
-// Commit the PNG it writes; the site serves it from public/.
+// The image is typographic and uses the site's own stylesheet: the colours, the font, weights, type
+// scale and spacing all come from src/tokens.css and src/styles.css, and the wordmark is the site's
+// .wordmark with the peanut mark. It is drawn on the signal plate, as band 1 of every page is, with
+// the site's own font file (public/fonts, inlined as a data URL, since a page set from a string has
+// no origin to load /fonts from); the run fails if the font did not load. The words come from
+// src/lib/copy.ts (studio name and pitch line) and the address from index.html's og:url. Only the
+// frame is laid out here. Chromium comes from @playwright/test, a site devDependency, so run
+// `playwright install chromium` first if needed. Commit the PNG it writes; the site serves it from
+// public/.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
@@ -50,8 +53,13 @@ const pitchBody = copyString(copySource, 'pitchBody');
 const ogUrl = read('index.html').match(/<meta property="og:url" content="([^"]+)"/);
 if (ogUrl === null) throw new Error('index.html has no og:url');
 const address = new URL(ogUrl[1]).host;
-// styles.css starts by importing tokens.css; the page here has no bundler, so inline both.
-const stylesheet = `${read('src/tokens.css')}\n${read('src/styles.css').replace(/^@import [^;]+;\n/m, '')}`;
+// styles.css starts by importing tokens.css; the page here has no bundler, so inline both, with the
+// font file's url turned into a data URL.
+const FONT = 'fonts/atkinson-hyperlegible-next-400-700.woff2';
+const font = `data:font/woff2;base64,${readFileSync(resolve(SITE, 'public', FONT)).toString('base64')}`;
+const tokens = read('src/tokens.css');
+if (!tokens.includes(`url('/${FONT}')`)) throw new Error(`src/tokens.css does not load /${FONT}`);
+const stylesheet = `${tokens.replace(`url('/${FONT}')`, `url('${font}')`)}\n${read('src/styles.css').replace(/^@import [^;]+;\n/m, '')}`;
 const mark = readFileSync(resolve(SITE, 'public/peanut.png')).toString('base64');
 
 // The site's type scale is in rem, so a larger root size scales every token together: at 175% the
@@ -71,12 +79,14 @@ html { font-size: 175%; }
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--signal);
+  color: var(--paper);
+  --mark-filter: invert(1);
 }
 .og .wordmark { font-size: var(--size-lead); }
 .og h1 { margin-bottom: var(--space-2); }
 .og .lede { max-width: none; }
-.og .address { margin: 0; color: var(--muted); font-size: var(--size-small); }
+.og .address { margin: 0; color: var(--muted-on-signal); font-size: var(--size-small); }
 </style>
 </head>
 <body>
@@ -96,6 +106,8 @@ try {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);
+  const loaded = await page.evaluate(() => document.fonts.check('700 30px "Atkinson Hyperlegible Next"') && [...document.fonts].some((face) => face.family.includes('Atkinson Hyperlegible Next') && face.status === 'loaded'));
+  if (!loaded) throw new Error('the site font did not load');
   const fits = await page.evaluate(() => {
     const frame = document.querySelector('.og');
     return frame !== null && frame.scrollHeight <= frame.clientHeight && frame.scrollWidth <= frame.clientWidth;

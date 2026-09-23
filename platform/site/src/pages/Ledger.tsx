@@ -6,9 +6,10 @@ import { StaleNotice } from '../components/StaleNotice';
 import { legal } from '../lib/legal';
 import { unavailableLine, useStudio } from '../lib/studio';
 
-// Kernel (docs/specs/board-site.md): the public ledger, with its strings from legal.ts. Four bands
-// (DESIGN.md, Bands): the heading on ink, the funding on paper, the agent work on ink, the deploys on
-// paper.
+// Kernel (docs/specs/board-site.md): the public ledger, with its strings from legal.ts. Four full-width
+// bands stacked (DESIGN.md, Bands): the heading on the signal plate, the funding on paper, the agent
+// work on ink, the deploys on paper. Nothing sits side by side, so no short block leaves an empty
+// column beside a long one.
 
 export function Ledger() {
   const studio = useStudio();

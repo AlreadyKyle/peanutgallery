@@ -90,7 +90,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
 /**
  * Meet the team: every active role from public_roles, running roles first. Running is a fact the
  * site derives, not a label: only a role that builds cards in an open folder runs. No scorecards.
- * Two bands: the heading on ink, and every agent row on paper (DESIGN.md, Bands).
+ * Two bands: the heading on the signal plate, and every agent row on paper (DESIGN.md, Bands).
  */
 export function Team() {
   const studio = useStudio();

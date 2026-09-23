@@ -167,10 +167,12 @@ export const legal = {
   },
   contributeTitle: 'Where should your contribution go?',
   contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
-  pickForMe: 'Pick for me',
+  // The first choice on /contribute: money given with no card funds later cards (PLAN.md §4). It
+  // names no card until the waterfall's order is public (docs/specs/home-and-design.md, Decisions).
+  pickForMe: 'Fund the next card in line',
   pickForMeBody: 'Your contribution funds whatever the agents build next.',
   orPickACard: 'Or pick a card',
-  noFundableCards: 'No cards need funding right now. Pick for me still funds the next one.',
+  noFundableCards: 'No cards need funding right now. Funding the next card in line still pays for whatever the agents build next.',
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
     'The money available to the agents, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',

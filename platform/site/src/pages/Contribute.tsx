@@ -17,8 +17,9 @@ const CATEGORIES = CATEGORY_FILTERS.filter((filter): filter is CardCategory => f
 
 /**
  * The step before checkout, on two bands (DESIGN.md, Bands): the heading and the paused notice on
- * ink, the choices on paper. Send the money wherever it is needed, or to one card. Both go to the
- * same Payment Link; a card adds client_reference_id, which the webhook credits to that card.
+ * the signal plate, the choices on paper. Fund the next card in line (no card named: money given
+ * with no card funds later cards), or one card. Both go to the same Payment Link; a card adds
+ * client_reference_id, which the webhook credits to that card.
  */
 export function Contribute() {
   const env = siteEnv();

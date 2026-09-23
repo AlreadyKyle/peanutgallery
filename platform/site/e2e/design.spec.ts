@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-env';
-import { expect, overflowsHorizontally, test } from './fixtures';
+import { DEFAULT_STUDIO, expect, overflowsHorizontally, test } from './fixtures';
 
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
 // reduced motion and accessibility. The guide is the design-system pull request's mockup.
@@ -12,7 +12,10 @@ const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadm
 const WIDTHS = [320, 360, 375, 390, 768, 1024, 1440];
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
+const SIGNAL = 'rgb(26, 47, 200)';
 const COIN = 'rgb(217, 164, 65)';
+const COIN_DOWN = 'rgb(184, 134, 47)';
+const COIN_UP = 'rgb(236, 195, 110)';
 
 // Set E2E_SCREENSHOTS to a folder to save full-page screenshots of the guide and home.
 const SHOTS = process.env.E2E_SCREENSHOTS ?? '';
@@ -29,6 +32,15 @@ async function place(locator: Locator): Promise<number[]> {
     const r = el.getBoundingClientRect();
     return [r.left + window.scrollX, r.top + window.scrollY, r.width, r.height];
   });
+}
+
+/**
+ * The grounds a page must draw, top to bottom: the top bar and band 1 on signal, band 2 on paper,
+ * then ink and paper in turn, and the footer taking the next place (DESIGN.md, Bands).
+ */
+function expected(bands: number): string[] {
+  const band = (i: number) => (i === 0 ? SIGNAL : i % 2 === 1 ? PAPER : INK);
+  return [SIGNAL, ...Array.from({ length: bands }, (_, i) => band(i)), bands % 2 === 1 ? PAPER : INK];
 }
 
 /** The grounds of the drawn bands, top to bottom: the top bar, each band in main, the footer. */
@@ -57,28 +69,22 @@ test.describe('the design guide', () => {
     }
   });
 
-  test('alternates its bands from ink, with the top bar on the first band and the footer continuing', async ({ page }) => {
+  test('puts the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn, with the footer continuing', async ({ page }) => {
     await settle(page, GUIDE);
     const drawn = await grounds(page);
-    expect(drawn[0]).toBe(INK);
-    expect(drawn.slice(1, -1)).toEqual([INK, PAPER, INK]);
-    expect(drawn.at(-1)).toBe(PAPER);
-    for (let i = 2; i < drawn.length; i += 1) expect(drawn[i], `band ${i}`).not.toBe(drawn[i - 1]);
+    expect(drawn).toEqual(expected(3));
   });
 
-  test('puts no card, funding bar, choice or agent row in an ink band', async ({ page }) => {
+  test('puts no card, funding bar, choice or agent row outside band 2', async ({ page }) => {
     await settle(page, GUIDE);
-    const onInk = await page.evaluate(
-      () =>
-        [...document.querySelectorAll('.card, .funding-bar, .choice, .agent')].filter(
-          (el) => getComputedStyle(el.closest('main > .band')!).backgroundColor === 'rgb(17, 17, 17)',
-        ).length,
+    const outside = await page.evaluate(
+      () => [...document.querySelectorAll('.card, .funding-bar, .choice, .agent')].filter((el) => el.closest('main > .band') !== document.querySelector('main > .band:nth-child(2)')).length,
     );
-    expect(onInk).toBe(0);
+    expect(outside).toBe(0);
     expect(await page.locator('main > .band:nth-child(2) .card').count()).toBeGreaterThanOrEqual(8);
   });
 
-  test('draws the change marker in paper on ink and in ink on paper', async ({ page }) => {
+  test('draws the change marker in the text colour: paper on signal and ink, ink on paper', async ({ page }) => {
     await settle(page, GUIDE);
     const shadows = await page.evaluate(() =>
       [...document.querySelectorAll('main > .band li.changed')].map((el) => [
@@ -87,34 +93,62 @@ test.describe('the design guide', () => {
       ]),
     );
     expect(shadows).toEqual([
-      ['rgb(17, 17, 17)', 'rgb(255, 255, 255) 3px 0px 0px 0px inset'],
-      ['rgb(255, 255, 255)', 'rgb(17, 17, 17) 3px 0px 0px 0px inset'],
+      [SIGNAL, `${PAPER} 3px 0px 0px 0px inset`],
+      [PAPER, `${INK} 3px 0px 0px 0px inset`],
+      [INK, `${PAPER} 3px 0px 0px 0px inset`],
     ]);
   });
 
-  test('keeps Contribute ink on coin inside an ink band', async ({ page }) => {
+  test('keeps Contribute ink on coin on the signal plate and on ink, hovering to coin-up on signal and coin-down on ink', async ({ page }) => {
     await settle(page, GUIDE);
-    const contribute = page.locator('main > .band:nth-child(1) a.btn-coin');
-    await expect(contribute).toHaveCSS('color', INK);
-    await expect(contribute).toHaveCSS('background-color', COIN);
-    await expect(contribute).toHaveAttribute('href', '/contribute');
+    for (const [band, hover] of [
+      ['main > .band:nth-child(1)', COIN_UP],
+      ['main > .band:nth-child(3)', COIN_DOWN],
+    ] as const) {
+      const contribute = page.locator(`${band} a.btn-coin`).first();
+      await expect(contribute).toHaveCSS('color', INK);
+      await expect(contribute).toHaveCSS('background-color', COIN);
+      await expect(contribute).toHaveAttribute('href', '/contribute');
+      await contribute.hover();
+      await expect(contribute).toHaveCSS('background-color', hover);
+    }
   });
 
-  test('marks the pressed Pause on ink with a 3px paper border and the check glyph', async ({ page }) => {
+  test('marks the pressed Pause with a 3px paper border and the check glyph on signal and on ink', async ({ page }) => {
     await settle(page, GUIDE);
-    const pause = page.locator('main > .band:nth-child(1)').getByRole('button', { name: 'Pause live updates' });
+    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause live updates' });
     await pause.click();
     await expect(pause).toHaveAttribute('aria-pressed', 'true');
     await expect(pause).toHaveCSS('border-top-width', '3px');
     await expect(pause).toHaveCSS('border-top-color', PAPER);
     await expect(pause.locator('svg[data-glyph="check"]')).toHaveCount(1);
+    const onInk = page.locator('main > .band:nth-child(3) [aria-pressed="true"]');
+    await expect(onInk).toHaveCSS('border-top-width', '3px');
+    await expect(onInk).toHaveCSS('border-top-color', PAPER);
+  });
+
+  test('draws the suit tiles on paper, and resets them and the Live mark to the text colour on signal and ink', async ({ page }) => {
+    await settle(page, GUIDE);
+    const tiles = await page.evaluate(() =>
+      [1, 2, 3].map((n) => {
+        const band = document.querySelector(`main > .band:nth-child(${n})`)!;
+        const tile = band.querySelector('.rows [data-suit="game"] > .suit-tile')!;
+        const live = band.querySelector('.rows [data-state="live"] > .glyph')!;
+        return [getComputedStyle(tile).backgroundColor, getComputedStyle(live).color];
+      }),
+    );
+    expect(tiles).toEqual([
+      ['rgba(0, 0, 0, 0)', PAPER],
+      ['rgb(176, 34, 106)', 'rgb(22, 112, 31)'],
+      ['rgba(0, 0, 0, 0)', PAPER],
+    ]);
   });
 
   test('keeps the updates button and Pause still when the label changes, and keeps focus after a press', async ({ page }) => {
     await settle(page, GUIDE);
     const band = page.locator('main > .band:nth-child(1)');
     const updates = band.locator('.updates-button');
-    const pause = band.getByRole('button', { name: 'Pause live updates' });
+    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause live updates' });
     const before = [await place(updates), await place(pause)];
     await band.getByRole('button', { name: 'Add sample updates' }).click();
     await expect(updates).toHaveText(/Show 3 updates/);
@@ -125,19 +159,24 @@ test.describe('the design guide', () => {
     await expect(updates).toBeFocused();
   });
 
-  test('rings every focused control in an ink band with 3px paper at a 2px offset', async ({ page }) => {
+  test('rings every focused control with 3px at a 2px offset: paper on signal and ink, signal on paper', async ({ page }) => {
     await settle(page, GUIDE);
-    const rings = await page.evaluate(async () => {
-      const band = document.querySelector('main > .band:nth-child(1)')!;
-      const controls = [...band.querySelectorAll<HTMLElement>('a[href], button')];
-      return controls.map((el) => {
-        el.focus({ focusVisible: true } as FocusOptions);
-        const style = getComputedStyle(el);
-        return [style.outlineColor, style.outlineWidth, style.outlineOffset, style.outlineStyle];
-      });
-    });
-    expect(rings.length).toBeGreaterThan(4);
-    for (const ring of rings) expect(ring).toEqual([PAPER, '3px', '2px', 'solid']);
+    for (const [n, colour] of [
+      [1, PAPER],
+      [2, SIGNAL],
+      [3, PAPER],
+    ] as const) {
+      const rings = await page.evaluate((band) => {
+        const controls = [...document.querySelectorAll<HTMLElement>(`main > .band:nth-child(${band}) a[href], main > .band:nth-child(${band}) button`)];
+        return controls.map((el) => {
+          el.focus({ focusVisible: true } as FocusOptions);
+          const style = getComputedStyle(el);
+          return [style.outlineColor, style.outlineWidth, style.outlineOffset, style.outlineStyle];
+        });
+      }, n);
+      expect(rings.length, `band ${n}`).toBeGreaterThan(4);
+      for (const ring of rings) expect(ring, `band ${n}`).toEqual([colour, '3px', '2px', 'solid']);
+    }
   });
 
   test('loads its font from its own origin', async ({ page }) => {
@@ -151,13 +190,16 @@ test.describe('the design guide', () => {
     expect(await page.evaluate(() => document.fonts.check('16px "Atkinson Hyperlegible Next"'))).toBe(true);
   });
 
-  test('marks each band edge with a CanvasText rule under forced colours', async ({ page }) => {
+  test('marks each band edge with a CanvasText rule, fills the Funded glyph and edges the suit tiles under forced colours', async ({ page }) => {
     await page.emulateMedia({ forcedColors: 'active' });
     await settle(page, GUIDE);
     const edges = await page.evaluate(() =>
       [...document.querySelectorAll('main > .band + .band'), document.querySelector('.site-footer')].map((el) => getComputedStyle(el!).borderTopWidth),
     );
     expect(edges).toEqual(['1px', '1px', '1px']);
+    const funded = page.locator('.card[data-face="funded"] .card-index svg[data-glyph="full-bar"] path').first();
+    expect(await funded.evaluate((el) => getComputedStyle(el).fill)).toBe('rgb(0, 0, 0)');
+    await expect(page.locator('main > .band:nth-child(2) .card .suit-tile').first()).toHaveCSS('border-top-width', '1px');
   });
 });
 
@@ -177,7 +219,9 @@ test.describe('motion', () => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await settle(page, '/');
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
-    await page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'How it works' }).click();
+    const nav = page.getByRole('navigation', { name: 'Site' });
+    await nav.getByRole('button', { name: 'Menu' }).click();
+    await nav.getByRole('link', { name: 'How it works' }).click();
     await page.waitForURL('**/how-it-works');
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
   });
@@ -195,6 +239,24 @@ test.describe('motion', () => {
 });
 
 test.describe('every route', () => {
+  test('draws its bands signal, paper, then ink and paper in turn, the footer continuing, with every card in band 2', async ({ page }) => {
+    for (const path of ROUTES) {
+      await settle(page, path);
+      const drawn = await grounds(page);
+      expect(drawn, path).toEqual(expected(drawn.length - 2));
+      const outside = await page.evaluate(
+        () => [...document.querySelectorAll('.card, .funding-bar, .choice, .agent')].filter((el) => el.closest('main > .band') !== document.querySelector('main > .band:nth-child(2)')).length,
+      );
+      expect(outside, path).toBe(0);
+      // Every band touches the next: no strip of page ground between two grounds.
+      const seams = await page.evaluate(() => {
+        const stack = [document.querySelector('.topbar')!, ...document.querySelectorAll('main > .band'), document.querySelector('.site-footer')!];
+        return stack.slice(1).map((el, i) => Math.abs(el.getBoundingClientRect().top - stack[i]!.getBoundingClientRect().bottom));
+      });
+      for (const seam of seams) expect(seam, path).toBeLessThanOrEqual(0.5);
+    }
+  });
+
   for (const width of WIDTHS) {
     test(`has no horizontal scroll at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -215,6 +277,26 @@ test.describe('every route', () => {
   });
 });
 
+test.describe('bands with empty data', () => {
+  test.use({ studio: { ...DEFAULT_STUDIO, roles: [] } });
+
+  test('keep the order when home draws no team strip and /team has no Running list', async ({ page }) => {
+    for (const [path, bands] of [
+      ['/', 4],
+      ['/team', 2],
+    ] as const) {
+      await settle(page, path);
+      expect(await grounds(page), path).toEqual(expected(bands));
+    }
+    // With no team strip, Shipped moves onto ink: its suit tiles and Live mark reset to the text colour.
+    await settle(page, '/');
+    const shipped = page.locator('main > .band:nth-child(3)');
+    await expect(shipped.getByRole('heading', { level: 2, name: 'Shipped' })).toBeVisible();
+    await expect(shipped.locator('[data-suit] > .suit-tile').first()).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(shipped.locator('[data-state="live"] > .glyph').first()).toHaveCSS('color', PAPER);
+  });
+});
+
 test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
   for (const width of [375, 1440]) {
     test(`finds no violation on the guide and every page at ${width}px`, async ({ page }) => {
@@ -230,7 +312,7 @@ test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
     });
   }
 
-  test('finds no violation inside each ink band of the guide', async ({ page }) => {
+  test('finds no violation inside the signal plate and the ink band of the guide', async ({ page }) => {
     await settle(page, GUIDE);
     for (const band of ['main > .band:nth-child(1)', 'main > .band:nth-child(3)']) {
       const results = await new AxeBuilder({ page }).include(band).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();

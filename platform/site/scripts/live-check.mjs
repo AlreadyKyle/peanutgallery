@@ -7,11 +7,13 @@
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
-// the footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: Building now, Queued and Shipped appear
-// only when cards are in those stages. The Right now panel, the fund links, the category filters and
-// /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
+// pages and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
+// bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
+// no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
+// footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
+// Policy report. The landing's h2 order, read from the page: Building now, the team, Shipped and
+// Planned next appear only when there is something to show. The status line, the pool figure, the
+// shipped rows, the fund links, the category filters and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
 // rest; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
@@ -34,6 +36,7 @@
 import { readFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 import { boardHostFrom, playHostFrom, strayNetlifyHosts } from './board-address.mjs';
+import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
@@ -66,8 +69,14 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['Right now', 'Building now', "Fund what's next", 'Queued', 'Shipped', 'How it works', 'Funding', 'Ledger', 'Fixed rules'];
-const OPTIONAL_H2 = new Set(['Building now', 'Queued', 'Shipped']);
+const H2_ORDER = ['Building now', "Fund what's next", 'Queued', 'The team', 'Shipped', 'Planned next', 'Where the money goes'];
+const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned next']);
+// The grounds, as computed colours: band 1 and the top bar signal, band 2 paper, then ink and paper.
+const SIGNAL = 'rgb(26, 47, 200)';
+const PAPER = 'rgb(255, 255, 255)';
+const INK = 'rgb(17, 17, 17)';
+const STATUS_LINE =
+  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?( The agents are paused\.)?$/;
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 // The headers netlify.toml sends on every path, by exact value (docs/specs/site-truth-pass.md).
@@ -181,6 +190,14 @@ try {
         links.push((await link.count()) === 1 && (await link.getAttribute('href')) === href);
       }
       check(links.every(Boolean), `${width}px ${path} footer links Terms, Privacy, Refunds, Contact`);
+      const grounds = await page.evaluate(() =>
+        [document.querySelector('.topbar'), ...document.querySelectorAll('main > .band'), document.querySelector('.site-footer')].map((el) => (el === null ? '' : getComputedStyle(el).backgroundColor)),
+      );
+      const bands = grounds.length - 2;
+      const want = [SIGNAL, ...Array.from({ length: bands }, (_, i) => (i === 0 ? SIGNAL : i % 2 === 1 ? PAPER : INK)), bands % 2 === 1 ? PAPER : INK];
+      check(bands >= 2 && JSON.stringify(grounds) === JSON.stringify(want), `${width}px ${path} bands signal, paper, then ink and paper: ${grounds.join(' / ')}`);
+      const gaps = await page.evaluate(auditLayout, LIMITS);
+      check(gaps.length === 0, `${width}px ${path} no dead space${gaps.length === 0 ? '' : `: ${gaps.slice(0, 3).join(' | ')}`}`);
     }
     if (BOARD_HOST === null) skip(`${width}px the board site's address on every route: BOARD_SITE_URL is not set`);
     else check(namesBoard.length === 0, `${width}px no route names the board site's address${namesBoard.length === 0 ? '' : `: ${namesBoard.join(', ')}`}`);
@@ -214,39 +231,51 @@ try {
   const reports = await watchPolicy(page);
   await open(page, '/');
   const main = page.getByRole('main');
-  const panel = page.getByRole('complementary');
-  const hasData = (await panel.locator('dd').count()) > 0;
+  const pool = main.locator('.pool-line .figure');
+  const hasData = (await pool.count()) > 0;
 
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
   check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
 
-  const heroContribute = main.getByRole('link', { name: 'Contribute', exact: true });
-  if ((await heroContribute.count()) === 0) {
-    skip('hero Contribute: no payment link in this build');
+  const topContribute = page.getByRole('banner').getByRole('link', { name: 'Contribute', exact: true });
+  if ((await topContribute.count()) === 0) {
+    skip('top bar Contribute: no payment link in this build');
   } else {
-    check((await heroContribute.getAttribute('href')) === '/contribute', 'hero Contribute -> /contribute');
+    check((await topContribute.getAttribute('href')) === '/contribute', 'top bar Contribute -> /contribute');
   }
+  const money = page.getByRole('region', { name: 'Where the money goes' });
+  check(
+    (await money.getByText('These are contributions, not donations.', { exact: false }).count()) === 1 &&
+      (await money.getByRole('link', { name: 'Full ledger' }).getAttribute('href')) === '/ledger',
+    'Where the money goes says contributions, not donations, and links the full ledger',
+  );
 
   if (!hasData) {
-    noData('Right now available figure');
-    noData('Shipped rows and the latest shipped line');
+    noData('the status line and the pool figure');
+    noData('Shipped rows');
     noData('fund links and category filters');
   } else {
-    const available = (await panel.locator('dd').first().textContent()) ?? '';
-    check(/^\$[\d,]+\.\d\d$/.test(available), `Right now available shows ${available}`);
+    const status = ((await main.locator('p.status-line').textContent()) ?? '').trim();
+    check(STATUS_LINE.test(status), `status line: ${status}`);
+    const available = (await pool.textContent()) ?? '';
+    check(/^\$[\d,]+\.\d\d$/.test(available) && (await money.locator('.pool-line svg.coin').count()) === 1, `pool figure with the coin shows ${available}`);
 
     const shipped = page.getByRole('region', { name: 'Shipped' });
     if ((await shipped.count()) === 0) {
-      check((await panel.getByText('Latest shipped:').count()) === 0, 'nothing shipped yet: no Shipped section and no latest shipped line');
+      skip('Shipped rows: nothing has shipped yet');
     } else {
       const titles = await shipped.getByRole('heading', { level: 3 }).allTextContents();
-      const latest = await panel.getByText('Latest shipped:').locator('xpath=..').textContent();
-      check(latest === `Latest shipped: ${titles[0]}`, `Right now names the latest shipped card: ${latest}`);
-      const metas = await shipped.locator('li .card-meta').allTextContents();
+      const dates = await shipped.locator('li .row-time').allTextContents();
+      const metas = await shipped.locator('li .row-meta .card-meta').allTextContents();
       check(
-        metas.length === titles.length && metas.every((line) => /^(\$[\d,]+\.\d\d spent · )?.+ · shipped .+$/.test(line)),
-        `${titles.length} shipped rows carry cost, contributors and date`,
+        titles.length >= 1 &&
+          titles.length <= 3 &&
+          dates.length === titles.length &&
+          dates.every((date) => /^\d{1,2} [A-Z][a-z]{2} \d{4}$/.test(date)) &&
+          metas.length === titles.length &&
+          metas.every((line) => line.trim() !== ''),
+        `${titles.length} shipped rows carry the date, the Live tag and cost or who asked`,
       );
     }
 
@@ -282,7 +311,7 @@ try {
     skip('contribute choices: no payment link in this build');
   } else {
     const [first] = choices;
-    check(first[0].startsWith('Pick for me') && STRIPE_LINK.test(first[1]), `Pick for me first -> ${first[1]}`);
+    check(first[0].startsWith('Fund the next card in line') && STRIPE_LINK.test(first[1]), `Fund the next card in line first -> ${first[1]}`);
     check(
       choices.slice(1).every(([, href]) => href.includes('client_reference_id=')),
       `${choices.length - 1} card choices carry card ids`,

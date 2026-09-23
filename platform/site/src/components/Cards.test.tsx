@@ -221,7 +221,9 @@ describe('BuildingNow and QueuedList', () => {
   it('lists funded cards as rail rows with the suit in the rail, and says when none are queued', () => {
     render(<QueuedList cards={[card({ id: 'q', title: 'Queued one', stage: 'funded', folder: 'platform' })]} />);
     const row = screen.getByText('Queued one').closest('li')!;
-    expect(row.querySelector('.row-time')?.textContent).toBe(copy.categories.studio);
+    const suit = row.querySelector('.row-rail [data-suit]');
+    expect(suit?.getAttribute('data-suit')).toBe('studio');
+    expect(suit?.querySelector('.suit-tile svg[data-glyph="browser"]')).not.toBeNull();
     expect(row.textContent).toBe(`${copy.categories.studio}Queued one`);
     cleanup();
     render(<QueuedList cards={[]} />);
@@ -257,15 +259,16 @@ describe('ShippedList', () => {
     }),
   ];
 
-  it('draws rail rows: the ship date in the rail, the Live tag and title, then cost and who funded it', () => {
+  it('draws rail rows: the ship date in the rail, the title, then the suit, the Live tag, cost and who funded it', () => {
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
     render(<MemoryRouter><ShippedList cards={shipped} snapshot={snapshot(shipped, { older: { contributors: 3, credited_usd: 3 } })} /></MemoryRouter>);
     const section = screen.getByRole('region', { name: copy.shipped });
     const rows = within(section).getAllByRole('listitem');
     expect(rows.map((row) => row.querySelector('.row-time')?.textContent)).toEqual([formatDate('2026-09-16T18:30:00Z'), formatDate('2026-09-15T09:00:00Z')]);
-    expect(rows.map((row) => within(row).getByRole('heading', { level: 3 }).textContent)).toEqual([
-      `${copy.statusLive} A clearer ledger page`,
-      `${copy.statusLive} Save and resume`,
+    expect(rows.map((row) => within(row).getByRole('heading', { level: 3 }).textContent)).toEqual(['A clearer ledger page', 'Save and resume']);
+    expect(rows.map((row) => [row.querySelector('.row-meta [data-suit]')?.getAttribute('data-suit'), row.querySelector('.row-meta [data-state]')?.textContent])).toEqual([
+      ['studio', copy.statusLive],
+      ['game', copy.statusLive],
     ]);
     // A card nobody funded names who asked for it instead of a contributor count.
     expect(within(rows[0]!).getByText(`$0.50 ${legal.spent} · ${copy.sources.board}`)).toBeTruthy();
@@ -295,7 +298,7 @@ describe('PlannedNext', () => {
     render(<MemoryRouter><PlannedNext cards={[card({ id: 'p', title: 'A planned change', folder: 'platform', horizon: 'next' })]} /></MemoryRouter>);
     const section = screen.getByRole('region', { name: copy.plannedNext });
     const row = within(section).getByRole('listitem');
-    expect(row.querySelector('.row-time')?.textContent).toBe(copy.categories.studio);
+    expect(row.querySelector('.row-rail [data-suit]')?.textContent).toBe(copy.categories.studio);
     expect(within(row).getByRole('heading', { level: 3 }).textContent).toBe('A planned change');
     expect(within(section).queryByRole('progressbar')).toBeNull();
     cleanup();
@@ -329,7 +332,8 @@ describe('example mode', () => {
         <ShippedRow card={live} snapshot={snapshot([live])} example />
       </ul>,
     );
-    expect(screen.getByRole('heading', { level: 3, name: `${copy.statusLive} Shipped one` })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: 'Shipped one' })).toBeTruthy();
+    expect(screen.getByText(copy.statusLive).closest('[data-state]')?.getAttribute('data-state')).toBe('live');
     expect(screen.queryByRole('link')).toBeNull();
   });
 });

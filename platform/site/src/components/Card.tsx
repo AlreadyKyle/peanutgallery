@@ -4,7 +4,7 @@ import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
 import { CardMoney, shippedCaption, type CardMode, type SpecRow } from './Funding';
-import { Glyph, STATE_TAGS, SUITS } from './Glyph';
+import { Glyph, StateTag, SuitTag } from './Glyph';
 
 // The card, the one object on the page (DESIGN.md, The card). A white face with a 2px ink edge; a
 // corner index with the suit and the state, the title and summary, then the money and the action
@@ -14,9 +14,10 @@ function blank(text: string | null): boolean {
   return text === null || text.trim() === '';
 }
 
-// The agent brief stays public but collapsed behind a native disclosure.
+// The agent brief stays public but collapsed behind a native disclosure. A card with no brief keeps
+// the disclosure's one line empty, so its bar and button line up with the cards beside it.
 function Brief({ intent }: { intent: string | null }) {
-  if (blank(intent)) return null;
+  if (blank(intent)) return <div className="brief-slot" aria-hidden="true" />;
   return (
     <details className="brief">
       <summary>{copy.agentBrief}</summary>
@@ -56,21 +57,13 @@ export type CardFaceProps = {
 export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
-  const suit = SUITS[categoryOf(card)];
-  const state = STATE_TAGS[shown];
   const titleId = `${mode}-title-${card.id}`;
   const playable = shown === 'live' && card.folder === 'seed-1' && env.playUrl !== '';
   return (
     <li className="card" data-face={shown} data-card={card.id}>
       <p className="card-index">
-        <span className="tag" data-suit={categoryOf(card)}>
-          <Glyph name={suit.glyph} />
-          {suit.label}
-        </span>
-        <span className={stamp && shown === 'live' ? 'tag tag-stamp' : 'tag'} data-state={shown}>
-          <Glyph name={state.glyph} />
-          {state.word}
-        </span>
+        <SuitTag suit={categoryOf(card)} />
+        <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
       <h3 id={titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}

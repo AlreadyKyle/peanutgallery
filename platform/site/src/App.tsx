@@ -73,10 +73,11 @@ export function CartridgeMark() {
 }
 
 /**
- * The top bar (DESIGN.md, Top bar): the peanut mark (with the name from 32rem), Play, Contribute and
- * a Menu button that opens the page links as an inline list; from 64rem the links sit in the row and
- * the Menu button goes. Below 22.5rem Play moves into the list. Escape closes the list and returns
- * focus to the button, and moving to another page closes it.
+ * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the peanut mark (with
+ * the name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
+ * list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves into
+ * the list. Escape closes the list and returns focus to the button, and moving to another page
+ * closes it.
  */
 function TopBar() {
   const env = siteEnv();
@@ -188,18 +189,22 @@ function SiteFooter() {
   );
 }
 
+/** The not found page: its title on the signal plate, then the message and the way home together. */
 function NotFound() {
   return (
     <main>
       <div className="band">
-        <PageHeader title={copy.notFound} lede={copy.notFoundBody} />
+        <PageHeader title={copy.notFound} />
       </div>
       <div className="band">
-        <p>
-          <Link className="button" to="/">
-            {copy.home}
-          </Link>
-        </p>
+        <div className="prose">
+          <p className="lede">{copy.notFoundBody}</p>
+          <p>
+            <Link className="button" to="/">
+              {copy.home}
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );

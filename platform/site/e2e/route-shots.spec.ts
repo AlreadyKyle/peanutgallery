@@ -19,6 +19,7 @@ const ROUTES: [string, string][] = [
   ['refunds', '/refunds'],
   ['contact', '/contact'],
   ['not-found', '/no-such-page'],
+  ['guide', '/design-kit-7q4m'],
 ];
 
 test.use({ studio: LIVE_STUDIO });

@@ -11,24 +11,27 @@ for (const viewport of WIDTHS) {
   test.describe(`paused, at ${viewport.width} px`, () => {
     test.use({ viewport });
 
-    test('the landing, /contribute and /how-it-works say the agents are paused', async ({ page }) => {
+    test('home says it in the status line, and /contribute and /how-it-works in the notice on the signal plate', async ({ page }) => {
       await page.goto('/');
-      const panel = page.getByRole('complementary');
-      await expect(panel.getByText(NOTICE)).toBeVisible();
-      await expect(panel.getByText('Nothing is building while the agents are paused.')).toBeVisible();
+      const status = page.locator('main > .band:first-child p.status-line');
+      await expect(status).toHaveText('2 cards are open for funding. The agents are paused.');
+      await expect(status.locator('svg[data-glyph="pause"]')).toHaveCount(1);
+      // Home says the pause once: in the status line, and nowhere else.
+      await expect(page.getByText(NOTICE)).toHaveCount(0);
+      // The team strip draws the agents asleep.
+      await expect(page.locator('.team-strip svg.avatar[data-pose="asleep"]')).toHaveCount(3);
       expect(await overflowsHorizontally(page)).toBe(false);
       if (SHOTS !== '') {
         mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: join(SHOTS, `landing-paused-${viewport.width}.png`) });
       }
 
-      await page.goto('/contribute');
-      await expect(page.getByRole('main').getByText(NOTICE)).toBeVisible();
-      expect(await overflowsHorizontally(page)).toBe(false);
-
-      await page.goto('/how-it-works');
-      await expect(page.getByRole('main').getByText(NOTICE)).toBeVisible();
-      expect(await overflowsHorizontally(page)).toBe(false);
+      for (const path of ['/contribute', '/how-it-works']) {
+        await page.goto(path);
+        // One plain line in the page's first band, under its heading: the notice qualifies the page.
+        await expect(page.locator('main > .band:first-child .hero p.notice')).toHaveText(NOTICE);
+        expect(await overflowsHorizontally(page)).toBe(false);
+      }
     });
   });
 }
