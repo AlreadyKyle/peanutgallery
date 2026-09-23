@@ -101,7 +101,64 @@ Board items: none required. Optional at /board: a cooling window length (it ship
 
 ## Evidence
 
-EVIDENCE_PLACEHOLDER
+Built on `launch/agent-system-core` from `launch/money-surfaces` at f2c6a6c (stacked on money-surfaces, which had not merged). The production lines of Verification and the production steps are the ship stage's and are not run here; the gate result at the pull request's head sha is quoted in the pull request.
+
+`pnpm verify` at the repository root exits 0:
+
+```
+platform/board test:       Tests  84 passed (84)
+platform/supabase test:       Tests  297 passed (297)
+platform/site test:       Tests  415 passed (415)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  638 passed (638)
+platform/gate test: PASS: gate tests passed=508
+test:agents: tests 119, pass 119, fail 0
+test:ops: tests 122, pass 122, fail 0
+test:functions: ok | 105 passed (135 steps) | 0 failed
+PASS: secret-scan files=560
+docs.test.mjs: tests 17, pass 17, fail 0
+rename.test.mjs: tests 6, pass 6, fail 0
+EXIT 0
+```
+
+After the last migration change (the stopped-card title), `pnpm test:functions`: `ok | 105 passed (136 steps) | 0 failed`, and `pnpm --filter @backseat/supabase test`: `Tests  297 passed (297)`. `money_logic_test.ts` is unchanged from the base (`git diff f2c6a6c -- platform/supabase/functions/_shared/money_logic_test.ts` is empty) and passes on the recreated predicate.
+
+`platform/supabase/functions/_shared/agent_system_test.ts` (PGlite, every migration, the append-only triggers on), one test per criterion:
+
+```
+criterion 1: card_approvals is append-only and private, and record_card_approval enforces separation of duties ... ok
+criterion 2: a hashed field changes only through a board RPC, which records a board approval ... ok
+criterion 3: an approved agent card is dealt to now at opens_at, and only then ... ok
+criterion 4: no money reaches an undealt, board-vetoed or unapproved card ... ok
+criterion 5: outside the board an agent-written card is readable only while its approval is current ... ok
+criterion 6: the board's veto, the cooling window and role pauses ... ok
+criterion 7, SQL half: the job queue ... ok
+criterion 8: resume by rule, once per card, topping the bar up from money not on a card yet ... ok
+criterion 9's foreign keys: one delete of planned cards removes none when any is referenced ... ok
+the migration applies twice and keeps money-logic's allocation reasons ... ok
+ok | 10 passed (31 steps) | 0 failed
+```
+
+By criterion:
+
+1. `agent_system_test.ts` criterion 1: UPDATE, DELETE and TRUNCATE refused as the superuser; anon and authenticated refused; service_role may select but not insert; each refusal's own message (proposer, drafter, executor; check-line author; qa_verify by the executor and naming a build session; empty, equal and used grader refs; a stale hash; paused, retired and wrong-class approvers; a draft verdict of revise); the card row is byte-equal before and after, `director_stance` endorsed and `board_vetoed` false. `money_safety_test.ts` and `migration_test.ts` include `card_approvals` in the append-only set.
+2. Criterion 2: every hashed field refused as the superuser and as service_role, clearing the source refused, the estimate allowed; `set_card_horizon` leaves the card approved with a `board` approval graded `board:<board_actions id>` carrying the new hash; `resume_card` leaves it approved in `dispatcher_cards`, stage funded and public; criterion 8 checks the rule's half.
+3. Criterion 3: window 0 dealt on the first call with a `dealt` event; window 60 not dealt at approval or one second before, dealt after; board-vetoed, Director-vetoed, voided, never-approved, paused-executor and unready cards not dealt, the paused one dealt once resumed. `platform/dispatcher/test/select.test.ts`: `runnable()` refuses an unapproved, a board-vetoed and a paused-executor card.
+4. Criterion 4 on money-logic's `apply_contribution`, `credit_held_contributions` and `waterfall_sweep`: the predicate cases, a payment naming each shape keeps it in `requested_card_id` and places at step 2 on the board's card, a released hold of each goes to step 2, the drain moves nothing onto them, `record_usage` refuses a studio row with no card; `ledger_identity()` holds after each step.
+5. Criterion 5: anon and a signed-in outsider read the board card and the approved agent card through `cards`, and nothing of the voided card through `public_card_funding`, `public_card_spend`, `public_stopped_cards` or `public_agent_events` (the card-less event stays); a board member and the moderator read all four cards; the policies read back as `card_is_public(id)` and `is_board_member()`, `cards` is in the realtime publication, and a stopped card's money moved to a voided card shows no title. `platform/supabase/test/migration.test.ts` "agent-system-core migration": `anon-negative-test.ts` probes `card_approvals`, `jobs`, `job_runs`, `dispatcher_cards` and all twenty new functions, with `card_is_public` callable.
+6. Criterion 6: each RPC refused for anon, an outsider, the moderator (or "Only the board resumes a role"), the board at aal1 and a blank reason; the moderator pauses at aal1; the window refuses -1 and 10,081; a veto moves a card on now to next with `opens_at` cleared and the stance kept, refused with money on the bar and with money on hold; unvetoing sets `opens_at` 90 minutes out with the window at 90. The paused role's session: `platform/dispatcher/test/pipeline.test.ts` "sends the card back to funded with no rejection when its executor role is paused, and it runs again once the role is resumed, with no card action" and `session.test.ts` (outcome `role_paused`).
+7. `scheduler.ts`, its test, node-cron (`pnpm-lock.yaml`), `DISPATCHER_SCHEDULER` and `OPERATIONS_BUCKET_USD` are deleted. SQL half: criterion 7 (one run per key, one queued scheduled run, board origin inherited, claim refused without the lease, `fail_running_job_runs` for the holder only). `platform/dispatcher/test/jobs.test.ts` (11 tests): each skip reason, a board model run queued with no board member in both studio modes and started once one signs in, a code run in both modes, one job at a time, a throwing and a missing handler, a studio or role pause and the dispatcher stopping a running job. `startup.test.ts`: running runs failed with `dispatcher_restart` once the lease is held; `tick.test.ts`: dealing and resume each tick, never fatal, and the job tick after a sleeping or failing card path. The seven dispatcher files: `Tests  203 passed (203)`.
+8. Criterion 8: with $1.00 that may leave Not on a card yet it returns `{waiting: true, need_usd: 1.25}` and changes no card, allocation or event; with $2.00 it moves $1.25 (two `ceiling_top_up` rows), sets the estimate to $1.50, funded $2.25, target $1.00, stage funded, logs `ceiling_top_up` and `resume_rule` (ceiling 2.25), the approval current, and `ledger_identity()` holds and equals `lib/ledger-identity.ts` line for line; a second ceiling pause and a card at the $5 maximum are blocked and listed in `board_needs_you.rule_blocked`.
+9. `platform/supabase/test/backlog.test.ts`: drafted, dealt-pending and vetoed cards skipped with their reasons; the removal list holds only board-filed, proposed, next or later cards with no money, target, executor, drafter, `opens_at` or veto; `--apply` is one delete repeating each condition and prints a refused delete. Criterion 9's SQL test: a delete of two planned cards, one named by a board action, deletes neither.
+10. `node --test platform/agents/specs.test.mjs`: 119 pass (class on every spec, `write_access` by the class rule, the Directors' Read, Glob and Grep, no write tool for the Studio Head, "You have no write tools" in each prompt without one); `role-files.test.ts` and `roles.test.ts` check the classes and the seed's `agent_class`; `migration_test.ts` reads `agent_class`, `paused` and `paused_reason` from `public_roles`; `docs.test.mjs` "docs/SYSTEM.md's role table equals the role specs' name, class, status and trigger".
+11. `platform/board/src/Board.test.tsx` "Board agent system controls" and the moderator's role pause, `lib/board.test.ts`, `lib/needs.test.ts` (84 tests). `BOARD_E2E_PORT=4455 pnpm --filter @backseat/board e2e`:
+
+```
+  ✓  5 e2e/board.spec.ts:232:1 › at the second factor the board sees and vetoes an undealt agent card, and reads the roles, the jobs and the cooling window, under the enforced policy
+  5 passed (3.3s)
+```
+
+The fixture answers the cards read with the undealt card only for the board member's own token, and the site's anon key reads none. The public site did not change, so no site e2e or screenshots; the board's new sections were screenshot at 375 and 1440 and the role rows' spacing fixed.
 
 ## Decisions
 
