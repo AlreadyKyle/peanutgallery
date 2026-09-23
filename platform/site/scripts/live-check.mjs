@@ -53,7 +53,7 @@ const AGREEMENT_TOKENS = ['/terms', '/refunds'];
 // built with; and the board site's host, from BOARD_SITE_URL in the environment when it is set (the
 // address lives in .env and never in the repository). No page may name any other netlify.app host,
 // nor the board site's (docs/specs/board-site.md).
-const PLAY_HOST = playHostFrom(TOML);
+const PLAY_HOST = playHostFrom(readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8'));
 const BOARD_HOST = boardHostFrom(process.env.BOARD_SITE_URL);
 const args = process.argv.slice(2);
 const allowNoData = args.includes('--allow-no-data');
