@@ -1,7 +1,7 @@
 import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
 import { SUPABASE_URL } from './fixture-env';
-import { DEFAULT_STUDIO, expect, test, type StudioFixture } from './fixtures';
+import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
 
 // Layout balance (DESIGN.md, No dead space; docs/specs/home-and-design.md): on every public route,
@@ -43,7 +43,12 @@ auditRoutes('the launch-shaped studio', LIVE_STUDIO, [320, 375, 768, 1024, 1440]
 // The default fixture: a building-free studio with a picked card, a queued card and two shipped.
 auditRoutes('the default fixture', DEFAULT_STUDIO, [375, 768, 1440]);
 // Nothing loaded that could be empty: no roles (home draws no team strip), no actions, no deploys.
-auditRoutes('an empty studio', { ...LIVE_STUDIO, roles: [], events: [], deploys: [] }, [375, 1440], ['/', '/team', '/ledger', '/how-it-works']);
+// No contributions yet in Money in and no stopped cards, so the ledger draws its shortest bands.
+auditRoutes('an empty studio', { ...LIVE_STUDIO, roles: [], events: [], deploys: [], money: moneyRow(), stopped: [] }, [375, 1440], ['/', '/team', '/ledger', '/how-it-works', '/contribute']);
+// public_money and public_stopped_cards failing, as production reads them until money-logic's
+// migration is applied: the Funding band's Not on a card yet row says "Not available right now." in
+// place of its figure, which must not squeeze the label and description into a sliver at 320px.
+auditRoutes('the money reads failing', { ...LIVE_STUDIO, money: null, stopped: null }, [320, 375, 768, 1440], ['/ledger', '/contribute', '/']);
 
 // Home with each count of open cards the fill rule has to handle, and one card with no brief.
 const open = LIVE_STUDIO.cards.filter((card) => card.horizon === 'now' && (card.stage === 'proposed' || card.stage === 'voted'));
@@ -51,8 +56,18 @@ const rest = LIVE_STUDIO.cards.filter((card) => !open.includes(card));
 const extra = { ...open[1]!, id: '10000000-0000-4000-8000-000000009999', title: 'One more open card to fund', created_at: '2026-09-22T00:01:00Z' };
 for (const count of [1, 2, 4, 5, 7]) {
   const cards = count <= open.length ? open.slice(0, count) : [...open, extra];
-  auditRoutes(`home with ${count} open ${count === 1 ? 'card' : 'cards'}`, { ...LIVE_STUDIO, cards: [...cards, ...rest] }, [768, 1024, 1440], ['/', '/contribute']);
+  // Every open card takes money, so each is in the waterfall's order and draws its Fund this card.
+  const money = { ...LIVE_STUDIO.money, funding_order: fundingOrder(cards.map((card) => card.id)) };
+  auditRoutes(`home with ${count} open ${count === 1 ? 'card' : 'cards'}`, { ...LIVE_STUDIO, cards: [...cards, ...rest], money }, [768, 1024, 1440], ['/', '/contribute']);
 }
+// An open card the waterfall's order leaves out (a vetoed card): it takes no money, so it must not sit
+// in a row of Fund this card buttons without one, which misaligns the row's bars.
+auditRoutes(
+  'home with an open card left out of the funding order',
+  { ...LIVE_STUDIO, money: { ...LIVE_STUDIO.money, funding_order: fundingOrder(open.slice(0, -1).map((card) => card.id)) } },
+  [768, 1024, 1440],
+  ['/', '/contribute'],
+);
 auditRoutes(
   'home with a card that has no brief',
   { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card === open[1] ? { ...card, intent: '' } : card)) },

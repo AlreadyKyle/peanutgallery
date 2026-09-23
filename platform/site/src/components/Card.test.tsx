@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { categoryOf, FACES, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
+import { books } from '../lib/books.test-fixture';
+import { canFund } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
 import { Glyph, GLYPH_NAMES, STATE_TAGS, SUITS } from './Glyph';
@@ -32,7 +34,8 @@ function card(overrides: Partial<Card> = {}): Card {
   };
 }
 
-function snapshot(cards: Card[], funding: Snapshot['funding'] = {}): Snapshot {
+/** The cards a goal bar still has room on stand in for the waterfall's order, unless a test names the order. */
+function snapshot(cards: Card[], funding: Snapshot['funding'] = {}, order: string[] = cards.filter(canFund).map((c) => c.id)): Snapshot {
   return {
     pool: null,
     cards,
@@ -44,6 +47,7 @@ function snapshot(cards: Card[], funding: Snapshot['funding'] = {}): Snapshot {
     deploys: [],
     roles: [],
     cardTitles: {},
+    money: books(order),
     missing: [],
   };
 }

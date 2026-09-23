@@ -11,7 +11,10 @@ export {
   fundableCards,
   fundLink,
   fundOrder,
+  inFundingOrder,
   isFullyFunded,
+  nextInLine,
+  openForFunding,
   type CardCategory,
   type CategoryFilter,
 } from './payment';
@@ -48,7 +51,7 @@ export function isRunnable(card: Card): boolean {
 export type CardGroups = {
   /** Building or in the gate, in server order. */
   now: Card[];
-  /** Open for funding or picked by the board and still filling, in fundOrder. */
+  /** Open for funding or picked by the board and still filling, in fundOrder; only those `open` keeps. */
   fund: Card[];
   /** Funded and waiting for the agents, oldest first. */
   queued: Card[];
@@ -56,14 +59,18 @@ export type CardGroups = {
   shipped: Card[];
 };
 
-/** Building, funding and queued hold horizon now cards only; a live card is shipped whatever its horizon. */
-export function groupCards(cards: readonly Card[]): CardGroups {
+/**
+ * Building, funding and queued hold horizon now cards only; a live card is shipped whatever its
+ * horizon. `open` is openForFunding(snapshot): with the waterfall's order loaded, fund holds only the
+ * cards in it (docs/specs/money-surfaces.md); left out, every open card.
+ */
+export function groupCards(cards: readonly Card[], open: (card: Card) => boolean = () => true): CardGroups {
   const runnable = cards.filter(isRunnable);
   const elsewhere = (card: Card) =>
     NOW_STAGES.has(card.stage) || card.stage === QUEUED_STAGE || card.stage === SHIPPED_STAGE;
   return {
     now: runnable.filter((card) => NOW_STAGES.has(card.stage)),
-    fund: runnable.filter((card) => !elsewhere(card)).sort(fundOrder),
+    fund: runnable.filter((card) => !elsewhere(card) && open(card)).sort(fundOrder),
     queued: runnable.filter((card) => card.stage === QUEUED_STAGE),
     shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
   };
@@ -94,7 +101,8 @@ export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Car
 
 /**
  * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage.
- * Paused and rejected are drawn only on the design guide until a public read lists those cards.
+ * Paused and rejected faces are drawn only on the design guide; /ledger lists stopped cards as rows
+ * (Stopped.tsx), never as faces (docs/specs/money-surfaces.md).
  */
 export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected';
 export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected'];

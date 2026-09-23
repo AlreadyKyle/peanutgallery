@@ -3,7 +3,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
-import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, RESERVE_PCT } from '../lib/payment';
+import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 import { LinkedText } from './TextPage';
@@ -107,7 +107,9 @@ export type CardMode = 'live' | 'example' | 'sample';
  * The money at the bottom of a card. Building or being checked: who is on it and what it has spent
  * so far (`who`, from the layout; only studio-billed spend is public). Funded and waiting: the full
  * bar, the spec rows and "Waiting for the agents" in the button slot. Any other card: its bar and
- * spec rows, then Fund this card while it can take money, the Payment Link with this card's id.
+ * spec rows, then Fund this card while it takes money, the Payment Link with this card's id. A live
+ * card takes money only while it is in the waterfall's order (public_money.funding_order), so no
+ * button shows when the order did not load; a sample card draws its button while canFund says so.
  */
 export function CardMoney({
   card,
@@ -151,7 +153,7 @@ export function CardMoney({
         {legal.fundThis}
       </button>
     );
-  } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && canFund(card)) {
+  } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && inFundingOrder(snapshot, card.id)) {
     // The agreement goes with every live link to checkout, so no card layout can draw one without it
     // (docs/specs/legal-copy.md). A sample or example card links nowhere and carries none.
     action = (

@@ -108,7 +108,7 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('heading', { level: 1, name: 'Where should your contribution go?' })).toBeVisible();
       const first = page.getByRole('main').getByRole('link').first();
       await expect(first).toContainText('Fund the next card in line');
-      await expect(first).toContainText('Your contribution funds whatever the agents build next.');
+      await expect(first).toContainText('Next in line: Quiet rooms: one more unlock');
       await expect(first).toHaveAttribute('href', PAYMENT_LINK);
       await expect(page.getByRole('main').getByText('Rename the Gatherer to Sweeper')).toBeVisible();
       await expect(page.getByRole('main').getByText('Board on its own site')).toHaveCount(0);
@@ -116,10 +116,11 @@ for (const viewport of WIDTHS) {
       expect(await overflowsHorizontally(page)).toBe(false);
     });
 
-    test('ledger stacks Funding, Agent work and Deploys, and shows no raw bot output', async ({ page }) => {
+    test('ledger stacks Funding, Money in, Agent work and Deploys, and shows no raw bot output', async ({ page }) => {
       await page.goto('/ledger');
       await expect(page.getByRole('heading', { level: 1, name: 'Ledger' })).toBeVisible();
-      await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveText(['Funding', 'Agent work', 'Deploys']);
+      // No card has stopped in the default fixture, so the Stopped band is not drawn.
+      await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveText(['Funding', 'Money in', 'Agent work', 'Deploys']);
       await expect(page.getByRole('region', { name: 'Deploys' }).getByRole('listitem').first()).toContainText('Game 2775bcb passed checks');
       await expect(page.getByText('simulated seconds', { exact: false })).toHaveCount(0);
       // Stacked, one band each: nothing sits beside the long lists.
