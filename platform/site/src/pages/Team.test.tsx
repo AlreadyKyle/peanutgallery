@@ -136,6 +136,15 @@ describe('Team', () => {
     expect(screen.queryByText(/claude-haiku/)).toBeNull();
   });
 
+  it('runs the Platform Builder once the studio says the platform code lane is open', async () => {
+    renderTeam(sourceOf(snapshot({ platformLaneOpen: true })));
+    const running = await screen.findByRole('region', { name: team.running });
+    expect(names(running)).toEqual(['Builder A', 'Builder B', 'Platform Builder', 'QA']);
+    const hired = `${team.hired} ${formatDate('2026-09-14T00:00:00Z')}`;
+    expect(within(box('Platform Builder')).getByText(`claude-sonnet-5 · ${hired} · 0 cards shipped · changes the site`)).toBeTruthy();
+    expect(screen.queryByText(team.siteClosed, { exact: false })).toBeNull();
+  });
+
   it('draws every agent with an avatar named by its species note, and shows no scorecards', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });

@@ -3,7 +3,6 @@ import { PageHeader } from './components/PageHeader';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
 import { StudioProvider } from './lib/studio';
-import { Board } from './pages/Board';
 import { Contribute } from './pages/Contribute';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
@@ -31,7 +30,6 @@ export function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="*" element={<NotFound />} />
           </Route>
-          <Route path="/board" element={<Board />} />
         </Routes>
         <SiteFooter />
       </div>

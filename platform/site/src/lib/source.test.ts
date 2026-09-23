@@ -253,7 +253,8 @@ describe('createSupabaseSource.load', () => {
     expect(spend.terminal).toBe('returns');
 
     const studio = query(fake.queries, 'public_studio');
-    expect(studio.select).toBe('launched_at,paused');
+    // Every column of the view, so platform_lane_open is read once the view has it.
+    expect(studio.select).toBe('*');
     expect(studio.terminal).toBe('maybeSingle');
 
     expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
@@ -493,6 +494,15 @@ describe('horizon, rank and pause', () => {
   it('reads paused as false unless the studio row says true', async () => {
     const fake = fakeClient({ rows: { public_studio: { launched_at: null, paused: null } } });
     expect((await createSupabaseSource(fake.client).load()).paused).toBe(false);
+  });
+
+  it('reads the platform code lane as open only when the studio row says so, and closed on a database without the column', async () => {
+    const open = fakeClient({ rows: { public_studio: { launched_at: null, paused: false, platform_lane_open: true } } });
+    expect((await createSupabaseSource(open.client).load()).platformLaneOpen).toBe(true);
+    const before = fakeClient({ rows: { public_studio: { launched_at: null, paused: true } } });
+    const snapshot = await createSupabaseSource(before.client).load();
+    expect(snapshot.platformLaneOpen).toBe(false);
+    expect(snapshot.paused).toBe(true);
   });
 });
 

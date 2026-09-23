@@ -1,6 +1,6 @@
 # Peanut Gallery site style guide
 
-This is the one style guide for the public site and `/board`. The site is mostly short lines of text, so the design's job is to make them easy to read, understand and act on. When in doubt, remove something.
+This is the one style guide for the public site. The board's own site (`platform/board`, docs/specs/board-site.md) copies its tokens and form rules into its own stylesheet. The site is mostly short lines of text, so the design's job is to make them easy to read, understand and act on. When in doubt, remove something.
 
 Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the rules marked **(tested)**.
 
@@ -12,7 +12,7 @@ Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the ru
 4. **Two text colours.** `--ink` for what matters, `--muted` for what explains it. Both meet WCAG AA on white **(tested)**.
 5. **Space before rules.** Sections are separated by space. Hairlines (`--line`) separate rows in a list, and the top bar and footer. Things you can act on (cards, choices, the Right now panel) are boxes with a `--line` border and `--radius-box` corners, so they read as separate objects.
 6. **Things you can press look pressable.** Links are underlined, and buttons are filled or outlined boxes at least 44px tall **(tested)**.
-7. **Every public string lives in `src/lib/copy.ts`.** `/board` keeps its own literals.
+7. **Every public string lives in `src/lib/copy.ts`.** The board's own site keeps its own literals.
 8. **Three text styles to a block.** A block (the hero, a card, a panel, a section intro) uses at most a heading, body text and one small muted line, plus its button. If a fourth style seems needed, the block is saying too much: cut a line or move it.
 9. **Headings balance their lines.** Headings use `text-wrap: balance` **(tested)**, so a headline never leaves one or two words alone on its last line.
 
@@ -36,7 +36,7 @@ Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the ru
 | `--leading-heading` | 1.25 | Headings |
 | `--space-1` … `--space-5` | 0.5 / 1 / 1.5 / 2.5 / 4rem | All spacing |
 | `--wrap` | 72rem | Page width: top bar, main, footer |
-| `--measure` | 44rem | Maximum width of any text block; the whole content of text pages (ledger, contribute, terms, privacy, refunds, contact, board) |
+| `--measure` | 44rem | Maximum width of any text block; the whole content of text pages (ledger, contribute, terms, privacy, refunds, contact) |
 | `--gutter` | 1.25rem | Side padding at every width |
 | `--radius` | 0.375rem | Buttons and fields |
 | `--radius-box` | 0.625rem | Cards, choices, the Right now panel |
@@ -129,7 +129,7 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 
 **How it works (`/how-it-works`).** A `main.wide` page: the heading and lede, the paused notice when paused, then `ol.how-steps` of six steps. Each `li.how-step` is a text half (an `h2` numbered by a CSS counter, and one or two paragraphs) and a visual half; from 48rem they sit side by side and swap sides on every other step, and on a phone the text comes first. Each visual is a real component in example mode inside `figure.example`: a dashed `--field` frame whose `figcaption` starts with "Example" and says whether it shows a real public record ("Example from the live studio") or made-up figures ("Example with made-up figures"). Example mode renders no link, button or disclosure, whatever the Payment Link says. Made-up visuals use times relative to now, never a fixed date. Then plain headed sections (Where the money goes, Holds and refunds, Rules that never change), written as statements, with no questions.
 
-**The team (`/team`).** A `main.wide` page with two sections, Running and Not running yet, each a `ul.team-grid` of `li.card.role` boxes (one column on phones, two from 48rem, three from 64rem). A box has the avatar, the name as `h3`, "AI agent" (with the title when the name differs), the description, and one muted facts line. Running is derived, not labelled: a role runs when it builds cards in an open folder (`runsCards` in `src/lib/board.ts`). A running role's line is its model, hired date, live cards shipped and what it changes; a role that does not run shows none of those, only that it is not running and, for a closed lane, why. No scorecards.
+**The team (`/team`).** A `main.wide` page with two sections, Running and Not running yet, each a `ul.team-grid` of `li.card.role` boxes (one column on phones, two from 48rem, three from 64rem). A box has the avatar, the name as `h3`, "AI agent" (with the title when the name differs), the description, and one muted facts line. Running is derived, not labelled: a role runs when it builds cards in an open folder (`runsCards` in `src/lib/roster.ts`; the platform folder counts as open once the studio says its code lane is open). A running role's line is its model, hired date, live cards shipped and what it changes; a role that does not run shows none of those, only that it is not running and, for a closed lane, why. No scorecards.
 
 **Avatar.** `components/Avatar.tsx` draws every agent as inline SVG from its one-line species note: colour and build from the words before "creature", then eyes, ears, horns, arms, a tail, a shell, legs and so on from the rest. The same note always draws the same picture. Fills come from the `--creature-*` tokens through `--avatar-fill`; every shape has an `--ink` outline. The SVG is `role="img"` with the species note as its `title`.
 
@@ -139,9 +139,9 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 
 **Link preview image.** `public/og.png` is 1200×630 and typographic: the wordmark with the peanut mark, the pitch line as the heading and lede, and the address in muted small text on `--paper`. `scripts/og-image.mjs` draws it from `styles.css` at a 175% root size, so the tokens scale together. Run it again and commit the PNG when the pitch, the tokens or the mark change.
 
-**Forms (/board).** Labels at weight 600 above the fields. Fields are `--target` tall with a `--field` border and `--radius` corners. Buttons use `.button` styling. The board has, after the second factor: pause and resume, the studio status, the caps form (`set_caps`, every cap with a reason), record a credit purchase, one form per card for horizon, rank, target, cancel and resume (`ul.board-cards`), file a card (with its horizon), file a directive and file a note.
+**Forms (the board's own site).** Labels at weight 600 above the fields. Fields are `--target` tall with a `--field` border and `--radius` corners. Buttons use `.button` styling. The board site opens on the Needs you inbox, then has, after the second factor: pause and resume, the studio status, the caps form (`set_caps`, every cap with a reason), record a credit purchase, one form per card for horizon, rank, target, cancel and resume (`ul.board-cards`), file a card (with its horizon), file a directive and file a note.
 
-**Two-factor step (/board).** A board member's first section until the session has a verified second factor. It says what stays hidden. With no authenticator app, it shows a "Set up an authenticator app" button, then the QR code (`img.qr`, 12.5rem), the secret in `code` and a 6-digit code form. With an app, it shows the code form only.
+**Two-factor step (the board's own site).** The section under the Needs you inbox until the session has a verified second factor. It says what stays hidden. With no authenticator app, it shows a "Set up an authenticator app" button, then the QR code (`img.qr`, 12.5rem), the secret in `code` and a 6-digit code form. With an app, it shows the code form only.
 
 ## Breakpoints
 
@@ -165,5 +165,5 @@ The full rules, with examples and the patterns to avoid, are in `docs/COPY.md`. 
 - Text contrast is at least 4.5:1, and control borders at least 3:1.
 - Every interactive element is reachable by keyboard and shows the focus ring.
 - Touch targets are at least 44px tall.
-- No horizontal scroll at 375px or 1440px (Playwright checks the landing, contribute, ledger, how it works, team, roadmap and the paused state at both widths, and terms, privacy, refunds, contact and board at 375px).
+- No horizontal scroll at 375px or 1440px (Playwright checks the landing, contribute, ledger, how it works, team, roadmap and the paused state at both widths, and terms, privacy, refunds and contact at 375px; the board site's own suite checks it at 375px).
 - Information is never carried by colour alone or hidden behind hover.

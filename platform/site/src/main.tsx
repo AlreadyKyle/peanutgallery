@@ -5,12 +5,18 @@ import { App } from './App';
 import { watchForNewBuild } from './lib/freshness';
 import { createSupabaseSource } from './lib/source';
 import { SourceProvider } from './lib/studio';
-import { getClient } from './lib/supabase';
+import { clearStoredSessions, getClient } from './lib/supabase';
 import './styles.css';
 
 // A tab restored from the back/forward cache runs the build it started with; reload when the
 // site has moved on.
 watchForNewBuild({ doc: document, win: window, fetchFn: fetch.bind(window), reload: () => { window.location.reload(); } });
+
+try {
+  clearStoredSessions(window.localStorage);
+} catch {
+  // Storage blocked by the browser: there is nothing stored to clear.
+}
 
 const client = getClient();
 const source = client === null ? null : createSupabaseSource(client);

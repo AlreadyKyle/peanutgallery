@@ -44,11 +44,25 @@ describe('netlify.toml security headers', () => {
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
 
-  it('enforces frame-ancestors, and connect-src to the site and its Supabase project only', () => {
+  it('enforces frame-ancestors, connect-src to the site and its Supabase project only, and form-action to the site', () => {
     const host = new URL(supabaseUrl).host;
-    expect(headers['Content-Security-Policy']).toBe(`frame-ancestors 'none'; connect-src 'self' https://${host} wss://${host}`);
+    expect(headers['Content-Security-Policy']).toBe(`frame-ancestors 'none'; connect-src 'self' https://${host} wss://${host}; form-action 'self'`);
     const enforced = directives(headers['Content-Security-Policy'] ?? '');
-    expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src']);
+    expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src', 'form-action']);
+  });
+
+  it('answers /board with the not found page and a 404 status, before the SPA rewrite', () => {
+    const rules = [...toml.matchAll(/^\[\[redirects\]\]\s*\n\s*from = "([^"]+)"\s*\n\s*to = "([^"]+)"\s*\n\s*status = (\d+)/gm)].map((m) => [
+      m[1],
+      m[2],
+      m[3],
+    ]);
+    const spa = rules.findIndex(([from]) => from === '/*');
+    expect(rules.slice(1, spa)).toEqual([
+      ['/board', '/index.html', '404'],
+      ['/board/*', '/index.html', '404'],
+    ]);
+    expect(toml).not.toMatch(/board[a-z0-9-]*\.netlify\.app/);
   });
 
   it('is what vite preview sends, so the e2e run tests the production policy', () => {

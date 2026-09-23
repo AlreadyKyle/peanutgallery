@@ -1,5 +1,9 @@
 import { copy } from './copy';
+import { isFullyFunded } from './payment';
 import type { Card, Horizon } from './source';
+
+// Which cards take money and the Payment Link address live in payment.ts (kernel).
+export { canFund, fundLink, isFullyFunded } from './payment';
 
 export type CardStatus = 'building' | 'gated' | 'queued' | 'picked' | 'open' | 'shipped';
 
@@ -122,20 +126,6 @@ export function visibleFilters(cards: readonly Card[]): CategoryFilter[] {
   return CATEGORY_FILTERS.filter(
     (filter) => filter === 'all' || filter === 'game' || cards.some((card) => inCategory(card, filter)),
   );
-}
-
-export function isFullyFunded(card: Card): boolean {
-  return card.funding_target_usd > 0 && card.funded_usd >= card.funding_target_usd;
-}
-
-export function canFund(card: Card): boolean {
-  return card.shape === 'goal' && card.funding_target_usd > 0 && !isFullyFunded(card);
-}
-
-/** The Payment Link with client_reference_id set to the card id, which the webhook credits. */
-export function fundLink(base: string, id: string): string {
-  const joiner = base.includes('?') ? '&' : '?';
-  return `${base}${joiner}client_reference_id=${encodeURIComponent(id)}`;
 }
 
 export function sourceLabel(source: string): string {

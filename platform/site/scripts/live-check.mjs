@@ -7,7 +7,7 @@
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages, /board and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
+// pages and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
 // the footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
 // Policy report. The landing's h2 order, read from the page: Building now, Queued and Shipped appear
 // only when cards are in those stages. The Right now panel, the fund links, the category filters and
@@ -48,7 +48,6 @@ const ROUTES = [
   '/privacy',
   '/refunds',
   '/contact',
-  '/board',
   '/no-such-page',
 ];
 const FOOTER_LINKS = [
@@ -68,7 +67,8 @@ const REPORT_ONLY_POLICY =
   "object-src 'none'; base-uri 'self'; form-action 'self'";
 const ENFORCED_POLICY =
   "frame-ancestors 'none'; " +
-  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co";
+  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
+  "form-action 'self'";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
   ['x-content-type-options', 'nosniff'],
@@ -173,6 +173,22 @@ try {
     check(errors.length === 0, `${width}px no console errors${errors.length === 0 ? '' : `: ${errors.slice(0, 3).join(' | ')}`}`);
     checkPolicy(reports, `${width}px`);
     await page.close();
+  }
+
+  // The board has its own site (docs/specs/board-site.md): /board here is the not found page, with a
+  // 404 status from Netlify, no sign-in form and no address for the board. vite preview has no
+  // redirect rules, so a local server answers it 200.
+  {
+    const board = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    const response = await open(board, '/board');
+    const status = response?.status() ?? 0;
+    if (LOCAL.test(BASE)) skip(`/board status ${status}: a local server has no redirect rules`);
+    else check(status === 404, `/board status ${status}`);
+    const h1 = await board.locator('h1').allTextContents();
+    check(JSON.stringify(h1) === JSON.stringify(['Not found']), `/board is the not found page: ${JSON.stringify(h1)}`);
+    check((await board.getByLabel('Email').count()) === 0, '/board has no sign-in form');
+    check(!/netlify\.app/.test(await board.content()), '/board names no netlify.app address');
+    await board.close();
   }
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });

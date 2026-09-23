@@ -195,10 +195,18 @@ describe('Site chrome', () => {
   it('shows the pitch line on the landing only', () => {
     renderAt('/ledger');
     expect(screen.queryByText(copy.pitchBody)).toBeNull();
-    cleanup();
-    renderAt('/board');
-    expect(screen.queryByText(copy.pitchBody)).toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Board' })).toBeTruthy();
+  });
+
+  it('has no board page: /board is the plain not found page, with no sign-in form and no link to the board site', () => {
+    for (const path of ['/board', '/board/']) {
+      renderAt(path);
+      expect(screen.getByRole('heading', { level: 1, name: copy.notFound }), path).toBeTruthy();
+      expect(screen.queryByRole('heading', { level: 1, name: 'Board' }), path).toBeNull();
+      expect(screen.queryByRole('form', { name: 'Sign in' }), path).toBeNull();
+      expect(screen.queryByLabelText('Email'), path).toBeNull();
+      expect(document.body.innerHTML, path).not.toMatch(/netlify\.app/);
+      cleanup();
+    }
   });
 
   it('omits the Contribute and Discord links when the env values are unset', () => {
