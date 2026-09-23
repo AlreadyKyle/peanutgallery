@@ -8,7 +8,7 @@ import type { DispatcherConfig } from '../src/config.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
-import { CODE_PATHS, checkCodeReadonly, checkMode, checkRoleModels, startupChecks, unattendedStartup, type StartupDeps } from '../src/startup.js';
+import { CODE_PATHS, checkCodeReadonly, checkMode, checkRoleModels, failStaleJobRuns, startupChecks, unattendedStartup, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
@@ -142,6 +142,23 @@ describe('checkCodeReadonly', () => {
     trees.push(root);
     for (const relative of [...CODE_PATHS].reverse()) await chmod(path.join(root, relative), 0o555);
     await expect(checkCodeReadonly(root)).resolves.toBeUndefined();
+  });
+});
+
+describe('failStaleJobRuns', () => {
+  it('finishes every job run still marked running as failed with dispatcher_restart, once the lease is held, and logs the count', async () => {
+    const db = new FakeDb();
+    db.jobList = [{ name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: false }];
+    const lines: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
+    await expect(failStaleJobRuns(db, 'mac/1/abcd', log)).rejects.toThrow('Only the dispatcher lease holder');
+    await db.claimLease('mac/1/abcd', 300);
+    const left = await db.enqueueJobRun({ job: 'tidy_up', origin: 'operator' });
+    const queued = await db.enqueueJobRun({ job: 'tidy_up', origin: 'operator' });
+    await db.claimJobRun(left.id, 'mac/1/abcd');
+    expect(await failStaleJobRuns(db, 'mac/1/abcd', log)).toBe(1);
+    expect(db.jobRuns.map((r) => [r.id, r.status, r.reason])).toEqual([[left.id, 'failed', 'dispatcher_restart'], [queued.id, 'queued', null]]);
+    expect(JSON.parse(lines.at(-1)!)).toMatchObject({ scope: 'startup', msg: '1 running job run(s) finished as failed', count: 1, reason: 'dispatcher_restart' });
   });
 });
 

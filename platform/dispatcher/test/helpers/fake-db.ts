@@ -185,8 +185,11 @@ export class FakeDb implements Db {
   async listFundedCards() {
     return this.cards.filter((c) => c.stage === 'funded').map((c) => ({ ...c }));
   }
+  // dispatcher_cards: the executor's pause is read from its role, as the view joins it.
   async listCardsInStages(stages: string[]) {
-    return this.cards.filter((c) => stages.includes(c.stage)).map((c) => ({ ...c }));
+    return this.cards
+      .filter((c) => stages.includes(c.stage))
+      .map((c) => ({ ...c, executor_paused: c.executor_paused || this.roles.some((r) => r.id === c.executor_role_id && r.paused) }));
   }
   async claimCard(id: string) {
     this.claims += 1;

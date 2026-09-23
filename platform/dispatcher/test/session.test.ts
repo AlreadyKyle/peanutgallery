@@ -691,6 +691,16 @@ describe('runAgentSession watch', () => {
     expect(result).toMatchObject({ outcome: 'paused_by_board' });
   });
 
+  it('aborts when the board or the moderator pauses the executor role (docs/specs/agent-system-core.md)', async () => {
+    const db = new FakeDb();
+    const { result } = await run(db, async (_spec, emit, signal) => {
+      await emit(startEvent());
+      db.roles[0]!.paused = true;
+      await untilAborted(signal, 2000);
+    }, { watchIntervalMs: 5 });
+    expect(result).toMatchObject({ outcome: 'role_paused', detail: 'the executor role Builder A was paused' });
+  });
+
   it('aborts when the dispatcher stops', async () => {
     const db = new FakeDb();
     const stop = new AbortController();
