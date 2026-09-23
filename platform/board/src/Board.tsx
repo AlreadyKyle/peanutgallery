@@ -25,11 +25,13 @@ import {
   HEARTBEAT_MS,
   HORIZON_STAGES,
   horizons,
+  JOB_BUTTONS,
   lanes,
   movesToNow,
   parseJobInput,
   recordCreditPurchase,
   resumeCard,
+  runOutputFrom,
   sendMagicLink,
   sessionExpiry,
   setAgentMode,
@@ -57,6 +59,7 @@ import {
   type Horizon,
   type NextCardStage,
   type Role,
+  type RunOutput,
   type TotpEnrolment,
   type TwoFactorState,
 } from './lib/board';
@@ -1310,7 +1313,47 @@ const RUN_WORDS: Record<string, string> = {
   skipped: 'skipped',
 };
 
+const shortCard = (id: string) => id.replace(/-/g, '').slice(0, 8);
+
+/** A role job's typed output under its run: the ranking's moves, or the draft's result and rounds. */
+function RunOutputLines({ output }: { output: RunOutput }) {
+  if (output.kind === 'ranking') {
+    return (
+      <p className="muted">
+        {output.moves.length === 0
+          ? 'Moved no card.'
+          : `Moved ${output.moves.map((move) => `${shortCard(move.card_id)} from ${move.from ?? 'no rank'} to ${move.to}`).join('; ')}.`}
+        {output.unapplied > 0 ? ` ${output.unapplied} more not applied: ten changes a run.` : ''}
+      </p>
+    );
+  }
+  const head =
+    output.result === 'approved' && output.card_id
+      ? `Approved: card ${shortCard(output.card_id)} waits out the cooling window, then is dealt to now.`
+      : `Withdrawn${output.reason ? `: ${output.reason.replace(/_/g, ' ')}` : ''}. No card was written.`;
+  return (
+    <>
+      <p className="muted">{head}</p>
+      {output.rounds.length === 0 ? null : (
+        <ol className="job-runs">
+          {output.rounds.map((round) => (
+            <li key={round.round}>
+              {round.title === null
+                ? 'No valid draft.'
+                : `${round.title} (${round.lane ?? 'no lane'}, ${round.executor ?? 'no executor'}, ${round.estimate_usd === null ? 'no estimate' : formatUsd(round.estimate_usd)}): ${round.summary ?? ''}`}
+              {round.check ? ` Refused by the ${round.check.name} check: ${round.check.detail}` : ''}
+              {round.verdict ? ` Graded ${round.verdict.result}: ${round.verdict.reason_codes.join(', ')}.${round.verdict.note ? ` ${round.verdict.note}` : ''}` : ''}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
+  );
+}
+
 function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; job: BoardJob; canRun: boolean; onChanged: () => Promise<void> }) {
+  // The role jobs have a button of their own and send {}; every other job takes typed input.
+  const named = JOB_BUTTONS[job.name];
   const [reason, setReason] = useState('');
   const [input, setInput] = useState('');
   const [message, setMessage] = useState('');
@@ -1324,7 +1367,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
     }
     let typed: Record<string, unknown>;
     try {
-      typed = parseJobInput(input);
+      typed = named ? {} : parseJobInput(input);
     } catch (error) {
       setMessage(errorMessage(error));
       return;
@@ -1356,26 +1399,32 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
           <p className="muted">No runs yet.</p>
         ) : (
           <ul className="job-runs">
-            {job.runs.map((run) => (
-              <li key={run.id}>
-                {formatDateTime(run.created_at)} · {run.origin} · {RUN_WORDS[run.status] ?? run.status}
-                {run.reason ? `: ${run.reason}` : ''}
-              </li>
-            ))}
+            {job.runs.map((run) => {
+              const output = runOutputFrom(job.name, run.output);
+              return (
+                <li key={run.id}>
+                  {formatDateTime(run.created_at)} · {run.origin} · {RUN_WORDS[run.status] ?? run.status}
+                  {run.reason ? `: ${run.reason}` : ''}
+                  {output ? <RunOutputLines output={output} /> : null}
+                </li>
+              );
+            })}
           </ul>
         )}
         {canRun ? (
           <>
-            <label>
-              Input (JSON, optional)
-              <textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} />
-            </label>
+            {named ? null : (
+              <label>
+                Input (JSON, optional)
+                <textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} />
+              </label>
+            )}
             <label>
               Reason
               <input value={reason} onChange={(event) => setReason(event.target.value)} />
             </label>
             <button type="submit" disabled={busy}>
-              Run now
+              {named ?? 'Run now'}
             </button>
           </>
         ) : null}

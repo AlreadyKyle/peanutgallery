@@ -155,9 +155,9 @@ export function canUnveto(card: Pick<BoardCard, 'stage' | 'board_vetoed'>): bool
 
 /**
  * The roles that build cards, and the folder each builds in. Only these are offered as a card's
- * executor. Every other role (the directors, the Game Designer, the Host, Biz Dev, the Community
- * agent and the rest of the roster) has no job that runs yet: note triage, card drafting, grading,
- * the report, the stream and outside research are backlog cards.
+ * executor. The Studio Head, the Game Designer and the Game Director run the board's Rank now and
+ * Draft a game card (JOB_BUTTONS) and build no card; the rest of the roster has no job that runs
+ * yet: note triage, the report, the stream and outside research are backlog cards.
  */
 export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
   'Builder A': 'seed-1',
@@ -448,7 +448,84 @@ export type JobRunRow = {
   reason: string | null;
   created_at: string;
   finished_at: string | null;
+  /** The run's typed output, as the dispatcher finished it; null while it runs or when it failed. */
+  output: Record<string, unknown> | null;
 };
+
+/**
+ * The role jobs' own buttons (docs/specs/agent-workflows.md): each queues a board-origin run with
+ * input {}. Every other job keeps Run now with its typed input box.
+ */
+export const JOB_BUTTONS: Readonly<Record<string, string>> = {
+  studio_ranking: 'Rank now',
+  draft_card: 'Draft a game card',
+};
+
+export type RankingMoveRow = { card_id: string; from: number | null; to: number };
+export type DraftRoundRow = {
+  round: number;
+  title: string | null;
+  summary: string | null;
+  lane: string | null;
+  executor: string | null;
+  estimate_usd: number | null;
+  check: { name: string; detail: string } | null;
+  verdict: { result: string; reason_codes: string[]; note: string | null } | null;
+};
+
+/** A run's typed output, read for its job: the ranking's moves, or the draft's rounds and result. */
+export type RunOutput =
+  | { kind: 'ranking'; moves: RankingMoveRow[]; unapplied: number }
+  | { kind: 'draft'; result: string; card_id: string | null; reason: string | null; rounds: DraftRoundRow[] };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+export function runOutputFrom(job: string, output: Record<string, unknown> | null): RunOutput | null {
+  if (output === null) return null;
+  if (job === 'studio_ranking') {
+    const moves = (Array.isArray(output.moves) ? output.moves : []).map(record).filter((move): move is Record<string, unknown> => move !== null);
+    return {
+      kind: 'ranking',
+      moves: moves.map((move) => ({ card_id: String(move.card_id), from: numberOrNull(move.from), to: numberOrNull(move.to) ?? 0 })),
+      unapplied: numberOrNull(output.unapplied) ?? 0,
+    };
+  }
+  if (job === 'draft_card') {
+    const rounds = (Array.isArray(output.rounds) ? output.rounds : []).map(record).filter((round): round is Record<string, unknown> => round !== null);
+    return {
+      kind: 'draft',
+      result: typeof output.result === 'string' ? output.result : 'unknown',
+      card_id: typeof output.card_id === 'string' ? output.card_id : null,
+      reason: typeof output.reason === 'string' ? output.reason : null,
+      rounds: rounds.map((round) => {
+        const draft = record(round.draft);
+        const check = record(round.check);
+        const verdict = record(round.verdict);
+        return {
+          round: numberOrNull(round.round) ?? 0,
+          title: draft ? textOrNull(draft, 'title') : null,
+          summary: draft ? textOrNull(draft, 'summary') : null,
+          lane: draft ? textOrNull(draft, 'lane') : null,
+          executor: draft ? textOrNull(draft, 'executor') : null,
+          estimate_usd: draft ? numberOrNull(draft.estimate_usd) : null,
+          check: check ? { name: String(check.name), detail: String(check.detail) } : null,
+          verdict: verdict ? { result: String(verdict.result), reason_codes: strings(verdict.reason_codes), note: textOrNull(verdict, 'note') } : null,
+        };
+      }),
+    };
+  }
+  return null;
+}
 
 export type BoardJob = {
   name: string;
@@ -474,6 +551,7 @@ function jobFrom(row: Record<string, unknown>): BoardJob {
       reason: textOrNull(run, 'reason'),
       created_at: String(run.created_at),
       finished_at: textOrNull(run, 'finished_at'),
+      output: record(run.output),
     })),
   };
 }

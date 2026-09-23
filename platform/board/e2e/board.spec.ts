@@ -117,6 +117,47 @@ const JOBS = [
     description: null,
     runs: [{ id: 'run-e2e', origin: 'schedule', status: 'skipped', reason: 'role_paused', created_at: '2026-09-23T10:00:00Z', finished_at: '2026-09-23T10:00:01Z' }],
   },
+  // The two role jobs (docs/specs/agent-workflows.md), each with a finished run's typed output.
+  {
+    name: 'draft_card',
+    role_name: 'Game Designer',
+    calls_model: true,
+    runs_when_paused: true,
+    description: 'Draft a game card: the Game Designer drafts a new seed-1 card, the checks run, and the Game Director grades it; up to three rounds.',
+    runs: [
+      {
+        id: 'draft-e2e',
+        origin: 'board',
+        status: 'succeeded',
+        reason: null,
+        created_at: '2026-09-23T11:00:00Z',
+        finished_at: '2026-09-23T11:06:00Z',
+        output: {
+          result: 'approved',
+          card_id: '22222222-2222-4222-8222-222222222222',
+          rounds: [{ round: 1, draft: { title: 'Gatherers cost 11', summary: 'The gatherer costs one more to build.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: null, verdict: { result: 'approved', reason_codes: ['fits_pillars'] } }],
+        },
+      },
+    ],
+  },
+  {
+    name: 'studio_ranking',
+    role_name: 'Studio Head',
+    calls_model: true,
+    runs_when_paused: true,
+    description: 'Rank now: the Studio Head orders the open cards on now that hold no money; at most ten changes a run.',
+    runs: [
+      {
+        id: 'rank-e2e',
+        origin: 'board',
+        status: 'succeeded',
+        reason: null,
+        created_at: '2026-09-23T12:00:00Z',
+        finished_at: '2026-09-23T12:02:00Z',
+        output: { moves: [{ card_id: '11111111-1111-4111-8111-111111111111', from: 2, to: 1 }], unapplied: 0 },
+      },
+    ],
+  },
 ];
 
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
@@ -148,6 +189,8 @@ async function answerSupabase(page: Page, seen: string[], bodies: Record<string,
         return json(JOBS);
       case '/rest/v1/rpc/card_is_public':
         return json(true);
+      case '/rest/v1/rpc/enqueue_manual_job':
+        return json('run-queued-e2e');
       case '/rest/v1/rpc/set_card_veto':
         return json({ card_id: UNDEALT.id, board_vetoed: true, horizon: 'next', opens_at: UNDEALT.opens_at });
       case '/rest/v1/public_roles':
@@ -252,6 +295,20 @@ test('at the second factor the board sees and vetoes an undealt agent card, and 
   const jobs = page.getByRole('region', { name: 'Jobs' });
   await expect(jobs.getByText('schedule · skipped: role_paused', { exact: false })).toBeVisible();
   await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();
+  // Rank now and Draft a game card queue board-origin runs with {}, and each run shows its typed output.
+  const rank = page.getByRole('form', { name: 'Job studio_ranking' });
+  await expect(rank.getByText('Moved 11111111 from 2 to 1.')).toBeVisible();
+  await rank.getByLabel('Reason').fill('New cards on now');
+  await rank.getByRole('button', { name: 'Rank now' }).click();
+  await expect(rank.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();
+  const draft = page.getByRole('form', { name: 'Job draft_card' });
+  await expect(draft.getByText('Approved: card 22222222 waits out the cooling window, then is dealt to now.')).toBeVisible();
+  await expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more to build. Graded approved: fits_pillars.')).toBeVisible();
+  await draft.getByLabel('Reason').fill('Short of cards');
+  await draft.getByRole('button', { name: 'Draft a game card' }).click();
+  await expect(draft.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/enqueue_manual_job', body: { p_job: 'studio_ranking', p_card: null, p_reason: 'New cards on now', p_input: {} } });
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/enqueue_manual_job', body: { p_job: 'draft_card', p_card: null, p_reason: 'Short of cards', p_input: {} } });
   await expect(page.getByRole('form', { name: 'Set the cooling window' }).getByLabel('Cooling window (minutes)')).toHaveValue('0');
 
   // The cards read carried the board member's session, never the anon key alone.
