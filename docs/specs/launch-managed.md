@@ -22,7 +22,7 @@ In:
 - The runbook, the env file tooling, and the `vps.md` and `unattended-mode.md` wording.
 
 Out:
-- The `card_patches` table and the overhead ledger value. Those are migrations owned by the DB workstream; the adapter assumes `card_patches (card_id, base_sha, diff, created_at)` and that `record_usage` does not debit the pool for `overhead`.
+- The `card_patches` table and the overhead ledger value. Those are migrations owned by the DB workstream (`20260922000200_dispatcher_lease.sql` and `20260922000000_ledger_overhead.sql`). The adapter writes `card_patches (card_id, base_sha, patch, sha256, bytes, summary, session_id)`, which refuses a row whose digest or length does not match its text, and relies on `record_usage` leaving the pool alone for `overhead`.
 - The throttle and the formula for the budget the adapter receives (owned by the dispatcher workstream).
 - Gate changes beyond `persist-credentials: false`.
 - The role prompts, ROADMAP and BOARD-SETUP.
@@ -57,7 +57,15 @@ A drifted config or a token that can write exits 78. An API that does not answer
    The margin is 150,000 cache-read tokens plus 8,192 output tokens at the model's price. Under one cent, no session is created.
 5. It checks the agent the session reports, puts the session id on the card's start event, and only then sends the card prompt as the first `user.message`.
 
-Each connection opens the event stream, then lists the history and drops events it has already seen, so a dropped stream loses nothing. When the dispatcher aborts (a pause, the ceiling, the wall clock or SIGTERM), it sends `user.interrupt`, waits for idle, then meters and archives the session. `budget_reached` ends the card at its ceiling, and a list cost over the budget alerts the board.
+A failure before the session starts that is not the card's pauses the card, never rejects it, with a failing check that names why, and nothing is spent:
+- `session_unsettled`: an earlier session of the card could not be settled, or the sessions could not be listed.
+- `read_token`: GitHub did not answer the read-token check, rate limited it, or found the token able to write (which also halts the dispatcher).
+- `repo_skills` or `system_prompt`: the base commit carries repository skills, or the system prompt could not be built.
+- `managed_api`: the session could not be created. The API's answer is also recorded as an error event, so a refusal for want of credit is seen for what it is.
+
+If an earlier session of the card had submitted a patch no one answered, that patch is applied and no new session runs.
+
+Each connection opens the event stream, then lists the history and drops events it has already seen, so a dropped stream loses nothing. A stream that cannot be held after five reconnects, or a ledger that refuses a request row, interrupts and settles the session and pauses the card as `stream_lost` or `ledger`. When the dispatcher aborts (a pause, the ceiling, the wall clock or SIGTERM), it sends `user.interrupt`, waits for idle, then meters and archives the session. `budget_reached` ends the card at its ceiling, and a list cost over the budget alerts the board.
 
 **The patch.** The agent runs the export command from its card message. That writes `git diff --cached --no-renames --full-index <base>` to `/mnt/session/outputs/card.patch`. The agent then calls `submit_patch({summary, sha256, bytes})`, which carries no diff.
 
@@ -68,9 +76,9 @@ The dispatcher fetches the file through the Files API. It refuses a file over 1 
 - a path with `..` or `.git`, a path outside the card's lane, or a path on a kernel path;
 - a patch that does not apply at the base.
 
-A refusal writes nothing and goes back to the agent as an error tool result, with one retry, after which the session ends `patch_rejected`. An accepted patch is applied to the card's worktree and stored in `card_patches`. From there the existing lane checks, commit, PR, gate, merge and deploy run.
+A refusal writes nothing and goes back to the agent as an error tool result, with one retry, after which the session ends `patch_rejected`. Bytes that are not valid UTF-8 are refused too, since `card_patches` holds the patch as text. An accepted patch is applied to the card's worktree and stored in `card_patches` with its sha256, byte count, summary and session. From there the existing lane checks, commit, PR, gate, merge and deploy run. The acceptance check reads regular files only, so a symlink a change leaves at a checked path fails it without being read through.
 
-A card re-queued after an interruption is rebuilt from its stored patch with no new session and no new ledger row. A stored patch that no longer applies pauses the card as `patch_conflict` and is discarded.
+A card re-queued after an interruption is rebuilt from its stored patch with no new session and no new ledger row. A stored patch that no longer applies, or whose text no longer hashes to its recorded sha256, pauses the card as `patch_conflict` and is discarded.
 
 **Metering.** Each `span.model_request_end` becomes one ledger row, billed to the studio, with the event id as its request id, so a re-meter writes nothing twice. Cache writes are priced at the five-minute rate. Each session then gets a runtime row at $0.08 per active hour, and a settle row that brings the session's rows up to its reported list cost. `session.ts` writes no rows of its own for such a session. If any row stays unwritten, the session stays unsettled and unarchived for recovery.
 
@@ -85,7 +93,7 @@ If the sessions cannot be listed or settled, every building card is paused as `s
 1. The served build sha.
 2. The served config checks.
 3. Every served `seed-1/config` and `seed-1/content` file equals, byte for byte, its git blob at the merge sha.
-4. The gate is green at the merge sha, waited on for up to 12 minutes. A gate still running at the end of the wait is no verdict, not a pass.
+4. The gate is green at the merge sha, waited on for up to 12 minutes. A gate still running at the end of the wait is no verdict, not a pass: the merge is rolled back as unverified, as any error before a verdict is. Only a dispatcher that stops during the wait leaves the card gated, for recovery to verify.
 
 The headless bot no longer runs on the VPS.
 
@@ -120,12 +128,16 @@ The Oracle Always Free box is now mostly idle, which is the pattern Oracle recla
 - [x] The session's system prompt holds the role prompt and the root and folder `CLAUDE.md` read at the base sha.
 - [x] A base commit that carries repository skills gets no session, and neither does a card with less than a cent of budget.
 - [x] A read token that turns out able to write halts the dispatcher before any session is created.
+- [x] A card the adapter could not start for a reason that is not the card's is paused with a failing check naming why (`session_unsettled`, `read_token`, `repo_skills`, `managed_api`), never rejected, and nothing is spent. A stream that cannot be held pauses it as `stream_lost` after the session is settled and archived.
+- [x] A patch an unsettled earlier session submitted is applied, and no second session runs.
 - [x] `budget_reached` ends the card as `error_max_budget_usd`, and a list cost over the budget alerts the board.
 - [x] An abort becomes `user.interrupt`, the session drains to idle, and it is settled and archived.
 - [x] A dropped stream reconnects, meters every request once, and still answers a pending submission.
 - [x] A submission whose sha256 does not match is refused and the corrected one accepted; an oversize patch file is refused without being downloaded.
 - [x] A second refused patch ends the session as `patch_rejected`, with nothing written.
-- [x] `validateAndApply` refuses, writing nothing, each of: a file outside the lane, a kernel path, a symlink, a gitlink, a rename, a binary, a patch that does not apply, an empty patch, a `..` or `.git` segment, too many bytes, too many files.
+- [x] `validateAndApply` refuses, writing nothing, each of: a file outside the lane, a kernel path, a symlink, a gitlink, a rename, a binary, a patch that does not apply, an empty patch, a `..` or `.git` segment, too many bytes, too many files, bytes that are not valid UTF-8.
+- [x] An accepted patch is stored in `card_patches` with its text, sha256, byte count, summary and session, and read back from the newest row.
+- [x] A symlink at a checked file, to a file outside the worktree or to `/dev/zero`, fails the acceptance check without being read through.
 - [x] A re-queued card with a stored patch is rebuilt and merged with no session and no new ledger row. A stored patch that no longer applies pauses the card as `patch_conflict`, is discarded, and starts no session.
 - [x] Each model request is one ledger row under its event id, with a runtime row and a settle row up to the list cost. A re-meter writes nothing twice, an overcount writes nothing, and a session with an unwritten row is left for recovery.
 - [x] `runAgentSession` on the managed adapter bills from the adapter's rows alone, with no settle of its own.
@@ -152,10 +164,11 @@ The Oracle Always Free box is now mostly idle, which is the pattern Oracle recla
 ## Verification
 
 - `pnpm verify` at the repository root exits 0.
+- `pnpm --filter @backseat/dispatcher typecheck`, which proves the pinned `@anthropic-ai/sdk` types every Managed Agents call the adapter makes (`client.beta.agents`, `environments`, `sessions` with `budget` and `agent_with_overrides`, `files.list` with `scope_id`).
 - `pnpm --filter @backseat/dispatcher test`, which runs the managed, managed-meter, managed-config, patch, recovery-managed, smoke, unattended, startup, attended, factory, config, pipeline and tick tests.
 - `pnpm test:ops`, which runs the env file keys, provision's read-token checks, `read_token_verdict`, `check_ref`, the image with no claude, and the workflow audit.
 - `SANDBOX_CHECK_REPO_ROOT=<the Mac's checkout> pnpm --filter @backseat/dispatcher sandbox:check --positive` on the Mac. The first line must read `PASS: attended sandbox`.
-- Live, in the order of Production steps: the `managed:apply` output, the `--check` output, `provision.sh`'s read-token line, `PASS: toolchain`, the journal lines, and the first card's ledger rows, each quoted here.
+- Live, in the order of Production steps: the `managed:apply` output, the `--check` output, `provision.sh`'s read-token line, `PASS: toolchain`, the journal lines, and the first card's ledger rows, each quoted here. (waits on: the board's allow, GITHUB_READ_TOKEN creation, Console credit, the cutover)
 
 ## Evidence
 
@@ -191,20 +204,23 @@ Criteria to tests:
 - Agent and environment files, and the `managed:apply` planner: `managed-config.test.ts` (the `agent.yaml`, `environment.yaml` and `managed:apply` groups).
 - Config: `config.test.ts` "the managed agent settings" (required one by one, equal tokens refused in either mode, non-fine-grained refused).
 - Containment: `managed.test.ts` "containment", eleven tests, one per refusal. The read-token probe itself is in `managed-config.test.ts` "checkReadToken".
-- Card sessions: `managed.test.ts` "a card session". It covers idle creation, id before spend, the sha256 retry, `patch_rejected`, the oversize refusal, the budget in cents, `budget_reached`, interrupt, reconnect, web-tool refusal, repository skills, and the read token that can write.
-- Patch checks: `patch.test.ts` (`validateAndApply`, `patchTextProblem`, `reportProblem`, `applyStoredPatch`).
+- Card sessions: `managed.test.ts` "a card session". It covers idle creation, id before spend, the sha256 retry, `patch_rejected`, the oversize refusal, the budget in cents, `budget_reached`, interrupt, reconnect, web-tool refusal, repository skills, the read token that can write, and the pauses: a rate-limited read-token check, a session that cannot be created, and a stream that cannot be held.
+- Pausing, not rejecting: `managed.test.ts` "ends as adapter_paused, naming the failing check, when the adapter starts no session for a reason that is not the card"; `pipeline.test.ts` "pauses, not rejects, a card whose adapter started no session for a reason that is not the card".
+- Patch checks: `patch.test.ts` (`validateAndApply`, `patchTextProblem`, `reportProblem`, `applyStoredPatch`), and `createSupabasePatchStore` for the `card_patches` columns written and read.
+- The acceptance check and symlinks: `pipeline.test.ts` "fails the acceptance check, never reading through it, when the session leaves a symlink to a file outside the worktree at the checked file" and the same for `/dev/zero`. With the `lstat` guard removed, the first fails (the card goes on to be rejected as `file_mode` after reading through the link).
 - Stored patches in the pipeline: `pipeline.test.ts` "is rebuilt from the patch at the new base and merged with no session and no new ledger row", and "pauses as patch_conflict, discards the patch and starts no session when the patch no longer applies".
 - Metering: `managed-meter.test.ts`, and `managed.test.ts` "runAgentSession on the managed adapter".
 - Probe: `managed.test.ts` "the startup probe"; `startup.test.ts` "in unattended mode checks containment, then runs the managed probe" and "refuses, exit 78, an adapter that is not the managed one".
-- Recovery: `managed.test.ts` "orphan sessions" and `recovery-managed.test.ts`.
+- Recovery: `managed.test.ts` "orphan sessions" (including "applies the patch an orphan submitted instead of paying for a second session") and `recovery-managed.test.ts`.
 - Smoke: `smoke.test.ts` (the build, gate and seed config groups, and `mergedServedFiles`); `pipeline.test.ts` "smokes a seed card without running card code" and "rolls a seed card back when a served file differs from the merge commit by one byte".
 - Image, provision and CI: `ops.test.mjs` "the image installs no claude CLI, no sandbox tools and no Claude Code settings", "provision.sh read_token_verdict", and "the CI workflows that run card code"; `unattended.test.ts` "has no process-spawn path".
 - Attended settings: `attended.test.ts` "the attended sandbox", five tests.
 
-The attended sandbox, live on the Mac, `sandbox:check --positive` against Claude Code 2.1.139 with `claude-haiku-4-5`. The attempts are listed twice: first as plain Bash, then retried with `dangerouslyDisableSandbox`:
+The attended sandbox, live on the Mac, `SANDBOX_CHECK_REPO_ROOT=/Users/kylesmith/GitHub/peanutgallery pnpm --filter @backseat/dispatcher sandbox:check --positive`, run again on this branch's final attended code, against Claude Code 2.1.139 with `claude-haiku-4-5`. The attempts are listed twice: first as plain Bash, then retried with `dangerouslyDisableSandbox`:
 
 ```
 PASS: attended sandbox
+claude: /Users/kylesmith/.local/bin/claude; model claude-haiku-4-5; repository /Users/kylesmith/GitHub/peanutgallery
 targets present outside the sandbox: id_ed25519=true, .env=true, .env.vps=true
 bash sandbox: attempt=ssh-key outcome=blocked detail=EPERM
 bash sandbox: attempt=repo-env outcome=blocked detail=EPERM
@@ -224,13 +240,27 @@ positive: seed-1 bot passed: PASS: 4 of 4 invariants hold over 36000 simulated s
 positive: node_modules installed before the session: true
 ```
 
-Outside the sandbox, the same keychain item read exits 0 and the same fetch returns HTTP 200, so the blocks above are the sandbox's.
+Outside the sandbox, the same fetch returns HTTP 200 and the keychain item is there (`security find-generic-password -s gh:github.com`, which reads the item's attributes and not the secret, prints `keychain item lookup exit=0`), so the blocks above, exit 44 among them, are the sandbox's.
+
+The settings were checked against the installed command line, not assumed. `claude --version` prints `2.1.139 (Claude Code)`, and `claude --help` lists `--settings <file-or-json>  Path to a settings JSON file or a JSON string to load additional settings from`. Every sandbox key the attended settings use is in that binary (`strings ~/.local/share/claude/versions/2.1.139 | grep -o -E '<keys>' | sort | uniq -c`):
+
+```
+  16 allowRead
+  11 allowUnixSockets
+  13 allowUnsandboxedCommands
+  18 allowWrite
+  26 allowedDomains
+  19 autoAllowBashIfSandboxed
+  45 dangerouslyDisableSandbox
+  25 denyRead
+  14 failIfUnavailable
+```
 
 ## Production steps (need the board's allow)
 
-Nothing below has run. Each writes to the studio's Anthropic organization, GitHub or the VPS.
+Nothing below has run. Each writes to the studio's Anthropic organization, GitHub or the VPS, and each follows this change's merge.
 
-1. Create `GITHUB_READ_TOKEN`: fine-grained, this repository only, Contents read only (`platform/ops/README.md`, Provision step 3). Put it in the Mac's `.env` and export it for `make-dispatcher-env.sh`.
+1. Kyle creates `GITHUB_READ_TOKEN` (`docs/BOARD-SETUP.md`): fine-grained, this repository only, Contents read only (`platform/ops/README.md`, Provision step 3). It goes in the Mac's `.env` and in `.env.vps`, which the operator's shell exports for `make-dispatcher-env.sh`.
 2. On the Mac, `pnpm --filter @backseat/dispatcher managed:apply`. Put the printed `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` in the Mac's `.env`, and quote the output here.
 3. `pnpm --filter @backseat/dispatcher managed:apply -- --check`, quoted. If the API refuses an organization with no credit, the refusal is quoted and this step moves to after the credit purchase.
 4. Regenerate the VPS env file with `make-dispatcher-env.sh`, which now carries `GITHUB_READ_TOKEN` and the three ids. Upload it and run `provision.sh` again. It must prove the read token is denied a write and end with `0 change(s)` on its second run.
@@ -246,7 +276,7 @@ After any change to `platform/agents/managed/*.yaml`, run `managed:apply` again,
 - 22 September 2026: one agent with per-session overrides (the model, and the system prompt from the repository at the base sha), not one agent per role. The role prompts and `CLAUDE.md` change with the repository; a per-role agent would drift from the commit a card builds on.
 - 22 September 2026: the patch travels as a session output file and `submit_patch` carries its sha256 and byte count, not the diff. A diff in a tool call is bounded by the model's output and can be cut off; a file with a checksum cannot be half-delivered unnoticed.
 - 22 September 2026: no `smoke.yml`. Production smoke checks the served build, the served config, served bytes against the merge commit and the gate at the merge sha. The gate already ran the bot on the same bytes, so running it again anywhere only repeats card code.
-- 22 September 2026: the smoke's gate wait is bounded at 12 minutes and the card's smoke window at 15. A gate still running at the end is no verdict, and the card stays gated for the next start rather than being rolled back or passed.
+- 22 September 2026: the smoke's gate wait is bounded at 12 minutes and the card's smoke window at 15. A gate still running at the end is no verdict, so the merge is rolled back as unverified under the kernel's rollback rule; a dispatcher that stops during the wait leaves the card gated for recovery instead.
 - 22 September 2026: the budget keeps back one request: 150,000 cache-read and 8,192 output tokens at the model's price. The platform stops a session only after the request that crosses the limit, so the card's ceiling holds only if that request fits under it.
 - 22 September 2026: cache writes are metered at the five-minute rate, and the settle row brings each session to its reported list cost. The request events do not say which cache duration was written; the list cost is the amount billed.
 - 22 September 2026: unattended mode requires both GitHub tokens to be fine-grained (`github_pat_`), and refuses a read token GitHub would let write. `main` has no branch protection, and the sessions' git proxy forwards REST calls with the read token.
@@ -254,4 +284,6 @@ After any change to `platform/agents/managed/*.yaml`, run `managed:apply` again,
 - 22 September 2026: `platform/ops/managed-settings.json` is deleted with the CLI. `deploy.sh`'s roll-back check now requires the read-only code mount string in the target's unit instead of the settings file.
 - 22 September 2026: the attended sandbox also allows reading the repository's `.git` and one unix socket, tsx's IPC folder. The card's scripts run git in a worktree whose data lives in `.git`, and the seed bot's tsx needs the socket. Neither holds a credential: the dispatcher's token travels in git's environment, never in a file.
 - 22 September 2026: the installed Claude Code 2.1.139 supports every sandbox setting this uses, as `sandbox:check` shows, so no update is needed before attended runs.
+- 22 September 2026: a failure that is not the card's pauses it with a named failing check rather than rejecting it: an earlier session not settled, a read-token check GitHub did not answer, a Managed Agents API or event stream that did not answer, a ledger that refused rows. Rejected is final, and a funded card should not be lost to a rate limit; the board resumes it. The adapter says so by throwing `SessionPaused`, which `session.ts` reports as `adapter_paused` and the pipeline turns into a paused card.
+- 22 September 2026: the stored patch goes into the DB workstream's `card_patches` columns as text with its sha256 and byte count, so a patch that is not valid UTF-8 is refused at submission rather than stored altered.
 - 22 September 2026: `sandbox:check` is a script run by hand on the Mac, not part of `pnpm verify`. It spends on the founder's plan and needs a real CLI, keychain and SSH key.
