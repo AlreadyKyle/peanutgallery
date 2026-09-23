@@ -72,7 +72,7 @@ const FOOTER_LINKS = [
 const H2_ORDER = ['Building now', "Fund what's next", 'Queued', 'The team', 'Shipped', 'Planned next', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned next']);
 // The grounds, as computed colours: band 1 and the top bar signal, band 2 paper, then ink and paper.
-const SIGNAL = 'rgb(26, 47, 200)';
+const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
 const STATUS_LINE =

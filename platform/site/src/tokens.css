@@ -107,7 +107,7 @@
   --space-3: 1.5rem;
   --space-4: 2.5rem;
   --space-5: 4rem;
-  --band-pad: var(--space-3); /* block padding inside a band; --space-4 from 48rem */
+  --band-pad: var(--space-4); /* block padding inside a band; --space-5 from 48rem (the board, 23 Sep 2026: more room between sections) */
 
   /* Layout */
   --wrap: 72rem;
@@ -130,6 +130,6 @@
 
 @media (min-width: 48rem) {
   :root {
-    --band-pad: var(--space-4);
+    --band-pad: var(--space-5);
   }
 }
