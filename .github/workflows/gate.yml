@@ -12,6 +12,10 @@ permissions:
 
 # A newer push to a pull request cancels its older run: the dispatcher reads the gate only at the
 # exact head sha. A push to main keeps one group per sha and is never cancelled.
+#
+# Actions minutes (docs/specs/scale-launch.md): detect selects only the jobs and slow steps a change
+# can affect (platform/gate/changed-paths.sh), the jobs that run card tests cache the pnpm store,
+# and the gate job fails unless every job detect selected passed.
 concurrency:
   group: gate-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -25,6 +29,8 @@ jobs:
       seed: ${{ steps.paths.outputs.seed }}
       platform: ${{ steps.paths.outputs.platform }}
       lane: ${{ steps.paths.outputs.lane }}
+      site: ${{ steps.paths.outputs.site }}
+      functions: ${{ steps.paths.outputs.functions }}
       base: ${{ steps.refs.outputs.base }}
       head: ${{ steps.refs.outputs.head }}
     steps:
@@ -90,13 +96,28 @@ jobs:
           seed=$(echo "$result" | sed -E 's/.*seed=([a-z]+).*/\1/')
           platform=$(echo "$result" | sed -E 's/.*platform=([a-z]+).*/\1/')
           lane=$(echo "$result" | sed -E 's/.*lane=([a-z]+).*/\1/')
+          site=$(echo "$result" | sed -E 's/.*site=([a-z]+).*/\1/')
+          functions=$(echo "$result" | sed -E 's/.*functions=([a-z]+).*/\1/')
           case "$BRANCH" in
             *-code) lane=code ;;
+          esac
+          # A flag that is not exactly true or false would skip a job, so it fails the gate instead.
+          for flag in "seed=$seed" "platform=$platform" "site=$site" "functions=$functions"; do
+            case "${flag#*=}" in
+              true|false) ;;
+              *) echo "detect: malformed flag $flag in: $result"; exit 1 ;;
+            esac
+          done
+          case "$lane" in
+            config|code) ;;
+            *) echo "detect: malformed lane $lane in: $result"; exit 1 ;;
           esac
           echo "seed=$seed" >> "$GITHUB_OUTPUT"
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
           echo "lane=$lane" >> "$GITHUB_OUTPUT"
-          echo "seed=$seed platform=$platform lane=$lane branch=$BRANCH"
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "functions=$functions" >> "$GITHUB_OUTPUT"
+          echo "seed=$seed platform=$platform lane=$lane site=$site functions=$functions branch=$BRANCH"
       # The secret scan, the deny-list and the runtime-token scan read the change as committed, with
       # no install and no card code run.
       - name: Scan the change before any card code runs
@@ -174,18 +195,26 @@ jobs:
         run: pnpm test:ops
       - name: Docs tests
         run: pnpm test:docs
+      # The Deno tests read only platform/supabase, so detect selects them only for a change that can
+      # reach it.
       - uses: denoland/setup-deno@v2
+        if: needs.detect.outputs.functions == 'true'
         with:
           deno-version: v2.7.13
       - name: Stripe webhook function tests
+        if: needs.detect.outputs.functions == 'true'
         run: pnpm test:functions
       # The end-to-end suite serves a build. This one is only for the suite: the build job builds
-      # and scans the site on its own runner.
+      # and scans the site on its own runner. Detect selects the suite only for a change that can
+      # reach the site or the role specs it reads.
       - name: Build the site for the end-to-end suite
+        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site build
       - name: Install Chromium for Playwright
+        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
       - name: Site end-to-end
+        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site e2e
 
   # A fresh runner that never runs card tests builds each selected folder and scans the build, and
@@ -197,7 +226,7 @@ jobs:
   build:
     name: build
     needs: detect
-    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.platform == 'true'
+    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.site == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -224,7 +253,7 @@ jobs:
           LANE: ${{ needs.detect.outputs.lane }}
         run: bash platform/gate/ship-gate.sh --phase build --folder seed-1 --lane "$LANE"
       - name: Build the site and scan the build
-        if: needs.detect.outputs.platform == 'true'
+        if: needs.detect.outputs.site == 'true'
         run: bash platform/gate/ship-gate.sh --phase build --folder platform
       - name: Headless bot
         if: needs.detect.outputs.seed == 'true'
@@ -240,13 +269,16 @@ jobs:
     timeout-minutes: 5
     steps:
       # A skipped job passes only when detect ran and did not select it: a failed detect skips every
-      # other job, so detect's own result and each selected job's result are checked by name.
+      # other job, so detect's own result and each selected job's result are checked by name. A flag
+      # that is not exactly true or false fails, so a missing output never reads as "not selected".
       - name: Require detect and every job it selected to pass
         env:
           RESULTS: ${{ toJSON(needs) }}
           DETECT: ${{ needs.detect.result }}
           SEED: ${{ needs.detect.outputs.seed }}
           PLATFORM: ${{ needs.detect.outputs.platform }}
+          SITE: ${{ needs.detect.outputs.site }}
+          FUNCTIONS: ${{ needs.detect.outputs.functions }}
           LANE: ${{ needs.detect.outputs.lane }}
           SEED_CODE: ${{ needs.seed-code.result }}
           PLATFORM_JOB: ${{ needs.platform.result }}
@@ -258,10 +290,16 @@ jobs:
             exit 1
           fi
           [ "$DETECT" = success ] || { echo "detect did not pass: $DETECT"; exit 1; }
+          for flag in "seed=$SEED" "platform=$PLATFORM" "site=$SITE" "functions=$FUNCTIONS"; do
+            case "${flag#*=}" in
+              true|false) ;;
+              *) echo "detect gave a malformed flag: $flag"; exit 1 ;;
+            esac
+          done
           want() {
             [ "$2" = success ] || { echo "detect selected $1 and it did not pass: $2"; exit 1; }
           }
           if [ "$SEED" = true ] && [ "$LANE" = code ]; then want seed-code "$SEED_CODE"; fi
-          if [ "$PLATFORM" = true ]; then want platform "$PLATFORM_JOB"; fi
-          if [ "$SEED" = true ] || [ "$PLATFORM" = true ]; then want build "$BUILD"; fi
+          if [ "$PLATFORM" = true ] || [ "$SITE" = true ] || [ "$FUNCTIONS" = true ]; then want platform "$PLATFORM_JOB"; fi
+          if [ "$SEED" = true ] || [ "$SITE" = true ]; then want build "$BUILD"; fi
           echo "gate passed"
