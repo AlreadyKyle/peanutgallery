@@ -111,6 +111,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | Spec | Status | What is left |
 |---|---|---|
 | `specs/announcement.md` | draft | the clip, the drafts and Go live, the last steps before the announcement |
+| `specs/gate-local-output.md` | built | none |
 | `specs/rename.md` | draft | the board's choice of the new name and domain; the migration then runs from the spec and `scripts/rename.mjs` |
 
 ## Standing facts for any session
