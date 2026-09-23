@@ -341,4 +341,37 @@ describe('tick', () => {
     expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_eligible_card' });
     expect(db.cards.map((c) => c.stage)).toEqual(['funded', 'funded', 'funded']);
   });
+
+  // docs/specs/money-safety.md: a red main would fail every card's gate for a break it did not cause.
+  it("claims nothing while main's gate has failed, alerts once per red sha, and claims again once main is green", async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const started: string[] = [];
+    const alert = new RecordingAlerter();
+    let main: { sha: string; status: import('../src/github.js').GateStatus } = { sha: 'a'.repeat(40), status: { state: 'fail', conclusion: 'failure' } };
+    const mainGate = async () => main;
+    expect(await tick(deps(db, started, { alert, mainGate }))).toEqual({ action: 'sleep', reason: 'main_red' });
+    expect(await tick(deps(db, started, { alert, mainGate }))).toEqual({ action: 'sleep', reason: 'main_red' });
+    expect(alert.messages).toEqual([
+      "main's gate failed at aaaaaaaa (failure), so no card is claimed until main is green again. Cards stay funded with their money; fix main with a pull request.",
+    ]);
+    expect(db.claims).toBe(0);
+    // A cancelled or pending gate on main does not stop claiming: the card's own gate decides.
+    main = { sha: 'b'.repeat(40), status: { state: 'fail', conclusion: 'cancelled' } };
+    expect((await tick(deps(db, started, { alert, mainGate }))).action).toBe('started');
+    db.cards = [card()];
+    main = { sha: 'c'.repeat(40), status: { state: 'pending' } };
+    expect((await tick(deps(db, started, { alert, mainGate }))).action).toBe('started');
+    expect(started).toEqual([card().id, card().id]);
+  });
+
+  it("claims nothing while main's gate cannot be read, so no session is spent on a card that could not be pushed", async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const mainGate = async (): Promise<never> => {
+      throw new Error('github ref main: http 502');
+    };
+    expect(await tick(deps(db, [], { mainGate }))).toEqual({ action: 'sleep', reason: 'main_unreadable' });
+    expect(db.claims).toBe(0);
+  });
 });

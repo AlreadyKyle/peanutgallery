@@ -7,6 +7,7 @@ import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
 import type { Card, Db, Pool, StudioState } from './db.js';
+import { isInfrastructureConclusion, type GateStatus } from './github.js';
 import { haltReason } from './halt.js';
 import { errorMessage, type Logger } from './log.js';
 import { runnableInOrder } from './select.js';
@@ -43,6 +44,8 @@ export interface TickDeps {
   runCard: (card: Card) => Promise<void>;
   log: Logger;
   alert: Alerter;
+  // main's head and its gate status (docs/specs/money-safety.md); unset, main is not checked.
+  mainGate?: () => Promise<{ sha: string; status: GateStatus }>;
 }
 
 // Each claim holds the lease this long; the tick renews it every DISPATCHER_TICK_MS, so it lapses only
@@ -55,7 +58,7 @@ export function leaseTtlSeconds(tickMs: number): number {
 }
 
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' }
+  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
@@ -97,6 +100,8 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
     concurrency: concurrency(pool.balance_usd, studio.agent_hourly_rate_usd, deps.mode, deps.maxConcurrency),
   });
   if (!decision.ok) return { action: 'sleep', reason: decision.reason };
+  const main = await mainBlocks(deps);
+  if (main) return { action: 'sleep', reason: main };
 
   // An attended session is billed to the founder, so the pool bounds nothing: its budget is the card
   // ceiling alone (session.ts).
@@ -112,6 +117,33 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   }
   await alertMoney(deps, studio, money, first!);
   return { action: 'sleep', reason: first!.reason };
+}
+
+type MainReason = 'main_red' | 'main_unreadable';
+
+// Every card's gate runs on main's tree, so while main's own gate has failed no card is claimed: its
+// gate would fail for a break it did not cause (docs/specs/money-safety.md). The board hears once per
+// red sha, and claiming resumes by itself once main is green. A main gate that is pending or missing
+// lets cards run, since their own gate decides; one GitHub could not read stops claiming, so no session
+// is spent on a card that could not be pushed.
+async function mainBlocks(deps: TickDeps): Promise<MainReason | null> {
+  if (!deps.mainGate) return null;
+  let main: { sha: string; status: GateStatus };
+  try {
+    main = await deps.mainGate();
+  } catch (error) {
+    deps.log.warn('tick', "main's gate could not be read; claiming nothing", { error: errorMessage(error) });
+    return 'main_unreadable';
+  }
+  const { sha, status } = main;
+  if (status.state === 'fail' && !isInfrastructureConclusion(status.conclusion)) {
+    await deps.alert.notifyOnce(
+      `main_red:${sha}`,
+      `main's gate failed at ${sha.slice(0, 8)} (${status.conclusion}), so no card is claimed until main is green again. Cards stay funded with their money; fix main with a pull request.`,
+    );
+    return 'main_red';
+  }
+  return null;
 }
 
 async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
