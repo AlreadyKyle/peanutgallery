@@ -89,7 +89,7 @@ Five sizes on a 1.2 ratio from a 17px body; every font-size is one of them **(te
 
 Money and counts use tabular figures.
 
-**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. `--band-pad` is the block padding inside a band: `--space-3` below 48rem, `--space-4` from 48rem. `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
+**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. `--band-pad` is the block padding inside a band and the space between sections in one band: `--space-4` below 48rem, `--space-5` from 48rem (raised on 23 September 2026 at the board's call that sections sat too close). `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
 
 **Focus.** `:focus-visible` is a 3px solid outline in `--focus-colour` at a 2px offset **(tested)**: signal on paper (9.19; 7.16 on the work face), paper on the signal plate (9.19) and in an ink band (18.88) **(e2e)**. The offset gap, which shows the ground, keeps a paper ring apart from a paper-filled button or Contribute.
 

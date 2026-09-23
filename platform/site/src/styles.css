@@ -283,7 +283,7 @@ main > .band {
 }
 
 .band > * + * {
-  margin-top: var(--space-4);
+  margin-top: var(--band-pad);
 }
 
 .band > .section,
@@ -350,9 +350,9 @@ main > .band:first-child,
   border: 0;
 }
 
-/* Band 1 sits close under the top bar it shares a ground with. */
+/* Band 1 sits under the top bar it shares a ground with, with room for the headline to breathe. */
 main > .band:first-child {
-  padding-top: var(--space-2);
+  padding-top: var(--space-4);
 }
 
 /* Top bar ---------------------------------------------------------------
