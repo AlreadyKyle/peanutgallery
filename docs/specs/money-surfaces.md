@@ -36,13 +36,13 @@ Out:
 **/contribute.**
 - Pick for me stays first and names the first card in `money.funding_order`: "Next in line: <title>". With no card in the order, it says the money waits in Not on a card yet and funds the next card that opens.
 - The card choices are exactly the `funding_order` cards, in that order, in one list (no category groups, which could reorder them), each linking the Payment Link with its card's `client_reference_id`. Under them, one line: "Anything beyond a card's target funds the next cards in line."
-- A card's live Fund this button (on /contribute, /roadmap or anywhere `Funding.tsx` renders) shows only when the card is in `funding_order`.
+- A card's live Fund this button (on /contribute, /roadmap or anywhere `Funding.tsx` renders) shows only when the card is in `funding_order`. Home's Fund what's next and its status line count and draw as open for funding only the open cards in `funding_order`, so a card that takes no money (a vetoed card) is neither called open nor drawn without its button among cards that have one; with `public_money` unread they keep every open card, none with a button.
 - When `public_money` did not load, /contribute offers Pick for me with no card named ("Your contribution funds whatever the agents build next."), "Not available right now." in place of the card choices, and no Fund this buttons anywhere. Pick for me money is safe without the order: it waits in Not on a card yet and the waterfall places it.
 
 **/ledger, the funding band.**
 - Not on a card yet, from `not_on_card_usd`, a figure in the same list as the pool, the reserve, the emergency fund and held money, described as money given with no card or beyond a card's target, waiting for the next card to open.
 - When `short_usd` is above 0, a line says waiting cards are short by that amount until new money arrives.
-- While `board_test_usd` is above 0: "Includes the board's own test payment of $X; it funds no card."
+- While `board_test_usd` is above 0: "The pool includes $X of the board's own test payment; it funds no card." `board_test_usd` is the payment's agent credit, the part of it in the pool ($0.5019 of the $1.00 in production), not the payment.
 
 **/ledger, a Money in band.**
 - Eight figures, each with a one-line description: received (with the number of payments), Stripe fees, refunded, disputed (net of disputes won), the 10% reserve, the studio's income, the emergency fund and agent credit. Held money and corrections show only when not zero. They add up: received − fees − refunded − disputed + corrections = reserve + studio + emergency fund + held + agent credit (money-logic's identity; the board's test payment is in none of them, by money-logic's SQL).
@@ -58,7 +58,7 @@ Out:
 
 **The paused notice and home's status line** say the same sentence, `pausedSentence(snapshot)`: the reason for `awaiting_credit` (waiting for a Stripe payout to buy the agents' model credit), `spend_limit` (the monthly limit on model usage), `incident` (a problem the board is checking) or `board`; the general line when the reason is missing or has no sentence; nothing when not paused or the studio row did not load. It names the category only, never who paused or when.
 
-**Anything that did not load** says "Not available right now." instead of a zero or an empty band.
+**Anything that did not load** says "Not available right now." instead of a zero or an empty band. A single figure whose read failed says it as a muted line under its label (`Stat` with no value), never in the figure's place.
 
 **The fixed rule** becomes "The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions."
 
@@ -76,7 +76,7 @@ Out:
 - [x] Home's status line and the paused notice on /contribute show the identical `pausedSentence` for each of `awaiting_credit`, `spend_limit`, `incident` and `board`, the general line when `pause_reason` is null, and nothing when not paused or the studio row did not load (unit tests and `paused.spec.ts`).
 - [x] `MoneyIn.tsx` and `Stopped.tsx` are in `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` and the parity test passes; `legal.fixedRules[0]` is the new sentence and `docs.test.mjs` still finds the ledger in it; `BACKLOG.md` and PLAN §4 Not built yet no longer list "Split aggregate on the meter" or "Handling a dispute the studio wins"; PLAN §4 The Board's public list names money in, the reconciliation status, Not on a card yet and the shortfall, and stopped cards with their money trail.
 - [x] With `live-studio.ts` carrying `public_money` and `public_stopped_cards` rows (a paused and a rejected card), `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on /contribute and /ledger at 375, 768 and 1440.
-- [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games.
+- [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games. (Open: the local preview reads production, which has no `public_money` until money-logic's migration is applied; production step 1 closes the local half before the merge. Every branch of the four checks has printed PASS against a stand-in database, Evidence.)
 
 ## Verification
 
@@ -89,9 +89,10 @@ Out:
 
 ## Production steps
 
-1. Netlify builds the site from main on merge. Confirm the served build sha equals the merge sha.
-2. Run `pnpm --filter @backseat/site exec node scripts/live-check.mjs` against https://peanutgallery.games and quote the PASS.
-3. Record the Evidence and set this spec to done.
+1. Before the merge, once money-logic has merged and its production steps have applied its migration (`public_money` and `public_stopped_cards` answer the anon key): build this branch with `netlify.toml`'s production values, `vite preview` it on a free port, run `node platform/site/scripts/live-check.mjs http://localhost:<port> --allow-no-data`, and quote a PASS in which the next-in-line (or waits), reconciliation, received (or "No contributions yet.") and payout-sentence checks print PASS, not SKIP. Tick the local half of the last criterion. Do not merge until it passes.
+2. Netlify builds the site from main on merge. Confirm the served build sha equals the merge sha.
+3. Run `pnpm --filter @backseat/site exec node scripts/live-check.mjs` against https://peanutgallery.games and quote the PASS.
+4. Record the Evidence and set this spec to done.
 
 Board items (listed, none blocks this pull request):
 - /ledger says "Not yet reconciled with Stripe" until `STRIPE_READ_KEY` exists (BOARD-SETUP step 4) and the Controller's first reconcile passes.
@@ -121,7 +122,7 @@ exit 0
 
 The kernel lists: `platform/dispatcher/test/worktree.test.ts` (the `KERNEL_PATHS` = `kernel-paths.txt` parity) and `site-kernel.test.ts` (`MoneyIn.tsx`, `Stopped.tsx` and `PausedNotice.tsx` are kernel and import only kernel files): `Tests  36 passed (36)`; `bash platform/gate/test/run-tests.sh`: `PASS: gate tests passed=508`.
 
-`E2E_PORT=4457 pnpm --filter @backseat/site e2e` (the full suite, `design.spec.ts` axe WCAG 2.2 AA and `layout-balance.spec.ts` at 320 to 1440 on the launch-shaped fixture, now carrying `public_money` and a paused and a rejected card):
+`E2E_PORT=4457 pnpm --filter @backseat/site e2e` (the full suite; at this run `layout-balance.spec.ts` audited the launch-shaped fixture, carrying `public_money` and a paused and a rejected card, at 320 to 1440, but `design.spec.ts` ran axe on `DEFAULT_STUDIO` only, at 375 and 1440, with no stopped cards, shortfall or test payment line; the review fixes below add that):
 
 ```
 Running 129 tests using 4 workers
@@ -133,7 +134,7 @@ It includes the new `e2e/money.spec.ts` (/contribute follows the funding order; 
 
 `E2E_ROUTE_SHOTS=<folder> E2E_PORT=4457 pnpm --filter @backseat/site e2e`: /contribute and /ledger at 375, 768 and 1440 were looked at (the Funding band with Not on a card yet and the test payment line, Money in on ink, Stopped cards with a paused and a rejected row, /contribute's next-in-line line and ordered choices). One fix came of it: the waterfall line sat flush under the last choice, and the list now has `--space-3` under it; the second pass at 1440 showed the gap.
 
-The live check against a local `vite preview` of a build with `netlify.toml`'s production values (`node platform/site/scripts/live-check.mjs http://localhost:4458 --allow-no-data`):
+The live check against a local `vite preview` of a build with `netlify.toml`'s production values (`node platform/site/scripts/live-check.mjs http://localhost:4458 --allow-no-data`). It FAILED, and every new money check SKIPPED, so this run does not meet the last criterion:
 
 ```
 FAIL live-check http://localhost:4458 passed=211 failed=2 skipped=11
@@ -146,6 +147,58 @@ SKIP /ledger reconciliation line and money in: the site has no live data
 ```
 
 The two failures are the reads of `public_money` and `public_stopped_cards`, which production does not have until money-logic's migration is applied (404, `PGRST205`); every route passed its status, h1, bands, overflow and no-dead-space checks at both widths. The money checks run against production after the deploy (production step 2).
+
+
+### Review fixes
+
+Five review findings and one the fixes' own live check found, each with a test that failed before its fix (Decisions, "review"): the test payment line said "test payment of $0.50" for a $1.00 payment; `design.spec.ts` never drew the money bands; five Managed Agents stop codes had no words; the live check's money checks had never printed PASS; an unread Not on a card yet put a sentence in the figure's slot (a 438px row at 320px, the label 46px wide); and an open card left out of the funding order misaligned home's card rows.
+
+Before the fixes, the new layout variants failed: `/ledger balance: side-by-side blocks in div.stat "Not on a card yetMoney given with no car" differ by 369px (26 / 395)` at 320px, and `/ card: funding bars misaligned by 135px in a row of ul.card-grid.fund-grid` at 768 and 1440 (113px at 1024). Without the five new words, `Stopped.test.tsx` failed with `card_spend: expected 'It stopped on a check the board is lo…' not to be 'It stopped on a check the board is lo…'`.
+
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+
+```
+platform/board test:       Tests  71 passed (71)
+platform/supabase test:       Tests  286 passed (286)
+platform/site test:       Tests  420 passed (420)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+PASS: payment-host-scan files=7 allowed=0
+PASS: banned-phrases files=499 paths=577 message=yes
+docs.test.mjs: pass 15, fail 0
+rename.test.mjs: pass 6, fail 0
+exit 0
+```
+
+`E2E_PORT=4461 pnpm --filter @backseat/site e2e`: `145 tests`, `5 skipped`, `140 passed (2.6m)`. It includes `design.spec.ts`'s new money-band block: axe WCAG 2.2 AA, no sideways scroll and no animation under reduced motion on /contribute and /ledger at 375, 768 and 1440, on the launch-shaped studio (the test payment line, Money in, a paused row with its tag and a Didn't ship row), with a $0.45 shortfall and with both money reads failing. Each variant first checks that the parts it audits are drawn (9 passed). `layout-balance.spec.ts` adds the money reads failing (/ledger, /contribute, / at 320 to 1440) and an open card left out of the funding order (/ and /contribute at 768 to 1440).
+
+`E2E_ROUTE_SHOTS=<folder> E2E_PORT=4461 pnpm --filter @backseat/site e2e`: /contribute and /ledger at 375, 768 and 1440 were looked at, as were /ledger's Funding band with both money reads failing (320 to 1440) and home with a card left out of the order (375 to 1440). At 320px the unread Not on a card yet row is now 141px: the label and description are full width, with "Not available right now." as a muted line under them. The Funding band reads "The pool includes $0.50 of the board's own test payment; it funds no card." Home with five of six cards in the order shows five cards with each row's bars level, and the status line says 5.
+
+The live check's new money checks, against a local build served with the launch-shaped fixture on the same origin (the scratch harness in Decisions; `node scripts/live-check.mjs http://127.0.0.1:4466`, three data states):
+
+```
+PASS live-check http://127.0.0.1:4466 passed=221 failed=0 skipped=5   (paused for awaiting_credit, 2 payments, never reconciled)
+PASS home status line says the payout sentence while paused for awaiting_credit
+PASS Fund the next card in line says "Next in line: Stop the unlock count from showing more unlocks than exist", the first of 6 card choices
+PASS /contribute says the payout sentence while paused for awaiting_credit: "The agents are paused while the studio waits for Stripe to pay out contributions, ..."
+PASS /ledger shows exactly one reconciliation line: ["Not yet reconciled with Stripe."]
+PASS /ledger received $3.00 matches public_money.received_usd $3.00 (2 payments)
+
+PASS live-check http://127.0.0.1:4466 passed=216 failed=0 skipped=9   (not paused, no payments, empty order, reconciled)
+PASS status line: No card is open for funding right now.
+PASS Fund the next card in line says the money waits: "No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens." with 0 card choices
+PASS /ledger shows exactly one reconciliation line: ["Reconciled with Stripe on 23 Sep 2026."]
+PASS /ledger says No contributions yet. with public_money.payments 0
+
+PASS live-check http://127.0.0.1:4466 passed=219 failed=0 skipped=7   (paused by the board, one card in the order, reconciled)
+PASS status line: 1 card is open for funding. The board has paused the agents. ...
+PASS Fund the next card in line says "Next in line: Add Quiet rooms, a fourteenth unlock after Polished rails", the first of 1 card choices
+PASS /ledger shows exactly one reconciliation line: ["Reconciled with Stripe on 23 Sep 2026."]
+PASS /ledger received $3.00 matches public_money.received_usd $3.00 (2 payments)
+```
+
+The third state first FAILED on `1440px / no dead space: card: funding bars misaligned by 135px`: the five open cards outside the order kept their places without a button. That is how home's fund group came to follow the funding order. The SKIP lines are the board site's address (BOARD_SITE_URL unset), /board's redirect and og:image (local server) and the www redirect (production only). This is not the criterion's local preview, which reads production; production step 1 runs that.
 
 
 ## Decisions
@@ -161,13 +214,17 @@ The two failures are the reads of `public_money` and `public_stopped_cards`, whi
 - 2026-09-23 (board defaults): card naming is the Payment Link's `client_reference_id`, already on main; the /thanks redirect is a board step (BOARD-SETUP step 12); Discord is not touched.
 - 2026-09-23 (build): the `awaiting_credit` sentence drops "Before launch" and "the first": the dispatcher also writes `awaiting_credit` whenever the Console credit runs out after launch (`pipeline.ts`), so the sentence has to be true then too. The other three reasons, which the agreed spec named but did not word, are in the Appendix.
 - 2026-09-23 (build): /contribute's choices are one list in the funding order. The category groups it had (Dust, The studio) would reorder the choices whenever the two categories interleave; with the platform lane closed only Dust has cards anyway. `.choice-group` styles are gone.
-- 2026-09-23 (build): Not on a card yet is a row in the Funding band's own list of figures (`Meter` takes extra rows and lines), so the band keeps one list and one hairline rhythm; with `public_money` unread the row's figure says "Not available right now.".
+- 2026-09-23 (build): Not on a card yet is a row in the Funding band's own list of figures (`Meter` takes extra rows and lines), so the band keeps one list and one hairline rhythm; with `public_money` unread the row says "Not available right now." as a muted line under its label (see the review decision below).
 - 2026-09-23 (build): `snapshot.money`, `snapshot.stopped` and `snapshot.pauseReason` are optional on the `Snapshot` type, like `platformLaneOpen`: the loader always sets them, and a sample or test snapshot without them reads as not loaded (no card takes money, no stopped rows, the general paused line). A malformed figure or a missing `public_money` row names `money` missing.
-- 2026-09-23 (build): `failingCheckWords` covers every code the dispatcher writes today (read from `pipeline.ts`, `recovery.ts`, `credit.ts` and the Managed Agents adapter) and `cancelled_by_board`; a unit test checks each entry is a sentence and no entry is a code, and the stage fallback covers any code added later.
+- 2026-09-23 (build, corrected in review): `failingCheckWords` covers every code written on a stopped card today: `pipeline.ts` (CardStop, InfraStop, `PAUSING_OUTCOMES`, the gate's infrastructure checks), `worktree.ts`'s commit checks, `credit.ts`'s `REFUSAL_CHECK`, `recovery.ts`, the Managed Agents adapter's `SessionPaused` codes and `cancelled_by_board`. The build first missed five adapter codes (`card_spend`, `read_token`, `repo_skills`, `system_prompt`, `ledger`), which showed the generic fallback; they now have words. `Stopped.test.tsx` lists every such code by hand and fails when one has no words (the trimmed spec cut a test that scans the dispatcher's sources, so the list is kept by hand), a second test checks each entry is a sentence and no entry is a code, and the stage fallback covers any code added later.
 - 2026-09-23 (build): the paused state tag on a Stopped row draws the pause glyph inline in `Stopped.tsx` with the word from `copy.statusPaused`: a kernel file may not import `Glyph.tsx` (`site-kernel.test.ts`), and the unit test checks the tag matches `STATE_TAGS.paused`. A Didn't ship row carries no state tag; its list heading says it.
 - 2026-09-23 (build): home's status line marks itself `data-balance="ignore"` while it carries the pause glyph. The glyph is a 16px marker beside a sentence, and the reason sentences are long enough that the layout audit read the pair as two unbalanced columns at 320px.
 - 2026-09-23 (build): the tests live where the code's tests already were: `payment.ts`'s in `cards.test.ts` (there is no `payment.test.ts`), with a shared `books()` row in `src/lib/books.test-fixture.ts`. `live-studio.ts` is paused for `awaiting_credit`, carries two contributions, the board's $1 test payment and the open cards in its funding order, and one paused and one rejected card; the layout-balance "home with n open cards" variants put every open card in the order, and the empty-studio variant adds "No contributions yet." and /contribute.
 - 2026-09-23 (build): the route screenshots use the launch-shaped fixture, not production: production has no `public_money` or `public_stopped_cards` until money-logic's migration is applied, so production data would show only "Not available right now." in the new parts. A local preview built with `netlify.toml`'s production values was live-checked as well (Evidence).
+- 2026-09-23 (review): the test payment line says "The pool includes {usd} of the board's own test payment; it funds no card." `board_test_usd` is the payment's agent credit ($0.5019 of the $1.00 in production), so "test payment of $0.50" would have understated the payment; the pool is where that credit sits. `live-studio.ts`, `money.spec.ts` and the unit fixtures carry 0.5019, so the e2e run and the screenshots show the line production will show, and BOARD-SETUP step 12 quotes it.
+- 2026-09-23 (review): a figure whose read failed is `Stat` with no value: the row stacks "Not available right now." under its label as a muted body line, the same treatment as a band whose read failed. A sentence in the figure's slot (lead size, no wrap) squeezed the label to 46px at 320px (a 438px row). `layout-balance.spec.ts` audits /ledger, /contribute and / with both money reads failing at 320, 375, 768 and 1440.
+- 2026-09-23 (review): home's fund group follows the funding order. The stand-in live check (Evidence) found that an open card the order leaves out (a vetoed card) stayed in Fund what's next without a button, misaligning its row's bars by 113 to 135px at 768 to 1440, while the status line counted it as open for funding. `groupCards` takes `openForFunding(snapshot)` (`payment.ts`, kernel), so home counts and draws only the cards that take money, as /contribute offers them; with the order unread nothing changes (every open card, no buttons). `layout-balance.spec.ts` audits that state.
+- 2026-09-23 (review): the live check's new money checks were exercised before production has `public_money` by serving a local build and the launch-shaped fixture on one origin (a scratch harness, not committed: the site's reads stay same-origin under the enforced policy, and a copy of `live-check.mjs` read a `netlify.toml` pointing at it). The criterion's local half stays open until production step 1 runs it against production data.
 
 ## Appendix: strings
 
@@ -182,7 +239,7 @@ In `legal.ts`, with money-logic's column names:
 > reconciledOn: Reconciled with Stripe on {date}.
 > notReconciled: Not yet reconciled with Stripe.
 > waterfallLine: Anything beyond a card's target funds the next cards in line.
-> boardTestLine: Includes the board's own test payment of {usd}; it funds no card.
+> boardTestLine: The pool includes {usd} of the board's own test payment; it funds no card.
 > pauseReasons.awaiting_credit: The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.
 > pauseReasons.spend_limit: The agents are paused because the studio reached its monthly limit on model usage. Funded cards keep their money and wait in the queue until the board resumes them.
 > pauseReasons.incident: The agents are paused while the board checks a problem. Funded cards keep their money and wait in the queue until the board resumes them.
