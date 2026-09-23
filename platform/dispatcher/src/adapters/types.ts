@@ -20,6 +20,10 @@ export interface SessionSpec {
   folder: CardFolder;
   maxTurns: number;
   maxBudgetUsd: number;
+  // The card's spend (cards.actual_usd) when maxBudgetUsd was worked out. The managed adapter settles
+  // the card's earlier sessions first and lowers the budget by whatever they add to it; it refuses a
+  // card session without this. Absent for the probe and the sandbox check.
+  spentUsd?: number;
   // The executor role, for the ledger rows an adapter writes itself (the managed adapter); null for
   // the probe.
   roleId?: string | null;
