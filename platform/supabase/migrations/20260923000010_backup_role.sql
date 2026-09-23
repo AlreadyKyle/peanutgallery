@@ -41,9 +41,19 @@ $$;
 -- Everything here except the password, which a second run must not touch.
 -- inherit lets it use pg_read_all_data when that grant is allowed below;
 -- default_transaction_read_only keeps a mistyped write from landing even if a
--- grant were ever widened.
-alter role peanutgallery_backup with login nosuperuser nocreatedb nocreaterole noreplication inherit connection limit 4;
+-- grant were ever widened. Only a superuser may name SUPERUSER or REPLICATION
+-- in an alter role, and the project owner is not one, so those two are checked
+-- instead: a login that has either stops the migration.
+alter role peanutgallery_backup with login nocreatedb nocreaterole inherit connection limit 4;
 alter role peanutgallery_backup set default_transaction_read_only = on;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'peanutgallery_backup' and (rolsuper or rolreplication)) then
+    raise exception 'peanutgallery_backup is a superuser or has replication; drop it by hand and run this file again';
+  end if;
+end
+$$;
 
 do $$
 begin

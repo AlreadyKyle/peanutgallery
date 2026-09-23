@@ -1483,6 +1483,13 @@ describe("backup-role migration", () => {
     expect(backupSql).toContain("alter role peanutgallery_backup set default_transaction_read_only = on;");
   });
 
+  it("never names SUPERUSER or REPLICATION in an alter role, which the project owner may not do, and checks them instead", () => {
+    // Production refused the first version: only a superuser may alter those two attributes.
+    expect(withoutComments(backupSql)).not.toMatch(/alter role peanutgallery_backup with[^;]*(superuser|replication)/);
+    expect(backupSql).toContain("alter role peanutgallery_backup with login nocreatedb nocreaterole inherit connection limit 4;");
+    expect(backupSql).toContain("(rolsuper or rolreplication)) then\n    raise exception");
+  });
+
   it("grants reads only: select on every table and sequence, never a write", () => {
     const grants = withoutComments(backupSql)
       .split("\n")
