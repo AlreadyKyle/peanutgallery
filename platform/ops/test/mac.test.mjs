@@ -515,19 +515,42 @@ describe('backup-mac.sh', () => {
     }
   });
 
-  // No dump carries pg_cron's jobs, so the restore runbook schedules each one the migrations schedule.
-  test('the restore runbook schedules every pg_cron job a migration schedules, and checks cron.job', () => {
+  // The dumps carry public and money only. What the migrations make outside them (a trigger on
+  // auth.users, Realtime's tables, the backup login's grants, pg_cron's jobs) a restore makes with
+  // after-restore.sql, so every such statement in the migrations must be there.
+  test('after-restore.sql makes everything the migrations make outside the dumped schemas, and both restore runbooks run it', () => {
     const migrations = path.join(REPO_ROOT, 'platform', 'supabase', 'migrations');
-    const jobs = readdirSync(migrations)
+    const sql = readdirSync(migrations)
       .filter((file) => file.endsWith('.sql'))
-      .flatMap((name) => [...readFileSync(path.join(migrations, name), 'utf8').matchAll(/cron\.schedule\(('[^']+', '[^']+', '[^']+')\)/g)].map((match) => match[1]));
+      .sort()
+      .map((name) => readFileSync(path.join(migrations, name), 'utf8'))
+      .join('\n');
+    const after = read('platform/ops/after-restore.sql');
+    const flat = (text) => text.replace(/\s+/g, ' ').trim();
+    const dumped = new Set(['public', 'money']);
+
+    const jobs = [...sql.matchAll(/cron\.schedule\(('[^']+', '[^']+', '[^']+')\)/g)].map((match) => match[1]);
     for (const name of ['credit-held-contributions', 'waterfall-sweep']) assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
+    for (const job of jobs) assert.ok(after.includes(`select cron.schedule(${job});`), `after-restore.sql schedules ${job}`);
+
+    const triggers = [...sql.matchAll(/create (?:or replace )?trigger (\w+)\s+([^;]*?\son (\w+)\.\w+[^;]*);/gi)].filter((match) => !dumped.has(match[3].toLowerCase()));
+    assert.ok(triggers.some((match) => match[1] === 'restrict_auth_users_to_board'), 'the sign-in trigger is found');
+    for (const [, name, body] of triggers) assert.ok(flat(after).includes(flat(`create or replace trigger ${name} ${body};`)), `after-restore.sql makes trigger ${name}`);
+
+    const published = [...sql.matchAll(/alter publication supabase_realtime add table ([^;]+);/gi)].flatMap((match) => match[1].split(',').map((table) => table.trim()));
+    const set = /alter publication supabase_realtime set table ([^;]+);/i.exec(after)?.[1].split(',').map((table) => table.trim()) ?? [];
+    assert.deepEqual([...set].sort(), [...new Set(published)].sort(), "after-restore.sql sets Realtime's tables to every table the migrations add");
+
+    const grants = [...sql.matchAll(/grant (usage on schema|select on all tables in schema) (\w+) to (\w+);/gi)].filter((match) => !dumped.has(match[2].toLowerCase()));
+    assert.ok(grants.length >= 4, 'the backup login grants on auth and supabase_migrations are found');
+    for (const [statement] of grants) assert.ok(after.includes(statement), `after-restore.sql has: ${statement}`);
+
     const readme = read('platform/ops/README.md');
     const macRestore = /^### Restore a Mac backup\n[\s\S]*?(?=^### )/m.exec(readme)?.[0] ?? '';
-    for (const job of jobs) assert.ok(macRestore.includes(`--command "select cron.schedule(${job})"`), `Restore a Mac backup schedules ${job}`);
-    assert.match(macRestore, /`select jobname, schedule from cron\.job order by jobname` must list every job step 4 scheduled/);
+    assert.ok(macRestore.includes('$PSQL --single-transaction --variable ON_ERROR_STOP=1 --file platform/ops/after-restore.sql --dbname "<target>"'), 'Restore a Mac backup runs it');
+    assert.match(macRestore, /`select jobname, schedule from cron\.job order by jobname` must list every job `after-restore\.sql` schedules/);
     const serverRestore = /^## Restore the database\n[\s\S]*?(?=^## )/m.exec(readme)?.[0] ?? '';
-    assert.match(serverRestore, /The pg_cron jobs are not in the dumps: schedule them as \[Restore a Mac backup\]\(#restore-a-mac-backup\), step 4, does\./);
+    assert.match(serverRestore, /Then run `platform\/ops\/after-restore\.sql` on the target, as \[Restore a Mac backup\]\(#restore-a-mac-backup\), step 4, does/);
   });
 
   test("never holds the owner's login, under any name, and leaves the auth dump out with BACKUP_SKIP_AUTH=1", () => {

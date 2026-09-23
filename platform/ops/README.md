@@ -35,6 +35,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
 | `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
 | `backups-repo/` | a separate private repository | the weekly fallback backup's workflow template |
+| `after-restore.sql` | the Mac, on a restored copy | what the migrations make outside the dumped schemas: the sign-in trigger, Realtime's tables, the backup login's reads and the pg_cron jobs |
 
 ## Operator inputs
 
@@ -312,7 +313,7 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
    psql --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
    psql --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
    ```
-   Skip the `auth.sql` line when the backup has none. The pg_cron jobs are not in the dumps: schedule them as [Restore a Mac backup](#restore-a-mac-backup), step 4, does.
+   Skip the `auth.sql` line when the backup has none. Then run `platform/ops/after-restore.sql` on the target, as [Restore a Mac backup](#restore-a-mac-backup), step 4, does: no dump carries what it makes.
 5. **Check it:** `psql --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`; then `psql --dbname "<target>" -At -c 'select public.ledger_identity()'` for the lines. Only the top-level `holds` counts: each line carries its own. Quote both.
 6. **For a real recovery, then:**
    - put the new project's URL and keys in `.env` and in the VPS's env files, and set the stripe-webhook function's secrets there;
@@ -473,13 +474,11 @@ There is no weekly restore check on the Mac: it needs a scratch Supabase Postgre
    $PSQL --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
    $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
    ```
-   Skip the `auth.sql` line when the backup has none. The pg_cron jobs are not in the dumps: schedule every job the migrations schedule, on the target:
+   Skip the `auth.sql` line when the backup has none. Then, from the repository, make what the migrations make outside the dumped schemas, which no dump carries: the trigger that limits sign-in to board accounts, Realtime's tables, the backup login's reads and the pg_cron jobs:
    ```sh
-   $PSQL --variable ON_ERROR_STOP=1 --dbname "<target>" \
-     --command "select cron.schedule('credit-held-contributions', '17 * * * *', 'select public.credit_held_contributions()')" \
-     --command "select cron.schedule('waterfall-sweep', '*/5 * * * *', 'select public.waterfall_sweep()')"
+   $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file platform/ops/after-restore.sql --dbname "<target>"
    ```
-5. **Check it:** `$PSQL --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`, `select public.ledger_identity()` must show the same lines as `identity.json`, and `select jobname, schedule from cron.job order by jobname` must list every job step 4 scheduled. Quote all three in `docs/specs/mac-host.md`.
+5. **Check it:** `$PSQL --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`, `select public.ledger_identity()` must show the same lines as `identity.json`, and `select jobname, schedule from cron.job order by jobname` must list every job `after-restore.sql` schedules. Quote all three in `docs/specs/mac-host.md`.
 6. **A real recovery** then follows [Restore the database](#restore-the-database), step 6.
 7. **Delete the decrypted copy** (`rm -r backup.tar peanutgallery-*`, leaving the `.tar.age`) and put the key back offline.
 
