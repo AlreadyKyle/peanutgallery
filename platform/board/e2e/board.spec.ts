@@ -29,10 +29,13 @@ function base64url(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-/** A stored session for a board member at aal1, the way supabase-js keeps one after the magic link. */
-async function signIn(page: Page) {
+/**
+ * A stored session for a board member, the way supabase-js keeps one after the magic link: aal1, or
+ * aal2 once a code from the authenticator app has been verified.
+ */
+async function signIn(page: Page, aal: 'aal1' | 'aal2' = 'aal1') {
   const now = Math.floor(Date.now() / 1000);
-  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal: 'aal1', amr: [{ method: 'otp', timestamp: now }], exp: now + 3600, session_id: 's-1' };
+  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal, amr: [{ method: 'otp', timestamp: now }], exp: now + 3600, session_id: 's-1' };
   const session = {
     access_token: `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url(payload)}.c2lnbmF0dXJl`,
     refresh_token: 'e2e-refresh',
@@ -75,15 +78,56 @@ const studio = {
   credit_studio_daily_cap_usd: 500,
   anthropic_tier_cap_usd: null,
   platform_lane_open: false,
+  cooling_window_minutes: 0,
 };
+
+// docs/specs/agent-system-core.md: an approved agent card waiting on next to be dealt, which only a
+// board member's session reads (cards_board_read); anon's policy (card_is_public) hides no approved
+// card, but the e2e fixture answers the cards read only with the signed-in board member's token.
+const UNDEALT = {
+  id: '6b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e',
+  title: 'Faster gatherers after the first unlock',
+  stage: 'proposed',
+  horizon: 'next',
+  rank: 1,
+  folder: 'seed-1',
+  lane: 'config',
+  funding_target_usd: '3.0000',
+  funded_usd: '0.0000',
+  estimate_usd: '3.0000',
+  created_at: '2026-09-23T00:00:00Z',
+  source: 'agent',
+  drafter_role_id: 'r-designer',
+  opens_at: '2026-09-25T12:00:00Z',
+  board_vetoed: false,
+  board_veto_reason: null,
+};
+
+const ROLES = [
+  { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
+  { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
+];
+
+const JOBS = [
+  {
+    name: 'tidy_up',
+    role_name: null,
+    calls_model: false,
+    runs_when_paused: true,
+    description: null,
+    runs: [{ id: 'run-e2e', origin: 'schedule', status: 'skipped', reason: 'role_paused', created_at: '2026-09-23T10:00:00Z', finished_at: '2026-09-23T10:00:01Z' }],
+  },
+];
 
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
-async function answerSupabase(page: Page, seen: string[]) {
+async function answerSupabase(page: Page, seen: string[], bodies: Record<string, unknown>[] = []) {
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
+    const body = route.request().postData();
+    if (body) bodies.push({ path: url.pathname, body: JSON.parse(body) });
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     switch (url.pathname) {
       case '/auth/v1/user':
@@ -98,6 +142,21 @@ async function answerSupabase(page: Page, seen: string[]) {
         return json(studio);
       case '/rest/v1/rpc/board_needs_you':
         return json(needsYou);
+      case '/rest/v1/rpc/board_roles':
+        return json(ROLES);
+      case '/rest/v1/rpc/board_jobs':
+        return json(JOBS);
+      case '/rest/v1/rpc/card_is_public':
+        return json(true);
+      case '/rest/v1/rpc/set_card_veto':
+        return json({ card_id: UNDEALT.id, board_vetoed: true, horizon: 'next', opens_at: UNDEALT.opens_at });
+      case '/rest/v1/public_roles':
+        return json([]);
+      case '/rest/v1/cards': {
+        // Only the board member's own token reads the undealt card, as cards_board_read allows.
+        const bearer = route.request().headers()['authorization'] ?? '';
+        return json(bearer.includes('.') && bearer.split('.').length === 3 ? [UNDEALT] : []);
+      }
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
     }
@@ -168,4 +227,35 @@ test('a connection to any host but the Supabase project is refused', async ({ pa
   });
   expect(outcomes).toEqual(['refused', 'refused']);
   await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
+});
+
+test('at the second factor the board sees and vetoes an undealt agent card, and reads the roles, the jobs and the cooling window, under the enforced policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, bodies);
+  await signIn(page, 'aal2');
+  await page.goto('/');
+
+  const card = page.getByRole('form', { name: `Card ${UNDEALT.title}` });
+  await expect(card).toBeVisible();
+  await expect(card.getByText('Written by an agent; its approval is current.')).toBeVisible();
+  await expect(card.getByText(/^Waiting to be dealt: moves to now at /)).toBeVisible();
+  await card.getByLabel('Reason').fill('Not this week');
+  await card.getByRole('button', { name: 'Veto card' }).click();
+  await expect(card.getByText('Card vetoed.')).toBeVisible();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: UNDEALT.id, p_vetoed: true, p_reason: 'Not this week' } });
+
+  const roles = page.getByRole('region', { name: 'Roles' });
+  await expect(roles.getByText('reviewer · not paused', { exact: false })).toBeVisible();
+  await expect(roles.getByRole('button', { name: 'Resume QA' })).toBeVisible();
+  const jobs = page.getByRole('region', { name: 'Jobs' });
+  await expect(jobs.getByText('schedule · skipped: role_paused', { exact: false })).toBeVisible();
+  await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Set the cooling window' }).getByLabel('Cooling window (minutes)')).toHaveValue('0');
+
+  // The cards read carried the board member's session, never the anon key alone.
+  expect(seen).toContain('GET /rest/v1/cards');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  expect(reports).toEqual([]);
 });
