@@ -12,7 +12,8 @@
 // Policy report. The landing's h2 order, read from the page: Building now, Queued and Shipped appear
 // only when cards are in those stages. The Right now panel, the fund links, the category filters and
 // /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
-// draws every agent; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
+// draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
+// rest; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. The www redirect runs only against production. The
 // security headers from netlify.toml, the enforced and report-only policies' full values included,
 // run against any address that is not local; a local `vite preview` sends them too
@@ -29,6 +30,7 @@
 // The first line is PASS or FAIL with the counts; one line per check follows. Exit 0 pass, 1 fail.
 
 import { chromium } from '@playwright/test';
+import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
 const args = process.argv.slice(2);
@@ -272,13 +274,12 @@ try {
     const avatars = await page.getByRole('main').locator('svg.avatar[role="img"]').count();
     const named = await page.getByRole('main').locator('svg.avatar title').allTextContents();
     check(avatars > 0 && named.length === avatars && named.every((note) => note.trim() !== ''), `/team ${avatars} avatars, each named`);
-    // Every role that runs is on a claude-* model and shows it (PLAN.md §10 decision 36); a role that
-    // does not run shows none, since no model runs it.
+    // At least one role runs and every role that runs shows claude-opus-5-5 (PLAN.md §10 decision
+    // 36; team-models.mjs); a role that does not run shows no model, since none runs it.
     const running = page.getByRole('region', { name: 'Running', exact: true });
     const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
-    const runningRoles = await running.locator('li.role').count();
-    const runningModels = await running.locator('li.role .card-meta').filter({ hasText: /^claude-[a-z0-9-]+ · / }).count();
-    check(runningModels === runningRoles, `/team ${runningRoles} running roles, ${runningModels} showing a model`);
+    const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+    check(models.ok, models.message);
     const waitingModels = (await waiting.count()) === 0 ? 0 : await waiting.getByText(/\bclaude-/).count();
     check(waitingModels === 0, `/team shows no model for a role that does not run (${waitingModels} found)`);
   }
