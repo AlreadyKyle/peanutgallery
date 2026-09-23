@@ -5,12 +5,16 @@ on:
   push:
     branches: [main]
 
+# Card code runs in these jobs. The token reads the repository and nothing more, no step names a
+# secret, and no checkout leaves the token in .git/config (docs/specs/launch-gate.md).
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its older run: the dispatcher reads the gate only at the
+# exact head sha. A push to main keeps one group per sha and is never cancelled.
 concurrency:
   group: gate-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   detect:
@@ -27,6 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Resolve the compared commits
         id: refs
         env:
@@ -42,20 +47,21 @@ jobs:
             echo "base=$PUSH_BASE" >> "$GITHUB_OUTPUT"
             echo "head=$PUSH_HEAD" >> "$GITHUB_OUTPUT"
           fi
-      # The card checks run here, before any job installs dependencies: an install runs lifecycle
-      # scripts and reads .npmrc and .pnpmfile.cjs, so a card could run code before a later guard.
-      # A failure here skips every other job, and the gate job fails on it.
+      # The kernel checks run here, before any job installs dependencies or runs card code: an install
+      # runs lifecycle scripts and reads .npmrc and .pnpmfile.cjs, and card tests run anything. A
+      # failure here skips every other job, and the gate job fails on it.
       - name: Use the base commit's gate on a card branch
         if: startsWith(github.head_ref, 'card/')
         env:
           BASE: ${{ steps.refs.outputs.base }}
         run: git checkout "$BASE" -- platform/gate
-      - name: List the changed files on a card branch
-        if: startsWith(github.head_ref, 'card/')
+      - name: Write the commit message and changed files
         env:
           BASE: ${{ steps.refs.outputs.base }}
           HEAD: ${{ steps.refs.outputs.head }}
-        run: bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
+        run: |
+          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
+          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
       - name: Kernel guard on a card branch
         if: startsWith(github.head_ref, 'card/')
         run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"
@@ -65,6 +71,13 @@ jobs:
           BASE: ${{ steps.refs.outputs.base }}
           HEAD: ${{ steps.refs.outputs.head }}
         run: bash platform/gate/changed-paths.sh --check-modes "$BASE" "$HEAD"
+      - name: Keep a card branch inside its lane
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ steps.refs.outputs.base }}
+          HEAD: ${{ steps.refs.outputs.head }}
+          BRANCH: ${{ github.head_ref }}
+        run: bash platform/gate/changed-paths.sh --check-lane "$BRANCH" "$BASE" "$HEAD"
       - name: Detect folders and lane
         id: paths
         env:
@@ -79,45 +92,25 @@ jobs:
           lane=$(echo "$result" | sed -E 's/.*lane=([a-z]+).*/\1/')
           case "$BRANCH" in
             *-code) lane=code ;;
-            *-config) [ "$lane" = config ] || echo "branch name says config but the change touches code; lane stays code" ;;
           esac
           echo "seed=$seed" >> "$GITHUB_OUTPUT"
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
           echo "lane=$lane" >> "$GITHUB_OUTPUT"
           echo "seed=$seed platform=$platform lane=$lane branch=$BRANCH"
-
-  seed-config:
-    name: seed-config
-    needs: detect
-    if: needs.detect.outputs.seed == 'true' && needs.detect.outputs.lane == 'config'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # On a card branch every gate script, changed-paths.sh included, runs from the base commit,
-      # so a card cannot change the list it is checked against.
-      - name: Use the base commit's gate on a card branch
-        if: startsWith(github.head_ref, 'card/')
+      # The secret scan, the deny-list and the runtime-token scan read the change as committed, with
+      # no install and no card code run.
+      - name: Scan the change before any card code runs
         env:
-          BASE: ${{ needs.detect.outputs.base }}
-        run: git checkout "$BASE" -- platform/gate
-      - name: Write the commit message and changed files
-        env:
-          BASE: ${{ needs.detect.outputs.base }}
-          HEAD: ${{ needs.detect.outputs.head }}
+          SEED: ${{ steps.paths.outputs.seed }}
+          PLATFORM: ${{ steps.paths.outputs.platform }}
+          LANE: ${{ steps.paths.outputs.lane }}
         run: |
-          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
-          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Ship gate
-        run: bash platform/gate/ship-gate.sh --folder seed-1 --lane config --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+          if [ "$SEED" = true ]; then
+            bash platform/gate/ship-gate.sh --phase scans --folder seed-1 --lane "$LANE" --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+          fi
+          if [ "$PLATFORM" = true ]; then
+            bash platform/gate/ship-gate.sh --phase scans --folder platform --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+          fi
 
   seed-code:
     name: seed-code
@@ -129,28 +122,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # On a card branch every gate script, changed-paths.sh included, runs from the base commit,
-      # so a card cannot change the list it is checked against.
+      # On a card branch every gate script runs from the base commit, so a card cannot change the
+      # checks it is held to.
       - name: Use the base commit's gate on a card branch
         if: startsWith(github.head_ref, 'card/')
         env:
           BASE: ${{ needs.detect.outputs.base }}
         run: git checkout "$BASE" -- platform/gate
-      - name: Write the commit message and changed files
-        env:
-          BASE: ${{ needs.detect.outputs.base }}
-          HEAD: ${{ needs.detect.outputs.head }}
-        run: |
-          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
-          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Ship gate
-        run: bash platform/gate/ship-gate.sh --folder seed-1 --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
+      - name: Typecheck and tests
+        run: bash platform/gate/ship-gate.sh --phase checks --folder seed-1 --lane code
 
   platform:
     name: platform
@@ -162,29 +149,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # On a card branch every gate script, changed-paths.sh included, runs from the base commit,
-      # so a card cannot change the list it is checked against.
+      # On a card branch every gate script runs from the base commit, so a card cannot change the
+      # checks it is held to.
       - name: Use the base commit's gate on a card branch
         if: startsWith(github.head_ref, 'card/')
         env:
           BASE: ${{ needs.detect.outputs.base }}
         run: git checkout "$BASE" -- platform/gate
-      - name: Write the commit message and changed files
-        env:
-          BASE: ${{ needs.detect.outputs.base }}
-          HEAD: ${{ needs.detect.outputs.head }}
-        run: |
-          git log -1 --format=%B "$HEAD" > "$RUNNER_TEMP/commit-message.txt"
-          bash platform/gate/changed-paths.sh --list "$BASE" "$HEAD" > "$RUNNER_TEMP/changed-files.txt"
-      - name: Ship gate
-        run: bash platform/gate/ship-gate.sh --folder platform --lane code --commit-message-file "$RUNNER_TEMP/commit-message.txt" --changed-files-file "$RUNNER_TEMP/changed-files.txt"
-      # The rest of pnpm verify: the ship gate runs the dispatcher, supabase and site tests only.
+      - name: Typecheck and tests
+        run: bash platform/gate/ship-gate.sh --phase checks --folder platform
+      # The rest of pnpm verify: the checks phase runs the dispatcher, supabase and site tests only.
       - name: Gate tests
         run: pnpm --filter @backseat/gate test
       - name: Agent role spec tests
@@ -196,15 +177,63 @@ jobs:
           deno-version: v2.7.13
       - name: Stripe webhook function tests
         run: pnpm test:functions
+      # The end-to-end suite serves a build. This one is only for the suite: the build job builds
+      # and scans the site on its own runner.
+      - name: Build the site for the end-to-end suite
+        run: pnpm --filter @backseat/site build
       - name: Install Chromium for Playwright
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
       - name: Site end-to-end
         run: pnpm --filter @backseat/site e2e
 
+  # A fresh runner that never runs card tests builds each selected folder and scans the build, and
+  # only then runs the headless bot, the one step here that runs card code. On a card branch every
+  # kernel file (the gate, the package files, the build configs, the bot harness) comes from the base
+  # commit first, and the install runs no lifecycle scripts. There is no dependency cache: a cache
+  # can be written by a run that ran card tests. The bot still imports the card's sim code, so it
+  # catches a confused agent's regressions; it is not containment against a malicious one.
+  build:
+    name: build
+    needs: detect
+    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.platform == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Restore every kernel file from the base commit on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+        run: |
+          git checkout "$BASE" -- platform/gate
+          bash platform/gate/restore-kernel.sh "$BASE"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build seed-1 and scan the build
+        if: needs.detect.outputs.seed == 'true'
+        env:
+          LANE: ${{ needs.detect.outputs.lane }}
+        run: bash platform/gate/ship-gate.sh --phase build --folder seed-1 --lane "$LANE"
+      - name: Build the site and scan the build
+        if: needs.detect.outputs.platform == 'true'
+        run: bash platform/gate/ship-gate.sh --phase build --folder platform
+      - name: Headless bot
+        if: needs.detect.outputs.seed == 'true'
+        env:
+          LANE: ${{ needs.detect.outputs.lane }}
+        run: bash platform/gate/ship-gate.sh --phase bot --folder seed-1 --lane "$LANE"
+
   gate:
     name: gate
-    needs: [detect, seed-config, seed-code, platform]
-    if: always()
+    needs: [detect, seed-code, platform, build]
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -217,9 +246,9 @@ jobs:
           SEED: ${{ needs.detect.outputs.seed }}
           PLATFORM: ${{ needs.detect.outputs.platform }}
           LANE: ${{ needs.detect.outputs.lane }}
-          SEED_CONFIG: ${{ needs.seed-config.result }}
           SEED_CODE: ${{ needs.seed-code.result }}
           PLATFORM_JOB: ${{ needs.platform.result }}
+          BUILD: ${{ needs.build.result }}
         run: |
           echo "$RESULTS"
           if echo "$RESULTS" | grep -Eq '"result": *"(failure|cancelled)"'; then
@@ -230,7 +259,7 @@ jobs:
           want() {
             [ "$2" = success ] || { echo "detect selected $1 and it did not pass: $2"; exit 1; }
           }
-          if [ "$SEED" = true ] && [ "$LANE" = config ]; then want seed-config "$SEED_CONFIG"; fi
           if [ "$SEED" = true ] && [ "$LANE" = code ]; then want seed-code "$SEED_CODE"; fi
           if [ "$PLATFORM" = true ]; then want platform "$PLATFORM_JOB"; fi
+          if [ "$SEED" = true ] || [ "$PLATFORM" = true ]; then want build "$BUILD"; fi
           echo "gate passed"

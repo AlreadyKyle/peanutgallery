@@ -3,24 +3,33 @@
 // reads its JSON report; it never imports from seed-1.
 //
 // usage: node run.mjs --config-dir <dir> --hours <n> --seed <n> [--real-seconds <n>] [--repo-root <dir>]
+//                     [--report-file <path>]
 //
 // Runs `pnpm --filter @backseat/seed-1 bot -- <args> --json` from the repository root. Prints
 // PASS: headless-bot ... when the bot exits 0 with every invariant holding, else FAIL: headless-bot
 // with the failing invariants on the following lines. Exit 0 pass, 1 fail, 2 usage.
+//
+// --report-file writes the same verdict to a file the caller names, a fresh path per run (the gate
+// puts a random nonce in it). The file must not exist beforehand, and it is created only once the
+// bot has exited; a file someone else created in between fails the run. A caller reads the verdict
+// there, so a stray line on this process's output cannot stand in for it. It is not containment: the
+// bot imports the card's sim code into its own process, and code running there can do what this
+// file does. It catches a confused agent's regressions, not a malicious one.
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const USAGE = 'usage: node run.mjs --config-dir <dir> --hours <n> --seed <n> [--real-seconds <n>] [--repo-root <dir>]';
+const USAGE = 'usage: node run.mjs --config-dir <dir> --hours <n> --seed <n> [--real-seconds <n>] [--repo-root <dir>] [--report-file <path>]';
 const SEED_PACKAGE = '@backseat/seed-1';
+const FLAGS = ['--config-dir', '--hours', '--seed', '--real-seconds', '--repo-root', '--report-file'];
 
 function parseArgs(argv) {
   const values = new Map();
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const value = argv[i + 1];
-    if (!['--config-dir', '--hours', '--seed', '--real-seconds', '--repo-root'].includes(flag)) throw new Error(`unknown argument ${flag}`);
+    if (!FLAGS.includes(flag)) throw new Error(`unknown argument ${flag}`);
     if (value === undefined || value.startsWith('--')) throw new Error(`${flag} needs a value`);
     values.set(flag, value);
   }
@@ -45,6 +54,25 @@ function lastJsonLine(text) {
   }
 }
 
+// The verdict lines and the exit code for one bot run.
+function verdict(child) {
+  if (child.error) return { code: 1, lines: [`FAIL: headless-bot could not start pnpm: ${child.error.message}`] };
+  const report = lastJsonLine(child.stdout ?? '');
+  if (report === null) return { code: 1, lines: [`FAIL: headless-bot no JSON report from the bot (exit ${child.status})`] };
+  const invariants = Array.isArray(report.invariants) ? report.invariants : [];
+  const failed = invariants.filter((item) => item && item.ok === false);
+  if (child.status !== 0 || report.ok !== true || failed.length > 0) {
+    const lines = [`FAIL: headless-bot exit=${child.status} ok=${report.ok === true} failed=${failed.length}`];
+    for (const item of failed) lines.push(`invariant ${item.name}: ${item.detail}`);
+    return { code: 1, lines };
+  }
+  const unlocks = Array.isArray(report.unlocks) ? report.unlocks.length : 0;
+  return {
+    code: 0,
+    lines: [`PASS: headless-bot simulatedSeconds=${report.simulatedSeconds} unlocks=${unlocks} finalTotalDust=${report.finalTotalDust} stateHash=${report.stateHash}`],
+  };
+}
+
 function main(argv) {
   let args;
   try {
@@ -60,6 +88,11 @@ function main(argv) {
     process.stderr.write(`config directory not found: ${configDir}\n${USAGE}\n`);
     return 2;
   }
+  const reportFile = args.has('--report-file') ? resolve(args.get('--report-file')) : null;
+  if (reportFile !== null && (existsSync(reportFile) || !existsSync(dirname(reportFile)))) {
+    process.stderr.write(`the report file must be a new file in a folder that exists: ${reportFile}\n${USAGE}\n`);
+    return 2;
+  }
   const botArgs = ['--config-dir', configDir, '--hours', args.get('--hours'), '--seed', args.get('--seed')];
   if (args.has('--real-seconds')) botArgs.push('--real-seconds', args.get('--real-seconds'));
   botArgs.push('--json');
@@ -69,26 +102,19 @@ function main(argv) {
     stdio: ['ignore', 'pipe', 'inherit'],
     maxBuffer: 64 * 1024 * 1024,
   });
-  if (child.error) {
-    process.stdout.write(`FAIL: headless-bot could not start pnpm: ${child.error.message}\n`);
-    return 1;
+  let result = verdict(child);
+  if (reportFile !== null) {
+    try {
+      // wx: create the file, and fail when it already exists.
+      writeFileSync(reportFile, `${result.lines.join('\n')}\n`, { flag: 'wx' });
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : 'unknown';
+      const why = code === 'EEXIST' ? 'another process created it during the run' : `the write failed with ${code}`;
+      result = { code: 1, lines: [`FAIL: headless-bot could not write the report file: ${why}`] };
+    }
   }
-  const report = lastJsonLine(child.stdout ?? '');
-  if (report === null) {
-    process.stdout.write(`FAIL: headless-bot no JSON report from the bot (exit ${child.status})\n`);
-    return 1;
-  }
-  const invariants = Array.isArray(report.invariants) ? report.invariants : [];
-  const failed = invariants.filter((item) => item && item.ok === false);
-  if (child.status !== 0 || report.ok !== true || failed.length > 0) {
-    const lines = [`FAIL: headless-bot exit=${child.status} ok=${report.ok === true} failed=${failed.length}`];
-    for (const item of failed) lines.push(`invariant ${item.name}: ${item.detail}`);
-    process.stdout.write(`${lines.join('\n')}\n`);
-    return 1;
-  }
-  const unlocks = Array.isArray(report.unlocks) ? report.unlocks.length : 0;
-  process.stdout.write(`PASS: headless-bot simulatedSeconds=${report.simulatedSeconds} unlocks=${unlocks} finalTotalDust=${report.finalTotalDust} stateHash=${report.stateHash}\n`);
-  return 0;
+  process.stdout.write(`${result.lines.join('\n')}\n`);
+  return result.code;
 }
 
 process.exitCode = main(process.argv.slice(2));

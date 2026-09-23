@@ -51,12 +51,18 @@ sha256_hex() {
   node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$1"
 }
 
+# A string spelled entirely in JSON \u escapes: ab becomes ab.
+json_escaped() {
+  printf '%s' "$1" | od -An -tx1 | tr -d ' \n' | sed 's/\(..\)/\\u00\1/g'
+}
+
 BANNED="$GATE_DIR/banned-phrases.sh"
 TOKENS="$GATE_DIR/runtime-token-deny.sh"
 SECRETS="$GATE_DIR/secret-scan.sh"
 CHANGED="$GATE_DIR/changed-paths.sh"
 SHIP="$GATE_DIR/ship-gate.sh"
 BOT="$GATE_DIR/headless-bot/run.mjs"
+RESTORE="$GATE_DIR/restore-kernel.sh"
 
 # ---------------------------------------------------------------- banned-phrases.sh
 P1=$(term_from profanity 1)
@@ -88,6 +94,31 @@ printf '{"title":"%s"}\n' "$(printf '%s' "$P1" | sed 's/./& /g; s/ $//')" > "$A/
 expect "banned: spaced spelling fails" 1 '^FAIL: banned-phrases hits=1 .* list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
 printf '{"title":"%s"}\n' "$(printf '%s' "$P1" | sed 's/./&./g; s/\.$//')" > "$A/seed-1/content/strings.json"
 expect "banned: dotted spelling fails" 1 '^FAIL: banned-phrases hits=1 .* list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+# JSON.parse turns escapes into the characters a player sees, so a .json line is decoded first.
+printf '{"title":"%s"}\n' "$(json_escaped "$P1")" > "$A/seed-1/content/strings.json"
+expect "banned: a term spelled in JSON \\u escapes fails" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/strings.json:1 list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+printf '{"title":"%s"}\n' "$(json_escaped "$P1" | tr 'a-f' 'A-F')" > "$A/seed-1/content/strings.json"
+expect "banned: uppercase hex escapes fail" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/strings.json:1 list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+printf '{"title":"%s%s"}\n' "$(json_escaped "$(printf '%s' "$P1" | cut -c1)")" "$(printf '%s' "$P1" | cut -c2-)" > "$A/seed-1/content/strings.json"
+expect "banned: a term with only its first letter escaped fails" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/strings.json:1 list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+printf '{"title":"Dust\\n%s"}\n' "$P1" > "$A/seed-1/content/strings.json"
+expect "banned: a term after an escaped newline fails" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/strings.json:1 list=profanity' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+printf '{"title":"Dust \\u00e9 \\\\u0041 \\/ \\"quoted\\""}\n' > "$A/seed-1/content/strings.json"
+expect "banned: other escapes in clean JSON pass" 0 '^PASS: banned-phrases files=3 ' -- bash "$BANNED" --repo-root "$A" "$A/seed-1" "$A/platform"
+printf '{"title":"Dust"}\n' > "$A/seed-1/content/strings.json"
+# A file the line scanners cannot read fails instead of being skipped.
+printf '{"title":"Dust"}\000\n' > "$A/seed-1/content/nul.json"
+expect "banned: a file with a NUL byte fails as unreadable" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/nul.json:1 list=unreadable term=nul-or-utf16$' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+rm -f "$A/seed-1/content/nul.json"
+printf '\377\376{\000}\000\n\000' > "$A/seed-1/content/wide.json"
+expect "banned: a UTF-16 little-endian file fails as unreadable" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/wide.json:1 list=unreadable' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+printf '\376\377\000{\000}' > "$A/seed-1/content/wide.json"
+expect "banned: a UTF-16 big-endian file fails as unreadable" 1 '^FAIL: banned-phrases hits=1 first=seed-1/content/wide.json:1 list=unreadable' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
+rm -f "$A/seed-1/content/wide.json"
+: > "$A/seed-1/content/empty.json"
+printf 'Bud1\000\000' > "$A/seed-1/.DS_Store"
+expect "banned: an empty file and a Finder .DS_Store file pass" 0 '^PASS: banned-phrases files=3 ' -- bash "$BANNED" --repo-root "$A" "$A/seed-1" "$A/platform"
+rm -f "$A/seed-1/content/empty.json" "$A/seed-1/.DS_Store"
 printf '{"title":"x%sy and %s5"}\n' "$P1" "$P1" > "$A/seed-1/content/strings.json"
 expect "banned: term inside a longer token passes" 0 '^PASS: banned-phrases' -- bash "$BANNED" --repo-root "$A" "$A/seed-1"
 printf '{"title":"cost 455 and 413 and 7175"}\n' > "$A/seed-1/content/strings.json"
@@ -211,17 +242,41 @@ printf 'export const rate = 1;\n' > "$B/seed-1/sim/index.ts"
 printf 'export const r = Math.ran%s();\n' "dom" > "$B/seed-1/render/main.ts"
 expect "tokens: Math.random outside seed-1/sim passes" 0 '^PASS: runtime-token-deny' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
 printf 'export const title = "Dust";\n' > "$B/seed-1/render/main.ts"
+# Test files and folders are card code too, and anything in them can be imported and shipped.
 printf 'export const t = "%s";\n' "$TD" > "$B/seed-1/sim/index.test.ts"
-printf 'export const t = "%s";\n' "$TD" > "$B/seed-1/tests/fixture.ts"
-expect "tokens: test files are outside the scan" 0 '^PASS: runtime-token-deny files=4$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+expect "tokens: a test file is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/sim/index.test.ts:1 pattern=open-task-marker$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
 rm -f "$B/seed-1/sim/index.test.ts"
+printf 'export const t = "%s";\n' "$TD" > "$B/seed-1/tests/fixture.ts"
+expect "tokens: a file in a tests folder is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/tests/fixture.ts:1 pattern=open-task-marker$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+rm -f "$B/seed-1/tests/fixture.ts"
+mkdir -p "$B/seed-1/ui"
+printf 'export const t = "value %s";\n' "$U" > "$B/seed-1/ui/strings.ts"
+expect "tokens: a new folder in the seed code lane is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/ui/strings.ts:1 pattern=undefined$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+rm -rf "$B/seed-1/ui"
+mkdir -p "$B/platform/site/e2e"
+printf 'export const note = "%s";\n' "$TD" > "$B/platform/site/e2e/home.spec.ts"
+expect "tokens: a site end-to-end spec is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=platform/site/e2e/home.spec.ts:1 pattern=open-task-marker$' -- bash "$TOKENS" --repo-root "$B" --folder platform
+rm -rf "$B/platform/site/e2e"
+printf 'export const a = 1;\000\n' > "$B/seed-1/render/nul.ts"
+expect "tokens: a file with a NUL byte fails as unreadable" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/render/nul.ts:1 pattern=unreadable$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+rm -f "$B/seed-1/render/nul.ts"
+printf '\377\376{\000}\000' > "$B/seed-1/content/wide.json"
+expect "tokens: a UTF-16 file fails as unreadable" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/content/wide.json:1 pattern=unreadable$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+rm -f "$B/seed-1/content/wide.json"
 mkdir -p "$B/seed-1/dist/assets"
 printf '<p>%s</p>\n' "$TD" > "$B/seed-1/dist/index.html"
 expect "tokens: built HTML is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/dist/index.html:1 pattern=open-task-marker$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
 printf '<p>Dust</p>\n' > "$B/seed-1/dist/index.html"
+# The built bundle is read for the unfinished-work markers, whatever folder the text came from.
 printf 'const t = "%s";\n' "$TD" > "$B/seed-1/dist/assets/app.js"
-expect "tokens: built assets are not scanned" 0 '^PASS: runtime-token-deny files=5$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
-expect "tokens: a dist folder given directly reads only its HTML" 0 '^PASS: runtime-token-deny files=1$' -- bash "$TOKENS" --repo-root "$B" "$B/seed-1/dist"
+expect "tokens: a built bundle is scanned for unfinished-work markers" 1 '^FAIL: runtime-token-deny hits=1 first=seed-1/dist/assets/app.js:1 pattern=open-task-marker$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+printf 'body::after{content:"%s"}\n' "Lor""em ipsum" > "$B/seed-1/dist/assets/app.css"
+expect "tokens: a built stylesheet is scanned" 1 '^FAIL: runtime-token-deny hits=2 first=seed-1/dist/assets/app.css:1 pattern=latin-filler$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+rm -f "$B/seed-1/dist/assets/app.css"
+# Libraries carry the language names and the object-to-string text in their own strings.
+printf 'var a=typeof x=="%s"?"%s":String(y)==="%s";throw new %s("%s")\n' "$U" "$N" "[object"" Object]" "Type""Error" "$U" > "$B/seed-1/dist/assets/app.js"
+expect "tokens: language names in a built bundle pass" 0 '^PASS: runtime-token-deny files=6$' -- bash "$TOKENS" --repo-root "$B" --folder seed-1
+expect "tokens: a dist folder given directly reads every built file" 0 '^PASS: runtime-token-deny files=2$' -- bash "$TOKENS" --repo-root "$B" "$B/seed-1/dist"
 printf 'export const Field = () => <input place%s="Name" />;\n' "holder" > "$B/platform/site/src/Field.tsx"
 expect "tokens: input hint attribute is a safe context" 0 '^PASS: runtime-token-deny files=3$' -- bash "$TOKENS" --repo-root "$B" --folder platform
 printf "export const Note = () => <p>Don't stop</p>; // %s later\n" "$TD" > "$B/platform/site/src/Note.tsx"
@@ -259,6 +314,26 @@ shape_cases | while IFS='|' read -r name value; do
   echo "$PASSED $FAILED" > "$T/counts.txt"
 done
 read -r PASSED FAILED < "$T/counts.txt"
+# The gh command line stores an OAuth token (gho_); GitHub also issues user, server and refresh tokens.
+for prefix in gho ghu ghs ghr; do
+  printf 'token=%s\n' "$prefix""_$BODY24" > "$C/secret.txt"
+  expect "secrets: a GitHub ${prefix}_ token fails as github-token" 1 "^FAIL: secret-scan hits=1 first=$C/secret.txt:1 shape=github-token\$" -- bash "$SECRETS" "$C/secret.txt"
+done
+printf 'token=%s\n' "gha""_$BODY24" > "$C/secret.txt"
+expect "secrets: a prefix GitHub does not issue passes" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
+# The key block's first line is assembled here, so no tracked file carries it.
+for kind in "RSA " "OPENSSH " "EC " ""; do
+  printf '%s\n' "-----BEGIN ""${kind}PRIVATE KEY-----" "MIIEowIBAAKCAQEA" "-----END ""${kind}PRIVATE KEY-----" > "$C/key.pem"
+  expect "secrets: a ${kind:-PKCS8 }private key block fails" 1 "^FAIL: secret-scan hits=1 first=$C/key.pem:1 shape=private-key\$" -- bash "$SECRETS" "$C/key.pem"
+done
+printf 'A key file starts with a BEGIN line naming a PRIVATE KEY.\n' > "$C/key.pem"
+expect "secrets: prose about a key block passes" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/key.pem"
+rm -f "$C/key.pem"
+printf 'token\000\n' > "$C/blob.dat"
+expect "secrets: a file with a NUL byte fails as unreadable" 1 "^FAIL: secret-scan hits=1 first=$C/blob.dat:1 shape=unreadable\$" -- bash "$SECRETS" "$C/blob.dat"
+printf '\377\376k\000e\000y\000' > "$C/blob.dat"
+expect "secrets: a UTF-16 file fails as unreadable" 1 "^FAIL: secret-scan hits=1 first=$C/blob.dat:1 shape=unreadable\$" -- bash "$SECRETS" "$C/blob.dat"
+rm -f "$C/blob.dat"
 printf 'prefix only: %s\n' "sk_""live_abc" > "$C/secret.txt"
 expect "secrets: a bare prefix is not a key" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
 printf 'key=%s\n' "sb_""publishable_$BODY24" > "$C/secret.txt"
@@ -318,6 +393,21 @@ assert "changed: a rename lists both names" test "$(cat "$T/renamed.txt")" = "se
 seed-1/tests/invariants.test.ts"
 expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
 expect "changed: kernel-guard fails the old name of a renamed kernel file" 1 '^FAIL: kernel-guard path=seed-1/tests/invariants.test.ts$' -- bash "$GATE_DIR/kernel-guard.sh" "$T/renamed.txt"
+# The config lane holds .json files only; a card branch stays inside seed-1/ while the platform
+# code lane is closed.
+git -C "$D" checkout -q -b lane-page "$C0"
+mkdir -p "$D/seed-1/content"
+printf '<p>x</p>\n' > "$D/seed-1/content/page.html"; git -C "$D" add -A; git -C "$D" commit -q -m "page"; C8=$(git -C "$D" rev-parse HEAD)
+expect "changed: a non-JSON file in content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C8"
+expect "lane: a non-JSON file on a config branch fails" 1 '^FAIL: lane-check path=seed-1/content/page.html rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C0" "$C8"
+expect "lane: the same file on a code branch passes" 0 '^PASS: lane-check files=1 lane=code$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0" "$C8"
+expect "lane: JSON under config passes on a config branch" 0 '^PASS: lane-check files=1 lane=config$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C0" "$C1"
+expect "lane: a seed code change fails on a config branch" 1 '^FAIL: lane-check path=seed-1/sim/a.ts rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C1" "$C2"
+expect "lane: a platform change fails on a card branch while the platform code lane is closed" 1 '^FAIL: lane-check path=platform/site/a.ts rule=seed-1-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C2" "$C3"
+expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=README.md rule=seed-1-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
+expect "lane: a branch that names no lane fails" 1 '^FAIL: lane-check branch=card/abcd1234 rule=branch-name$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234 "$C0" "$C1"
+expect "lane: --check-lane needs a branch and two refs" 2 '^$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0"
+git -C "$D" checkout -q main
 
 # ---------------------------------------------------------------- headless-bot/run.mjs and ship-gate.sh
 W="$T/w"
@@ -335,28 +425,40 @@ fs.writeFileSync('dist/assets/app.js', 'export {};\n');
 EOF_BUILD
 SEED_BUILD="node ../build.js"
 SITE_BUILD="node ../../build.js"
-cat > "$W/seed-1/bot.js" <<'EOF_BOT'
-// A substitute for the seed bot command line: same flags, same report shape, no simulation.
+# A substitute for the seed bot command line under seed-1/bots, a kernel path, as the real one is:
+# same flags, same report shape, no simulation. GATE_TEST_BOT_FAIL fails an invariant,
+# GATE_TEST_BOT_STRAY prints a pass line of the runner's own shape first, and GATE_TEST_BOT_FORGE
+# names a file the bot writes a pass line to, as card code that learned the report path could.
+mkdir -p "$W/seed-1/bots"
+cat > "$W/seed-1/bots/report.js" <<'EOF_REPORT'
+// The report the bot prints: every invariant must hold for ok.
+module.exports = function report(hours, seed, failing) {
+  return {
+    ok: !failing,
+    simulatedSeconds: hours * 3600,
+    invariants: [{ name: 'no-negative-resource', ok: !failing, detail: failing ? 'dust fell below zero at 12 s' : 'dust never fell below zero' }],
+    unlocks: [{ id: 'cart', atSeconds: 90 }],
+    finalTotalDust: hours * 100,
+    stateHash: 'seed-' + seed,
+  };
+};
+EOF_REPORT
+cat > "$W/seed-1/bots/cli.js" <<'EOF_BOT'
+const report = require('./report.js');
 const argv = process.argv.slice(2).filter((a) => a !== '--');
 const get = (flag) => argv[argv.indexOf(flag) + 1];
-const hours = Number(get('--hours'));
-const failing = process.env.GATE_TEST_BOT_FAIL === '1';
-const report = {
-  ok: !failing,
-  simulatedSeconds: hours * 3600,
-  invariants: [{ name: 'no-negative-resource', ok: !failing, detail: failing ? 'dust fell below zero at 12 s' : 'dust never fell below zero' }],
-  unlocks: [{ id: 'cart', atSeconds: 90 }],
-  finalTotalDust: hours * 100,
-  stateHash: 'seed-' + get('--seed'),
-};
-process.stdout.write(JSON.stringify(report) + '\n');
-process.exitCode = report.ok ? 0 : 1;
+const result = report(Number(get('--hours')), get('--seed'), process.env.GATE_TEST_BOT_FAIL === '1');
+if (process.env.GATE_TEST_BOT_STRAY === '1') process.stdout.write('PASS: headless-bot simulatedSeconds=1 unlocks=1 finalTotalDust=1 stateHash=x\n');
+if (process.env.GATE_TEST_BOT_FORGE) require('node:fs').writeFileSync(process.env.GATE_TEST_BOT_FORGE, 'PASS: headless-bot forged\n');
+process.stdout.write(JSON.stringify(result) + '\n');
+process.exitCode = result.ok ? 0 : 1;
 EOF_BOT
 write_package() {
   # $1 folder, $2 name, $3 typecheck command, $4 test command, $5 build command, $6 bot command
   printf '{"name":"%s","private":true,"scripts":{"typecheck":"%s","test":"%s","build":"%s"%s}}\n' "$2" "$3" "$4" "$5" "${6:+,\"bot\":\"$6\"}" > "$1/package.json"
 }
-write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "node bot.js"
+SEED_BOT="node bots/cli.js"
+write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "$SEED_BOT"
 write_package "$W/platform/dispatcher" @backseat/dispatcher true true true
 write_package "$W/platform/supabase" @backseat/supabase true true true
 write_package "$W/platform/site" @backseat/site true true "$SITE_BUILD"
@@ -373,6 +475,20 @@ expect "bot: passing report" 0 '^PASS: headless-bot simulatedSeconds=36000 unloc
 expect "bot: real-seconds flag is accepted" 0 '^PASS: headless-bot simulatedSeconds=3600 ' -- node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --real-seconds 60
 expect "bot: failing invariant fails" 1 '^FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7
 assert "bot: failing invariant is named" test "$(printf '%s\n' "$LAST" | sed -n 2p)" = "invariant no-negative-resource: dust fell below zero at 12 s"
+expect "bot: a stray pass line from a failing bot does not pass" 1 '^FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 GATE_TEST_BOT_STRAY=1 node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7
+# --report-file: the verdict goes to a new file named per run; a file that already exists, before
+# or during the run, fails.
+REPORT="$T/bot-report-$(gate_nonce).txt"
+expect "bot: --report-file writes the verdict" 0 '^PASS: headless-bot simulatedSeconds=3600 ' -- node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --report-file "$REPORT"
+assert "bot: the report file holds the pass line" test "$(head -n 1 "$REPORT")" = "$(printf '%s\n' "$LAST" | head -n 1)"
+expect "bot: a report file that already exists is a usage error" 2 '^$' -- node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --report-file "$REPORT"
+rm -f "$REPORT"
+expect "bot: a report file in a missing folder is a usage error" 2 '^$' -- node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --report-file "$T/none/report.txt"
+expect "bot: a failing bot writes its FAIL line to the report file" 1 '^FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --report-file "$REPORT"
+assert "bot: the report file holds the FAIL line" test "$(head -n 1 "$REPORT")" = "FAIL: headless-bot exit=1 ok=false failed=1"
+rm -f "$REPORT"
+expect "bot: a report file the bot wrote itself fails the run" 1 '^FAIL: headless-bot could not write the report file: another process created it during the run$' -- env GATE_TEST_BOT_FORGE="$REPORT" node "$BOT" --repo-root "$W" --config-dir "$W/seed-1/config" --hours 1 --seed 7 --report-file "$REPORT"
+rm -f "$REPORT"
 
 expect "ship: usage without folder" 2 '^$' -- bash "$SHIP"
 expect "ship: usage for an unknown folder" 2 '^$' -- bash "$SHIP" --folder docs
@@ -403,18 +519,74 @@ printf '{"title":"%s"}\n' "$TD" > "$W/seed-1/content/strings.json"
 expect "ship: runtime token fails the third step" 1 '^GATE FAIL step=runtime-token-deny detail=FAIL: runtime-token-deny hits=1 first=seed-1/content/strings.json:1 pattern=open-task-marker$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
 printf '{"title":"Dust"}\n' > "$W/seed-1/content/strings.json"
 expect "ship: failing bot fails the bot step" 1 '^GATE FAIL step=bot detail=FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
-write_package "$W/seed-1" @backseat/seed-1 "exit 1" true "$SEED_BUILD" "node bot.js"
+write_package "$W/seed-1" @backseat/seed-1 "exit 1" true "$SEED_BUILD" "$SEED_BOT"
 expect "ship: failing typecheck fails the code lane" 1 '^GATE FAIL step=typecheck detail=@backseat/seed-1: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --dry-run
 expect "ship: config lane skips typecheck" 0 '^GATE PASS folder=seed-1 lane=config$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
-write_package "$W/seed-1" @backseat/seed-1 true "exit 1" "$SEED_BUILD" "node bot.js"
+write_package "$W/seed-1" @backseat/seed-1 true "exit 1" "$SEED_BUILD" "$SEED_BOT"
 expect "ship: failing tests fail the code lane" 1 '^GATE FAIL step=tests detail=@backseat/seed-1: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --dry-run
-write_package "$W/seed-1" @backseat/seed-1 true true "exit 3" "node bot.js"
-expect "ship: failing build fails the last step" 1 '^GATE FAIL step=build detail=@backseat/seed-1: exit 3$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
-write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "node bot.js"
+# Every step that runs no card code comes first: the build and its scan before the tests, and the
+# tests before the bot.
+expect "ship: the build and its scan run before the tests" 1 '^GATE FAIL step=runtime-token-deny-dist detail=FAIL: runtime-token-deny hits=1 first=seed-1/dist/index.html:1 pattern=open-task-marker$' -- env GATE_TEST_BUILD_TEXT="$TD" bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --dry-run
+rm -rf "$W/seed-1/dist"
+expect "ship: the tests run before the bot" 1 '^GATE FAIL step=tests detail=@backseat/seed-1: exit 1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --dry-run
+rm -rf "$W/seed-1/dist"
+# The phases the workflow runs one at a time.
+expect "ship: the scans phase runs the scans alone" 0 '^GATE PASS folder=seed-1 lane=code phase=scans$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --phase scans --dry-run
+assert "ship: the scans phase builds nothing" test ! -e "$W/seed-1/dist"
+expect "ship: the build phase builds and scans the build alone" 0 '^GATE PASS folder=seed-1 lane=code phase=build$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --phase build --dry-run
+assert "ship: the build phase wrote the build" test -f "$W/seed-1/dist/index.html"
+rm -rf "$W/seed-1/dist"
+expect "ship: the build phase fails on a token in the build" 1 '^GATE FAIL step=runtime-token-deny-dist ' -- env GATE_TEST_BUILD_TEXT="$TD" bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase build --dry-run
+rm -rf "$W/seed-1/dist"
+expect "ship: the checks phase runs typecheck and tests" 1 '^GATE FAIL step=tests detail=@backseat/seed-1: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --phase checks --dry-run
+assert "ship: the checks phase builds nothing" test ! -e "$W/seed-1/dist"
+expect "ship: the bot phase fails a failing bot" 1 '^GATE FAIL step=bot detail=FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --phase bot --dry-run
+expect "ship: the bot phase passes a passing bot" 0 '^GATE PASS folder=seed-1 lane=code phase=bot$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane code --phase bot --dry-run
+expect "ship: the platform folder has no bot phase" 2 '^$' -- bash "$SHIP" --repo-root "$W" --folder platform --phase bot
+expect "ship: the seed config lane has no checks phase" 2 '^$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase checks
+expect "ship: an unknown phase is a usage error" 2 '^$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --phase deploy
+write_package "$W/seed-1" @backseat/seed-1 true true "exit 3" "$SEED_BOT"
+expect "ship: failing build fails the build step" 1 '^GATE FAIL step=build detail=@backseat/seed-1: exit 3$' -- bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
+write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "$SEED_BOT"
 write_package "$W/platform/site" @backseat/site true "exit 1" "$SITE_BUILD"
 expect "ship: platform test failure names the package" 1 '^GATE FAIL step=tests detail=@backseat/site: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+expect "ship: the site build and its scan run before the platform tests" 1 '^GATE FAIL step=runtime-token-deny-dist detail=FAIL: runtime-token-deny hits=1 first=platform/site/dist/index.html:1 pattern=open-task-marker$' -- env GATE_TEST_BUILD_TEXT="$TD" bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+rm -rf "$W/platform/site/dist"
+expect "ship: the platform checks phase runs the package tests" 1 '^GATE FAIL step=tests detail=@backseat/site: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder platform --phase checks --dry-run
 rm -f "$W/platform/site/package.json"
-expect "ship: absent package is a failure, not a pass" 1 '^GATE FAIL step=typecheck detail=@backseat/site is not in the workspace$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+expect "ship: absent package is a failure, not a pass" 1 '^GATE FAIL step=build detail=@backseat/site is not in the workspace$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+write_package "$W/platform/site" @backseat/site true true "$SITE_BUILD"
+
+# ---------------------------------------------------------------- restore-kernel.sh
+# The build job's second line. A card test that ran on the same disk could rewrite the bot's package
+# script or its report module and forge a green bot; restoring every kernel file from the base
+# commit before the bot runs puts the real harness back. W's commit is the base.
+W_BASE=$(git -C "$W" rev-parse HEAD)
+expect "restore: a clean checkout changes nothing" 0 '^PASS: restore-kernel files=[0-9]+ restored=0 removed=0$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+printf 'process.stdout.write(JSON.stringify({ ok: true, simulatedSeconds: 36000, invariants: [], unlocks: [], finalTotalDust: 1, stateHash: "x" }) + "\\n");\n' > "$W/seed-1/forged.js"
+write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "node forged.js"
+expect "restore: a rewritten bot script forges a green bot when nothing is restored" 0 '^GATE PASS folder=seed-1 lane=config phase=bot$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase bot --dry-run
+expect "restore: the rewritten package file comes back from the base commit" 0 '^PASS: restore-kernel files=[0-9]+ restored=1 removed=0$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+expect "restore: the restored harness runs the real bot, which fails" 1 '^GATE FAIL step=bot detail=FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase bot --dry-run
+printf 'module.exports = (hours, seed) => ({ ok: true, simulatedSeconds: hours * 3600, invariants: [], unlocks: [], finalTotalDust: 1, stateHash: "x" });\n' > "$W/seed-1/bots/report.js"
+expect "restore: a rewritten report module forges a green bot when nothing is restored" 0 '^GATE PASS folder=seed-1 lane=config phase=bot$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase bot --dry-run
+printf 'module.exports = {};\n' > "$W/seed-1/bots/extra.js"
+printf 'module.exports = { plugins: [] };\n' > "$W/seed-1/postcss.config.cjs"
+mkdir -p "$W/seed-1/render"
+printf 'VITE_NOTE=1\n' > "$W/seed-1/render/.env.local"
+rm -f "$W/pnpm-workspace.yaml"
+expect "restore: changed and deleted kernel files come back and new ones go" 0 '^PASS: restore-kernel files=[0-9]+ restored=2 removed=3$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+assert "restore: the report module is the base commit's" test "$(cat "$W/seed-1/bots/report.js")" = "$(git -C "$W" show "$W_BASE:seed-1/bots/report.js")"
+assert "restore: the deleted workspace file is back" test -f "$W/pnpm-workspace.yaml"
+assert "restore: a new file under a kernel path is gone" test ! -e "$W/seed-1/bots/extra.js"
+assert "restore: a new build config is gone" test ! -e "$W/seed-1/postcss.config.cjs"
+assert "restore: a new env file is gone" test ! -e "$W/seed-1/render/.env.local"
+assert "restore: a lane file is left alone" test -f "$W/seed-1/forged.js"
+expect "restore: the real bot fails again" 1 '^GATE FAIL step=bot detail=FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase bot --dry-run
+expect "restore: a second run changes nothing" 0 '^PASS: restore-kernel files=[0-9]+ restored=0 removed=0$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+rm -f "$W/seed-1/forged.js"
+expect "restore: usage without a base" 2 '^$' -- bash "$RESTORE" --repo-root "$W"
+expect "restore: a base that does not resolve is an error" 2 '^$' -- bash "$RESTORE" --repo-root "$W" not-a-ref
 
 # ---------------------------------------------------------------- .github/workflows/gate.yml
 # ---------------------------------------------------------------- kernel-guard
@@ -436,6 +608,17 @@ for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/
 done
 printf 'seed-1/config/spawn-table.json\nseed-1/content/CLAUDE.md.txt\nseed-1/content/claude/notes.json\nseed-1/render/vite.configs/a.ts\n' > "$T/kernel-name-near.txt"
 expect "kernel-guard: names that only resemble a kernel name pass" 0 '^PASS: kernel-guard files=4$' -- bash "$KERNEL" "$T/kernel-name-near.txt"
+# The board's client code, the determinism harness, the game page, and every config a build tool,
+# the package manager or Netlify loads from the folder it works in.
+for file in platform/site/src/lib/board.ts platform/site/src/lib/env.ts seed-1/index.html seed-1/sim/hash.ts seed-1/sim/rng.ts seed-1/tests/timeline.test.ts \
+  platform/site/postcss.config.mjs seed-1/.postcssrc.json seed-1/render/tailwind.config.ts seed-1/babel.config.json seed-1/.babelrc platform/site/tsconfig.json \
+  seed-1/render/tsconfig.app.json seed-1/.env seed-1/.env.production seed-1/public/_headers platform/site/public/_redirects seed-1/pnpm-workspace.yaml \
+  seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock; do
+  printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-new.txt"
+  expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-new.txt"
+done
+printf 'seed-1/render/headers.ts\nseed-1/content/environment.json\nseed-1/sim/hashing.ts\nseed-1/render/postcss.ts\nseed-1/render/rng-view.ts\n' > "$T/kernel-new-near.txt"
+expect "kernel-guard: names that only resemble the new kernel files pass" 0 '^PASS: kernel-guard files=5$' -- bash "$KERNEL" "$T/kernel-new-near.txt"
 printf 'seed-1/config/spawn-table.json\nseed-1/content/a\tb.json\n' > "$T/kernel-tab.txt"
 expect "kernel-guard: a tab in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-tab.txt"
 printf 'seed-1/content/a\001b.json\n' > "$T/kernel-control.txt"
@@ -482,33 +665,121 @@ WORKFLOW="$REPO_ROOT/.github/workflows/gate.yml"
 workflow_has() { grep -qE -- "$1" "$WORKFLOW"; }
 assert "workflow: file exists" test -f "$WORKFLOW"
 assert "workflow: named gate" workflow_has '^name: gate$'
-for job in detect seed-config seed-code platform gate; do
+for job in detect seed-code platform build gate; do
   assert "workflow: job $job" workflow_has "^  $job:$"
 done
-assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-config, seed-code, platform\]$'
-assert "workflow: the gate job always runs" workflow_has '^    if: always\(\)$'
+assert "workflow: no seed-config job (the config lane's build and bot run in the build job)" test "$(grep -c '^  seed-config:$' "$WORKFLOW")" = 0
+assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-code, platform, build\]$'
+assert "workflow: the gate job runs unless the run was cancelled" workflow_has '^    if: \$\{\{ !cancelled\(\) \}\}$'
 assert "workflow: the gate job fails on a failed or cancelled job" workflow_has '\(failure\|cancelled\)'
-assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -c 'run: git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 4
+assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -cE '^ +(run: )?git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 4
 assert "workflow: the gate is restored before the changed-files list is written" awk '/Use the base commit.s gate on a card branch/{r=NR} /Write the commit message and changed files/{if (!r || r > NR) bad=1; r=0} END{exit bad}' "$WORKFLOW"
 job_block() { awk -v job="  $1:" '$0 == job {p=1; next} /^  [a-z-]+:$/{p=0} p' "$WORKFLOW"; }
 detect_runs() { job_block detect | grep -qF -- "$1"; }
 detect_installs_nothing() { ! job_block detect | grep -qE 'pnpm (install|i )|npm (install|ci)|uses: (pnpm/action-setup|actions/setup-node)'; }
-detect_order() { job_block detect | awk '/run: git checkout "\$BASE" -- platform\/gate$/{r=NR} /kernel-guard\.sh/{g=NR} /--check-modes/{m=NR} END{exit !(r && g && m && r < g && r < m)}'; }
+# order <job> <fixed string> ...: each string is found in the job, each after the one before.
+order() {
+  local job=$1
+  shift
+  job_block "$job" | ORDER_LIST="$(printf '%s\n' "$@")" awk 'BEGIN { n = split(ENVIRON["ORDER_LIST"], want, "\n") } { for (i = 1; i <= n; i++) if (!(i in at) && index($0, want[i])) at[i] = NR } END { for (i = 1; i <= n; i++) { if (!(i in at)) exit 1; if (i > 1 && at[i] <= at[i - 1]) exit 1 } }'
+}
 assert "workflow: card branches run the kernel guard in detect" detect_runs 'run: bash platform/gate/kernel-guard.sh "$RUNNER_TEMP/changed-files.txt"'
 assert "workflow: card branches run the mode check in detect" detect_runs 'run: bash platform/gate/changed-paths.sh --check-modes "$BASE" "$HEAD"'
+assert "workflow: card branches run the lane check in detect" detect_runs 'run: bash platform/gate/changed-paths.sh --check-lane "$BRANCH" "$BASE" "$HEAD"'
 assert "workflow: the kernel guard runs in one place only" test "$(grep -c 'platform/gate/kernel-guard.sh' "$WORKFLOW")" = 1
 assert "workflow: detect installs nothing" detect_installs_nothing
-assert "workflow: detect restores the base gate before the guard and the mode check" detect_order
+assert "workflow: detect restores the base gate, then guards, then scans" order detect 'run: git checkout "$BASE" -- platform/gate' 'kernel-guard.sh' '--check-modes' '--check-lane' 'Detect folders and lane' '--phase scans --folder seed-1' '--phase scans --folder platform'
 assert "workflow: the gate job requires detect to pass" workflow_has '\[ "\$DETECT" = success \]'
-for pair in 'seed-config SEED_CONFIG' 'seed-code SEED_CODE' 'platform PLATFORM_JOB'; do
+for pair in 'seed-code SEED_CODE' 'platform PLATFORM_JOB' 'build BUILD'; do
   set -- $pair
   assert "workflow: the gate job requires $1 to pass when detect selects it" workflow_has "want $1 \"\\\$$2\""
 done
+assert "workflow: the gate job requires the build job whenever detect selects a folder" workflow_has 'if \[ "\$SEED" = true \] \|\| \[ "\$PLATFORM" = true \]; then want build'
 for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
-  assert "workflow: the platform job runs $step after the ship gate" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Ship gate$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
+  assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
 assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
+assert "workflow: the platform job builds the site for the end-to-end suite before running it" order platform 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
+# Card code runs in seed-code and platform only; the build job runs it only in its last step.
+assert "workflow: every ship-gate call names its phase" test "$(grep 'ship-gate.sh' "$WORKFLOW" | grep -vc -- '--phase ')" = 0
+for job in seed-code platform; do
+  assert "workflow: $job runs the checks phase and never the build or the bot" test "$(job_block "$job" | grep -c -- '--phase checks')" = 1 -a "$(job_block "$job" | grep -cE -- '--phase (build|bot|all)')" = 0
+done
+assert "workflow: the build job restores every kernel file, then installs, builds, scans and runs the bot last" order build 'git checkout "$BASE" -- platform/gate' 'restore-kernel.sh "$BASE"' 'uses: pnpm/action-setup' 'uses: actions/setup-node' 'run: pnpm install --frozen-lockfile --ignore-scripts' '--phase build --folder seed-1' '--phase build --folder platform' '--phase bot --folder seed-1'
+build_runs_no_card_tests() { ! job_block build | grep -qE -- '--phase checks|pnpm (--filter [^ ]+ )?(test|e2e)|test:|playwright'; }
+build_has_no_cache() { ! job_block build | grep -qE '^ +cache:'; }
+assert "workflow: the build job runs no card tests" build_runs_no_card_tests
+assert "workflow: the build job uses no dependency cache" build_has_no_cache
+assert "workflow: the build job runs when detect selects a folder" test "$(job_block build | grep -c "^    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.platform == 'true'$")" = 1
+assert "workflow: the build job restores kernel files on card branches only" order build 'name: Restore every kernel file from the base commit on a card branch' "if: startsWith(github.head_ref, 'card/')" 'restore-kernel.sh "$BASE"'
+assert "workflow: a newer push to a pull request cancels its older run" workflow_has "^  cancel-in-progress: \\\$\\{\\{ github.event_name == 'pull_request' \\}\\}$"
+
+# Every workflow file (.github is a kernel path; the board writes these): the token reads and
+# nothing more, no secret is named, no trigger runs with the base branch's rights, every checkout
+# drops the token, and only gate.yml has a job named gate, the check the dispatcher merges on.
+for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/*.yaml; do
+  [ -f "$file" ] || continue
+  name=$(basename "$file")
+  top_permissions() { awk '/^permissions:/{p=1; next} p && /^  /{print; next} {p=0}' "$1"; }
+  assert "workflow audit: $name grants the token contents: read and nothing else" test "$(top_permissions "$file")" = "  contents: read"
+  assert "workflow audit: $name sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
+  assert "workflow audit: $name grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0
+  assert "workflow audit: $name names no secret" test "$(grep -c 'secrets\.' "$file")" = 0
+  assert "workflow audit: $name has no pull_request_target or workflow_run trigger" test "$(grep -cE 'pull_request_target|workflow_run' "$file")" = 0
+  checkouts_drop_token() {
+    awk '
+      /uses: actions\/checkout@/ { if (open && !ok) bad = 1; open = 1; ok = 0; indent = index($0, "-"); next }
+      open && /persist-credentials: false/ { ok = 1 }
+      open && /^ *- / && index($0, "-") <= indent { if (!ok) bad = 1; open = 0 }
+      open && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { if (!ok) bad = 1; open = 0 }
+      END { if (open && !ok) bad = 1; exit bad }
+    ' "$1"
+  }
+  assert "workflow audit: every checkout in $name sets persist-credentials: false" checkouts_drop_token "$file"
+  gate_jobs=$(awk '
+    /^jobs:/ { j = 1; next }
+    j && /^[^ ]/ { j = 0 }
+    j && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { id = $1; sub(/:$/, "", id); if (id == "gate") n++ }
+    j && /^    name:[[:space:]]*["'"'"']?gate["'"'"']?[[:space:]]*$/ { n++ }
+    END { print n + 0 }
+  ' "$file")
+  if [ "$name" = gate.yml ]; then
+    assert "workflow audit: gate.yml has one job with the id gate and the name gate" test "$gate_jobs" = 2 -a "$(job_block gate | grep -c '^    name: gate$')" = 1
+  else
+    assert "workflow audit: $name has no job named gate" test "$gate_jobs" = 0
+  fi
+done
+assert "workflow audit: gate.yml runs checkout four times" test "$(grep -c 'uses: actions/checkout@' "$WORKFLOW")" = 4
+
+# ---------------------------------------------------------------- netlify.toml
+# A card branch's pull request is opened before the gate runs, so neither site may build a deploy
+# preview of it. Netlify runs the ignore command with bash in the site's folder; exit 0 skips.
+SITES="$T/netlify"
+mkdir -p "$SITES/platform/site" "$SITES/seed-1"
+git -C "$SITES" init -q -b main
+for f in pnpm-lock.yaml package.json pnpm-workspace.yaml tsconfig.base.json platform/site/index.html seed-1/index.html; do printf 'x\n' > "$SITES/$f"; done
+git -C "$SITES" add -A && git -C "$SITES" commit -q -m "base"; N0=$(git -C "$SITES" rev-parse HEAD)
+printf 'y\n' > "$SITES/seed-1/index.html"; git -C "$SITES" commit -q -am "seed"; N1=$(git -C "$SITES" rev-parse HEAD)
+netlify_ignore() { sed -n "s/^  ignore = '\(.*\)'\$/\1/p" "$REPO_ROOT/$1"; }
+# ignore_exit <toml> <folder> <HEAD> <CACHED_COMMIT_REF> <COMMIT_REF>
+ignore_exit() {
+  local cmd
+  cmd=$(netlify_ignore "$1")
+  (cd "$SITES/$2" && env HEAD="$3" CACHED_COMMIT_REF="$4" COMMIT_REF="$5" bash -c "$cmd") > /dev/null 2>&1
+  echo $?
+}
+for pair in 'platform/site/netlify.toml platform/site' 'seed-1/netlify.toml seed-1'; do
+  set -- $pair
+  assert "netlify: $1 has one ignore command" test "$(netlify_ignore "$1" | wc -l | tr -d ' ')" = 1
+  assert "netlify: $1 skips a card branch's deploy preview" test "$(ignore_exit "$1" "$2" card/abcd1234-code '' "$N1")" = 0
+  assert "netlify: $1 skips a card branch with a cached build too" test "$(ignore_exit "$1" "$2" card/abcd1234-config "$N0" "$N1")" = 0
+  assert "netlify: $1 builds a board branch's deploy preview" test "$(ignore_exit "$1" "$2" launch/gate '' "$N1")" != 0
+  assert "netlify: $1 builds a branch that only starts like a card branch" test "$(ignore_exit "$1" "$2" cards/x '' "$N1")" != 0
+  assert "netlify: $1 builds main with no cached build" test "$(ignore_exit "$1" "$2" main '' "$N1")" != 0
+done
+assert "netlify: the site skips a main build that changed nothing it uses" test "$(ignore_exit platform/site/netlify.toml platform/site main "$N0" "$N1")" = 0
+assert "netlify: the seed builds main when its folder changed" test "$(ignore_exit seed-1/netlify.toml seed-1 main "$N0" "$N1")" != 0
 
 # ---------------------------------------------------------------- summary
 if [ "$FAILED" -eq 0 ]; then
