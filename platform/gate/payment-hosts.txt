@@ -1,0 +1,34 @@
+# Payment hosts (docs/specs/board-site.md). payment-host-scan.mjs fails a build that carries an
+# address on any of these domains, or on any of their subdomains, other than the one Payment Link the
+# site is configured with. One domain per line; comments and blank lines are skipped.
+stripe.com
+stripe.network
+link.com
+paypal.com
+paypal.me
+paypalobjects.com
+braintreegateway.com
+venmo.com
+cash.app
+square.link
+square.site
+squareup.com
+ko-fi.com
+patreon.com
+buymeacoffee.com
+gofundme.com
+liberapay.com
+opencollective.com
+gumroad.com
+lemonsqueezy.com
+paddle.com
+coinbase.com
+revolut.me
+wise.com
+paystack.com
+razorpay.com
+mollie.com
+adyen.com
+checkout.com
+2checkout.com
+payoneer.com

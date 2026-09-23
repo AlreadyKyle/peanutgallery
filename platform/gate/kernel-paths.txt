@@ -1,5 +1,7 @@
 # Paths no agent may change, in any lane (docs/specs/launch-hardening.md, docs/specs/launch-gate.md,
-# PLAN.md §4 Kernel). One repository-relative path per line; a folder covers everything under it.
+# docs/specs/board-site.md, PLAN.md §4 Kernel). In platform/site that is the build, the money (the
+# Payment Link and what reads, formats or states money), the ledger and the legal pages; the whole
+# board site is kernel. One repository-relative path per line; a folder covers everything under it.
 # The dispatcher refuses a card that changes one, the gate fails a card branch that does, and the
 # gate's build job restores every one of them from the base commit before it installs or builds.
 .github
@@ -10,6 +12,7 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 tsconfig.base.json
 platform/agents
+platform/board
 platform/dispatcher
 platform/gate
 platform/ops
@@ -19,8 +22,20 @@ platform/site/netlify.toml
 platform/site/package.json
 platform/site/playwright.config.ts
 platform/site/scripts
-platform/site/src/lib/board.ts
+platform/site/src/components/Funding.tsx
+platform/site/src/components/LedgerSummary.tsx
+platform/site/src/components/Meter.tsx
+platform/site/src/components/PoolStat.tsx
+platform/site/src/components/TextPage.tsx
 platform/site/src/lib/env.ts
+platform/site/src/lib/format.ts
+platform/site/src/lib/legal.ts
+platform/site/src/lib/payment.ts
+platform/site/src/lib/source.ts
+platform/site/src/lib/supabase.ts
+platform/site/src/pages/Contribute.tsx
+platform/site/src/pages/Ledger.tsx
+platform/site/src/pages/Legal.tsx
 platform/site/vite.config.ts
 seed-1/CLAUDE.md
 seed-1/bots

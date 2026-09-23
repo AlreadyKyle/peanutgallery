@@ -5,8 +5,8 @@
 # usage: runtime-token-deny.sh --folder seed-1|platform [--repo-root d]
 #        runtime-token-deny.sh [--repo-root d] path ...
 #
-# Scope by folder: all of seed-1, and seed-1/dist; platform/site and platform/agents, and
-# platform/site/dist. Test files and test folders are read like any other source: a code-lane card
+# Scope by folder: all of seed-1, and seed-1/dist; platform/site, platform/board and platform/agents,
+# and the two sites' dist folders. Test files and test folders are read like any other source: a code-lane card
 # writes them, and anything under a folder named tests can be imported and shipped. A path argument
 # names a file or a folder. A folder named dist, given directly or found inside a folder argument, is
 # the build: every file in it is read, and the bundles under its assets/ folder too. node_modules
@@ -112,7 +112,7 @@ scope_files() {
   if [ -n "$FOLDER" ]; then
     case "$FOLDER" in
       seed-1) set -- "$REPO_ROOT/seed-1" ;;
-      platform) set -- "$REPO_ROOT/platform/site" "$REPO_ROOT/platform/agents" ;;
+      platform) set -- "$REPO_ROOT/platform/site" "$REPO_ROOT/platform/board" "$REPO_ROOT/platform/agents" ;;
     esac
     for p in "$@"; do if [ -d "$p" ]; then folder_files "$p"; fi; done
   else
