@@ -8,6 +8,9 @@ import { SourceProvider } from './lib/studio';
 import { clearStoredSessions, getClient } from './lib/supabase';
 import './styles.css';
 
+// Kernel (docs/specs/board-site.md): the entry index.html loads. It builds the data source every
+// figure comes through, clears any stored session and mounts the kernel frame in App.tsx.
+//
 // A tab restored from the back/forward cache runs the build it started with; reload when the
 // site has moved on.
 watchForNewBuild({ doc: document, win: window, fetchFn: fetch.bind(window), reload: () => { window.location.reload(); } });

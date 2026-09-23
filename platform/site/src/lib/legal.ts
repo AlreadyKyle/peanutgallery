@@ -1,8 +1,10 @@
-// The legal pages, the fixed rules and every string that states money: the Payment Link's choices,
-// the ledger's figures and their descriptions, and the funding caption on a card (docs/specs/board-site.md).
-// This file is kernel (platform/gate/kernel-paths.txt): no card may change it, and a change is a board
-// pull request. copy.ts spreads it first, so the rest of the site reads the same strings as copy.<key>;
-// the kernel pages and components read them from here.
+// The legal pages, the fixed rules and the statements of money: every money rule (the reserve, the
+// split, the emergency fund, the daily limit, holds, refunds and where the money goes), the label and
+// description of every money and ledger figure, the words of the ledger's rows, the Payment Link's
+// choices and the funding caption on a card (docs/specs/board-site.md). This file is kernel
+// (platform/gate/kernel-paths.txt): no card may change it, and a change is a board pull request.
+// copy.ts holds the rest of the site's words and does not repeat these; every page, kernel or not,
+// reads these from here.
 //
 // The text pages are drafted for board review; not legal advice. In a paragraph, {email} becomes the
 // contact address as a mailto link, {refunds} a link to the Refunds page and {discord} the Discord
@@ -45,6 +47,106 @@ export const legal = {
     "Agent credit above $50 from one person in one day, or above the studio's daily limit across everyone. It moves to In the pool after 14 days.",
   describeAgentSpend: 'Model usage paid for with contributions, priced at list rates.',
   tokensLine: '{in} in · {cached} cached · {out} out tokens',
+  meterUnavailable: 'Live figures are not available yet.',
+  staleFigures: 'Could not refresh. These figures may be out of date.',
+  partUnavailable: 'Not available right now.',
+  ledgerEmpty: 'No agent work recorded yet.',
+  deploysEmpty: 'No deploys yet.',
+  artPolicy: 'Art in the games and the agent avatars is drawn by code.',
+  allAges: 'Everything here is made for all ages.',
+  deployGreen: 'passed checks',
+  deployNotGreen: 'failed checks',
+  spent: 'spent',
+  shippedOn: 'shipped',
+  spentSoFar: 'spent so far',
+  fundThis: 'Fund this card',
+  folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
+  // Shown while the board has paused the agents, for any reason: before the first payout, at the
+  // cutover, after a failed revert or in an incident. It follows the board's Pause and Resume on its own.
+  pausedNotice: 'The agents are paused. Funded cards keep their money and wait in the queue until the board resumes them.',
+  eventVerbs: {
+    start: 'started',
+    tool_call: 'used a tool',
+    tool_result: 'got a result',
+    message: 'wrote a note',
+    gate_pass: 'passed checks',
+    gate_fail: 'failed checks',
+    ship: 'shipped',
+    revert: 'reverted',
+    error: 'hit an error',
+  } as Record<string, string>,
+  // The worked path of a contribution on /how-it-works: its steps, the split example's rows and
+  // where the money goes. The page's title, lede and example labels are in copy.ts.
+  howMoneyMoves: {
+    blocks: [
+      {
+        heading: 'Pick a card',
+        body: [
+          'Each card is one change to the game or to this site, with a funding target. Pick one to fund, or let the studio pick for you.',
+        ],
+      },
+      {
+        heading: 'Contribute and choose the split',
+        body: [
+          "At checkout you choose an amount and how it splits between the agents and the studio. Before the split, 10% of what is left after Stripe's fee goes to a reserve that covers disputes.",
+          "Unless you change it, 80% of the rest goes to the agents and 20% to the studio. 5% of the agents' share goes to an emergency fund until it holds $500.",
+        ],
+      },
+      {
+        heading: 'The bar fills',
+        body: [
+          "Up to $50 of agent credit from one person a day reaches the card's bar within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days first.",
+          'When the bar is full, the card joins the queue. If a card costs less than its bar holds, the rest pays for later cards.',
+        ],
+      },
+      {
+        heading: 'The agents build it',
+        body: [
+          'An AI agent takes the card and makes the change. Its actions appear on the ledger, and the cost of work paid for with contributions is added to the public total.',
+        ],
+      },
+      {
+        heading: 'Checks, then live',
+        body: [
+          'Before a change goes live it must pass automated checks, including a bot that plays the game. A change that fails is not shipped, and a live change that breaks is rolled back.',
+        ],
+      },
+      {
+        heading: 'It shows under Shipped',
+        body: ['Once it is live, the card is listed under Shipped with what it cost and how many people funded it.'],
+      },
+    ],
+    splitCaption: "A $10.00 contribution after Stripe's fee, with the default split.",
+    splitRows: {
+      reserve: 'Held in reserve',
+      reserveNote: '10% of the $10.00.',
+      studio: "Studio's share",
+      studioNote: '20% of the $9.00 left.',
+      incident: 'Emergency fund',
+      incidentNote: "5% of the agents' $7.20, until the fund holds $500.",
+      credit: 'Agent credit',
+      creditNote: "What reaches the card's bar and the meter.",
+    },
+    sections: [
+      {
+        heading: 'Where the money goes',
+        paragraphs: [
+          "Stripe takes its fee first. 10% of the rest is held in reserve; it covers disputes first, and agents never spend it.",
+          "The split you choose at checkout divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
+          "5% of the agents' share goes to an emergency fund for urgent bug fixes, until the fund holds $500. The rest is agent credit.",
+          'Agent credit pays for model usage on funded cards, within daily and per-card caps. Money a card does not use stays with the agents and pays for later cards.',
+          "The studio pays for the agents' model usage with contributions once Stripe has paid them out to the studio.",
+        ],
+      },
+      {
+        heading: 'Holds and refunds',
+        paragraphs: [
+          "Up to $50 of agent credit from one person a day is added within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days before it counts.",
+          "A refund or a dispute takes that contribution's credit off the meter and off any card bar it funded. Work that has already shipped stays shipped. The {refunds} says how to ask for one.",
+        ],
+      },
+    ],
+  },
   contributeTitle: 'Where should your contribution go?',
   contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
   pickForMe: 'Pick for me',

@@ -54,7 +54,7 @@ beforeAll(async () => {
   await mkdir(path.join(repo, 'platform', 'site'), { recursive: true });
   await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), `${JSON.stringify(SPAWN_TABLE, null, 2)}\n`, 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'content', 'strings.json'), '{"title":"Dust"}\n', 'utf8');
-  await writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>Backseat</title>\n', 'utf8');
+  await writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>Backseat</title>\n', 'utf8');
   await git(['add', '-A'], repo);
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'initial'], repo);
   await git(['remote', 'add', 'origin', origin], repo);
@@ -213,7 +213,7 @@ const OLDER_GREEN = { id: 'row-1', folder: 'platform' as const, sha: 'older-sha'
 
 const editSite: FakeScript = async (spec, emit) => {
   await emit(startEvent());
-  await writeFile(path.join(spec.worktree, 'platform', 'site', 'index.html'), '<title>Peanut Gallery</title>\n', 'utf8');
+  await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), '<title>Peanut Gallery</title>\n', 'utf8');
   await emit(usageEvent(1, 100));
 };
 
@@ -280,7 +280,7 @@ describe('runCardPipeline', () => {
 
     const pushed = await git(['show', '--format=%an <%ae>%P%n%B', '--name-only', 'card/4c2f5a1e-code'], origin);
     expect(pushed).toContain(`Builder A (AI agent) <${AGENT_EMAIL}>${initialSha}`);
-    expect(pushed).toContain('platform/site/index.html');
+    expect(pushed).toContain('platform/site/page.html');
     expect(existsSync(path.join(config.worktreeRoot, 'card-4c2f5a1e'))).toBe(false);
     expect(adapter.specs[0]?.prompt).toContain('Allowed paths: platform/site.');
   });
@@ -1325,12 +1325,12 @@ class MemoryPatchStore implements PatchStore {
 // The patch an earlier managed session had accepted for a platform card: made against the initial
 // commit, stored with it.
 function storedSitePatch(title: string): string {
-  const file = path.join(repo, 'platform', 'site', 'index.html');
+  const file = path.join(repo, 'platform', 'site', 'page.html');
   const original = readFileSync(file, 'utf8');
-  execFileSync('git', ['checkout', '-q', initialSha, '--', 'platform/site/index.html'], { cwd: repo, stdio: 'pipe' });
+  execFileSync('git', ['checkout', '-q', initialSha, '--', 'platform/site/page.html'], { cwd: repo, stdio: 'pipe' });
   const before = readFileSync(file, 'utf8');
   execFileSync('bash', ['-c', `printf '%s\n' "$1" > "$2"`, 'x', title, file]);
-  const patch = execFileSync('git', ['diff', '--no-renames', '--full-index', initialSha, '--', 'platform/site/index.html'], { cwd: repo, stdio: 'pipe' }).toString();
+  const patch = execFileSync('git', ['diff', '--no-renames', '--full-index', initialSha, '--', 'platform/site/page.html'], { cwd: repo, stdio: 'pipe' }).toString();
   execFileSync('bash', ['-c', 'printf "%s" "$1" > "$2"', 'x', before === original ? original : before, file]);
   return patch;
 }
@@ -1353,8 +1353,8 @@ describe('a card with a stored patch', () => {
     expect(adapter.specs).toEqual([]);
     expect(db.ledger).toEqual([]);
     expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
-    expect(db.events.find((event) => event.payload.step === 'patch_reused')).toMatchObject({ type: 'message', payload: { base_sha: initialSha, files: ['platform/site/index.html'] } });
-    const pushed = await git(['show', 'card/eeeeeeee-code:platform/site/index.html'], origin);
+    expect(db.events.find((event) => event.payload.step === 'patch_reused')).toMatchObject({ type: 'message', payload: { base_sha: initialSha, files: ['platform/site/page.html'] } });
+    const pushed = await git(['show', 'card/eeeeeeee-code:platform/site/page.html'], origin);
     expect(pushed).toBe('<title>Studio</title>');
   });
 

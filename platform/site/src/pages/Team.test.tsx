@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import type { Card, Role, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -170,9 +171,9 @@ describe('Team', () => {
   it('says the team is unavailable when the roles did not load, and loading before', async () => {
     renderTeam(sourceOf(snapshot({ roles: [], missing: ['roles'] })));
     expect(screen.getByText(team.loading)).toBeTruthy();
-    await waitFor(() => expect(screen.getByText(copy.partUnavailable)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(legal.partUnavailable)).toBeTruthy());
     cleanup();
     renderTeam(null);
-    expect(screen.getByText(copy.meterUnavailable)).toBeTruthy();
+    expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 });

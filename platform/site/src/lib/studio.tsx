@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Snapshot, StudioSource } from './source';
 import { errorMessage } from './supabase';
-import { copy } from './copy';
+import { legal } from './legal';
 
+// Kernel (docs/specs/board-site.md): the one load and poll of the snapshot every figure on the site
+// comes through.
 export const POLL_MS = 15_000;
 export const REFRESH_DEBOUNCE_MS = 500;
 
@@ -15,7 +17,7 @@ export type StudioState =
 
 /** The line shown when figures are missing: not set up yet, or failed to load right now. */
 export function unavailableLine(studio: StudioState): string {
-  return studio.state === 'error' ? copy.partUnavailable : copy.meterUnavailable;
+  return studio.state === 'error' ? legal.partUnavailable : legal.meterUnavailable;
 }
 
 const SourceContext = createContext<StudioSource | null>(null);

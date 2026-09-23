@@ -65,7 +65,7 @@ async function patchFor(change: () => Promise<void>): Promise<Buffer> {
 }
 
 const costPatch = () => patchFor(async () => writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), SPAWN.replace('10', '11'), 'utf8'));
-const strayPatch = () => patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>stray</title>\n', 'utf8'));
+const strayPatch = () => patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>stray</title>\n', 'utf8'));
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-managed-'));
@@ -78,7 +78,7 @@ beforeAll(async () => {
   await writeFile(path.join(repo, 'CLAUDE.md'), '# Root\n\nRoot instructions for every session.\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'CLAUDE.md'), '# Seed\n\nSeed instructions: the sim is deterministic.\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), SPAWN, 'utf8');
-  await writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>Peanut Gallery</title>\n', 'utf8');
+  await writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>Peanut Gallery</title>\n', 'utf8');
   await writeFile(path.join(repo, 'platform', 'agents', 'prompts', 'builder-a.md'), '# Builder A\n\nYou are Builder A.\n', 'utf8');
   await git(['add', '-A'], repo);
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'base'], repo);
@@ -278,13 +278,13 @@ describe('a card session', () => {
 
   it('puts only the root CLAUDE.md in a platform card session, since platform has none of its own', async () => {
     const h = harness();
-    const patch = await patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>Studio</title>\n', 'utf8'));
+    const patch = await patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>Studio</title>\n', 'utf8'));
     runsFixture(h.client, patch);
     await run(h, spec({ folder: 'platform', allowedPaths: lanePaths('platform', 'code') }));
     const system = (h.client.last.params.agent as { system: string }).system;
     expect(system).toContain('Root instructions for every session.');
     expect(system).not.toContain('Seed instructions');
-    expect(await readFile(path.join(repo, 'platform', 'site', 'index.html'), 'utf8')).toBe('<title>Studio</title>\n');
+    expect(await readFile(path.join(repo, 'platform', 'site', 'page.html'), 'utf8')).toBe('<title>Studio</title>\n');
   });
 
   it('refuses a submission whose sha256 does not match, then accepts the corrected one', async () => {
@@ -329,8 +329,8 @@ describe('a card session', () => {
     expect(sentTypes(h.client)).toEqual(['user.message', 'user.custom_tool_result']);
     expect(result).toMatchObject({ isError: true, endSubtype: 'patch_rejected', exitCode: 1 });
     expect(events.filter((event) => event.type === 'error').map((event) => event.type === 'error' && event.message)).toEqual([
-      'submit_patch refused: the patch changes files outside the lane or on a kernel path: platform/site/index.html',
-      'submit_patch refused: the patch changes files outside the lane or on a kernel path: platform/site/index.html',
+      'submit_patch refused: the patch changes files outside the lane or on a kernel path: platform/site/page.html',
+      'submit_patch refused: the patch changes files outside the lane or on a kernel path: platform/site/page.html',
     ]);
     expect(raw(['status', '--porcelain'])).toBe('');
     expect(h.store.rows).toEqual([]);

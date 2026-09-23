@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { Contribute } from './Contribute';
@@ -79,9 +80,9 @@ describe('Contribute', () => {
         card({ id: 'l1', title: 'Already live', stage: 'live', funding_target_usd: 10, funded_usd: 4 }),
       ]),
     );
-    expect(screen.getByRole('heading', { level: 1, name: copy.contributeTitle })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: legal.contributeTitle })).toBeTruthy();
     const links = () => screen.getAllByRole('link');
-    expect(links()[0]?.textContent).toBe(`${copy.pickForMe}${copy.pickForMeBody}`);
+    expect(links()[0]?.textContent).toBe(`${legal.pickForMe}${legal.pickForMeBody}`);
     expect(links()[0]?.getAttribute('href')).toBe(STRIPE);
 
     await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
@@ -114,17 +115,17 @@ describe('Contribute', () => {
 
   it('says the agents are paused above the choices while the board has paused them', async () => {
     renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true));
-    await waitFor(() => expect(screen.getByText(copy.pausedNotice)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(legal.pausedNotice)).toBeTruthy());
     // The notice comes before Pick for me, so it is read before any payment.
-    const notice = screen.getByText(copy.pausedNotice);
-    const pick = screen.getByRole('link', { name: new RegExp(copy.pickForMe) });
+    const notice = screen.getByText(legal.pausedNotice);
+    const pick = screen.getByRole('link', { name: new RegExp(legal.pickForMe) });
     expect(notice.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps Pick for me when no card needs funding, and says so', async () => {
     renderContribute(source([]));
-    await waitFor(() => expect(screen.getByText(copy.noFundableCards)).toBeTruthy());
-    expect(screen.getByRole('link', { name: new RegExp(copy.pickForMe) }).getAttribute('href')).toBe(STRIPE);
+    await waitFor(() => expect(screen.getByText(legal.noFundableCards)).toBeTruthy());
+    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).getAttribute('href')).toBe(STRIPE);
   });
 
   it('says the figures may be out of date when a refresh fails', async () => {
@@ -144,7 +145,7 @@ describe('Contribute', () => {
     expect(status.textContent).toBe('');
     fail = true;
     onChange();
-    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(legal.staleFigures), { timeout: 3000 });
     expect(screen.getAllByRole('status')).toEqual([status]);
     expect(screen.getByText('Rename the Gatherer')).toBeTruthy();
   });
@@ -152,7 +153,7 @@ describe('Contribute', () => {
   it('says contributions are not open without a payment link', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
     renderContribute(null);
-    expect(screen.getByText(copy.contributeUnavailable)).toBeTruthy();
-    expect(screen.queryByRole('link', { name: new RegExp(copy.pickForMe) })).toBeNull();
+    expect(screen.getByText(legal.contributeUnavailable)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: new RegExp(legal.pickForMe) })).toBeNull();
   });
 });

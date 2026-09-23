@@ -4,6 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { copy } from '../lib/copy';
 import { formatDate, formatInteger } from '../lib/format';
+import { legal } from '../lib/legal';
 import { cardRoleFolder, runsCards } from '../lib/roster';
 import type { Card, Role, Snapshot } from '../lib/source';
 import { unavailableLine, useStudio } from '../lib/studio';
@@ -48,7 +49,7 @@ function RoleCard({ role, cards, platformLaneOpen }: { role: Role; cards: readon
 }
 
 function Roster({ snapshot }: { snapshot: Snapshot }) {
-  if (snapshot.missing.includes('roles')) return <p className="muted">{copy.partUnavailable}</p>;
+  if (snapshot.missing.includes('roles')) return <p className="muted">{legal.partUnavailable}</p>;
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
   const laneOpen = snapshot.platformLaneOpen === true;

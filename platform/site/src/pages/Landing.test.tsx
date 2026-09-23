@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import type { Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -215,7 +216,7 @@ describe('Landing', () => {
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     // Contribute goes to the chooser first, not straight to checkout.
     expect(screen.getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
-    expect(screen.getByText(copy.split)).toBeTruthy();
+    expect(screen.getByText(legal.split)).toBeTruthy();
     expect(screen.getByText(copy.fundIntro)).toBeTruthy();
 
     // Three short lines and a link to the whole path on /how-it-works.
@@ -223,10 +224,10 @@ describe('Landing', () => {
     for (const step of copy.steps) expect(screen.getByText(step)).toBeTruthy();
     const how = screen.getByRole('region', { name: copy.howItWorks });
     expect(within(how).getByRole('link', { name: copy.howItWorksMore }).getAttribute('href')).toBe('/how-it-works');
-    expect(screen.getByText(copy.artPolicy)).toBeTruthy();
-    expect(screen.getByText(copy.allAges)).toBeTruthy();
-    expect(screen.getByText(copy.fixedRulesIntro)).toBeTruthy();
-    for (const rule of copy.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
+    expect(screen.getByText(legal.artPolicy)).toBeTruthy();
+    expect(screen.getByText(legal.allAges)).toBeTruthy();
+    expect(screen.getByText(legal.fixedRulesIntro)).toBeTruthy();
+    for (const rule of legal.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
 
     await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
     expect(
@@ -238,8 +239,8 @@ describe('Landing', () => {
       copy.queued,
       copy.shipped,
       copy.howItWorks,
-      copy.meter,
-      copy.ledger,
+      legal.meter,
+      legal.ledger,
       copy.policies,
     ]);
     expect(screen.getAllByRole('link', { name: copy.fullLedger }).map((link) => link.getAttribute('href'))).toEqual(['/ledger', '/ledger']);
@@ -251,25 +252,25 @@ describe('Landing', () => {
     expect(paragraphIn(panel, `${copy.buildingLine} The core loop`)).toBeTruthy();
     expect(paragraphIn(panel, `${copy.latestShipped} The unlock list`)).toBeTruthy();
     expect(within(panel).queryByRole('list')).toBeNull();
-    expect(screen.queryByText(copy.staleFigures)).toBeNull();
-    expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy();
+    expect(screen.queryByText(legal.staleFigures)).toBeNull();
+    expect(screen.getByText(legal.ledgerEmpty)).toBeTruthy();
 
     expect(screen.getByText('$7.10')).toBeTruthy();
     expect(screen.getByText('$2.56')).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
     expect(screen.getByText('12,000 in · 3,000 cached · 800 out tokens')).toBeTruthy();
-    expect(screen.getAllByText(copy.describeAvailable)).toHaveLength(2);
-    expect(screen.getByText(copy.describeReserve)).toBeTruthy();
-    expect(screen.getByText(copy.describeIncidentReserve)).toBeTruthy();
-    expect(screen.getByText(copy.held)).toBeTruthy();
+    expect(screen.getAllByText(legal.describeAvailable)).toHaveLength(2);
+    expect(screen.getByText(legal.describeReserve)).toBeTruthy();
+    expect(screen.getByText(legal.describeIncidentReserve)).toBeTruthy();
+    expect(screen.getByText(legal.held)).toBeTruthy();
     expect(screen.getByText('$61.50')).toBeTruthy();
-    expect(screen.getByText(copy.describeHeld)).toBeTruthy();
-    expect(screen.getByText(copy.describeAgentSpend)).toBeTruthy();
+    expect(screen.getByText(legal.describeHeld)).toBeTruthy();
+    expect(screen.getByText(legal.describeAgentSpend)).toBeTruthy();
     expect(screen.queryAllByRole('tooltip')).toHaveLength(0);
     expect(screen.getByText(copy.notLiveYet)).toBeTruthy();
 
     // Building now shows the card and what it has spent; the fund board lists open cards.
-    expect(paragraph(`$3.20 ${copy.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
+    expect(paragraph(`$3.20 ${legal.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
     expect(paragraph('$25.00 of $100.00 · 3 contributors')).toBeTruthy();
     expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual([
       'A second level',
@@ -301,7 +302,7 @@ describe('Landing', () => {
     expect(within(shipped).getByText(copy.shippedIntro)).toBeTruthy();
     expect(
       within(shipped).getByText(
-        `$1.50 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '2')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`,
+        `$1.50 ${legal.spent} · ${legal.contributorsMany.replace('{n}', '2')} · ${legal.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`,
       ),
     ).toBeTruthy();
     expect(within(shipped).queryByRole('progressbar')).toBeNull();
@@ -376,7 +377,7 @@ describe('Landing', () => {
     expect(screen.queryByText('A ranked card')).toBeNull();
     const fund = screen.getByRole('region', { name: copy.fund });
     expect(within(fund).getAllByText(copy.statusOpen)).toHaveLength(2);
-    expect(within(fund).getAllByRole('link', { name: copy.fundThis }).map((a) => a.getAttribute('href'))).not.toContain(
+    expect(within(fund).getAllByRole('link', { name: legal.fundThis }).map((a) => a.getAttribute('href'))).not.toContain(
       'https://buy.stripe.com/test-link?client_reference_id=later1',
     );
   });
@@ -387,7 +388,7 @@ describe('Landing', () => {
       subscribe: () => () => {},
     });
     const panel = screen.getByRole('complementary', { name: copy.rightNow });
-    await waitFor(() => expect(within(panel).getByText(copy.pausedNotice)).toBeTruthy());
+    await waitFor(() => expect(within(panel).getByText(legal.pausedNotice)).toBeTruthy());
     expect(within(panel).getByText(copy.nowEmptyPaused)).toBeTruthy();
     expect(within(panel).queryByText(copy.nowEmpty)).toBeNull();
   });
@@ -398,7 +399,7 @@ describe('Landing', () => {
       subscribe: () => () => {},
     });
     await waitFor(() => expect(screen.getAllByText('$48.56')).toHaveLength(2));
-    expect(screen.queryByText(copy.pausedNotice)).toBeNull();
+    expect(screen.queryByText(legal.pausedNotice)).toBeNull();
   });
 
   it('shows In the pool at $0.00 and states the shortfall when agent work has cost more than came in', async () => {
@@ -408,18 +409,18 @@ describe('Landing', () => {
     });
     const panel = screen.getByRole('complementary', { name: copy.rightNow });
     await waitFor(() => expect(within(panel).getByText('$0.00')).toBeTruthy());
-    expect(within(panel).getByText(copy.poolBalance)).toBeTruthy();
-    expect(within(panel).getByText(`${copy.describeAvailable} ${copy.shortfall.replace('{amount}', '$1.23')}`)).toBeTruthy();
+    expect(within(panel).getByText(legal.poolBalance)).toBeTruthy();
+    expect(within(panel).getByText(`${legal.describeAvailable} ${legal.shortfall.replace('{amount}', '$1.23')}`)).toBeTruthy();
     expect(screen.queryByText(/-\$/)).toBeNull();
   });
 
   it('shows the unavailable line and no figures without a database', () => {
     renderLanding(null);
-    expect(screen.getAllByText(copy.meterUnavailable).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(legal.meterUnavailable).length).toBeGreaterThan(0);
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
-    expect(screen.getByText(copy.contributeUnavailable)).toBeTruthy();
+    expect(screen.getByText(legal.contributeUnavailable)).toBeTruthy();
     expect(screen.queryByText(copy.notLiveYet)).toBeNull();
   });
 
@@ -455,24 +456,24 @@ describe('Landing', () => {
     expect(within(panel).getByRole('status')).toBe(status);
     expect(status.textContent).toBe('');
     expect(screen.getAllByRole('status')).toHaveLength(1);
-    const funding = screen.getByRole('region', { name: copy.meter });
-    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
+    const funding = screen.getByRole('region', { name: legal.meter });
+    expect(within(funding).queryByText(legal.staleFigures)).toBeNull();
 
     fail = true;
     onChange();
-    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(legal.staleFigures), { timeout: 3000 });
     expect(within(panel).getByRole('status')).toBe(status);
     expect(status.className).toBe('muted small status');
     expect(within(panel).getByText('$48.56')).toBeTruthy();
     // The meter repeats the line beside the money, without a second live region.
-    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
+    expect(within(funding).getByText(legal.staleFigures)).toBeTruthy();
     expect(within(funding).getByText('$7.10')).toBeTruthy();
     expect(screen.getAllByRole('status')).toHaveLength(1);
 
     fail = false;
     onChange();
     await waitFor(() => expect(status.textContent).toBe(''), { timeout: 3000 });
-    expect(within(funding).queryByText(copy.staleFigures)).toBeNull();
+    expect(within(funding).queryByText(legal.staleFigures)).toBeNull();
   });
 
   it('says nothing about launch when the studio row did not load', async () => {

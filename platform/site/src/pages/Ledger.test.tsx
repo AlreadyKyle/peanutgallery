@@ -1,6 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDateTime } from '../lib/format';
 import type { Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -120,8 +121,8 @@ describe('Ledger', () => {
 
   it('shows the empty lines when the database holds no work or deploys', async () => {
     renderLedger(sourceOf({ ...snapshot, events: [], deploys: [], cardTitles: {} }));
-    await waitFor(() => expect(screen.getByText(copy.ledgerEmpty)).toBeTruthy());
-    expect(screen.getByText(copy.deploysEmpty)).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(legal.ledgerEmpty)).toBeTruthy());
+    expect(screen.getByText(legal.deploysEmpty)).toBeTruthy();
     expect(screen.getByText('$1.25')).toBeTruthy();
   });
 
@@ -137,22 +138,22 @@ describe('Ledger', () => {
       }),
     );
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
-    const work = screen.getByRole('region', { name: copy.agentWork });
-    expect(within(work).getAllByText(copy.partUnavailable)).toHaveLength(2);
-    expect(within(work).queryByText(copy.describeAgentSpend)).toBeNull();
+    const work = screen.getByRole('region', { name: legal.agentWork });
+    expect(within(work).getAllByText(legal.partUnavailable)).toHaveLength(2);
+    expect(within(work).queryByText(legal.describeAgentSpend)).toBeNull();
     expect(within(work).queryByText(/tokens/)).toBeNull();
-    expect(screen.queryByText(copy.ledgerEmpty)).toBeNull();
-    const deploys = screen.getByRole('region', { name: copy.deploys });
-    expect(within(deploys).getByText(copy.partUnavailable)).toBeTruthy();
-    expect(screen.queryByText(copy.deploysEmpty)).toBeNull();
+    expect(screen.queryByText(legal.ledgerEmpty)).toBeNull();
+    const deploys = screen.getByRole('region', { name: legal.deploys });
+    expect(within(deploys).getByText(legal.partUnavailable)).toBeTruthy();
+    expect(screen.queryByText(legal.deploysEmpty)).toBeNull();
     expect(within(work).queryByText('$0.00')).toBeNull();
   });
 
   it('shows the totals and the deploys when only the agent actions did not load', async () => {
     renderLedger(sourceOf({ ...snapshot, events: [], cardTitles: {}, missing: ['events'] }));
     await waitFor(() => expect(screen.getByText('$1.25')).toBeTruthy());
-    const work = screen.getByRole('region', { name: copy.agentWork });
-    expect(within(work).getByText(copy.partUnavailable)).toBeTruthy();
+    const work = screen.getByRole('region', { name: legal.agentWork });
+    expect(within(work).getByText(legal.partUnavailable)).toBeTruthy();
     expect(listItems('Deploys')).toHaveLength(2);
   });
 
@@ -172,18 +173,18 @@ describe('Ledger', () => {
     expect(status.closest('.hero')).not.toBeNull();
     fail = true;
     onChange();
-    await waitFor(() => expect(status.textContent).toBe(copy.staleFigures), { timeout: 3000 });
+    await waitFor(() => expect(status.textContent).toBe(legal.staleFigures), { timeout: 3000 });
     expect(screen.getAllByRole('status')).toEqual([status]);
     expect(screen.getByText('$48.56')).toBeTruthy();
-    const funding = screen.getByRole('region', { name: copy.meter });
-    expect(within(funding).getByText(copy.staleFigures)).toBeTruthy();
+    const funding = screen.getByRole('region', { name: legal.meter });
+    expect(within(funding).getByText(legal.staleFigures)).toBeTruthy();
   });
 
   it('shows the unavailable line in every section without a database', () => {
     renderLedger(null);
-    expect(screen.getAllByText(copy.meterUnavailable)).toHaveLength(3);
-    expect(screen.queryByText(copy.ledgerEmpty)).toBeNull();
-    expect(screen.queryByText(copy.deploysEmpty)).toBeNull();
+    expect(screen.getAllByText(legal.meterUnavailable)).toHaveLength(3);
+    expect(screen.queryByText(legal.ledgerEmpty)).toBeNull();
+    expect(screen.queryByText(legal.deploysEmpty)).toBeNull();
     expect(screen.queryByText('$0.00')).toBeNull();
   });
 });

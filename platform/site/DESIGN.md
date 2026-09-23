@@ -12,7 +12,7 @@ Tokens live at `:root` in `src/styles.css`. `src/styles.test.ts` enforces the ru
 4. **Two text colours.** `--ink` for what matters, `--muted` for what explains it. Both meet WCAG AA on white **(tested)**.
 5. **Space before rules.** Sections are separated by space. Hairlines (`--line`) separate rows in a list, and the top bar and footer. Things you can act on (cards, choices, the Right now panel) are boxes with a `--line` border and `--radius-box` corners, so they read as separate objects.
 6. **Things you can press look pressable.** Links are underlined, and buttons are filled or outlined boxes at least 44px tall **(tested)**.
-7. **Every public string lives in `src/lib/copy.ts`.** The board's own site keeps its own literals.
+7. **Every public string lives in `src/lib/copy.ts`, or in `src/lib/legal.ts`.** `legal.ts` is kernel and holds the legal pages, the fixed rules and every statement of money: the money rules, the labels and descriptions of money and ledger figures, the ledger's row words and the funding caption. Pages read it directly; `copy.ts` never repeats it. The board's own site keeps its own literals.
 8. **Three text styles to a block.** A block (the hero, a card, a panel, a section intro) uses at most a heading, body text and one small muted line, plus its button. If a fourth style seems needed, the block is saying too much: cut a line or move it.
 9. **Headings balance their lines.** Headings use `text-wrap: balance` **(tested)**, so a headline never leaves one or two words alone on its last line.
 
@@ -111,7 +111,7 @@ Rows, not boxes, because a shipped card is a record: the one action, playing the
 - Each section is a `section.section` that opens with an `h2`, followed by plain paragraphs. Sections sit `--space-4` apart, closer than landing sections, because each holds only a sentence or two.
 - In the copy, `{email}` becomes the contact address as a mailto link, `{refunds}` a link to the Refunds page, and `{discord}` the Discord invite.
 - The legal pages end with the muted small "Last updated" line. Contact adds a Discord section only when the invite is set.
-- The strings live in `copy.ts` like every public string. The pages never say draft.
+- The strings live in `legal.ts` (kernel). The pages never say draft.
 
 **Stale and missing figures.** A failed or timed-out refresh keeps the figures on screen and shows "Could not refresh. These figures may be out of date." until a load succeeds. Each page has one `p.muted.small.status` with `role="status"`, always in place and empty until then, so a screen reader announces the text when it arrives; `.status:empty` takes no space. It sits under the Right now heading on the landing and under the lede on the ledger, contribute, team and roadmap pages. The Funding meter repeats the line above its figures, without `role="status"`, so a reader who scrolls to the money sees it and a screen reader hears it once. When one part of the data did not load, that part says "Not available right now." instead of a zero or an empty line: agent spend and tokens, agent actions and deploys. The launch line is left out when the studio's launch date did not load, and a funding caption leaves out the contributor count when the funding figures did not.
 

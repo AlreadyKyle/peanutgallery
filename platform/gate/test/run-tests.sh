@@ -725,15 +725,18 @@ for file in platform/board/src/Board.tsx platform/board/netlify.toml platform/si
   platform/site/src/lib/source.ts platform/site/src/lib/env.ts seed-1/index.html seed-1/sim/hash.ts seed-1/sim/rng.ts seed-1/tests/timeline.test.ts \
   platform/site/postcss.config.mjs seed-1/.postcssrc.json seed-1/render/tailwind.config.ts seed-1/babel.config.json seed-1/.babelrc platform/site/tsconfig.json \
   seed-1/render/tsconfig.app.json seed-1/.env seed-1/.env.production seed-1/public/_headers platform/site/public/_redirects seed-1/pnpm-workspace.yaml \
-  seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock; do
+  seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock \
+  platform/site/index.html platform/site/src/main.tsx platform/site/src/App.tsx platform/site/src/lib/studio.tsx platform/site/src/components/Stat.tsx \
+  platform/site/src/components/Guarded.tsx platform/site/src/components/EventList.tsx platform/site/src/components/DeployList.tsx \
+  platform/site/src/components/StaleNotice.tsx platform/site/src/components/PausedNotice.tsx platform/site/src/components/Funding.tsx; do
   printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-new.txt"
   expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-new.txt"
 done
 printf 'seed-1/render/headers.ts\nseed-1/content/environment.json\nseed-1/sim/hashing.ts\nseed-1/render/postcss.ts\nseed-1/render/rng-view.ts\n' > "$T/kernel-new-near.txt"
 expect "kernel-guard: names that only resemble the new kernel files pass" 0 '^PASS: kernel-guard files=5$' -- bash "$KERNEL" "$T/kernel-new-near.txt"
-# The site's pages, copy, card layout and styles stay open to the platform code lane.
-printf 'platform/site/src/pages/Landing.tsx\nplatform/site/src/lib/copy.ts\nplatform/site/src/lib/roster.ts\nplatform/site/src/components/Cards.tsx\nplatform/site/src/styles.css\nplatform/boards/x.ts\n' > "$T/kernel-site-open.txt"
-expect "kernel-guard: the site's pages, copy, cards and styles pass" 0 '^PASS: kernel-guard files=6$' -- bash "$KERNEL" "$T/kernel-site-open.txt"
+# The site's pages, their routes, copy, card layout, page header and styles stay open to the platform code lane.
+printf 'platform/site/src/pages/Landing.tsx\nplatform/site/src/lib/copy.ts\nplatform/site/src/lib/roster.ts\nplatform/site/src/components/Cards.tsx\nplatform/site/src/styles.css\nplatform/boards/x.ts\nplatform/site/src/routes.tsx\nplatform/site/src/components/PageHeader.tsx\nplatform/site/src/lib/cards.ts\n' > "$T/kernel-site-open.txt"
+expect "kernel-guard: the site's pages, routes, copy, cards, header and styles pass" 0 '^PASS: kernel-guard files=9$' -- bash "$KERNEL" "$T/kernel-site-open.txt"
 printf 'seed-1/config/spawn-table.json\nseed-1/content/a\tb.json\n' > "$T/kernel-tab.txt"
 expect "kernel-guard: a tab in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-tab.txt"
 printf 'seed-1/content/a\001b.json\n' > "$T/kernel-control.txt"

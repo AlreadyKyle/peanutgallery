@@ -1,4 +1,4 @@
-import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDateTime, shortSha } from '../lib/format';
 import type { Snapshot } from '../lib/source';
 
@@ -6,10 +6,10 @@ import type { Snapshot } from '../lib/source';
 // is inside text ("bot: 812 simulated seconds, 13 unlocks"), not something a reader can use.
 export function DeployList({ snapshot }: { snapshot: Snapshot }) {
   if (snapshot.missing.includes('deploys')) {
-    return <p className="muted">{copy.partUnavailable}</p>;
+    return <p className="muted">{legal.partUnavailable}</p>;
   }
   if (snapshot.deploys.length === 0) {
-    return <p className="muted">{copy.deploysEmpty}</p>;
+    return <p className="muted">{legal.deploysEmpty}</p>;
   }
   return (
     <ul className="rows">
@@ -17,10 +17,10 @@ export function DeployList({ snapshot }: { snapshot: Snapshot }) {
         <li key={deploy.id}>
           <span className="row-time">{formatDateTime(deploy.created_at)}</span>
           <span>
-            {copy.folders[deploy.folder] ?? deploy.folder}{' '}
+            {legal.folders[deploy.folder] ?? deploy.folder}{' '}
             <code className="muted">{shortSha(deploy.sha)}</code>{' '}
             <span className={deploy.is_green ? undefined : 'failed'}>
-              {deploy.is_green ? copy.deployGreen : copy.deployNotGreen}
+              {deploy.is_green ? legal.deployGreen : legal.deployNotGreen}
             </span>
           </span>
         </li>

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { netlifyHeaders } from '../vite.config';
+import { KERNEL_SEGMENTS } from './App';
 
 // Security headers: netlify.toml sends them on every path. frame-ancestors and connect-src are
 // enforced (docs/specs/launch-site.md); the full policy is report-only until production shows it
@@ -51,17 +52,25 @@ describe('netlify.toml security headers', () => {
     expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src', 'form-action']);
   });
 
-  it('answers /board with the not found page and a 404 status, before the SPA rewrite', () => {
-    const rules = [...toml.matchAll(/^\[\[redirects\]\]\s*\n\s*from = "([^"]+)"\s*\n\s*to = "([^"]+)"\s*\n\s*status = (\d+)/gm)].map((m) => [
-      m[1],
-      m[2],
-      m[3],
-    ]);
+  it('answers /board with the not found page and a 404 status, and serves the app at the kernel pages even over a file, before the SPA rewrite', () => {
+    const rules = [
+      ...toml.matchAll(/^\[\[redirects\]\]\s*\n\s*from = "([^"]+)"\s*\n\s*to = "([^"]+)"\s*\n\s*status = (\d+)(\s*\n\s*force = true)?/gm),
+    ].map((m) => [m[1], m[2], m[3], m[4] === undefined ? 'no force' : 'force']);
     const spa = rules.findIndex(([from]) => from === '/*');
     expect(rules.slice(1, spa)).toEqual([
-      ['/board', '/index.html', '404'],
-      ['/board/*', '/index.html', '404'],
+      ['/board', '/index.html', '404', 'force'],
+      ['/board/*', '/index.html', '404', 'force'],
+      ...['/contribute', '/ledger', '/terms', '/privacy', '/refunds', '/contact'].map((path) => [path, '/index.html', '200', 'force']),
     ]);
+    // The same paths App.tsx keeps from the card lane's routes.
+    expect(KERNEL_SEGMENTS.map((segment) => `/${segment}`).sort()).toEqual(
+      rules
+        .slice(1, spa)
+        .map(([from]) => from)
+        .filter((from) => from !== '/board/*')
+        .sort(),
+    );
+    expect(rules[spa]).toEqual(['/*', '/index.html', '200', 'no force']);
     expect(toml).not.toMatch(/board[a-z0-9-]*\.netlify\.app/);
   });
 

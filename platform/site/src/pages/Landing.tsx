@@ -6,6 +6,7 @@ import { RightNow } from '../components/RightNow';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate } from '../lib/format';
+import { legal } from '../lib/legal';
 import { useStudio, type StudioState } from '../lib/studio';
 
 // Nothing until the studio row has loaded, so a failed read never says the studio is not live.
@@ -29,7 +30,7 @@ export function Landing() {
           <p className="lede">{copy.pitchBody}</p>
           {launch === null ? null : <p className="muted small">{launch}</p>}
           {env.stripePaymentLinkUrl === '' ? (
-            <p>{copy.contributeUnavailable}</p>
+            <p>{legal.contributeUnavailable}</p>
           ) : (
             <p>
               <Link className="button" to="/contribute">
@@ -37,7 +38,7 @@ export function Landing() {
               </Link>
             </p>
           )}
-          <p className="muted small">{copy.split}</p>
+          <p className="muted small">{legal.split}</p>
         </div>
         <RightNow studio={studio} />
       </div>
@@ -68,12 +69,12 @@ export function Landing() {
 
       <div className="columns">
         <section className="section" aria-labelledby="funding">
-          <h2 id="funding">{copy.meter}</h2>
+          <h2 id="funding">{legal.meter}</h2>
           <Meter studio={studio} />
         </section>
 
         <section className="section" aria-labelledby="ledger">
-          <h2 id="ledger">{copy.ledger}</h2>
+          <h2 id="ledger">{legal.ledger}</h2>
           <LedgerSummary studio={studio} />
           <p>
             <Link to="/ledger">{copy.fullLedger}</Link>
@@ -84,11 +85,11 @@ export function Landing() {
       <section className="section" aria-labelledby="rules">
         <h2 id="rules">{copy.policies}</h2>
         <div className="prose">
-          <p>{copy.artPolicy}</p>
-          <p>{copy.allAges}</p>
-          <p>{copy.fixedRulesIntro}</p>
+          <p>{legal.artPolicy}</p>
+          <p>{legal.allAges}</p>
+          <p>{legal.fixedRulesIntro}</p>
           <ul className="rules">
-            {copy.fixedRules.map((rule) => (
+            {legal.fixedRules.map((rule) => (
               <li key={rule}>{rule}</li>
             ))}
           </ul>

@@ -1,15 +1,37 @@
-import { Link, NavLink, Outlet, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { PageHeader } from './components/PageHeader';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
+import { legal } from './lib/legal';
 import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
-import { HowItWorks } from './pages/HowItWorks';
-import { Landing } from './pages/Landing';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, Terms } from './pages/Legal';
-import { Roadmap } from './pages/Roadmap';
-import { Team } from './pages/Team';
+import { pageNav, pageRoutes, type PageRoute } from './routes';
+
+// Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
+// links and the credit, and the not found page) and the routes of the Contribute, Ledger and legal
+// pages. The card lane's pages come from routes.tsx and never take one of these paths.
+
+/** First path segments only the kernel's pages use; /board is here so it stays the not found page. */
+export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board'];
+
+/**
+ * The card lane's routes this frame mounts: the landing at /, and pages whose first path segment is
+ * plain (lowercase letters, digits and hyphens) and not one of the kernel's. A dynamic, optional or
+ * catch-all first segment is dropped, since it could answer a kernel path or /board. Paths match
+ * without regard to case, as the router matches them.
+ */
+export function cardRoutes(routes: readonly PageRoute[]): PageRoute[] {
+  return routes.filter(({ path }) => {
+    if (path === '/') return true;
+    const first = path.replace(/^\/+/, '').split('/')[0]?.toLowerCase() ?? '';
+    return /^[a-z0-9-]+$/.test(first) && !KERNEL_SEGMENTS.includes(first);
+  });
+}
+
+// A top bar link from routes.tsx goes to a page on this site: a plain path, never another host.
+const PLAIN_PATH = /^\/[a-z0-9-]*$/;
 
 export function App() {
   return (
@@ -17,19 +39,16 @@ export function App() {
       <div className="page">
         <TopBar />
         <Routes>
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Landing />} />
-            <Route path="/ledger" element={<Ledger />} />
-            <Route path="/how-it-works" element={<HowItWorks />} />
-            <Route path="/team" element={<Team />} />
-            <Route path="/roadmap" element={<Roadmap />} />
-            <Route path="/contribute" element={<Contribute />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/refunds" element={<Refunds />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="*" element={<NotFound />} />
-          </Route>
+          <Route path="/contribute" element={<Contribute />} />
+          <Route path="/ledger" element={<Ledger />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/refunds" element={<Refunds />} />
+          <Route path="/contact" element={<Contact />} />
+          {cardRoutes(pageRoutes).map((route) => (
+            <Route key={route.path} path={route.path} element={route.element} />
+          ))}
+          <Route path="*" element={<NotFound />} />
         </Routes>
         <SiteFooter />
       </div>
@@ -49,10 +68,14 @@ function TopBar() {
           </Link>
         </div>
         <nav aria-label="Site">
-          <NavLink to="/how-it-works">{copy.howItWorksNav}</NavLink>
-          <NavLink to="/team">{copy.teamNav}</NavLink>
-          <NavLink to="/roadmap">{copy.roadmapNav}</NavLink>
-          <NavLink to="/ledger">{copy.ledger}</NavLink>
+          {pageNav
+            .filter((item) => PLAIN_PATH.test(item.to))
+            .map((item) => (
+              <NavLink key={item.to} to={item.to}>
+                {item.label}
+              </NavLink>
+            ))}
+          <NavLink to="/ledger">{legal.ledger}</NavLink>
           {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
           {env.discordInvite === '' ? null : <a href={env.discordInvite}>{copy.discord}</a>}
           {env.stripePaymentLinkUrl === '' ? null : (
@@ -66,10 +89,6 @@ function TopBar() {
   );
 }
 
-function PublicLayout() {
-  return <Outlet />;
-}
-
 function SiteFooter() {
   const env = siteEnv();
   return (
@@ -78,16 +97,16 @@ function SiteFooter() {
         <p>{copy.footer}</p>
         <ul className="footer-links">
           <li>
-            <Link to="/terms">{copy.footerLinks.terms}</Link>
+            <Link to="/terms">{legal.footerLinks.terms}</Link>
           </li>
           <li>
-            <Link to="/privacy">{copy.footerLinks.privacy}</Link>
+            <Link to="/privacy">{legal.footerLinks.privacy}</Link>
           </li>
           <li>
-            <Link to="/refunds">{copy.footerLinks.refunds}</Link>
+            <Link to="/refunds">{legal.footerLinks.refunds}</Link>
           </li>
           <li>
-            <Link to="/contact">{copy.footerLinks.contact}</Link>
+            <Link to="/contact">{legal.footerLinks.contact}</Link>
           </li>
           {env.discordInvite === '' ? null : (
             <li>

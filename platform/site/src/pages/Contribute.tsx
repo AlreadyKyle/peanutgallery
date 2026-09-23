@@ -1,17 +1,17 @@
-import { Guarded } from '../components/Cards';
 import { FundingBar, fundingCaption } from '../components/Funding';
+import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
-import { CATEGORY_FILTERS, categoryOf, groupCards, type CardCategory } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
-import { canFund, fundLink } from '../lib/payment';
+import { CATEGORY_FILTERS, categoryOf, fundableCards, fundLink, type CardCategory } from '../lib/payment';
 import { useStudio } from '../lib/studio';
 
 // Kernel (docs/specs/board-site.md): the page that sends money to the Payment Link. Its strings come
-// from legal.ts and its links from payment.ts, both kernel too.
+// from legal.ts; which cards it offers, in what order and under which heading, and their links, come
+// from payment.ts; every module it reads is kernel but copy.ts (the category names) and PageHeader.
 
 const CATEGORIES = CATEGORY_FILTERS.filter((filter): filter is CardCategory => filter !== 'all');
 
@@ -40,7 +40,7 @@ export function Contribute() {
           <h2 className="choices-heading">{legal.orPickACard}</h2>
           <Guarded studio={studio}>
             {(snapshot) => {
-              const fundable = groupCards(snapshot.cards).fund.filter(canFund);
+              const fundable = fundableCards(snapshot.cards);
               if (fundable.length === 0) return <p className="muted">{legal.noFundableCards}</p>;
               return CATEGORIES.map((category) => {
                 const cards = fundable.filter((card) => categoryOf(card) === category);

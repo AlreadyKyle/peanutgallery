@@ -1,4 +1,3 @@
-import { copy } from '../lib/copy';
 import { formatInteger, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
 import { unavailableLine, type StudioState } from '../lib/studio';
@@ -22,7 +21,7 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
   return (
     <>
       {missing.includes('totals') ? (
-        <p className="muted">{copy.partUnavailable}</p>
+        <p className="muted">{legal.partUnavailable}</p>
       ) : (
         <>
           <dl className="stats">
@@ -32,7 +31,7 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
         </>
       )}
       {missing.includes('events') ? (
-        <p className="muted">{copy.partUnavailable}</p>
+        <p className="muted">{legal.partUnavailable}</p>
       ) : (
         <EventList snapshot={studio.snapshot} />
       )}

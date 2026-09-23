@@ -60,7 +60,7 @@ beforeAll(async () => {
   await writeFile(path.join(repo, 'seed-1', 'config', 'unlocks.json'), '{"unlocks":[]}\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'sim', 'index.ts'), 'export const x = 1;\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'package.json'), '{"name":"@backseat/seed-1"}\n', 'utf8');
-  await writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>x</title>\n', 'utf8');
+  await writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>x</title>\n', 'utf8');
   await git(['add', '-A'], repo);
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'base'], repo);
   base = await git(['rev-parse', 'HEAD'], repo);
@@ -100,7 +100,7 @@ describe('validateAndApply', () => {
   });
 
   const refusals: Array<[string, () => Promise<Buffer>, readonly string[], RegExp]> = [
-    ['a file outside the lane', () => patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'index.html'), '<title>y</title>\n', 'utf8')), CONFIG_LANE, /outside the lane or on a kernel path: platform\/site\/index\.html/],
+    ['a file outside the lane', () => patchFor(async () => writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>y</title>\n', 'utf8')), CONFIG_LANE, /outside the lane or on a kernel path: platform\/site\/page\.html/],
     ['a kernel path inside the lane', () => patchFor(async () => writeFile(path.join(repo, 'seed-1', 'package.json'), '{"name":"x"}\n', 'utf8')), CODE_LANE, /kernel path: seed-1\/package\.json/],
     [
       'a symlink (mode 120000)',

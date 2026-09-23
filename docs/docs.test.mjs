@@ -253,7 +253,7 @@ test('docs/PLAN.md, CLAUDE.md and every prompt name every kernel item', () => {
 });
 
 test("the site's fixed rules name every kernel item except the broadcast delay and kill switch", () => {
-  // The fixed rules are in the kernel file legal.ts (docs/specs/board-site.md), which copy.ts spreads.
+  // The fixed rules are in the kernel file legal.ts (docs/specs/board-site.md), which every page reads directly.
   const copy = read('platform', 'site', 'src', 'lib', 'legal.ts');
   const block = /fixedRules:\s*\[([\s\S]*?)\]/.exec(copy);
   assert.ok(block, 'platform/site/src/lib/legal.ts has a fixedRules list');
