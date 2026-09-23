@@ -92,14 +92,16 @@ export class FakeDb implements Db {
   lease: { holder: string; expiresAt: number } | null = null;
   clock = () => NOW.getTime();
   pausedBy: string | null = null;
+  pauseReason: string | null = null;
 
   async getStudioState() {
     return { ...this.studio };
   }
-  async pauseStudio(by: string) {
+  async pauseStudio(by: string, _now: Date, reason: string) {
     if (this.studio.paused) return;
     this.studio.paused = true;
     this.pausedBy = by;
+    this.pauseReason = reason;
   }
   async claimLease(holder: string, ttlSeconds: number) {
     const now = this.clock();

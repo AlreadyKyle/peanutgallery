@@ -139,14 +139,14 @@ describe('createSupabaseDb queries', () => {
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: granted.fetchFn }).claimLease('vps/1/ffff', 300)).toBe(true);
   });
 
-  it('pauses the studio only when it is not paused already, naming the dispatcher', async () => {
+  it('pauses the studio only when it is not paused already, naming the dispatcher and the reason', async () => {
     const { fetchFn, seen } = rest([]);
-    await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).pauseStudio('dispatcher: Console credit needed (card 4c2f5a1e)', NOW);
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).pauseStudio('dispatcher: Console credit needed (card 4c2f5a1e)', NOW, 'awaiting_credit');
     expect(seen[0]?.method).toBe('PATCH');
     expect(seen[0]?.url.pathname).toBe('/rest/v1/studio_state');
     expect(seen[0]?.url.searchParams.get('id')).toBe('eq.1');
     expect(seen[0]?.url.searchParams.get('paused')).toBe('eq.false');
-    expect(seen[0]?.body).toEqual({ paused: true, paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString() });
+    expect(seen[0]?.body).toEqual({ paused: true, paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString(), pause_reason: 'awaiting_credit' });
   });
 
   it("reads each card's studio-billed spend from public_card_spend, and asks nothing for no cards", async () => {

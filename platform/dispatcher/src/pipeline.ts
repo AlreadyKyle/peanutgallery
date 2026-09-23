@@ -626,7 +626,7 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   if (run.outcome === 'insufficient_balance') throw new Requeue(['building'], 'insufficient_balance', run.detail, false);
   if (run.outcome === 'credit_exhausted') {
     // The next session would fail the same way, so the studio stops until the board buys credit.
-    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: Console credit needed (card ${shortId(card.id)})`, deps.now()));
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: Console credit needed (card ${shortId(card.id)})`, deps.now(), 'awaiting_credit'));
     await deps.alert.notify(
       `Console credit needed: card ${shortId(card.id)} stopped because the API refused the studio key for credit or its spend limit. ${
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
@@ -637,7 +637,7 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   if (run.outcome === 'tier_cap') {
     // Buying credit does not clear it: the organisation's usage tier caps its spend for the month, so
     // the studio stops until the month turns or Anthropic raises the tier.
-    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: usage tier cap reached (card ${shortId(card.id)})`, deps.now()));
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: usage tier cap reached (card ${shortId(card.id)})`, deps.now(), 'spend_limit'));
     await deps.alert.notify(
       `Usage tier cap reached: card ${shortId(card.id)} stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. ${
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
@@ -1040,7 +1040,7 @@ async function rollBack(card: Card, roleId: string | null, mergeSha: string, rea
   // is claimed until the board has looked.
   let paused = '';
   if (!revert.ok) {
-    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: the revert of card ${shortId(card.id)} failed`, deps.now()));
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: the revert of card ${shortId(card.id)} failed`, deps.now(), 'incident'));
     paused = unpaused ? ` The studio could not be paused (${unpaused}); pause it from /board.` : ' The studio is paused until the board unpauses it.';
   }
   await deps.alert.notify(`Card ${shortId(card.id)} failed after merge and the rollback is incomplete: ${problems.join('; ')}. Check main and the live site.${paused}`);
