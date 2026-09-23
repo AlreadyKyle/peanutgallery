@@ -702,6 +702,21 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* A figure that did not load: "Not available right now." stacks under the label as a muted body
+   line, like a band whose read failed, instead of taking the figure's unwrapping place. */
+.stat-unavailable {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.stat-unavailable dd {
+  color: var(--text-muted);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  white-space: normal;
+}
+
 /* Cards: a white face with a 2px ink edge; the money and the action pinned to the bottom ---------- */
 
 .card-grid {

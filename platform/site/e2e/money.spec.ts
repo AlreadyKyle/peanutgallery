@@ -176,13 +176,13 @@ test.describe('/ledger Funding: Not on a card yet, the shortfall and the board t
   });
 
   test.describe('short, with the board test payment', () => {
-    test.use({ studio: studio({}, { not_on_card_usd: '0.0000', short_usd: '0.4500', board_test_usd: '1.0000' }) });
+    test.use({ studio: studio({}, { not_on_card_usd: '0.0000', short_usd: '0.4500', board_test_usd: '0.5019' }) });
     test('says waiting cards are short, and names the test payment', async ({ page }) => {
       await page.goto('/ledger');
       const funding = page.getByRole('region', { name: 'Funding' });
       await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('$0.00');
       await expect(await ledgerLine(page, 'Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
-      await expect(await ledgerLine(page, "Includes the board's own test payment of $1.00; it funds no card.")).toBeVisible();
+      await expect(await ledgerLine(page, "The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeVisible();
     });
   });
 });

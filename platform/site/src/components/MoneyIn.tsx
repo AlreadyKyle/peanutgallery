@@ -38,14 +38,12 @@ function loadedMoney(snapshot: Snapshot): Money | null {
 }
 
 /**
- * The Funding band's Not on a card yet figure, from not_on_card_usd; "Not available right now." in
- * its place when public_money did not load.
+ * The Funding band's Not on a card yet figure, from not_on_card_usd. When public_money did not load,
+ * Stat's unread row says "Not available right now." under the label, never in the figure's place.
  */
 export function NotOnCardStat({ snapshot }: { snapshot: Snapshot }) {
   const money = loadedMoney(snapshot);
-  return (
-    <Stat label={legal.notOnCard} description={legal.describeNotOnCard} value={money === null ? legal.partUnavailable : formatUsd(money.not_on_card_usd)} />
-  );
+  return <Stat label={legal.notOnCard} description={legal.describeNotOnCard} value={money === null ? null : formatUsd(money.not_on_card_usd)} />;
 }
 
 /** Under the Funding band's figures: the shortfall while there is one, and the board's test payment while it is booked. */

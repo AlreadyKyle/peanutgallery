@@ -43,6 +43,10 @@ auditRoutes('the default fixture', DEFAULT_STUDIO, [375, 768, 1440]);
 // Nothing loaded that could be empty: no roles (home draws no team strip), no actions, no deploys.
 // No contributions yet in Money in and no stopped cards, so the ledger draws its shortest bands.
 auditRoutes('an empty studio', { ...LIVE_STUDIO, roles: [], events: [], deploys: [], money: moneyRow(), stopped: [] }, [375, 1440], ['/', '/team', '/ledger', '/how-it-works', '/contribute']);
+// public_money and public_stopped_cards failing, as production reads them until money-logic's
+// migration is applied: the Funding band's Not on a card yet row says "Not available right now." in
+// place of its figure, which must not squeeze the label and description into a sliver at 320px.
+auditRoutes('the money reads failing', { ...LIVE_STUDIO, money: null, stopped: null }, [320, 375, 768, 1440], ['/ledger', '/contribute', '/']);
 
 // Home with each count of open cards the fill rule has to handle, and one card with no brief.
 const open = LIVE_STUDIO.cards.filter((card) => card.horizon === 'now' && (card.stage === 'proposed' || card.stage === 'voted'));
