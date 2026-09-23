@@ -77,17 +77,47 @@ gate_is_generated() {
   return 1
 }
 
-# Regular files under a folder, with dependency, build and scratch folders pruned, and the Finder's
-# .DS_Store files (git ignores them, and they hold NUL bytes); sorted bytewise.
+# The folders the scans never walk: dependencies, git's own data, and build, test and scratch output,
+# every one of them gitignored. dist-e2e and e2e-screenshots are what the site's and the board's e2e
+# runs leave behind locally; a CI checkout never has them. A build folder the gate reads is named to
+# the scan directly (runtime-token-deny-dist). gate_tracked_output fails a tracked file under any of
+# the output names, so pruning by name hides nothing a commit can carry.
+GATE_PRUNED_NAMES='node_modules .git dist dist-e2e e2e-screenshots .worktrees coverage test-results playwright-report'
+GATE_OUTPUT_NAMES='dist dist-e2e e2e-screenshots coverage test-results playwright-report'
+
+gate_prune_args() {
+  local name first=1
+  printf '(\n'
+  for name in $GATE_PRUNED_NAMES .DS_Store; do
+    [ "$first" -eq 1 ] || printf -- '-o\n'
+    printf -- '-name\n%s\n' "$name"
+    first=0
+  done
+  printf ')\n'
+}
+
+# Regular files under a folder, with the folders above pruned, and the Finder's .DS_Store files (git
+# ignores them, and they hold NUL bytes); sorted bytewise.
 gate_find_files() {
-  find "$1" \( -name node_modules -o -name .git -o -name dist -o -name .worktrees -o -name coverage \
-    -o -name test-results -o -name playwright-report -o -name .DS_Store \) -prune -o -type f -print | LC_ALL=C sort
+  local args=()
+  while IFS= read -r a; do args+=("$a"); done < <(gate_prune_args)
+  find "$1" "${args[@]}" -prune -o -type f -print | LC_ALL=C sort
 }
 
 # Every path (files and folders) under a folder, same pruning, sorted bytewise.
 gate_find_paths() {
-  find "$1" \( -name node_modules -o -name .git -o -name dist -o -name .worktrees -o -name coverage \
-    -o -name test-results -o -name playwright-report -o -name .DS_Store \) -prune -o -print | LC_ALL=C sort
+  local args=()
+  while IFS= read -r a; do args+=("$a"); done < <(gate_prune_args)
+  find "$1" "${args[@]}" -prune -o -print | LC_ALL=C sort
+}
+
+# Tracked files under a folder that sit inside a build, test or scratch output folder, one path
+# relative to the repository per line. Prints nothing outside a git work tree.
+gate_tracked_output() {
+  local root=$1 dir=$2 names
+  git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  names=$(printf '%s\n' $GATE_OUTPUT_NAMES | sed 's/[.]/\\./g' | paste -s -d '|' -)
+  git -C "$root" ls-files -z -- "$dir" 2>/dev/null | tr '\0' '\n' | grep -E "(^|/)($names)/" || true
 }
 
 # A random hex string for a per-run file name.
