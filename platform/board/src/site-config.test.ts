@@ -84,6 +84,14 @@ describe('index.html', () => {
   });
 });
 
+describe('.gitignore', () => {
+  it('keeps the end-to-end build out of the repository, as the public site does', () => {
+    const ignored = readFileSync(resolve(root, '.gitignore'), 'utf8').split('\n');
+    expect(ignored).toContain('dist-e2e/');
+    expect(readFileSync(resolve(root, 'playwright.config.ts'), 'utf8')).toContain('--outDir dist-e2e');
+  });
+});
+
 describe('the board app is self-contained', () => {
   it('imports nothing from the public site or any other folder a card can change', () => {
     for (const file of sourceFiles(resolve(root, 'src'))) {

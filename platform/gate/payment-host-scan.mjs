@@ -4,19 +4,26 @@
 //
 // usage: node payment-host-scan.mjs [--allow-from <netlify.toml>] [--allow <url>] <build-folder> ...
 //
-// Every file under each build folder is read, bundles and source maps included; binary media is
-// skipped. JSON-escaped slashes (\/) and URL-encoded ones (%2F, %3A) are read as plain, so an escaped
-// address is still seen. A payment address is any address on a domain in payment-hosts.txt beside
-// this script, or on a subdomain of one, with or without a scheme, with the rest of the address up
-// to a quote, space, angle bracket, backtick, parenthesis or backslash. The only address allowed is
-// the Payment Link: exactly the VITE_STRIPE_PAYMENT_LINK_URL value in the named netlify.toml, or the
-// --allow value, which must be https://buy.stripe.com/<id>. With neither, no payment address is
-// allowed at all (the game's build). The card id the site adds to the link is added at runtime, so
-// the build holds the bare link.
+// Every file under each build folder is read as UTF-8, bundles and source maps included; binary media
+// is skipped. The text is read the way a browser would read an address in it before it is matched:
+// JSON and JavaScript escapes (\/, \x2e, \u002e, \u{2e}), HTML character references (&#46;, &#x2e;,
+// &period;, &sol;, &colon;, &amp;) and percent-encoded bytes (%2E, %2F, %3A, %EF%BC%8E) are decoded,
+// repeatedly until nothing changes, then NFKC folds fullwidth letters and dots to plain ones and the
+// ideographic full stops (U+3002, U+FF61) become dots, as the URL parser's IDNA step does. A payment
+// address is any address on a domain in payment-hosts.txt beside this script, or on a subdomain of
+// one, with or without a scheme, with the rest of the address up to a quote, space, angle bracket,
+// backtick, parenthesis or backslash. The only address allowed is the Payment Link: exactly the
+// VITE_STRIPE_PAYMENT_LINK_URL value in the named netlify.toml, or the --allow value, which must be
+// https://buy.stripe.com/<id>. With neither, no payment address is allowed at all (the game's build).
+// The card id the site adds to the link is added at runtime, so the build holds the bare link.
 //
-// It stops a build that names another payment page, whether a card wrote it or a dependency slipped
-// it in. It cannot see an address assembled at runtime from pieces; the enforced form-action and
-// connect-src policies and the kernel payment files cover the rest.
+// It stops a build that names another payment page, in any spelling a browser resolves to that host,
+// whether a card wrote it or a dependency slipped it in. It cannot see an address the page assembles
+// at run time from pieces (a join, a character-code table, base64), and no Content Security Policy
+// directive covers one: form-action limits form posts and connect-src limits fetches, but neither
+// limits a link or a change of location. The Payment Link itself is read only by the kernel files
+// (lib/env.ts, lib/payment.ts, components/Funding.tsx, pages/Contribute.tsx); an address assembled
+// in card code is left to the Platform Director's review and the board's.
 //
 // First stdout line: PASS: payment-host-scan files=<n> allowed=<k> or
 // FAIL: payment-host-scan path=<file> address=<address>, then one line per address found.
@@ -55,10 +62,47 @@ export function addressPattern(domains) {
   );
 }
 
-/** Every payment address in a text, after reading escaped slashes and colons as plain. */
+const NAMED_REFERENCES = { period: '.', sol: '/', colon: ':', amp: '&', percnt: '%', bsol: '\\' };
+
+function codePoint(value, radix) {
+  const code = Number.parseInt(value, radix);
+  return Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : null;
+}
+
+/** One run of %XX bytes as UTF-8, or byte by byte when the run is not UTF-8. */
+function percentDecoded(run) {
+  try {
+    return decodeURIComponent(run);
+  } catch {
+    return run.replace(/%([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+  }
+}
+
+/**
+ * The text as a browser reads an address in it: escapes, character references and percent-encoding
+ * decoded until nothing changes, then fullwidth and ideographic forms folded to plain ones.
+ */
+export function readable(text) {
+  let current = text;
+  for (let round = 0; round < 8; round += 1) {
+    const next = current
+      .replace(/\\\//g, '/')
+      .replace(/\\u\{([0-9a-f]{1,6})\}/gi, (whole, hex) => codePoint(hex, 16) ?? whole)
+      .replace(/\\u([0-9a-f]{4})/gi, (whole, hex) => codePoint(hex, 16) ?? whole)
+      .replace(/\\x([0-9a-f]{2})/gi, (whole, hex) => codePoint(hex, 16) ?? whole)
+      .replace(/&#x([0-9a-f]{1,6});?/gi, (whole, hex) => codePoint(hex, 16) ?? whole)
+      .replace(/&#([0-9]{1,7});?/g, (whole, dec) => codePoint(dec, 10) ?? whole)
+      .replace(/&(period|sol|colon|amp|percnt|bsol);/gi, (whole, name) => NAMED_REFERENCES[name.toLowerCase()] ?? whole)
+      .replace(/(?:%[0-9a-f]{2})+/gi, percentDecoded);
+    if (next === current) break;
+    current = next;
+  }
+  return current.normalize('NFKC').replace(/[\u3002\uff0e\uff61]/g, '.');
+}
+
+/** Every payment address in a text, read as a browser would read it. */
 export function addressesIn(text, pattern) {
-  const plain = text.replace(/\\\//g, '/').replace(/%2f/gi, '/').replace(/%3a/gi, ':');
-  return [...plain.matchAll(pattern)].map((match) => match[0].replace(/[.,;]+$/, ''));
+  return [...readable(text).matchAll(pattern)].map((match) => match[0].replace(/[.,;]+$/, ''));
 }
 
 function filesUnder(dir) {
@@ -104,7 +148,7 @@ function main(argv) {
   for (const folder of folders) {
     for (const file of filesUnder(folder)) {
       files += 1;
-      for (const address of addressesIn(readFileSync(file, 'latin1'), pattern)) {
+      for (const address of addressesIn(readFileSync(file, 'utf8'), pattern)) {
         if (allowed !== null && address === allowed) allowedCount += 1;
         else bad.push({ file: relative(process.cwd(), file), address });
       }

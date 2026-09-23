@@ -621,6 +621,7 @@ expect "ship: the site builds with its Payment Link and the scan allows it" 0 '^
 assert "ship: the site build carries the configured Payment Link" grep -q 'href="https://buy.stripe.com/gate_test_link"' "$W/platform/site/dist/index.html"
 assert "ship: the board build carries no Payment Link" test "$(grep -c 'buy.stripe.com' "$W/platform/board/dist/index.html")" = 0
 expect "ship: another payment address in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://www.paypal.com/donate$' -- env GATE_TEST_BUILD_TEXT='Give at https://www.paypal.com/donate today' bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+expect "ship: a Stripe link with percent-encoded dots in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://buy.stripe.com/test_evil$' -- env GATE_TEST_BUILD_TEXT='<a href="https://buy%2Estripe%2Ecom/test_evil">' bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
 expect "ship: a second Stripe link in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://buy.stripe.com/other_link$' -- env GATE_TEST_BUILD_TEXT='https://buy.stripe.com/other_link' bash "$SHIP" --repo-root "$W" --folder platform --dry-run
 expect "ship: any payment address in the game's build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*seed-1/dist/index.html address=https://buy.stripe.com/gate_test_link$' -- env GATE_TEST_BUILD_TEXT='https://buy.stripe.com/gate_test_link' bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
 rm -rf "$W/platform/site/dist" "$W/platform/board/dist" "$W/seed-1/dist"
@@ -644,8 +645,22 @@ for address in 'https://buy.stripe.com/abc1234' 'https://buy.stripe.com/abc123?p
   printf 'const b="%s";\n' "$address" > "$PD/other/x.js"
   expect "pay: $address fails" 1 '^FAIL: payment-host-scan path=.*x.js address=' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
 done
+# Every spelling a browser resolves to a payment host: percent-encoded dots and letters (once, twice,
+# and as the UTF-8 bytes of a fullwidth dot), HTML character references, JavaScript escapes, the
+# ideographic and fullwidth full stops, and fullwidth letters (new URL() reads each as buy.stripe.com).
+for address in 'https://buy%2Estripe%2Ecom/test_evil' 'https://buy%252Estripe%252Ecom/x' 'https://buy.str%69pe.com/x' 'https://buy%EF%BC%8Estripe%EF%BC%8Ecom/x' \
+  'https://buy&#46;stripe&#46;com/x' 'https://buy&#x2E;stripe&#x2e;com/x' 'https://buy&period;stripe&period;com/x' 'https&colon;&sol;&sol;paypal&period;me/x' \
+  'https://buy\u002estripe\u002ecom/x' 'https://buy\u{2e}stripe\x2ecom/x' 'https://buy。stripe。com/x' 'https://buy．stripe．com/x' 'https://buy｡stripe｡com/x' \
+  'https://ｂｕｙ.ｓｔｒｉｐｅ.ｃｏｍ/x' 'https://ＢＵＹ．ＳＴＲＩＰＥ．ＣＯＭ/abc123'; do
+  printf 'const b="%s";\n' "$address" > "$PD/other/x.js"
+  expect "pay: $address fails as the host a browser reads" 1 '^FAIL: payment-host-scan path=.*x.js address=.*(stripe\.com|STRIPE\.COM|paypal\.me)' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+done
+printf '<a href="https://buy&#46;stripe&#46;com/abc123">Pay</a>\n' > "$PD/other/x.js"
+expect "pay: the configured link written with character references is still the configured link" 0 '^PASS: payment-host-scan files=1 allowed=1$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
 printf 'const c="https://notstripe.com/x https://stripe.company/y help@stripe.com https://example.com/buy.stripe";\n' > "$PD/other/x.js"
 expect "pay: look-alike hosts, an email address and a path pass" 0 '^PASS: payment-host-scan files=1 allowed=0$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+printf '%s\n' 'const d="100% done, 50%2 off, &#169; 2026, été, notstripe%2Ecom/x";' > "$PD/other/x.js"
+expect "pay: decoded text that names no payment host passes" 0 '^PASS: payment-host-scan files=1 allowed=0$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
 expect "pay: a netlify.toml with no Payment Link is a usage error" 2 '^FAIL: payment-host-scan usage: .* sets no VITE_STRIPE_PAYMENT_LINK_URL$' -- node "$PAY" --allow-from "$GATE_DIR/payment-hosts.txt" "$PD/dist"
 expect "pay: an allowed link that is not a Payment Link is a usage error" 2 '^FAIL: payment-host-scan usage: the allowed link is not a Payment Link address' -- node "$PAY" --allow-from "$PD/bad.toml" "$PD/dist"
 expect "pay: a missing folder is a usage error" 2 '^FAIL: payment-host-scan usage: not a folder' -- node "$PAY" "$PD/none"
