@@ -9,6 +9,13 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Pulling past the top shows the top bar's ground, not white; past the bottom, the footer's. The
+     page itself paints paper, so this shows only in the overscroll. */
+  background: linear-gradient(var(--signal) 50%, var(--ink) 50%);
+}
+
+html:has(.page > main > .band:last-child:nth-child(odd)) {
+  background: linear-gradient(var(--signal) 50%, var(--paper) 50%);
 }
 
 body {
@@ -33,6 +40,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: var(--paper);
 }
 
 .wrap,
@@ -1218,13 +1226,28 @@ button.link:hover:not(:disabled) {
   margin: 0 0 var(--space-2);
 }
 
+/* A link to the rest of a list on its own page: the words, then an arrow. */
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .agent {
-  display: flow-root;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
+  column-gap: var(--space-2);
+  align-content: start;
+}
+
+.agent > :not(.avatar) {
+  grid-column: 2;
 }
 
 .agent > .avatar {
-  float: left;
-  margin: 0 var(--space-2) var(--space-1) 0;
+  grid-row: 1 / -1;
+  margin: 0;
 }
 
 /* The facts line sits at the bottom of each row, so the lines align across a row of agents. */
@@ -1733,16 +1756,6 @@ input[type='radio'] {
     height: 4.5rem;
   }
 
-  .agent {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .agent .avatar {
-    float: none;
-    width: 6rem;
-    margin: 0 0 var(--space-2);
-  }
 }
 
 /* From 48rem to 64rem a strip member's avatar sits over its name, so the job keeps a readable width. */

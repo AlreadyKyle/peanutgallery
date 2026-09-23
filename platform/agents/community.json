@@ -1,7 +1,7 @@
 {
   "name": "Community",
   "title": "Community",
-  "description": "Reads the studio's community channels and turns what people ask for into cards, but is not running yet.",
+  "description": "Reads the studio's community channels and turns what people ask for into cards.",
   "species_note": "A soft lavender creature with a broad face and short, curled horns.",
   "model": "MODEL_BUILDER",
   "budget_share": 0.025,

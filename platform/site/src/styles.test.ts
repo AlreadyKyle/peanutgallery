@@ -351,7 +351,8 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
 
   it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
     const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
-    expect(gradients).toEqual([".card[data-face='paused']::before"]);
+    // The overscroll paint behind the page (html) is the one other gradient: two flat halves.
+    expect(gradients.sort()).toEqual([".card[data-face='paused']::before", 'html', 'html:has(.page > main > .band:last-child:nth-child(odd))'].sort());
     const shadows = ALL_RULES.filter((rule) => /(box|text)-shadow:/.test(rule.body)).map((rule) => rule.selector);
     expect(shadows).toEqual(['.changed']);
   });
