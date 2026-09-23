@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { CoinMark } from './components/Funding';
 import { PageHeader } from './components/PageHeader';
 import { copy } from './lib/copy';
@@ -39,6 +39,7 @@ export function App() {
   return (
     <StudioProvider>
       <div className="page">
+        <ScrollOnNavigate />
         <TopBar />
         <Routes>
           <Route path="/contribute" element={<Contribute />} />
@@ -56,6 +57,25 @@ export function App() {
       </div>
     </StudioProvider>
   );
+}
+
+/**
+ * A link to another page opens it at the top, or at the element its #hash names, not at the last
+ * page's scroll position. Back and forward keep the browser's own scroll restoration.
+ */
+function ScrollOnNavigate() {
+  const location = useLocation();
+  const type = useNavigationType();
+  const last = useRef(location.key);
+  useEffect(() => {
+    if (location.key === last.current) return;
+    last.current = location.key;
+    if (type === 'POP') return;
+    const target = location.hash === '' ? null : document.getElementById(location.hash.slice(1));
+    if (target === null) window.scrollTo(0, 0);
+    else target.scrollIntoView();
+  }, [location, type]);
+  return null;
 }
 
 /**

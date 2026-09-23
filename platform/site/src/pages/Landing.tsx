@@ -126,7 +126,7 @@ function TeamSection({ view }: { view: HomeView }) {
       <section className="section" aria-labelledby="team">
         <h2 id="team">{copy.team.title}</h2>
         <TeamStrip roles={roles} asleep={paused(snapshot)} />
-        <p>
+        <p className="more">
           <MoreLink to="/team">{copy.team.meetAll}</MoreLink>
         </p>
       </section>

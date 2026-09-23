@@ -97,7 +97,7 @@ Money and counts use tabular figures.
 
 ## Colour
 
-**The board's decision (23 September 2026):** the site takes real colour. The colour system (`docs/specs/home-and-design.md`, Decisions) replaces the direction's black-and-white-only rule: the page stays white with black bands and cards stay on white, every page opens on one signal plate, and each colour has one meaning. **Later the same day** the board judged the cobalt signal to read as MS-DOS and set it to ink (`#111111`) for now: the top bar and band 1 are black, the primary button and focus ring on paper are black, and pulling past the top of the page shows black, not white (`html`'s background in styles.css).
+**The board's decision (23 September 2026):** the site takes real colour. The colour system (`docs/specs/home-and-design.md`, Decisions) replaces the direction's black-and-white-only rule: the page stays white with black bands and cards stay on white, every page opens on one signal plate, and each colour has one meaning. **Later the same day** the board judged the cobalt signal to read as MS-DOS and set it to ink (`#111111`) for now: the top bar and band 1 are black, the primary button and focus ring on paper are black, and pulling past the top of the page shows black, not white: browsers fill the overscroll with the root's solid background colour, so `html` paints `--signal`, `body` paints nothing (WebKit blends body's colour over the root's) and `.page` paints the paper. Pulling past the bottom shows black too **(tested)**.
 
 **One colour, one meaning.**
 - **Amber is money**: Contribute, the funding bar's fill, the coin mark and the Funded glyph's fill. Every amber shape keeps an ink edge on paper **(tested: `--coin` appears only in those rules)**.

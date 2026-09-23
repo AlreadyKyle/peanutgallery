@@ -9,13 +9,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
-  /* Pulling past the top shows the top bar's ground, not white; past the bottom, the footer's. The
-     page itself paints paper, so this shows only in the overscroll. */
-  background: linear-gradient(var(--signal) 50%, var(--ink) 50%);
-}
-
-html:has(.page > main > .band:last-child:nth-child(odd)) {
-  background: linear-gradient(var(--signal) 50%, var(--paper) 50%);
+  /* Pulling past the top of the page shows the top bar's ground, not white. Browsers fill the
+     overscroll with one solid colour, the root's (WebKit blends body's over it, so body paints none),
+     never an image; .page paints paper over everything, so this shows only in the overscroll, and
+     past the bottom it is black too. */
+  background-color: var(--signal);
 }
 
 body {
@@ -27,7 +25,6 @@ body {
   /* The font file has no italic and no synthesised slant: an emphasis stays upright everywhere. */
   font-synthesis-style: none;
   color: var(--ink);
-  background: var(--paper);
   overflow-wrap: anywhere;
 }
 
@@ -1277,6 +1274,7 @@ button.link:hover:not(:disabled) {
 .team-strip {
   display: grid;
   gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .member {
