@@ -29,7 +29,7 @@ Out:
 - The stage is checked when the payment is credited, not when the supporter paid (see Decisions).
 - A replay (the same event or Checkout session again) reports the `goal_card_id` stored on the payment row, so it names the card the money went to even after that card has closed, and names none for money that went to the pool.
 - A `proposed` or `voted` card that reaches its target still moves to `funded`. A `designing` card is credited and keeps its stage.
-- Money already held for a card that was open when it was paid still reaches that card's bar when the hold is released, whatever the card's stage by then. The payment row carries the card id, and `credit_held_contributions` credits the card named on the row without checking its stage (`refunds-and-holds.md`). The pledge was made while the card was open.
+- ~~Money already held for a card that was open when it was paid still reaches that card's bar when the hold is released, whatever the card's stage by then. The payment row carries the card id, and `credit_held_contributions` credits the card named on the row without checking its stage (`refunds-and-holds.md`). The pledge was made while the card was open.~~ Superseded by `money-logic.md` (2026-09-23): a released hold enters the waterfall at step 1 only while its card still takes money, and otherwise at step 2.
 - The split, the daily hold, the lock order and every reversal figure are unchanged.
 
 **Reversal result.** `reverse_contribution` returns four more figures, with no change to what it moves:
@@ -64,7 +64,7 @@ Out:
 - [x] A replay of a payment to a card that has since closed names the card; a replay of a payment that went to the pool names none, even when an open card's id is passed.
 - [x] A refund of a payment that went to the pool because its card was closed leaves the card's bar alone, and the refund row's `goal_card_id` is null.
 - [x] `apply_contribution` and `reverse_contribution` in the new migration equal their refunds-and-holds definitions apart from the goal lookup, the replay's goal and the lines that return the reserves and the kind's totals. Each new file holds nothing beyond its function blocks, grants, trigger statements, the `live_at` column and backfill, the lock timeout and comments.
-- [x] A hold paid while a card was open is released onto the card's bar after the card has gone live.
+- [x] ~~A hold paid while a card was open is released onto the card's bar after the card has gone live.~~ Superseded by `money-logic.md` (2026-09-23): a live card takes no money, so the release goes on at step 2.
 - [x] `reverse_contribution` returns the pool's reserve and incident reserve after the update, including a reserve below zero.
 - [x] `reverse_contribution` returns `kind_reversed_usd` and `kind_total_usd` on insert and when nothing is left: a second dispute event with the same total returns `kind_reversed_usd >= kind_total_usd`, and a dispute after a full refund returns `kind_reversed_usd` 0.
 - [x] Below the incident cap at a 20% studio share, a refund row carries negative shares in the payment's proportions, the balance and the bar fall by the agents' credit share, and a dispute for the rest is covered by the reserve. The identity offsets do not move.
@@ -179,7 +179,7 @@ on 18 September. That is a visibility quirk of the catalog view under this role,
 ## Decisions
 
 - 2026-09-16: the open stages are `proposed`, `designing` and `voted`, the stages the site offers for funding. Money that names any other card funds the pool rather than being refused, because the payment has already been taken and the pool is where unassigned money goes.
-- 2026-09-16: held money keeps the card it was paid toward. The supporter pledged while the card was open, and changing the release job would move money that the hold rules already settled.
+- 2026-09-16: held money keeps the card it was paid toward. The supporter pledged while the card was open, and changing the release job would move money that the hold rules already settled. Superseded by `money-logic.md` (2026-09-23): released and reinstated credit enters at step 1 of the waterfall.
 - 2026-09-16: the backfill turns off the `updated_at` trigger for its one update. Without that, every live card's `updated_at` would become the migration time, and the live site reads `updated_at` as the ship date until the site change lands.
 - 2026-09-16: `actual_usd` is withheld because it counts founder-billed turns; `severity` and `priority` because priority 1 is an S1 and the incident list is private until its post-mortem (PLAN.md §4). The card row itself stays public.
 - 2026-09-16: the grants name columns, so a new card column is private until granted. A table-level revoke also removes column grants, so the migration can run twice.

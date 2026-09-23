@@ -1,6 +1,6 @@
 # Money logic: one waterfall, allocations, supporter numbers, the terms stamp and the fees Stripe keeps
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Part of the launch series, built on the merge of legal-copy (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). The cross-PR contracts it relies on are in its Decisions under "Reconciled with the series".
 

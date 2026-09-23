@@ -42,9 +42,9 @@ Out:
 **Reversal.**
 - `reverse_contribution` takes the kind's cumulative total from Stripe: a charge's `amount_refunded`, or a dispute's `amount`.
 - It reverses only what is still due: the smaller of that total minus what this kind already reversed, and the payment minus everything already reversed. A replay, several partial refunds and events that arrive out of order each change nothing twice.
-- The reversed share is split in the payment's own proportions, rounded cumulatively so a full reversal returns every column to zero.
+- The reversed share is split in the payment's own proportions, rounded cumulatively so a full reversal returns every column to zero. ~~The row's net is its pro-rata share of the payment's net.~~ Superseded by `money-logic.md` (2026-09-23): the row's net is minus the whole amount reversed, and the fee Stripe keeps (the amount less the pro-rata shares) comes off the studio share, so a full refund leaves the family's net and studio share at minus that fee.
 - Held money is cancelled before credited money.
-- A dispute draws the 10% reserve first. The reserve covers the reversed pool and incident amounts up to its balance, and only the rest comes off the balance, the incident reserve and the card bar. A refund comes off all of them in the original proportions.
+- A dispute draws the 10% reserve first. The reserve covers the reversed pool and incident amounts up to its balance, and only the rest comes off the balance, the incident reserve and ~~the card bar~~ the payment's allocations (`money-logic.md`: newest place first, each card giving up only the payment's unspent money there). A refund comes off all of them in the original proportions.
 - The negative row records exactly what moved. A card keeps its stage.
 - The webhook finds the Checkout session through the payment intent. A payment the webhook never credited (its fee never arrived) is credited first under `<event id>.credit` and then reversed.
 - Every inserted reversal and every new dispute posts one line to `NTFY_TOPIC_URL` when that function secret is set. The line has no email or name, and it warns when a card past voting falls below its target or the pool balance goes below zero.
@@ -58,7 +58,7 @@ An S1 draw moves money from the balance to the incident reserve side of the same
 
 ## Acceptance criteria
 
-- [x] A refund event for a credited session writes one negative row, moves the pool, reserve, incident reserve and card bar back by the refunded share, and a replay of the same event changes nothing.
+- [x] A refund event for a credited session writes one negative row, moves the pool, reserve, incident reserve and ~~card bar~~ the payment's allocations (`money-logic.md`, 2026-09-23) back by the refunded share, and a replay of the same event changes nothing.
 - [x] A dispute draws the reserve first and alerts.
 - [x] A $120 contribution credits $50 immediately and holds the rest; the release job credits it once 14 days have passed.
 - [x] The ledger identity holds after refunds and releases (I1–I3 above).

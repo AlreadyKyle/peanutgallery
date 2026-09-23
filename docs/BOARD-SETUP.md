@@ -125,6 +125,10 @@ are its only Stripe reads. The key can't move money.
    Links, Events and Disputes. Nothing else, and no Write anywhere.
 3. Put it in `.env` as `STRIPE_READ_KEY=…`.
 
+Until this key exists the Controller does not run, so the site's reconciliation line shows no
+run yet, and a dispute fee Stripe charges is not booked until its first run
+(`docs/specs/money-logic.md`).
+
 Before either job first runs, I tell you exactly what each one reads. The host's env check refuses
 `STRIPE_READ_KEY` unless it starts with `rk_live_`, and refuses any value starting `sk_live_` or
 `sk_test_` under any name.
@@ -290,7 +294,12 @@ No agent touches Stripe; these are yours.
   payer could check out in their own currency, and the webhook refuses any currency but US dollars,
   so the payment would be charged and not credited. No agent may read Stripe to check this, so it
   is yours.
-- **Your test payment.** Refund your own $1 test payment.
+- **Your test payment.** Refund your own $1 test payment (Payments → the $1.00 payment of
+  15 September 2026 → Refund), before the cutover. Until then it is booked apart
+  (`docs/specs/money-logic.md`): it funds no card and sits in no "Not on a card yet" money, gets no
+  supporter number, is in no money-in figure on the site, and is left out of the agent money a
+  Console credit purchase may use. The fee Stripe keeps on the refund ($0.2662) is booked to the
+  studio share automatically; there is nothing to record by hand.
 - **After-payment redirect.** Payment Link → After payment: redirect customers to
   `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
   is live.
