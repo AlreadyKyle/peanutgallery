@@ -104,26 +104,28 @@ export function isInfrastructureConclusion(conclusion: string): boolean {
   return INFRASTRUCTURE_CONCLUSIONS.includes(conclusion);
 }
 
-// The GitHub Actions app. Any app with checks:write can post a check run named gate, so only the
-// ones Actions created count. Among workflows only gate.yml defines a job named gate: the gate
-// tests read every file in .github/workflows (a kernel path) and fail on a second one, so an
-// Actions run named gate comes from gate.yml.
-export const ACTIONS_APP_SLUG = 'github-actions';
+// The gate is the workflow .github/workflows/gate.yml, a kernel path; its last job, named gate, needs
+// every other job, so the workflow run's conclusion is the gate's. The dispatcher reads workflow runs
+// through the Actions API, because a fine-grained token cannot read check runs (GitHub answers 403)
+// and the dispatcher's token holds Actions read (docs/PLAN.md §10 decision 30). Only Actions creates
+// workflow runs, so no other app can post a passing gate.
+export const GATE_WORKFLOW_PATH = '.github/workflows/gate.yml';
 
-function isActionsGateRun(run: Record<string, unknown>): boolean {
-  return run.name === GATE_CHECK_NAME && isRecord(run.app) && run.app.slug === ACTIONS_APP_SLUG;
+function isGateWorkflowRun(run: Record<string, unknown>): boolean {
+  return run.path === GATE_WORKFLOW_PATH;
 }
 
-// Every Actions gate run on the sha must pass. The API's default filter keeps each run's latest
-// attempt, so a re-run replaces the attempt it repeats. Missing: no Actions gate run yet. Fail: any
-// completed run concluded other than success, cancelled included. Pending: none failed and one is
-// still running. Pass: all completed with success.
+// Every gate workflow run on the sha must pass (a pull request and a push to main each start one).
+// The API lists each run's latest attempt, so a re-run replaces the attempt it repeats. Missing: no
+// gate run yet. Fail: any completed run concluded other than success, cancelled and startup_failure
+// included. Pending: none failed and one is still queued or running. Pass: all completed with success.
 export async function gateStatus(opts: GitHubOptions, sha: string): Promise<GateStatus> {
-  const result = await request(opts, 'GET', `/repos/${opts.repo}/commits/${sha}/check-runs?check_name=${GATE_CHECK_NAME}&per_page=50`);
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/runs?head_sha=${sha}&per_page=50`);
   if (result.status !== 200 || !isRecord(result.json)) {
-    throw new Error(`github check-runs: http ${result.status} ${apiMessage(result.json)}`.trim());
+    throw new Error(`github workflow runs: http ${result.status} ${apiMessage(result.json)}`.trim());
   }
-  const runs = (Array.isArray(result.json.check_runs) ? result.json.check_runs.filter(isRecord) : []).filter(isActionsGateRun);
+  const all = Array.isArray(result.json.workflow_runs) ? result.json.workflow_runs.filter(isRecord) : [];
+  const runs = all.filter(isGateWorkflowRun);
   if (runs.length === 0) return { state: 'missing' };
   const failed = runs.find((run) => run.status === 'completed' && run.conclusion !== 'success');
   if (failed) return { state: 'fail', conclusion: String(failed.conclusion ?? 'unknown') };
@@ -137,7 +139,7 @@ export interface PollOptions {
   signal?: AbortSignal;
 }
 
-// Polls until the gate completes; a missing check-run keeps polling because Actions can take
+// Polls until the gate completes; a missing workflow run keeps polling because Actions can take
 // a moment to register it after the push.
 export async function waitForGate(opts: GitHubOptions, sha: string, poll: PollOptions): Promise<GateStatus> {
   const deadline = Date.now() + poll.timeoutMs;

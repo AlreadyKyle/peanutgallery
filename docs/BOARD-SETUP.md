@@ -67,10 +67,13 @@ below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permiss
 - the token is shown once; copy it straight into the file named, never into chat.
 
 1. **The host's token** (the unattended dispatcher, on your Mac for now and later on a server):
-   Contents read and write, Pull requests read and write, Checks read. No Actions, no Workflows. If
-   you already made it from the old item 7 link, it is right as it is.
+   Contents read and write, Pull requests read and write, Actions read-only. No Workflows. GitHub
+   offers these tokens no Checks permission and ignores `checks` in the link, so add Actions by hand
+   (+ Add permissions, Actions, Read-only): the dispatcher reads the gate's result through the
+   Actions API (PLAN §10 decision 30). GitHub may also ignore the link's expiry; check the date it
+   shows.
 
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`.
 2. **The read-only token for agent sessions** (it mounts the repository into each Managed Agents
@@ -82,7 +85,7 @@ below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permiss
    cannot write: a push with it must answer 403, and the unattended startup refuses to run otherwise.
 3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token.
 
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
    is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
