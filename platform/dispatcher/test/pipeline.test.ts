@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
-import type { PatchStore, StoredPatch } from '../src/patch.js';
+import { storedPatch, type PatchStore, type StoredPatch } from '../src/patch.js';
 import { runCardPipeline, type PipelineDeps, type PipelineTimings } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
 import { AGENT_EMAIL, defaultGitRunner, git, setGitRunner, type GitCall } from '../src/worktree.js';
@@ -1065,7 +1065,7 @@ describe('a card with a stored patch', () => {
     db.cards = [{ ...c, stage: 'building' }];
     db.deploys = [OLDER_GREEN];
     const patches = new MemoryPatchStore();
-    await patches.save({ cardId: c.id, baseSha: initialSha, diff: storedSitePatch('<title>Studio</title>') });
+    await patches.save(storedPatch(c.id, initialSha, Buffer.from(storedSitePatch('<title>Studio</title>')), 'Name the page Studio', 'sesn_earlier'));
     let sessions = 0;
     const adapter = new FakeAdapter(async () => {
       sessions += 1;
@@ -1086,7 +1086,7 @@ describe('a card with a stored patch', () => {
     const c = platformCard({ id: 'eeeeeeee-0000-4000-8000-000000000002' });
     db.cards = [{ ...c, stage: 'building' }];
     const patches = new MemoryPatchStore();
-    await patches.save({ cardId: c.id, baseSha: initialSha, diff: storedSitePatch('<title>Studio</title>').replace('-<title>Backseat</title>', '-<title>Something else</title>') });
+    await patches.save(storedPatch(c.id, initialSha, Buffer.from(storedSitePatch('<title>Studio</title>').replace('-<title>Backseat</title>', '-<title>Something else</title>')), 'Name the page Studio', 'sesn_earlier'));
     const adapter = new FakeAdapter(async () => undefined);
     const alert = new RecordingAlerter();
     const { fetchFn, calls } = remote();

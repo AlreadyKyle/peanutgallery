@@ -4,7 +4,21 @@ import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { applyStoredPatch, parseApplyReport, patchSha256, patchTextProblem, PATCH_MAX_BYTES, PATCH_MAX_FILES, reportProblem, validateAndApply, type PatchStore, type StoredPatch } from '../src/patch.js';
+import {
+  applyStoredPatch,
+  createSupabasePatchStore,
+  parseApplyReport,
+  patchSha256,
+  patchTextProblem,
+  PATCH_MAX_BYTES,
+  PATCH_MAX_FILES,
+  reportProblem,
+  storedPatch,
+  validateAndApply,
+  type PatchStore,
+  type StoredPatch,
+} from '../src/patch.js';
+import { mockFetch } from './helpers/mock-fetch.js';
 import { AGENT_EMAIL, git, lanePaths } from '../src/worktree.js';
 
 const CONFIG_LANE = lanePaths('seed-1', 'config');
@@ -148,6 +162,12 @@ describe('patchTextProblem and reportProblem', () => {
     expect(patchTextProblem(Buffer.alloc(PATCH_MAX_BYTES + 1, 'a'))).toMatch(/over the 1048576-byte limit/);
   });
 
+  it('refuses bytes that are not valid UTF-8, which card_patches could not hold exactly', () => {
+    const text = Buffer.from('diff --git a/seed-1/config/a.json b/seed-1/config/a.json\n+caf', 'utf8');
+    expect(patchTextProblem(Buffer.concat([text, Buffer.from([0xe9, 0x0a])]))).toMatch(/not valid UTF-8/);
+    expect(patchTextProblem(Buffer.from('diff --git a/seed-1/config/a.json b/seed-1/config/a.json\n+café\n', 'utf8'))).toBeNull();
+  });
+
   it('refuses more files than the limit', () => {
     const report = { entries: Array.from({ length: PATCH_MAX_FILES + 1 }, (_, i) => ({ path: `seed-1/config/f${i}.json`, binary: false })), summary: [] };
     expect(reportProblem(report, CONFIG_LANE)).toMatch(/101 files, over the 100-file limit/);
@@ -191,19 +211,53 @@ describe('applyStoredPatch', () => {
   it('re-applies the newest stored patch and names its sha256', async () => {
     const store = new MemoryStore();
     const patch = await configEdit();
-    await store.save({ cardId: 'card-1', baseSha: base, diff: patch.toString('utf8') });
+    await store.save(storedPatch('card-1', base, patch, 'Gatherer base cost 10 to 11', 'sesn_test'));
     const outcome = await applyStoredPatch(store, 'card-1', repo, CONFIG_LANE);
     expect(outcome).toEqual({ kind: 'applied', sha256: patchSha256(patch), baseSha: base, files: ['seed-1/config/spawn-table.json'] });
     expect(store.rows).toHaveLength(1);
   });
 
+  it('discards, without applying, a stored patch whose text does not hash to its recorded sha256', async () => {
+    const store = new MemoryStore();
+    const patch = await configEdit();
+    await store.save({ ...storedPatch('card-1', base, patch, null, null), sha256: 'f'.repeat(64) });
+    const outcome = await applyStoredPatch(store, 'card-1', repo, CONFIG_LANE);
+    expect(outcome).toMatchObject({ kind: 'conflict', sha256: patchSha256(patch), detail: expect.stringMatching(/not the recorded f{64}/) });
+    expect(store.rows).toEqual([]);
+    expect(raw(['status', '--porcelain', '--untracked-files=all'])).toBe('');
+  });
+
   it('discards a stored patch that no longer applies, so the next claim runs a session', async () => {
     const store = new MemoryStore();
     const patch = await configEdit();
-    await store.save({ cardId: 'card-1', baseSha: base, diff: patch.toString('utf8') });
+    await store.save(storedPatch('card-1', base, patch, 'Gatherer base cost 10 to 11', 'sesn_test'));
     await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), SPAWN.replace('10', '12'), 'utf8');
     const outcome = await applyStoredPatch(store, 'card-1', repo, CONFIG_LANE);
     expect(outcome.kind).toBe('conflict');
     expect(store.rows).toEqual([]);
+  });
+});
+
+describe('createSupabasePatchStore', () => {
+  const URL_BASE = 'https://db.local';
+
+  it('writes card_patches with the patch text, its sha256 and byte count, the summary and the session', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.startsWith(`${URL_BASE}/rest/v1/card_patches`) ? { status: 201, text: '' } : undefined));
+    const patch = Buffer.from('diff --git a/seed-1/config/a.json b/seed-1/config/a.json\n', 'utf8');
+    await createSupabasePatchStore(URL_BASE, 'service-key', fetchFn).save(storedPatch('card-1', base, patch, 'Raise a', 'sesn_1'));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toEqual({ card_id: 'card-1', base_sha: base, patch: patch.toString('utf8'), sha256: patchSha256(patch), bytes: patch.byteLength, summary: 'Raise a', session_id: 'sesn_1' });
+  });
+
+  it('reads back the newest row for the card', async () => {
+    const patch = 'diff --git a/seed-1/config/a.json b/seed-1/config/a.json\n';
+    const row = { card_id: 'card-1', base_sha: base, patch, sha256: patchSha256(Buffer.from(patch)), bytes: patch.length, summary: null, session_id: 'sesn_1' };
+    const { fetchFn, calls } = mockFetch((method, url) => (method === 'GET' && url.startsWith(`${URL_BASE}/rest/v1/card_patches`) ? { status: 200, json: [row] } : undefined));
+    const stored = await createSupabasePatchStore(URL_BASE, 'service-key', fetchFn).latest('card-1');
+    expect(stored).toEqual({ cardId: 'card-1', baseSha: base, patch, sha256: row.sha256, bytes: patch.length, summary: null, sessionId: 'sesn_1' });
+    const url = new URL(calls[0]?.url ?? '');
+    expect(url.searchParams.get('select')).toBe('card_id,base_sha,patch,sha256,bytes,summary,session_id');
+    expect(url.searchParams.get('card_id')).toBe('eq.card-1');
+    expect(url.searchParams.get('order')).toBe('created_at.desc');
   });
 });

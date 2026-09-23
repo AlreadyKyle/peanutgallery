@@ -35,7 +35,13 @@ export function patchSha256(bytes: Uint8Array): string {
 export function patchTextProblem(bytes: Uint8Array): string | null {
   if (bytes.byteLength === 0) return 'the patch is empty';
   if (bytes.byteLength > PATCH_MAX_BYTES) return `the patch is ${bytes.byteLength} bytes, over the ${PATCH_MAX_BYTES}-byte limit`;
-  const text = Buffer.from(bytes).toString('utf8');
+  // card_patches stores the patch as text, so only bytes that are valid UTF-8 survive the round trip.
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return 'the patch is not valid UTF-8';
+  }
   if (text.includes('\0')) return 'the patch contains a NUL byte';
   if (/^GIT binary patch$/m.test(text) || /^Binary files .* differ$/m.test(text)) return 'the patch changes a binary file';
   if (/^(rename|copy) (from|to) /m.test(text)) return 'the patch renames or copies a file; make it with --no-renames';
@@ -133,12 +139,23 @@ export async function validateAndApply(worktree: string, bytes: Uint8Array, allo
   }
 }
 
-// card_patches (platform/supabase, workstream DB): service role only. The dispatcher writes the
-// patch it accepted, with the base commit it applied to, and reads the newest one for a card.
+// card_patches (platform/supabase/migrations/20260922000200_dispatcher_lease.sql): service role only.
+// The dispatcher writes each patch it accepted, as text, with the base commit it applied to, its
+// sha256 and byte count (the table refuses a row whose digest or length does not match the text), the
+// agent's one-line summary and the session it came from; it reads back the newest one for a card.
 export interface StoredPatch {
   cardId: string;
   baseSha: string;
-  diff: string;
+  patch: string;
+  sha256: string;
+  bytes: number;
+  summary: string | null;
+  sessionId: string | null;
+}
+
+// A row for patch bytes that passed patchTextProblem, so they are valid UTF-8 and the text is exact.
+export function storedPatch(cardId: string, baseSha: string, bytes: Uint8Array, summary: string | null, sessionId: string | null): StoredPatch {
+  return { cardId, baseSha, patch: Buffer.from(bytes).toString('utf8'), sha256: patchSha256(bytes), bytes: bytes.byteLength, summary, sessionId };
 }
 
 export interface PatchStore {
@@ -157,15 +174,36 @@ export function createSupabasePatchStore(url: string, serviceRoleKey: string, fe
   });
   return {
     async save(patch) {
-      const { error } = await client.from(PATCH_TABLE).insert({ card_id: patch.cardId, base_sha: patch.baseSha, diff: patch.diff });
+      const { error } = await client.from(PATCH_TABLE).insert({
+        card_id: patch.cardId,
+        base_sha: patch.baseSha,
+        patch: patch.patch,
+        sha256: patch.sha256,
+        bytes: patch.bytes,
+        summary: patch.summary,
+        session_id: patch.sessionId,
+      });
       if (error) throw new Error(`db ${PATCH_TABLE} insert: ${error.message}`);
     },
     async latest(cardId) {
-      const { data, error } = await client.from(PATCH_TABLE).select('card_id, base_sha, diff').eq('card_id', cardId).order('created_at', { ascending: false }).limit(1);
+      const { data, error } = await client
+        .from(PATCH_TABLE)
+        .select('card_id, base_sha, patch, sha256, bytes, summary, session_id')
+        .eq('card_id', cardId)
+        .order('created_at', { ascending: false })
+        .limit(1);
       if (error) throw new Error(`db ${PATCH_TABLE} read: ${error.message}`);
       const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
-      if (!row || typeof row.diff !== 'string' || typeof row.base_sha !== 'string') return null;
-      return { cardId, baseSha: row.base_sha, diff: row.diff };
+      if (!row || typeof row.patch !== 'string' || typeof row.base_sha !== 'string' || typeof row.sha256 !== 'string') return null;
+      return {
+        cardId,
+        baseSha: row.base_sha,
+        patch: row.patch,
+        sha256: row.sha256,
+        bytes: typeof row.bytes === 'number' ? row.bytes : Buffer.byteLength(row.patch, 'utf8'),
+        summary: typeof row.summary === 'string' ? row.summary : null,
+        sessionId: typeof row.session_id === 'string' ? row.session_id : null,
+      };
     },
     async discard(cardId) {
       const { error } = await client.from(PATCH_TABLE).delete().eq('card_id', cardId);
@@ -182,8 +220,12 @@ export type StoredPatchOutcome = { kind: 'none' } | { kind: 'applied'; sha256: s
 export async function applyStoredPatch(store: PatchStore, cardId: string, worktree: string, allowed: readonly string[]): Promise<StoredPatchOutcome> {
   const stored = await store.latest(cardId);
   if (!stored) return { kind: 'none' };
-  const bytes = Buffer.from(stored.diff, 'utf8');
+  const bytes = Buffer.from(stored.patch, 'utf8');
   const sha256 = patchSha256(bytes);
+  if (sha256 !== stored.sha256) {
+    await store.discard(cardId);
+    return { kind: 'conflict', sha256, detail: `the stored text hashes to ${sha256}, not the recorded ${stored.sha256}` };
+  }
   const check = await validateAndApply(worktree, bytes, allowed);
   if (check.ok) return { kind: 'applied', sha256, baseSha: stored.baseSha, files: check.files };
   await store.discard(cardId);

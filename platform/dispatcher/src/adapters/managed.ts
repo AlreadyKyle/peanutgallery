@@ -32,7 +32,7 @@ import type { Db } from '../db.js';
 import { StartupError } from '../exit-code.js';
 import { haltDispatcher } from '../halt.js';
 import { errorMessage, type Logger } from '../log.js';
-import { PATCH_FILE, PATCH_MAX_BYTES, patchSha256, validateAndApply, type PatchStore } from '../patch.js';
+import { PATCH_FILE, PATCH_MAX_BYTES, patchSha256, patchTextProblem, storedPatch, validateAndApply, type PatchStore } from '../patch.js';
 import { fallbackPrice, modelPrice, priceWith, round4, type PriceTable } from '../pricing.js';
 import { sleep } from '../time.js';
 import { git, headSha, shortId } from '../worktree.js';
@@ -781,10 +781,10 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
         }
         const check = await validateAndApply(spec.worktree, fetched.bytes, allowed);
         if (!check.ok) return { accepted: false, reason: check.reason };
-        await this.opts.patches?.save({ cardId: spec.cardId, baseSha, diff: fetched.bytes.toString('utf8') }).catch(async (error: unknown) => {
+        const summary = typeof input.summary === 'string' ? input.summary.slice(0, 500) : '';
+        await this.opts.patches?.save(storedPatch(spec.cardId, baseSha, fetched.bytes, summary || null, sessionId)).catch(async (error: unknown) => {
           this.log.warn('managed', 'accepted patch not stored', { card: spec.cardId, session: sessionId, error: errorMessage(error) });
         });
-        const summary = typeof input.summary === 'string' ? input.summary.slice(0, 500) : '';
         await onEvent({ type: 'message', text: `patch accepted: sha256 ${fetched.sha256}, ${check.files.length} file(s): ${check.files.join(', ')}${summary ? `. ${summary}` : ''}` });
         return { accepted: true };
       };
@@ -884,12 +884,18 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     let patchStored = false;
     const baseSha = metadata.base_sha ?? '';
     if (purpose === 'card' && pending && !answered.has(pending.id) && this.opts.patches && /^[0-9a-f]{40}$/.test(baseSha)) {
-      const input = pending.input as { sha256?: unknown };
+      const input = pending.input as { sha256?: unknown; summary?: unknown };
       const fetched = await this.fetchPatch(session.id, typeof input.sha256 === 'string' ? input.sha256 : null);
-      if ('bytes' in fetched) {
-        await this.opts.patches.save({ cardId: metadata.card_id ?? '', baseSha, diff: fetched.bytes.toString('utf8') });
+      // Checked in full against the lane when the card's next claim re-applies it (patch.ts
+      // applyStoredPatch); only a patch card_patches can hold as exact text is kept.
+      const problem = 'bytes' in fetched ? patchTextProblem(fetched.bytes) : fetched.reason;
+      if ('bytes' in fetched && problem === null) {
+        const summary = typeof input.summary === 'string' ? input.summary.slice(0, 500) : null;
+        await this.opts.patches.save(storedPatch(metadata.card_id ?? '', baseSha, fetched.bytes, summary, session.id));
         patchStored = true;
         this.log.info('managed', 'orphan patch stored', { session: session.id, card: metadata.card_id, sha256: fetched.sha256 });
+      } else {
+        this.log.warn('managed', 'orphan patch not stored', { session: session.id, card: metadata.card_id, reason: problem });
       }
     }
     const outcome = await this.settle(session.id, meter, null, label);

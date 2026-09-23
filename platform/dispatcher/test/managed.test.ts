@@ -15,7 +15,7 @@ import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
-import { patchSha256, PATCH_MAX_BYTES, type PatchStore, type StoredPatch } from '../src/patch.js';
+import { patchSha256, PATCH_MAX_BYTES, storedPatch, type PatchStore, type StoredPatch } from '../src/patch.js';
 import { parsePriceTable, round4 } from '../src/pricing.js';
 import { runAgentSession, type SessionDeps } from '../src/session.js';
 import { AGENT_EMAIL, git, lanePaths } from '../src/worktree.js';
@@ -251,7 +251,8 @@ describe('a card session', () => {
     expect(ledgerTotal(h.db)).toBe(0.07);
 
     expect(await readFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), 'utf8')).toContain('"baseCost": 11');
-    expect(h.store.rows).toEqual([{ cardId: card().id, baseSha: base, diff: patch.toString('utf8') }]);
+    expect(h.store.rows).toEqual([storedPatch(card().id, base, patch, 'Gatherer base cost 10 to 11', session.id)]);
+    expect(h.store.rows[0]).toMatchObject({ sha256: patchSha256(patch), bytes: patch.byteLength, patch: patch.toString('utf8') });
     expect(sentTypes(h.client)).toEqual(['user.message']);
     expect(session.archived).toBe(true);
     expect(h.client.deletedFiles).toEqual(['file_1']);
@@ -483,7 +484,7 @@ describe('orphan sessions', () => {
     expect(sentTypes(h.client)).toEqual(['user.interrupt']);
     expect(h.db.ledger.map((row) => row.request_id)).toEqual(['sevt_req_end_1', 'sevt_req_end_2', 'sevt_req_end_3', `${session.id}/runtime`, `${session.id}/settle`]);
     expect(ledgerTotal(h.db)).toBe(0.07);
-    expect(h.store.rows).toEqual([{ cardId: card().id, baseSha: base, diff: patch.toString('utf8') }]);
+    expect(h.store.rows).toEqual([storedPatch(card().id, base, patch, 'Gatherer base cost 10 to 11', session.id)]);
     expect(session.archived).toBe(true);
     const again = await h.adapter.closeOrphans();
     expect(again.size).toBe(0);
