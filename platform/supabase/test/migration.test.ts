@@ -1441,3 +1441,52 @@ describe("roles-revoke migration", () => {
     );
   });
 });
+
+// The Biz Dev rename and the roster columns (docs/specs/carry-over.md).
+const RENAME_BIZ_DEV_FILE = "20260923000200_rename_biz_dev.sql";
+const renameSql = launchFile(RENAME_BIZ_DEV_FILE);
+
+describe("rename-biz-dev migration", () => {
+  it("comes after the launch files and sets a lock timeout first", () => {
+    expect(RENAME_BIZ_DEV_FILE > LAUNCH_FILES.revoke).toBe(true);
+    expect(withoutComments(renameSql).startsWith(LOCK_TIMEOUT)).toBe(true);
+  });
+
+  it("renames the Scout's row in place, only while no Biz Dev row exists, so the seed's upsert on name finds it", () => {
+    expect(renameSql).toContain(
+      "update public.roles\nset name = 'Biz Dev', title = 'Biz Dev', prompt_path = 'platform/agents/prompts/biz-dev.md'\nwhere name = 'Scout'\n  and not exists (select 1 from public.roles where name = 'Biz Dev');",
+    );
+    // A Scout row left beside a Biz Dev row is retired, never deleted.
+    expect(renameSql).toContain("set state = 'retired', retired_at = coalesce(retired_at, now())");
+    expect(withoutComments(renameSql)).not.toMatch(/\bdelete\b|\binsert\b|\bdrop table\b/i);
+  });
+
+  it("retitles the Scout's planned roadmap card to the new backlog title, so file-backlog finds it", () => {
+    expect(renameSql).toContain(
+      "update public.cards\nset title = 'Biz Dev agent for outside tools and trends'\nwhere title = 'Scout agent for outside tools and trends'\n  and stage = 'proposed'\n  and horizon in ('next', 'later')\n  and not exists (select 1 from public.cards where title = 'Biz Dev agent for outside tools and trends');",
+    );
+    const backlog = readFileSync(resolve(MIGRATIONS_DIR, "..", "..", "..", "docs", "BACKLOG.md"), "utf8");
+    expect(backlog).toContain("### Biz Dev agent for outside tools and trends\n");
+    expect(backlog).not.toMatch(/scout/i);
+  });
+
+  it("adds nullable status and trigger, each checked, and runs twice", () => {
+    expect(renameSql).toContain("alter table public.roles add column if not exists status text;");
+    expect(renameSql).toContain("alter table public.roles add column if not exists trigger text;");
+    expect(renameSql).toContain("check (status is null or status in ('running', 'starts', 'planned'));");
+    expect(renameSql).toContain("check (trigger is null or (btrim(trigger) <> '' and char_length(trigger) <= 200 and strpos(trigger, E'\\n') = 0));");
+    for (const name of ["roles_status_check", "roles_trigger_check"]) {
+      expect(renameSql).toContain(`alter table public.roles drop constraint if exists ${name};`);
+    }
+  });
+
+  it("re-creates public_roles with status and trigger at its end, then revokes everything before granting select", () => {
+    expect(renameSql).toContain(
+      "create or replace view public.public_roles with (security_invoker = false) as\n  select id, name, title, description, species_note, avatar_url, model, write_access, state, hired_at, status, trigger\n  from public.roles;",
+    );
+    const body = withoutComments(renameSql);
+    expect(body.indexOf("revoke all on table public.public_roles from anon, authenticated;")).toBeGreaterThan(body.indexOf("create or replace view public.public_roles"));
+    expect(body.indexOf("grant select on public.public_roles to anon, authenticated;")).toBeGreaterThan(body.indexOf("revoke all on table public.public_roles"));
+    expect(body).not.toMatch(/(revoke|grant)[^;]* on (table )?public\.roles[ ;]/);
+  });
+});

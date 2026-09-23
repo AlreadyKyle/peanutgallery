@@ -1,12 +1,12 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import { rolePromptFile } from '../src/session.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AttendedAdapter, CHILD_ENV_SWITCHES, DISALLOWED_TOOLS, HOME_DENY, allowedToolRules, attendedSettings, baseToolNames, childEnv, claudeArgs, refusedTools } from '../src/adapters/attended.js';
+import { AttendedAdapter, CHILD_ENV_SWITCHES, DISALLOWED_TOOLS, HOME_DENY, allowedToolRules, attendedSettings, baseToolNames, childEnv, claudeArgs, realPath, refusedTools } from '../src/adapters/attended.js';
 import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
 
 const fixture = readFileSync(new URL('./fixtures/sample-stream.jsonl', import.meta.url), 'utf8');
@@ -343,8 +343,11 @@ describe('the session process group', () => {
 describe('the attended sandbox', () => {
   const paths = { worktree: '/work/card-4c2f5a1e', repoRoot: '/Users/board/peanutgallery', home: '/Users/board', tmpdir: '/var/folders/tmp', uid: 501 };
 
+  // These paths do not exist on the machine running the test, so they are taken as already resolved.
+  const asIs = (target: string) => target;
+
   it('runs Bash sandboxed with no host, no way out and no socket but tsx IPC, reading only the worktree, the git data, the pnpm store, the corepack cache and the temp folder', () => {
-    const settings = attendedSettings(paths) as { sandbox: Record<string, unknown>; permissions: { deny: string[] } };
+    const settings = attendedSettings(paths, asIs) as { sandbox: Record<string, unknown>; permissions: { deny: string[] } };
     expect(settings.sandbox).toEqual({
       enabled: true,
       failIfUnavailable: true,
@@ -375,9 +378,65 @@ describe('the attended sandbox', () => {
   });
 
   it('denies the Read, Glob and Grep tools the credential paths, the .env files and the dispatcher, and Edit the git folder', () => {
-    const { permissions } = attendedSettings(paths) as { permissions: { deny: string[] } };
+    const { permissions } = attendedSettings(paths, asIs) as { permissions: { deny: string[] } };
     for (const rel of ['.ssh/**', '.config/**', 'Library/Keychains/**', '.claude/**', '.claude.json', '.netrc']) expect(HOME_DENY).toContain(rel);
     expect(permissions.deny).toEqual([...HOME_DENY.map((rel) => `Read(~/${rel})`), 'Read(//Users/board/peanutgallery/.env*)', 'Read(//Users/board/peanutgallery/platform/dispatcher/**)', 'Edit(//Users/board/peanutgallery/.git/**)']);
+  });
+
+  it('resolves a path through its symlinks, keeping a tail that does not exist yet', () => {
+    const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'backseat-realpath-')));
+    try {
+      mkdirSync(path.join(dir, 'real', 'clone'), { recursive: true });
+      symlinkSync(path.join(dir, 'real'), path.join(dir, 'link'));
+      expect(realPath(path.join(dir, 'link', 'clone'))).toBe(path.join(dir, 'real', 'clone'));
+      expect(realPath(path.join(dir, 'link', 'clone', 'not-yet', 'x'))).toBe(path.join(dir, 'real', 'clone', 'not-yet', 'x'));
+      expect(realPath('/')).toBe('/');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Claude Code 2.1.280 denies a denyRead folder again after the allowRead paths when one of them holds
+  // it, which would deny the git data re-allowed inside it (docs/specs/carry-over.md).
+  it('never re-allows a path that holds a denied folder, so the git data inside it stays readable', () => {
+    const scratch = { worktree: '/tmp-real/T/check/peanutgallery-worktrees/card-sandbox', repoRoot: '/tmp-real/T/check/peanutgallery', home: '/Users/board', tmpdir: '/tmp-real/T', uid: 501 };
+    const { sandbox } = attendedSettings(scratch, asIs) as { sandbox: { filesystem: { denyRead: string[]; allowRead: string[]; allowWrite: string[] } } };
+    expect(sandbox.filesystem.denyRead).toEqual(['/Users/board', '/tmp-real/T/check/peanutgallery']);
+    expect(sandbox.filesystem.allowRead).toEqual([
+      '/tmp-real/T/check/peanutgallery-worktrees/card-sandbox',
+      '/tmp-real/T/check/peanutgallery/.git',
+      '/Users/board/Library/pnpm/store',
+      '/Users/board/.cache/node/corepack',
+      '/Users/board/Library/Caches/node/corepack',
+    ]);
+    // Writes are not re-denied that way, so the temp folder stays writable.
+    expect(sandbox.filesystem.allowWrite).toEqual(['/tmp-real/T/check/peanutgallery-worktrees/card-sandbox', '/tmp-real/T']);
+    for (const allow of sandbox.filesystem.allowRead) {
+      for (const deny of sandbox.filesystem.denyRead) expect(deny === allow || deny.startsWith(`${allow}/`), `${allow} holds ${deny}`).toBe(false);
+    }
+  });
+
+  it('names every sandbox path resolved, and the repository rules both as given and as resolved', () => {
+    const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'backseat-sandbox-link-')));
+    try {
+      mkdirSync(path.join(dir, 'home', 'peanutgallery', '.git'), { recursive: true });
+      mkdirSync(path.join(dir, 'home', 'peanutgallery-worktrees', 'card-4c2f5a1e'), { recursive: true });
+      symlinkSync(path.join(dir, 'home'), path.join(dir, 'home-link'));
+      const linked = path.join(dir, 'home-link');
+      const settings = attendedSettings({ worktree: path.join(linked, 'peanutgallery-worktrees', 'card-4c2f5a1e'), repoRoot: path.join(linked, 'peanutgallery'), home: linked, tmpdir: '/var/folders/tmp', uid: 501 }) as {
+        sandbox: { filesystem: { denyRead: string[]; allowRead: string[]; allowWrite: string[] } };
+        permissions: { deny: string[] };
+      };
+      const home = path.join(dir, 'home');
+      expect(settings.sandbox.filesystem.denyRead).toEqual([home, path.join(home, 'peanutgallery')]);
+      expect(settings.sandbox.filesystem.allowRead.slice(0, 2)).toEqual([path.join(home, 'peanutgallery-worktrees', 'card-4c2f5a1e'), path.join(home, 'peanutgallery', '.git')]);
+      expect(settings.sandbox.filesystem.allowWrite[0]).toBe(path.join(home, 'peanutgallery-worktrees', 'card-4c2f5a1e'));
+      expect(settings.permissions.deny).toContain(`Read(/${path.join(linked, 'peanutgallery')}/.env*)`);
+      expect(settings.permissions.deny).toContain(`Read(/${path.join(home, 'peanutgallery')}/.env*)`);
+      expect(settings.permissions.deny).toContain(`Edit(/${path.join(home, 'peanutgallery')}/.git/**)`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('scopes Edit and Write to the worktree, and passes the settings on the command line', () => {
@@ -411,7 +470,7 @@ describe('the attended sandbox', () => {
         },
       });
       await adapter.run({ ...spec, worktree }, () => undefined, new AbortController().signal);
-      expect(order).toEqual([`install ${worktree}`, 'spawn', `writes ${worktree},/var/folders/tmp`]);
+      expect(order).toEqual([`install ${worktree}`, 'spawn', `writes ${realPath(worktree)},${realPath('/var/folders/tmp')}`]);
       order.length = 0;
       const second = new FakeChild();
       const readOnly = new AttendedAdapter({

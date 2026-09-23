@@ -33,7 +33,7 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 
 ## The order from here
 
-1. **The launch batch** (below) is merged, and its production steps are run as each merged. Before the cutover, fix the Managed Agents stream-loss item below.
+1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
 2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Oracle sign-in, after which the instance is launched by script.
 3. **Board steps 4 and 5**: the call on how the first player arrives, and contributions open with the studio paused.
 4. **Board steps 6 and 7**: the first Stripe payout, then Console credit bought from it and recorded at /board.
@@ -51,10 +51,10 @@ Seven pull requests built in parallel from the plan of 22 September 2026. A spec
 | Live cards: plain titles and the launch slate (#45) | `specs/launch-cards.md` | built (`refresh-cards.ts` applied: 8 updated, 3 inserted) | nothing |
 | Gate: kernel checks first, kernel list, deny-list holes (#48) | `specs/launch-gate.md` | built | a card branch run through the gate |
 | Dispatcher: throttle, merge safety, metering (#49) | `specs/launch-dispatcher.md` | built | the cutover |
-| Managed Agents: unattended sessions, smoke without card code (#51) | `specs/launch-managed.md` | built | Console credit and the cutover; the fix below before it |
+| Managed Agents: unattended sessions, smoke without card code (#51) | `specs/launch-managed.md` | built | Console credit and the cutover |
 | Site: honest copy, /how-it-works, /team, /roadmap, board controls (#47) | `specs/launch-site.md` | built | the live check on production |
 
-**Fix before the cutover.** The Managed Agents adapter must stop and settle a session whose event stream is lost: send `user.interrupt`, poll until the session is no longer running, settle and archive it, and reset the reconnect count after a connect that delivered events (found in the finish review of 23 September 2026; `platform/dispatcher/src/adapters/managed.ts` around the `stream_lost` stop). Nothing reaches this code until the dispatcher runs unattended.
+**Fixed before the cutover (done, `specs/carry-over.md`).** The Managed Agents adapter now stops and settles a session whose event stream is lost: it sends `user.interrupt`, polls until the session is no longer running, settles and archives it, and resets the reconnect count after a connect that delivered events. It also reads the card's spend again after settling the card's earlier sessions, before it sets the new session's budget (found in the finish review of 23 September 2026; `platform/dispatcher/src/adapters/managed.ts`, tests in `managed.test.ts`).
 
 Production steps for the batch, each with the board's allow, the studio paused and no Mac dispatcher running: after the DB merge, the migrations up to `20260922000400_public_roles`, the `stripe-webhook` deploy and the anon negative test; after the live-cards merge, `refresh-cards.ts` as a dry run and then applied; after the site deploy is verified, `20260922000500_roles_revoke` and the anon negative test again; at the end, `file-backlog.ts` as a dry run and then applied, the model and price edits to `.env`, the role re-seed, the ledger identity, the live check, an attended probe and the Stripe Payment Link's field label. A close-out pull request then records the results in the specs.
 
@@ -100,6 +100,8 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/merge-safety.md` | built | the three live lines, which need a card merged through the dispatcher |
 | `specs/site-truth-pass.md` | built | /board two-factor enrolment watched in Chromium and Safari with DevTools open and no CSP report |
 | `specs/sweep-22-sep.md` | built | none named in the spec; moving it to done is a close-out check |
+| `specs/carry-over.md` | built | the production steps: migration `20260923000200`, the role re-seed, and the live check on production |
+| `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
 
 ### Draft
 
@@ -115,7 +117,8 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
   - The dispatcher runs attended on the founder's Mac until the cutover.
 - **Money.** The pool holds customer money only. Work before the cutover runs attended on the founder's Max subscription, billed to the founder. There is no founding budget. Console credit is bought only from Stripe payouts, never with the founder's money. Everything the studio runs on is free.
-- **Models.** The builders run on `claude-sonnet-5`; the directors are set to `claude-opus-5-5`, and no job runs them yet.
+- **Models.** Every role that runs is on `claude-opus-5-5` (`MODEL_BUILDER` and `MODEL_DIRECTOR`); the Host keeps `claude-haiku-4-5` while it does not run (PLAN.md §10 decision 36).
+- **Claude Code on the Mac.** Attended sessions need 2.1.280 or newer, because 2.1.139 refuses `claude-opus-5-5`. The Mac runs 2.1.280, and the attended `sandbox:check --positive` passes on it (`specs/carry-over.md`).
 - **Production changes.** Migrations are applied through the Supabase Management API query endpoint. Functions deploy from `platform/` with `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api`. Both need the board's allow in auto mode. A spec that needs production steps lists them under "Production steps (need the board's allow)", and a Verification line that can run only after Console credit, the cutover or the board's second factor names what it waits on and stays unticked, with the spec at built.
 - **What waits on the board.** `docs/BOARD-SETUP.md` is the step-by-step for every item that needs the board, with what is done and what is outstanding.
 - **Merging.** `main` has no branch protection; the repository is private on a plan without it. Every change reaches `main` through a pull request, except the revert commit the dispatcher writes after a merged card fails its deploy or smoke. The dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha, and its squash merge passes that sha, so a head that moved is refused. Board changes merge the same way, with the gate green at the head sha.

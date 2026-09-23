@@ -23,9 +23,10 @@ export type StudioFixture = {
   totals: Record<string, string>;
 };
 
+// The values the board set (docs/PLAN.md §10 decision 36): every role that runs is on claude-opus-5-5.
 const MODELS: Record<string, string> = {
   MODEL_DIRECTOR: 'claude-opus-5-5',
-  MODEL_BUILDER: 'claude-sonnet-5',
+  MODEL_BUILDER: 'claude-opus-5-5',
   MODEL_HOST: 'claude-haiku-4-5',
 };
 

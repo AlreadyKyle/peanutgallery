@@ -17,7 +17,7 @@ const ROLES: [string, boolean, string][] = [
   ['Platform Builder', true, 'claude-sonnet-5'],
   ['QA', true, 'claude-sonnet-5'],
   ['Host', false, 'claude-haiku-4-5'],
-  ['Scout', false, 'claude-sonnet-5'],
+  ['Biz Dev', false, 'claude-sonnet-5'],
   ['Community', false, 'claude-sonnet-5'],
 ];
 
@@ -109,7 +109,7 @@ describe('Team', () => {
     const running = await screen.findByRole('region', { name: team.running });
     expect(names(running)).toEqual(['Builder A', 'Builder B', 'QA']);
     const waiting = screen.getByRole('region', { name: team.notRunning });
-    expect(names(waiting)).toEqual(['Studio Head', 'Game Director', 'Platform Builder', 'Host', 'Scout', 'Community']);
+    expect(names(waiting)).toEqual(['Studio Head', 'Game Director', 'Platform Builder', 'Host', 'Biz Dev', 'Community']);
     expect(within(waiting).getByRole('link', { name: team.roadmapLink }).getAttribute('href')).toBe('/roadmap');
   });
 
@@ -128,7 +128,7 @@ describe('Team', () => {
   it('shows no model or hired date for a role that does not run, so the director model claims nothing', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.notRunning });
-    for (const name of ['Studio Head', 'Game Director', 'Host', 'Scout', 'Community']) {
+    for (const name of ['Studio Head', 'Game Director', 'Host', 'Biz Dev', 'Community']) {
       expect(within(box(name)).getByText(`${team.notRunning}.`)).toBeTruthy();
     }
     expect(within(box('Platform Builder')).getByText(`${team.notRunning}. ${team.siteClosed}`)).toBeTruthy();

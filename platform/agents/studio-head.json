@@ -9,5 +9,6 @@
   "prompt_path": "platform/agents/prompts/studio-head.md",
   "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
   "metrics": ["estimate_accuracy", "cost_per_ship"],
-  "write_access": true
+  "write_access": true,
+  "status": "running"
 }

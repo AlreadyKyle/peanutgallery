@@ -1,13 +1,13 @@
-// Reads the nine launch role specs from platform/agents/*.json. Shared by
+// Reads the sixteen roster role specs from platform/agents/*.json. Shared by
 // seed.ts and its test so both validate the same files the same way.
 
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { assertSharesSumToOne, parseRoleSpec, type RoleSpec } from "./roles.js";
 
-export const ROLE_COUNT = 9;
+export const ROLE_COUNT = 16;
 
-/** Every *.json file in the directory, parsed and validated; exactly nine, unique names, shares summing to 1. */
+/** Every *.json file in the directory, parsed and validated; exactly sixteen, unique names, the shares that are not 0 summing to 1. */
 export async function readRoleSpecs(agentsDir: string): Promise<RoleSpec[]> {
   const files = (await readdir(agentsDir)).filter((f) => f.endsWith(".json")).sort();
   const specs: RoleSpec[] = [];

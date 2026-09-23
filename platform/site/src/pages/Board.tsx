@@ -562,8 +562,8 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   );
 }
 
-// The roles that build cards. The directors, the Host, the Scout and the Community agent have no job
-// that runs yet, so they are never offered (lib/board.ts CARD_ROLE_FOLDERS).
+// The roles that build cards. Every other role, the directors, the Host, Biz Dev and the Community
+// agent among them, has no job that runs yet, so none is offered (lib/board.ts CARD_ROLE_FOLDERS).
 function executors(roles: Role[]): Role[] {
   return roles.filter(isCardRole);
 }

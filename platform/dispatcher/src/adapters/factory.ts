@@ -15,7 +15,7 @@ import type { AgentAdapter } from './types.js';
 import { STUDIO_KEY_ENV } from './unattended.js';
 
 export interface AdapterDeps {
-  db: Pick<Db, 'recordUsage'>;
+  db: Pick<Db, 'recordUsage' | 'getCard'>;
   alert: Alerter;
   log: Logger;
   patches: PatchStore | null;
