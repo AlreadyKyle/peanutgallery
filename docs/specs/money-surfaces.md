@@ -76,7 +76,7 @@ Out:
 - [x] Home's status line and the paused notice on /contribute show the identical `pausedSentence` for each of `awaiting_credit`, `spend_limit`, `incident` and `board`, the general line when `pause_reason` is null, and nothing when not paused or the studio row did not load (unit tests and `paused.spec.ts`).
 - [x] `MoneyIn.tsx` and `Stopped.tsx` are in `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` and the parity test passes; `legal.fixedRules[0]` is the new sentence and `docs.test.mjs` still finds the ledger in it; `BACKLOG.md` and PLAN §4 Not built yet no longer list "Split aggregate on the meter" or "Handling a dispute the studio wins"; PLAN §4 The Board's public list names money in, the reconciliation status, Not on a card yet and the shortfall, and stopped cards with their money trail.
 - [x] With `live-studio.ts` carrying `public_money` and `public_stopped_cards` rows (a paused and a rejected card), `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on /contribute and /ledger at 375, 768 and 1440.
-- [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games. (Open: the local preview reads production, which has no `public_money` until money-logic's migration is applied; production step 1 closes the local half before the merge. Every branch of the four checks has printed PASS against a stand-in database, Evidence.)
+- [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games. (Local half done: production step 1 printed PASS with all four checks PASS, not SKIP, against production data, Evidence, Ship. Open until the deploy: the production run.)
 
 ## Verification
 
@@ -201,6 +201,48 @@ PASS /ledger received $3.00 matches public_money.received_usd $3.00 (2 payments)
 The third state first FAILED on `1440px / no dead space: card: funding bars misaligned by 135px`: the five open cards outside the order kept their places without a button. That is how home's fund group came to follow the funding order. The SKIP lines are the board site's address (BOARD_SITE_URL unset), /board's redirect and og:image (local server) and the www redirect (production only). This is not the criterion's local preview, which reads production; production step 1 runs that.
 
 
+
+### Ship
+
+Money-logic merged as 2f451e4 (#69) with its production steps run (its migration is applied, so `public_money` and `public_stopped_cards` answer the anon key), and its docs follow-up as e56ebcf (#72). The branch was stacked on money-logic's pre-squash 33274fd, so, as money-logic did with legal-copy, it first merged money-logic's final head 8febb2f (6b1e8ee) and then origin/main at e56ebcf (76885f5). Main's tree equals 8febb2f except `docs/ROADMAP.md` and `docs/specs/money-logic.md`, so each conflict kept main's lines plus this branch's own change: `DESIGN.md` (the /contribute paragraph keeps legal-copy's `--space-1` caption sentence), `Cards.tsx` and `Landing.tsx` (#65's `MoreLink` beside `openForFunding` and `pausedSentence`), `layout-balance.spec.ts` (both imports), `styles.css` (one comment for `.choice-primary`), `BOARD-SETUP.md` and `PLAN.md` (this branch's steps 4 and 12 and decision 42), `ROADMAP.md` (money-logic done, this row built) and `money-logic.md` (main's). The PR's base was already main (set before #69 merged). After the merges the diff against main is this pull request's 48 files and nothing else.
+
+`pnpm verify` at the repository root at 7fd06dc exits 0. The two runs before it each failed one timing test under a load average of 45 to 48 from agents running in parallel, both passing alone and neither touched here: `Guide.test.tsx` ("Test timed out in 5000ms"; alone, 8 passed in 2.51s) and the dispatcher's `github.test.ts` "reports the merge as unknown…" (alone, 26 passed). The passing run:
+
+```
+platform/board test:       Tests  71 passed (71)
+platform/supabase test:       Tests  286 passed (286)
+platform/site test:       Tests  423 passed (423)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+test:agents ℹ pass 117 ℹ fail 0; test:ops ℹ pass 124 ℹ fail 0
+test:functions ok | 97 passed (106 steps) | 0 failed
+PASS: secret-scan files=558
+PASS: payment-host-scan files=7 allowed=0
+docs.test.mjs: pass 15, fail 0
+rename.test.mjs: pass 6, fail 0
+verify exit 0
+```
+
+`E2E_ROUTE_SHOTS=<folder> E2E_PORT=4447 pnpm --filter @backseat/site e2e`: `2 skipped`, `150 passed (3.2m)`. /ledger at 1440 and /contribute at 375 were looked at after the merge: the Funding band with Not on a card yet and the test payment line, Money in on ink with one reconciliation line, Stopped cards with a Paused and a Didn't ship row; /contribute's agreement line sits close under Fund the next card in line (legal-copy's caption spacing kept), with no gap or misalignment.
+
+Production step 1: a build of 7fd06dc with `netlify.toml`'s production values, served by `vite preview` on port 4452, then `node platform/site/scripts/live-check.mjs http://localhost:4452 --allow-no-data` against production data, exit 0:
+
+```
+PASS live-check http://localhost:4452 passed=224 failed=0 skipped=3
+PASS status line: 6 cards are open for funding. The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.
+PASS home status line says the payout sentence while paused for awaiting_credit
+PASS Fund the next card in line says "Next in line: Stop the unlock count from showing more unlocks than exist", the first of 6 card choices
+PASS /contribute says the payout sentence while paused for awaiting_credit: "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue."
+PASS /ledger shows exactly one reconciliation line: ["Not yet reconciled with Stripe."]
+PASS /ledger says No contributions yet. with public_money.payments 0
+SKIP /board status 200: a local server has no redirect rules
+SKIP og:image points at https://peanutgallery.games, not http://localhost:4452; http://localhost:4452/og.png was checked instead
+SKIP www redirect: production only
+```
+
+The four money checks print PASS, not SKIP, so the criterion's local half is met. No SQL changes here, so there is no dump, no migration and no identity or anon re-run for this pull request.
+
 ## Decisions
 
 - 2026-09-23, Trimmed (board: "better to be simple and delete than add more convoluted bespoke"; good normal modern standards): 31 criteria became 11. Cut: the `takesMoney` mirror of `money.card_takes_money` and its shared fixture (when `public_money` fails, the site offers only Pick for me, which the waterfall places safely, so no second copy of the rule is needed); the operations clause on /contribute and the operations line on /ledger (the bucket ships at 0% and is removed until a percentage exists; nothing here depended on it but those two lines); the read of `public_card_funding.on_card_usd` (it equals the bar); the cross-package test that scans dispatcher sources for `failing_check` codes (replaced by a per-stage fallback, so no code ever shows raw); the read-count test, the band-colour and band-2 checks (home's style and design tests own the bands rule); the shipped-card funder-count e2e (money-logic owns and tests `public_card_funding`); the attended reviewer session and published review page (replaced by the existing axe suite, home's `layout-balance.spec.ts` and route screenshots looked at); the dependency on layout-balance's gate module (that pull request is dropped). Kept whole: every Problem outcome, the figures adding up, the reconciliation line, the money trail of a stopped card, kernel paths, and the production live check.
@@ -225,6 +267,9 @@ The third state first FAILED on `1440px / no dead space: card: funding bars misa
 - 2026-09-23 (review): a figure whose read failed is `Stat` with no value: the row stacks "Not available right now." under its label as a muted body line, the same treatment as a band whose read failed. A sentence in the figure's slot (lead size, no wrap) squeezed the label to 46px at 320px (a 438px row). `layout-balance.spec.ts` audits /ledger, /contribute and / with both money reads failing at 320, 375, 768 and 1440.
 - 2026-09-23 (review): home's fund group follows the funding order. The stand-in live check (Evidence) found that an open card the order leaves out (a vetoed card) stayed in Fund what's next without a button, misaligning its row's bars by 113 to 135px at 768 to 1440, while the status line counted it as open for funding. `groupCards` takes `openForFunding(snapshot)` (`payment.ts`, kernel), so home counts and draws only the cards that take money, as /contribute offers them; with the order unread nothing changes (every open card, no buttons). `layout-balance.spec.ts` audits that state.
 - 2026-09-23 (review): the live check's new money checks were exercised before production has `public_money` by serving a local build and the launch-shaped fixture on one origin (a scratch harness, not committed: the site's reads stay same-origin under the enforced policy, and a copy of `live-check.mjs` read a `netlify.toml` pointing at it). The criterion's local half stays open until production step 1 runs it against production data.
+- 2026-09-23 (ship): the branch merged money-logic's final head 8febb2f before origin/main, so the conflicts were only where this branch changed money-logic's and legal-copy's own lines, not the whole squashed history; every conflict kept main's final lines plus this branch's change (Evidence, Ship).
+- 2026-09-23 (ship): no pg_dump or migration step: this pull request writes no SQL, so its production steps are the local preview check before the merge, the Netlify deploy, the production live check and a docs close-out after it.
+- 2026-09-23 (ship): the two timing tests that failed under a load average of 45 to 48 (`Guide.test.tsx`, the dispatcher's `github.test.ts` merge-unknown test) were re-run, not changed: each passes alone and in the third full `pnpm verify`, and neither is in this pull request's files.
 
 ## Appendix: strings
 
