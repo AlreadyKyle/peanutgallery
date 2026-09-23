@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  closePullRequest,
   compareRange,
   findPullForBranch,
   gateStatus,
@@ -28,6 +29,16 @@ function mockFetch(status: number, json: unknown, calls: Call[] = []): { fetchFn
 }
 
 const base = { token: 'token', repo: 'owner/repo' };
+
+describe('closePullRequest', () => {
+  it('patches the pull request closed, and throws on a refusal', async () => {
+    const { fetchFn, calls } = mockFetch(200, { number: 7, state: 'closed' });
+    await closePullRequest({ ...base, fetchFn }, 7);
+    expect(calls).toEqual([{ url: 'https://api.github.com/repos/owner/repo/pulls/7', method: 'PATCH', body: { state: 'closed' } }]);
+    const refused = mockFetch(422, { message: 'Validation Failed' });
+    await expect(closePullRequest({ ...base, fetchFn: refused.fetchFn }, 7)).rejects.toThrow('github close pull request 7: http 422 Validation Failed');
+  });
+});
 
 describe('mergePullRequest', () => {
   it('squash-merges with the head sha guard', async () => {

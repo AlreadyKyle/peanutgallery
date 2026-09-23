@@ -1,22 +1,34 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
 // record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
 // and wall-clock ceilings, and aborts when the board session lapses or the board pauses the studio.
+//
+// The session's dollar budget is the card's remaining ceiling. In unattended mode the tick also
+// passes the budget the throttle allowed (throttle.ts planStart), and the session stops at the lower
+// of the two: reaching the ceiling is outcome ceiling, reaching the throttle's budget first is outcome
+// budget. An API error that says the Console credit or spend limit ran out is credit_exhausted.
 import { randomUUID } from 'node:crypto';
 import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
 import type { Alerter } from './alert.js';
+import { creditExhausted } from './credit.js';
 import type { Billing, Card, Db, Role, StudioState } from './db.js';
 import { errorMessage, type Logger } from './log.js';
-import { SessionMeter, type MeterRow } from './metering.js';
+import { SessionMeter, isSyntheticModel, type MeterRow } from './metering.js';
 import { modelPrice, round4, type PriceTable } from './pricing.js';
 import path from 'node:path';
-import { billingFor } from './throttle.js';
+import { billingFor, ceilingUsd } from './throttle.js';
 import { retry } from './time.js';
 import { KERNEL_NAMES, lanePaths, protectedPaths, shortId, singleLineTitle } from './worktree.js';
 
 export type SessionOutcome =
   | 'completed'
   | 'ceiling'
+  // The throttle's budget, below the ceiling, was reached (unattended).
+  | 'budget'
+  // The throttle's budget was nothing by the time the session started (unattended).
+  | 'insufficient_balance'
+  // An API error said the Console credit or spend limit ran out.
+  | 'credit_exhausted'
   | 'turn_cap'
   | 'board_session_lapsed'
   | 'paused_by_board'
@@ -48,6 +60,13 @@ export interface SessionDeps {
   log: Logger;
   stopSignal: AbortSignal;
   now: () => Date;
+  // The budget the tick allowed this card's session (throttle.ts); unset or Infinity leaves the
+  // ceiling as the only budget, as for every attended session.
+  budgetUsd?: number;
+  // Told the session's running spend estimate after every metered turn (budgets.ts).
+  onSpend?: (usd: number) => void;
+  // The model a role runs on (role-model.ts); roles.model, then fallbackModel, when unset.
+  resolveModel?: (role: Role) => string;
 }
 
 const PAYLOAD_LIMIT = 8000;
@@ -56,9 +75,7 @@ export const API_KEY_SOURCE = 'ANTHROPIC_API_KEY';
 export const LEDGER_TRIES = 3;
 export const LEDGER_RETRY_MS = 500;
 
-export function ceilingUsd(estimateUsd: number, cardMaxUsd: number): number {
-  return round4(Math.min(1.5 * estimateUsd, cardMaxUsd));
-}
+export { ceilingUsd };
 
 export function roleTools(role: Role): string[] {
   return Array.isArray(role.tools_json) ? role.tools_json.filter((tool): tool is string => typeof tool === 'string') : [];
@@ -140,7 +157,15 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   if (remaining <= 0) {
     return { outcome: 'ceiling', detail: `actual ${priorUsd} has reached the ceiling ${ceiling} before the session`, turns: 0 };
   }
-  const model = role.model || deps.fallbackModel;
+  const throttleBudget = deps.budgetUsd ?? Number.POSITIVE_INFINITY;
+  const budget = round4(Math.min(remaining, throttleBudget));
+  // Only an unattended budget can be below the ceiling; one that is nothing starts no session, and
+  // the card goes back to funded rather than to a refusal.
+  if (budget <= 0) {
+    return { outcome: 'insufficient_balance', detail: `the throttle allowed ${throttleBudget} USD for this session`, turns: 0 };
+  }
+  const budgetBinds = budget < remaining;
+  const model = deps.resolveModel ? deps.resolveModel(role) : role.model || deps.fallbackModel;
   if (!modelPrice(deps.priceTable, model)) {
     return { outcome: 'unknown_model', detail: `no price for model ${model}`, turns: 0 };
   }
@@ -153,7 +178,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     roleTools: roleTools(role),
     folder: card.folder,
     maxTurns: deps.sessionMaxTurns,
-    maxBudgetUsd: remaining,
+    maxBudgetUsd: budget,
   };
   try {
     await deps.adapter.preflight(spec);
@@ -201,9 +226,18 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       (error, attempt) => deps.log.warn('session', 'ledger write failed', { card: card.id, request_id: row.request_id, usd: row.usd, attempt, error: errorMessage(error) }),
     );
   const checkCeiling = () => {
-    const estimate = round4(priorUsd + meter.liveEstimateUsd());
+    const live = meter.liveEstimateUsd();
+    const estimate = round4(priorUsd + live);
+    deps.onSpend?.(live);
     if (estimate >= ceiling) abort('ceiling', `estimated spend ${estimate} reached the ceiling ${ceiling}`);
+    else if (budgetBinds && live >= budget) abort('budget', `estimated session spend ${round4(live)} reached the session budget ${budget}, below the ceiling ${ceiling}`);
     return estimate;
+  };
+  // Text the session wrote since its last turn, read when Claude Code turns an API error into a
+  // turn of its own.
+  let recentText: string[] = [];
+  const creditCheck = (text: string) => {
+    if (creditExhausted(text)) abort('credit_exhausted', `the API refused the studio key for credit: ${text.split('\n')[0]?.slice(0, 300) ?? ''}`);
   };
 
   let turns = 0;
@@ -231,9 +265,17 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       }
       case 'turn_usage': {
         turns = event.turn;
+        const text = recentText.join('\n');
+        recentText = [];
         if (event.turn > deps.sessionMaxTurns) abort('turn_cap', `turn ${event.turn} exceeds the cap ${deps.sessionMaxTurns}`);
+        // An API error Claude Code wrote as a turn: no request, nothing to meter.
+        if (isSyntheticModel(event.model)) {
+          deps.log.warn('session', `turn ${event.turn} is an API error, not metered`, { card: card.id, text: text.slice(0, 300) });
+          creditCheck(text);
+          return;
+        }
         if (zeroUsage(event.usage) && event.contentChars === 0 && !event.thinking) return;
-        const { row, fallback } = meter.addTurn(event);
+        const { row, fallback, premium } = meter.addTurn(event);
         let actual: number | null = null;
         if (!zeroUsage(event.usage)) {
           try {
@@ -247,7 +289,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
           }
         }
         const estimate = checkCeiling();
-        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: row.usd, actual, estimate });
+        deps.log.info('session', `turn ${event.turn} metered`, { card: card.id, usd: row.usd, actual, estimate, ...(premium ? { premium_tier: premium } : {}) });
         // A model missing from the price table is recorded at the fallback rates first, so the
         // turn it already paid for is on the ledger, and then the session stops.
         if (fallback) abort('unknown_model', `no price for model ${event.model}`);
@@ -269,13 +311,16 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
         await deps.db.insertEvent(card.id, role.id, 'tool_result', { tool_use_id: event.toolUseId, is_error: event.isError, content: event.content });
         return;
       case 'message':
+        recentText.push(event.text);
         await deps.db.insertEvent(card.id, role.id, 'message', { text: event.text });
         return;
       case 'error':
+        creditCheck(event.message);
         await deps.db.insertEvent(card.id, role.id, 'error', { message: event.message });
         return;
       case 'end':
         end = event;
+        if (event.isError) creditCheck(event.result);
         return;
     }
   };
@@ -297,7 +342,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
     return { outcome: 'turn_cap', detail: `session reached ${result.turns} turns`, turns: result.turns };
   }
   if (result.endSubtype === 'error_max_budget_usd') {
-    return { outcome: 'ceiling', detail: `session reached its budget of ${remaining} USD`, turns: result.turns };
+    return { outcome: budgetBinds ? 'budget' : 'ceiling', detail: `session reached its budget of ${budget} USD`, turns: result.turns };
   }
   if (result.isError || result.exitCode !== 0) {
     return { outcome: 'error', detail: `session ended with ${result.endSubtype ?? 'no result'} (exit ${result.exitCode ?? 'signal'})`, turns: result.turns };
@@ -384,6 +429,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
   const turnFallbacks = settled.fallbackModels.filter((model) => settled.turnModels.includes(model));
   const sideFallbacks = settled.fallbackModels.filter((model) => !settled.turnModels.includes(model));
   const reportedModels = (end?.modelUsage ?? []).map((entry) => entry.model);
+  const premiumTiers = settled.premiumTiers ?? [];
   const problems = [
     ...(settled.basis === 'estimate' && metered
       ? [settled.anomaly ? 'modelUsage reported fewer tokens than the turns, so the session was settled on the estimate' : 'no usable result line, so the session was settled on the estimate']
@@ -391,6 +437,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
     ...(settled.zeroedFields.length > 0 ? [`modelUsage reported 0 for ${settled.zeroedFields.join(', ')} where the turns reported tokens`] : []),
     ...(settled.mismatch ? [`modelUsage names ${reportedModels.join(', ') || 'no model'} but the turns named ${settled.turnModels.join(', ')}`] : []),
     ...(turnFallbacks.length > 0 ? [`priced at fallback rates: ${turnFallbacks.join(', ')}`] : []),
+    ...(premiumTiers.length > 0 ? [`turns ran at a premium tier and were priced at the table's highest rates, which may be below the tier's price: ${premiumTiers.join('; ')}`] : []),
     ...(settled.overcountUsd > 0 ? [`the rows recorded ${settled.overcountUsd} USD above the settled total`] : []),
     ...(unwritten.length > 0 ? [`rows not written, to post by hand: ${unwritten.map((row) => `${row.request_id} ${row.model} ${row.usd} USD`).join(', ')}`] : []),
     ...(metered ? accountProblem(deps.adapter.mode, account) : []),
@@ -407,6 +454,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
     mismatch: settled.mismatch,
     anomaly: settled.anomaly,
     zeroed_fields: settled.zeroedFields,
+    ...(premiumTiers.length > 0 ? { premium_tiers: premiumTiers } : {}),
     overcount_usd: settled.overcountUsd,
     cli_total_cost_usd: end?.totalCostUsd ?? null,
   };

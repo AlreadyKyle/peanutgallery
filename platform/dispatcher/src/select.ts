@@ -1,5 +1,5 @@
-// Pure card selection: the funded, non-vetoed card from a write-safe source with an executor
-// whose estimate fits, lowest priority number first, then oldest.
+// Pure card selection: which funded cards may run a session at all, and in what order. Money is
+// throttle.ts's: a runnable card starts only when what it still needs fits what is available to it.
 
 // Kernel: no agent with write access reads free text from the public. A community card's
 // title, intent and acceptance test are public text until a non-writing role rewrites them
@@ -16,19 +16,27 @@ export interface SelectableCard {
   severity: string | null;
   director_stance: string;
   executor_role_id: string | null;
+  horizon: string;
+  folder: string;
+  lane: string;
 }
 
-// S1 cards may draw on the incident reserve in addition to the available pool.
-export function budgetFor(card: SelectableCard, availableUsd: number, incidentReserveUsd: number): number {
-  return card.severity === 's1' ? availableUsd + incidentReserveUsd : availableUsd;
+// The platform code lane is closed at launch. The board signs in on the site's own origin, so no
+// card-built JavaScript may ship beside it until the board has an origin of its own (the backlog
+// card "Board on its own site").
+export function closedLane(card: Pick<SelectableCard, 'folder' | 'lane'>): boolean {
+  return card.folder === 'platform' && card.lane === 'code';
 }
 
-export function eligible(card: SelectableCard, availableUsd: number, incidentReserveUsd: number): boolean {
+// A card a session may be started for: funded, on horizon now, from a write-safe source, not
+// vetoed, with an executor, and not in a closed lane.
+export function runnable(card: SelectableCard): boolean {
   if (card.stage !== 'funded') return false;
+  if (card.horizon !== 'now') return false;
   if (!SESSION_SOURCES.includes(card.source)) return false;
   if (card.director_stance === 'vetoed') return false;
   if (card.executor_role_id === null) return false;
-  return card.estimate_usd <= budgetFor(card, availableUsd, incidentReserveUsd);
+  return !closedLane(card);
 }
 
 export function orderCards<T extends SelectableCard>(cards: readonly T[]): T[] {
@@ -39,11 +47,7 @@ export function orderCards<T extends SelectableCard>(cards: readonly T[]): T[] {
   });
 }
 
-export function selectCard<T extends SelectableCard>(
-  cards: readonly T[],
-  availableUsd: number,
-  incidentReserveUsd: number,
-): T | null {
-  const ordered = orderCards(cards);
-  return ordered.find((card) => eligible(card, availableUsd, incidentReserveUsd)) ?? null;
+// The runnable cards, lowest priority number first, then oldest.
+export function runnableInOrder<T extends SelectableCard>(cards: readonly T[]): T[] {
+  return orderCards(cards.filter(runnable));
 }

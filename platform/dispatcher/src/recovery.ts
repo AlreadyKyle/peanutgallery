@@ -8,7 +8,9 @@
 //   request for its branch is read. Merged: the sha is written and the card is verified. Not merged:
 //   the card is paused, or rejected when its merge request was lost (merge_unknown), and nothing is
 //   closed. Unreadable: the card is left gated for the board.
-// The board is alerted in every case.
+// The board is alerted in every case. Recovery runs only while this process holds the dispatcher
+// lease (main.ts), so it never pauses a card another dispatcher is running, and each stage write names
+// the stage the card was found in, so a card the board moved meanwhile is left as the board set it.
 import type { Alerter } from './alert.js';
 import type { DispatcherConfig } from './config.js';
 import type { Card, Db } from './db.js';
@@ -72,9 +74,18 @@ export async function recoverOrphans(deps: RecoveryDeps): Promise<Promise<void>[
   return background;
 }
 
+// The board moved the card while recovery was looking at it; it is left as the board set it.
+async function moved(deps: RecoveryDeps, card: Card, to: string): Promise<void> {
+  deps.log.warn('recovery', `card ${card.id} left ${card.stage} while recovery read it; not moved to ${to}`);
+  await deps.alert.notify(`Card ${shortId(card.id)} changed stage while the dispatcher was recovering it, so it was not moved to ${to}.`);
+}
+
 async function pause(deps: RecoveryDeps, card: Card): Promise<void> {
   const actual = await deps.db.sumLedger(card.id);
-  await deps.db.updateCard(card.id, { stage: 'paused', failing_check: 'dispatcher_restart', actual_usd: actual });
+  if (!(await deps.db.updateCardIf(card.id, [card.stage], { stage: 'paused', failing_check: 'dispatcher_restart', actual_usd: actual }))) {
+    await moved(deps, card, 'paused');
+    return;
+  }
   await deps.db.insertEvent(card.id, card.executor_role_id, 'error', {
     step: 'dispatcher_restart',
     previous_stage: card.stage,
@@ -92,7 +103,10 @@ async function pause(deps: RecoveryDeps, card: Card): Promise<void> {
 // closed, since GitHub's answer was lost once already and the board can see both.
 async function rejectUnmerged(deps: RecoveryDeps, card: Card): Promise<void> {
   const actual = await deps.db.sumLedger(card.id);
-  await deps.db.updateCard(card.id, { stage: 'rejected', failing_check: 'merge', actual_usd: actual });
+  if (!(await deps.db.updateCardIf(card.id, ['gated'], { stage: 'rejected', failing_check: 'merge', actual_usd: actual }))) {
+    await moved(deps, card, 'rejected');
+    return;
+  }
   await deps.db.insertEvent(card.id, card.executor_role_id, 'error', { step: 'merge_unknown_resolved', merged: false, branch: card.branch });
   deps.log.warn('recovery', `card ${card.id} had a lost merge and did not merge; rejected`, { branch: card.branch });
   await deps.alert.notify(

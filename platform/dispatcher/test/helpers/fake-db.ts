@@ -35,6 +35,8 @@ export function card(overrides: Partial<Card> = {}): Card {
     design_spec_url: null,
     estimate_usd: 2,
     actual_usd: 0,
+    funded_usd: 2,
+    horizon: 'now',
     severity: null,
     director_stance: 'neutral',
     stage: 'funded',
@@ -61,6 +63,8 @@ export function role(overrides: Partial<Role> = {}): Role {
 
 export interface LedgerRow extends UsageInput {
   id: string;
+  // When the row was written; a row without one counts as written now.
+  created_at?: string;
 }
 
 export interface EventRow {
@@ -71,7 +75,7 @@ export interface EventRow {
 }
 
 export class FakeDb implements Db {
-  studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0 };
+  studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500 };
   pool: Pool = { balance_usd: 50, reserve_usd: 0, incident_reserve_usd: 0, daily_spent_usd: 0, day: '2026-09-14' };
   boardActive = true;
   cards: Card[] = [];
@@ -82,9 +86,57 @@ export class FakeDb implements Db {
   claims = 0;
   heartbeats: Date[] = [];
   heartbeatError: Error | null = null;
+  // Console credit the board has recorded buying; ample by default so money tests set it.
+  creditPurchased = 1000;
+  // The dispatcher lease, as claim_dispatcher_lease keeps it, on the clock below.
+  lease: { holder: string; expiresAt: number } | null = null;
+  clock = () => NOW.getTime();
+  pausedBy: string | null = null;
 
   async getStudioState() {
     return { ...this.studio };
+  }
+  async pauseStudio(by: string) {
+    if (this.studio.paused) return;
+    this.studio.paused = true;
+    this.pausedBy = by;
+  }
+  async claimLease(holder: string, ttlSeconds: number) {
+    const now = this.clock();
+    if (this.lease && this.lease.holder !== holder && this.lease.expiresAt > now) return false;
+    this.lease = { holder, expiresAt: now + ttlSeconds * 1000 };
+    return true;
+  }
+  async releaseLease(holder: string) {
+    if (this.lease?.holder === holder) this.lease = null;
+  }
+  async getCard(id: string) {
+    const found = this.cards.find((c) => c.id === id);
+    return found ? { ...found } : null;
+  }
+  async updateCardIf(id: string, expectedStages: readonly string[], patch: CardPatch) {
+    const found = this.cards.find((c) => c.id === id);
+    if (!found || !expectedStages.includes(found.stage)) return false;
+    Object.assign(found, patch);
+    return true;
+  }
+  async cardSpend(cardIds: readonly string[]) {
+    const spend = new Map<string, number>();
+    for (const row of this.ledger) {
+      if (row.billed_to !== 'studio' || row.card_id === null || !cardIds.includes(row.card_id)) continue;
+      spend.set(row.card_id, round4((spend.get(row.card_id) ?? 0) + row.usd));
+    }
+    return spend;
+  }
+  async creditPurchasedUsd() {
+    return this.creditPurchased;
+  }
+  async studioSpend(since: Date) {
+    const rows = this.ledger.filter((row) => row.billed_to === 'studio' || row.billed_to === 'overhead');
+    return {
+      totalUsd: round4(rows.reduce((total, row) => total + row.usd, 0)),
+      sinceUsd: round4(rows.filter((row) => (row.created_at ? Date.parse(row.created_at) : this.clock()) >= since.getTime()).reduce((total, row) => total + row.usd, 0)),
+    };
   }
   async dispatcherHeartbeat(now: Date) {
     if (this.heartbeatError) throw this.heartbeatError;

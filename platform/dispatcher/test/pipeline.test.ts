@@ -8,9 +8,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DispatcherConfig } from '../src/config.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
+import { SessionBudgets } from '../src/budgets.js';
 import { runCardPipeline, type PipelineDeps, type PipelineTimings } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
 import type { BotExec } from '../src/smoke.js';
+import { tick } from '../src/tick.js';
 import { AGENT_EMAIL, defaultGitRunner, git, setGitRunner, type GitCall } from '../src/worktree.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
@@ -137,11 +139,20 @@ interface Remote {
   restore?: Reply;
   ref?: Reply;
   compareExtra?: CompareFile[];
+  // main's head at the merge; origin's main when unset.
+  main?: Answer;
+  close?: Reply;
 }
 
 function answer(value: Answer | undefined, head: string, fallback: Reply): Reply {
   if (value === undefined) return fallback;
   return typeof value === 'function' ? value(head) : value;
+}
+
+// main's head as origin has it, read inside the merge lock before the merge.
+function mainRoute(method: string, url: string): Reply | undefined {
+  if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main`) return { status: 200, json: { object: { sha: originSha('refs/heads/main') } } };
+  return undefined;
 }
 
 // Revert routes that answer for any merge sha.
@@ -172,6 +183,9 @@ function remote(over: Remote = {}) {
     }
     const git = github(method, url);
     if (git) return git;
+    const main = over.main ? answer(over.main, state.head, { status: 500 }) : mainRoute(method, url);
+    if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main` && main) return main;
+    if (method === 'PATCH' && url === `${GITHUB}/pulls/5`) return over.close ?? { status: 200, json: { number: 5, state: 'closed' } };
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return answer(over.merge, state.head, { status: 200, json: { sha: MERGE_SHA } });
     if (method === 'GET' && url === deploysUrl('site-platform')) return answer(over.deploys, state.head, { status: 200, json: [readyDeploy] });
     if (method === 'GET' && url === `${NETLIFY}/site-platform`) return answer(over.site, state.head, { status: 200, json: { ssl_url: `${SITE_URL}/` } });
@@ -244,6 +258,7 @@ describe('runCardPipeline', () => {
     expect(urls(calls)).toEqual([
       `POST ${GITHUB}/pulls`,
       `GET ${GITHUB}/commits/${state.head}/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/git/ref/heads/main`,
       `GET ${GITHUB}/compare/${initialSha}...${state.head}`,
       `GET ${GITHUB}/git/trees/${initialSha}?recursive=1`,
       `GET ${GITHUB}/git/trees/${state.head}?recursive=1`,
@@ -253,7 +268,7 @@ describe('runCardPipeline', () => {
       `GET ${SITE_URL}/`,
       `GET ${SITE_URL}/version.json`,
     ]);
-    expect(calls[5]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
+    expect(calls[6]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
     expect(calls[0]?.body).toMatchObject({ head: 'card/4c2f5a1e-code', base: 'main' });
     expect(String(calls[0]?.body && (calls[0].body as { body: string }).body)).toContain(`Card-Id: ${c.id}`);
 
@@ -414,8 +429,10 @@ describe('runCardPipeline', () => {
       revert_error: 'main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward',
     });
     expect(alert.messages[0]).toBe(
-      'Card 4c2f5a1e failed after merge and the rollback is incomplete: no green platform deploy exists to restore; main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward. Check main and the live site.',
+      'Card 4c2f5a1e failed after merge and the rollback is incomplete: no green platform deploy exists to restore; main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward. Check main and the live site. The studio is paused until the board unpauses it.',
     );
+    expect(db.studio.paused).toBe(true);
+    expect(db.pausedBy).toBe('dispatcher: the revert of card 4c2f5a1e failed');
   });
 
   it('still restores, reverts and alerts when the database fails during the rollback', async () => {
@@ -623,7 +640,7 @@ describe('runCardPipeline', () => {
         return { status: 201, json: { number, head: { sha: head } } };
       }
       if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
-      const git = github(method, url);
+      const git = github(method, url) ?? mainRoute(method, url);
       if (git) return git;
       const merge = /\/pulls\/(\d+)\/merge$/.exec(url);
       if (method === 'PUT' && merge) {
@@ -987,6 +1004,173 @@ describe('runCardPipeline', () => {
     expect(adapter.specs).toEqual([]);
   });
 
+  // Runs fn when the gate's check-runs are first read, as a board action would land during the wait.
+  function duringGate(fetchFn: typeof fetch, fn: () => void): typeof fetch {
+    let done = false;
+    return (async (input: string | URL | Request, init?: RequestInit) => {
+      if (!done && CHECK_RUNS.test(String(input))) {
+        done = true;
+        fn();
+      }
+      return fetchFn(input, init);
+    }) as typeof fetch;
+  }
+
+  it('pauses the card, unmerged, when the board pauses the studio during the gate wait', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => (db.studio.paused = true)), undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'paused_by_board', commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(db.deploys).toEqual([]);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged',
+    ]);
+  });
+
+  it.each([
+    ['moved off horizon now', { horizon: 'next' }, 'horizon', 'the board moved the card to horizon next while it was in the gate; it was not merged'],
+    ['vetoed', { director_stance: 'vetoed' }, 'vetoed', 'the card was vetoed while it was in the gate; it was not merged'],
+  ])('pauses a card %s during the gate wait without merging it', async (_name, change, check, detail) => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => Object.assign(db.cards[0]!, change))));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: check });
+    expect(db.events.at(-1)).toMatchObject({ type: 'gate_pass' });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(detail).toContain('it was not merged');
+  });
+
+  it('leaves a card the board moved during the gate wait as the board set it, unmerged, and closes its pull request', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => (db.cards[0]!.stage = 'rejected')), undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: null, commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(calls.find((call) => call.method === 'PATCH' && call.url === `${GITHUB}/pulls/5`)?.body).toEqual({ state: 'closed' });
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e: the card moved to rejected while it was in the gate; it was not merged and its stage is left as the board set it. Pull request #5 was closed. spawn table row gatherer: baseCost changes from 10 to 11',
+    ]);
+  });
+
+  it('never overwrites a stage the board set during the session', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await editSite(spec, emit, new AbortController().signal);
+      db.cards[0]!.stage = 'rejected';
+    });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: null });
+    expect(urls(calls).some((call) => CHECK_RUNS.test(call.slice(4)) || call.startsWith('PUT'))).toBe(false);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e: the card is rejected, not building, so it was not moved to gated; the dispatcher left it as it is. Pull request #5 was closed. spawn table row gatherer: baseCost changes from 10 to 11',
+    ]);
+  });
+
+  it('sends a card back to funded, unmerged, when main moved while it was in the gate', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({ main: { status: 200, json: { object: { sha: 'a-board-merge-0123456789' } } } });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'main_moved', commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'requeue', reason: 'main_moved' } });
+    expect(String(db.events.at(-1)?.payload.detail)).toMatch(/^main moved from [0-9a-f]{8} to a-board- while the card was in the gate/);
+    expect(alert.messages).toEqual([]);
+  });
+
+  it('restores the previous green deploy when the deploy does not finish in time, since it may still publish', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    const building = { id: 'dep-2', state: 'building', commit_ref: MERGE_SHA, context: 'production' };
+    const { fetchFn, calls } = remote({ deploys: { status: 200, json: [building] } });
+    await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn), timings: { ...FAST, deployTimeoutMs: 30 } });
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'deploy' });
+    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
+    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { reason: 'deploy did not finish: deploy dep-2 still building after 0.03 s', restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
+  });
+
+  it('pauses the studio and the card, keeping its money, when the API says the Console credit ran out, and nothing more is claimed', async () => {
+    const c = card();
+    db.studio.agent_mode = 'unattended';
+    db.cards = [{ ...c, stage: 'building' }, card({ id: 'aaaaaaaa-0000-4000-8000-00000000000b', priority: 200 })];
+    const adapter = new FakeAdapter(
+      async (_spec, emit, signal) => {
+        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+        await emit({ type: 'message', text: 'Credit balance is too low' });
+        await emit({ type: 'turn_usage', turn: 1, model: '<synthetic>', usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 }, contentChars: 25, thinking: false });
+        await untilAborted(signal, 200);
+      },
+      { mode: 'unattended' },
+    );
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'console_credit', actual_usd: 0 });
+    expect(db.studio.paused).toBe(true);
+    expect(db.pausedBy).toBe('dispatcher: Console credit needed (card 4c2f5a1e)');
+    expect(db.ledger).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(alert.messages).toEqual([
+      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.',
+      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low',
+    ]);
+    const outcome = await tick({
+      db,
+      mode: 'unattended',
+      boardSessionTtlMin: 3,
+      maxConcurrency: 1,
+      running: new Map(),
+      budgets: new SessionBudgets(),
+      leaseHolder: 'dispatcher-a',
+      leaseTtlSeconds: 300,
+      stuckAfterMs: 60 * 60_000,
+      now: () => NOW,
+      runCard: async () => undefined,
+      log: silent,
+      alert,
+    });
+    expect(outcome).toEqual({ action: 'sleep', reason: 'paused' });
+    expect(db.claims).toBe(0);
+  });
+
+  it('gives the session the budget the tick set, and sends the card back to funded when that budget is gone', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const budgets = new SessionBudgets();
+    budgets.start(c.id, 0);
+    const adapter = new FakeAdapter(async () => undefined, { mode: 'unattended' });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), budgets });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'insufficient_balance' });
+    expect(adapter.specs).toEqual([]);
+    expect(alert.messages).toEqual([]);
+
+    db.cards = [{ ...c, stage: 'building' }];
+    budgets.start(c.id, 1.25);
+    const spent = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 100));
+    }, { mode: 'unattended', subtype: 'error_max_budget_usd', isError: true, exitCode: 1 });
+    await runCardPipeline(c, { ...deps(db, spent, remote().fetchFn, undefined, alert), budgets });
+    expect(spent.specs[0]?.maxBudgetUsd).toBe(1.25);
+    // The session told the budgets its running estimate, so what it may still spend fell.
+    expect(budgets.remaining().get(c.id)).toBeLessThan(1.25);
+    expect(budgets.remaining().get(c.id)).toBeGreaterThan(1.2);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'budget' });
+  });
+
   it('serves the checked value from the worktree the session edited', async () => {
     const c = card();
     db.cards = [{ ...c, stage: 'building' }];
@@ -1018,7 +1202,7 @@ function seedRemote() {
       return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
-    const git = github(method, url);
+    const git = github(method, url) ?? mainRoute(method, url);
     if (git) return git;
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
       state.merged = (body as { sha: string }).sha;

@@ -209,6 +209,30 @@ describe('recoverOrphans', () => {
     ]);
   });
 
+  it('leaves a card the board moved while recovery read it as the board set it', async () => {
+    // The list is read before the board's change lands.
+    class StaleList extends FakeDb {
+      override async listCardsInStages() {
+        return [{ ...building }, { ...gatedUnmerged, failing_check: 'merge_unknown' }];
+      }
+    }
+    db = new StaleList();
+    db.cards = [
+      { ...building, stage: 'rejected' },
+      { ...gatedUnmerged, stage: 'paused', failing_check: 'merge_unknown' },
+    ];
+    await recoverOrphans(recoveryDeps(async () => undefined, async () => null));
+    expect(db.cards.map((c) => [c.stage, c.failing_check])).toEqual([
+      ['rejected', null],
+      ['paused', 'merge_unknown'],
+    ]);
+    expect(db.events).toEqual([]);
+    expect(alert.messages).toEqual([
+      'Card aaaaaaaa changed stage while the dispatcher was recovering it, so it was not moved to paused.',
+      'Card bbbbbbbb changed stage while the dispatcher was recovering it, so it was not moved to rejected.',
+    ]);
+  });
+
   it('leaves a gated card as it is, and alerts, when its pull request cannot be read', async () => {
     db.cards = [{ ...gatedUnmerged }];
     await recoverOrphans(
