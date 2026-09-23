@@ -307,7 +307,7 @@ test('docs/PLAN.md numbers its decisions from 1 with no gaps, and the live docs 
   const { decisions } = outline;
   assert.ok(decisions.length >= 35, `§10 holds the decisions (found ${decisions.length})`);
   assert.deepEqual(decisions, decisions.map((_, index) => index + 1));
-  const live = ['README.md', 'CLAUDE.md', 'docs/ROADMAP.md', 'docs/BOARD-SETUP.md', 'docs/BACKLOG.md', 'docs/PLAN.md', ...PROMPT_FILES];
+  const live = ['README.md', 'CLAUDE.md', 'docs/ROADMAP.md', 'docs/BOARD-SETUP.md', 'docs/BACKLOG.md', 'docs/PLAN.md', 'docs/SYSTEM.md', ...PROMPT_FILES];
   for (const file of live) {
     assert.doesNotMatch(read(file), /PLAN\.md:\d/, `${file} cites PLAN.md by line number; cite a section instead`);
   }
@@ -455,7 +455,7 @@ test('every link into docs/BACKLOG.md from the docs lands on an entry', () => {
 const SCHEDULE = /\b(week|day|hour|sprint|season)[ -]\d+\b|\blaunch day\b/i;
 
 test('the plan, the checklist, the backlog, the board\'s steps, the root docs and the prompts carry no schedule', () => {
-  const files = ['docs/PLAN.md', 'docs/ROADMAP.md', 'docs/BACKLOG.md', 'docs/BOARD-SETUP.md', 'CLAUDE.md', 'README.md', ...PROMPT_FILES];
+  const files = ['docs/PLAN.md', 'docs/ROADMAP.md', 'docs/BACKLOG.md', 'docs/BOARD-SETUP.md', 'docs/SYSTEM.md', 'CLAUDE.md', 'README.md', ...PROMPT_FILES];
   for (const file of files) {
     read(file)
       .split('\n')
@@ -475,4 +475,39 @@ test('the prompts mark mechanics that are not built as not running yet', () => {
   const platformBuilder = read('platform', 'agents', 'prompts', 'platform-builder.md');
   assert.doesNotMatch(platformBuilder, /proposes changes to the card system/i, 'the Platform Builder no longer changes the card system');
   assert.match(platformBuilder, /board work/i, 'the Platform Builder names board work');
+});
+
+// ---------------------------------------------------------------- the system map
+
+// docs/SYSTEM.md, the single map (docs/specs/agent-system-core.md): its role table carries every
+// role spec's name, class, status and trigger, and nothing else stands in for them.
+function systemRoleRows() {
+  const lines = read('docs', 'SYSTEM.md').split('\n');
+  const start = lines.findIndex((line) => /^\| Role \| Class \| Status \| Trigger \|/.test(line));
+  assert.ok(start >= 0, 'docs/SYSTEM.md has the role table');
+  const rows = [];
+  for (const line of lines.slice(start + 2)) {
+    if (!line.startsWith('|')) break;
+    const cells = line.split('|').slice(1, -1).map((cell) => cell.trim());
+    rows.push({ name: cells[0], class: cells[1], status: cells[2], trigger: cells[3] });
+  }
+  return rows;
+}
+
+test("docs/SYSTEM.md's role table equals the role specs' name, class, status and trigger", () => {
+  const dir = join(repoRoot, 'platform', 'agents');
+  const specs = readdirSync(dir)
+    .filter((file) => file.endsWith('.json'))
+    .map((file) => JSON.parse(readFileSync(join(dir, file), 'utf8')))
+    .map((spec) => ({ name: spec.name, class: spec.class, status: spec.status, trigger: spec.trigger ?? '' }));
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  assert.deepEqual([...systemRoleRows()].sort(byName), [...specs].sort(byName));
+});
+
+test('docs/SYSTEM.md marks what a later pull request builds as not built yet, naming its spec', () => {
+  const text = read('docs', 'SYSTEM.md');
+  for (const spec of ['specs/agent-workflows.md', 'specs/agent-upkeep.md', 'specs/studio-reports.md', 'specs/design-review.md']) {
+    assert.match(text, new RegExp(`not built yet[^\\n]*\\x60${spec.replace('.', '\\.')}\\x60`, 'i'), `SYSTEM.md marks ${spec}'s part as not built yet`);
+    assert.ok(existsSync(join(repoRoot, 'docs', spec)), `docs/${spec} exists`);
+  }
 });
