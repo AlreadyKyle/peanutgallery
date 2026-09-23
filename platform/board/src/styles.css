@@ -228,13 +228,29 @@ section > h3 {
   list-style: none;
 }
 
-.board-cards li {
+.board-cards > li {
   padding-block: var(--space-2);
   border-top: 1px solid var(--line);
 }
 
-.board-cards li:last-child {
+.board-cards > li:last-child {
   border-bottom: 1px solid var(--line);
+}
+
+.board-cards > li > p {
+  margin: 0;
+}
+
+.board-cards > li > p + .row,
+.board-cards > li > .row + p {
+  margin-top: var(--space-1);
+}
+
+/* What the public does not see about a card, and a job's recent runs: short plain lists. */
+.marks,
+.job-runs {
+  margin: 0;
+  padding-left: var(--space-3);
 }
 
 /* Forms ------------------------------------------------------------------ */
@@ -266,6 +282,15 @@ form + form {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* A reason field with its button, bottoms aligned. */
+.row-end {
+  align-items: flex-end;
+}
+
+.row-end label {
+  flex: 1 1 12rem;
 }
 
 /* The QR code shown while a board member sets up an authenticator app. */

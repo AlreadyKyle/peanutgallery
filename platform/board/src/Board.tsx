@@ -1245,7 +1245,7 @@ function RolePause({
         {role.paused ? `paused${role.paused_reason ? `: ${role.paused_reason}` : ''}` : 'not paused'}
       </p>
       {can ? (
-        <div className="row">
+        <div className="row row-end">
           <label>
             Reason
             <input aria-label={`Reason for ${role.name}`} value={reason} onChange={(event) => setReason(event.target.value)} />
@@ -1291,7 +1291,7 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
       </p>
       {roles === null ? <p role="status">{loadError === '' ? 'Loading the roles.' : loadError}</p> : null}
       {roles !== null ? (
-        <ul className="board-roles">
+        <ul className="board-cards">
           {roles.map((role) => (
             <RolePause key={`${role.id}-${role.paused}`} client={client} role={role} canPause={canPause} canResume={canResume} onChanged={refresh} />
           ))}
