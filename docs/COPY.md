@@ -1,6 +1,6 @@
 # Copy rules
 
-How every public sentence is written: the site, card titles and summaries, release notes. The board and the agents follow the same rules. `platform/site/src/lib/copy.test.ts` checks the ones marked **(tested)** against every string in `copy.ts`.
+How every public sentence is written: the site, card titles and summaries, release notes. The board and the agents follow the same rules. `platform/site/src/lib/copy.test.ts` checks the ones marked **(tested)** against every string in `copy.ts` and `legal.ts`.
 
 The reader is someone who has never heard of the studio. They should understand each sentence the first time, without knowing any of our terms.
 

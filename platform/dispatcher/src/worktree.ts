@@ -150,9 +150,12 @@ export function worktreePath(root: string, cardId: string): string {
 }
 
 // Paths no agent may change in any lane: the gate, the dispatcher, the database, the role specs,
-// the workflows, the constitution, the board's client code and site settings, and the build,
-// determinism and invariant harness of each folder. The same list is platform/gate/kernel-paths.txt,
-// which the gate checks card branches against; a test keeps the two equal.
+// the workflows, the constitution, the board's own site, the public site's settings, its entry, the
+// frame and routes of its pages, its money, ledger and legal surfaces and the snapshot they read
+// (docs/specs/board-site.md), and the build, determinism and invariant harness of each folder. The
+// same list is platform/gate/kernel-paths.txt, which the gate checks card branches against; a test
+// keeps the two equal, and test/site-kernel.test.ts keeps the site's kernel files from importing a
+// file a card can change.
 export const KERNEL_PATHS: readonly string[] = [
   '.github',
   'CLAUDE.md',
@@ -162,17 +165,40 @@ export const KERNEL_PATHS: readonly string[] = [
   'pnpm-workspace.yaml',
   'tsconfig.base.json',
   'platform/agents',
+  'platform/board',
   'platform/dispatcher',
   'platform/gate',
   'platform/ops',
   'platform/supabase',
   'platform/site/build-sha.ts',
+  'platform/site/index.html',
   'platform/site/netlify.toml',
   'platform/site/package.json',
   'platform/site/playwright.config.ts',
   'platform/site/scripts',
-  'platform/site/src/lib/board.ts',
+  'platform/site/src/App.tsx',
+  'platform/site/src/components/DeployList.tsx',
+  'platform/site/src/components/EventList.tsx',
+  'platform/site/src/components/Funding.tsx',
+  'platform/site/src/components/Guarded.tsx',
+  'platform/site/src/components/LedgerSummary.tsx',
+  'platform/site/src/components/Meter.tsx',
+  'platform/site/src/components/PausedNotice.tsx',
+  'platform/site/src/components/PoolStat.tsx',
+  'platform/site/src/components/StaleNotice.tsx',
+  'platform/site/src/components/Stat.tsx',
+  'platform/site/src/components/TextPage.tsx',
   'platform/site/src/lib/env.ts',
+  'platform/site/src/lib/format.ts',
+  'platform/site/src/lib/legal.ts',
+  'platform/site/src/lib/payment.ts',
+  'platform/site/src/lib/source.ts',
+  'platform/site/src/lib/studio.tsx',
+  'platform/site/src/lib/supabase.ts',
+  'platform/site/src/main.tsx',
+  'platform/site/src/pages/Contribute.tsx',
+  'platform/site/src/pages/Ledger.tsx',
+  'platform/site/src/pages/Legal.tsx',
   'platform/site/vite.config.ts',
   'seed-1/CLAUDE.md',
   'seed-1/bots',

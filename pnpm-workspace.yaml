@@ -1,5 +1,6 @@
 packages:
   - platform/site
+  - platform/board
   - platform/dispatcher
   - platform/gate
   - platform/supabase

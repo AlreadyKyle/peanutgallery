@@ -25,7 +25,9 @@
 //   yet converted, plus the overhead. Agent money is agents less the incident share less any hold,
 //   so the reserve, the incident fund and held money are never in it;
 // - the Minimum balance figure: the 10% reserve, plus held money, plus the Stripe fees on the last
-//   30 days' charges (what Stripe would keep if every one were refunded).
+//   30 days' charges (what Stripe would keep if every one were refunded);
+// - the newest paid payout, whose id the board's Needs you inbox fills into the credit purchase form
+//   (docs/specs/board-site.md).
 import { readFileSync } from 'node:fs';
 import { alerter, floor2, jobEnvProblems, JobEnvError, round2, round4, stripeApiVersion, stripeReader, supabaseClient, toCents } from './lib.mjs';
 
@@ -235,6 +237,12 @@ export function reconcile({ identity, figures, stripe, now }) {
   }
   paidOutAgentUsd = round4(paidOutAgentUsd);
 
+  // The newest paid payout, by the day it arrived, for the credit purchase the board records.
+  const newest = [...stripe.payouts].sort((a, b) => (b.arrival_date ?? 0) - (a.arrival_date ?? 0) || String(b.id).localeCompare(String(a.id)))[0] ?? null;
+  const latestPayout = newest === null
+    ? null
+    : { id: newest.id, arrival_date: typeof newest.arrival_date === 'number' ? usdDate(newest.arrival_date) : null, amount: newest.amount / 100, currency: String(newest.currency).toLowerCase() };
+
   const undelivered = stripe.undelivered.map((event) => ({ event: event.id, type: event.type, created_on: usdDate(event.created), fix: 'resend it from the Stripe Dashboard (Developers, Events)' }));
 
   // Console credit and the purchase formula.
@@ -317,6 +325,7 @@ export function reconcile({ identity, figures, stripe, now }) {
       },
       stripe_balance: { currency: settlement, amount: balanceCents / 100 },
       disputes_to_answer: attention,
+      latest_payout: latestPayout,
       paid_sessions: paidSessions.length,
       payouts: stripe.payouts.length,
     },

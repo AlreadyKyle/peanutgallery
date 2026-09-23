@@ -104,6 +104,11 @@ export type Snapshot = {
   launchedAt: string | null;
   /** True while the board has paused the agents. False when the studio row did not load. */
   paused: boolean;
+  /**
+   * True once the platform code lane is open (studio_state.platform_lane_open, docs/specs/board-site.md).
+   * Absent or false while it is closed, or when the studio row did not load.
+   */
+  platformLaneOpen?: boolean;
   totals: LedgerTotals;
   events: AgentEvent[];
   deploys: Deploy[];
@@ -161,6 +166,7 @@ type FundingRow = {
 type StudioRow = {
   launched_at: string | null;
   paused: boolean | null;
+  platform_lane_open?: boolean | null;
 };
 
 type RoleRow = {
@@ -399,12 +405,14 @@ export function createSupabaseSource(
         optional(
           'studio',
           async () => {
+            // Every column of the view, which holds public columns only: a column it gains (platform_lane_open)
+            // is read when present and a database without it still loads the pause and the launch.
             const row = unwrap(
-              await client.from('public_studio').select('launched_at,paused').abortSignal(timeout()).maybeSingle<StudioRow>(),
+              await client.from('public_studio').select('*').abortSignal(timeout()).maybeSingle<StudioRow>(),
             );
-            return { launchedAt: row?.launched_at ?? null, paused: row?.paused === true };
+            return { launchedAt: row?.launched_at ?? null, paused: row?.paused === true, platformLaneOpen: row?.platform_lane_open === true };
           },
-          { launchedAt: null, paused: false },
+          { launchedAt: null, paused: false, platformLaneOpen: false },
         ),
         optional(
           'totals',
@@ -466,6 +474,7 @@ export function createSupabaseSource(
         funding,
         launchedAt: studio.launchedAt,
         paused: studio.paused,
+        platformLaneOpen: studio.platformLaneOpen,
         totals,
         events,
         deploys,

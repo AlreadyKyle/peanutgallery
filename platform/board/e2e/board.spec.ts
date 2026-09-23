@@ -1,0 +1,171 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { expect, test, type Page, type Route } from '@playwright/test';
+import { SUPABASE_URL } from './fixture-env';
+
+// vite preview sends netlify.toml's headers (vite.config.ts), so every page here loads under the
+// board's enforced Content Security Policy. Any report fails the test. Supabase is never reached:
+// every request to the project is answered here.
+const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.url)), 'utf8');
+const enforced = toml.match(/^\s*Content-Security-Policy\s*=\s*"([^"]*)"/m)?.[1] ?? '';
+const host = new URL(SUPABASE_URL).host;
+const storageKey = `sb-${host.split('.')[0]}-auth-token`;
+const EMAIL = 'board@peanutgallery.games';
+
+async function watchPolicy(page: Page): Promise<string[]> {
+  const reports: string[] = [];
+  await page.exposeFunction('e2ePolicyReport', (line: string) => reports.push(line));
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (event) => {
+      (window as unknown as { e2ePolicyReport: (line: string) => void }).e2ePolicyReport(
+        `${event.disposition} ${event.effectiveDirective} ${event.blockedURI || 'inline'} on ${location.pathname}`,
+      );
+    });
+  });
+  return reports;
+}
+
+function base64url(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString('base64url');
+}
+
+/** A stored session for a board member at aal1, the way supabase-js keeps one after the magic link. */
+async function signIn(page: Page) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal: 'aal1', amr: [{ method: 'otp', timestamp: now }], exp: now + 3600, session_id: 's-1' };
+  const session = {
+    access_token: `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url(payload)}.c2lnbmF0dXJl`,
+    refresh_token: 'e2e-refresh',
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: now + 3600,
+    user: { id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] },
+  };
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key!, value!), [storageKey, JSON.stringify(session)]);
+}
+
+const needsYou = {
+  controller: {
+    finished_at: '2026-09-24T07:07:00Z',
+    ok: true,
+    mismatches: 0,
+    credit_purchase_usd: 12.5,
+    minimum_balance_usd: 3.25,
+    settlement_amount: 4.5,
+    settlement_currency: 'cad',
+    disputes_to_answer: [{ dispute: 'du_e2e', status: 'needs_response', due_by: '2026-10-01', amount_usd: 5 }],
+    latest_payout: { id: 'po_e2e', arrival_date: '2026-09-23' },
+  },
+  last_credit_purchase: null,
+  incident_reserve_usd: 0.4,
+  s1_cards: [],
+};
+
+const studio = {
+  paused: true,
+  paused_by: EMAIL,
+  paused_at: '2026-09-23T00:00:00Z',
+  agent_mode: 'attended',
+  launched_at: null,
+  dispatcher_seen_at: null,
+  daily_cap_usd: 100,
+  card_max_usd: 25,
+  agent_hourly_rate_usd: 5,
+  monthly_cap_usd: 500,
+  credit_studio_daily_cap_usd: 500,
+  anthropic_tier_cap_usd: null,
+  platform_lane_open: false,
+};
+
+// A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
+const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
+
+async function answerSupabase(page: Page, seen: string[]) {
+  await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
+    const url = new URL(route.request().url());
+    seen.push(`${route.request().method()} ${url.pathname}`);
+    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    switch (url.pathname) {
+      case '/auth/v1/user':
+        return json({ id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] });
+      case '/auth/v1/factors':
+        return json({ id: 'f-e2e', type: 'totp', friendly_name: '', totp: { qr_code: QR_SVG, secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/e2e' } });
+      case '/rest/v1/rpc/board_role':
+        return json('board');
+      case '/rest/v1/rpc/board_heartbeat':
+        return json(new Date().toISOString());
+      case '/rest/v1/rpc/board_studio_state':
+        return json(studio);
+      case '/rest/v1/rpc/board_needs_you':
+        return json(needsYou);
+      default:
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
+    }
+  });
+}
+
+test('the preview sends the enforced policy, the robots header and the frame rules from netlify.toml', async ({ page }) => {
+  expect(enforced).toBe(
+    `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://${host}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+  );
+  const response = await page.goto('/');
+  const headers = response?.headers() ?? {};
+  expect(headers['content-security-policy']).toBe(enforced);
+  expect(headers['content-security-policy-report-only']).toBeUndefined();
+  expect(headers['x-robots-tag']).toBe('noindex, nofollow');
+  expect(headers['x-frame-options']).toBe('DENY');
+  expect(headers['referrer-policy']).toBe('no-referrer');
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
+  const robots = await page.request.get('/robots.txt');
+  expect(await robots.text()).toBe('User-agent: *\nDisallow: /\n');
+});
+
+test('the sign-in form renders at 375 px with no horizontal overflow and no policy report', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Board' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  expect(reports).toEqual([]);
+});
+
+test('a signed-in board member sees Needs you first, and sets up an authenticator app, under the enforced policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  await answerSupabase(page, seen);
+  await signIn(page);
+  await page.goto('/');
+
+  const inbox = page.getByRole('region', { name: 'Needs you' });
+  await expect(inbox).toBeVisible();
+  await expect(inbox.getByText('Answer dispute du_e2e for $5.00 by 1 Oct 2026.')).toBeVisible();
+  await expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeVisible();
+  await expect(inbox.getByText('Verify your second factor, then fill in the record form from here.', { exact: false })).toBeVisible();
+  // Needs you is the first section on the page, above the two-factor step.
+  const sections = await page.locator('main section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
+  expect(sections[0]).toBe('Needs you');
+
+  await page.getByRole('button', { name: 'Set up an authenticator app' }).click();
+  const qr = page.getByRole('img', { name: 'QR code for your authenticator app' });
+  await expect(qr).toBeVisible();
+  expect(await qr.evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
+  expect(await qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml;utf-8,<svg /);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+
+  expect(seen).toContain('POST /rest/v1/rpc/board_needs_you');
+  expect(seen).toContain('POST /auth/v1/factors');
+  expect(reports).toEqual([]);
+});
+
+test('a connection to any host but the Supabase project is refused', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  await page.route('https://example.com/**', (route) => route.abort());
+  await page.goto('/');
+  const outcomes = await page.evaluate(async () => {
+    const attempt = (url: string) => fetch(url, { method: 'POST', body: 'x' }).then(() => 'sent', () => 'refused');
+    return [await attempt('https://example.com/collect'), await attempt(`${location.origin}/collect`)];
+  });
+  expect(outcomes).toEqual(['refused', 'refused']);
+  await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
+});

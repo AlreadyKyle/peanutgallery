@@ -7,19 +7,21 @@
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages, /board and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
+// pages and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow,
 // the footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
 // Policy report. The landing's h2 order, read from the page: Building now, Queued and Shipped appear
 // only when cards are in those stages. The Right now panel, the fund links, the category filters and
 // /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
 // rest; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
-// /og.png as a 200 image/png of 1200x630. The www redirect runs only against production. The
+// /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
+// sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
+// set, no route names the board site's address. The www redirect runs only against production. The
 // security headers from netlify.toml, the enforced and report-only policies' full values included,
 // run against any address that is not local; a local `vite preview` sends them too
 // (vite.config.ts), so they are checked there when present.
 //
-// frame-ancestors and connect-src are enforced; the rest of the policy is report-only and blocks
+// frame-ancestors, connect-src and form-action are enforced; the rest of the policy is report-only and blocks
 // nothing, so the only sign it would break the site is a report. Every page listens for
 // securitypolicyviolation, which fires for enforced and report-only policies alike, and any report
 // fails the run whatever the console printed (docs/specs/site-truth-pass.md, docs/specs/launch-site.md).
@@ -29,10 +31,18 @@
 //
 // The first line is PASS or FAIL with the counts; one line per check follows. Exit 0 pass, 1 fail.
 
+import { readFileSync } from 'node:fs';
 import { chromium } from '@playwright/test';
+import { boardHostFrom, playHostFrom, strayNetlifyHosts } from './board-address.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
+// The game's netlify.app host, which every page's top bar links to, from the netlify.toml the site is
+// built with; and the board site's host, from BOARD_SITE_URL in the environment when it is set (the
+// address lives in .env and never in the repository). No page may name any other netlify.app host,
+// nor the board site's (docs/specs/board-site.md).
+const PLAY_HOST = playHostFrom(readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8'));
+const BOARD_HOST = boardHostFrom(process.env.BOARD_SITE_URL);
 const args = process.argv.slice(2);
 const allowNoData = args.includes('--allow-no-data');
 const BASE = (args.find((arg) => !arg.startsWith('--')) ?? PRODUCTION).replace(/\/+$/, '');
@@ -48,7 +58,6 @@ const ROUTES = [
   '/privacy',
   '/refunds',
   '/contact',
-  '/board',
   '/no-such-page',
 ];
 const FOOTER_LINKS = [
@@ -68,7 +77,8 @@ const REPORT_ONLY_POLICY =
   "object-src 'none'; base-uri 'self'; form-action 'self'";
 const ENFORCED_POLICY =
   "frame-ancestors 'none'; " +
-  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co";
+  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
+  "form-action 'self'";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
   ['x-content-type-options', 'nosniff'],
@@ -154,8 +164,10 @@ try {
       if (message.type() === 'error') errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(String(error)));
+    const namesBoard = [];
     for (const path of ROUTES) {
       const response = await open(page, path);
+      if (BOARD_HOST !== null && (await page.content()).toLowerCase().includes(BOARD_HOST)) namesBoard.push(path);
       const status = response?.status() ?? 0;
       check(status === 200, `${width}px ${path} status ${status}`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
@@ -170,9 +182,32 @@ try {
       }
       check(links.every(Boolean), `${width}px ${path} footer links Terms, Privacy, Refunds, Contact`);
     }
+    if (BOARD_HOST === null) skip(`${width}px the board site's address on every route: BOARD_SITE_URL is not set`);
+    else check(namesBoard.length === 0, `${width}px no route names the board site's address${namesBoard.length === 0 ? '' : `: ${namesBoard.join(', ')}`}`);
     check(errors.length === 0, `${width}px no console errors${errors.length === 0 ? '' : `: ${errors.slice(0, 3).join(' | ')}`}`);
     checkPolicy(reports, `${width}px`);
     await page.close();
+  }
+
+  // The board has its own site (docs/specs/board-site.md): /board here is the not found page, with a
+  // 404 status from Netlify, no sign-in form and no address for the board. vite preview has no
+  // redirect rules, so a local server answers it 200.
+  {
+    const board = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    const response = await open(board, '/board');
+    const status = response?.status() ?? 0;
+    if (LOCAL.test(BASE)) skip(`/board status ${status}: a local server has no redirect rules`);
+    else check(status === 404, `/board status ${status}`);
+    const h1 = await board.locator('h1').allTextContents();
+    check(JSON.stringify(h1) === JSON.stringify(['Not found']), `/board is the not found page: ${JSON.stringify(h1)}`);
+    check((await board.getByLabel('Email').count()) === 0, '/board has no sign-in form');
+    // The top bar's Play link names the game's netlify.app address on every page, /board included;
+    // any other netlify.app address would be a leak.
+    const content = await board.content();
+    const stray = strayNetlifyHosts(content, PLAY_HOST === null ? [] : [PLAY_HOST]);
+    check(stray.length === 0, `/board names no netlify.app address but the game's (${PLAY_HOST ?? 'none set'})${stray.length === 0 ? '' : `: ${stray.join(', ')}`}`);
+    if (BOARD_HOST !== null) check(!content.toLowerCase().includes(BOARD_HOST), "/board does not name the board site's address");
+    await board.close();
   }
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });

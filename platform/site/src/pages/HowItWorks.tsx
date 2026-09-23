@@ -5,33 +5,20 @@ import { EventList } from '../components/EventList';
 import { Example } from '../components/Example';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
-import { Stat } from '../components/Stat';
+import { SplitStats } from '../components/Funding';
 import { LinkedText } from '../components/TextPage';
-import { canFund, groupCards } from '../lib/cards';
+import { groupCards } from '../lib/cards';
 import { copy } from '../lib/copy';
-import { formatUsd } from '../lib/format';
+import { legal } from '../lib/legal';
+import { canFund } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
+// The page's title, lede and example labels are words in copy.ts; its steps, the split example and
+// where the money goes state money, so they are in legal.ts, and the split's figures come from
+// Funding.tsx (both kernel, docs/specs/board-site.md).
 const page = copy.howItWorksPage;
-
-// The fixed rules behind the split example (PLAN.md §4 Kernel): 10% reserve, the default 80/20
-// split and 5% of the agents' share to the emergency fund while it holds under $500.
-export const RESERVE_PCT = 10;
-export const DEFAULT_STUDIO_PCT = 20;
-export const INCIDENT_PCT = 5;
-const EXAMPLE_NET_USD = 10;
-
-/** The worked split of a contribution after Stripe's fee, as apply_contribution computes it. */
-export function exampleSplit(net: number) {
-  const round = (value: number) => Math.round(value * 10_000) / 10_000;
-  const reserve = round((net * RESERVE_PCT) / 100);
-  const remainder = net - reserve;
-  const studio = round((remainder * DEFAULT_STUDIO_PCT) / 100);
-  const agents = remainder - studio;
-  const incident = round((agents * INCIDENT_PCT) / 100);
-  return { reserve, studio, agents, incident, credit: agents - incident };
-}
+const money = legal.howMoneyMoves;
 
 const EXAMPLE_ID = 'example';
 /** The made-up agent actions, newest first: a start, a tool call and passed checks. */
@@ -105,16 +92,9 @@ function PickVisual({ snapshot }: { snapshot: Snapshot | null }) {
 }
 
 function SplitVisual() {
-  const split = exampleSplit(EXAMPLE_NET_USD);
-  const rows = page.splitRows;
   return (
-    <Example real={false} caption={page.splitCaption}>
-      <dl className="stats">
-        <Stat label={rows.reserve} description={rows.reserveNote} value={formatUsd(split.reserve)} />
-        <Stat label={rows.studio} description={rows.studioNote} value={formatUsd(split.studio)} />
-        <Stat label={rows.incident} description={rows.incidentNote} value={formatUsd(split.incident)} />
-        <Stat label={rows.credit} description={rows.creditNote} value={formatUsd(split.credit)} />
-      </dl>
+    <Example real={false} caption={money.splitCaption}>
+      <SplitStats />
     </Example>
   );
 }
@@ -207,7 +187,7 @@ export function HowItWorks() {
       <PageHeader title={page.title} lede={page.lede} />
       <PausedNotice studio={studio} />
       <ol className="how-steps">
-        {page.blocks.map((block, index) => (
+        {money.blocks.map((block, index) => (
           <li key={block.heading} className="how-step">
             <div className="how-text">
               <h2 id={`how-${index + 1}`}>{block.heading}</h2>
@@ -219,7 +199,7 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
-      {page.sections.map((section, index) => (
+      {money.sections.map((section, index) => (
         <section key={section.heading} className="section" aria-labelledby={`how-more-${index + 1}`}>
           <h2 id={`how-more-${index + 1}`}>{section.heading}</h2>
           {section.paragraphs.map((paragraph) => (
@@ -232,14 +212,14 @@ export function HowItWorks() {
       <section className="section" aria-labelledby="how-rules">
         <h2 id="how-rules">{page.rulesHeading}</h2>
         <div className="prose">
-          <p>{copy.fixedRulesIntro}</p>
+          <p>{legal.fixedRulesIntro}</p>
           <ul className="rules">
-            {copy.fixedRules.map((rule) => (
+            {legal.fixedRules.map((rule) => (
               <li key={rule}>{rule}</li>
             ))}
           </ul>
-          <p>{copy.artPolicy}</p>
-          <p>{copy.allAges}</p>
+          <p>{legal.artPolicy}</p>
+          <p>{legal.allAges}</p>
         </div>
       </section>
     </main>

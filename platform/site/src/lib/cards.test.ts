@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canFund,
   categoryOf,
+  fundableCards,
   fundLink,
   fundOrder,
   groupCards,
@@ -58,6 +59,26 @@ describe('groupCards', () => {
     expect(fund.map((c) => c.id)).toEqual(['b', 'd']);
     expect(queued.map((c) => c.id)).toEqual(['e']);
     expect(shipped.map((c) => c.id)).toEqual(['g', 'f']);
+  });
+});
+
+describe('fundableCards (payment.ts, kernel)', () => {
+  it("offers exactly the cards in Fund what's next that can take money, in funding order", () => {
+    const cards = [
+      card({ id: 'building', stage: 'building', funding_target_usd: 5 }),
+      card({ id: 'picked', stage: 'voted', funding_target_usd: 5, funded_usd: 1 }),
+      card({ id: 'full', stage: 'proposed', funding_target_usd: 5, funded_usd: 5 }),
+      card({ id: 'open-more', stage: 'proposed', funding_target_usd: 5, funded_usd: 3 }),
+      card({ id: 'open-less', stage: 'proposed', funding_target_usd: 5, funded_usd: 1 }),
+      card({ id: 'no-target', stage: 'proposed' }),
+      card({ id: 'directive', stage: 'proposed', shape: 'directive', funding_target_usd: 5 }),
+      card({ id: 'queued', stage: 'funded', funding_target_usd: 5, funded_usd: 5 }),
+      card({ id: 'live', stage: 'live', funding_target_usd: 10, funded_usd: 2 }),
+      card({ id: 'next', stage: 'proposed', horizon: 'next', funding_target_usd: 5 }),
+      card({ id: 'designing', stage: 'designing', funding_target_usd: 5 }),
+    ];
+    expect(fundableCards(cards).map((c) => c.id)).toEqual(['picked', 'designing', 'open-more', 'open-less']);
+    expect(fundableCards(cards)).toEqual(groupCards(cards).fund.filter(canFund));
   });
 });
 

@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { Roadmap } from './Roadmap';
@@ -104,7 +105,7 @@ describe('Roadmap', () => {
     expect(screen.queryByText('Open now')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByText(copy.statusOpen)).toBeNull();
-    expect(screen.queryByText(copy.fundThis)).toBeNull();
+    expect(screen.queryByText(legal.fundThis)).toBeNull();
     expect(container.innerHTML).not.toContain('buy.stripe.com');
   });
 
@@ -116,6 +117,6 @@ describe('Roadmap', () => {
 
   it('shows the loading and unavailable lines', () => {
     renderRoadmap(null);
-    expect(screen.getByText(copy.meterUnavailable)).toBeTruthy();
+    expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 });

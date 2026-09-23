@@ -1,6 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { toNumber } from './format';
-import type { Horizon, Role } from './source';
+
+// Every board RPC the board's own site calls (docs/specs/board-site.md). This app is kernel: no card
+// may change a file under platform/board, and nothing here imports from the public site.
+
+/** When a card is meant to be built: now (open to funding and the agents), next or later (the roadmap). */
+export type Horizon = 'now' | 'next' | 'later';
+
+/** The public_roles columns the board reads to offer a card's executor. */
+export type Role = {
+  id: string;
+  title: string;
+  write_access: boolean;
+  state: string;
+};
 
 // Mirrors the dispatcher default for BOARD_SESSION_TTL_MIN (platform/dispatcher/src/config.ts).
 // The dispatcher judges the session from board_members.last_seen_at with this window; change both together.
@@ -54,15 +67,23 @@ export type BoardStudioState = {
   agent_hourly_rate_usd: number | null;
   monthly_cap_usd: number | null;
   credit_studio_daily_cap_usd: number | null;
+  /** The monthly cap of the studio's Anthropic usage tier; null when unset, which adds no bound. */
+  anthropic_tier_cap_usd: number | null;
+  /** Whether the platform code lane is open (studio_state.platform_lane_open); false until the board site is live. */
+  platform_lane_open: boolean;
 };
 
-/** Every value set_caps takes, in US dollars. The database checks the bounds. */
+/**
+ * Every value set_caps takes, in US dollars. The database checks the bounds. The usage tier cap may
+ * be null, which removes it: the throttle then adds no tier bound.
+ */
 export type Caps = {
   daily_cap_usd: number;
   card_max_usd: number;
   agent_hourly_rate_usd: number;
   monthly_cap_usd: number;
   credit_studio_daily_cap_usd: number;
+  anthropic_tier_cap_usd: number | null;
 };
 
 /** A card as /board lists it for the horizon, rank, target, cancel and resume controls. */
@@ -108,14 +129,7 @@ export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
   'Platform Builder': 'platform',
 };
 
-/**
- * The folders whose cards run at launch. The platform code lane (all of platform/site) stays closed
- * until the board has its own site, because the board signs in on this origin: the dispatcher
- * refuses those cards, and set_card_horizon and file_card refuse horizon now for them.
- */
-export const OPEN_FOLDERS: readonly string[] = ['seed-1'];
-
-/** An active role that builds cards, whether or not its folder is open: the /board executor list. */
+/** An active role that builds cards, whether or not its folder is open: the board's executor list. */
 export function isCardRole(role: Role): boolean {
   return role.state === 'active' && role.write_access && Object.hasOwn(CARD_ROLE_FOLDERS, role.title);
 }
@@ -125,10 +139,16 @@ export function cardRoleFolder(role: Role): string | null {
   return isCardRole(role) ? (CARD_ROLE_FOLDERS[role.title] ?? null) : null;
 }
 
-/** A card role whose folder is open: the only roles /team shows as running. */
-export function runsCards(role: Role): boolean {
-  const folder = cardRoleFolder(role);
-  return folder !== null && OPEN_FOLDERS.includes(folder);
+/** The public_roles columns fetchCardRoles reads. */
+export const ROLE_COLUMNS = 'id,title,write_access,state';
+
+/** The active roles that build cards, in title order: the executors the card and directive forms offer. */
+export async function fetchCardRoles(client: SupabaseClient): Promise<Role[]> {
+  const rows = unwrap(await client.from('public_roles').select(ROLE_COLUMNS).returns<Record<string, unknown>[]>());
+  return (rows ?? [])
+    .map((row) => ({ id: String(row.id), title: String(row.title), write_access: row.write_access === true, state: String(row.state) }))
+    .filter(isCardRole)
+    .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export const buckets = ['game', 'platform', 'qa', 'studio', 'budget', 'agents'] as const;
@@ -151,10 +171,15 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
   return result.data;
 }
 
+/**
+ * Sends a sign-in link back to this site. shouldCreateUser is false: the seed creates each board
+ * member's user through the admin API, sign-ups are off in Supabase Auth, and the board_members
+ * trigger refuses any other address, so a link reaches existing board accounts only.
+ */
 export async function sendMagicLink(client: SupabaseClient, email: string): Promise<void> {
   const { error } = await client.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${window.location.origin}/board` },
+    options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false },
   });
   if (error) throw new Error(error.message);
 }
@@ -297,6 +322,7 @@ export async function resumeCard(client: SupabaseClient, id: string, estimateUsd
   unwrap(await client.rpc('resume_card', { p_card: id, p_estimate_usd: estimateUsd, p_reason: reason }));
 }
 
+/** set_caps: every cap at once. The usage tier cap is always sent, so a blank one removes it. */
 export async function setCaps(client: SupabaseClient, caps: Caps, reason: string): Promise<void> {
   unwrap(
     await client.rpc('set_caps', {
@@ -305,6 +331,8 @@ export async function setCaps(client: SupabaseClient, caps: Caps, reason: string
       p_agent_hourly_rate_usd: caps.agent_hourly_rate_usd,
       p_monthly_cap_usd: caps.monthly_cap_usd,
       p_credit_studio_daily_cap_usd: caps.credit_studio_daily_cap_usd,
+      p_anthropic_tier_cap_usd: caps.anthropic_tier_cap_usd,
+      p_set_anthropic_tier_cap: true,
       p_reason: reason,
     }),
   );
@@ -409,6 +437,8 @@ export function studioStateFrom(raw: unknown): BoardStudioState {
     agent_hourly_rate_usd: optionalAmount(row, 'agent_hourly_rate_usd'),
     monthly_cap_usd: optionalAmount(row, 'monthly_cap_usd'),
     credit_studio_daily_cap_usd: optionalAmount(row, 'credit_studio_daily_cap_usd'),
+    anthropic_tier_cap_usd: optionalAmount(row, 'anthropic_tier_cap_usd'),
+    platform_lane_open: row.platform_lane_open === true,
   };
 }
 

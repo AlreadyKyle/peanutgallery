@@ -216,6 +216,11 @@ jobs:
       - name: Site end-to-end
         if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site e2e
+      # The board's own site (docs/specs/board-site.md) builds its own copy for its suite, under its
+      # enforced policy, with the Chromium installed above.
+      - name: Board site end-to-end
+        if: needs.detect.outputs.site == 'true'
+        run: pnpm --filter @backseat/board e2e
 
   # A fresh runner that never runs card tests builds each selected folder and scans the build, and
   # only then runs the headless bot, the one step here that runs card code. On a card branch every
@@ -252,7 +257,7 @@ jobs:
         env:
           LANE: ${{ needs.detect.outputs.lane }}
         run: bash platform/gate/ship-gate.sh --phase build --folder seed-1 --lane "$LANE"
-      - name: Build the site and scan the build
+      - name: Build the sites and scan the builds
         if: needs.detect.outputs.site == 'true'
         run: bash platform/gate/ship-gate.sh --phase build --folder platform
       - name: Headless bot

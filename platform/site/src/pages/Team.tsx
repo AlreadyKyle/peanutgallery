@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
-import { cardRoleFolder, runsCards } from '../lib/board';
 import { copy } from '../lib/copy';
 import { formatDate, formatInteger } from '../lib/format';
+import { legal } from '../lib/legal';
+import { cardRoleFolder, runsCards } from '../lib/roster';
 import type { Card, Role, Snapshot } from '../lib/source';
 import { unavailableLine, useStudio } from '../lib/studio';
 
@@ -20,8 +21,8 @@ export function shippedBy(role: Role, cards: readonly Card[]): number {
  * shipped and what it changes. A role that does not run yet shows none of that, because none of it
  * is true of the studio today; it says it is not running, and why when a closed lane is the reason.
  */
-export function roleFacts(role: Role, cards: readonly Card[]): string {
-  if (!runsCards(role)) {
+export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen = false): string {
+  if (!runsCards(role, platformLaneOpen)) {
     const folder = cardRoleFolder(role);
     return folder === null ? `${team.notRunning}.` : `${team.notRunning}. ${team.siteClosed}`;
   }
@@ -33,7 +34,7 @@ export function roleFacts(role: Role, cards: readonly Card[]): string {
     .join(' · ');
 }
 
-function RoleCard({ role, cards }: { role: Role; cards: readonly Card[] }) {
+function RoleCard({ role, cards, platformLaneOpen }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean }) {
   const titleId = `role-${role.id}`;
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
   return (
@@ -42,17 +43,18 @@ function RoleCard({ role, cards }: { role: Role; cards: readonly Card[] }) {
       <h3 id={titleId}>{role.name}</h3>
       <p className="card-category">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      <p className="card-meta">{roleFacts(role, cards)}</p>
+      <p className="card-meta">{roleFacts(role, cards, platformLaneOpen)}</p>
     </li>
   );
 }
 
 function Roster({ snapshot }: { snapshot: Snapshot }) {
-  if (snapshot.missing.includes('roles')) return <p className="muted">{copy.partUnavailable}</p>;
+  if (snapshot.missing.includes('roles')) return <p className="muted">{legal.partUnavailable}</p>;
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
-  const running = roles.filter(runsCards);
-  const waiting = roles.filter((role) => !runsCards(role));
+  const laneOpen = snapshot.platformLaneOpen === true;
+  const running = roles.filter((role) => runsCards(role, laneOpen));
+  const waiting = roles.filter((role) => !runsCards(role, laneOpen));
   return (
     <>
       {running.length === 0 ? null : (
@@ -61,7 +63,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           <p className="muted">{team.runningIntro}</p>
           <ul className="team-grid">
             {running.map((role) => (
-              <RoleCard key={role.id} role={role} cards={snapshot.cards} />
+              <RoleCard key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} />
             ))}
           </ul>
         </section>
@@ -74,7 +76,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           </p>
           <ul className="team-grid">
             {waiting.map((role) => (
-              <RoleCard key={role.id} role={role} cards={snapshot.cards} />
+              <RoleCard key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} />
             ))}
           </ul>
         </section>

@@ -216,6 +216,13 @@ describe('tick', () => {
     expect(db.claims).toBe(0);
   });
 
+  it('starts a platform code card once studio_state.platform_lane_open is set', async () => {
+    const db = new FakeDb();
+    db.studio.platform_lane_open = true;
+    db.cards = [card({ id: 'site', folder: 'platform', lane: 'code' }), card({ id: 'later', horizon: 'later' })];
+    expect(await tick(deps(db, []))).toEqual({ action: 'started', cardId: 'site' });
+  });
+
   it('sleeps while paused, without a board session or at the concurrency limit', async () => {
     const db = new FakeDb();
     db.cards = [card()];

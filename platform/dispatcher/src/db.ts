@@ -18,6 +18,9 @@ export interface StudioState {
   // The monthly cap of the studio organisation's Anthropic usage tier, as the board reported it; null
   // when unset or when studio_state has no such column, which adds no bound (throttle.ts).
   anthropic_tier_cap_usd: number | null;
+  // Whether the platform code lane is open (select.ts, docs/specs/board-site.md); false when unset or
+  // when studio_state has no such column.
+  platform_lane_open: boolean;
 }
 
 export interface Pool {
@@ -313,6 +316,7 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         studio_reserve_usd: num(row, 'studio_reserve_usd'),
         monthly_cap_usd: row.monthly_cap_usd === null || row.monthly_cap_usd === undefined ? null : num(row, 'monthly_cap_usd'),
         anthropic_tier_cap_usd: row.anthropic_tier_cap_usd === null || row.anthropic_tier_cap_usd === undefined ? null : num(row, 'anthropic_tier_cap_usd'),
+        platform_lane_open: row.platform_lane_open === true,
       };
     },
 

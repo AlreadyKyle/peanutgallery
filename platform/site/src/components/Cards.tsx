@@ -1,11 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
-  canFund,
   categoryOf,
-  fundLink,
   groupCards,
   inCategory,
-  shippedAt,
   sourceLabel,
   statusOf,
   visibleFilters,
@@ -13,25 +10,15 @@ import {
 } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
-import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
-import { unavailableLine, type StudioState } from '../lib/studio';
+import type { StudioState } from '../lib/studio';
+import { CardMoney, shippedCaption as moneyCaption } from './Funding';
+import { Guarded } from './Guarded';
 
-export function Guarded({
-  studio,
-  children,
-}: {
-  studio: StudioState;
-  children: (snapshot: Snapshot) => ReactNode;
-}) {
-  if (studio.state === 'loading') {
-    return <p className="muted">{copy.loadingCards}</p>;
-  }
-  if (studio.state !== 'ready') {
-    return <p className="muted">{unavailableLine(studio)}</p>;
-  }
-  return <>{children(studio.snapshot)}</>;
-}
+// The card layout, in the platform code lane. Its money (the bar, the caption, what a card spent and
+// the Fund this card link) comes from Funding.tsx and the snapshot guard from Guarded.tsx, both kernel.
+export { FundingBar, fundingCaption } from './Funding';
+export { Guarded } from './Guarded';
 
 function blank(text: string | null): boolean {
   return text === null || text.trim() === '';
@@ -45,39 +32,6 @@ const STATUS_WORDS: Record<ReturnType<typeof statusOf>, string> = {
   open: copy.statusOpen,
   shipped: copy.statusShipped,
 };
-
-function contributorsLine(count: number): string {
-  return count === 1 ? copy.contributorsOne : copy.contributorsMany.replace('{n}', formatInteger(count));
-}
-
-/**
- * "$0.00 of $3.00 · 0 contributors" for a card with a target, or null. The count is left out when
- * the funding figures did not load, instead of showing 0.
- */
-export function fundingCaption(card: Card, snapshot: Snapshot): string | null {
-  if (card.funding_target_usd <= 0) return null;
-  const amount = `${formatUsd(card.funded_usd)} of ${formatUsd(card.funding_target_usd)}`;
-  if (snapshot.missing.includes('funding')) return amount;
-  const funding = snapshot.funding[card.id];
-  // A goal card shows its count from the start; no funding row yet means 0.
-  const showContributors = card.shape === 'goal' || funding !== undefined;
-  return showContributors ? `${amount} · ${contributorsLine(funding?.contributors ?? 0)}` : amount;
-}
-
-export function FundingBar({ card }: { card: Card }) {
-  return (
-    <div
-      className="bar"
-      role="progressbar"
-      aria-label={card.title}
-      aria-valuemin={0}
-      aria-valuemax={card.funding_target_usd}
-      aria-valuenow={card.funded_usd}
-    >
-      <div className="bar-fill" style={{ width: `${percent(card.funded_usd, card.funding_target_usd)}%` }} />
-    </div>
-  );
-}
 
 // The agent brief stays public but collapsed behind a native disclosure.
 function Brief({ intent }: { intent: string | null }) {
@@ -96,11 +50,8 @@ function Brief({ intent }: { intent: string | null }) {
  * all, whatever canFund or the Payment Link say, so an illustration can never take a payment.
  */
 export function CardBox({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
-  const env = siteEnv();
   const titleId = `${example ? 'example' : 'card'}-title-${card.id}`;
   const status = statusOf(card);
-  const caption = fundingCaption(card, snapshot);
-  const building = status === 'building' || status === 'gated';
   return (
     <li className="card">
       <p className="card-top">
@@ -110,27 +61,7 @@ export function CardBox({ card, snapshot, example = false }: { card: Card; snaps
       <h3 id={titleId}>{card.title}</h3>
       {blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>}
       <div className="card-bottom">
-        {building ? (
-          <p className="card-meta">
-            {card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spentSoFar} · ` : ''}
-            {sourceLabel(card.source)}
-          </p>
-        ) : null}
-        {!building && caption !== null ? (
-          <>
-            <FundingBar card={card} />
-            <p className="card-meta">{caption}</p>
-          </>
-        ) : null}
-        {!example && !building && env.stripePaymentLinkUrl !== '' && canFund(card) ? (
-          <a
-            className="button button-secondary button-block"
-            href={fundLink(env.stripePaymentLinkUrl, card.id)}
-            aria-describedby={titleId}
-          >
-            {copy.fundThis}
-          </a>
-        ) : null}
+        <CardMoney card={card} snapshot={snapshot} titleId={titleId} source={sourceLabel(card.source)} example={example} />
         {example ? null : <Brief intent={card.intent} />}
       </div>
     </li>
@@ -202,20 +133,9 @@ export function FundBoard({ studio }: { studio: StudioState }) {
   );
 }
 
-/**
- * "$1.23 spent · 3 contributors · shipped 15 Sep 2026"; a card nobody funded names its source
- * instead. Only studio-billed spend is public, so a card built on the founder's time shows none.
- * When the funding figures did not load, a goal card leaves its count out instead of showing 0.
- */
+/** The shipped row's money line, from Funding.tsx (kernel), with the card's source as the layout names it. */
 export function shippedCaption(card: Card, snapshot: Snapshot): string {
-  const funding = snapshot.funding[card.id];
-  let who: string | null = sourceLabel(card.source);
-  if (card.shape === 'goal' || funding !== undefined) {
-    who = snapshot.missing.includes('funding') ? null : contributorsLine(funding?.contributors ?? 0);
-  }
-  const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${copy.spent} · ` : '';
-  const count = who === null ? '' : `${who} · `;
-  return `${cost}${count}${copy.shippedOn} ${formatDate(shippedAt(card))}`;
+  return moneyCaption(card, snapshot, sourceLabel(card.source));
 }
 
 /** One shipped card as a row. In example mode it has no Play the game link. */

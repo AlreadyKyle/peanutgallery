@@ -1,16 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Board, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, GO_LIVE_CONFIRM, TIER_CAP_LABEL } from './Board';
 import {
   BOARD_SESSION_TTL_MIN,
   DISPATCHER_STALE_MS,
   HEARTBEAT_MS,
+  ROLE_COLUMNS,
   sessionExpiry,
   STUDIO_STATE_POLL_MS,
-} from '../lib/board';
-import { formatClock, formatDateTime } from '../lib/format';
-import type { Role, Snapshot, StudioSource } from '../lib/source';
-import { SourceProvider } from '../lib/studio';
-import { Board, CANCEL_CONFIRM, GO_LIVE_CONFIRM } from './Board';
+} from './lib/board';
+import { formatClock, formatDateTime } from './lib/format';
+import { BOARD_PULLS_URL } from './lib/needs';
+import { NOTHING_NEEDS_YOU } from './NeedsYou';
 
 type RpcCall = { name: string; args: Record<string, unknown> | undefined };
 
@@ -26,6 +27,8 @@ type FakeStudio = {
   agent_hourly_rate_usd?: number;
   monthly_cap_usd?: number;
   credit_studio_daily_cap_usd?: number;
+  anthropic_tier_cap_usd?: number | null;
+  platform_lane_open?: boolean;
 };
 
 type FakeCard = {
@@ -47,6 +50,10 @@ const fake = vi.hoisted(() => ({
   heartbeatFails: false,
   launchFails: false,
   noClient: false,
+  signedOut: false,
+  otpCalls: [] as Record<string, unknown>[],
+  needs: {} as Record<string, unknown>,
+  roleRows: [] as Record<string, unknown>[],
   seenAt: '2026-09-14T12:00:00Z',
   launchedAt: '2026-09-14T12:00:00Z',
   studio: {} as FakeStudio,
@@ -60,12 +67,16 @@ const fake = vi.hoisted(() => ({
   mfaCalls: [] as { name: string; args: Record<string, unknown> | undefined }[],
 }));
 
-vi.mock('../lib/supabase', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../lib/supabase')>();
+vi.mock('./lib/supabase', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./lib/supabase')>();
   const session = { user: { email: 'board@peanutgallery.games' } };
   const client = {
     auth: {
-      getSession: () => Promise.resolve({ data: { session } }),
+      getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : session } }),
+      signInWithOtp: (args: Record<string, unknown>) => {
+        fake.otpCalls.push(args);
+        return Promise.resolve({ data: {}, error: null });
+      },
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       signOut: () => Promise.resolve({ error: null }),
       mfa: {
@@ -128,6 +139,7 @@ vi.mock('../lib/supabase', async (importOriginal) => {
         board_role: fake.role,
         board_heartbeat: fake.seenAt,
         board_studio_state: fake.studio,
+        board_needs_you: fake.needs,
         set_launched: fake.launchedAt,
         set_agent_mode: null,
         set_paused: null,
@@ -154,7 +166,8 @@ vi.mock('../lib/supabase', async (importOriginal) => {
           return builder;
         },
         returns() {
-          return Promise.resolve({ data: table === 'cards' ? [...fake.cards] : [], error: null });
+          const data = table === 'cards' ? [...fake.cards] : table === 'public_roles' ? [...fake.roleRows] : [];
+          return Promise.resolve({ data, error: null });
         },
       };
       return builder;
@@ -163,43 +176,19 @@ vi.mock('../lib/supabase', async (importOriginal) => {
   return { ...original, getClient: () => (fake.noClient ? null : client) };
 });
 
-function role(id: string, title: string, write_access: boolean): Role {
-  return {
-    id,
-    name: title,
-    title,
-    description: null,
-    species_note: 'A small blue creature with two round antennae and stubby legs.',
-    model: 'claude-sonnet-5',
-    write_access,
-    state: 'active',
-    hired_at: '2026-09-14T00:00:00Z',
-  };
+function role(id: string, title: string, write_access: boolean): Record<string, unknown> {
+  return { id, title, write_access, state: 'active' };
 }
 
-const snapshot: Snapshot = {
-  pool: null,
-  cards: [],
-  funding: {},
-  launchedAt: null,
-  paused: false,
-  totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
-  events: [],
-  deploys: [],
-  roles: [
-    role('r-builder-a', 'Builder A', true),
-    role('r-director', 'Game Director', true),
-    role('r-platform', 'Platform Builder', true),
-    role('r-host', 'Host', false),
-  ],
-  cardTitles: {},
-  missing: [],
-};
+const ROLE_ROWS = [
+  role('r-platform', 'Platform Builder', true),
+  role('r-director', 'Game Director', true),
+  role('r-builder-a', 'Builder A', true),
+  role('r-host', 'Host', false),
+  { ...role('r-old', 'Builder B', true), state: 'retired' },
+];
 
-const source: StudioSource = {
-  load: () => Promise.resolve(snapshot),
-  subscribe: () => () => {},
-};
+const EMPTY_NEEDS = { controller: null, last_credit_purchase: null, incident_reserve_usd: 0, s1_cards: [] };
 
 const startedAt = new Date('2026-09-14T12:00:00Z');
 const notActive = 'Board session: not active. Keep this page open to run attended agent sessions.';
@@ -218,11 +207,7 @@ async function flush(ms = 0) {
 }
 
 async function renderBoard() {
-  render(
-    <SourceProvider source={source}>
-      <Board />
-    </SourceProvider>,
-  );
+  render(<Board />);
   // The session, the role and the two-factor state resolve in turn.
   await flush();
   await flush();
@@ -295,6 +280,10 @@ beforeEach(() => {
   fake.heartbeatFails = false;
   fake.launchFails = false;
   fake.noClient = false;
+  fake.signedOut = false;
+  fake.otpCalls.length = 0;
+  fake.needs = { ...EMPTY_NEEDS };
+  fake.roleRows = [...ROLE_ROWS];
   fake.seenAt = startedAt.toISOString();
   fake.launchedAt = startedAt.toISOString();
   fake.studio = {
@@ -500,7 +489,7 @@ describe('Board signed in as a board member', () => {
     fireEvent.submit(formElement);
     await flush();
 
-    expect(screen.getByText('Daily cap $100.00. Card maximum $10.00.')).toBeTruthy();
+    expect(screen.getByText('Daily cap $100.00. Card maximum $10.00. No usage tier cap.')).toBeTruthy();
     expect(callsNamed('file_card').map((call) => call.args?.p_funding_target_usd)).toEqual([12]);
   });
 
@@ -563,7 +552,7 @@ describe('Board caps and credit', () => {
     await renderBoard();
     expect(
       screen.getByText(
-        'Daily cap $100.00. Card maximum $25.00. Hourly rate $4.00. Monthly cap $500.00. Studio daily limit on immediate credit $500.00.',
+        'Daily cap $100.00. Card maximum $25.00. Hourly rate $4.00. Monthly cap $500.00. Studio daily limit on immediate credit $500.00. No usage tier cap.',
       ),
     ).toBeTruthy();
     const formElement = screen.getByRole('form', { name: 'Set the caps' });
@@ -585,6 +574,8 @@ describe('Board caps and credit', () => {
         p_agent_hourly_rate_usd: 4,
         p_monthly_cap_usd: 400,
         p_credit_studio_daily_cap_usd: 500,
+        p_anthropic_tier_cap_usd: null,
+        p_set_anthropic_tier_cap: true,
         p_reason: 'Match the Console limit.',
       },
     ]);
@@ -638,7 +629,7 @@ describe('Board card controls', () => {
       'Next ranked two',
       'Later card',
     ]);
-    expect(fake.selects).toEqual([
+    expect(fake.selects.filter((select) => select.table === 'cards')).toEqual([
       {
         table: 'cards',
         columns: 'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at',
@@ -912,6 +903,180 @@ describe('Board two-factor sign-in', () => {
   });
 });
 
+describe('Board usage tier cap', () => {
+  it('shows the tier cap, saves a new one with set_caps, and removes it when left blank', async () => {
+    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500, anthropic_tier_cap_usd: 100 };
+    await renderBoard();
+    expect(screen.getByText(/Usage tier cap \$100\.00\./)).toBeTruthy();
+    const formElement = screen.getByRole('form', { name: 'Set the caps' });
+    const form = within(formElement);
+    const tier = form.getByLabelText(TIER_CAP_LABEL) as HTMLInputElement;
+    expect(tier.value).toBe('100');
+    expect(tier.required).toBe(false);
+    fireEvent.change(tier, { target: { value: '500' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Tier 2 on the Console.' } });
+    fireEvent.submit(formElement);
+    await flush();
+    fireEvent.change(form.getByLabelText(TIER_CAP_LABEL), { target: { value: '' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'No tier limit.' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(callsNamed('set_caps').map((call) => [call.args?.p_anthropic_tier_cap_usd, call.args?.p_set_anthropic_tier_cap])).toEqual([
+      [500, true],
+      [null, true],
+    ]);
+  });
+
+  it('refuses a tier cap of zero before calling the database', async () => {
+    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500 };
+    await renderBoard();
+    const formElement = screen.getByRole('form', { name: 'Set the caps' });
+    const form = within(formElement);
+    fireEvent.change(form.getByLabelText(TIER_CAP_LABEL), { target: { value: '0' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'x' } });
+    fireEvent.submit(formElement);
+    await flush();
+    expect(form.getByText(`${TIER_CAP_LABEL} must be above zero, or blank for none.`)).toBeTruthy();
+    expect(callsNamed('set_caps')).toHaveLength(0);
+  });
+
+  it('says whether the studio code lane is open', async () => {
+    await renderBoard();
+    expect(screen.getByText('Studio code lane: closed.')).toBeTruthy();
+    cleanup();
+    fake.studio = { ...fake.studio, platform_lane_open: true };
+    await renderBoard();
+    expect(screen.getByText('Studio code lane: open.')).toBeTruthy();
+  });
+});
+
+const RUN = {
+  finished_at: '2026-09-24T07:07:00Z',
+  ok: true,
+  mismatches: 0,
+  credit_purchase_usd: '12.5',
+  minimum_balance_usd: 3.25,
+  settlement_amount: 4.5,
+  settlement_currency: 'cad',
+  disputes_to_answer: [
+    { dispute: 'du_late', status: 'needs_response', due_by: '2026-10-09', amount_usd: 7 },
+    { dispute: 'du_soon', status: 'warning_needs_response', due_by: '2026-10-01', amount_usd: 5 },
+  ],
+  latest_payout: { id: 'po_123', arrival_date: '2026-09-23' },
+};
+
+describe('Board Needs you inbox', () => {
+  it('is the first section, says nothing needs you, and keeps the standing duties when nothing is due', async () => {
+    await renderBoard();
+    const inbox = screen.getByRole('region', { name: 'Needs you' });
+    expect(document.querySelector('main section')?.getAttribute('aria-label')).toBe('Needs you');
+    expect(within(inbox).getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
+    expect(within(inbox).getByText(/No Controller run yet, so there is no credit or Minimum balance figure\./)).toBeTruthy();
+    expect(within(inbox).getByRole('link', { name: "Stripe's disputes" }).getAttribute('href')).toBe('https://dashboard.stripe.com/disputes');
+    expect(within(inbox).getByRole('link', { name: 'hello@clayhouse.studio' }).getAttribute('href')).toBe('mailto:hello@clayhouse.studio');
+    expect(within(inbox).getByRole('link', { name: 'open pull requests not from a card branch' }).getAttribute('href')).toBe(BOARD_PULLS_URL);
+    expect(BOARD_PULLS_URL).toBe('https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F');
+    expect(decodeURIComponent(new URL(BOARD_PULLS_URL).searchParams.get('q') ?? '')).toBe('is:pr is:open -head:card/');
+    expect(callsNamed('board_needs_you')).toEqual([{ name: 'board_needs_you', args: undefined }]);
+  });
+
+  it('lists disputes by due date, an S1 card, then the credit purchase with the Minimum balance', async () => {
+    fake.needs = { ...EMPTY_NEEDS, controller: RUN, incident_reserve_usd: '0.4', s1_cards: [{ id: 'c-s1', title: 'Fix the save bug', stage: 'funded' }] };
+    await renderBoard();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.queryByText(NOTHING_NEEDS_YOU)).toBeNull();
+    const items = screen.getByRole('region', { name: 'Needs you' }).querySelectorAll('ul.needs > li');
+    expect([...items].map((item) => item.querySelector('strong')?.textContent)).toEqual([
+      'Answer dispute du_soon for $5.00 by 1 Oct 2026.',
+      'Answer dispute du_late for $7.00 by 9 Oct 2026.',
+      'Card Fix the save bug is S1.',
+      'Buy $12.50 of Console credit.',
+    ]);
+    expect(inbox.getAllByRole('link', { name: 'Open the dispute in Stripe' }).map((a) => a.getAttribute('href'))).toEqual([
+      'https://dashboard.stripe.com/disputes/du_soon',
+      'https://dashboard.stripe.com/disputes/du_late',
+    ]);
+    expect(inbox.getByText(/emergency-fund credit: \$0\.40 is in the fund/)).toBeTruthy();
+    expect(inbox.getByText(/raise the/).textContent).toBe("In Stripe, raise the Minimum balance to $3.25 (4.50 CAD in Stripe's currency).");
+    expect(inbox.getByText(/^Controller, 24 Sep 2026, 07:07: the books match Stripe\./)).toBeTruthy();
+  });
+
+  it('fills in the credit form from the Controller figure and the latest payout, and records only on submit', async () => {
+    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
+    await renderBoard();
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in the record form' }));
+    await flush();
+    const form = within(screen.getByRole('form', { name: 'Record a credit purchase' }));
+    expect((form.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('12.5');
+    expect((form.getByLabelText('Stripe payout id') as HTMLInputElement).value).toBe('po_123');
+    expect((form.getByLabelText('Reason') as HTMLInputElement).value).toBe('Controller figure of 2026-09-24');
+    expect(form.getByText(FILLED_FROM_CONTROLLER)).toBeTruthy();
+    expect(callsNamed('record_credit_purchase')).toHaveLength(0);
+    fireEvent.submit(screen.getByRole('form', { name: 'Record a credit purchase' }));
+    await flush();
+    expect(callsNamed('record_credit_purchase').map((call) => call.args)).toEqual([
+      { p_amount_usd: 12.5, p_stripe_payout_id: 'po_123', p_reason: 'Controller figure of 2026-09-24' },
+    ]);
+  });
+
+  it('shows the inbox at aal1 but asks for the second factor before filling in the form', async () => {
+    fake.aal = 'aal1';
+    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
+    await renderBoard();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeTruthy();
+    expect(inbox.queryByRole('button', { name: 'Fill in the record form' })).toBeNull();
+    expect(inbox.getByText(/Verify your second factor, then fill in the record form from here\./)).toBeTruthy();
+    expectNoSecondFactorControls();
+  });
+
+  it('drops the credit item once a purchase is recorded after the run, and says why', async () => {
+    fake.needs = { ...EMPTY_NEEDS, controller: RUN, last_credit_purchase: { created_at: '2026-09-24T09:00:00Z', amount_usd: '12.5' } };
+    await renderBoard();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.queryByText('Buy $12.50 of Console credit.')).toBeNull();
+    expect(inbox.getByText('A purchase of $12.50 was recorded after that run. The next run updates the credit figure.')).toBeTruthy();
+  });
+
+  it('lists no credit item when the Controller figure is zero, and names mismatches', async () => {
+    fake.needs = { ...EMPTY_NEEDS, controller: { ...RUN, ok: false, mismatches: 2, credit_purchase_usd: 0, disputes_to_answer: [] } };
+    await renderBoard();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
+    expect(inbox.getByText(/2 mismatches, named in its alert/)).toBeTruthy();
+  });
+
+  it('shows the error when board_needs_you fails', async () => {
+    fake.needs = null as unknown as Record<string, unknown>;
+    await renderBoard();
+    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText('board_needs_you returned nothing')).toBeTruthy();
+  });
+});
+
+describe('Board executors', () => {
+  it('reads the roles from public_roles and offers active card roles only, in title order', async () => {
+    await renderBoard();
+    await flush();
+    expect(fake.selects.filter((select) => select.table === 'public_roles')).toEqual([{ table: 'public_roles', columns: ROLE_COLUMNS, filters: [] }]);
+    const executor = within(screen.getByRole('form', { name: 'File a card' })).getByLabelText('Executor') as HTMLSelectElement;
+    expect([...executor.options].map((option) => option.value)).toEqual(['r-builder-a', 'r-platform']);
+  });
+});
+
+describe('Board sign-in', () => {
+  it('sends a magic link back to this site that never creates a user', async () => {
+    fake.signedOut = true;
+    await renderBoard();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: ' board@peanutgallery.games ' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+    await flush();
+    expect(fake.otpCalls).toEqual([
+      { email: 'board@peanutgallery.games', options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false } },
+    ]);
+    expect(screen.getByRole('status').textContent).toBe('A sign-in link was sent to board@peanutgallery.games.');
+  });
+});
+
 describe('Board signed in as the moderator', () => {
   it('pauses and resumes at aal1 with no two-factor step', async () => {
     fake.role = 'moderator';
@@ -942,6 +1107,8 @@ describe('Board signed in as the moderator', () => {
     expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
     expect(callsNamed('board_heartbeat')).toHaveLength(0);
     expect(callsNamed('board_studio_state')).toHaveLength(0);
+    expect(callsNamed('board_needs_you')).toHaveLength(0);
+    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
   });
 });
 

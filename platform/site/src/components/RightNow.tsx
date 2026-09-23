@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { groupCards } from '../lib/cards';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import type { Snapshot } from '../lib/source';
 import { unavailableLine, type StudioState } from '../lib/studio';
 import { isPaused, PausedNotice } from './PausedNotice';
@@ -18,7 +19,7 @@ export function RightNow({ studio }: { studio: StudioState }) {
     <aside className="panel" aria-labelledby="right-now">
       <h2 id="right-now">{copy.rightNow}</h2>
       <StaleNotice studio={studio} />
-      {studio.state === 'loading' ? <p className="muted">{copy.loadingFigures}</p> : null}
+      {studio.state === 'loading' ? <p className="muted">{legal.loadingFigures}</p> : null}
       {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
       {studio.state === 'ready' ? <Ready studio={studio} snapshot={studio.snapshot} /> : null}
     </aside>

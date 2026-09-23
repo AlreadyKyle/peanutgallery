@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
+import { legal } from '../lib/legal';
 import { PageHeader } from './PageHeader';
 
 export type TextSection = {
@@ -11,7 +12,10 @@ export type TextSection = {
 
 const TOKENS = /(\{email\}|\{refunds\}|\{discord\})/;
 
-/** A paragraph from copy.ts with its {email}, {refunds} and {discord} tokens turned into links. */
+/**
+ * A paragraph from legal.ts with its {email}, {refunds} and {discord} tokens turned into links.
+ * Kernel (docs/specs/board-site.md): it renders the legal pages.
+ */
 export function LinkedText({ text }: { text: string }) {
   const env = siteEnv();
   return (
@@ -19,15 +23,15 @@ export function LinkedText({ text }: { text: string }) {
       {text.split(TOKENS).map((part, index) => {
         if (part === '{email}') {
           return (
-            <a key={index} href={`mailto:${copy.contactEmail}`}>
-              {copy.contactEmail}
+            <a key={index} href={`mailto:${legal.contactEmail}`}>
+              {legal.contactEmail}
             </a>
           );
         }
         if (part === '{refunds}') {
           return (
             <Link key={index} to="/refunds">
-              {copy.refundsPageLink}
+              {legal.refundsPageLink}
             </Link>
           );
         }

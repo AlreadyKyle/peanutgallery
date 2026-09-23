@@ -17,10 +17,11 @@
 #   lane      config only when every changed file is a .json file under seed-1/config/ or
 #             seed-1/content/: the build copies those folders into the game verbatim, and the config
 #             lane runs no typecheck or tests
-#   site      the site's build or its end-to-end suite may change: a changed file under
-#             platform/site/ or platform/agents/ (the suite reads the role specs), or under platform/
-#             outside the folders named below, or workspace-level. Changes only under seed-1/, docs/,
-#             platform/dispatcher/, platform/ops/ or platform/supabase/ leave it false.
+#   site      a site's build or its end-to-end suite may change: a changed file under
+#             platform/site/, platform/board/ (the board's own site) or platform/agents/ (the suite
+#             reads the role specs), or under platform/ outside the folders named below, or
+#             workspace-level. Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/
+#             or platform/supabase/ leave it false.
 #   functions the Deno tests of platform/supabase/functions may change: a changed file under
 #             platform/supabase/, or under platform/ outside the folders named below, or
 #             workspace-level. Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/,
@@ -34,11 +35,15 @@
 # are never listed. First stdout line: PASS: mode-check entries=<n> or
 # FAIL: mode-check path=<file> mode=<mode>; exit 0 pass, 1 fail.
 # --check-lane <branch> fails when a card branch leaves its lane. The branch is card/<id>-config or
-# card/<id>-code. Every changed file must lie under seed-1/: the platform code lane is closed until
-# the board has its own origin (docs/specs/launch-gate.md), so no card branch may change platform/ or
-# a root file. On a -config branch every changed file must also be a .json file under seed-1/config/
-# or seed-1/content/. First stdout line: PASS: lane-check files=<n> lane=<lane> or
-# FAIL: lane-check path=<file> rule=seed-1-only|config-json-only, or
+# card/<id>-code. Every changed file must lie under seed-1/ or platform/site/, the two card folders,
+# and all of them under the same one: no card changes another part of platform/ or a root file, and
+# kernel-guard.sh refuses the kernel files inside those folders. The board has its own site, so the
+# platform code lane can open (docs/specs/board-site.md); it opens only when
+# studio_state.platform_lane_open is set, because until then the dispatcher starts no platform card
+# and the database keeps none on now, so no platform/site card branch exists. On a -config branch
+# every changed file must also be a .json file under seed-1/config/ or seed-1/content/. First stdout
+# line: PASS: lane-check files=<n> lane=<lane> or
+# FAIL: lane-check path=<file> rule=card-folders|one-folder|config-json-only, or
 # FAIL: lane-check branch=<branch> rule=branch-name; exit 0 pass, 1 fail.
 # --repo-root names another repository.
 # Exit 0, or 2 on usage or when a ref does not resolve.
@@ -150,14 +155,24 @@ if [ "$MODE" = lane-check ]; then
   esac
   count=0
   failed=""
+  card_folder=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     count=$((count + 1))
     rule=""
+    folder=""
     case "$f" in
-      seed-1/*) ;;
-      *) rule=seed-1-only ;;
+      seed-1/*) folder=seed-1 ;;
+      platform/site/*) folder=platform/site ;;
+      *) rule=card-folders ;;
     esac
+    if [ -z "$rule" ]; then
+      if [ -z "$card_folder" ]; then
+        card_folder=$folder
+      elif [ "$folder" != "$card_folder" ]; then
+        rule=one-folder
+      fi
+    fi
     if [ -z "$rule" ] && [ "$BRANCH_LANE" = config ]; then
       case "$f" in
         seed-1/config/*.json|seed-1/content/*.json) ;;
@@ -191,7 +206,7 @@ if [ -n "$FILES" ]; then
       seed-1/config/*.json|seed-1/content/*.json) SEED=true ;;
       seed-1/*) SEED=true; LANE=code ;;
       docs/*|platform/dispatcher/*|platform/ops/*) PLATFORM=true; LANE=code ;;
-      platform/site/*|platform/agents/*) PLATFORM=true; SITE=true; LANE=code ;;
+      platform/site/*|platform/board/*|platform/agents/*) PLATFORM=true; SITE=true; LANE=code ;;
       platform/supabase/*) PLATFORM=true; FUNCTIONS=true; LANE=code ;;
       platform/*) PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;
       *) SEED=true; PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;

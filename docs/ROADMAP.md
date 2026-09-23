@@ -6,8 +6,8 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on the board's Mac. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 4, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
-- **Go live** is the board pressing Go live at /board, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
+- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on the board's Mac. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 20, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
+- **Go live** is the board pressing Go live on the board's own site, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
 
 ## What "live" means
 
@@ -24,7 +24,8 @@ These are two different states.
 4. **The site is ready for strangers.**
    - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@clayhouse.studio receives mail.
    - /how-it-works, /team and /roadmap are live.
-   - Link previews render, and /board requires a second factor.
+   - Link previews render, and the board's own site requires a second factor.
+   - The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).
    - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items on /roadmap.
    - The site shows a notice while the studio is paused.
 5. **The board has pressed Go live.** The launch clip and the post drafts exist.
@@ -34,11 +35,9 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 ## The order from here
 
 1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
-2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Mac made ready as the host, with the backup key and folder.
-3. **Board steps 4 and 5**: the call on how the first player arrives, and contributions open with the studio paused.
-4. **Board steps 6 and 7**: the first Stripe payout, then Console credit bought from it and recorded at /board.
-5. **Board step 8, the cutover and soak.** Closes criterion 2 once a player's card builds unattended.
-6. **Board steps 9 to 11**: a moderator, the launch clip, Go live.
+2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 11), in order: the contact address (done), the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, the GitHub tokens, healthchecks.io, the Discord webhooks, the Netlify plan check, the ntfy subscription, the business contact for the Terms and the Claude Code pin.
+3. **Board section B** (steps 12 to 18), before the announcement: the Stripe settings, retiring the full Stripe key, the legal pages, passkeys, a moderator, the first sign-in on the board's own site and the studio daily credit limit.
+4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live.
 
 ## The launch batch (22 September 2026)
 
@@ -105,6 +104,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the jobs' first runs (on the Mac host, `specs/mac-host.md`) and the backups repository, which waits on a new store |
 | `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
+| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
 ### Draft
 
@@ -116,6 +116,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 
 - **Production.**
   - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
+  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and peanutgallery.games/board is a plain not found page.
   - Supabase project `lyxndueoeisyqzewflpu`.
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
   - The dispatcher runs attended on the founder's Mac until the cutover, and after it unattended on the board's Mac under launchd, from `~/peanutgallery-host`, until the studio has a server (PLAN.md §10 decision 38).

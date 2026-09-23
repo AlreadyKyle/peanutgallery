@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import type { Card, Role, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
@@ -136,6 +137,15 @@ describe('Team', () => {
     expect(screen.queryByText(/claude-haiku/)).toBeNull();
   });
 
+  it('runs the Platform Builder once the studio says the platform code lane is open', async () => {
+    renderTeam(sourceOf(snapshot({ platformLaneOpen: true })));
+    const running = await screen.findByRole('region', { name: team.running });
+    expect(names(running)).toEqual(['Builder A', 'Builder B', 'Platform Builder', 'QA']);
+    const hired = `${team.hired} ${formatDate('2026-09-14T00:00:00Z')}`;
+    expect(within(box('Platform Builder')).getByText(`claude-sonnet-5 · ${hired} · 0 cards shipped · changes the site`)).toBeTruthy();
+    expect(screen.queryByText(team.siteClosed, { exact: false })).toBeNull();
+  });
+
   it('draws every agent with an avatar named by its species note, and shows no scorecards', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
@@ -161,9 +171,9 @@ describe('Team', () => {
   it('says the team is unavailable when the roles did not load, and loading before', async () => {
     renderTeam(sourceOf(snapshot({ roles: [], missing: ['roles'] })));
     expect(screen.getByText(team.loading)).toBeTruthy();
-    await waitFor(() => expect(screen.getByText(copy.partUnavailable)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(legal.partUnavailable)).toBeTruthy());
     cleanup();
     renderTeam(null);
-    expect(screen.getByText(copy.meterUnavailable)).toBeTruthy();
+    expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 });

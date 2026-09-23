@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
@@ -77,7 +78,7 @@ describe('FundBoard states', () => {
     expect(screen.getByText(copy.loadingCards)).toBeTruthy();
     cleanup();
     render(<FundBoard studio={{ state: 'unconfigured' }} />);
-    expect(screen.getByText(copy.meterUnavailable)).toBeTruthy();
+    expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 
   it('shows the empty line when nothing needs funding', () => {
@@ -118,9 +119,9 @@ describe('a card box', () => {
     const bar = within(box).getByRole('progressbar');
     expect(bar.getAttribute('aria-label')).toBe('A fourteenth unlock');
     expect([bar.getAttribute('aria-valuemin'), bar.getAttribute('aria-valuemax'), bar.getAttribute('aria-valuenow')]).toEqual(['0', '100', '25']);
-    expect(paragraph(`$25.00 of $100.00 · ${copy.contributorsMany.replace('{n}', '3')}`)).toBeTruthy();
+    expect(paragraph(`$25.00 of $100.00 · ${legal.contributorsMany.replace('{n}', '3')}`)).toBeTruthy();
 
-    const link = within(box).getByRole('link', { name: copy.fundThis });
+    const link = within(box).getByRole('link', { name: legal.fundThis });
     expect(link.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=n1`);
     expect(link.classList.contains('button')).toBe(true);
     expect(link.getAttribute('aria-describedby')).toBe(screen.getByRole('heading', { level: 3 }).id);
@@ -137,12 +138,12 @@ describe('a card box', () => {
   it('shows an open card without a badge and a single contributor', () => {
     render(<FundBoard studio={ready([card({ id: 'n2', funding_target_usd: 50 })], { n2: { contributors: 1, credited_usd: 5 } })} />);
     expect(screen.getByText(copy.statusOpen).classList.contains('badge')).toBe(false);
-    expect(paragraph(`$0.00 of $50.00 · ${copy.contributorsOne}`)).toBeTruthy();
+    expect(paragraph(`$0.00 of $50.00 · ${legal.contributorsOne}`)).toBeTruthy();
   });
 
   it('shows 0 contributors on a goal with no funding row, and no summary or brief when blank', () => {
     render(<FundBoard studio={ready([card({ id: 'new', title: 'New', summary: '  ', intent: null, funding_target_usd: 20 })])} />);
-    expect(paragraph(`$0.00 of $20.00 · ${copy.contributorsMany.replace('{n}', '0')}`)).toBeTruthy();
+    expect(paragraph(`$0.00 of $20.00 · ${legal.contributorsMany.replace('{n}', '0')}`)).toBeTruthy();
     expect(document.querySelectorAll('p.card-summary')).toHaveLength(0);
     expect(boxFor('New').querySelector('details.brief')).toBeNull();
   });
@@ -166,12 +167,12 @@ describe('a card box', () => {
         ])}
       />,
     );
-    expect(screen.queryByRole('link', { name: copy.fundThis })).toBeNull();
+    expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
     expect(within(boxFor('Zero')).queryByRole('progressbar')).toBeNull();
     cleanup();
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
     render(<FundBoard studio={ready([card({ id: 'n3', funding_target_usd: 100, funded_usd: 10 })])} />);
-    expect(screen.queryByRole('link', { name: copy.fundThis })).toBeNull();
+    expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
   });
 });
 
@@ -185,11 +186,11 @@ describe('BuildingNow and QueuedList', () => {
         ])}
       />,
     );
-    expect(paragraph(`$0.42 ${copy.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
+    expect(paragraph(`$0.42 ${legal.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
     expect(within(boxFor('Gated one')).getByText(copy.statusGated)).toBeTruthy();
     // No studio-billed spend yet (or founder-billed work, which is never published): no cost shown.
     expect(within(boxFor('Gated one')).getByText(copy.sources.agent).textContent).toBe(copy.sources.agent);
-    expect(within(boxFor('Gated one')).queryByText(new RegExp(copy.spentSoFar))).toBeNull();
+    expect(within(boxFor('Gated one')).queryByText(new RegExp(legal.spentSoFar))).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     cleanup();
     const { container } = render(<BuildingNow snapshot={snapshot([card()])} />);
@@ -252,14 +253,14 @@ describe('ShippedList', () => {
     const [studio, game] = rows as [HTMLElement, HTMLElement];
     expect(within(studio).getByText(copy.categories.studio).classList.contains('shipped-category')).toBe(true);
     // A card nobody funded names who asked for it instead of a contributor count.
-    expect(within(studio).getByText(`$0.50 ${copy.spent} · ${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
+    expect(within(studio).getByText(`$0.50 ${legal.spent} · ${copy.sources.board} · ${legal.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
     expect(within(studio).queryByRole('link', { name: copy.playTheGame })).toBeNull();
     expect(studio.querySelectorAll('p')).toHaveLength(2);
 
     expect(within(game).getByText(copy.categories.game)).toBeTruthy();
     expect(within(game).getByText('Your progress is kept between visits.')).toBeTruthy();
     expect(
-      within(game).getByText(`$1.23 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '3')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`),
+      within(game).getByText(`$1.23 ${legal.spent} · ${legal.contributorsMany.replace('{n}', '3')} · ${legal.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`),
     ).toBeTruthy();
     const play = within(game).getByRole('link', { name: copy.playTheGame });
     expect(play.getAttribute('href')).toBe(PLAY);
@@ -269,22 +270,22 @@ describe('ShippedList', () => {
 
   it('shows no cost for a card whose turns were all billed to the founder', () => {
     render(<ShippedList snapshot={snapshot([card({ id: 'f', title: 'Founder built', stage: 'live', shape: 'oneoff', spent_usd: 0, updated_at: '2026-09-15T04:26:18Z' })])} />);
-    expect(screen.getByText(`${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-15T04:26:18Z')}`)).toBeTruthy();
+    expect(screen.getByText(`${copy.sources.board} · ${legal.shippedOn} ${formatDate('2026-09-15T04:26:18Z')}`)).toBeTruthy();
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
   it('leaves the contributor count out of a shipped row when the funding figures did not load', () => {
     render(<ShippedList snapshot={{ ...snapshot(shipped, { older: { contributors: 3, credited_usd: 3 } }), funding: {}, missing: ['funding'] }} />);
-    expect(screen.getByText(`$1.23 ${copy.spent} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
+    expect(screen.getByText(`$1.23 ${legal.spent} · ${legal.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
     // A card that was never open to fund still names its source.
-    expect(screen.getByText(`$0.50 ${copy.spent} · ${copy.sources.board} · ${copy.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
+    expect(screen.getByText(`$0.50 ${legal.spent} · ${copy.sources.board} · ${legal.shippedOn} ${formatDate('2026-09-16T18:30:00Z')}`)).toBeTruthy();
     expect(screen.queryByText(/contributor/)).toBeNull();
   });
 
   it('shows no Play the game link without a play URL, and nothing at all without a shipped card', () => {
     render(<ShippedList snapshot={snapshot(shipped)} />);
     expect(screen.queryByRole('link', { name: copy.playTheGame })).toBeNull();
-    expect(screen.getByText(`$1.23 ${copy.spent} · ${copy.contributorsMany.replace('{n}', '0')} · ${copy.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
+    expect(screen.getByText(`$1.23 ${legal.spent} · ${legal.contributorsMany.replace('{n}', '0')} · ${legal.shippedOn} ${formatDate('2026-09-15T09:00:00Z')}`)).toBeTruthy();
     cleanup();
     const { container } = render(<ShippedList snapshot={snapshot([card({ stage: 'funded' }), card({ id: 'b', stage: 'building' })])} />);
     expect(container.innerHTML).toBe('');

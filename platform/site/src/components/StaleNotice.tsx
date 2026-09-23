@@ -1,4 +1,4 @@
-import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import type { StudioState } from '../lib/studio';
 
 function isStale(studio: StudioState): boolean {
@@ -13,7 +13,7 @@ function isStale(studio: StudioState): boolean {
 export function StaleNotice({ studio }: { studio: StudioState }) {
   return (
     <p className="muted small status" role="status">
-      {isStale(studio) ? copy.staleFigures : ''}
+      {isStale(studio) ? legal.staleFigures : ''}
     </p>
   );
 }
@@ -23,5 +23,5 @@ export function StaleNotice({ studio }: { studio: StudioState }) {
  * only while stale and not a live region, so a screen reader hears it once.
  */
 export function StaleLine({ studio }: { studio: StudioState }) {
-  return isStale(studio) ? <p className="muted small">{copy.staleFigures}</p> : null;
+  return isStale(studio) ? <p className="muted small">{legal.staleFigures}</p> : null;
 }

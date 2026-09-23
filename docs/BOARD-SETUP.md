@@ -4,7 +4,11 @@ Every step that only the board can take, in the order that gets the studio to Go
 says why it is needed, exactly what to do, how you know it worked, and what to tell me afterwards.
 
 Sources: `docs/ROADMAP.md` (the launch checklist), `docs/PLAN.md` §10 (the decisions),
-`platform/ops/README.md` (the runbook, with The Mac host at its end), `docs/specs/mac-host.md`, `.env.example`.
+`platform/ops/README.md` (the runbook, with The Mac host at its end), `docs/specs/mac-host.md`, `docs/specs/money-safety.md`,
+`docs/specs/board-site.md`, `.env.example`.
+
+**Where you act.** The board has its own site (`docs/specs/board-site.md`); "/board" and "the
+board's site" below both mean it. It opens on the **Needs you** inbox.
 
 **Two rules.**
 
@@ -23,77 +27,50 @@ players put in (`docs/PLAN.md` §10 decision 35).
 
 ## Your steps, in order
 
-This list replaces the item numbers used before 22 September 2026. The **Done** entries at the
-bottom keep their old numbers.
+This list is the launch plan's checklist (approved 23 September 2026), in four sections. It replaces
+the step numbers used from 22 September 2026; the **Done** entries at the bottom keep the numbers
+they were done under.
+
+- **A. Blocks me from finishing.** Do these first, in order.
+- **B. Needed before the announcement.** They don't block the build.
+- **C. The launch sequence.** Run in order once A and B are done.
+- **D. Open topics.** Nothing waits on them.
+
+Where something below is already done, it says so and points at **Done**. On 23 September 2026 the
+host moved from Oracle to your Mac (`docs/PLAN.md` §10 decision 38), so the Oracle account and its
+sign-in are gone from this list, and the backup key is part of the Mac's step.
+
+---
+
+## A. Blocks me from finishing
 
 ### 1. Contact email: DONE 23 September 2026
 
 The public contact address is hello@clayhouse.studio, the board's own mailbox (`docs/PLAN.md` §10
 decision 37). The site, the legal pages and Stripe's public details use it. Nothing to set up.
 
-### 2. Alerts and GitHub access (15 minutes, free)
+### 2. Board sign-in email (15 minutes, free)
 
-**Why.** Once the dispatcher runs unattended (on your Mac for now, `docs/PLAN.md` §10 decision 38),
-these are how you hear that something failed, and how it and the agent sessions reach the repository
-with no more access than they need.
+**Why.** The board now signs in on its own site (`docs/specs/board-site.md`). Supabase's built-in
+mail only reaches members of the Supabase project team, at most 2 an hour, so the moderator could
+not get a sign-in link at all, and two failed requests during an incident would lock you out of
+Pause for an hour. Resend's free plan sends it instead.
 
-**a. healthchecks.io.**
+**Do this.**
 
-1. Sign up at healthchecks.io with your own email, on the free plan.
-2. Add a check named `peanutgallery dispatcher`, **period 1 minute**, **grace 5 minutes**. The ops
-   runbook fixes these timings, so use them exactly.
-3. Under notification methods, confirm your email gets this check.
-4. Copy the ping URL (`https://hc-ping.com/<uuid>`). Open `.env.vps` in the peanutgallery folder
-   and add a line `HEALTHCHECK_URL=` followed by it. Save.
+1. Sign up at resend.com on the free plan with your own email.
+2. Add a domain and give it the sending subdomain of peanutgallery.games that Resend suggests. Add
+   the DNS records it shows (SPF and DKIM, and the MX it asks for on that subdomain) in GoDaddy →
+   the domain → DNS, and wait until Resend shows the domain verified.
+3. Create an SMTP key (an API key with sending access) and put it in `.env` at the repository root
+   as `RESEND_SMTP_KEY=…`. Never paste it in chat.
 
-**b. ntfy on your phone.** The topic exists and the Stripe webhook already posts to it (see
-**Done**), but your phone is not subscribed yet, so an unattended failure would not reach you.
+Then I point Supabase Auth's email at Resend (custom SMTP) with a sender on that subdomain, and send
+you a sign-in link to check it arrives.
 
-1. Install the free **ntfy** app (App Store or Play Store).
-2. In the app: **+** → paste the topic name → Subscribe, leaving the server as ntfy.sh. If the
-   topic name is no longer on your clipboard, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy`
-   in the Terminal tab puts it back. Anyone who knows the topic can read and post your alerts, so it
-   stays out of chat.
-3. Tell me, and I post a test so you see it arrive. The cutover repeats that test from the host.
+**Unblocks:** the moderator's sign-in, and a Pause that can't be rate-limited.
 
-**c. Three fine-grained GitHub tokens.** Each is for the peanutgallery repository only, and all
-three must be different. No API creates one, but GitHub takes the settings in a link, so each link
-below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permissions. For each one:
-
-- the one thing to choose by hand is Repository access → **Only select repositories** →
-  `peanutgallery`;
-- check the permissions list shows exactly what is written here (GitHub adds Metadata read on its
-  own) and **no Workflows**;
-- the token is shown once; copy it straight into the file named, never into chat.
-
-1. **The host's token** (the unattended dispatcher, on your Mac for now and later on a server):
-   Contents read and write, Pull requests read and write, Actions read-only. No Workflows. GitHub
-   offers these tokens no Checks permission and ignores `checks` in the link, so add Actions by hand
-   (+ Add permissions, Actions, Read-only): the dispatcher reads the gate's result through the
-   Actions API (PLAN §10 decision 30). GitHub may also ignore the link's expiry; check the date it
-   shows.
-
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
-
-   Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`.
-2. **The read-only token for agent sessions** (it mounts the repository into each Managed Agents
-   session): Contents read only.
-
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-read&description=Peanut+Gallery+agent+sessions,+read+only&target_name=AlreadyKyle&expires_in=366&contents=read
-
-   Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. Before the cutover I prove it
-   cannot write: a push with it must answer 403, and the unattended startup refuses to run otherwise.
-3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token.
-
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
-
-   In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
-   is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
-   repository on your account and has no Workflows limit. You can keep the gh sign-in for your own
-   use; it just must not be the value in `.env`. Unattended mode refuses a token that is not
-   fine-grained, and attended mode warns about one.
-
-**Tell me:** "healthchecks check is created", "subscribed to ntfy" and "tokens are set".
+**Tell me:** "Resend is verified and the key is in .env."
 
 ### 3. The Mac as the studio's host (30 minutes, free)
 
@@ -118,129 +95,347 @@ Cloud server is the planned later home, once you open a billing account (see **O
 4. **The backup folder.** Install Google Drive for desktop and sign in with your Google account.
    In My Drive, create a folder `peanutgallery-backups`. Drive copies each nightly backup off the
    Mac. Tell me when it exists; I find its full path and put it in `.env` as `BACKUP_DIR=`.
-5. **The backup key.** In the Terminal tab:
-
-   ```bash
-   age-keygen -o ~/Desktop/peanutgallery-backup-key.txt
-   ```
-
-   It prints `Public key: age1...`. Add a line `BACKUP_AGE_RECIPIENT=` followed by that public key to
-   `.env` (it is public; it only locks). The file itself is the only thing that can open a backup:
-   copy it to a USB stick you keep apart and into your password manager, then delete it from the
-   Desktop. It never goes in chat, in the repository or on the host.
+5. **The backup key.** Made on 23 September 2026 (see **Done**): its public half is in `.env` as
+   `BACKUP_AGE_RECIPIENT`. The private file, `~/peanutgallery-backup.key`, is the only thing that
+   can open a backup. Copy it to a USB stick you keep apart and into your password manager, then
+   delete it from the Mac. It never goes in chat, in the repository or on the host. You bring it
+   back once, for the restore drill (step 19).
 6. **A second healthchecks.io check,** `peanutgallery backup`, **period 1 day**, **grace 12 hours**
    (the Mac makes a missed night up at its next wake). Add its ping URL to `.env.vps` as
    `BACKUP_HEALTHCHECK_URL=`.
 
 Then I write the host's env files (they print key names only), run `platform/ops/mac/install.sh`
 twice (the second run must print `install: done: 0 change(s)`), and quote the first backup and the
-jobs' first runs. The dispatcher is installed but not started: starting it is the cutover (step 8).
+jobs' first runs. The dispatcher is installed but not started: starting it is the cutover (step 23).
 The backup login's password and `STRIPE_READ_KEY` are production steps I ask your allow for
 (`docs/specs/money-safety.md`); the backup and the Controller wait on them.
 
 **Tell me:** "the Mac is ready."
 
-### 4. Your call: how does the first player arrive?
+### 4. Stripe read-only key (10 minutes, free)
 
-**Why.** Contributions are already open: the Contribute button is live, and Go live only stamps
-the launch time. The money-first order (`docs/PLAN.md` §10 decision 23) needs a player's
-contribution and a Stripe payout before the cutover, and your own money never counts. Nothing tells
-anyone the site exists yet, so someone has to.
+**Why.** The Controller reconciles the books with Stripe every day and computes the Console credit
+to buy and the Minimum balance figure; the live check reads back the Payment Link's settings. Those
+are its only Stripe reads. The key can't move money.
 
-- **(a) Share it quietly before Go live. My recommendation**, because it is the kick-off plan's own
-  approach: the board posts from the day the page is live, and contributions before launch pre-load
-  the pool. Share it through the Discord server the site already links, your own posts, or an
-  invite to people you name. The site says the agents are paused until the studio resumes them. The
-  formal announcement (the Reddit posts, the Show HN and the X thread) still waits for the clip and
-  Go live.
-- **(b) Go live and announce first**, with the studio still paused. The cost: the studio is
-  announced when it cannot build anything until the payout clears, credit is bought and the cutover
-  is done, and the rule that posts wait for the clip has to change, because the clip needs a card to
-  ship after the cutover.
+1. In Stripe, go to Developers → API keys → **Create restricted key**, and name it
+   `peanutgallery-reconcile`.
+2. Give it **Read** on: Balance, Balance transactions (Stripe may list it as "Balance transaction
+   sources"), Payouts, Charges and Refunds (one line on some screens), Checkout Sessions, Payment
+   Links, Events and Disputes. Nothing else, and no Write anywhere.
+3. Put it in `.env` as `STRIPE_READ_KEY=…`.
 
-**Tell me:** "share quietly" or "announce first".
+Before either job first runs, I tell you exactly what each one reads. The host's env check refuses
+`STRIPE_READ_KEY` unless it starts with `rk_live_`, and refuses any value starting `sk_live_` or
+`sk_test_` under any name.
 
-### 5. Contributions open, with the studio paused
+**Tell me:** "Stripe read key is in .env."
 
-**Why.** Player money can arrive from now on, but no agent spends it until the credit is bought
-and the cutover is done.
+### 5. Three fine-grained GitHub tokens (15 minutes, free)
 
-1. The studio stays paused at /board. The site's paused notice follows Pause and Resume on its own,
-   so no copy change is needed at the cutover.
-2. **Confirm the studio-wide daily limit on immediate credit.** Besides the $50 a day of immediate
-   agent credit per payer, all payers together get at most $500 of immediate agent credit per New
-   York day, and credit above that is held 14 days, like any large contribution. $500 is the
-   default. You can change it in the Caps form at /board ("Studio daily limit on immediate
-   credit") with your second factor.
-3. If you chose (a) in step 4, share the site now.
+**Why.** How the dispatcher's host, the agent sessions and your Mac reach the repository with no more access
+than they need (`docs/PLAN.md` §10 decision 30). Each is for the peanutgallery repository only, and
+all three must be different. No API creates one, but GitHub takes the settings in a link, so each
+link below fills in the name, the owner AlreadyKyle, a 366-day expiry and the repository permissions.
+For each one:
 
-**Tell me:** "keep $500" (or the number you want), then "shared" if you chose (a).
+- the one thing to choose by hand is Repository access → **Only select repositories** →
+  `peanutgallery`;
+- check the permissions list shows exactly what is written here (GitHub adds Metadata read on its
+  own) and **no Workflows**;
+- the token is shown once; copy it straight into the file named, never into chat.
 
-### 6. The first payout
+1. **The host's token** (the unattended dispatcher, on your Mac for now and later on a server):
+   Contents read and write, Pull requests read and write, Actions read-only, Metadata read, and under
+   **Account permissions, Plan read** (for the Actions-minutes guard). No Workflows. GitHub offers
+   these tokens no Checks permission and ignores `checks` in the link, so the dispatcher reads the
+   gate's result through the Actions API (`docs/PLAN.md` §10 decision 30). If the list does not show
+   Actions and Plan as read-only, add them by hand (+ Add permissions); an existing token keeps its
+   value when you edit it. GitHub may also ignore the link's expiry; check the date it shows.
 
-**Why.** Console credit is bought only from money Stripe has paid out (`docs/PLAN.md` §10
-decision 23).
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
-1. In the Stripe Dashboard, confirm payouts are turned on and the bank account is verified.
-2. Wait for the first payout that includes a player's contribution.
+   Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026** (see
+   **Done**); if it lacks Plan read, edit it and add it.
+2. **The read token** (it mounts the repository into each Managed Agents session): Contents read
+   only.
+
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-read&description=Peanut+Gallery+agent+sessions,+read+only&target_name=AlreadyKyle&expires_in=366&contents=read
+
+   Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026.**
+   Before the cutover I prove it cannot write: a push with it must answer 403, and the unattended
+   startup refuses to run otherwise.
+3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token, Actions
+   read and Plan read included. **Still to do.**
+
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
+
+   In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
+   is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
+   repository on your account and has no Workflows limit. You can keep the gh sign-in for your own
+   use; it just must not be the value in `.env`. Unattended mode refuses a token that is not
+   fine-grained, and attended mode warns about one.
+
+**Unblocks:** unattended mode and the cutover.
+
+**Tell me:** "the Mac token is set."
+
+### 6. healthchecks.io (5 minutes, free)
+
+**Why.** Once the dispatcher and the daily jobs run unattended, this is how you hear that one stopped.
+
+The account and the `peanutgallery dispatcher` check (period 1 minute, grace 5 minutes) are made:
+`HEALTHCHECK_URL` is in `.env.vps` (see **Done**). The `peanutgallery backup` check is part of step 3.
+Under notification methods, confirm your email gets both checks.
+
+**Unblocks:** alerts that can't fail silently.
+
+**Tell me:** "both checks email me."
+
+### 7. Discord webhooks (10 minutes, free)
+
+**Why.** Ship posts and the weekly report go to Discord through webhooks, posted by code only.
+
+1. In your server's settings, go to Integrations → Webhooks and create one for a read-only `#ships`
+   channel and one for `#weekly`.
+2. Put the URLs in `.env` as `DISCORD_WEBHOOK_SHIPS=…` and `DISCORD_WEBHOOK_WEEKLY=…`.
+3. Turn on AutoMod (Settings → Safety Setup).
+
+**Unblocks:** ship posts and the weekly report.
+
+**Tell me:** "Discord webhooks are in .env."
+
+### 8. Netlify plan check (2 minutes)
+
+Open Netlify → Team settings → Billing and tell me whether it says **legacy Free** or
+**credit-based Free**. Don't switch plans. The board's own site is a second free site on the same
+team, so this also tells me how its builds count.
+
+**Unblocks:** the scale and deploy settings.
+
+**Tell me:** "legacy Free" or "credit-based Free".
+
+### 9. ntfy (5 minutes, free)
+
+**Why.** The topic exists and the Stripe webhook already posts to it (see **Done**), but your phone
+is not subscribed yet, so an unattended failure would not reach you.
+
+1. Install the free **ntfy** app (App Store or Play Store).
+2. In the app: **+** → paste the topic name → Subscribe, leaving the server as ntfy.sh. If the
+   topic name is not on your clipboard, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy` in
+   the Terminal tab puts it there. Anyone who knows the topic can read and post your alerts, so it
+   stays out of chat.
+3. Tell me, and I post a test so you see it arrive. The cutover repeats that test from the host.
+
+**Unblocks:** phone alerts.
+
+**Tell me:** "subscribed to ntfy", then "the test alert arrived."
+
+### 10. Business contact for the Terms
+
+The Ontario internet-agreement disclosure needs a mailing address and a phone number published on
+the Terms page. Send me the ones to publish; they will be public, so chat is fine. Or tell me to
+leave the disclosure out, and I'll say what that risks.
+
+**Unblocks:** the legal-copy pull request.
+
+**Tell me:** the address and phone to publish, or "leave it out".
+
+### 11. Pin Claude Code (when I ask, after the sandbox fix passes)
+
+Run the one `sudo` command I give you, which writes the version pin to Claude Code's managed
+settings, and enter your Mac password. Claude Code on the Mac is 2.1.280, and the attended sandbox
+check passes on it (see **Done**); it is pinned only after `sandbox:check --positive` passes on the
+pinned version.
+
+**Unblocks:** attended builds on a known-good version.
+
+**Tell me:** "Claude Code is pinned."
+
+---
+
+## B. Needed before the announcement (they don't block the build)
+
+### 12. Stripe settings, in the Stripe Dashboard
+
+No agent touches Stripe; these are yours.
+
+- **Business description.** Check that Settings → Business details describes the model accurately.
+  Email Stripe support describing it ("supporters fund specific development tasks on an AI-built
+  free game; no rewards") and ask whether a restricted category applies. Keep their reply. If they
+  say it needs approval, tell me before anything else; otherwise nothing waits for a written OK.
+- **Minimum balance.** Settings → Payouts → Minimum balance. Turn it on. It holds a fixed amount,
+  which you raise after each payout to the figure the board site's Needs you inbox shows (the
+  reserve plus held money plus typical fees, computed by the Controller). The Controller alerts if
+  Stripe's balance falls below it.
+- **Minimum amount.** Stays $1, your call on 23 September 2026. Leave Radar on its default:
+  card-testing protection is already on, and custom rules would charge a fee on every payment.
+- **Public details: done 23 September 2026.** Support email hello@clayhouse.studio (`docs/PLAN.md`
+  §10 decision 37), plus the terms and privacy URLs.
+- **Display name field: done 23 September 2026.** The Payment Link's "Public display name" custom
+  field is removed.
+- **Your test payment.** Refund your own $1 test payment.
+- **After-payment redirect.** Payment Link → After payment: redirect customers to
+  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
+  is live.
+
+**Tell me:** "Stripe settings done", and Stripe's reply on the category when it comes.
+
+### 13. Retire the full Stripe secret key
+
+Once I move the stripe-webhook function onto the restricted key, roll the secret key in Stripe
+(Developers → API keys → Roll key). I then remove `STRIPE_SECRET_KEY` from `.env` and the function
+secrets. After that, no key on your Mac, the host or Supabase can refund, charge or pay out, and
+changing webhook endpoints becomes a Dashboard step of yours.
+
+**Tell me:** "secret key rolled."
+
+### 14. Review the new Terms, Privacy and Refunds pages
+
+Once the legal-copy pull request is up, read them yourself, as you did on 20 September 2026 (see
+**Done**).
+
+**Tell me:** "legal pages are fine", or what to change.
+
+### 15. Passkeys or hardware keys
+
+Turn on passkeys or a hardware key on Stripe, GitHub, Supabase, Netlify, the studio's Anthropic
+organisation, Google, GoDaddy, Resend and Discord, and remove SMS as a recovery
+method on each. Where a service offers no passkey, turn on authenticator-app two-step instead, or
+sign in to it only through Google or GitHub.
+
+**Tell me:** "passkeys are on."
+
+### 16. Name a moderator
+
+**Why.** A second person who can pause the studio (and hold the kill switch once the stream exists).
+
+1. Add a line `MODERATOR_EMAIL=` with their address to `.env` yourself, never in chat.
+2. I re-run the seed (`pnpm --filter @backseat/supabase seed`, safe to run again). It writes their
+   `board_members` row and then creates their Supabase Auth user, since sign-ups are off and a
+   sign-in link never creates one. I quote its lines with the address redacted.
+3. They sign in on the board's site by magic link, which also proves the sign-in email works for
+   someone outside the Supabase team. They see the pause control only.
+4. In Discord, give them a moderator role (Server Settings → Roles).
+
+They then have pause-only access and Discord moderation.
+
+**Tell me:** "moderator email is in .env."
+
+### 17. Sign in once on the board's own site
+
+The board has moved to its own site (`docs/specs/board-site.md`): a separate free Netlify site at
+its own `netlify.app` address, which I give you once it is created. Bookmark it; nothing on the
+public site links to it, and peanutgallery.games/board is now a plain not found page. Everyone is
+signed out at the switch. Sign in there by magic link; your authenticator app carries over, so enter
+its code as before. The first thing you see is the **Needs you** inbox, which is usually empty.
+
+**Tell me:** "signed in on the board site."
+
+### 18. Studio daily credit limit
+
+Keep $500, or set the number the scale pull request proposes, in the Caps form on the board's site
+(second factor). Besides the $50 a day of immediate agent credit per payer, all payers together get
+at most this much immediate agent credit per New York day, and credit above it is held 14 days. The
+same form now takes the usage tier cap (step 22).
+
+**Tell me:** "keep $500", or the number you set.
+
+---
+
+## C. The launch sequence
+
+Run it in this order, once A and B are done, the money-safety, legal-copy, money-logic and
+supporter-loop pull requests are live, and the launch cards are open to fund.
+
+### 19. Restore drill (once, about 10 minutes)
+
+Bring the offline backup key (step 3). I decrypt one stored backup on your Mac with it, restore it
+and quote the ledger identity on it. Then the key goes back offline and the decrypted copy is
+deleted.
+
+**Tell me:** "ready for the restore drill."
+
+### 20. The first player arrives
+
+**Your call.** Contributions are already open: the Contribute button is live, and Go live only stamps
+the launch time. The money-first order (`docs/PLAN.md` §10 decision 23) needs a player's contribution
+and a Stripe payout before the cutover, and your own money never counts. Nothing tells anyone the
+site exists yet, so someone has to.
+
+- **(a) Share it quietly before Go live. My recommendation**, as your original plan did. Share it
+  through the Discord server the site already links, your own posts, or an invite to people you
+  name. The site says the agents are paused until the studio resumes them. The formal announcement
+  still waits for the clip and Go live.
+- **(b) Go live and announce first**, with the studio still paused. The cost: the studio is announced
+  when it cannot build anything until the payout clears, credit is bought and the cutover is done.
+
+The studio stays paused either way.
+
+**Tell me:** "share quietly" or "announce first", then "shared".
+
+### 21. First payout
+
+In Stripe → Balances, confirm payouts are on and the bank account is verified. Then wait for the
+first payout that includes a player's money. The new-account delay started with your test payment on
+15 September 2026, so it may already have run. Plan for the first payout taking 7 to 14 days.
 
 **Tell me:** "payouts are on", and later "the first payout arrived".
 
-### 7. Console credit, after this payout and after every payout from now on
+### 22. Buy Console credit, after this payout and after every payout from now on
 
-**Why.** Unattended cards bill the studio organisation's key, not your Max subscription.
-`STUDIO_ANTHROPIC_API_KEY` is already set in `.env`; the organisation it belongs to needs credit.
+**Why.** Unattended cards bill the studio organisation's key, not your Max subscription. Console
+credit is bought only from money Stripe has paid out (decision 23), never with your own.
 
-**How much.** I work it out and quote it before you buy:
+**How much.** The Controller computes it every day with one formula, and the board site's **Needs
+you** inbox shows it as soon as a payout leaves agent money that is not credit yet: the remaining
+ceilings of funded cards, plus overhead spent since the last purchase, less the credit left, and
+never more than the agent money Stripe has paid out and not yet converted, plus that overhead. The
+reserve, the emergency fund and held money are never in it. Fees, currency conversion and HST on the
+purchase come from the studio share.
 
-1. In the Stripe Dashboard, open the payout and note when the latest charge it includes was made.
-   That time is the cutoff.
-2. I run
-   `select coalesce(sum(agents_usd - held_usd), 0) from contributions where created_at <= '<cutoff>'`:
-   the agent share, incident reserve included, of everything paid out so far, with refunds and
-   disputes netted out and money still held left out until it is released.
-3. The purchase is that figure minus the credit already bought (the purchases recorded at /board).
-4. Fees, currency conversion and HST on the purchase, and overhead (the startup probe's model use
-   and session time), come from the studio share, never from the agent money.
-5. If the amount is below the Console's minimum purchase, wait for the next payout. Never add your
-   own money.
+**Do this,** from the inbox's credit item:
 
-**Do this.**
+1. console.anthropic.com → sign in → switch to the **studio** organisation (the one
+   `STUDIO_ANTHROPIC_API_KEY` belongs to, never your personal one). If you are unsure which it is,
+   open Settings → API keys in each organisation and find the key whose prefix matches the one in
+   `.env`; I can print you the first few characters safely if you ask.
+2. **Billing** → buy prepaid credit for the amount the inbox shows. If it is below the Console's
+   minimum purchase, wait for the next payout; never add your own money.
+3. Keep **auto-reload off**, and set the Console's monthly spend limit to the monthly cap the
+   board's site shows.
+4. On the board's site, press **Fill in the record form** in the inbox (second factor). It fills in
+   the amount, the Stripe payout id and a reason from the Controller's figure. Change the amount to
+   the one on the Console receipt if it differs, then **Record purchase**. The dispatcher never lets
+   unattended sessions spend more than the credit recorded.
+5. Tell me the tier the Console's **Limits** page shows. Its monthly limit goes in the Caps form as
+   the usage tier cap.
+6. In the same visit, raise Stripe's **Minimum balance** (Settings → Payouts) to the figure the inbox
+   shows.
 
-1. console.anthropic.com → sign in → switch to the **studio** organisation (the one that key
-   belongs to, never your personal one). If you are unsure which it is, open Settings → API keys in
-   each organisation and find the key whose prefix matches the one in `.env`; I can print you the
-   first few characters safely if you ask.
-2. **Billing** → buy prepaid credit for the amount I quoted.
-3. Keep **auto-reload off** and the **monthly spend limit at $500**.
-4. At /board, under **Record a credit purchase**, enter the amount, the Stripe payout id and a
-   one-line reason, then **Record purchase** (second factor). The dispatcher never lets unattended
-   sessions spend more than the credit recorded.
-5. As the meter grows, raise the Console's monthly limit and the monthly cap at /board together.
+Repeat after every payout. Console credit lags the pool, so a card can wait for credit while the
+pool shows money; the dispatcher then pauses the studio and alerts "Console credit needed", and the
+next payout's purchase clears it.
 
-Console credit lags the pool, so a card can wait for credit while the pool shows money. When that
-happens the dispatcher pauses the studio and alerts "Console credit needed", and the next payout's
-purchase clears it.
+**Tell me:** "credit bought and recorded", and the tier.
 
-**Tell me:** "credit bought and recorded".
-
-### 8. Cutover and soak (about twenty minutes with me, then a day)
+### 23. Cutover and soak (about twenty minutes with me, then a day)
 
 I prompt you at each point. Only one dispatcher ever runs: the dispatcher lease guarantees it, and
 from here the attended dispatcher is not started while the host runs. The runbook is
 `platform/ops/README.md`, The Mac host.
 
-1. You: **Pause** at /board.
+1. You: **Pause** on the board's site.
 2. Me: stop the attended dispatcher and confirm no dispatcher process is left.
 3. Me: create or update the managed agent and environment with the studio key and quote their ids;
    write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only) and run
    `platform/ops/mac/install.sh` twice. The second run must print `install: done: 0 change(s)`.
-4. You: set the agent mode to **unattended** at /board (second factor).
+4. You: set the agent mode to **unattended** on the board's site (second factor).
 5. Me: the toolchain check from the host's code clone, quoting `PASS: toolchain`.
 6. Me: `platform/ops/mac/install.sh --start`, which starts the dispatcher under launchd and waits
    for its `startup probe passed` line; I quote it. The probe is a small Managed Agents session,
    billed as overhead from the studio share.
-7. You: confirm /board shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
+7. You: confirm the board's site shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
 8. Me: post a test alert to ntfy from the host. You: confirm it arrived on your phone.
 9. You: **Resume**.
 10. Me: a restart test (`launchctl kickstart -k`), a kill test (the dispatcher killed outright comes
@@ -254,36 +449,60 @@ closes live criterion 2.
 
 **Tell me:** "ready for the cutover".
 
-### 9. Name a moderator
+### 24. Go live
 
-**Why.** A second person who can pause the studio (and hold the kill switch once the stream
-exists).
+The first player-funded card ships, and its /card replay is the launch clip. You press **Go live**
+on the board's site; it works once and cannot be undone. Then you edit my drafts in `docs/launch/`
+so they sound like you, and post them in the order in `docs/specs/announcement.md`. The posting is
+yours.
 
-1. Add a line `MODERATOR_EMAIL=` with their address to `.env` yourself, never in chat.
-2. Me: re-run the seed (`pnpm --filter @backseat/supabase seed`, safe to run again) and quote its
-   `board_members` line with the address redacted.
-3. The moderator signs in at /board by magic link and sees the pause control. Sign-in is refused
-   until that row exists.
-
-**Tell me:** "moderator email is in .env".
-
-### 10. The launch clip
-
-Record the screen as a real card goes from open to shipped, with the change visible in Dust. I
-draft the posts in `docs/launch/`; you edit them so they sound like you. The posting is yours.
-
-**Tell me:** "clip recorded".
-
-### 11. Go live
-
-At /board, press **Go live**. It works once and cannot be undone. Then post, in the order in
-`docs/specs/announcement.md`.
+**Tell me:** "gone live".
 
 ---
 
+## D. Open topics (no blockers)
+
+- **Operations percentage.** The agent-system pull request shows the number and the costs it came
+  from. Lower it if you want. Nothing waits on you.
+- **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
+  name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
+  HST threshold and income tax on the pool, and Ontario business-name registration for "Peanut
+  Gallery" ($60). I book nothing.
+- **Kill-condition pivots.** "Keep the pivots", or the ones you want for a site-first studio (see
+  **Open decisions**).
+- **A Google Cloud billing account,** whenever you choose, to move the dispatcher off your Mac (see
+  **Open decisions**).
+- **Delete `KEYS.md`** from the repository folder on your Mac (see **Standing items**).
+- **HST registration review** when cumulative receipts reach $15k (see **Standing items**).
+- **Record the trademark search** for "Peanut Gallery".
+- **Later, only if limits bite:** make the repository public when Actions minutes run short; move the
+  sites to Cloudflare Pages before Mid; Supabase Pro at about 400 MB; grow the Anthropic tier.
+- **Dreaming research-preview access,** only when memory comes back on the roadmap.
+
+---
+
+## Your standing duties
+
+These are the only standing actions left with the board, the ones the money rule and the kernel
+force. Each shows in the board site's **Needs you** inbox when it is due; the inbox is usually empty.
+If you do none of them, the studio pauses or stays as it is. Nothing else waits on you.
+
+- **After each payout:** buy Console credit and raise Stripe's Minimum balance (step 22). The inbox
+  lists it once a payout leaves agent money that is not credit yet.
+- **Refunds** asked for at hello@clayhouse.studio: refund each one in Stripe within 14 days of the
+  contribution. A standing line in the inbox; no script refunds.
+- **Disputes:** answer each in Stripe before its due date. The Controller alerts, and the inbox lists
+  each one with its date.
+- **The emergency fund:** convert its credit when an S1 card needs it. The inbox lists S1 cards that
+  may draw on it.
+- **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
+  The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
+  only those, so every other one waits for you.
+- **New models:** add a price-table row to `.env` before any role uses a new model. The board site
+  cannot read `.env`, so the inbox does not list this one; I tell you when a model change needs it.
+
 ## Standing items, outside the order
 
-- **Console credit after every payout** (step 7), recorded at /board each time.
 - **Claude Code on the Mac: 2.1.280 or newer.** Attended sessions need it, because 2.1.139 refuses
   `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision 36).
   `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
@@ -301,17 +520,21 @@ At /board, press **Go live**. It works once and cannot be undone. Then post, in 
 
 ## What only you can do
 
-- The healthchecks.io account.
+- The Resend account, its DNS records and its SMTP key.
+- The Mac's power and update settings, `brew install libpq age`, Google Drive for desktop and the
+  backup check.
+- The backup key, and keeping it offline.
+- The Stripe read-only key, the Stripe settings, and rolling the secret key.
+- The Mac's fine-grained GitHub token.
+- The Discord webhooks and AutoMod.
 - Subscribing to the ntfy topic on your phone.
-- The three fine-grained GitHub tokens.
-- The Mac's power and update settings, `brew install libpq age`, Google Drive for desktop, the
-  backup key and the backup check.
-- The call on how the first player arrives, and the share if you choose it.
-- Confirming Stripe payouts and the bank account, and the studio-wide daily credit limit.
-- Buying Console credit after each payout and recording it at /board.
+- The business contact for the Terms, and reviewing the legal pages.
+- Passkeys on every account.
 - Naming a moderator.
-- The launch clip.
-- Go live.
+- The call on how the first player arrives, and the share if you choose it.
+- Confirming Stripe payouts and the bank account.
+- Buying Console credit after each payout and recording it on the board's site.
+- Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
 
@@ -365,17 +588,28 @@ different numbers.
 
 Copy any of these back to me as you finish:
 
-- "healthchecks check is created."
-- "subscribed to ntfy."
-- "tokens are set."
+- "Resend is verified and the key is in .env."
 - "the Mac is ready."
-- "share quietly" / "announce first"
-- "keep $500" (or a number) and "shared"
+- "Stripe read key is in .env."
+- "the Mac token is set."
+- "both checks email me."
+- "Discord webhooks are in .env."
+- "legacy Free" / "credit-based Free"
+- "subscribed to ntfy." / "the test alert arrived."
+- the address and phone for the Terms, or "leave it out"
+- "Claude Code is pinned."
+- "Stripe settings done." / "secret key rolled."
+- "legal pages are fine"
+- "passkeys are on."
+- "moderator email is in .env."
+- "signed in on the board site."
+- "keep $500" (or a number)
+- "ready for the restore drill."
+- "share quietly" / "announce first", then "shared"
 - "payouts are on" / "the first payout arrived"
-- "credit bought and recorded"
+- "credit bought and recorded", and the tier
 - "ready for the cutover"
-- "moderator email is in .env"
-- "clip recorded"
+- "gone live"
 - "keep the pivots" (or the pivots you want)
 - "the Google Cloud billing account is open" (whenever you choose)
 
@@ -384,7 +618,7 @@ Copy any of these back to me as you finish:
 ## Done
 
 Newest last. Each entry says what was checked, not just that it happened. The numbers are the item
-numbers used before 22 September 2026.
+numbers used before 22 September 2026; the steps above are numbered afresh from the launch plan.
 
 ### 1. Image provider and key: DONE 19 September 2026
 
@@ -456,7 +690,7 @@ this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/i
 
 Generated an unguessable topic without printing it, saved the URL as `NTFY_TOPIC_URL` in `.env.vps`
 at the repository root (gitignored, mode 0600), and posted a test to it: HTTP 200. Subscribing your
-phone is still open (step 2b).
+phone is still open (step 9).
 
 ### 9. Viewer-count kill lines: DONE 22 September 2026
 
@@ -479,3 +713,16 @@ The Mac's Claude Code went from 2.1.139 to 2.1.280, because 2.1.139 refuses `cla
 because the seed tests could not read the repository's git data, and passes after the carry-over fix:
 `PASS: attended sandbox`, seed-1 tests `77 passed (77)`, with the check's clone in the temp folder and
 again with it under your home folder (`docs/specs/carry-over.md`).
+
+### Contact address, the host's tokens, the dispatcher check and the backup key: DONE 23 September 2026
+
+- **Contact address.** hello@clayhouse.studio on the site, the legal pages and Stripe's public
+  details (`docs/PLAN.md` §10 decision 37, pull request #57).
+- **Tokens.** `VPS_GITHUB_TOKEN` and `GITHUB_READ_TOKEN` are set in `.env.vps`, checked by length
+  only (93 characters each, the fine-grained form), never printed. The Mac's `GITHUB_TOKEN` in `.env`
+  is still the gh sign-in token (step 5.3).
+- **healthchecks.io.** `HEALTHCHECK_URL` is set in `.env.vps`. `BACKUP_HEALTHCHECK_URL` is not yet
+  (step 3).
+- **Backup key.** `BACKUP_AGE_RECIPIENT` is set in `.env`; the private file is at
+  `~/peanutgallery-backup.key` (mode 0600) until you move it offline (step 3).
+- **Stripe.** Public details and the removed display-name field (step 12); the minimum stays $1.

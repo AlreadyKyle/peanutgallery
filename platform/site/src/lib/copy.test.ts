@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { copy } from './copy';
+import { legal } from './legal';
 
 // docs/COPY.md is the copy guide; these tests keep every public string to the rules it marks tested.
 
@@ -14,7 +15,8 @@ function strings(value: unknown, path: string, out: Array<[string, string]>): Ar
   return out;
 }
 
-const all = strings(copy, '', []);
+// Every public string: the site's words in copy.ts and the legal pages and money statements in legal.ts.
+const all = [...strings(copy, 'copy', []), ...strings(legal, 'legal', [])];
 
 // The one contrast the guide allows: the legal line about contributions.
 const ALLOWED_CONTRAST = 'These are contributions, not donations.';
@@ -65,18 +67,18 @@ describe('copy rules', () => {
     const landing = [
       copy.pitchTitle,
       copy.pitchBody,
-      copy.split,
+      legal.split,
       copy.fundIntro,
       copy.queuedIntro,
       copy.shippedIntro,
       ...copy.steps,
       copy.howItWorksMore,
-      copy.pausedNotice,
+      legal.pausedNotice,
       copy.nowEmptyPaused,
-      copy.artPolicy,
-      copy.allAges,
-      copy.fixedRulesIntro,
-      ...copy.fixedRules,
+      legal.artPolicy,
+      legal.allAges,
+      legal.fixedRulesIntro,
+      ...legal.fixedRules,
       copy.footer,
     ];
     const inside = /\b(default split|the gate|kernel|dispatcher|directive|lane|the pool)\b/i;
@@ -120,8 +122,8 @@ describe('funding a card is the choice (22 September 2026)', () => {
 
 describe('launch copy', () => {
   it('states the art policy for the games and the avatars on one line', () => {
-    expect(copy.artPolicy).toBe('Art in the games and the agent avatars is drawn by code.');
-    expect(copy.artPolicy).not.toMatch(/such as agent avatars|image model/i);
+    expect(legal.artPolicy).toBe('Art in the games and the agent avatars is drawn by code.');
+    expect(legal.artPolicy).not.toMatch(/such as agent avatars|image model/i);
   });
 
   it('writes the footer as a full sentence', () => {
@@ -129,16 +131,16 @@ describe('launch copy', () => {
   });
 
   it('labels the pool figure In the pool and never promises money can be spent now', () => {
-    expect(copy.poolBalance).toBe('In the pool');
-    expect(copy.describeAvailable).not.toMatch(/\bnow\b/i);
-    expect(copy.shortfall).toContain('{amount}');
+    expect(legal.poolBalance).toBe('In the pool');
+    expect(legal.describeAvailable).not.toMatch(/\bnow\b/i);
+    expect(legal.shortfall).toContain('{amount}');
   });
 
   it('names both hold triggers wherever a hold is described', () => {
-    const large = copy.terms.sections.find((section) => section.heading === 'Large contributions')?.paragraphs.join(' ') ?? '';
-    const holds = copy.howItWorksPage.sections.find((section) => section.heading === 'Holds and refunds')?.paragraphs[0] ?? '';
-    const bar = copy.howItWorksPage.blocks.find((block) => block.heading === 'The bar fills')?.body[0] ?? '';
-    for (const text of [copy.describeHeld, large, holds, bar]) {
+    const large = legal.terms.sections.find((section) => section.heading === 'Large contributions')?.paragraphs.join(' ') ?? '';
+    const holds = legal.howMoneyMoves.sections.find((section) => section.heading === 'Holds and refunds')?.paragraphs[0] ?? '';
+    const bar = legal.howMoneyMoves.blocks.find((block) => block.heading === 'The bar fills')?.body[0] ?? '';
+    for (const text of [legal.describeHeld, large, holds, bar]) {
       expect(text).toMatch(/\$50/);
       expect(text).toMatch(/studio's (total for the day is under its )?daily limit/);
       expect(text).toMatch(/14 days/);
@@ -146,15 +148,15 @@ describe('launch copy', () => {
   });
 
   it("says money beyond a card's cost pays for later cards", () => {
-    const bar = copy.howItWorksPage.blocks.find((block) => block.heading === 'The bar fills')?.body.join(' ') ?? '';
+    const bar = legal.howMoneyMoves.blocks.find((block) => block.heading === 'The bar fills')?.body.join(' ') ?? '';
     expect(bar).toMatch(/rest pays for later cards/);
   });
 
   it('discloses the card fingerprint hash on the Privacy page and dates the change', () => {
-    const stores = copy.privacy.sections.find((section) => section.heading === 'What the studio stores')?.paragraphs.join(' ') ?? '';
+    const stores = legal.privacy.sections.find((section) => section.heading === 'What the studio stores')?.paragraphs.join(' ') ?? '';
     expect(stores).toMatch(/one-way hash of the identifier Stripe gives your payment card/);
     expect(stores).toMatch(/used only to apply the \$50 daily limit/);
-    expect(copy.legalUpdated).toBe('Last updated 22 September 2026.');
+    expect(legal.legalUpdated).toBe('Last updated 22 September 2026.');
   });
 
   it('describes no founding contributions, gate or player decision', () => {
@@ -164,14 +166,20 @@ describe('launch copy', () => {
   });
 
   it('gives /how-it-works six steps and headed sections, not questions', () => {
-    expect(copy.howItWorksPage.blocks).toHaveLength(6);
+    expect(legal.howMoneyMoves.blocks).toHaveLength(6);
     const headings = [
-      ...copy.howItWorksPage.blocks.map((block) => block.heading),
-      ...copy.howItWorksPage.sections.map((section) => section.heading),
+      ...legal.howMoneyMoves.blocks.map((block) => block.heading),
+      ...legal.howMoneyMoves.sections.map((section) => section.heading),
       copy.howItWorksPage.rulesHeading,
     ];
     expect(headings.filter((heading) => heading.includes('?'))).toEqual([]);
     expect(copy.howItWorksPage.exampleReal.startsWith('Example')).toBe(true);
     expect(copy.howItWorksPage.exampleMadeUp.startsWith('Example')).toBe(true);
+  });
+});
+
+describe('copy.ts and legal.ts (docs/specs/board-site.md)', () => {
+  it('share no key, so every money statement is read from legal.ts', () => {
+    expect(Object.keys(copy).filter((key) => key in legal)).toEqual([]);
   });
 });

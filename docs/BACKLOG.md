@@ -61,14 +61,6 @@ everything else, in the order the board would take it.
 - summary: A weekly public report from the Studio Head on what shipped, what it cost and what comes next.
 - intent: A scheduled Studio Head session writes the report from the ledger, the shipped cards and the efficiency figures, adds one line from each running agent, and posts it on the site. It is the studio's regular appointment for supporters. It is not built yet.
 
-### Board on its own site
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 6
-- summary: Move the board's dashboard to a separate site, so code built by the agents never runs next to the board's sign-in.
-- intent: Board work through a reviewed pull request, not a fundable card: a kernel folder platform/board deployed as its own free Netlify site with its own Supabase client and an enforced CSP; Supabase Auth's site URL and redirect list moved to it; the public site's client stops persisting sessions and clears any stored one; a global sign-out of board and moderator users at the switch. Until it ships the studio code lane stays closed, so no card changes the public site's code. It is not built yet.
-
 ## Later
 
 ### Refund and dispute fee rows on the ledger

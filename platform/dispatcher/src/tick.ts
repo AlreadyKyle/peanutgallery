@@ -91,7 +91,7 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   const boardSessionActive = await checkBoardSession(deps);
   const pool = await deps.db.getPool();
   const cards = await deps.db.listCardsInStages([...HOLD_STAGES, 'building']);
-  const runnable = runnableInOrder(cards);
+  const runnable = runnableInOrder(cards, studio.platform_lane_open);
   const decision = canStart({
     paused: studio.paused,
     mode: deps.mode,

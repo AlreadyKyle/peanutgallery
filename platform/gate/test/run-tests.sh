@@ -395,8 +395,7 @@ assert "changed: a rename lists both names" test "$(cat "$T/renamed.txt")" = "se
 seed-1/tests/invariants.test.ts"
 expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
 expect "changed: kernel-guard fails the old name of a renamed kernel file" 1 '^FAIL: kernel-guard path=seed-1/tests/invariants.test.ts$' -- bash "$GATE_DIR/kernel-guard.sh" "$T/renamed.txt"
-# The config lane holds .json files only; a card branch stays inside seed-1/ while the platform
-# code lane is closed.
+# The config lane holds .json files only, and a card branch stays inside one card folder.
 git -C "$D" checkout -q -b lane-page "$C0"
 mkdir -p "$D/seed-1/content"
 printf '<p>x</p>\n' > "$D/seed-1/content/page.html"; git -C "$D" add -A; git -C "$D" commit -q -m "page"; C8=$(git -C "$D" rev-parse HEAD)
@@ -405,10 +404,23 @@ expect "lane: a non-JSON file on a config branch fails" 1 '^FAIL: lane-check pat
 expect "lane: the same file on a code branch passes" 0 '^PASS: lane-check files=1 lane=code$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0" "$C8"
 expect "lane: JSON under config passes on a config branch" 0 '^PASS: lane-check files=1 lane=config$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C0" "$C1"
 expect "lane: a seed code change fails on a config branch" 1 '^FAIL: lane-check path=seed-1/sim/a.ts rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C1" "$C2"
-expect "lane: a platform change fails on a card branch while the platform code lane is closed" 1 '^FAIL: lane-check path=platform/site/a.ts rule=seed-1-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C2" "$C3"
-expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=README.md rule=seed-1-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
+# The platform code lane can open now that the board has its own site: platform/site is a card folder
+# on a code branch. studio_state.platform_lane_open decides when a platform card runs at all.
+expect "lane: a platform/site change passes on a code branch" 0 '^PASS: lane-check files=1 lane=code$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C2" "$C3"
+expect "lane: a platform/site change fails on a config branch" 1 '^FAIL: lane-check path=platform/site/a.ts rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C2" "$C3"
+expect "lane: one branch never changes both card folders" 1 '^FAIL: lane-check path=seed-1/sim/a.ts rule=one-folder$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C1" "$C3"
+expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=README.md rule=card-folders$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
 expect "lane: a branch that names no lane fails" 1 '^FAIL: lane-check branch=card/abcd1234 rule=branch-name$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234 "$C0" "$C1"
 expect "lane: --check-lane needs a branch and two refs" 2 '^$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0"
+git -C "$D" checkout -q main
+# The board's own site is never a card folder, and a change to it selects the site steps.
+git -C "$D" checkout -q -b lane-board "$C0"
+mkdir -p "$D/platform/board" "$D/platform/dispatcher"
+printf 'b\n' > "$D/platform/board/a.ts"; git -C "$D" add -A; git -C "$D" commit -q -m "board"; C9=$(git -C "$D" rev-parse HEAD)
+printf 'd\n' > "$D/platform/dispatcher/a.ts"; git -C "$D" add -A; git -C "$D" commit -q -m "dispatcher"; C10=$(git -C "$D" rev-parse HEAD)
+expect "lane: the board's site is never a card folder" 1 '^FAIL: lane-check path=platform/board/a.ts rule=card-folders$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0" "$C9"
+expect "lane: another platform folder is never a card folder" 1 '^FAIL: lane-check path=platform/dispatcher/a.ts rule=card-folders$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C9" "$C10"
+expect "changed: a board site change selects the site steps and not the functions tests" 0 '^seed=false platform=true lane=code site=true functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C9"
 git -C "$D" checkout -q main
 
 # Which of the platform job's slower steps a change selects (docs/specs/scale-launch.md). Each
@@ -430,7 +442,8 @@ for pair in \
   'platform/agents/builder-a.json seed=false platform=true lane=code site=true functions=false' \
   'platform/site/src/App.tsx seed=false platform=true lane=code site=true functions=false' \
   'platform/gate/ship-gate.sh seed=false platform=true lane=code site=true functions=true' \
-  'platform/board/src/main.tsx seed=false platform=true lane=code site=true functions=true' \
+  'platform/board/src/main.tsx seed=false platform=true lane=code site=true functions=false' \
+  'platform/newfolder/src/main.tsx seed=false platform=true lane=code site=true functions=true' \
   '.github/workflows/gate.yml seed=true platform=true lane=code site=true functions=true' \
   'pnpm-lock.yaml seed=true platform=true lane=code site=true functions=true' \
   'seed-1/sim/b.ts seed=true platform=false lane=code site=false functions=false'; do
@@ -448,10 +461,12 @@ printf 'packages:\n  - seed-1\n  - platform/*\n' > "$W/pnpm-workspace.yaml"
 printf 'node_modules/\ndist/\n' > "$W/.gitignore"
 cat > "$W/build.js" <<'EOF_BUILD'
 // A substitute for a package build: writes dist/index.html and one asset the way the seed and site
-// builds do. GATE_TEST_BUILD_TEXT replaces the page text.
+// builds do. GATE_TEST_BUILD_TEXT replaces the page text, and a Payment Link in the build's
+// environment becomes a link on the page, as the site's Contribute button is.
 const fs = require('node:fs');
 fs.mkdirSync('dist/assets', { recursive: true });
-fs.writeFileSync('dist/index.html', `<p>${process.env.GATE_TEST_BUILD_TEXT || 'Dust'}</p>\n`);
+const link = process.env.VITE_STRIPE_PAYMENT_LINK_URL ? `<a href="${process.env.VITE_STRIPE_PAYMENT_LINK_URL}">Contribute</a>` : '';
+fs.writeFileSync('dist/index.html', `<p>${process.env.GATE_TEST_BUILD_TEXT || 'Dust'}</p>${link}\n`);
 fs.writeFileSync('dist/assets/app.js', 'export {};\n');
 EOF_BUILD
 SEED_BUILD="node ../build.js"
@@ -493,6 +508,11 @@ write_package "$W/seed-1" @backseat/seed-1 true true "$SEED_BUILD" "$SEED_BOT"
 write_package "$W/platform/dispatcher" @backseat/dispatcher true true true
 write_package "$W/platform/supabase" @backseat/supabase true true true
 write_package "$W/platform/site" @backseat/site true true "$SITE_BUILD"
+mkdir -p "$W/platform/board"
+write_package "$W/platform/board" @backseat/board true true "$SITE_BUILD"
+# The site's public build values, as in platform/site/netlify.toml: the build runs with them and the
+# payment-host scan allows this one Payment Link.
+printf '[build.environment]\n  NODE_VERSION = "22"\n  VITE_STRIPE_PAYMENT_LINK_URL = "https://buy.stripe.com/gate_test_link"\n' > "$W/platform/site/netlify.toml"
 printf '{"rows":[{"id":"gatherer","name":"Gatherer","baseCost":10,"rate":0.2}]}\n' > "$W/seed-1/config/spawn-table.json"
 printf '{"unlocks":[]}\n' > "$W/seed-1/config/unlocks.json"
 printf '{"title":"Dust"}\n' > "$W/seed-1/content/strings.json"
@@ -587,6 +607,64 @@ expect "ship: the platform checks phase runs the package tests" 1 '^GATE FAIL st
 rm -f "$W/platform/site/package.json"
 expect "ship: absent package is a failure, not a pass" 1 '^GATE FAIL step=build detail=@backseat/site is not in the workspace$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
 write_package "$W/platform/site" @backseat/site true true "$SITE_BUILD"
+# The board's own site is built and its tests run with the platform folder.
+write_package "$W/platform/board" @backseat/board true "exit 1" "$SITE_BUILD"
+expect "ship: platform test failure names the board package" 1 '^GATE FAIL step=tests detail=@backseat/board: exit 1$' -- bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+write_package "$W/platform/board" @backseat/board true true "exit 4"
+expect "ship: a failing board build fails the build step" 1 '^GATE FAIL step=build detail=@backseat/board: exit 4$' -- bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+write_package "$W/platform/board" @backseat/board true true "$SITE_BUILD"
+rm -rf "$W/platform/site/dist" "$W/platform/board/dist"
+# The payment-host scan (docs/specs/board-site.md): the site is built with its netlify.toml values,
+# so the configured Payment Link is in the build and allowed; any other payment address fails, and
+# the game's build may carry none at all.
+expect "ship: the site builds with its Payment Link and the scan allows it" 0 '^GATE PASS folder=platform lane=code phase=build$' -- bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+assert "ship: the site build carries the configured Payment Link" grep -q 'href="https://buy.stripe.com/gate_test_link"' "$W/platform/site/dist/index.html"
+assert "ship: the board build carries no Payment Link" test "$(grep -c 'buy.stripe.com' "$W/platform/board/dist/index.html")" = 0
+expect "ship: another payment address in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://www.paypal.com/donate$' -- env GATE_TEST_BUILD_TEXT='Give at https://www.paypal.com/donate today' bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+expect "ship: a Stripe link with percent-encoded dots in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://buy.stripe.com/test_evil$' -- env GATE_TEST_BUILD_TEXT='<a href="https://buy%2Estripe%2Ecom/test_evil">' bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+expect "ship: a second Stripe link in the site build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*platform/site/dist/index.html address=https://buy.stripe.com/other_link$' -- env GATE_TEST_BUILD_TEXT='https://buy.stripe.com/other_link' bash "$SHIP" --repo-root "$W" --folder platform --dry-run
+expect "ship: any payment address in the game's build fails the scan" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan path=.*seed-1/dist/index.html address=https://buy.stripe.com/gate_test_link$' -- env GATE_TEST_BUILD_TEXT='https://buy.stripe.com/gate_test_link' bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --dry-run
+rm -rf "$W/platform/site/dist" "$W/platform/board/dist" "$W/seed-1/dist"
+mv "$W/platform/site/netlify.toml" "$T/site-netlify.toml"
+expect "ship: a site with no configured Payment Link fails the scan closed" 1 '^GATE FAIL step=payment-host-scan detail=FAIL: payment-host-scan usage: ' -- bash "$SHIP" --repo-root "$W" --folder platform --phase build --dry-run
+mv "$T/site-netlify.toml" "$W/platform/site/netlify.toml"
+rm -rf "$W/platform/site/dist" "$W/platform/board/dist"
+
+# ---------------------------------------------------------------- payment-host-scan.mjs
+PAY="$GATE_DIR/payment-host-scan.mjs"
+PD="$T/pay"
+mkdir -p "$PD/dist/assets" "$PD/other"
+printf '[build.environment]\n  VITE_STRIPE_PAYMENT_LINK_URL = "https://buy.stripe.com/abc123"\n' > "$PD/netlify.toml"
+printf '[build.environment]\n  VITE_STRIPE_PAYMENT_LINK_URL = "https://evil.example/pay"\n' > "$PD/bad.toml"
+printf 'const a="https://buy.stripe.com/abc123";\n' > "$PD/dist/assets/app.js"
+printf '\211PNG buy.stripe.com/zzz\n' > "$PD/dist/assets/image.png"
+expect "pay: the configured link alone passes" 0 '^PASS: payment-host-scan files=1 allowed=1$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/dist"
+expect "pay: --allow names the link directly" 0 '^PASS: payment-host-scan files=1 allowed=1$' -- node "$PAY" --allow https://buy.stripe.com/abc123 "$PD/dist"
+expect "pay: with no allowed link any payment address fails" 1 '^FAIL: payment-host-scan path=.*app.js address=https://buy.stripe.com/abc123$' -- node "$PAY" "$PD/dist"
+for address in 'https://buy.stripe.com/abc1234' 'https://buy.stripe.com/abc123?prefilled_email=x' 'https://checkout.stripe.com/c/pay/cs_live_x' '//donate.stripe.com/x' 'https://www.paypal.com/cgi-bin/webscr' 'paypal.me/someone' 'https://ko-fi.com/x' 'HTTPS://BUY.STRIPE.COM/abc123x' 'https:\/\/buy.stripe.com\/evil' 'https%3A%2F%2Fcheckout.stripe.com%2Fx'; do
+  printf 'const b="%s";\n' "$address" > "$PD/other/x.js"
+  expect "pay: $address fails" 1 '^FAIL: payment-host-scan path=.*x.js address=' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+done
+# Every spelling a browser resolves to a payment host: percent-encoded dots and letters (once, twice,
+# and as the UTF-8 bytes of a fullwidth dot), HTML character references, JavaScript escapes, the
+# ideographic and fullwidth full stops, and fullwidth letters (new URL() reads each as buy.stripe.com).
+for address in 'https://buy%2Estripe%2Ecom/test_evil' 'https://buy%252Estripe%252Ecom/x' 'https://buy.str%69pe.com/x' 'https://buy%EF%BC%8Estripe%EF%BC%8Ecom/x' \
+  'https://buy&#46;stripe&#46;com/x' 'https://buy&#x2E;stripe&#x2e;com/x' 'https://buy&period;stripe&period;com/x' 'https&colon;&sol;&sol;paypal&period;me/x' \
+  'https://buy\u002estripe\u002ecom/x' 'https://buy\u{2e}stripe\x2ecom/x' 'https://buy。stripe。com/x' 'https://buy．stripe．com/x' 'https://buy｡stripe｡com/x' \
+  'https://ｂｕｙ.ｓｔｒｉｐｅ.ｃｏｍ/x' 'https://ＢＵＹ．ＳＴＲＩＰＥ．ＣＯＭ/abc123'; do
+  printf 'const b="%s";\n' "$address" > "$PD/other/x.js"
+  expect "pay: $address fails as the host a browser reads" 1 '^FAIL: payment-host-scan path=.*x.js address=.*(stripe\.com|STRIPE\.COM|paypal\.me)' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+done
+printf '<a href="https://buy&#46;stripe&#46;com/abc123">Pay</a>\n' > "$PD/other/x.js"
+expect "pay: the configured link written with character references is still the configured link" 0 '^PASS: payment-host-scan files=1 allowed=1$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+printf 'const c="https://notstripe.com/x https://stripe.company/y help@stripe.com https://example.com/buy.stripe";\n' > "$PD/other/x.js"
+expect "pay: look-alike hosts, an email address and a path pass" 0 '^PASS: payment-host-scan files=1 allowed=0$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+printf '%s\n' 'const d="100% done, 50%2 off, &#169; 2026, été, notstripe%2Ecom/x";' > "$PD/other/x.js"
+expect "pay: decoded text that names no payment host passes" 0 '^PASS: payment-host-scan files=1 allowed=0$' -- node "$PAY" --allow-from "$PD/netlify.toml" "$PD/other"
+expect "pay: a netlify.toml with no Payment Link is a usage error" 2 '^FAIL: payment-host-scan usage: .* sets no VITE_STRIPE_PAYMENT_LINK_URL$' -- node "$PAY" --allow-from "$GATE_DIR/payment-hosts.txt" "$PD/dist"
+expect "pay: an allowed link that is not a Payment Link is a usage error" 2 '^FAIL: payment-host-scan usage: the allowed link is not a Payment Link address' -- node "$PAY" --allow-from "$PD/bad.toml" "$PD/dist"
+expect "pay: a missing folder is a usage error" 2 '^FAIL: payment-host-scan usage: not a folder' -- node "$PAY" "$PD/none"
+expect "pay: no folder is a usage error" 2 '^FAIL: payment-host-scan usage: name at least one build folder$' -- node "$PAY"
 
 # ---------------------------------------------------------------- restore-kernel.sh
 # The build job's second line. A card test that ran on the same disk could rewrite the bot's package
@@ -639,17 +717,26 @@ for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/
 done
 printf 'seed-1/config/spawn-table.json\nseed-1/content/CLAUDE.md.txt\nseed-1/content/claude/notes.json\nseed-1/render/vite.configs/a.ts\n' > "$T/kernel-name-near.txt"
 expect "kernel-guard: names that only resemble a kernel name pass" 0 '^PASS: kernel-guard files=4$' -- bash "$KERNEL" "$T/kernel-name-near.txt"
-# The board's client code, the determinism harness, the game page, and every config a build tool,
-# the package manager or Netlify loads from the folder it works in.
-for file in platform/site/src/lib/board.ts platform/site/src/lib/env.ts seed-1/index.html seed-1/sim/hash.ts seed-1/sim/rng.ts seed-1/tests/timeline.test.ts \
+# The board's own site, the public site's money, ledger and legal surfaces, the determinism harness,
+# the game page, and every config a build tool, the package manager or Netlify loads from the folder
+# it works in.
+for file in platform/board/src/Board.tsx platform/board/netlify.toml platform/site/src/lib/legal.ts platform/site/src/lib/payment.ts \
+  platform/site/src/pages/Contribute.tsx platform/site/src/pages/Ledger.tsx platform/site/src/pages/Legal.tsx platform/site/src/components/Meter.tsx \
+  platform/site/src/lib/source.ts platform/site/src/lib/env.ts seed-1/index.html seed-1/sim/hash.ts seed-1/sim/rng.ts seed-1/tests/timeline.test.ts \
   platform/site/postcss.config.mjs seed-1/.postcssrc.json seed-1/render/tailwind.config.ts seed-1/babel.config.json seed-1/.babelrc platform/site/tsconfig.json \
   seed-1/render/tsconfig.app.json seed-1/.env seed-1/.env.production seed-1/public/_headers platform/site/public/_redirects seed-1/pnpm-workspace.yaml \
-  seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock; do
+  seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock \
+  platform/site/index.html platform/site/src/main.tsx platform/site/src/App.tsx platform/site/src/lib/studio.tsx platform/site/src/components/Stat.tsx \
+  platform/site/src/components/Guarded.tsx platform/site/src/components/EventList.tsx platform/site/src/components/DeployList.tsx \
+  platform/site/src/components/StaleNotice.tsx platform/site/src/components/PausedNotice.tsx platform/site/src/components/Funding.tsx; do
   printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-new.txt"
   expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-new.txt"
 done
 printf 'seed-1/render/headers.ts\nseed-1/content/environment.json\nseed-1/sim/hashing.ts\nseed-1/render/postcss.ts\nseed-1/render/rng-view.ts\n' > "$T/kernel-new-near.txt"
 expect "kernel-guard: names that only resemble the new kernel files pass" 0 '^PASS: kernel-guard files=5$' -- bash "$KERNEL" "$T/kernel-new-near.txt"
+# The site's pages, their routes, copy, card layout, page header and styles stay open to the platform code lane.
+printf 'platform/site/src/pages/Landing.tsx\nplatform/site/src/lib/copy.ts\nplatform/site/src/lib/roster.ts\nplatform/site/src/components/Cards.tsx\nplatform/site/src/styles.css\nplatform/boards/x.ts\nplatform/site/src/routes.tsx\nplatform/site/src/components/PageHeader.tsx\nplatform/site/src/lib/cards.ts\n' > "$T/kernel-site-open.txt"
+expect "kernel-guard: the site's pages, routes, copy, cards, header and styles pass" 0 '^PASS: kernel-guard files=9$' -- bash "$KERNEL" "$T/kernel-site-open.txt"
 printf 'seed-1/config/spawn-table.json\nseed-1/content/a\tb.json\n' > "$T/kernel-tab.txt"
 expect "kernel-guard: a tab in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-tab.txt"
 printf 'seed-1/content/a\001b.json\n' > "$T/kernel-control.txt"
@@ -740,12 +827,12 @@ step_if() {
 for step in 'uses: denoland/setup-deno' 'name: Stripe webhook function tests'; do
   assert "workflow: the platform job runs '$step' only when detect selects the functions" step_if platform "$step" "if: needs.detect.outputs.functions == 'true'"
 done
-for step in 'name: Build the site for the end-to-end suite' 'name: Install Chromium for Playwright' 'name: Site end-to-end'; do
+for step in 'name: Build the site for the end-to-end suite' 'name: Install Chromium for Playwright' 'name: Site end-to-end' 'name: Board site end-to-end'; do
   assert "workflow: the platform job runs '$step' only when detect selects the site" step_if platform "$step" "if: needs.detect.outputs.site == 'true'"
 done
-assert "workflow: the platform job gates exactly five steps on detect's flags" test "$(job_block platform | grep -cE "^        if: needs\.detect\.outputs\.(site|functions) == 'true'\$")" = 5
-assert "workflow: the platform job's checks, gate, agent, ops and docs tests run on every platform change" test "$(job_block platform | grep -cE '^        if: ')" = 6
-assert "workflow: the build job builds the site only when detect selects it" step_if build 'name: Build the site and scan the build' "if: needs.detect.outputs.site == 'true'"
+assert "workflow: the platform job gates exactly six steps on detect's flags" test "$(job_block platform | grep -cE "^        if: needs\.detect\.outputs\.(site|functions) == 'true'\$")" = 6
+assert "workflow: the platform job's checks, gate, agent, ops and docs tests run on every platform change" test "$(job_block platform | grep -cE '^        if: ')" = 7
+assert "workflow: the build job builds the sites only when detect selects them" step_if build 'name: Build the sites and scan the builds' "if: needs.detect.outputs.site == 'true'"
 for job in seed-code platform; do
   assert "workflow: $job caches the pnpm store" test "$(job_block "$job" | grep -c '^          cache: pnpm$')" = 1
 done
@@ -753,7 +840,7 @@ for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:op
   assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
 assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
-assert "workflow: the platform job builds the site for the end-to-end suite before running it" order platform 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e'
+assert "workflow: the platform job builds the site for the end-to-end suite before running it, then the board site's suite" order platform 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e' 'run: pnpm --filter @backseat/board e2e'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
 # Card code runs in seed-code and platform only; the build job runs it only in its last step.
 assert "workflow: every ship-gate call names its phase" test "$(grep 'ship-gate.sh' "$WORKFLOW" | grep -vc -- '--phase ')" = 0

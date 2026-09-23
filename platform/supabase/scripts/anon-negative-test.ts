@@ -56,9 +56,10 @@ const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank";
 const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "*"];
 const PERMISSION_DENIED = "42501";
 
-// public_studio shows whether the studio is paused and never who paused it or
+// public_studio shows whether the studio is paused and whether the platform
+// code lane is open (docs/specs/board-site.md), and never who paused it or
 // when; those columns are not in the view at all (42703).
-const STUDIO_COLUMNS_READABLE = "launched_at,paused";
+const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open";
 const STUDIO_COLUMNS_ABSENT = ["paused_by", "paused_at"];
 const UNDEFINED_COLUMN = "42703";
 
@@ -74,6 +75,7 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["claim_dispatcher_lease", { p_holder: "anon-negative-test", p_ttl_seconds: 0 }],
   ["release_dispatcher_lease", { p_holder: "anon-negative-test" }],
   ["set_caps", {}],
+  ["board_needs_you", {}],
   ["record_credit_purchase", { p_amount_usd: 0 }],
   ["set_card_horizon", { p_card: NO_CARD, p_horizon: "later", p_rank: null, p_reason: null }],
   ["cancel_card", { p_card: NO_CARD, p_reason: null }],

@@ -109,10 +109,37 @@ describe('pure helpers', () => {
     ]);
   });
 
-  it('protects the board client, the determinism harness, the game page and every build config', () => {
+  it('protects the board site, the money, ledger and legal surfaces, the determinism harness, the game page and every build config', () => {
     const kernel = [
-      'platform/site/src/lib/board.ts',
+      'platform/board/src/Board.tsx',
+      'platform/board/netlify.toml',
+      'platform/board/e2e/board.spec.ts',
       'platform/site/src/lib/env.ts',
+      'platform/site/src/lib/legal.ts',
+      'platform/site/src/lib/payment.ts',
+      'platform/site/src/lib/format.ts',
+      'platform/site/src/lib/source.ts',
+      'platform/site/src/lib/supabase.ts',
+      'platform/site/src/pages/Contribute.tsx',
+      'platform/site/src/pages/Ledger.tsx',
+      'platform/site/src/pages/Legal.tsx',
+      'platform/site/src/components/Funding.tsx',
+      'platform/site/src/components/Meter.tsx',
+      'platform/site/src/components/PoolStat.tsx',
+      'platform/site/src/components/LedgerSummary.tsx',
+      'platform/site/src/components/TextPage.tsx',
+      // The entry, the frame and routes, the snapshot every figure comes through, and every
+      // component a kernel page draws a figure, a ledger row or the snapshot guard with.
+      'platform/site/index.html',
+      'platform/site/src/main.tsx',
+      'platform/site/src/App.tsx',
+      'platform/site/src/lib/studio.tsx',
+      'platform/site/src/components/Stat.tsx',
+      'platform/site/src/components/Guarded.tsx',
+      'platform/site/src/components/EventList.tsx',
+      'platform/site/src/components/DeployList.tsx',
+      'platform/site/src/components/StaleNotice.tsx',
+      'platform/site/src/components/PausedNotice.tsx',
       'seed-1/index.html',
       'seed-1/sim/hash.ts',
       'seed-1/sim/rng.ts',
@@ -135,7 +162,23 @@ describe('pure helpers', () => {
       'seed-1/yarn.lock',
     ];
     for (const file of kernel) expect(isKernelPath(file), file).toBe(true);
-    for (const file of ['seed-1/render/headers.ts', 'seed-1/content/environment.json', 'seed-1/sim/hashing.ts', 'seed-1/render/postcss.ts']) {
+    for (const file of [
+      'seed-1/render/headers.ts',
+      'seed-1/content/environment.json',
+      'seed-1/sim/hashing.ts',
+      'seed-1/render/postcss.ts',
+      // The site's pages, their routes, copy, cards, headers and styles stay in the platform code lane.
+      'platform/site/src/pages/Landing.tsx',
+      'platform/site/src/pages/HowItWorks.tsx',
+      'platform/site/src/routes.tsx',
+      'platform/site/src/lib/copy.ts',
+      'platform/site/src/lib/cards.ts',
+      'platform/site/src/lib/roster.ts',
+      'platform/site/src/components/Cards.tsx',
+      'platform/site/src/components/PageHeader.tsx',
+      'platform/site/src/styles.css',
+      'platform/boards/x.ts',
+    ]) {
       expect(isKernelPath(file), file).toBe(false);
     }
     expect(outsideLane(['seed-1/sim/hash.ts', 'seed-1/sim/sim.ts', 'seed-1/index.html', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual([
@@ -166,7 +209,7 @@ describe('pure helpers', () => {
 
   it('refuses kernel files in every lane and names the ones inside a lane', () => {
     expect(outsideLane(['seed-1/sim/invariants.ts', 'seed-1/sim/sim.ts', 'seed-1/bots/greedy.ts'], lanePaths('seed-1', 'code'))).toEqual(['seed-1/sim/invariants.ts', 'seed-1/bots/greedy.ts']);
-    expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml']);
+    expect(outsideLane(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx', 'platform/site/src/pages/Landing.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/gate/ship-gate.sh', 'platform/site/netlify.toml', 'platform/site/src/App.tsx']);
     expect(outsideLane(['platform/site/scripts/live-check.mjs', 'platform/site/scripts-notes.md'], lanePaths('platform', 'code'))).toEqual(['platform/site/scripts/live-check.mjs']);
     expect(outsideLane(['seed-1/sim/invariants.tsx'], lanePaths('seed-1', 'code'))).toEqual([]);
     expect(outsideLane(['seed-1/content/CLAUDE.md', 'seed-1/config/spawn-table.json'], lanePaths('seed-1', 'config'))).toEqual(['seed-1/content/CLAUDE.md']);
@@ -174,7 +217,7 @@ describe('pure helpers', () => {
       'seed-1/render/.claude/settings.json',
       'seed-1/vitest.config.ts',
     ]);
-    expect(outsideLane(['platform/site/src/CLAUDE.md', 'platform/site/src/App.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/src/CLAUDE.md']);
+    expect(outsideLane(['platform/site/src/CLAUDE.md', 'platform/site/src/routes.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/src/CLAUDE.md']);
     expect(protectedPaths(lanePaths('seed-1', 'config'))).toEqual([]);
     expect(protectedPaths(lanePaths('seed-1', 'code'))).toContain('seed-1/sim/invariants.ts');
   });
@@ -183,7 +226,7 @@ describe('pure helpers', () => {
     const allowed = ['seed-1/config', 'seed-1/content'];
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/content/strings.json'], allowed)).toEqual([]);
     expect(outsideLane(['seed-1/config/spawn-table.json', 'seed-1/sim/index.ts', 'seed-1/configuration.md'], allowed)).toEqual(['seed-1/sim/index.ts', 'seed-1/configuration.md']);
-    expect(outsideLane(['platform/site/index.html'], ['platform/site'])).toEqual([]);
+    expect(outsideLane(['platform/site/src/pages/Team.tsx'], ['platform/site'])).toEqual([]);
   });
 
   it('parses a rename or copy entry into both names, in either status column', () => {

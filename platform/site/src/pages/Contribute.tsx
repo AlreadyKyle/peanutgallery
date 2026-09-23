@@ -1,11 +1,17 @@
-import { FundingBar, Guarded, fundingCaption } from '../components/Cards';
+import { FundingBar, fundingCaption } from '../components/Funding';
+import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
-import { CATEGORY_FILTERS, canFund, categoryOf, fundLink, groupCards, type CardCategory } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
+import { legal } from '../lib/legal';
+import { CATEGORY_FILTERS, categoryOf, fundableCards, fundLink, type CardCategory } from '../lib/payment';
 import { useStudio } from '../lib/studio';
+
+// Kernel (docs/specs/board-site.md): the page that sends money to the Payment Link. Its strings come
+// from legal.ts; which cards it offers, in what order and under which heading, and their links, come
+// from payment.ts; every module it reads is kernel but copy.ts (the category names) and PageHeader.
 
 const CATEGORIES = CATEGORY_FILTERS.filter((filter): filter is CardCategory => filter !== 'all');
 
@@ -18,24 +24,24 @@ export function Contribute() {
   const studio = useStudio();
   return (
     <main>
-      <PageHeader title={copy.contributeTitle} lede={copy.contributeLede}>
+      <PageHeader title={legal.contributeTitle} lede={legal.contributeLede}>
         <StaleNotice studio={studio} />
       </PageHeader>
       <PausedNotice studio={studio} />
       {env.stripePaymentLinkUrl === '' ? (
-        <p>{copy.contributeUnavailable}</p>
+        <p>{legal.contributeUnavailable}</p>
       ) : (
         <>
           <a className="choice choice-primary" href={env.stripePaymentLinkUrl}>
-            <span className="choice-title">{copy.pickForMe}</span>
-            <span className="choice-body">{copy.pickForMeBody}</span>
+            <span className="choice-title">{legal.pickForMe}</span>
+            <span className="choice-body">{legal.pickForMeBody}</span>
           </a>
 
-          <h2 className="choices-heading">{copy.orPickACard}</h2>
+          <h2 className="choices-heading">{legal.orPickACard}</h2>
           <Guarded studio={studio}>
             {(snapshot) => {
-              const fundable = groupCards(snapshot.cards).fund.filter(canFund);
-              if (fundable.length === 0) return <p className="muted">{copy.noFundableCards}</p>;
+              const fundable = fundableCards(snapshot.cards);
+              if (fundable.length === 0) return <p className="muted">{legal.noFundableCards}</p>;
               return CATEGORIES.map((category) => {
                 const cards = fundable.filter((card) => categoryOf(card) === category);
                 if (cards.length === 0) return null;
@@ -61,7 +67,7 @@ export function Contribute() {
               });
             }}
           </Guarded>
-          <p className="muted small">{copy.split}</p>
+          <p className="muted small">{legal.split}</p>
         </>
       )}
     </main>

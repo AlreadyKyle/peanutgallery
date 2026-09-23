@@ -1,0 +1,2 @@
+# The e2e run's own build (playwright.config.ts).
+dist-e2e/

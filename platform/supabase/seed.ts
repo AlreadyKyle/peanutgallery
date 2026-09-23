@@ -1,5 +1,6 @@
-// Seed: roles, studio_state, pool, stream_state and board_members. Idempotent;
-// service role; reads .env at the repo root. studio_state is inserted only when
+// Seed: roles, studio_state, pool, stream_state, board_members and each board
+// member's Supabase Auth user (sign-ups are off; docs/specs/board-site.md).
+// Idempotent; service role; reads .env at the repo root. studio_state is inserted only when
 // missing and warns when .env differs from the live row. Next cards are filed
 // separately by scripts/file-next-cards.ts.
 //   pnpm --filter @backseat/supabase seed
@@ -7,6 +8,7 @@
 
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { boardUsersLine, ensureBoardUsers, supabaseAuthUserStore } from "./lib/board-users.js";
 import { loadRepoEnv, REPO_ROOT, serviceClient } from "./lib/client.js";
 import { parseBoardMembers, todayInNewYork, type Env } from "./lib/env.js";
 import { readRoleSpecs } from "./lib/role-files.js";
@@ -65,6 +67,8 @@ async function seedBoardMembers(db: SupabaseClient, env: Env): Promise<void> {
   const members = parseBoardMembers(env.BOARD_EMAILS, env.MODERATOR_EMAIL);
   check("board_members upsert", await db.from("board_members").upsert(members, { onConflict: "email" }));
   console.log(`board_members: ${members.map((m) => `${m.email} (${m.role})`).join(", ")}`);
+  // After the rows, which the auth trigger checks. The line prints counts only.
+  console.log(boardUsersLine(await ensureBoardUsers(supabaseAuthUserStore(db), members)));
 }
 
 async function insertWeek1Card(db: SupabaseClient, run: Week1Run): Promise<void> {

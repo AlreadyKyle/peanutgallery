@@ -2,12 +2,15 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
-import { exampleSplit, HowItWorks } from './HowItWorks';
+import { exampleSplit } from '../lib/payment';
+import { HowItWorks } from './HowItWorks';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 const page = copy.howItWorksPage;
+const money = legal.howMoneyMoves;
 
 function card(overrides: Partial<Card>): Card {
   return {
@@ -83,16 +86,16 @@ describe('How it works', () => {
     renderPage(null);
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([page.title]);
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
-      ...page.blocks.map((block) => block.heading),
-      ...page.sections.map((section) => section.heading),
+      ...money.blocks.map((block) => block.heading),
+      ...money.sections.map((section) => section.heading),
       page.rulesHeading,
     ]);
     expect(figures()).toHaveLength(6);
     for (const figure of figures()) expect(figure.querySelector('figcaption')?.textContent).toMatch(/^Example/);
-    for (const rule of copy.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
-    expect(screen.getByText(copy.artPolicy)).toBeTruthy();
+    for (const rule of legal.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
+    expect(screen.getByText(legal.artPolicy)).toBeTruthy();
     // Holds and refunds links to the Refunds page.
-    expect(screen.getByRole('link', { name: copy.refundsPageLink }).getAttribute('href')).toBe('/refunds');
+    expect(screen.getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });
 
   it('never renders a Payment Link, a fund button or a Play link, even with real open cards and the link set', async () => {
@@ -103,7 +106,7 @@ describe('How it works', () => {
     expect(container.innerHTML).not.toContain(STRIPE);
     expect(container.innerHTML).not.toContain('buy.stripe.com');
     expect(container.innerHTML).not.toContain('client_reference_id');
-    expect(screen.queryByText(copy.fundThis)).toBeNull();
+    expect(screen.queryByText(legal.fundThis)).toBeNull();
     expect(screen.queryByText(copy.playTheGame)).toBeNull();
     expect(container.querySelectorAll('figure.example a, figure.example button, figure.example details')).toHaveLength(0);
   });
@@ -142,14 +145,14 @@ describe('How it works', () => {
     expect(exampleSplit(10)).toEqual({ reserve: 1, studio: 1.8, agents: 7.2, incident: 0.36, credit: 6.84 });
     renderPage(null);
     const split = figures()[1]!;
-    expect(within(split).getByText(page.splitCaption)).toBeTruthy();
+    expect(within(split).getByText(money.splitCaption)).toBeTruthy();
     for (const amount of ['$1.00', '$1.80', '$0.36', '$6.84']) expect(within(split).getByText(amount)).toBeTruthy();
-    expect(page.splitRows.studioNote).toContain('$9.00');
-    expect(page.splitRows.incidentNote).toContain('$7.20');
+    expect(money.splitRows.studioNote).toContain('$9.00');
+    expect(money.splitRows.incidentNote).toContain('$7.20');
   });
 
   it('shows the paused notice while the board has paused the agents', async () => {
     renderPage(sourceOf(snapshot({ paused: true })));
-    await waitFor(() => expect(screen.getByText(copy.pausedNotice)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(legal.pausedNotice)).toBeTruthy());
   });
 });

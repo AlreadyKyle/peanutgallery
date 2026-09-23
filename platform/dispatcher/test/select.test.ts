@@ -34,11 +34,21 @@ describe('runnable', () => {
     expect(runnable(card({ id: 'a', horizon: 'next' }))).toBe(false);
     expect(runnable(card({ id: 'a', horizon: 'later' }))).toBe(false);
   });
-  it('keeps the platform code lane closed and every other lane open', () => {
+  it('keeps the platform code lane closed until the studio opens it, and every other lane open', () => {
     expect(closedLane({ folder: 'platform', lane: 'code' })).toBe(true);
+    expect(closedLane({ folder: 'platform', lane: 'code' }, false)).toBe(true);
     expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code' }))).toBe(false);
     expect(runnable(card({ id: 'a', folder: 'seed-1', lane: 'code' }))).toBe(true);
     expect(runnable(card({ id: 'a', folder: 'seed-1', lane: 'config' }))).toBe(true);
+  });
+
+  it('runs a platform code card once studio_state.platform_lane_open is set, with every other rule still applied', () => {
+    expect(closedLane({ folder: 'platform', lane: 'code' }, true)).toBe(false);
+    expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code' }), true)).toBe(true);
+    expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code', source: 'community' }), true)).toBe(false);
+    expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code', stage: 'voted' }), true)).toBe(false);
+    expect(runnable(card({ id: 'a', folder: 'platform', lane: 'code', director_stance: 'vetoed' }), true)).toBe(false);
+    expect(runnable(card({ id: 'a', folder: 'seed-1', lane: 'config' }), true)).toBe(true);
   });
   it('leaves money to the throttle: an estimate above any pool is still runnable', () => {
     expect(runnable(card({ id: 'a', estimate_usd: 1_000_000 }))).toBe(true);
@@ -67,6 +77,7 @@ describe('runnableInOrder', () => {
       card({ id: 'parked', priority: 0, horizon: 'later' }),
     ];
     expect(runnableInOrder(cards).map((c) => c.id)).toEqual(['early', 'late']);
+    expect(runnableInOrder(cards, true).map((c) => c.id)).toEqual(['site', 'early', 'late']);
     expect(runnableInOrder([])).toEqual([]);
   });
 });

@@ -9,10 +9,14 @@
 # runs no card code comes before the first step that does.
 #   scans   secret-scan, banned-phrases, runtime-token-deny. Bash and one node call; nothing is
 #           installed and no card code runs.
-#   build   the folder's build, then runtime-token-deny over what it wrote (runtime-token-deny-dist).
-#           The build config, package files and build scripts are kernel, so no card code runs.
-#   checks  typecheck and tests: the seed-1 code lane, or the dispatcher, supabase and site packages
-#           for platform. Card code runs here. The seed-1 config lane has no checks.
+#   build   the folder's build, then runtime-token-deny over what it wrote (runtime-token-deny-dist)
+#           and the payment-host scan (payment-host-scan.mjs). For platform that is the public site,
+#           built with the public values its netlify.toml sets, as Netlify builds it, whose build may
+#           carry no payment address but the Payment Link; then the board's own site. For seed-1 the
+#           game's build may carry none. The build config, package files and build scripts are
+#           kernel, so no card code runs.
+#   checks  typecheck and tests: the seed-1 code lane, or the dispatcher, supabase, site and board
+#           packages for platform. Card code runs here. The seed-1 config lane has no checks.
 #   bot     the headless bot, seed-1 only. It imports the card's sim code, so it runs last. Its
 #           verdict is read from a report file with a random name in this run's scratch folder, not
 #           from its output.
@@ -103,6 +107,7 @@ package_dir() {
     @backseat/dispatcher) echo "platform/dispatcher" ;;
     @backseat/supabase) echo "platform/supabase" ;;
     @backseat/site) echo "platform/site" ;;
+    @backseat/board) echo "platform/board" ;;
   esac
 }
 require_package() {
@@ -133,13 +138,36 @@ phase_scans() {
   run_step runtime-token-deny "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" --folder "$FOLDER"
 }
 
+# The public build values a netlify.toml sets for its site ([build.environment] VITE_* lines with a
+# quoted value), one NAME=value per line. A missing file sets none.
+netlify_build_env() {
+  [ -f "$1" ] || return 0
+  sed -n 's/^[[:space:]]*\(VITE_[A-Z0-9_]*\)[[:space:]]*=[[:space:]]*"\([^"[:space:]]*\)"[[:space:]]*$/\1=\2/p' "$1"
+}
+
+# A package's build with its site's public build values, as Netlify runs it.
+# $1 step name, $2 package, $3 netlify.toml
+netlify_build_step() {
+  local line
+  local vars=()
+  while IFS= read -r line; do
+    [ -n "$line" ] && vars+=("$line")
+  done < <(netlify_build_env "$3")
+  require_package "$2" "$1"
+  run_step "$1" "$2" env ${vars[@]+"${vars[@]}"} pnpm --filter "$2" build
+}
+
 phase_build() {
   if [ "$FOLDER" = seed-1 ]; then
     pnpm_step build @backseat/seed-1 build
     run_step runtime-token-deny-dist "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" "$REPO_ROOT/seed-1/dist"
+    run_step payment-host-scan "" node "$GATE_DIR/payment-host-scan.mjs" "$REPO_ROOT/seed-1/dist"
   else
-    pnpm_step build @backseat/site build
+    netlify_build_step build @backseat/site "$REPO_ROOT/platform/site/netlify.toml"
     run_step runtime-token-deny-dist "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" "$REPO_ROOT/platform/site/dist"
+    run_step payment-host-scan "" node "$GATE_DIR/payment-host-scan.mjs" --allow-from "$REPO_ROOT/platform/site/netlify.toml" "$REPO_ROOT/platform/site/dist"
+    netlify_build_step build @backseat/board "$REPO_ROOT/platform/board/netlify.toml"
+    run_step runtime-token-deny-dist "" bash "$GATE_DIR/runtime-token-deny.sh" --repo-root "$REPO_ROOT" "$REPO_ROOT/platform/board/dist"
   fi
 }
 
@@ -150,10 +178,10 @@ phase_checks() {
     pnpm_step typecheck @backseat/seed-1 typecheck
     pnpm_step tests @backseat/seed-1 test
   else
-    for pkg in @backseat/dispatcher @backseat/supabase @backseat/site; do
+    for pkg in @backseat/dispatcher @backseat/supabase @backseat/site @backseat/board; do
       pnpm_step typecheck "$pkg" typecheck
     done
-    for pkg in @backseat/dispatcher @backseat/supabase @backseat/site; do
+    for pkg in @backseat/dispatcher @backseat/supabase @backseat/site @backseat/board; do
       pnpm_step tests "$pkg" test
     done
   fi
