@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded by `mac-host.md` for now: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), and the dispatcher runs unattended on the board's Mac until the studio has a server. This spec and its scripts are kept: the planned Google Cloud server reuses the Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud).
+
 ## Problem
 
 The dispatcher runs on the founder's Mac in attended mode. A public studio needs it running around the clock on the studio's API key, spending only funded money, restarting on its own, and telling the board when it stops or a card fails.

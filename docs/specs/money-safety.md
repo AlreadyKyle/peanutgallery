@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Oracle is dropped (PLAN.md §10 decision 38, 23 September 2026). Until the studio has a server the jobs run on the board's Mac under launchd, and the nightly backup there is `platform/ops/mac/backup-mac.sh`, written to a folder the board chooses rather than an Oracle bucket (`mac-host.md`). The server's `backup.sh`, units and timers are kept for the planned Google Cloud server, whose backup store is still to be chosen.
+
 ## Problem
 
 The money database has no backup, and Supabase Free takes none. Nothing reconciles the books with Stripe, so a webhook the studio missed, a fee Stripe kept or a dispute Stripe closed as won goes unseen, and the Console credit purchase has no formula. Money rows can still be updated or deleted by anyone holding the service key. A paid card is rejected when the gate never starts, is cancelled, or fails on a main that was already red, and after the merge when Netlify does not answer. `oracle-launch.sh` asks for twice Oracle's Always Free Ampere allowance. Nothing warns the board before the database or the Actions minutes run out.
@@ -73,9 +75,9 @@ It writes one `controller_runs` row and, on any mismatch or a dispute that needs
 - [ ] Production: the three migrations applied, `ledger_identity()` holds, the anon negative test passes (waits on: the board's allow).
 - [ ] The backup login's grants read back as the tests show, and its password set; `BACKUP_SKIP_AUTH=1` only if the auth read comes back false (waits on: the board's allow).
 - [ ] The migration history repaired and `migration list` in step (waits on: the board's allow and the database password).
-- [ ] The instance launched at 2 OCPUs and 12 GB (waits on: the board's Oracle sign-in).
-- [ ] The bucket reads back `"versioning": "Enabled"` (waits on: the board's Oracle sign-in).
-- [ ] The first nightly backup and a forced restore check PASS on the VPS, and an object in the bucket (waits on: the age key, the bucket and requests, the backup healthcheck, the instance).
+- [ ] ~~The instance launched at 2 OCPUs and 12 GB (waits on: the board's Oracle sign-in).~~ Superseded by `mac-host.md`: Oracle is dropped.
+- [ ] ~~The bucket reads back `"versioning": "Enabled"` (waits on: the board's Oracle sign-in).~~ Superseded by `mac-host.md`: the Mac's backups go to a folder the board chooses.
+- [ ] The first nightly backup PASS and an object stored (on the Mac host: `mac-host.md`; waits on the age key, the backup folder and the backup healthcheck).
 - [ ] The Controller's first dry run, then its first run, PASS against production Stripe (waits on: `STRIPE_READ_KEY`, and the board told what it reads).
 - [ ] The quota check's first run PASS (waits on: the dispatcher token's Plan read).
 - [ ] The backups repository's first run uploads an object (waits on: the board's allow to create the repository and its secrets).
@@ -100,9 +102,9 @@ Pause the studio from /board first and make sure no dispatcher is running on the
 2. **Read back the backup login:** `select rolcanlogin, rolbypassrls, rolconfig from pg_roles where rolname = 'peanutgallery_backup'` and `select has_table_privilege('peanutgallery_backup', 'auth.users', 'select')`. Quote both.
 3. **Set its password** once through the Management API (`alter role peanutgallery_backup with password '<new random>'`, generated locally and never printed), and put the Session pooler string in `.env` as `BACKUP_DB_URL=` (`platform/ops/README.md`, Backups and the Controller, step 4). If step 2 shows no auth access, put `BACKUP_SKIP_AUTH=1` in `.env` and in the backups repository's variables; the owner's password is never put in any backup setting.
 4. **Repair the migration history** once (`platform/ops/README.md`, Migration history): `npx supabase@2.117.0 link --project-ref lyxndueoeisyqzewflpu`, then `npx supabase@2.117.0 migration repair --status applied` with every applied version, `20260914000000` to `20260923000020`, then `npx supabase@2.117.0 migration list --linked`, quoted. It needs the database password, which the board puts in the Mac's `.env` as `SUPABASE_DB_PASSWORD=` and nowhere else. From then on migrations go through `supabase db push`, which is a change to the ROADMAP's standing fact on production changes for the docs to record.
-5. **After the board's Oracle sign-in:** `platform/ops/oracle-launch.sh` (2 OCPUs, 12 GB), then the bucket, versioned, and the two write-only requests (runbook steps 1 and 2), with the expiry the board chooses; quote the bucket's `versioning` read-back.
-6. **After the board sends the age public key and creates `STRIPE_READ_KEY` and the backup healthcheck:** tell the board exactly what the Controller reads (the runbook's list), then `platform/ops/make-jobs-env.sh`, upload the three files, `provision.sh`, and the first runs of runbook step 7, quoted here.
-7. **The backups repository:** create it private, add its secrets and variables, copy the template, run it once and quote the object it uploaded.
+5. ~~**After the board's Oracle sign-in:** `platform/ops/oracle-launch.sh` (2 OCPUs, 12 GB), then the bucket, versioned, and the two write-only requests (runbook steps 1 and 2), with the expiry the board chooses; quote the bucket's `versioning` read-back.~~ Superseded by `mac-host.md`: Oracle is dropped.
+6. **After the board sends the age public key and creates `STRIPE_READ_KEY` and the backup healthcheck:** tell the board exactly what the Controller reads (the runbook's list), then, on the Mac host (`mac-host.md`), `JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac controller quota`, `platform/ops/mac/install.sh`, and the first runs with `run-job.sh <job> --now`, quoted in `mac-host.md`.
+7. **The backups repository** (waits on a new store: its template uploads through an Oracle pre-authenticated request, and Oracle is dropped): create it private, add its secrets and variables, copy the template, run it once and quote the object it uploaded.
 8. The Mac's attended dispatcher takes the infrastructure-stop change at its next start; the VPS takes it at its first `provision.sh` or, after the cutover, at the next `deploy.sh`.
 
 ## Evidence

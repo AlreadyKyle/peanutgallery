@@ -11,9 +11,11 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
-import { JOB_KEYS } from '../jobs/lib.mjs';
-// The jobs' own tests (the Controller, the quota check and their env rules) run with these.
+import { VPS_JOBS } from '../jobs/lib.mjs';
+// The jobs' own tests (the Controller, the quota check and their env rules) and the Mac host's
+// (docs/specs/mac-host.md) run with these.
 import './jobs.test.mjs';
+import './mac.test.mjs';
 
 const OPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(OPS_DIR, '..', '..');
@@ -409,7 +411,22 @@ const SHELL_SCRIPTS = readdirSync(OPS_DIR, { recursive: true }).filter((name) =>
 
 describe('shell scripts', () => {
   test('parse with bash -n (the entrypoint with sh -n too)', () => {
-    assert.deepEqual(SHELL_SCRIPTS.sort(), ['backup/backup.sh', 'deploy.sh', 'dispatcher-entrypoint.sh', 'make-dispatcher-env.sh', 'make-jobs-env.sh', 'oracle-launch.sh', 'provision.sh']);
+    assert.deepEqual(SHELL_SCRIPTS.sort(), [
+      'backup/backup.sh',
+      'deploy.sh',
+      'dispatcher-entrypoint.sh',
+      'mac/backup-mac.sh',
+      'mac/deploy.sh',
+      'mac/install.sh',
+      'mac/lib.sh',
+      'mac/run-dispatcher.sh',
+      'mac/run-job.sh',
+      'mac/uninstall.sh',
+      'make-dispatcher-env.sh',
+      'make-jobs-env.sh',
+      'oracle-launch.sh',
+      'provision.sh',
+    ]);
     for (const script of SHELL_SCRIPTS) {
       const run = spawnSync('bash', ['-n', path.join(OPS_DIR, script)], { encoding: 'utf8' });
       assert.equal(run.status, 0, `${script}: ${run.stderr}`);
@@ -983,7 +1000,7 @@ describe('the jobs on the VPS', () => {
     assert.match(read('platform/ops/provision.sh'), /unit_text "\$sha" backup\/backup\.sh > "\$text"\n {2}install_file "\$JOB_LIB\/backup\.sh" 0755 < "\$text"/);
     assert.match(read('platform/ops/deploy.sh'), /unit_text "\$new" backup\/backup\.sh > "\$WORK\/backup\.sh"/);
     assert.match(read('platform/ops/provision.sh'), /^ {2}install_units\n {2}install_jobs\n/m);
-    assert.deepEqual([...listed('provision.sh', 'JOBS')].sort(), Object.keys(JOB_KEYS).sort());
+    assert.deepEqual([...listed('provision.sh', 'JOBS')].sort(), [...VPS_JOBS].sort());
     assert.match(read('platform/ops/provision.sh'), /for pkg in git ufw unattended-upgrades curl jq ca-certificates age; do/);
     assert.match(read('platform/ops/provision.sh'), /^SUPABASE_CLI_VERSION=\d+\.\d+\.\d+$/m);
   });

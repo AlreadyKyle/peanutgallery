@@ -6,7 +6,7 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to the VPS. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 4, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
+- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on the board's Mac. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`docs/BOARD-SETUP.md` step 4, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
 - **Go live** is the board pressing Go live at /board, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
 
 ## What "live" means
@@ -15,9 +15,9 @@ These are two different states.
    - The three test runs and the board's directives D1 to D3 (the unlock list, save and resume, the game shell) shipped through the dispatcher (`docs/specs/week1-runs.md`).
    - A real contribution from a player, never the founder's, is credited on the meter through `checkout.session.completed` or `charge.updated`.
 2. **The dispatcher runs unattended.**
-   - It runs on the Oracle instance, restarts on its own, holds the dispatcher lease, and alerts the board through healthchecks.io and ntfy, with a test alert received on the board's phone.
-   - Card sessions run as Claude Managed Agents sessions: no agent-written code runs on the VPS, the repository is mounted read-only, and the dispatcher applies and checks the returned patch itself (PLAN.md §10 decision 25).
-   - Every dispatcher secret and id is present, and provisioning and startup check it: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`), `GITHUB_TOKEN` (the VPS's own fine-grained token, never the Mac's), `GITHUB_READ_TOKEN` (contents read only; a write attempt with it answers 403), `GITHUB_REPO`, `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID_SEED`, `NETLIFY_SITE_ID_PLATFORM`, `STUDIO_ANTHROPIC_API_KEY` (the studio organisation's key, never the founder's), `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION`, `MANAGED_ENVIRONMENT_ID`, `MODEL_BUILDER`, `MODEL_DIRECTOR`, `PRICE_TABLE_JSON`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`.
+   - It runs on the board's Mac under launchd until the studio has a server (PLAN.md §10 decision 38, `specs/mac-host.md`), restarts on its own, holds the dispatcher lease, and alerts the board through healthchecks.io and ntfy, with a test alert received on the board's phone.
+   - Card sessions run as Claude Managed Agents sessions: no agent-written code runs on the dispatcher's host, the repository is mounted read-only, and the dispatcher applies and checks the returned patch itself (PLAN.md §10 decision 25).
+   - Every dispatcher secret and id is present, and provisioning and startup check it: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`), `GITHUB_TOKEN` (the host's own fine-grained token, never the attended checkout's), `GITHUB_READ_TOKEN` (contents read only; a write attempt with it answers 403), `GITHUB_REPO`, `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID_SEED`, `NETLIFY_SITE_ID_PLATFORM`, `STUDIO_ANTHROPIC_API_KEY` (the studio organisation's key, never the founder's), `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION`, `MANAGED_ENVIRONMENT_ID`, `MODEL_BUILDER`, `MODEL_DIRECTOR`, `PRICE_TABLE_JSON`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`.
    - Console credit bought from a Stripe payout is recorded at /board, and the unattended startup probe passes on it.
    - A card funded by a player builds with no one at the keyboard, billed to the studio.
 3. **The money is safe.** Refunds and disputes reverse cleanly. Credit above $50 a day per payer (keyed on the card fingerprint), or above the studio-wide daily limit, is held for 14 days. A refund of money already spent takes the shortfall from unearmarked money first and alerts the board.
@@ -34,7 +34,7 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 ## The order from here
 
 1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
-2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Oracle sign-in, after which the instance is launched by script.
+2. **Board steps 1 to 3** in `docs/BOARD-SETUP.md`: the hello@ mailbox; healthchecks.io, the ntfy subscription and the GitHub tokens; the Mac made ready as the host, with the backup key and folder.
 3. **Board steps 4 and 5**: the call on how the first player arrives, and contributions open with the studio paused.
 4. **Board steps 6 and 7**: the first Stripe payout, then Console credit bought from it and recorded at /board.
 5. **Board step 8, the cutover and soak.** Closes criterion 2 once a player's card builds unattended.
@@ -90,9 +90,9 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/week1-runs.md` | built | criterion 6, a player's contribution credited (criterion 1 above) |
 | `specs/live-cut.md` | built | criterion 7, an unattended build, at the cutover |
 | `specs/unattended-mode.md` | built | the unattended probe and a funded card with no board session, at the cutover |
-| `specs/vps.md` | built | the cutover and soak (board step 8) |
-| `specs/ops-separation.md` | built | the production steps, which need the VPS |
-| `specs/oracle-launch.md` | built | the live run and a rerun, after the board signs in with `oci session authenticate` |
+| `specs/vps.md` | built | superseded by `specs/mac-host.md` for now (PLAN.md §10 decision 38); a server's cutover waits on the Google Cloud move in the backlog |
+| `specs/ops-separation.md` | built | the production steps, which need a server; the Mac host has its own (`specs/mac-host.md`) |
+| `specs/oracle-launch.md` | built | none: Oracle is dropped (PLAN.md §10 decision 38); the script is kept, unrun |
 | `specs/stripe-late-fee.md` | built | `charge.updated` crediting a fresh payment, on the next real contribution |
 | `specs/next-cards.md` | built | a real contribution moving a card's bar |
 | `specs/stale-tab.md` | built | a tab held open across a site deploy reloads into the new build |
@@ -102,7 +102,8 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/sweep-22-sep.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/carry-over.md` | built | the production steps: migration `20260923000200`, the role re-seed, and the live check on production |
 | `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
-| `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the VPS jobs' first runs and the backups repository |
+| `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the jobs' first runs (on the Mac host, `specs/mac-host.md`) and the backups repository, which waits on a new store |
+| `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
 
 ### Draft
@@ -117,7 +118,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
   - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
   - Supabase project `lyxndueoeisyqzewflpu`.
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
-  - The dispatcher runs attended on the founder's Mac until the cutover.
+  - The dispatcher runs attended on the founder's Mac until the cutover, and after it unattended on the board's Mac under launchd, from `~/peanutgallery-host`, until the studio has a server (PLAN.md §10 decision 38).
 - **Money.** The pool holds customer money only. Work before the cutover runs attended on the founder's Max subscription, billed to the founder. There is no founding budget. Console credit is bought only from Stripe payouts, never with the founder's money. Everything the studio runs on is free.
 - **Models.** Every role that runs is on `claude-opus-5-5` (`MODEL_BUILDER` and `MODEL_DIRECTOR`); the Host keeps `claude-haiku-4-5` while it does not run (PLAN.md §10 decision 36).
 - **Claude Code on the Mac.** Attended sessions need 2.1.280 or newer, because 2.1.139 refuses `claude-opus-5-5`. The Mac runs 2.1.280, and the attended `sandbox:check --positive` passes on it (`specs/carry-over.md`).

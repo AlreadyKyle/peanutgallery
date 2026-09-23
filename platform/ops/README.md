@@ -2,9 +2,11 @@
 
 The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). Each card's agent runs as a Claude Managed Agents session in a container Anthropic hosts (`docs/specs/launch-managed.md`): the VPS holds the session's event stream, meters it, applies the patch the agent hands back, and drives the gate, merge and deploy. No agent-written code runs on the VPS. This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
+**Until the studio has a server, the host is the board's Mac** (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`): the dispatcher and the daily jobs run there under launchd, and [The Mac host](#the-mac-host) at the end of this page is its runbook. Oracle is dropped. The server sections are kept for the planned Google Cloud server, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud); the Oracle-specific parts (the instance launcher, idle reclaim, the bucket and its pre-authenticated requests) are kept for the record and are not run.
+
 ## What runs where
 
-- **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto: free, in Canada, 2 cores and 12 GB of memory, the Always Free limit (`docs/specs/money-safety.md`). Everything below is the same on any Ubuntu 24.04 host.
+- **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The planned server is a Google Cloud Compute Engine e2-micro (1 GB of memory, so the container's memory limit drops with it); the Oracle Cloud Always Free Ampere shape this page was written for, 2 cores and 12 GB, is dropped. Everything below is the same on any Ubuntu 24.04 host.
 - **Two clones and a worktree folder** (`docs/specs/ops-separation.md`). The dispatcher runs as uid 10001 and writes agent-supplied files into card worktrees, so nothing uid 10001 can write is ever run by root or loaded as the dispatcher's code.
 
   | Host path | Owner | In the container | Holds |
@@ -224,6 +226,8 @@ What uid 10001 can and cannot change (`docs/specs/ops-separation.md`):
 
 ## Oracle idle reclaim
 
+Kept for the record: Oracle is dropped (`docs/PLAN.md` §10 decision 38), and nothing here is run.
+
 Oracle stops an Always Free instance whose CPU (at the 95th percentile), network and memory all stay under 20% for 7 days, and the dispatcher is idle by design between funded cards. When that happens the healthchecks.io checks alert the board.
 
 **Recovery needs no laptop.** On a phone, sign in at cloud.oracle.com, then Compute, Instances, `peanutgallery-dispatcher`, Start. `dispatcher.service` and the job timers are enabled, so the dispatcher comes back on boot, and each timer's `Persistent=` runs the backup, the Controller or the quota check it missed while the instance was stopped. If Oracle answers that it has no capacity, try again later. From the Mac, `platform/ops/oracle-launch.sh` after `oci session authenticate` does the same and retries capacity by itself.
@@ -256,6 +260,8 @@ Only these requests, all GET, with `STRIPE_READ_KEY`, the restricted `rk_live_` 
 It holds no key that could re-send an event, so a missed event is named in the alert with the fix: resend it from the Stripe Dashboard (Developers, Events) while it is under 30 days old.
 
 ### Set them up
+
+On the board's Mac, use [The Mac host](#the-mac-host) instead: the Oracle bucket and its requests below are dropped with Oracle, and a server's store waits on the Google Cloud move.
 
 With `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` done on the Mac, and the tenancy's OCID as `TENANCY` (the `tenancy=` line of `~/.oci/config`):
 
@@ -320,3 +326,168 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
 ## Migration history
 
 Production's migrations were applied through the Management API query endpoint, which records nothing in `supabase_migrations.schema_migrations`. Once, with the board's allow, `npx supabase@2.117.0 migration repair --status applied <each applied version> --linked` (after `npx supabase link --project-ref lyxndueoeisyqzewflpu`) records every applied file, and `npx supabase migration list --linked` must then show local and remote in step. Later migrations can then go through `supabase db push`. The nightly dump carries the history (`history_schema.sql`, `history_data.sql`), so a restore keeps it.
+
+## The Mac host
+
+Until the studio has a server, the dispatcher runs unattended on the board's Mac, a MacBook Pro on Apple Silicon kept plugged in, under launchd (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). The daily jobs run there too. It keeps the server's rules where a single-user Mac can: the dispatcher runs from a code clone it cannot write, git state lives in a separate work clone, card worktrees sit outside both, every git call runs with hooks and fsmonitor off, a deploy needs the gate green and the board's confirmed sha, and no agent-written code runs on the Mac at all (card sessions are Managed Agents sessions). What is weaker is at the end of this section.
+
+### What runs where
+
+Everything lives in `~/peanutgallery-host`, outside the board's own checkout, which the board keeps using for attended work and for running these scripts.
+
+| Path | Holds |
+|---|---|
+| `code/` | the code clone: a clone of main, its `node_modules`, the pnpm store (`.pnpm-store`) and the `.env` the dispatcher reads. `chmod -R a-w` after every install, so the dispatcher's `DISPATCHER_CODE_READONLY=required` check passes; only `install.sh` and `deploy.sh` make it writable, and only while they run. |
+| `work/` | the work clone (`DISPATCHER_REPO_ROOT`): the git state the dispatcher fetches, pushes and adds worktrees from. Nothing runs from it. |
+| `work-worktrees/` | card worktrees (`DISPATCHER_WORKTREE_ROOT`), where checked patches are applied and committed. |
+| `env/` | 0700: `dispatcher.env` (written by `make-dispatcher-env.sh`), `controller.env`, `quota.env` and `backup-mac.env` (written by `make-jobs-env.sh`), and `ntfy.url`. Each file 0600. |
+| `state/` | the dispatcher's recent starts and failures in a row, each job's last run date, and the backup's run folder while it runs. |
+| `logs/` | `dispatcher.log` (rotated at 10 MB, three kept), one log per job (rotated at 5 MB), and launchd's own small logs. |
+
+| LaunchAgent (`~/Library/LaunchAgents`) | Runs | When |
+|---|---|---|
+| `studio.peanutgallery.dispatcher` | `code/platform/ops/mac/run-dispatcher.sh` | at login, and again after any exit but 0 |
+| `studio.peanutgallery.backup` | `run-job.sh backup`: `backup-mac.sh` | once per UTC day at 06:17, or at the first wake after it |
+| `studio.peanutgallery.controller` | `run-job.sh controller`: `jobs/main.mjs controller` | once per UTC day at 07:07, or at the first wake after it |
+| `studio.peanutgallery.quota` | `run-job.sh quota`: `jobs/main.mjs quota` | once per UTC day at 07:37, or at the first wake after it |
+
+launchd's calendar is in local time, which moves with daylight saving, so each job's LaunchAgent wakes `run-job.sh` every hour at the job's minute and the script runs the job once per UTC day at its UTC time, the same times as the server's timers. A wake missed while the Mac slept runs as soon as it wakes, as the timers' `Persistent=` makes up a run at boot. A job that fails posts "Peanut Gallery job <job> failed on <host>" to ntfy and is tried again the next UTC day.
+
+| File in `platform/ops/mac` | Does |
+|---|---|
+| `install.sh` | creates the layout, clones both clones with the env file's token, installs `node_modules`, copies `env/dispatcher.env` to `code/.env` and checks the dispatcher's dotenv reads it as written, makes the code clone read-only and runs the dispatcher's read-only check, writes and loads the LaunchAgents; `--start` is the cutover. A second run reports `install: done: 0 change(s)`. It prints key names and paths, never a value. |
+| `deploy.sh` | the Mac's `platform/ops/deploy.sh`, with the same checks |
+| `uninstall.sh` | unloads and removes the four LaunchAgents, leaving `~/peanutgallery-host` |
+| `run-dispatcher.sh` | the dispatcher's wrapper: the entrypoint's checks, `caffeinate`, the exit codes and restarts |
+| `run-job.sh` | the jobs' wrapper: the UTC schedule, the env file checks, the ntfy alert |
+| `backup-mac.sh` | the nightly backup with Homebrew's libpq, to the board's backup folder |
+| `studio.peanutgallery.dispatcher.plist`, `studio.peanutgallery.job.plist` | the LaunchAgent templates `install.sh` fills in |
+| `lib.sh` | what `install.sh`, `deploy.sh` and `uninstall.sh` share, including the server's `deploy.sh` checks |
+
+### Prepare the Mac (the board, once)
+
+These are `docs/BOARD-SETUP.md` step 3.
+
+1. **Power.** Keep it plugged in and the lid open: `caffeinate -i -s`, which the wrapper holds, keeps a Mac on power from sleeping, but closing the lid sleeps it anyway. In System Settings, Battery, Options, turn on "Prevent automatic sleeping on power adapter when the display is off". The display may sleep.
+2. **Restarts.** In System Settings, General, Software Update, Automatic updates, turn off installing macOS updates, so the Mac never restarts on its own; install them by hand while the studio is paused. With FileVault on, a restart or a power cut stops at the login screen and nothing runs until the board logs in: healthchecks.io emails when the dispatcher goes quiet.
+3. **Tools.** `brew install libpq age` (Homebrew's libpq has `pg_dump`, `pg_dumpall` and `psql`; `backup-mac.sh` uses them from `/opt/homebrew/opt/libpq/bin`). Node 22 or later and pnpm 11.0.9 are already on the Mac.
+4. **The backup folder.** Install Google Drive for desktop, sign in, and create a folder `peanutgallery-backups` in My Drive. Its path, something like `~/Library/CloudStorage/GoogleDrive-<account>/My Drive/peanutgallery-backups` written out in full, goes in `.env` as `BACKUP_DIR=`. Drive copies each backup off the Mac.
+5. **The age key.** `age-keygen -o ~/Desktop/peanutgallery-backup-key.txt`. The `# public key: age1...` line goes in `.env` as `BACKUP_AGE_RECIPIENT=`. Keep the file itself offline (a USB stick kept apart, and a copy in the board's password manager), then delete it from the Mac: only that key opens a backup.
+6. **The backup check.** At healthchecks.io, a check named `peanutgallery backup` with a period of 1 day and a grace of 12 hours (the Mac may make a run up at its next wake). Its ping URL goes in `.env.vps` as `BACKUP_HEALTHCHECK_URL=`.
+
+### Install
+
+From the repository root of the board's checkout of reviewed main, with the values in `.env.vps` exported (`VPS_GITHUB_TOKEN` is the host's own fine-grained token, `GITHUB_READ_TOKEN` the read-only one, `HEALTHCHECK_URL` the dispatcher check, `NTFY_TOPIC_URL`, `BACKUP_HEALTHCHECK_URL`):
+
+```sh
+mkdir -p ~/peanutgallery-host/env && chmod 700 ~/peanutgallery-host ~/peanutgallery-host/env
+platform/ops/make-dispatcher-env.sh ~/peanutgallery-host/env/dispatcher.env
+JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac controller quota
+platform/ops/mac/install.sh
+platform/ops/mac/install.sh
+```
+
+`make-dispatcher-env.sh` writes the same file as for a server (`KEY=value`, no quotes, `PRICE_TABLE_JSON` on one line, `AGENT_MODE=unattended`); the dispatcher's dotenv reads every line of it as written, which `install.sh` checks. `install.sh` refuses the env file on the same rules `provision.sh` uses. The second run must end `install: done: 0 change(s)`. The dispatcher is installed and disabled, so a login does not start it: starting it is the cutover.
+
+The first job runs, by hand, quoted in `docs/specs/mac-host.md`:
+
+```sh
+node --env-file="$HOME/peanutgallery-host/env/controller.env" ~/peanutgallery-host/code/platform/ops/jobs/main.mjs controller --dry-run
+~/peanutgallery-host/code/platform/ops/mac/run-job.sh quota --now; tail -n 5 ~/peanutgallery-host/logs/quota.log
+~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log
+```
+
+Each job's first line must read `PASS:`, and the backup must end `backup: done: peanutgallery-<time>.tar.age` with the file in the backup folder. Run the Controller's dry run only after the board has been told what it reads ([What the Controller reads from Stripe](#what-the-controller-reads-from-stripe)).
+
+### The cutover on the Mac
+
+`docs/BOARD-SETUP.md` step 8. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not be started while the host runs (it would wait on the lease, and its attended mode would disagree with /board's).
+
+1. **Pause** from /board.
+2. **Stop the attended dispatcher** (Ctrl-C in its terminal) and confirm no `dispatcher` process is left: `pgrep -fl 'src/main.ts'` prints nothing.
+3. **The managed agent and environment:** `pnpm --filter @backseat/dispatcher managed:apply` in the board's checkout; put the printed ids in `.env`, then rewrite the env file and run the install again (Install, above). It must end `0 change(s)` on its second run.
+4. **Set the agent mode to unattended** at /board (second factor).
+5. **The toolchain check,** once, as on a server, from the code clone:
+   ```sh
+   cd ~/peanutgallery-host/code/platform/dispatcher && env -i PATH="$PATH" HOME="$HOME" TSX_DISABLE_CACHE=1 \
+     DISPATCHER_CODE_ROOT="$(cd ../.. && pwd -P)" DISPATCHER_REPO_ROOT="$HOME/peanutgallery-host/work" \
+     DISPATCHER_WORKTREE_ROOT="$HOME/peanutgallery-host/work-worktrees" node --import tsx src/probe.ts --toolchain; cd -
+   ```
+   The first line must read `PASS: toolchain`.
+6. **Start it:** `platform/ops/mac/install.sh --start`. It refuses unless /board shows unattended, then starts the dispatcher and waits for this start's `code root is read-only` and `startup probe passed` lines, which it prints. Quote them.
+7. **Heartbeat.** /board shows the dispatcher seen under 3 minutes ago; the healthchecks.io check is green.
+8. **The alert path:** `curl -fsS -H 'Title: Peanut Gallery test' -d "Test alert from the Mac host" "$(head -n 1 ~/peanutgallery-host/env/ntfy.url)"`; the board's phone shows it.
+9. **Resume** from /board.
+10. **Restart checks.** `launchctl kickstart -k gui/$(id -u)/studio.peanutgallery.dispatcher`, then as the service role `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 2 minutes. Then `pkill -9 -f 'src/main.ts'`: the wrapper sees the exit, waits 30 seconds and exits, launchd starts it again, and the log shows `failure 1 in a row`. Then log out and back in (or restart and log in): the dispatcher is running again with no command.
+11. **Liveness alert.** `launchctl bootout gui/$(id -u)/studio.peanutgallery.dispatcher` and wait out the check's grace: healthchecks.io emails the board. Start it again with `platform/ops/mac/install.sh --start`.
+12. **Soak for 24 hours** with the lid open and no restart loop (`grep -c 'failure' ~/peanutgallery-host/logs/dispatcher.log`) and no unexpected alert. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
+
+### Deploy an update
+
+1. Merge to main as usual (the gate green on the head sha).
+2. Pause from /board and let any building card finish.
+3. In the board's checkout: `git switch main && git pull --ff-only`, and read the diff of `platform/ops/mac/deploy.sh` since the last deploy. The script that runs is this checkout's, never the copy in the code clone it moves.
+4. `platform/ops/mac/deploy.sh`. It refuses unless the studio is paused with no card building or gated and the dispatcher's LaunchAgent is loaded; refuses a dirty or altered code clone as the server's does; fetches main by the repository's URL with a one-off token header; checks the target's `gate` check concluded `success`; prints the commits it adds and removes and a diff stat, and asks for the first 12 characters of the target sha (or takes `--confirm <them>`). Then it makes the clone writable, fast-forwards it, runs `pnpm install --frozen-lockfile` with no secret in its environment, makes it read-only again, runs the read-only, clone and dotenv checks, rewrites any LaunchAgent whose template changed, restarts the dispatcher and waits for this start's probe lines. On any exit the clone is made read-only again.
+5. Resume from /board.
+
+### Roll back
+
+Pause, then from the board's checkout `platform/ops/mac/deploy.sh --ref <full sha>` (review, then again with `--confirm <first 12>`). The sha must be on `origin/main` and have the Mac host's files; the gate and review apply as for a deploy. Resume, and fix forward on main: the next plain `deploy.sh` returns the clone to main. If `deploy.sh` refuses a dirty code clone, do not clean it by hand: find out how it changed, then move it aside (`chmod -R u+w ~/peanutgallery-host/code && mv ~/peanutgallery-host/code ~/peanutgallery-code.suspect`) and run `install.sh`, which clones it fresh.
+
+### Rotate a key
+
+Pause from /board. Change the value in `~/peanutgallery-host/env/dispatcher.env` (or write it again with `make-dispatcher-env.sh`), run `platform/ops/mac/install.sh` (it copies it into the code clone and reports 1 change), then `launchctl kickstart -k gui/$(id -u)/studio.peanutgallery.dispatcher` and check `startup probe passed` in the log and the heartbeat. Resume, and only then revoke the old key. The keys are those of [Rotate a key](#rotate-a-key) above. A job's key changes in its own env file, written again with `make-jobs-env.sh`; the next run reads it.
+
+### Read logs
+
+```sh
+tail -f ~/peanutgallery-host/logs/dispatcher.log                                   # follow
+grep -v '"level":"info"' ~/peanutgallery-host/logs/dispatcher.log | tail -n 50    # warnings and errors
+grep '^run-dispatcher:' ~/peanutgallery-host/logs/dispatcher.log | tail            # starts, stops, restarts
+tail -n 20 ~/peanutgallery-host/logs/backup.log ~/peanutgallery-host/logs/controller.log ~/peanutgallery-host/logs/quota.log
+launchctl print gui/$(id -u)/studio.peanutgallery.dispatcher | grep -E 'state|pid|last exit'
+```
+
+### Exit codes and restarts
+
+- **Exit 78**, or a failed check in the wrapper (no code clone, no `node_modules`, no `.env`, a work clone without an https origin), is a startup failure no restart can fix. The wrapper posts "Peanut Gallery dispatcher stopped on <host>: fatal startup error" to ntfy and exits 0, which launchd does not restart. Fix the cause (the last lines of `dispatcher.log` say why), then `platform/ops/mac/install.sh --start`.
+- **Any other exit** waits 30 seconds, doubling at each failure in a row to 30 minutes at the seventh, then exits 1 and launchd starts it again; a run of 10 minutes or more starts the count again. The ninth start within 6 hours is refused with an ntfy post, as on a server. After fixing the cause, `platform/ops/mac/install.sh --start` clears the counts and starts it.
+- **A stop** (`launchctl bootout`, `kickstart -k`, logging out, shutting down) sends the wrapper SIGTERM, which it passes to the dispatcher; launchd gives it 90 seconds, and the dispatcher interrupts, meters and archives any running session within its 50.
+
+### Backups on the Mac
+
+`backup-mac.sh` dumps as the read-only `peanutgallery_backup` login through the Session pooler, with the same refusals as the server's `backup.sh`: no owner's connection string and no Stripe secret key, under any name, in its env file. The password reaches libpq in a service file inside the run's private folder, never on a command line. It needs `pg_dump` at least the server's major version, and says so otherwise (`brew upgrade libpq`). The dump set is `roles.sql` (`pg_dumpall --roles-only --no-role-passwords`, Supabase's own roles commented out as the Supabase CLI does; if the login is refused this, the run fails and says so), `schema.sql` and `data.sql` (the public schema), `auth.sql` (left out with `BACKUP_SKIP_AUTH=1`), `history_schema.sql`, `history_data.sql`, and `identity.json`, the live ledger identity when the dump was taken. They are tarred, encrypted to the board's age key, and written to `BACKUP_DIR` as `peanutgallery-<UTC time>.tar.age` under a hidden name first and then renamed, so Drive never copies half a file. The plaintext is deleted on every exit. Backups older than `BACKUP_KEEP_DAYS` (30 unless set) are deleted, keeping at least the newest 7; Drive keeps a deleted file in its trash for 30 days. Success pings `BACKUP_HEALTHCHECK_URL`; failure pings its `/fail`, and `run-job.sh` posts to ntfy.
+
+There is no weekly restore check on the Mac: it needs a scratch Supabase Postgres, which the server ran in Docker and the Mac has not got. The restore drill below is the check, by hand.
+
+### Restore a Mac backup
+
+1. **Fetch it** from the backup folder, or from Google Drive on the web if the Mac is gone.
+2. **Decrypt it** with the offline key: `age -d -i <path to the key> -o backup.tar peanutgallery-<time>.tar.age && tar -xf backup.tar`.
+3. **Pick the target.** For the drill, a second free Supabase project; for a real recovery, a new project in the same region. In its Dashboard, Database, Extensions, turn on `pg_cron`.
+4. **Restore,** with Homebrew's `psql` (the same major version as the `pg_dump` that wrote it: a newer `pg_dump` writes lines an older `psql` cannot read) and the target's owner connection string, which stays in the board's shell:
+   ```sh
+   PSQL=/opt/homebrew/opt/libpq/bin/psql
+   $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file roles.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' --file data.sql --dbname "<target>"
+   $PSQL --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
+   $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
+   ```
+   Skip the `auth.sql` line when the backup has none. The pg_cron job is not in the dumps: run the `cron.schedule` statement from `platform/supabase/migrations/20260920000000_refunds_and_holds.sql` on the target.
+5. **Check it:** `$PSQL --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`, and `select public.ledger_identity()` must show the same lines as `identity.json`. Quote both in `docs/specs/mac-host.md`.
+6. **A real recovery** then follows [Restore the database](#restore-the-database), step 6.
+7. **Delete the decrypted copy** (`rm -r backup.tar peanutgallery-*`, leaving the `.tar.age`) and put the key back offline.
+
+### Stop the host
+
+To move to a server, or to stop for good: pause from /board, then `platform/ops/mac/uninstall.sh`, which unloads and removes the four LaunchAgents. It leaves `~/peanutgallery-host` and prints how to remove it (the code clone must be made writable first). A server's cutover starts only after this, so two dispatchers never run.
+
+### What is weaker than a server
+
+- **One user, not two.** On a server the dispatcher runs as uid 10001 from a root-owned clone mounted read-only, so it cannot change its own code. On the Mac it runs as the board's own user, and the code clone is read-only by its mode bits alone: that user could `chmod` it back. The dispatcher still refuses to start from a clone it can write. What keeps agent-written code from using this is that none runs on the Mac: card sessions run in Anthropic's containers, and their patches are checked and applied only into worktrees outside the code clone, with hooks and fsmonitor off.
+- **The dispatcher can read the board's files.** A server holds only the dispatcher's secrets. On the Mac the same user owns the board's own checkout and its `.env` (the founder's key, the Stripe secret key, the Supabase access token), ssh keys and browser sessions. The dispatcher starts with only the environment it needs, but a flaw in it, or in a dependency, would reach all of that.
+- **No container.** No memory or process limit, no dropped capabilities, no read-only root for the jobs; the Controller and the quota check run as the board's user, not as nobody.
+- **The install runs as the board.** `pnpm install` runs with no secret in its environment and a HOME of its own, but not in a throwaway container: an install script could read the board's files. The workspace allows build scripts for `esbuild` only (`pnpm-workspace.yaml`).
+- **It sleeps and restarts.** Closing the lid, a power cut, a network drop, or a restart that waits at the FileVault login screen stops the dispatcher until the board is back. healthchecks.io alerts on all of them; nothing restarts the Mac by itself.
+- **The backups are not write-only.** The server could add backups and never read or delete one. The Mac writes to a folder it can read and delete; Drive's trash keeps a deleted file 30 days. The weekly restore check is a drill by hand, and the dump set is pg_dump's own rather than the Supabase CLI's, so the first drill is what proves it restores.
+- **The attended dispatcher shares the machine.** It must not be started while the host runs. The lease keeps a second one from ticking, and its attended mode would stop it at startup, but it is one command away.
