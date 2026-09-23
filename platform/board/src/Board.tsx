@@ -29,6 +29,8 @@ import {
   setCaps,
   setCardHorizon,
   setLaunched,
+  PAUSE_REASONS,
+  type PauseReason,
   setPaused,
   STUDIO_STATE_POLL_MS,
   TOTP_CODE,
@@ -53,7 +55,8 @@ import { NeedsYou } from './NeedsYou';
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
 export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
-export const CANCEL_CONFIRM = 'Cancel this card? It is rejected with your reason, and this cannot be undone.';
+export const CANCEL_CONFIRM =
+  'Cancel this card? It is rejected with your reason, its unspent money goes to the next cards in line, and this cannot be undone.';
 export const FILLED_FROM_CONTROLLER = "Filled in from the Controller's figure. Check it against the Console receipt, then record it.";
 
 export function Board() {
@@ -583,11 +586,12 @@ function SessionStatus({ client }: { client: SupabaseClient }) {
 function PauseControls({ client, onChanged }: { client: SupabaseClient; onChanged?: () => Promise<void> }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState<PauseReason>('board');
 
   async function apply(paused: boolean) {
     setBusy(true);
     try {
-      await setPaused(client, paused);
+      await setPaused(client, paused, reason);
       setMessage(paused ? 'Agents paused.' : 'Agents resumed.');
       await onChanged?.();
     } catch (error) {
@@ -600,6 +604,16 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   return (
     <section aria-label="Pause and resume">
       <h2>Agents</h2>
+      <label>
+        Pause reason
+        <select value={reason} disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
+          {PAUSE_REASONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="row">
         <button type="button" disabled={busy} onClick={() => void apply(true)}>
           Pause agents
@@ -862,11 +876,11 @@ function CardControl({
     return reason.trim();
   }
 
-  async function run(action: () => Promise<void>, done: string) {
+  async function run(action: () => Promise<void>, done: string | (() => string)) {
     setBusy(true);
     try {
       await action();
-      setMessage(done);
+      setMessage(typeof done === 'string' ? done : done());
       setReason('');
       await onChanged();
     } catch (error) {
@@ -910,7 +924,13 @@ function CardControl({
     const why = needReason();
     if (why === null) return;
     if (!window.confirm(CANCEL_CONFIRM)) return;
-    await run(() => cancelCard(client, card.id, why), 'Card cancelled.');
+    let moved = 0;
+    await run(
+      async () => {
+        moved = await cancelCard(client, card.id, why);
+      },
+      () => (moved > 0 ? `Card cancelled. $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : 'Card cancelled.'),
+    );
   }
 
   async function resume() {
