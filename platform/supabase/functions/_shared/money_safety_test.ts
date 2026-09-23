@@ -458,7 +458,8 @@ Deno.test("the money-safety migrations upgrade a live database in production ord
   try {
     const migrations = await readMigrations();
     const earlier = migrations.filter((m) => m.name < MONEY_SAFETY);
-    const files = migrations.filter((m) => m.name.startsWith(MONEY_SAFETY));
+    // The money-safety files only; later 20260923 files have tests of their own.
+    const files = migrations.filter((m) => m.name.startsWith(MONEY_SAFETY) && m.name < "20260923000100");
     assertEquals(files.map((m) => m.name), ["20260923000000_contribution_entries.sql", "20260923000010_backup_role.sql", "20260923000020_append_only.sql"]);
 
     await t.step("the schema before holds a payment and a dispute", async () => {
