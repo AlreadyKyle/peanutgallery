@@ -546,6 +546,26 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       const needs = (await s.row<{ n: { approval_void: { id: string }[] } }>(`select public.board_needs_you() as n`)).n;
       assertEquals(needs.approval_void.map((c) => c.id), [voided]);
     });
+
+    await t.step("a stopped card's money moved to a card whose approval is not current shows no title for it", async () => {
+      // The voided card's money moves on when the board cancels it; then the card that took it is voided too.
+      const taker = await s.card("Agent, takes the release", { horizon: "now", target: 10 });
+      await s.approve(taker);
+      await s.signInAs(BOARD_EMAIL, "aal2");
+      await s.db.query(`update public.cards set stage = 'paused' where id = $1`, [voided]);
+      await s.db.query(`select public.cancel_card($1, 'Voided')`, [voided]);
+      await s.rawEdit(voided, "summary = 'Still voided'");
+      const board = await s.card("Board, stopped", { source: "board", target: 10 });
+      await s.pay("v2", 3, board);
+      // Only the taker takes money when the board's card releases its bar.
+      await s.db.query(`update public.cards c set director_stance = 'vetoed' where c.id <> $1 and money.card_takes_money(c, true)`, [taker]);
+      await s.db.query(`select public.cancel_card($1, 'Stopped')`, [board]);
+      const before = (await s.asRole("anon", () => s.row<{ moved: { to_card_id: string; to_title: string | null }[] }>(`select moved from public.public_stopped_cards where card_id = $1`, [board]))).moved;
+      assertEquals(before.map((m) => [m.to_card_id, m.to_title]), [[taker, "Agent, takes the release"]]);
+      await s.rawEdit(taker, "title = 'Rewritten outside a board RPC'");
+      const after = (await s.asRole("anon", () => s.row<{ moved: { to_card_id: string; to_title: string | null }[] }>(`select moved from public.public_stopped_cards where card_id = $1`, [board]))).moved;
+      assertEquals(after.map((m) => [m.to_card_id, m.to_title]), [[taker, null]]);
+    });
   } finally {
     await s.close();
   }

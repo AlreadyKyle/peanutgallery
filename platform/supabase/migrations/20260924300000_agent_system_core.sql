@@ -644,7 +644,8 @@ drop policy if exists cards_board_read on public.cards;
 create policy cards_board_read on public.cards for select to authenticated using (public.is_board_member());
 
 -- The public views, each filtered to the cards the public may read. An event
--- that names no card stays.
+-- that names no card stays, and a stopped card's money moved to a card the
+-- public may not read shows no title for it.
 
 create or replace view public.public_card_funding with (security_invoker = false) as
   select
@@ -676,7 +677,7 @@ create or replace view public.public_stopped_cards with (security_invoker = fals
     c.funded_usd,
     coalesce(f.credited_usd, 0)::numeric(12,4) as credited_usd,
     coalesce((
-      select jsonb_agg(jsonb_build_object('to_card_id', m.card_id, 'to_title', t.title, 'usd', m.usd) order by m.usd desc, m.card_id nulls last)
+      select jsonb_agg(jsonb_build_object('to_card_id', m.card_id, 'to_title', case when public.card_is_public(m.card_id) then t.title end, 'usd', m.usd) order by m.usd desc, m.card_id nulls last)
       from (
         select a.card_id, sum(a.amount_usd)::numeric(12,4) as usd
         from public.contribution_allocations a
