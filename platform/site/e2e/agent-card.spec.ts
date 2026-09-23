@@ -17,7 +17,7 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 
 const designer = DEFAULT_STUDIO.roles.find((role) => role.title === 'Game Designer')!;
 const [RENAME, QUIET] = DEFAULT_STUDIO.cards as Record<string, unknown>[];
-const drafted = (fields: Record<string, unknown>) => ({
+const drafted = (fields: Record<string, unknown>): Record<string, unknown> => ({
   ...RENAME,
   source: 'agent',
   drafter_role_id: designer.id,
