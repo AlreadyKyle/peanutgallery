@@ -12,7 +12,8 @@
 // Only the display name (any case, with a space or a "+" between the words) and the domain are
 // rewritten. Internal identifiers such as peanutgallery_backup, studio.peanutgallery.*, the
 // @backseat/* packages and the Netlify site slugs are tier 3: counted, never rewritten here.
-// History is never rewritten: specs, applied migrations, and the lines in KEEP_LINES.
+// History is never rewritten: specs, applied migrations, the posted Terms versions, and the lines in
+// KEEP_LINES.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -99,7 +100,9 @@ export const TIERS = {
 };
 
 // Records of what happened. Never rewritten, whatever tier their file is in.
-const HISTORY_PREFIXES = ['docs/specs/', 'platform/supabase/migrations/', 'scripts/rename'];
+// A posted Terms version's words are what applied to the money given under it: a rename posts a new
+// version instead (docs/specs/legal-copy.md, docs/specs/rename.md).
+const HISTORY_PREFIXES = ['docs/specs/', 'platform/supabase/migrations/', 'scripts/rename', 'platform/site/src/lib/terms-versions.ts'];
 export const KEEP_LINES = [
   'in place of hello@peanutgallery.games', // PLAN §10 decision 37
   'from Peanut Gallery, Backseat Driver, Armchair, Helicopter', // PLAN §10 decision 2

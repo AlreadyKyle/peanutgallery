@@ -752,7 +752,8 @@ for file in platform/board/src/Board.tsx platform/board/netlify.toml platform/si
   seed-1/pnpm-lock.yaml seed-1/package-lock.json seed-1/npm-shrinkwrap.json seed-1/yarn.lock \
   platform/site/index.html platform/site/src/main.tsx platform/site/src/App.tsx platform/site/src/lib/studio.tsx platform/site/src/components/Stat.tsx \
   platform/site/src/components/Guarded.tsx platform/site/src/components/EventList.tsx platform/site/src/components/DeployList.tsx \
-  platform/site/src/components/StaleNotice.tsx platform/site/src/components/PausedNotice.tsx platform/site/src/components/Funding.tsx; do
+  platform/site/src/components/StaleNotice.tsx platform/site/src/components/PausedNotice.tsx platform/site/src/components/Funding.tsx \
+  platform/site/src/lib/terms.ts platform/site/src/lib/terms-versions.ts platform/site/src/lib/terms.test.ts platform/site/src/components/NotFound.tsx; do
   printf 'seed-1/config/spawn-table.json\n%s\n' "$file" > "$T/kernel-new.txt"
   expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-new.txt"
 done
