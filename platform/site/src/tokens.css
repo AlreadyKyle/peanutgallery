@@ -25,19 +25,30 @@
 :root {
   color-scheme: light;
 
-  /* Colour. The measured ratios (WCAG 2.x) are in DESIGN.md; styles.test.ts checks each minimum. */
-  --paper: #ffffff; /* the page ground and paper bands; card faces and fields */
-  --ink: #111111; /* text, card edges, the bar's outline and rule; the ground of ink bands */
+  /* Colour. The measured ratios (WCAG 2.x) are in DESIGN.md (Colour) and lib/colour-pairs.ts;
+     styles.test.ts checks each floor. One colour, one meaning: amber is money, signal is the studio,
+     green is Live. Text is ink or paper plus one muted tone per ground; never a colour. */
+  --paper: #ffffff; /* the page ground and paper bands; card faces and fields; text on signal and ink */
+  --ink: #111111; /* text on paper and work, card edges, the bar's outline and rule; the ground of ink bands */
   --muted: #5c5c5c; /* secondary text on paper and on the work face */
-  --work: #d4e1ee; /* the Building and Being checked card face */
-  --coin: #d9a441; /* money only: the Contribute fill, the funding bar's fill, the coin mark */
-  --coin-down: #b8862f; /* Contribute on hover and press */
-  --field: #7d7d7d; /* field and chip borders, on paper, work and ink */
-  --line: #d6d6d6; /* hairlines on paper (decorative) */
-  --paper-hover: #eeeff0; /* hover fill only: outline buttons on paper, the primary button on ink */
-  --ink-hover: #333333; /* primary hover on paper; outline hover and press on ink */
+  --field: #7d7d7d; /* field, chip and quiet edges on paper, work and ink */
+  --line: #d6d6d6; /* hairlines on paper (decorative); the outline press fill on paper */
+  --paper-hover: #eeeff0; /* outline hover on paper; primary hover and press on signal and ink */
+  --ink-hover: #333333; /* outline hover and press on ink */
   --muted-on-ink: #a3a3a3; /* secondary text in ink bands */
   --line-on-ink: #333333; /* hairlines in ink bands (decorative) */
+  --signal: #1a2fc8; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit */
+  --signal-deep: #1526a0; /* hover of every signal fill */
+  --signal-press: #12218c; /* press of every signal fill */
+  --muted-on-signal: #c8d0fa; /* secondary text on signal; the quiet label and edge there */
+  --line-on-signal: #4859d3; /* hairlines on signal (decorative) */
+  --work: #dfe2f7; /* the Building and Being checked card face: the signal at 14% on paper */
+  --suit-game: #b0226a; /* the Dust suit tile, on paper and the work face only */
+  --suit-studio: var(--signal); /* the studio suit tile: the studio is the site */
+  --live: #16701f; /* Live only: its glyph and the stamp's edge, on paper */
+  --coin: #d9a441; /* money only: Contribute, the funding bar's fill, the coin mark, the Funded glyph */
+  --coin-down: #b8862f; /* Contribute on hover and press, on paper and ink */
+  --coin-up: #ecc36e; /* Contribute on hover and press, on the signal band */
 
   /* Agent avatars. Fills only: every shape has an --ink outline, so none carries meaning by colour. */
   --creature-blue: #8db9e8;
@@ -52,21 +63,26 @@
   --creature-red: #eb9a9a;
   --creature-brown: #cfa77c;
 
-  /* Roles on paper. An ink band resets these from its position (styles.css, Bands), so a component
-     that reads a role draws correctly on either ground without a band class. */
+  /* Roles on paper. The signal band and the ink bands reset these from their position (styles.css,
+     Bands), so a component that reads a role draws correctly on any ground without a band class. */
   --text-muted: var(--muted);
   --hairline: var(--line);
-  --focus-colour: var(--ink);
-  --primary-bg: var(--ink);
+  --focus-colour: var(--signal);
+  --primary-bg: var(--signal);
   --primary-fg: var(--paper);
-  --primary-hover: var(--ink-hover);
-  --primary-press: var(--ink);
+  --primary-hover: var(--signal-deep);
+  --primary-press: var(--signal-press);
   --outline-bg: var(--paper);
   --outline-fg: var(--ink);
   --outline-hover: var(--paper-hover);
   --outline-press: var(--line);
+  --coin-hover: var(--coin-down);
   --quiet-fg: var(--muted);
+  --quiet-edge: var(--field);
   --mark-filter: none;
+  --suit-tile-game: var(--suit-game);
+  --suit-tile-studio: var(--suit-studio);
+  --live-mark: var(--live);
 
   /* Type */
   --font-sans: 'Atkinson Hyperlegible Next', 'Atkinson Fallback', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -100,7 +116,7 @@
   --rail: 9rem; /* the time column of a row from 48rem */
   --radius: 0.375rem; /* buttons, fields, chips and choices */
   --radius-card: 1rem;
-  --radius-tile: 0.25rem; /* the funding bar */
+  --radius-tile: 0.25rem; /* the funding bar and the suit tile */
   --target: 2.75rem; /* 44px minimum touch target */
 
   /* Motion. Only transform and opacity move, and only under prefers-reduced-motion: no-preference. */

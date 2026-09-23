@@ -90,17 +90,22 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
 /**
  * Meet the team: every active role from public_roles, running roles first. Running is a fact the
  * site derives, not a label: only a role that builds cards in an open folder runs. No scorecards.
+ * Two bands: the heading on the signal plate, and every agent row on paper (DESIGN.md, Bands).
  */
 export function Team() {
   const studio = useStudio();
   return (
     <main className="wide">
-      <PageHeader title={team.title} lede={team.lede}>
-        <StaleNotice studio={studio} />
-      </PageHeader>
-      {studio.state === 'loading' ? <p className="muted">{team.loading}</p> : null}
-      {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
-      {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
+      <div className="band">
+        <PageHeader title={team.title} lede={team.lede}>
+          <StaleNotice studio={studio} />
+        </PageHeader>
+      </div>
+      <div className="band">
+        {studio.state === 'loading' ? <p className="muted">{team.loading}</p> : null}
+        {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
+        {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
+      </div>
     </main>
   );
 }

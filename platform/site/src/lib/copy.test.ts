@@ -64,22 +64,40 @@ describe('copy rules', () => {
   });
 
   it('keeps inside terms off the landing page', () => {
+    // What home renders (docs/specs/home-and-design.md): the pitch, the status line, the updates row,
+    // the section headings and intros, the empty lines, the split and the footer. Figure labels
+    // (In the pool, with its description under it) are not sentences and are not listed.
     const landing = [
       copy.pitchTitle,
       copy.pitchBody,
-      legal.split,
+      copy.playDust,
+      copy.howItWorks,
+      ...Object.values(copy.status.open),
+      copy.status.openNone,
+      ...Object.values(copy.status.building),
+      copy.status.paused,
+      copy.pauseLiveUpdates,
+      copy.upToDate,
+      copy.showUpdates,
+      copy.liveUpdatesPaused,
+      copy.now,
+      copy.fund,
       copy.fundIntro,
+      copy.showAllCards,
+      copy.queued,
       copy.queuedIntro,
-      copy.shippedIntro,
-      ...copy.steps,
-      copy.howItWorksMore,
-      legal.pausedNotice,
-      copy.nowEmptyPaused,
-      legal.artPolicy,
-      legal.allAges,
-      legal.fixedRulesIntro,
-      ...legal.fixedRules,
+      copy.queuedEmpty,
+      copy.team.title,
+      copy.shipped,
+      copy.plannedNext,
+      copy.roadmapLink,
+      legal.moneyHeading,
+      legal.splitLine,
+      legal.notDonations,
+      legal.latestActions,
+      copy.fullLedger,
       copy.footer,
+      legal.allAges,
     ];
     const inside = /\b(default split|the gate|kernel|dispatcher|directive|lane|the pool)\b/i;
     expect(landing.filter((t) => inside.test(t))).toEqual([]);
@@ -160,7 +178,6 @@ describe('launch copy', () => {
   });
 
   it('describes no founding contributions, gate or player decision', () => {
-    expect(copy.notLiveYet).not.toMatch(/founding/i);
     expect(copy.statusGated).not.toMatch(/gate/i);
     expect(JSON.stringify(copy.sources)).not.toMatch(/decision/i);
   });

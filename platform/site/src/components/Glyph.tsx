@@ -68,13 +68,9 @@ const DRAWINGS: Record<GlyphName, ReactNode> = {
       <path className="glyph-fill" d="M3.5 1.75h9.25l-2.5 3.25 2.5 3.25H3.5z" />
     </>
   ),
-  // Funded: a full bar.
-  'full-bar': (
-    <>
-      <path className="glyph-line" d="M1.75 5.25h12.5v5.5H1.75z" />
-      <path className="glyph-fill" d="M3.5 7h9v2h-9z" />
-    </>
-  ),
+  // Funded: a tiny full funding bar, the coin fill inside the text-colour outline (styles.css
+  // .glyph-money). With the coin mark, the only fixed fill: the bar it draws is money.
+  'full-bar': <path className="glyph-line glyph-money" d="M1.75 5.25h12.5v5.5H1.75z" />,
   // Building: a gear.
   gear: (
     <>
@@ -121,6 +117,32 @@ export function Glyph({ name }: { name: GlyphName }) {
     <svg className="glyph" viewBox="0 0 16 16" width={16} height={16} aria-hidden="true" focusable="false" data-glyph={name}>
       {DRAWINGS[name]}
     </svg>
+  );
+}
+
+/**
+ * A suit as a tag: its glyph in a tile of the suit's colour, then its label (DESIGN.md, Suits). The
+ * tile is drawn on paper and the work face only; the signal and ink bands reset it by role.
+ */
+export function SuitTag({ suit }: { suit: CardCategory }) {
+  return (
+    <span className="tag" data-suit={suit}>
+      <span className="suit-tile">
+        <Glyph name={SUITS[suit].glyph} />
+      </span>
+      {SUITS[suit].label}
+    </span>
+  );
+}
+
+/** A state as a tag: its glyph and its word, never colour alone. Live's glyph takes the Live mark. */
+export function StateTag({ face, stamp = false }: { face: Face; stamp?: boolean }) {
+  const state = STATE_TAGS[face];
+  return (
+    <span className={stamp ? 'tag tag-stamp' : 'tag'} data-state={face}>
+      <Glyph name={state.glyph} />
+      {state.word}
+    </span>
   );
 }
 

@@ -158,7 +158,7 @@ function ShippedVisual({ snapshot }: { snapshot: Snapshot | null }) {
         })();
   return (
     <Example real={real}>
-      <ul className="shipped">
+      <ul className="rows rail">
         <ShippedRow card={card} snapshot={shown} example />
       </ul>
     </Example>
@@ -175,53 +175,63 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
 ];
 
 /**
- * The whole path of a contribution: six steps, each a short text beside the real component that
- * shows it, in example mode. A visual uses a real public record where one exists and made-up
+ * The whole path of a contribution: six steps, each a short text with the real component that shows
+ * it under it, in example mode. A visual uses a real public record where one exists and made-up
  * figures, labelled so, where none does. Then where the money goes, holds and refunds, and the rules.
+ * Three bands (DESIGN.md, Bands): the heading and the paused notice on the signal plate, the steps
+ * and their examples on paper, and the money and the rules on ink. Each step stacks its text over its
+ * example at every width, so a short text never floats beside a tall card. The all-ages line is in
+ * every footer.
  */
 export function HowItWorks() {
   const studio = useStudio();
   const snapshot = studio.state === 'ready' ? studio.snapshot : null;
   return (
     <main className="wide">
-      <PageHeader title={page.title} lede={page.lede} />
-      <PausedNotice studio={studio} />
-      <ol className="how-steps">
-        {money.blocks.map((block, index) => (
-          <li key={block.heading} className="how-step">
-            <div className="how-text">
-              <h2 id={`how-${index + 1}`}>{block.heading}</h2>
-              {block.body.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-            </div>
-            <div className="how-visual">{VISUALS[index]?.(snapshot)}</div>
-          </li>
-        ))}
-      </ol>
-      {money.sections.map((section, index) => (
-        <section key={section.heading} className="section" aria-labelledby={`how-more-${index + 1}`}>
-          <h2 id={`how-more-${index + 1}`}>{section.heading}</h2>
-          {section.paragraphs.map((paragraph) => (
-            <p key={paragraph}>
-              <LinkedText text={paragraph} />
-            </p>
+      <div className="band">
+        <PageHeader title={page.title} lede={page.lede}>
+          <PausedNotice studio={studio} />
+        </PageHeader>
+      </div>
+      <div className="band">
+        <ol className="how-steps">
+          {money.blocks.map((block, index) => (
+            <li key={block.heading} className="how-step">
+              <div className="how-text">
+                <h2 id={`how-${index + 1}`}>{block.heading}</h2>
+                {block.body.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+              <div className="how-visual">{VISUALS[index]?.(snapshot)}</div>
+            </li>
           ))}
-        </section>
-      ))}
-      <section className="section" aria-labelledby="how-rules">
-        <h2 id="how-rules">{page.rulesHeading}</h2>
-        <div className="prose">
-          <p>{legal.fixedRulesIntro}</p>
-          <ul className="rules">
-            {legal.fixedRules.map((rule) => (
-              <li key={rule}>{rule}</li>
+        </ol>
+      </div>
+      <div className="band">
+        {money.sections.map((section, index) => (
+          <section key={section.heading} className="section" aria-labelledby={`how-more-${index + 1}`}>
+            <h2 id={`how-more-${index + 1}`}>{section.heading}</h2>
+            {section.paragraphs.map((paragraph) => (
+              <p key={paragraph}>
+                <LinkedText text={paragraph} />
+              </p>
             ))}
-          </ul>
-          <p>{legal.artPolicy}</p>
-          <p>{legal.allAges}</p>
-        </div>
-      </section>
+          </section>
+        ))}
+        <section className="section" aria-labelledby="how-rules">
+          <h2 id="how-rules">{page.rulesHeading}</h2>
+          <div className="prose">
+            <p>{legal.fixedRulesIntro}</p>
+            <ul className="rules">
+              {legal.fixedRules.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+            <p>{legal.artPolicy}</p>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

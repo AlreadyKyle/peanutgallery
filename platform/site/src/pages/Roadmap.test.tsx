@@ -81,22 +81,23 @@ afterEach(() => {
 });
 
 describe('Roadmap', () => {
-  it('lists next and later cards by horizon, then category, in rank order, each labelled planned', async () => {
+  it('lists next and later cards by horizon in rank order as rail rows, the suit in the rail, each labelled planned', async () => {
     renderRoadmap(sourceOf(cards));
     const next = await screen.findByRole('region', { name: roadmap.horizons.next });
     expect(within(next).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
-      copy.categories.game,
-      copy.categories.studio,
-    ]);
-    expect(within(next).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual([
       'Card drafting',
       'Free picks',
       'Board on its own site',
     ]);
+    expect([...next.querySelectorAll('li .row-rail [data-suit]')].map((tag) => tag.textContent)).toEqual([
+      copy.categories.game,
+      copy.categories.game,
+      copy.categories.studio,
+    ]);
     expect(within(next).getByText('Choose the next card without paying.')).toBeTruthy();
     expect(within(next).getAllByText(roadmap.planned)).toHaveLength(3);
     const later = screen.getByRole('region', { name: roadmap.horizons.later });
-    expect(within(later).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Seasons']);
+    expect(within(later).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Seasons']);
   });
 
   it('never shows a card on horizon now, a bar, a status or a fund link', async () => {

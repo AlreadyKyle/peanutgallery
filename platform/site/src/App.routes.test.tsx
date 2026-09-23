@@ -89,7 +89,8 @@ describe('the kernel frame and the card lane routes', () => {
     renderAt('/extra');
     const nav = screen.getByRole('navigation', { name: 'Site' });
     const hrefs = [...nav.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    expect(hrefs).toEqual(['/extra', '/ledger', '/contribute']);
+    // The wordmark home, Contribute, then the Menu list: the card page and the kernel's Ledger.
+    expect(hrefs).toEqual(['/', '/contribute', '/extra', '/ledger']);
   });
 });
 

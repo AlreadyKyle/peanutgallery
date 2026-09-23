@@ -26,7 +26,7 @@ These are two different states.
    - /how-it-works, /team and /roadmap are live.
    - Link previews render, and the board's own site requires a second factor.
    - The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).
-   - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items on /roadmap.
+   - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items, on /roadmap and in home's Planned next.
    - The site shows a notice while the studio is paused.
 5. **The board has pressed Go live.** The launch clip and the post drafts exist.
 
@@ -104,7 +104,8 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the jobs' first runs (on the Mac host, `specs/mac-host.md`) and the backups repository, which waits on a new store |
 | `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
-| `specs/design-system.md` | built | the home-and-design pull request applies the bands to every page and rebuilds home; the replay, the next-in-line sentence and the gate's design frames wait on supporter-loop, money-logic and agent-system |
+| `specs/design-system.md` | built | the replay, the next-in-line sentence and the gate's design frames wait on supporter-loop, money-logic and agent-system; the bands on every page and the new home are `specs/home-and-design.md` |
+| `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
 | `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
 ### Draft

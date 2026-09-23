@@ -1,5 +1,6 @@
 import { formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
+import { CoinMark } from './Funding';
 import { Stat } from './Stat';
 
 /**
@@ -21,4 +22,23 @@ export function poolFigure(balance: number): { value: string; description: strin
 export function PoolStat({ balance }: { balance: number }) {
   const { value, description } = poolFigure(balance);
   return <Stat label={legal.poolBalance} description={description} value={value} />;
+}
+
+/**
+ * The pool figure as one line on home: the coin mark, the amount and "in the pool", with the same
+ * description as the ledger's figure under it, so the term is explained where it appears.
+ */
+export function PoolLine({ balance }: { balance: number }) {
+  const { value, description } = poolFigure(balance);
+  return (
+    <>
+      <p className="pool-line with-glyph">
+        <CoinMark />
+        <span>
+          <span className="figure">{value}</span> {legal.poolInline}
+        </span>
+      </p>
+      <p className="muted small">{description}</p>
+    </>
+  );
 }

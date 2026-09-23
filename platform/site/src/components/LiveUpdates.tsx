@@ -27,12 +27,15 @@ export function LiveUpdates({
   paused,
   onTogglePause,
   onShow,
+  message = '',
   now = () => Date.now(),
 }: {
   count: number;
   paused: boolean;
   onTogglePause: () => void;
   onShow: () => void;
+  /** Words for the announcer from the page: a card that was funded or shipped. */
+  message?: string;
   now?: () => number;
 }) {
   const waiting = count > 0;
@@ -49,6 +52,10 @@ export function LiveUpdates({
     previous.current = count;
     // The clock is read when the count changes, not watched.
   }, [count]);
+
+  useEffect(() => {
+    if (message !== '') setAnnouncement(message);
+  }, [message]);
 
   return (
     <div className="live-updates">

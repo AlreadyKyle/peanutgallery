@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe('Contribute', () => {
-  it('puts Pick for me first, then the fundable cards grouped by category, each linking to checkout', async () => {
+  it('puts Fund the next card in line first, then the fundable cards grouped by category, each linking to checkout', async () => {
     renderContribute(
       source([
         card({ id: 'g1', title: 'Rename the Gatherer', summary: 'A new name.', stage: 'voted' }),
@@ -116,13 +116,13 @@ describe('Contribute', () => {
   it('says the agents are paused above the choices while the board has paused them', async () => {
     renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true));
     await waitFor(() => expect(screen.getByText(legal.pausedNotice)).toBeTruthy());
-    // The notice comes before Pick for me, so it is read before any payment.
+    // The notice comes before the first choice, so it is read before any payment.
     const notice = screen.getByText(legal.pausedNotice);
     const pick = screen.getByRole('link', { name: new RegExp(legal.pickForMe) });
     expect(notice.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('keeps Pick for me when no card needs funding, and says so', async () => {
+  it('keeps Fund the next card in line when no card needs funding, and says so', async () => {
     renderContribute(source([]));
     await waitFor(() => expect(screen.getByText(legal.noFundableCards)).toBeTruthy());
     expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).getAttribute('href')).toBe(STRIPE);

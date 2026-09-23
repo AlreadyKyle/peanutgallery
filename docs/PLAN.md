@@ -48,7 +48,7 @@ At launch the board files every card, at /board or through reviewed scripts, and
 
 ### Funding a card
 
-A card open for funding has a target and a bar. A contribution toward it credits the bar with the agents' net amount (after Stripe's fee, the 10% reserve, the supporter's studio share and the incident carve-out), so a full bar means the pool holds the card's cost, and the card moves to funded. Money beyond a card's cost, and money given with no card, funds later cards. Contribute opens a chooser with "Pick for me" first. A card's funding target is not bounded by the per-card maximum, which limits only what agents may spend on one card (§10 decision 28).
+A card open for funding has a target and a bar. A contribution toward it credits the bar with the agents' net amount (after Stripe's fee, the 10% reserve, the supporter's studio share and the incident carve-out), so a full bar means the pool holds the card's cost, and the card moves to funded. Money beyond a card's cost, and money given with no card, funds later cards. Contribute opens a chooser with "Fund the next card in line" first. A card's funding target is not bounded by the per-card maximum, which limits only what agents may spend on one card (§10 decision 28).
 
 ### Work
 

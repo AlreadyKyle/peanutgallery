@@ -62,8 +62,9 @@ function TextBlock({ id, section }: { id: string; section: TextSection }) {
 }
 
 /**
- * The text-page layout: one h1 and a lede, then sections that each open with an h2, all held to the
- * reading measure. `name` prefixes the heading ids; `extra` sections follow the page's own.
+ * The text-page layout: one h1 and a lede on the first band (the signal plate), then sections that
+ * each open with an h2 on the second (paper) band, all held to the reading measure. `name` prefixes
+ * the heading ids; `extra` sections follow the page's own.
  */
 export function TextPage({
   name,
@@ -78,11 +79,15 @@ export function TextPage({
 }) {
   return (
     <main className="text-page">
-      <PageHeader title={page.title} lede={page.lede} />
-      {[...page.sections, ...extra].map((section, index) => (
-        <TextBlock key={section.heading} id={`${name}-${index + 1}`} section={section} />
-      ))}
-      {footer}
+      <div className="band">
+        <PageHeader title={page.title} lede={page.lede} />
+      </div>
+      <div className="band">
+        {[...page.sections, ...extra].map((section, index) => (
+          <TextBlock key={section.heading} id={`${name}-${index + 1}`} section={section} />
+        ))}
+        {footer}
+      </div>
     </main>
   );
 }

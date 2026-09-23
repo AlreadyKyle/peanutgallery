@@ -1,7 +1,8 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FACES } from '../lib/cards';
+import { COLOUR_PAIRS, COLOUR_TOKENS } from '../lib/colour';
 import { copy } from '../lib/copy';
 import { pageNav, pageRoutes } from '../routes';
 import { Guide, GUIDE_PATH } from './Guide';
@@ -47,12 +48,26 @@ describe('the design guide', () => {
     for (const card of cards) expect(card.closest('main > .band')).toBe(bands[1]);
   });
 
-  it('draws the card in all eight faces, each labelled Sample', () => {
+  it('draws the card in all eight faces, in two groups by anatomy, each noted and labelled Sample', () => {
     const { container } = renderGuide();
     const gallery = screen.getByRole('region', { name: copy.guide.cardsHeading });
-    expect([...gallery.querySelectorAll('li.card')].map((card) => card.getAttribute('data-face'))).toEqual([...FACES]);
-    expect(gallery.querySelectorAll('figcaption .sample-label')).toHaveLength(FACES.length);
+    const faces = [...gallery.querySelectorAll('li.card')].map((card) => card.getAttribute('data-face'));
+    expect(faces).toEqual(['open', 'picked', 'funded', 'paused', 'building', 'checks', 'live', 'rejected']);
+    expect([...faces].sort()).toEqual([...FACES].sort());
+    expect(gallery.querySelectorAll('ul.card-grid')).toHaveLength(2);
+    expect(gallery.querySelectorAll('.face-notes .sample-label')).toHaveLength(FACES.length);
     expect(container.querySelector('.tag-stamp')).not.toBeNull();
+  });
+
+  it('shows every colour token and every pairing from lib/colour.ts, and the colour rules', () => {
+    renderGuide();
+    const colour = screen.getByRole('region', { name: copy.guide.colourHeading });
+    for (const { name } of COLOUR_TOKENS) expect(within(colour).getAllByText(name).length).toBeGreaterThan(0);
+    const lists = colour.querySelectorAll('ul.swatches');
+    expect(lists[0]?.children).toHaveLength(COLOUR_TOKENS.length);
+    expect(lists[1]?.children).toHaveLength(COLOUR_PAIRS.length);
+    expect(lists[1]?.querySelectorAll('[data-banned="true"]')).toHaveLength(COLOUR_PAIRS.filter((pair) => pair.banned).length);
+    for (const rule of [...copy.guide.rulesDo, ...copy.guide.rulesDont]) expect(within(colour).getByText(rule)).toBeTruthy();
   });
 
   it('shows the funding bar at 5, 50 and 100 per cent', () => {

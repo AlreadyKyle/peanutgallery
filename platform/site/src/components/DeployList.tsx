@@ -3,7 +3,8 @@ import { formatDateTime, shortSha } from '../lib/format';
 import type { Snapshot } from '../lib/source';
 
 // A deploy reads "Game 2775bcb passed checks". The smoke bot's raw output stays in the database: it
-// is inside text ("bot: 812 simulated seconds, 13 unlocks"), not something a reader can use.
+// is inside text ("bot: 812 simulated seconds, 13 unlocks"), not something a reader can use. Rail
+// rows, the same shape as the agent actions, so the two lists on /ledger line up.
 export function DeployList({ snapshot }: { snapshot: Snapshot }) {
   if (snapshot.missing.includes('deploys')) {
     return <p className="muted">{legal.partUnavailable}</p>;
@@ -12,11 +13,11 @@ export function DeployList({ snapshot }: { snapshot: Snapshot }) {
     return <p className="muted">{legal.deploysEmpty}</p>;
   }
   return (
-    <ul className="rows">
+    <ul className="rows rail">
       {snapshot.deploys.map((deploy) => (
         <li key={deploy.id}>
           <span className="row-time">{formatDateTime(deploy.created_at)}</span>
-          <span>
+          <span className="row-body">
             {legal.folders[deploy.folder] ?? deploy.folder}{' '}
             <code className="muted">{shortSha(deploy.sha)}</code>{' '}
             <span className={deploy.is_green ? undefined : 'failed'}>
