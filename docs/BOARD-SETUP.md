@@ -493,8 +493,12 @@ yours.
 
 ## D. Open topics (no blockers)
 
-- **Operations percentage.** The agent-system pull request shows the number and the costs it came
-  from. Lower it if you want. Nothing waits on you.
+- **Cooling window, role pauses and vetoes (optional).** The agent-system pull request
+  (`docs/specs/agent-system-core.md`) ships the cooling window at 0, so an approved agent card moves
+  to now on the next dispatcher tick. If you want time to look first, set it on the board's site
+  (Cooling window, second factor, up to 10,080 minutes). You can also pause a role or veto a card
+  there. There is no operations percentage: no role job spends studio money, and model role jobs run
+  only when you start them from the board's site while you are signed in there. Nothing waits on you.
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
   HST threshold and income tax on the pool, and Ontario business-name registration for "Peanut
@@ -530,6 +534,10 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
   each one with its date.
 - **The emergency fund:** convert its credit when an S1 card needs it. The inbox lists S1 cards that
   may draw on it.
+- **A card the resume rule will not resume:** one paused at its ceiling at the card maximum, or a
+  second time. Resume it with a new estimate or cancel it. The inbox lists each one.
+- **A card holding money whose approval is not current:** its text was changed outside a board
+  control, so it is hidden and takes no money. Cancel it. The inbox lists each one.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
   The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
   only those, so every other one waits for you.

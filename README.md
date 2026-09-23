@@ -102,9 +102,11 @@ Per package:
 2. `docs/PLAN.md`, the sections the work touches: §4 the mechanics, the work definitions and the kernel, §5 the money, §6 the architecture, §10 the decisions, Appendix A the technical spec. `docs/BACKLOG.md` lists what is planned and not built.
 3. The specs under `docs/specs/` that the work touches.
 
+[`docs/SYSTEM.md`](docs/SYSTEM.md) is the map of the running system: every role with its class, job, tools and what it may and may not do, a card's life with approvals and dealing, the job queue, what pays for each kind of work and where the board steps in.
+
 ## Glossary
 
-- **Board.** Kyle and whoever joins him. The board acts through its own site (`platform/board`, not linked from the public site): the Needs you inbox, pause, the agent mode, Go live, directives, cards, notes, the caps and credit purchases.
+- **Board.** Kyle and whoever joins him. The board acts through its own site (`platform/board`, not linked from the public site): the Needs you inbox, pause, the agent mode, Go live, directives, cards and their vetoes, notes, the caps, the cooling window, role pauses, the job list and credit purchases.
 - **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a funding target, a lane, a folder, an executor role, a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused) and a horizon (now, next, later).
 - **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` outside its kernel paths only, and that lane opens when the board sets `studio_state.platform_lane_open` once its own site is live (PLAN.md §4 Work).
 - **Horizon and backlog.** Only a card on `now` can take money or run. `next` and `later` are the backlog: planned, not built, listed on /roadmap and seeded from `docs/BACKLOG.md`.
