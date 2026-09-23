@@ -9,6 +9,7 @@
   "prompt_path": "platform/agents/prompts/hr.md",
   "tools": [],
   "metrics": ["estimate_accuracy", "cost_per_ship"],
+  "class": "planner",
   "write_access": false,
   "status": "starts",
   "trigger": "Starts once role scorecards and the replay eval set exist."

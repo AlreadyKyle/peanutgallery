@@ -13,6 +13,7 @@ const builderA: RoleSpec = {
   prompt_path: "platform/agents/prompts/builder-a.md",
   tools: ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
   metrics: ["first_pass_rate", "cost_per_ship", "estimate_accuracy"],
+  class: "writer",
   write_access: true,
   status: "running",
   trigger: null,
@@ -33,6 +34,7 @@ const host: RoleSpec = {
   prompt_path: "platform/agents/prompts/host.md",
   tools: [],
   metrics: ["first_pass_rate", "cost_per_ship"],
+  class: "web_only",
   write_access: false,
   status: "planned",
   trigger: "No trigger is set yet; the Host waits on the stream, a backlog entry.",
@@ -78,9 +80,20 @@ describe("parseRoleSpec", () => {
     expect(() => parseRoleSpec({ ...builderAFile, tools: ["Read", "WebFetch"] }, "x.json")).toThrow("unknown value");
   });
 
-  it("ties write_access to a non-empty tools list", () => {
+  it("ties write_access to the class and a non-empty tools list (docs/specs/agent-system-core.md)", () => {
     expect(() => parseRoleSpec({ ...builderAFile, tools: [] }, "x.json")).toThrow("write_access");
     expect(() => parseRoleSpec({ ...host, write_access: true }, "x.json")).toThrow("write_access");
+    // A reviewer with read tools has no write access; a planner with them has.
+    const reviewer = { ...builderAFile, class: "reviewer", tools: ["Read", "Glob", "Grep"] };
+    expect(() => parseRoleSpec({ ...reviewer, write_access: true }, "x.json")).toThrow("write_access");
+    expect(parseRoleSpec({ ...reviewer, write_access: false }, "x.json").class).toBe("reviewer");
+    expect(parseRoleSpec({ ...reviewer, class: "planner", write_access: true }, "x.json").write_access).toBe(true);
+  });
+
+  it("requires a class from the five trust classes", () => {
+    const { class: _class, ...withoutClass } = builderAFile;
+    expect(() => parseRoleSpec(withoutClass, "x.json")).toThrow("missing key class");
+    expect(() => parseRoleSpec({ ...builderAFile, class: "admin" }, "x.json")).toThrow("class must be one of writer, planner, reviewer, read_only, web_only");
   });
 
   it("rejects a multi-line species note, a bad voice, a bad prompt path and a bad share", () => {

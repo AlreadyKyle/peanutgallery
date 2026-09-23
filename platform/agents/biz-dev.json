@@ -9,6 +9,7 @@
   "prompt_path": "platform/agents/prompts/biz-dev.md",
   "tools": [],
   "metrics": ["first_pass_rate", "cost_per_ship"],
+  "class": "web_only",
   "write_access": false,
   "status": "starts",
   "trigger": "Starts last, once every other role in the launch roster is built."

@@ -43,6 +43,7 @@ async function seedRoles(db: SupabaseClient, env: Env): Promise<void> {
     prompt_path: s.prompt_path,
     tools_json: s.tools,
     metrics_json: s.metrics,
+    agent_class: s.class,
     write_access: s.write_access,
     status: s.status,
     trigger: s.trigger,

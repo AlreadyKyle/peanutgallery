@@ -7,8 +7,9 @@
   "budget_share": 0.10,
   "voice": "firm",
   "prompt_path": "platform/agents/prompts/game-director.md",
-  "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
+  "tools": ["Read", "Glob", "Grep"],
   "metrics": ["estimate_accuracy", "cost_per_ship"],
-  "write_access": true,
+  "class": "reviewer",
+  "write_access": false,
   "status": "running"
 }

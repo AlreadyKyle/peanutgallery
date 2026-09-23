@@ -9,6 +9,7 @@
   "prompt_path": "platform/agents/prompts/qa.md",
   "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
   "metrics": ["first_pass_rate", "reopen_rate"],
+  "class": "writer",
   "write_access": true,
   "status": "running"
 }
