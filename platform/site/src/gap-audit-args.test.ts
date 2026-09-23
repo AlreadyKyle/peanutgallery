@@ -3,7 +3,7 @@ import { DEFAULT_WIDTHS, parseGapAuditArgs } from '../scripts/gap-audit-args.mjs
 
 describe('the gap audit command line (scripts/gap-audit.mjs)', () => {
   it('audits a single page at the default widths when --widths is absent', () => {
-    expect(parseGapAuditArgs(['https://peanutgallery.games/'])).toEqual({ targets: ['https://peanutgallery.games/'], widths: [...DEFAULT_WIDTHS] });
+    expect(parseGapAuditArgs(['https://example.com/'])).toEqual({ targets: ['https://example.com/'], widths: [...DEFAULT_WIDTHS] });
   });
 
   it('keeps the first of several pages when --widths is absent', () => {
