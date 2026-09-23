@@ -269,6 +269,18 @@ describe('the Controller reconciliation', () => {
     });
   });
 
+  test('names the newest paid payout for the board to record the credit purchase against, or none before the first', () => {
+    const result = reconcile({ identity: ACCOUNT.identity, figures: ACCOUNT.figures, stripe: stripeData(), now: NOW });
+    assert.deepEqual(result.figures.latest_payout, { id: 'po_fixture_1', arrival_date: '2026-09-25', amount: 16.48, currency: 'cad' });
+    const two = clone(ACCOUNT);
+    two.payouts = [{ ...two.payouts[0], id: 'po_newer', arrival_date: two.payouts[0].arrival_date + 86400, amount: 500 }, ...two.payouts];
+    two.payout_transactions.po_newer = [];
+    assert.equal(reconcile({ identity: ACCOUNT.identity, figures: ACCOUNT.figures, stripe: stripeData(two), now: NOW }).figures.latest_payout.id, 'po_newer');
+    const unpaid = clone(ACCOUNT);
+    unpaid.payouts = [];
+    assert.equal(reconcile({ identity: ACCOUNT.identity, figures: ACCOUNT.figures, stripe: stripeData(unpaid), now: NOW }).figures.latest_payout, null);
+  });
+
   test('buys what funded cards need when that is less than the paid-out agent money, and never less than nothing', () => {
     const figures = clone(ACCOUNT.figures);
     figures.funded_cards.remaining_ceilings_usd = 2;
