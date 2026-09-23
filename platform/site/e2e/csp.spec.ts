@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { SUPABASE_URL } from './fixture-env';
+import { strayNetlifyHosts } from '../scripts/board-address.mjs';
+import { PLAY_URL, SUPABASE_URL } from './fixture-env';
 import { expect, test } from './fixtures';
 
 // vite preview sends netlify.toml's headers (vite.config.ts), so this run loads every page under the
@@ -79,11 +80,15 @@ test('a form that posts to another host is refused by the enforced policy', asyn
   expect(new URL(page.url()).origin).not.toBe('https://example.com');
 });
 
-test('/board is the not found page, with no sign-in form and no board address', async ({ page }) => {
+test("/board is the not found page, with no sign-in form and no netlify.app address but the game's", async ({ page }) => {
   const reports = await watchPolicy(page);
   await page.goto('/board');
   await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
   await expect(page.getByLabel('Email')).toHaveCount(0);
-  expect(await page.content()).not.toMatch(/netlify\.app/);
+  // The build uses netlify.toml's play URL, a netlify.app address the top bar links to on every page.
+  const playHost = new URL(PLAY_URL).host;
+  expect(playHost).toMatch(/\.netlify\.app$/);
+  await expect(page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Play' })).toHaveAttribute('href', PLAY_URL);
+  expect(strayNetlifyHosts(await page.content(), [playHost])).toEqual([]);
   expect(reports).toEqual([]);
 });
