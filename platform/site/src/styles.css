@@ -264,6 +264,17 @@ main > .band:first-child {
   justify-content: flex-end;
 }
 
+/* While any part of the page is loading (every loading line carries aria-busy="true"), the page is
+   short only until the content arrives: the last band takes the spare height instead, so the heading
+   keeps its place under the top bar rather than dropping to the plate's foot and jumping back. */
+main:has([aria-busy='true']) > .band:first-child:not(:last-child) {
+  flex-grow: 0;
+}
+
+main:has([aria-busy='true']) > .band:last-child:not(:first-child) {
+  flex-grow: 1;
+}
+
 /* A page that is not wide keeps each band's blocks to the reading measure. */
 main:not(.wide) > .band > * {
   max-width: var(--measure);
@@ -934,12 +945,18 @@ button.link:hover:not(:disabled) {
 }
 
 /* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names no
-   card until the waterfall's order is public (docs/specs/home-and-design.md). */
+   card until the waterfall's order is public (docs/specs/home-and-design.md). Its agreement line
+   (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and carries the
+   section gap before "Or pick a card". */
 .choice-primary {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-1);
   border-color: var(--primary-bg);
   background: var(--primary-bg);
   color: var(--primary-fg);
+}
+
+.choice-primary + p {
+  margin-bottom: var(--space-4);
 }
 
 .choice-primary .choice-title {
