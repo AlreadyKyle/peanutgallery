@@ -1,3 +1,4 @@
+import { SUPABASE_URL } from './fixture-env';
 import { expect, test } from './fixtures';
 
 const PAGES = [
@@ -59,6 +60,48 @@ for (const { path, title, current } of [
     await expect(main.getByRole('link', { name: 'Read the version in force now' })).toHaveAttribute('href', current);
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflows).toBe(false);
+  });
+}
+
+test("/terms/1's Refunds link goes to /refunds/1, the words that applied with version 1", async ({ page }) => {
+  await page.goto('/terms/1');
+  await expect(page.getByRole('region', { name: 'Refunds', exact: true }).getByRole('link', { name: 'Refunds page' })).toHaveAttribute('href', '/refunds/1');
+});
+
+// While the versions read runs, the page is drawn whole with only its status line different, so the
+// title does not sit at the foot of a window-high signal plate and then jump when the words arrive.
+// The title moves by no more than the status line's own change in height.
+for (const width of [375, 768, 1440]) {
+  test(`the Terms pages keep their layout while the versions read runs, at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    // Each page load's read waits until the test releases it.
+    let release = () => {};
+    let held = Promise.resolve();
+    await page.route(`${SUPABASE_URL}/rest/v1/public_terms_versions**`, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    const measure = () =>
+      page.evaluate(() => {
+        const hero = document.querySelector('main .hero')!;
+        const h1 = hero.querySelector('h1')!.getBoundingClientRect();
+        const lede = hero.querySelector('.lede')!.getBoundingClientRect();
+        return { h1: h1.top, status: hero.getBoundingClientRect().bottom - lede.bottom };
+      });
+    for (const path of ['/terms', '/refunds', '/terms/1', '/refunds/1']) {
+      held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.goto(path);
+      await expect(page.getByText('Loading the terms.')).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const loading = await measure();
+      release();
+      await expect(page.getByText('Loading the terms.')).toHaveCount(0);
+      await expect(page.locator('main .hero').getByText(/^Version \d, in force/)).toBeVisible();
+      const loaded = await measure();
+      expect(Math.abs(loaded.h1 - loading.h1), `${path}: the title moved`).toBeLessThanOrEqual(Math.abs(loaded.status - loading.status) + 1);
+    }
   });
 }
 
