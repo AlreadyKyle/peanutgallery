@@ -9,6 +9,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Pulling past the top of the page shows the top bar's ground, not white. Browsers fill the
+     overscroll with one solid colour, the root's (WebKit blends body's over it, so body paints none),
+     never an image; .page paints paper over everything, so this shows only in the overscroll, and
+     past the bottom it is black too. */
+  background-color: var(--signal);
 }
 
 body {
@@ -20,7 +25,6 @@ body {
   /* The font file has no italic and no synthesised slant: an emphasis stays upright everywhere. */
   font-synthesis-style: none;
   color: var(--ink);
-  background: var(--paper);
   overflow-wrap: anywhere;
 }
 
@@ -33,6 +37,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: var(--paper);
 }
 
 .wrap,
@@ -1218,13 +1223,28 @@ button.link:hover:not(:disabled) {
   margin: 0 0 var(--space-2);
 }
 
+/* A link to the rest of a list on its own page: the words, then an arrow. */
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .agent {
-  display: flow-root;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
+  column-gap: var(--space-2);
+  align-content: start;
+}
+
+.agent > :not(.avatar) {
+  grid-column: 2;
 }
 
 .agent > .avatar {
-  float: left;
-  margin: 0 var(--space-2) var(--space-1) 0;
+  grid-row: 1 / -1;
+  margin: 0;
 }
 
 /* The facts line sits at the bottom of each row, so the lines align across a row of agents. */
@@ -1254,6 +1274,7 @@ button.link:hover:not(:disabled) {
 .team-strip {
   display: grid;
   gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .member {
@@ -1733,16 +1754,6 @@ input[type='radio'] {
     height: 4.5rem;
   }
 
-  .agent {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .agent .avatar {
-    float: none;
-    width: 6rem;
-    margin: 0 0 var(--space-2);
-  }
 }
 
 /* From 48rem to 64rem a strip member's avatar sits over its name, so the job keeps a readable width. */
