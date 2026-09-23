@@ -1,6 +1,6 @@
 # Money surfaces: money in, reconciled with Stripe, the next card in line, stopped cards and why the studio is paused
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Built on the merge of money-logic (and home-and-design, #64). It reads what money-logic publishes and writes no SQL. It is a board pull request: it changes kernel files (`legal.ts`, `payment.ts`, `Funding.tsx`, `Ledger.tsx`, the two new kernel components, `docs/`).
 
@@ -35,12 +35,12 @@ Out:
 
 **/contribute.**
 - Pick for me stays first and names the first card in `money.funding_order`: "Next in line: <title>". With no card in the order, it says the money waits in Not on a card yet and funds the next card that opens.
-- The card choices are exactly the `funding_order` cards, in that order, each linking the Payment Link with its card's `client_reference_id`. Under them, one line: "Anything beyond a card's target funds the next cards in line."
+- The card choices are exactly the `funding_order` cards, in that order, in one list (no category groups, which could reorder them), each linking the Payment Link with its card's `client_reference_id`. Under them, one line: "Anything beyond a card's target funds the next cards in line."
 - A card's live Fund this button (on /contribute, /roadmap or anywhere `Funding.tsx` renders) shows only when the card is in `funding_order`.
-- When `public_money` did not load, /contribute offers Pick for me with no card named, and no card choices or Fund this buttons. Pick for me money is safe without the order: it waits in Not on a card yet and the waterfall places it.
+- When `public_money` did not load, /contribute offers Pick for me with no card named ("Your contribution funds whatever the agents build next."), "Not available right now." in place of the card choices, and no Fund this buttons anywhere. Pick for me money is safe without the order: it waits in Not on a card yet and the waterfall places it.
 
 **/ledger, the funding band.**
-- Not on a card yet, from `not_on_card_usd`, described as money given with no card or beyond a card's target, waiting for the next card to open.
+- Not on a card yet, from `not_on_card_usd`, a figure in the same list as the pool, the reserve, the emergency fund and held money, described as money given with no card or beyond a card's target, waiting for the next card to open.
 - When `short_usd` is above 0, a line says waiting cards are short by that amount until new money arrives.
 - While `board_test_usd` is above 0: "Includes the board's own test payment of $X; it funds no card."
 
@@ -52,10 +52,11 @@ Out:
 
 **/ledger, a Stopped band.** Drawn only when it has rows; two lists of rows, each drawn only with rows:
 - **Paused**: title, state tag, the reason in plain words, what it spent, and that its money stays on it until it resumes or the board cancels it.
-- **Didn't ship** (rejected or cancelled): title, reason in plain words, what it spent, "funded by $X from N supporters", and where its unspent money went: each card by title and Not on a card yet, with amounts.
+- **Didn't ship** (rejected or cancelled): title, reason in plain words, what it spent, "funded by $X from N supporters" (from `credited_usd` and `public_card_funding.contributors`; the count left out when the funding read failed, the phrase left out when nothing reached the card), and where its unspent money went: each card by title and Not on a card yet, with amounts.
+- Each row carries the date it stopped in the rail, like the ledger's other rows, and the band opens with one line: "Cards that stopped before they shipped, why, and where their money is."
 - A reason is plain words from `legal.failingCheckWords`; a code with no entry shows its stage's fallback sentence. The raw code never shows. Stopped cards appear on no other page (`snapshot.cards`' stage filter is unchanged).
 
-**The paused notice and home's status line** say the same sentence, `pausedSentence(snapshot)`: the reason for `awaiting_credit` (waiting for a Stripe payout to buy the agents' model credit), `spend_limit`, `incident` (a problem the board is checking) or `board`; the general line when the reason is missing; nothing when not paused or the studio row did not load. It names the category only, never who paused or when.
+**The paused notice and home's status line** say the same sentence, `pausedSentence(snapshot)`: the reason for `awaiting_credit` (waiting for a Stripe payout to buy the agents' model credit), `spend_limit` (the monthly limit on model usage), `incident` (a problem the board is checking) or `board`; the general line when the reason is missing or has no sentence; nothing when not paused or the studio row did not load. It names the category only, never who paused or when.
 
 **Anything that did not load** says "Not available right now." instead of a zero or an empty band.
 
@@ -81,9 +82,9 @@ Out:
 
 - `pnpm verify` at the repository root.
 - `pnpm --filter @backseat/site test`
-- `E2E_PORT=4391 pnpm --filter @backseat/site e2e`
-- `E2E_ROUTE_SHOTS=<folder> E2E_PORT=4391 pnpm --filter @backseat/site e2e`, and the /contribute and /ledger shots at 375, 768 and 1440 looked at.
-- `pnpm --filter @backseat/site build && pnpm --filter @backseat/site preview`, then `node platform/site/scripts/live-check.mjs http://localhost:4173 --allow-no-data`.
+- `E2E_PORT=<free port> pnpm --filter @backseat/site e2e`
+- `E2E_ROUTE_SHOTS=<folder> E2E_PORT=<free port> pnpm --filter @backseat/site e2e`, and the /contribute and /ledger shots at 375, 768 and 1440 looked at.
+- `pnpm --filter @backseat/site build && pnpm --filter @backseat/site preview`, then `node platform/site/scripts/live-check.mjs http://localhost:<port> --allow-no-data`.
 - Production, after the deploy: `pnpm --filter @backseat/site exec node scripts/live-check.mjs` prints PASS.
 
 ## Production steps
@@ -111,6 +112,15 @@ Added when the status moves to built or done.
 - 2026-09-23: two new reads. Reconciliation, the funding order and the money-in figures ride in `public_money`; the pause reason rides in `public_studio`. site-snapshot carries both in its cached snapshot.
 - 2026-09-23: the ledger-truth plan is folded in: its SQL is money-logic's `public_money` and `public_studio.pause_reason` (backfilled `awaiting_credit`); its pages, strings, fixed rule and backlog removals are here. No `public_money_in`, `public_reconciliation` or `credit_bought` is built. The two planned roadmap cards whose BACKLOG entries this pull request deletes are removed by the series' backlog-to-cards path (agent-system-core), not by a hand-written delete here.
 - 2026-09-23 (board defaults): card naming is the Payment Link's `client_reference_id`, already on main; the /thanks redirect is a board step (BOARD-SETUP step 12); Discord is not touched.
+- 2026-09-23 (build): the `awaiting_credit` sentence drops "Before launch" and "the first": the dispatcher also writes `awaiting_credit` whenever the Console credit runs out after launch (`pipeline.ts`), so the sentence has to be true then too. The other three reasons, which the agreed spec named but did not word, are in the Appendix.
+- 2026-09-23 (build): /contribute's choices are one list in the funding order. The category groups it had (Dust, The studio) would reorder the choices whenever the two categories interleave; with the platform lane closed only Dust has cards anyway. `.choice-group` styles are gone.
+- 2026-09-23 (build): Not on a card yet is a row in the Funding band's own list of figures (`Meter` takes extra rows and lines), so the band keeps one list and one hairline rhythm; with `public_money` unread the row's figure says "Not available right now.".
+- 2026-09-23 (build): `snapshot.money`, `snapshot.stopped` and `snapshot.pauseReason` are optional on the `Snapshot` type, like `platformLaneOpen`: the loader always sets them, and a sample or test snapshot without them reads as not loaded (no card takes money, no stopped rows, the general paused line). A malformed figure or a missing `public_money` row names `money` missing.
+- 2026-09-23 (build): `failingCheckWords` covers every code the dispatcher writes today (read from `pipeline.ts`, `recovery.ts`, `credit.ts` and the Managed Agents adapter) and `cancelled_by_board`; a unit test checks each entry is a sentence and no entry is a code, and the stage fallback covers any code added later.
+- 2026-09-23 (build): the paused state tag on a Stopped row draws the pause glyph inline in `Stopped.tsx` with the word from `copy.statusPaused`: a kernel file may not import `Glyph.tsx` (`site-kernel.test.ts`), and the unit test checks the tag matches `STATE_TAGS.paused`. A Didn't ship row carries no state tag; its list heading says it.
+- 2026-09-23 (build): home's status line marks itself `data-balance="ignore"` while it carries the pause glyph. The glyph is a 16px marker beside a sentence, and the reason sentences are long enough that the layout audit read the pair as two unbalanced columns at 320px.
+- 2026-09-23 (build): the tests live where the code's tests already were: `payment.ts`'s in `cards.test.ts` (there is no `payment.test.ts`), with a shared `books()` row in `src/lib/books.test-fixture.ts`. `live-studio.ts` is paused for `awaiting_credit`, carries two contributions, the board's $1 test payment and the open cards in its funding order, and one paused and one rejected card; the layout-balance "home with n open cards" variants put every open card in the order, and the empty-studio variant adds "No contributions yet." and /contribute.
+- 2026-09-23 (build): the route screenshots use the launch-shaped fixture, not production: production has no `public_money` or `public_stopped_cards` until money-logic's migration is applied, so production data would show only "Not available right now." in the new parts. A local preview built with `netlify.toml`'s production values was live-checked as well (Evidence).
 
 ## Appendix: strings
 
@@ -118,12 +128,17 @@ In `legal.ts`, with money-logic's column names:
 
 > moneyInLede: What supporters have paid, and where it went.
 > moneyInEmpty: No contributions yet.
-> moneyFromCount: from {n} contributions (and from 1 contribution)
+> moneyFromMany: from {n} contributions; moneyFromOne: from 1 contribution
 > describeReceived: What supporters paid at checkout, before any fee.
-> describeStudio: What supporters chose to send to the studio, less any correction charged to it. At checkout they chose {pct}% on average, weighted by amount, and the default is 20%.
+> describeStudio: What supporters chose to send to the studio, less any correction charged to it.
+> studioPctAvg: At checkout they chose {pct}% on average, weighted by amount, and the default is {default}%. ({default} is `DEFAULT_STUDIO_PCT`, 20.)
 > reconciledOn: Reconciled with Stripe on {date}.
 > notReconciled: Not yet reconciled with Stripe.
 > waterfallLine: Anything beyond a card's target funds the next cards in line.
 > boardTestLine: Includes the board's own test payment of {usd}; it funds no card.
-> pauseReasons.awaiting_credit: The agents are paused. Before launch the studio waits for Stripe to pay out the first contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.
+> pauseReasons.awaiting_credit: The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.
+> pauseReasons.spend_limit: The agents are paused because the studio reached its monthly limit on model usage. Funded cards keep their money and wait in the queue until the board resumes them.
+> pauseReasons.incident: The agents are paused while the board checks a problem. Funded cards keep their money and wait in the queue until the board resumes them.
+> pauseReasons.board: The board has paused the agents. Funded cards keep their money and wait in the queue until the board resumes them.
+> The rest (the Money in labels and descriptions, the Stopped headings, `failingCheckWords` for every code the dispatcher writes today and `cancelled_by_board`, `pausedFallback`, `rejectedFallback`) are in `platform/site/src/lib/legal.ts`.
 > fixedRules[0]: The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.
