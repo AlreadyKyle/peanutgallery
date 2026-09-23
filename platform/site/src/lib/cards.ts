@@ -11,7 +11,9 @@ export {
   fundableCards,
   fundLink,
   fundOrder,
+  inFundingOrder,
   isFullyFunded,
+  nextInLine,
   type CardCategory,
   type CategoryFilter,
 } from './payment';

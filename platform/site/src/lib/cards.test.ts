@@ -7,8 +7,10 @@ import {
   fundOrder,
   groupCards,
   inCategory,
+  inFundingOrder,
   isFullyFunded,
   isRunnable,
+  nextInLine,
   plannedCards,
   shippedOrder,
   sourceLabel,
@@ -17,7 +19,7 @@ import {
   visibleFilters,
 } from './cards';
 import { copy } from './copy';
-import type { Card } from './source';
+import type { Card, Money, Snapshot } from './source';
 
 function card(overrides: Partial<Card> = {}): Card {
   return {
@@ -63,23 +65,76 @@ describe('groupCards', () => {
   });
 });
 
-describe('fundableCards (payment.ts, kernel)', () => {
-  it("offers exactly the cards in Fund what's next that can take money, in funding order", () => {
-    const cards = [
-      card({ id: 'building', stage: 'building', funding_target_usd: 5 }),
-      card({ id: 'picked', stage: 'voted', funding_target_usd: 5, funded_usd: 1 }),
-      card({ id: 'full', stage: 'proposed', funding_target_usd: 5, funded_usd: 5 }),
-      card({ id: 'open-more', stage: 'proposed', funding_target_usd: 5, funded_usd: 3 }),
-      card({ id: 'open-less', stage: 'proposed', funding_target_usd: 5, funded_usd: 1 }),
-      card({ id: 'no-target', stage: 'proposed' }),
-      card({ id: 'directive', stage: 'proposed', shape: 'directive', funding_target_usd: 5 }),
-      card({ id: 'queued', stage: 'funded', funding_target_usd: 5, funded_usd: 5 }),
-      card({ id: 'live', stage: 'live', funding_target_usd: 10, funded_usd: 2 }),
-      card({ id: 'next', stage: 'proposed', horizon: 'next', funding_target_usd: 5 }),
-      card({ id: 'designing', stage: 'designing', funding_target_usd: 5 }),
-    ];
-    expect(fundableCards(cards).map((c) => c.id)).toEqual(['picked', 'designing', 'open-more', 'open-less']);
-    expect(fundableCards(cards)).toEqual(groupCards(cards).fund.filter(canFund));
+function books(order: string[]): Money {
+  return {
+    payments: 0,
+    received_usd: 0,
+    stripe_fees_usd: 0,
+    refunded_usd: 0,
+    disputed_usd: 0,
+    corrections_usd: 0,
+    studio_pct_avg: null,
+    reserve_usd: 0,
+    studio_usd: 0,
+    incident_usd: 0,
+    held_usd: 0,
+    agent_credit_usd: 0,
+    not_on_card_usd: 0,
+    short_usd: 0,
+    board_test_usd: 0,
+    reconciled_at: null,
+    last_run_ok: null,
+    funding_order: order.map((card_id) => ({ card_id, room_usd: 1 })),
+  };
+}
+
+function snapshot(cards: Card[], money: Money | null, missing: Snapshot['missing'] = []): Snapshot {
+  return {
+    pool: null,
+    cards,
+    funding: {},
+    launchedAt: null,
+    paused: false,
+    totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
+    events: [],
+    deploys: [],
+    roles: [],
+    cardTitles: {},
+    money,
+    missing,
+  };
+}
+
+describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', () => {
+  const cards = [
+    card({ id: 'picked', stage: 'voted', funding_target_usd: 5, funded_usd: 1 }),
+    card({ id: 'refunded', stage: 'funded', funding_target_usd: 5, funded_usd: 4 }),
+    card({ id: 'vetoed', stage: 'proposed', funding_target_usd: 5 }),
+    card({ id: 'open', stage: 'proposed', funding_target_usd: 5 }),
+  ];
+
+  it("offers exactly the cards in the waterfall's order, in that order, and skips an id the snapshot does not list", () => {
+    // A funded card a refund left below its target takes money first; a vetoed card is not in the order.
+    const s = snapshot(cards, books(['refunded', 'gone', 'picked', 'open']));
+    expect(fundableCards(s).map((c) => c.id)).toEqual(['refunded', 'picked', 'open']);
+    expect(nextInLine(s)?.id).toBe('refunded');
+    expect(inFundingOrder(s, 'refunded')).toBe(true);
+    expect(inFundingOrder(s, 'vetoed')).toBe(false);
+  });
+
+  it('offers no card and names none when the order is empty', () => {
+    const s = snapshot(cards, books([]));
+    expect(fundableCards(s)).toEqual([]);
+    expect(nextInLine(s)).toBeNull();
+    expect(inFundingOrder(s, 'open')).toBe(false);
+  });
+
+  it('offers no card when public_money did not load, or a snapshot carries no books', () => {
+    for (const s of [snapshot(cards, null, ['money']), snapshot(cards, books(['open']), ['money']), { ...snapshot(cards, null), money: undefined }]) {
+      expect(fundableCards(s)).toEqual([]);
+      expect(nextInLine(s)).toBeNull();
+      expect(inFundingOrder(s, 'open')).toBe(false);
+    }
   });
 });
 

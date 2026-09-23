@@ -27,12 +27,12 @@ export const copy = {
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
-  // Home's status line: one true sentence from the snapshot, its figures at 600, the pause said here only.
+  // Home's status line: one true sentence from the snapshot, its figures at 600, the pause said here
+  // only, in PausedNotice's sentence from legal.ts.
   status: {
     open: { one: '1 card', many: '{n} cards', restOne: 'is open for funding.', restMany: 'are open for funding.' },
     openNone: 'No card is open for funding right now.',
     building: { one: '1 card', many: '{n} cards', restOne: 'is being built.', restMany: 'are being built.' },
-    paused: 'The agents are paused.',
   },
   now: 'Building now',
   fund: "Fund what's next",

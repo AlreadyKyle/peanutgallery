@@ -933,8 +933,8 @@ button.link:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names no
-   card until the waterfall's order is public (docs/specs/home-and-design.md). */
+/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names the
+   next card in the waterfall's order (docs/specs/money-surfaces.md). */
 .choice-primary {
   margin-bottom: var(--space-4);
   border-color: var(--primary-bg);
@@ -957,16 +957,6 @@ button.link:hover:not(:disabled) {
 
 .choices-heading {
   font-size: var(--size-large);
-}
-
-.choice-group {
-  margin-bottom: var(--space-3);
-}
-
-.choice-group h3 {
-  margin-bottom: var(--space-1);
-  color: var(--text-muted);
-  font-size: var(--size-small);
 }
 
 .choices {

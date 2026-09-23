@@ -23,7 +23,7 @@ export const legal = {
   usdNote: 'All amounts are in US dollars (USD).',
   fixedRulesIntro: 'Some rules are fixed, and no contribution or card can change them.',
   fixedRules: [
-    'The public ledger shows the cost of all agent work paid for with contributions.',
+    'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.',
     'Agents spend contributions only on funded cards, within set caps.',
     "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.",
     "5% of the agents' share is set aside in an emergency fund, up to $500.",
@@ -80,9 +80,19 @@ export const legal = {
   // A card that was not built (the design guide's sample face until a public read lists them).
   notBuiltMoney: 'Its unspent money went to the next cards in line.',
   folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
-  // Shown while the board has paused the agents, for any reason: before the first payout, at the
-  // cutover, after a failed revert or in an incident. It follows the board's Pause and Resume on its own.
+  // Shown while the agents are paused and public_studio names no reason. It follows the board's Pause
+  // and Resume on its own. With a reason, the notice and home's status line say pauseReasons' sentence
+  // instead (PausedNotice.tsx pausedSentence); each names the category only, never who paused or when.
   pausedNotice: 'The agents are paused. Funded cards keep their money and wait in the queue until the board resumes them.',
+  pauseReasons: {
+    awaiting_credit:
+      "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.",
+    spend_limit:
+      'The agents are paused because the studio reached its monthly limit on model usage. Funded cards keep their money and wait in the queue until the board resumes them.',
+    incident:
+      'The agents are paused while the board checks a problem. Funded cards keep their money and wait in the queue until the board resumes them.',
+    board: 'The board has paused the agents. Funded cards keep their money and wait in the queue until the board resumes them.',
+  } as Record<string, string>,
   eventVerbs: {
     start: 'started',
     tool_call: 'used a tool',
@@ -168,12 +178,116 @@ export const legal = {
   },
   contributeTitle: 'Where should your contribution go?',
   contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
-  // The first choice on /contribute: money given with no card funds later cards (PLAN.md §4). It
-  // names no card until the waterfall's order is public (docs/specs/home-and-design.md, Decisions).
+  // The first choice on /contribute: money given with no card funds the next cards in line (PLAN.md
+  // §4). It names the first card in the waterfall's order (public_money.funding_order), says the
+  // money waits when no card takes money, and names no card when the order did not load
+  // (docs/specs/money-surfaces.md).
   pickForMe: 'Fund the next card in line',
   pickForMeBody: 'Your contribution funds whatever the agents build next.',
+  nextInLine: 'Next in line: {title}',
+  nextInLineNone: 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.',
   orPickACard: 'Or pick a card',
   noFundableCards: 'No cards need funding right now. Funding the next card in line still pays for whatever the agents build next.',
+  // Under /contribute's card choices.
+  waterfallLine: "Anything beyond a card's target funds the next cards in line.",
+  // /ledger's Funding band: money on no card yet, the shortfall and the board's test payment.
+  notOnCard: 'Not on a card yet',
+  describeNotOnCard: "Money given with no card, or beyond a card's target, waiting for the next card to open.",
+  shortBy: 'Waiting cards are short by {usd} until new money arrives.',
+  boardTestLine: "Includes the board's own test payment of {usd}; it funds no card.",
+  // /ledger's Money in band: what supporters paid and where it went. The figures add up: received -
+  // Stripe fees - refunded - disputed + corrections = reserve + studio + emergency fund + held + agent
+  // credit (docs/specs/money-logic.md). The board's own test payment is in none of them.
+  moneyIn: 'Money in',
+  moneyInLede: 'What supporters have paid, and where it went.',
+  moneyInEmpty: 'No contributions yet.',
+  moneyFromOne: 'from 1 contribution',
+  moneyFromMany: 'from {n} contributions',
+  received: 'Received',
+  describeReceived: 'What supporters paid at checkout, before any fee.',
+  stripeFees: 'Stripe fees',
+  describeStripeFees: 'What Stripe kept to process payments, refunds and disputes.',
+  refunded: 'Refunded',
+  describeRefunded: 'Contributions paid back to supporters.',
+  disputed: 'Disputed',
+  describeDisputed: "Contributions taken back through a bank dispute, less any the studio got back when the bank ruled for it.",
+  corrections: 'Corrections',
+  describeCorrections: 'Changes the board recorded by hand to correct the books.',
+  toReserve: 'To the reserve',
+  describeToReserve: "10% of every contribution after Stripe's fee. It covers disputes first.",
+  toStudio: 'To the studio',
+  describeStudio: 'What supporters chose to send to the studio, less any correction charged to it.',
+  studioPctAvg: 'At checkout they chose {pct}% on average, weighted by amount, and the default is {default}%.',
+  toIncident: 'To the emergency fund',
+  describeToIncident: "5% of the agents' share while the fund holds under $500.",
+  heldMoneyIn: 'Held for 14 days',
+  describeHeldMoneyIn: 'Agent credit still in its 14-day hold.',
+  agentCredit: 'Agent credit',
+  describeAgentCredit: 'What reached the agents to spend on cards.',
+  reconciledOn: 'Reconciled with Stripe on {date}.',
+  notReconciled: 'Not yet reconciled with Stripe.',
+  // /ledger's Stopped band: the rejected and paused cards, each with why and where its money is. The
+  // one public list of them (docs/specs/money-surfaces.md); they appear on no other page.
+  stoppedHeading: 'Stopped cards',
+  stoppedLede: 'Cards that stopped before they shipped, why, and where their money is.',
+  pausedHeading: 'Paused',
+  didntShipHeading: "Didn't ship",
+  pausedMoneyStays: 'Its money stays on it until it resumes or the board cancels it.',
+  fundedByOne: 'funded by {usd} from 1 supporter',
+  fundedByMany: 'funded by {usd} from {n} supporters',
+  fundedByAmount: 'funded by {usd}',
+  movedTo: 'Its unspent money went to {places}.',
+  movedPlace: '{place} ({usd})',
+  anotherCard: 'another card',
+  // A stopped card's reason in plain words, by the failing_check code the dispatcher or the board
+  // wrote. A code with no entry shows its stage's fallback; the raw code never shows.
+  failingCheckWords: {
+    cancelled_by_board: 'The board cancelled it.',
+    acceptance: "The change did not pass the card's own check.",
+    acceptance_grammar: "The card's check could not be read.",
+    acceptance_already_true: 'What the card asked for was already true.',
+    lane_unsupported: 'The agents cannot change that part of the studio yet.',
+    lane_violation: 'The change touched files the card does not allow.',
+    file_mode: 'The change added a kind of file the studio does not accept.',
+    history: 'The change did not arrive in the shape the checks expect.',
+    no_changes: 'The agent made no change.',
+    tool_allowlist: 'The agent tried to use a tool it is not allowed.',
+    session: "The agent's work session failed.",
+    gate: 'The change failed the automated checks.',
+    merge: 'The change could not be merged.',
+    deploy: 'The change failed to deploy.',
+    smoke: 'The bot that plays the game found a problem with the change.',
+    git_tamper: "The change touched the studio's own tools.",
+    dispatcher_error: "An error in the studio's own tools stopped it.",
+    ceiling: 'It reached its spending limit.',
+    budget: 'It used up its budget.',
+    turn_cap: 'The agent reached its limit on steps.',
+    wall_clock: 'The agent ran out of time.',
+    console_credit: "The agents' model credit ran out.",
+    usage_tier_cap: 'The studio reached its monthly limit on model usage.',
+    paused_by_board: 'The board paused the studio while it was being built.',
+    board_session: 'The board session it was running in ended.',
+    horizon: 'The board moved it to a later part of the roadmap.',
+    vetoed: 'The board set it aside.',
+    patch_conflict: 'Its change no longer fits the latest version, so it waits to be redone.',
+    unknown_model: "The agent's model was not recognised.",
+    dispatcher_stopped: "The studio's tools stopped while it was being built.",
+    dispatcher_restart: "The studio's tools restarted while it was being built.",
+    adapter: 'The service the agents run on had a problem.',
+    managed_api: 'The service the agents run on had a problem.',
+    stream_lost: 'The connection to the agent was lost.',
+    session_unsettled: "The agent's last session could not be closed out.",
+    outage: 'A service the studio relies on was down.',
+    post_merge_outage: 'A service the studio relies on was down after the change went in.',
+    deploy_timeout: 'The deploy took too long to confirm.',
+    gate_missing: 'The automated checks did not start.',
+    gate_pending: 'The automated checks did not finish in time.',
+    gate_infrastructure: 'The automated checks could not run.',
+    main_red: 'The automated checks were already failing before this change.',
+    pr_head: 'The change did not reach GitHub in time.',
+  } as Record<string, string>,
+  pausedFallback: 'It stopped on a check the board is looking into.',
+  rejectedFallback: "It did not pass one of the studio's checks.",
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
     'The money available to the agents, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
