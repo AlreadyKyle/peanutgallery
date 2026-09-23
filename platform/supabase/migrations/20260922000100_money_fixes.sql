@@ -199,8 +199,8 @@ alter table public.studio_state add column if not exists monthly_cap_usd numeric
 create table if not exists public.board_actions (
   id uuid primary key default gen_random_uuid(),
   action text not null constraint board_actions_action_check
-    check (action in ('set_caps', 'record_credit_purchase', 'set_card_horizon', 'cancel_card', 'resume_card')),
-  card_id uuid references public.cards (id),
+    check (action in ('set_caps', 'record_credit_purchase', 'file_card', 'set_card_horizon', 'cancel_card', 'resume_card')),
+  card_id uuid references public.cards (id) on delete set null,
   actor_email text not null,
   reason text not null constraint board_actions_reason_check check (btrim(reason) <> ''),
   details jsonb not null default '{}'::jsonb,

@@ -134,6 +134,12 @@ begin
     'low', null, p_stage, p_horizon
   )
   returning id into v_id;
+  insert into public.board_actions (action, card_id, actor_email, reason, details)
+  values ('file_card', v_id, auth.email(), coalesce(nullif(btrim(p_board_reason), ''), 'No reason given'), jsonb_build_object(
+    'horizon', p_horizon,
+    'stage', p_stage,
+    'funding_target_usd', round(p_funding_target_usd, 4)
+  ));
   return v_id;
 end;
 $$;
@@ -615,7 +621,7 @@ $$;
 -- working on can be cancelled: proposed, designing, voted, funded or paused.
 -- To stop a building or gated card the board pauses the studio first, which
 -- stops the session and the merge, and cancels the card once it shows paused.
--- Money on a cancelled card's bar stays in the pool and funds later cards.
+-- A card holding supporters' money (on its bar or on hold) is refused.
 
 create or replace function public.cancel_card(p_card uuid, p_reason text) returns jsonb
 language plpgsql
@@ -646,6 +652,25 @@ begin
   end if;
   if v_card.stage not in ('proposed', 'designing', 'voted', 'funded', 'paused') then
     raise exception 'A % card cannot be cancelled', v_card.stage;
+  end if;
+  -- Supporters funded this card to be built. A card with money on its bar, or
+  -- a payment still on hold for it, is not cancelled; its supporters are
+  -- refunded first, which clears the bar.
+  if v_card.funded_usd > 0 or exists (
+    select 1
+    from public.contributions p
+    where p.goal_card_id = p_card
+      and p.entry = 'payment'
+      and not exists (
+        select 1 from public.contributions r where r.parent_id = p.id and r.entry = 'release'
+      )
+      and (
+        select coalesce(sum(c.held_usd), 0)
+        from public.contributions c
+        where c.id = p.id or c.parent_id = p.id
+      ) > 0
+  ) then
+    raise exception 'A card holding supporters'' money cannot be cancelled; refund its supporters first';
   end if;
   update public.cards set stage = 'rejected', failing_check = 'cancelled_by_board' where id = p_card;
   insert into public.board_actions (action, card_id, actor_email, reason, details)

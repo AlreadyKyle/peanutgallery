@@ -1367,6 +1367,10 @@ describe("backlog migration", () => {
         [`  if p_horizon = 'now' and p_folder = 'platform' and p_lane = 'code' then\n    raise exception '${CLOSED_LANE}';\n  end if;\n`, ""],
         ["    confidence, proposer_role_id, stage, horizon\n", "    confidence, proposer_role_id, stage\n"],
         ["    'low', null, p_stage, p_horizon\n", "    'low', null, p_stage\n"],
+        [
+          "  insert into public.board_actions (action, card_id, actor_email, reason, details)\n  values ('file_card', v_id, auth.email(), coalesce(nullif(btrim(p_board_reason), ''), 'No reason given'), jsonb_build_object(\n    'horizon', p_horizon,\n    'stage', p_stage,\n    'funding_target_usd', round(p_funding_target_usd, 4)\n  ));\n",
+          "",
+        ],
       ]),
     ).toBe(functionBlockIn(boardTwoFactor, "file_card"));
     expect(backlogSql).toContain(`revoke all on function public.file_card(${FILE_CARD_V12_TYPES}) from public, anon;`);

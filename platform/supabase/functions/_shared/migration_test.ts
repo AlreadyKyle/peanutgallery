@@ -1200,6 +1200,11 @@ Deno.test("migrations on PGlite", {
             'spawn-table row gatherer: name changes from Gatherer to Sweeper.\n  check: config seed-1/config/spawn-table.json rows[id=gatherer].name == "Sweeper"',
           ],
         );
+        // Filing a card is a board action and is recorded, with a plain note when no reason was given.
+        assertEquals(
+          await row(`select action, actor_email, reason, details->>'horizon' as horizon from public.board_actions where card_id = $1`, [configCard.id]),
+          { action: "file_card", actor_email: BOARD_EMAIL, reason: "No reason given", horizon: "now" },
+        );
         assertEquals(
           await row(
             `select bucket::text as bucket, source::text as source, shape::text as shape, lane::text as lane, folder::text as folder, stage::text as stage, priority, confidence::text as confidence, title, summary, intent, board_reason, funding_target_usd, funded_usd, estimate_usd, proposer_role_id, executor_role_id = $2 as executor from public.cards where id = $1`,
@@ -3259,10 +3264,10 @@ Deno.test("migrations on PGlite", {
       "cancel_card rejects a card no agent is working on, with the board's reason, and refuses the rest",
       async () => {
         await signInAs(BOARD_EMAIL, "aal2");
-        const make = async (stage: string) =>
+        const make = async (stage: string, funded = 0) =>
           (await row<{ id: string }>(
-            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, funded_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 5, 2, $2) returning id`,
-            [`A ${stage} card for cancelling`, stage],
+            `insert into public.cards (bucket, source, shape, lane, folder, title, funding_target_usd, funded_usd, stage) values ('game', 'board', 'goal', 'config', 'seed-1', $1, 5, $3, $2) returning id`,
+            [`A ${stage} card for cancelling (${funded})`, stage, funded],
           )).id;
         for (const stage of ["proposed", "designing", "voted", "funded", "paused"]) {
           const id = await make(stage);
@@ -3270,7 +3275,7 @@ Deno.test("migrations on PGlite", {
           assertEquals(r, { card_id: id, stage: "rejected", from_stage: stage });
           assertEquals(
             await row(`select stage::text as stage, failing_check, funded_usd from public.cards where id = $1`, [id]),
-            { stage: "rejected", failing_check: "cancelled_by_board", funded_usd: "2.0000" },
+            { stage: "rejected", failing_check: "cancelled_by_board", funded_usd: "0.0000" },
           );
           assertEquals(
             await row(`select action, actor_email, reason, details from public.board_actions where card_id = $1`, [id]),
@@ -3278,9 +3283,16 @@ Deno.test("migrations on PGlite", {
               action: "cancel_card",
               actor_email: BOARD_EMAIL,
               reason: "Out of scope for Dust",
-              details: { from_stage: stage, funded_usd: 2 },
+              details: { from_stage: stage, funded_usd: 0 },
             },
           );
+          const funded = await make(stage, 2);
+          await refuses(
+            `select public.cancel_card($1, 'Stop it')`,
+            "A card holding supporters' money cannot be cancelled; refund its supporters first",
+            [funded],
+          );
+          assertEquals((await row<{ stage: string }>(`select stage::text as stage from public.cards where id = $1`, [funded])).stage, stage);
         }
         for (const stage of ["building", "gated"]) {
           const id = await make(stage);
