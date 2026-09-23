@@ -1,6 +1,6 @@
 # Scale for launch: spend totals, the usage tier cap, Actions minutes, Netlify builds, the launch credit limit
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 The launch plan's Phase 4 items F2, F3, F5, F6 and F7, from the scale review of 23 September 2026 (`review-scale.json`). F1 (the cached public snapshot), F4 (the Oracle shape) and F8 (quota alerts) are other pull requests.
 
@@ -20,7 +20,7 @@ In:
 - `.github/workflows/gate.yml` and `platform/gate/changed-paths.sh`: skipping jobs and steps a change cannot reach, with the gate failing closed; the pnpm cache and the cancelling of superseded pull request runs, verified.
 - Both `netlify.toml` ignore rules.
 - A proposed value for `credit_studio_daily_cap_usd`, and the Actions minutes floor F8 alerts on.
-- Two lines of `docs/PLAN.md` (§6 Budget throttle and the Appendix A `studio_state` shape) so the constitution names the tier cap.
+- Three places in `docs/PLAN.md`: §6 Budget throttle and the Appendix A `studio_state` shape, so the constitution names the tier cap, and the Appendix A gate paragraph, so it says the work is selected by changed path and the gate job fails closed.
 
 Out:
 - Changing the cap itself: the board sets it at /board. No kernel money function changes.
@@ -36,7 +36,7 @@ Out:
 - An API error whose text holds `enforced_spend_limit_reached` or "reached your API usage limits" is the tier cap. It is checked before the credit patterns, since only the tier cap cannot be cleared by buying credit.
 - A session that meets it ends as `tier_cap`. The pipeline pauses the studio (`paused_by` "dispatcher: usage tier cap reached (card …)"), pauses the card with failing check `usage_tier_cap` and its money kept, and alerts: the limit resets when the month turns or Anthropic raises the tier, buying credit does not clear it, and the tier's limit should be reported.
 - A refused session create maps to failing check `usage_tier_cap` or `console_credit`, and its error event keeps the API's whole answer, the error code included. A `session.error` event is kept whole as well.
-- `studio_state.anthropic_tier_cap_usd` is null by default, which adds no bound. Once the board reports the tier's monthly limit from the Console's Limits page, the throttle bounds each unattended session by the limit less the studio and overhead spend since the tier month start and less what running sessions may still spend. A card that does not fit sleeps as `tier_cap`, alerted once per tier month.
+- `studio_state.anthropic_tier_cap_usd` is null by default, which adds no bound. Once the board reports the tier's monthly limit from the Console's Limits page, the throttle bounds each unattended session by the limit less the studio and overhead spend since the tier month start and less what running sessions may still spend. A card that does not fit sleeps as `tier_cap`, alerted once per tier month: the alert is keyed on the tier month's name (`tierMonth`, the earliest of the three zones' current months), which changes only when the last zone turns, not on its start, which moves forward on the 1st as each zone turns.
 - The tier month starts at the earliest of the current month's starts in UTC, New York and Los Angeles, because Anthropic's rate-limits page does not say which time zone its month turns in. So it never starts after the month start in any of those zones, and in the hours on the 1st before every zone has turned it also counts the month just ending, which can only stop a card early.
 - The value is a production write (below). It can only stop cards; the monthly cap, the daily cap and the Console credit bound still apply.
 
@@ -67,12 +67,14 @@ Out:
 - [x] A `tier_cap` session pauses the studio and the card (`usage_tier_cap`), keeps the card's money and alerts the board that buying credit does not clear it.
 - [x] A refused session create pauses the card as `usage_tier_cap` or `console_credit` and keeps the API's error code in the event.
 - [x] With a tier cap set, the throttle starts no card whose need exceeds the cap less the tier month's spend and running sessions, bounds the budget by it, and alerts once; with none set it adds no bound.
+- [x] The tier cap alert is sent once per tier month, across the hours on the 1st when UTC, New York and Los Angeles turn one after another, and once more in the next tier month.
 - [x] The tier month never starts after the month start in UTC, New York or Los Angeles.
 - [x] `changed-paths.sh` gives the flags above for docs, dispatcher, ops, supabase, agents, site, gate, a new platform folder, `.github`, the lockfile and seed-1 changes.
 - [x] The gate job fails when a selected job did not pass, when a flag is missing or malformed, and when detect failed; it passes a docs-only or dispatcher-only change without the build job.
 - [x] Detect fails a missing or malformed flag and writes no output.
 - [x] The workflow runs the Deno steps only on `functions`, the end-to-end steps only on `site`, the build job on `seed` or `site`, and caches the pnpm store in `seed-code` and `platform` only.
 - [x] Each Netlify site rebuilds on its own folder and the four workspace files, skips a change to `docs/` or the dispatcher, and skips `card/*` and `dependabot/*` previews.
+- [x] `docs/PLAN.md` Appendix A says the work is selected by changed path, the Deno tests and the site build and suite run only for a change that can reach them, and the gate job fails closed.
 - [ ] `20260923000100_spend_totals.sql` is applied in production and `studio_spend_totals` matches a direct sum of the ledger there. (waits on: production step 1)
 - [ ] The tier's monthly limit is recorded in `studio_state.anthropic_tier_cap_usd`. (waits on: Kyle reporting the tier at the credit step, checklist C23; production step 2)
 - [ ] The Netlify team is confirmed on legacy Free. (waits on: Kyle, checklist A9)
@@ -93,23 +95,34 @@ Out:
 2. When Kyle reports the tier's monthly limit from the Console's Limits page at the credit step: `update public.studio_state set anthropic_tier_cap_usd = <that limit> where id = 1;`. Repeat whenever the tier changes. An Evaluation tier below Start has a lower limit, so the first report matters.
 3. Kyle: the Netlify Billing page check (checklist A9), and the studio daily credit limit (checklist B19).
 4. F8's alert reads the floor above: 300 minutes left.
+5. This pull request leaves `docs/ROADMAP.md` to the merge (the Wave 1 pull requests share no files). Its row names step 1, applied before any dispatcher, attended or not, is restarted on this code, since `sumLedger` and the tick's totals call the new functions and fail with no fallback until they exist; step 2; and checklist A9 and B19.
 
 ## Evidence
 
-`pnpm verify` on this branch, exit 0 (the lines that count):
+`pnpm verify` on this branch after the review fixes (the tier cap alert's key, the Appendix A gate paragraph), exit 0 (the lines that count):
 
 ```
 platform/supabase test:       Tests  232 passed (232)
 seed-1 test:       Tests  77 passed (77)
 platform/site test:       Tests  225 passed (225)
-platform/dispatcher test:       Tests  580 passed (580)
-platform/gate test: PASS: gate tests passed=423
-  studio_spend_totals and card_ledger_usd sum the ledger in SQL for the service role only, and the tier cap is optional and positive ... ok (12ms)
-the launch migrations upgrade a live database in production order ... ok (516ms)
+platform/dispatcher test:       Tests  583 passed (583)
+platform/gate test: PASS: gate tests passed=427
+  studio_spend_totals and card_ledger_usd sum the ledger in SQL for the service role only, and the tier cap is optional and positive ... ok (11ms)
+the launch migrations upgrade a live database in production order ... ok (489ms)
 ok | 79 passed (64 steps) | 0 failed (2s)
 GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
-PASS: secret-scan files=402
+PASS: secret-scan files=403
+ℹ tests 15
+ℹ pass 15
+ℹ fail 0
+```
+
+The new tick test run against the alert keyed on `tierMonthStart` as it was:
+
+```
+ × alerts the usage tier cap once across the month turn in UTC, New York and Los Angeles, and again in the next tier month
+      Tests  1 failed | 26 passed (27)
 ```
 
 An earlier `pnpm verify` on the same code failed three `pipeline.test.ts` cases on a 5-second timeout while other sessions loaded the machine (load average about 20); the file passed 59 of 59 when run alone straight after, and the rerun above passed.
@@ -117,8 +130,8 @@ An earlier `pnpm verify` on the same code failed three `pipeline.test.ts` cases 
 The criteria and the tests that prove them:
 - Spend totals: `db.test.ts` "reads the Console credit bought and the studio spend totals from one database function, never the ledger rows", "refuses spend totals the function did not return, rather than reading them as zero", "sums a card's ledger rows in the database, so a card with more rows than one answer holds is not undercounted"; `tick.test.ts` "reads the spend totals once a tick, from the New York month start and the tier month start"; the Deno step above, which also re-applies the migration (every file runs twice).
 - Tier cap recognised: `credit.test.ts` "reads the usage tier's monthly cap as tier_cap, by its message or its error code", "reads the workspace form of the Console limit as credit", "leaves other API errors, an ordinary rate limit included, to fail the card as before"; `session-money.test.ts` "stops as tier_cap on an adapter error event about the usage tier's monthly cap, never as credit"; `managed.test.ts` "pauses the card as usage_tier_cap, keeping the API's error code in the event, when the create meets the usage tier's cap" (the error built by the SDK's own `APIError.generate`), "pauses the card as console_credit when the create is refused for credit", "ends as tier_cap when the session create meets the usage tier's cap, so the pipeline pauses the studio", "ends as tier_cap when a running session reports the cap in a session.error event, keeping its error code".
-- Tier cap acted on: `pipeline.test.ts` "pauses the studio and the card, keeping its money, when the API says the usage tier's monthly cap is reached"; `throttle.test.ts` "usage tier cap" (four cases) and `tierMonthStart` (three cases, one across every zone); `tick.test.ts` "stays below the usage tier cap the board reported, counting the tier month, and alerts once"; `db.test.ts` "reads the usage tier cap, and a studio without one, or before the column exists, as null".
-- Gate: the gate tests above, among them `changed: <file> gives <flags>` for eleven paths, fourteen `gate verdict:` cases run from the workflow's own script, four `detect:` cases run from detect's own script, and the workflow and Netlify assertions. Each new check was then run against a mutation and failed as it should:
+- Tier cap acted on: `pipeline.test.ts` "pauses the studio and the card, keeping its money, when the API says the usage tier's monthly cap is reached"; `throttle.test.ts` "usage tier cap" (four cases) and `tierMonthStart` (five cases: one across every zone, and two for `tierMonth`, which names one tier month from the last zone's turn to the next and never splits a window); `tick.test.ts` "stays below the usage tier cap the board reported, counting the tier month, and alerts once" and "alerts the usage tier cap once across the month turn in UTC, New York and Los Angeles, and again in the next tier month", which fails with the alert keyed on `tierMonthStart` as it was; `db.test.ts` "reads the usage tier cap, and a studio without one, or before the column exists, as null".
+- Gate: the gate tests above, among them `changed: <file> gives <flags>` for eleven paths, fourteen `gate verdict:` cases run from the workflow's own script, four `detect:` cases run from detect's own script, the workflow and Netlify assertions, and four `plan:` assertions that docs/PLAN.md Appendix A describes the selection and the fail-closed gate job (all four fail against main's PLAN.md). Each new check was then run against a mutation and failed as it should:
 
 ```
 == verdict wants build on PLATFORM instead of SITE
