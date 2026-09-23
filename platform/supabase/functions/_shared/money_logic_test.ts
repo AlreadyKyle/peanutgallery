@@ -552,6 +552,34 @@ Deno.test("spend, refunds and releases", OPTS, async (t) => {
     }
   });
 
+  await t.step("waterfall_sweep releases a card the dispatcher rejected directly: its unspent money moves on at step 2 and its spent money stays on the bar", async () => {
+    const s = await studio();
+    try {
+      const rejected = await s.card("Rejected after a failed gate", 10);
+      const p1 = await s.pay("rj1", 1, rejected);
+      const p2 = await s.pay("rj2", 3, rejected);
+      await s.spend(rejected, 1.5); // p1's 1 spent, then 0.5 of p2's 3
+      // The dispatcher rejects a card by writing its stage, never through cancel_card.
+      await s.db.query(`update public.cards set stage = 'rejected' where id = $1`, [rejected]);
+      const next = await s.card("Next in line", 5);
+      assertEquals(await s.sweep(), { released_cards: 1, released_usd: 2.5, promoted: 0, drained_usd: 0 });
+      assertEquals(await s.stage(rejected), "rejected");
+      assertEquals([await s.bar(rejected), await s.bar(next)], [1.5, 2.5]);
+      assertEquals((await s.allocations(String(p1.contribution_id))).map((a) => [a.destination, a.card_id, a.amount_usd, a.step, a.reason]), [
+        ["card", rejected, 1, 1, "credit"],
+      ]);
+      assertEquals((await s.allocations(String(p2.contribution_id))).map((a) => [a.destination, a.card_id, a.amount_usd, a.step, a.reason]), [
+        ["card", rejected, 3, 1, "credit"],
+        ["card", rejected, -2.5, null, "card_release"],
+        ["card", next, 2.5, 2, "card_release"],
+      ]);
+      assertEquals(await s.sweep(), { released_cards: 0, released_usd: 0, promoted: 0, drained_usd: 0 });
+      await s.books();
+    } finally {
+      await s.close();
+    }
+  });
+
   await t.step("cancel_card cancels a card holding money, moves its unspent money to the next cards in line, and refuses building and gated cards", async () => {
     const s = await studio();
     try {
