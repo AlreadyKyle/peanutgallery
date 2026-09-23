@@ -12,7 +12,8 @@ import {
   plannedCards,
   shippedOrder,
   sourceLabel,
-  statusOf,
+  faceOf,
+  CATEGORY_FILTERS,
   visibleFilters,
 } from './cards';
 import { copy } from './copy';
@@ -123,26 +124,26 @@ describe('fundOrder', () => {
   });
 });
 
-describe('statusOf', () => {
-  it('maps every stage to a status', () => {
-    expect(statusOf(card({ stage: 'building' }))).toBe('building');
-    expect(statusOf(card({ stage: 'gated' }))).toBe('gated');
-    expect(statusOf(card({ stage: 'funded' }))).toBe('queued');
-    expect(statusOf(card({ stage: 'live' }))).toBe('shipped');
-    expect(statusOf(card({ stage: 'voted' }))).toBe('picked');
-    expect(statusOf(card({ stage: 'designing' }))).toBe('open');
-    expect(statusOf(card({ stage: 'proposed' }))).toBe('open');
-    expect(statusOf(card({ stage: 'anything-else' }))).toBe('open');
+describe('faceOf', () => {
+  it('maps every stage to a face', () => {
+    expect(faceOf(card({ stage: 'building' }))).toBe('building');
+    expect(faceOf(card({ stage: 'gated' }))).toBe('checks');
+    expect(faceOf(card({ stage: 'funded' }))).toBe('funded');
+    expect(faceOf(card({ stage: 'live' }))).toBe('live');
+    expect(faceOf(card({ stage: 'voted' }))).toBe('picked');
+    expect(faceOf(card({ stage: 'designing' }))).toBe('open');
+    expect(faceOf(card({ stage: 'proposed' }))).toBe('open');
+    expect(faceOf(card({ stage: 'anything-else' }))).toBe('open');
   });
 });
 
 describe('categoryOf and inCategory', () => {
-  it('puts platform cards under the studio and seed-1 cards under the game, and no card under next', () => {
+  it('puts platform cards under the studio and seed-1 cards under the game, and has no third suit', () => {
     const game = card({ folder: 'seed-1', bucket: 'qa' });
     const studio = card({ folder: 'platform', bucket: 'platform' });
     expect(categoryOf(game)).toBe('game');
     expect(categoryOf(studio)).toBe('studio');
-    expect([inCategory(game, 'all'), inCategory(game, 'game'), inCategory(game, 'studio'), inCategory(game, 'next')]).toEqual([true, true, false, false]);
+    expect([inCategory(game, 'all'), inCategory(game, 'game'), inCategory(game, 'studio')]).toEqual([true, true, false]);
     expect(inCategory(studio, 'studio')).toBe(true);
   });
 });
@@ -225,7 +226,7 @@ describe('horizons', () => {
 });
 
 describe('visibleFilters', () => {
-  it('always shows All and Dust, and The studio and Next game only while they have cards', () => {
+  it('always shows All and Dust, and The studio only while it has cards', () => {
     expect(visibleFilters([card({ folder: 'seed-1' })])).toEqual(['all', 'game']);
     expect(visibleFilters([])).toEqual(['all', 'game']);
     expect(visibleFilters([card({ folder: 'platform' })])).toEqual(['all', 'game', 'studio']);

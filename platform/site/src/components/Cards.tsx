@@ -1,78 +1,30 @@
 import { useState } from 'react';
-import {
-  categoryOf,
-  groupCards,
-  inCategory,
-  sourceLabel,
-  statusOf,
-  visibleFilters,
-  type CategoryFilter,
-} from '../lib/cards';
+import { categoryOf, groupCards, inCategory, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
-import { CardMoney, shippedCaption as moneyCaption } from './Funding';
+import { CardFace } from './Card';
+import { shippedCaption as moneyCaption } from './Funding';
+import { Glyph, SUITS } from './Glyph';
 import { Guarded } from './Guarded';
 
-// The card layout, in the platform code lane. Its money (the bar, the caption, what a card spent and
-// the Fund this card link) comes from Funding.tsx and the snapshot guard from Guarded.tsx, both kernel.
+// The card groups, in the platform code lane. Each card is drawn by Card.tsx; its money (the bar,
+// the spec rows, what a card spent and the Fund this card link) comes from Funding.tsx and the
+// snapshot guard from Guarded.tsx, both kernel.
 export { FundingBar, fundingCaption } from './Funding';
 export { Guarded } from './Guarded';
+export { CardFace } from './Card';
 
 function blank(text: string | null): boolean {
   return text === null || text.trim() === '';
-}
-
-const STATUS_WORDS: Record<ReturnType<typeof statusOf>, string> = {
-  building: copy.statusBuilding,
-  gated: copy.statusGated,
-  queued: copy.statusQueued,
-  picked: copy.statusPicked,
-  open: copy.statusOpen,
-  shipped: copy.statusShipped,
-};
-
-// The agent brief stays public but collapsed behind a native disclosure.
-function Brief({ intent }: { intent: string | null }) {
-  if (blank(intent)) return null;
-  return (
-    <details className="brief">
-      <summary>{copy.agentBrief}</summary>
-      <p>{intent}</p>
-    </details>
-  );
-}
-
-/**
- * One card as a box: category and status on top, title and summary, then money and the action
- * pinned to the bottom. In example mode (/how-it-works) it renders no link, button or disclosure at
- * all, whatever canFund or the Payment Link say, so an illustration can never take a payment.
- */
-export function CardBox({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
-  const titleId = `${example ? 'example' : 'card'}-title-${card.id}`;
-  const status = statusOf(card);
-  return (
-    <li className="card">
-      <p className="card-top">
-        <span className="card-category">{copy.categories[categoryOf(card)]}</span>
-        <span className={status === 'open' ? 'card-status' : 'card-status badge'}>{STATUS_WORDS[status]}</span>
-      </p>
-      <h3 id={titleId}>{card.title}</h3>
-      {blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>}
-      <div className="card-bottom">
-        <CardMoney card={card} snapshot={snapshot} titleId={titleId} source={sourceLabel(card.source)} example={example} />
-        {example ? null : <Brief intent={card.intent} />}
-      </div>
-    </li>
-  );
 }
 
 function CardGrid({ cards, snapshot }: { cards: Card[]; snapshot: Snapshot }) {
   return (
     <ul className="card-grid">
       {cards.map((card) => (
-        <CardBox key={card.id} card={card} snapshot={snapshot} />
+        <CardFace key={card.id} card={card} snapshot={snapshot} />
       ))}
     </ul>
   );
@@ -90,9 +42,30 @@ export function BuildingNow({ snapshot }: { snapshot: Snapshot }) {
   );
 }
 
+/** One filter chip: the suit glyph and label (or All), its count, and the check glyph while pressed. */
+export function FilterChip({
+  option,
+  count,
+  pressed,
+  onPress,
+}: {
+  option: CategoryFilter;
+  count: number;
+  pressed: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button type="button" className="filter" aria-pressed={pressed} onClick={onPress}>
+      {pressed ? <Glyph name="check" /> : null}
+      {option === 'all' ? null : <Glyph name={SUITS[option].glyph} />}
+      {copy.categories[option]} <span className="filter-count">{count}</span>
+    </button>
+  );
+}
+
 /**
- * Cards open for funding, filtered by what they spend money on. The studio and next game chips show
- * only while they have cards; a chip that empties while pressed falls back to All.
+ * Cards open for funding, filtered by what they spend money on. The studio chip shows only while it
+ * has cards; a chip that empties while pressed falls back to All.
  */
 export function FundBoard({ studio }: { studio: StudioState }) {
   const [chosen, setFilter] = useState<CategoryFilter>('all');
@@ -109,15 +82,7 @@ export function FundBoard({ studio }: { studio: StudioState }) {
           <>
             <div className="filters" role="group" aria-label={copy.filterLabel}>
               {options.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className="filter"
-                  aria-pressed={filter === option}
-                  onClick={() => setFilter(option)}
-                >
-                  {copy.categories[option]} <span className="filter-count">{count(option)}</span>
-                </button>
+                <FilterChip key={option} option={option} count={count(option)} pressed={filter === option} onPress={() => setFilter(option)} />
               ))}
             </div>
             {note === null ? null : <p className="muted">{note}</p>}
@@ -142,9 +107,13 @@ export function shippedCaption(card: Card, snapshot: Snapshot): string {
 export function ShippedRow({ card, snapshot, example = false }: { card: Card; snapshot: Snapshot; example?: boolean }) {
   const env = siteEnv();
   const titleId = `${example ? 'example' : 'shipped'}-title-${card.id}`;
+  const suit = SUITS[categoryOf(card)];
   return (
     <li>
-      <p className="shipped-category">{copy.categories[categoryOf(card)]}</p>
+      <p className="shipped-category with-glyph">
+        <Glyph name={suit.glyph} />
+        {suit.label}
+      </p>
       <h3 id={titleId}>{card.title}</h3>
       {blank(card.summary) ? null : <p>{card.summary}</p>}
       <p className="card-meta">{shippedCaption(card, snapshot)}</p>

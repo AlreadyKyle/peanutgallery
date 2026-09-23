@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { copy } from './lib/copy';
+import { Guide, GUIDE_PATH } from './pages/Guide';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
 import { Roadmap } from './pages/Roadmap';
@@ -17,6 +18,8 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/how-it-works', element: <HowItWorks /> },
   { path: '/team', element: <Team /> },
   { path: '/roadmap', element: <Roadmap /> },
+  // The design guide: unlisted (no top bar link, nothing links to it) and not indexed (DESIGN.md, Mockups).
+  { path: GUIDE_PATH, element: <Guide /> },
 ];
 
 /** The top bar's links to these pages, before the kernel's Ledger, Play, Discord and Contribute. */

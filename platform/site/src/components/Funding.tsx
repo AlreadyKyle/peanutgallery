@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
@@ -5,9 +7,10 @@ import { canFund, exampleSplit, fundLink } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 
-// A card's money: its funding bar and the "$0.00 of $3.00 · 0 contributors" line under it, what a
-// building or shipped card has spent, the Fund this card link, and the split example's figures.
-// Kernel (docs/specs/board-site.md): the card's own layout (Cards.tsx) places these and cannot change
+// A card's money: its funding bar and spec rows (and the "$0.00 of $3.00 · 0 contributors" line a
+// /contribute choice shows), what a building or shipped card has spent, the Fund this card link, the
+// coin mark, and the split example's figures.
+// Kernel (docs/specs/board-site.md): the card's own layout (Card.tsx) places these and cannot change
 // a figure, the link or the card id it carries.
 
 export function contributorsLine(count: number): string {
@@ -21,71 +24,143 @@ export function contributorsLine(count: number): string {
 export function fundingCaption(card: Card, snapshot: Snapshot): string | null {
   if (card.funding_target_usd <= 0) return null;
   const amount = `${formatUsd(card.funded_usd)} of ${formatUsd(card.funding_target_usd)}`;
-  if (snapshot.missing.includes('funding')) return amount;
-  const funding = snapshot.funding[card.id];
-  // A goal card shows its count from the start; no funding row yet means 0.
-  const showContributors = card.shape === 'goal' || funding !== undefined;
-  return showContributors ? `${amount} · ${contributorsLine(funding?.contributors ?? 0)}` : amount;
+  const contributors = cardContributors(card, snapshot);
+  return contributors === null ? amount : `${amount} · ${contributorsLine(contributors)}`;
 }
 
+/**
+ * The funding bar: a paper track and a coin fill that ends in a 2px ink rule. The fill is placed with
+ * a transform (styles.css), so the rule never scales, and it shows at least 2px once any money has
+ * landed. The bar is supplementary: the spec rows and the state word carry empty and full.
+ */
 export function FundingBar({ card }: { card: Card }) {
+  const fill = { '--fill': `${percent(card.funded_usd, card.funding_target_usd)}%` } as CSSProperties;
   return (
     <div
-      className="bar"
+      className="funding-bar"
       role="progressbar"
       aria-label={card.title}
       aria-valuemin={0}
       aria-valuemax={card.funding_target_usd}
       aria-valuenow={card.funded_usd}
     >
-      <div className="bar-fill" style={{ width: `${percent(card.funded_usd, card.funding_target_usd)}%` }} />
+      {card.funded_usd > 0 ? <div className="funding-bar-fill" style={fill} /> : null}
     </div>
   );
 }
 
+/** The coin mark: an ink rim, the coin fill and one inner ring. Only on Contribute and beside a dollar figure. */
+export function CoinMark() {
+  return (
+    <svg className="coin" viewBox="0 0 16 16" width={16} height={16} aria-hidden="true" focusable="false">
+      <circle className="coin-face" cx={8} cy={8} r={7.1} />
+      <circle className="coin-ring" cx={8} cy={8} r={4} />
+    </svg>
+  );
+}
+
 /**
- * The money at the bottom of a card box. A card that is building or being checked shows what it has
- * spent so far and who filed it (`source`, from the layout); any other card shows its bar and caption,
- * then Fund this card while it can take money, the Payment Link with this card's id. In example mode
- * (/how-it-works) there is no link, whatever canFund or the Payment Link say.
+ * How many contributors to show on a card, or null to leave the count out: no target, or the funding
+ * figures did not load. A goal card shows its count from the start; no funding row yet means 0.
+ */
+export function cardContributors(card: Card, snapshot: Snapshot): number | null {
+  if (card.funding_target_usd <= 0 || snapshot.missing.includes('funding')) return null;
+  const funding = snapshot.funding[card.id];
+  if (card.shape !== 'goal' && funding === undefined) return null;
+  return funding?.contributors ?? 0;
+}
+
+export type SpecRow = 'funded' | 'contributors';
+
+/**
+ * A card's spec rows: "Funded $1.50 of $3.00", then "Contributors 2" when the count is known. A row
+ * in `changed` carries the change marker until the next poll (DESIGN.md, the change rule).
+ */
+export function SpecRows({ card, snapshot, changed = [] }: { card: Card; snapshot: Snapshot; changed?: readonly SpecRow[] }) {
+  const contributors = cardContributors(card, snapshot);
+  const mark = (row: SpecRow) => (changed.includes(row) ? 'changed' : undefined);
+  return (
+    <dl className="spec-rows">
+      <div data-row="funded" className={mark('funded')}>
+        <dt>{legal.fundedLabel}</dt>
+        <dd>{`${formatUsd(card.funded_usd)} of ${formatUsd(card.funding_target_usd)}`}</dd>
+      </div>
+      {contributors === null ? null : (
+        <div data-row="contributors" className={mark('contributors')}>
+          <dt>{legal.contributorsLabel}</dt>
+          <dd>{formatInteger(contributors)}</dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
+/**
+ * How a card renders its actions. live: real links. example (/how-it-works): no link, button or
+ * disclosure at all, so an illustration can never take a payment. sample (the design guide): the
+ * button drawn as it looks, marked unavailable, linking nowhere.
+ */
+export type CardMode = 'live' | 'example' | 'sample';
+
+/**
+ * The money at the bottom of a card. Building or being checked: who is on it and what it has spent
+ * so far (`who`, from the layout; only studio-billed spend is public). Funded and waiting: the full
+ * bar, the spec rows and "Waiting for the agents" in the button slot. Any other card: its bar and
+ * spec rows, then Fund this card while it can take money, the Payment Link with this card's id.
  */
 export function CardMoney({
   card,
   snapshot,
   titleId,
-  source,
-  example = false,
+  who,
+  mode = 'live',
+  changed = [],
 }: {
   card: Card;
   snapshot: Snapshot;
   titleId: string;
-  source: string;
-  example?: boolean;
+  who: string;
+  mode?: CardMode;
+  changed?: readonly SpecRow[];
 }) {
   const env = siteEnv();
-  const building = card.stage === 'building' || card.stage === 'gated';
-  if (building) {
+  if (card.stage === 'building' || card.stage === 'gated') {
+    const spent = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${legal.spentSoFar}` : null;
+    return <p className="card-meta">{spent === null ? who : `${who} · ${spent}`}</p>;
+  }
+  const money =
+    card.funding_target_usd > 0 ? (
+      <>
+        <FundingBar card={card} />
+        <SpecRows card={card} snapshot={snapshot} changed={changed} />
+      </>
+    ) : null;
+  if (card.stage === 'funded') {
     return (
-      <p className="card-meta">
-        {card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${legal.spentSoFar} · ` : ''}
-        {source}
-      </p>
+      <>
+        {money}
+        <p className="card-waiting">{copy.waitingForAgents}</p>
+      </>
     );
   }
-  const caption = fundingCaption(card, snapshot);
+  let action = null;
+  if (mode === 'sample' && canFund(card)) {
+    action = (
+      <button type="button" className="button button-secondary button-block" aria-disabled="true" aria-describedby={titleId}>
+        {legal.fundThis}
+      </button>
+    );
+  } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && canFund(card)) {
+    action = (
+      <a className="button button-secondary button-block" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
+        {legal.fundThis}
+      </a>
+    );
+  }
   return (
     <>
-      {caption === null ? null : (
-        <>
-          <FundingBar card={card} />
-          <p className="card-meta">{caption}</p>
-        </>
-      )}
-      {!example && env.stripePaymentLinkUrl !== '' && canFund(card) ? (
-        <a className="button button-secondary button-block" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
-          {legal.fundThis}
-        </a>
-      ) : null}
+      {money}
+      {action}
     </>
   );
 }

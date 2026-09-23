@@ -270,8 +270,8 @@ describe('Landing', () => {
     expect(screen.getByText(copy.notLiveYet)).toBeTruthy();
 
     // Building now shows the card and what it has spent; the fund board lists open cards.
-    expect(paragraph(`$3.20 ${legal.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
-    expect(paragraph('$25.00 of $100.00 · 3 contributors')).toBeTruthy();
+    expect(paragraph(`${copy.sources.board} · $3.20 ${legal.spentSoFar}`)).toBeTruthy();
+    expect(screen.getByText('$25.00 of $100.00').tagName).toBe('DD');
     expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual([
       'A second level',
       'A music track',

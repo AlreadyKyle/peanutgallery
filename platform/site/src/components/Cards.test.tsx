@@ -5,7 +5,7 @@ import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
 import type { StudioState } from '../lib/studio';
-import { BuildingNow, CardBox, FundBoard, QueuedList, ShippedList, ShippedRow } from './Cards';
+import { BuildingNow, CardFace, FundBoard, QueuedList, ShippedList, ShippedRow } from './Cards';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -62,6 +62,17 @@ function boxFor(title: string): HTMLElement {
   return screen.getByRole('heading', { level: 3, name: title }).closest('li')!;
 }
 
+/** A spec row's label and value, or null when the row is not drawn. */
+function specRow(box: HTMLElement, row: 'funded' | 'contributors'): [string, string] | null {
+  const div = box.querySelector(`.spec-rows [data-row="${row}"]`);
+  if (div === null) return null;
+  return [div.querySelector('dt')?.textContent ?? '', div.querySelector('dd')?.textContent ?? ''];
+}
+
+function stateOf(box: HTMLElement): string | null {
+  return box.querySelector('.card-index [data-state]')?.getAttribute('data-state') ?? null;
+}
+
 beforeEach(() => {
   vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
   vi.stubEnv('VITE_PLAY_URL', '');
@@ -89,7 +100,7 @@ describe('FundBoard states', () => {
 });
 
 describe('a card box', () => {
-  it('shows category, status badge, title, summary, bar caption, a fund button and a closed brief', () => {
+  it('shows the suit, the state, title, summary, bar, spec rows, a fund button and a closed brief', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const intent = 'Edit seed-1/config/unlocks.json. Run the bot; stop and report.';
     render(
@@ -113,13 +124,16 @@ describe('a card box', () => {
     );
     const box = boxFor('A fourteenth unlock');
     expect(within(box).getByText(copy.categories.game)).toBeTruthy();
-    expect(within(box).getByText(copy.statusPicked).classList.contains('badge')).toBe(true);
+    expect(within(box).getByText(copy.statusPicked)).toBeTruthy();
+    expect(stateOf(box)).toBe('picked');
+    expect(box.getAttribute('data-face')).toBe('picked');
     expect(within(box).getByText('Add one more unlock.').classList.contains('card-summary')).toBe(true);
 
     const bar = within(box).getByRole('progressbar');
     expect(bar.getAttribute('aria-label')).toBe('A fourteenth unlock');
     expect([bar.getAttribute('aria-valuemin'), bar.getAttribute('aria-valuemax'), bar.getAttribute('aria-valuenow')]).toEqual(['0', '100', '25']);
-    expect(paragraph(`$25.00 of $100.00 · ${legal.contributorsMany.replace('{n}', '3')}`)).toBeTruthy();
+    expect(specRow(box, 'funded')).toEqual([legal.fundedLabel, '$25.00 of $100.00']);
+    expect(specRow(box, 'contributors')).toEqual([legal.contributorsLabel, '3']);
 
     const link = within(box).getByRole('link', { name: legal.fundThis });
     expect(link.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=n1`);
@@ -135,15 +149,18 @@ describe('a card box', () => {
     expect(within(details).getByText(intent)).toBeTruthy();
   });
 
-  it('shows an open card without a badge and a single contributor', () => {
-    render(<FundBoard studio={ready([card({ id: 'n2', funding_target_usd: 50 })], { n2: { contributors: 1, credited_usd: 5 } })} />);
-    expect(screen.getByText(copy.statusOpen).classList.contains('badge')).toBe(false);
-    expect(paragraph(`$0.00 of $50.00 · ${legal.contributorsOne}`)).toBeTruthy();
+  it('shows an open card with its state word and a single contributor', () => {
+    render(<FundBoard studio={ready([card({ id: 'n2', title: 'Open one', funding_target_usd: 50 })], { n2: { contributors: 1, credited_usd: 5 } })} />);
+    const box = boxFor('Open one');
+    expect(within(box).getByText(copy.statusOpen)).toBeTruthy();
+    expect(stateOf(box)).toBe('open');
+    expect(specRow(box, 'funded')).toEqual([legal.fundedLabel, '$0.00 of $50.00']);
+    expect(specRow(box, 'contributors')).toEqual([legal.contributorsLabel, '1']);
   });
 
   it('shows 0 contributors on a goal with no funding row, and no summary or brief when blank', () => {
     render(<FundBoard studio={ready([card({ id: 'new', title: 'New', summary: '  ', intent: null, funding_target_usd: 20 })])} />);
-    expect(paragraph(`$0.00 of $20.00 · ${legal.contributorsMany.replace('{n}', '0')}`)).toBeTruthy();
+    expect(specRow(boxFor('New'), 'contributors')).toEqual([legal.contributorsLabel, '0']);
     expect(document.querySelectorAll('p.card-summary')).toHaveLength(0);
     expect(boxFor('New').querySelector('details.brief')).toBeNull();
   });
@@ -152,8 +169,9 @@ describe('a card box', () => {
     const studio = ready([card({ id: 'n2', funding_target_usd: 50, funded_usd: 5 })]);
     if (studio.state !== 'ready') throw new Error('fixture is not ready');
     render(<FundBoard studio={{ ...studio, snapshot: { ...studio.snapshot, missing: ['funding'] } }} />);
-    expect(paragraph('$5.00 of $50.00')).toBeTruthy();
-    expect(screen.queryByText(/contributor/)).toBeNull();
+    const box = document.querySelector('li.card') as HTMLElement;
+    expect(specRow(box, 'funded')).toEqual([legal.fundedLabel, '$5.00 of $50.00']);
+    expect(specRow(box, 'contributors')).toBeNull();
   });
 
   it('omits the fund button for a full bar, a non-goal card and a missing payment link, and the bar at a zero target', () => {
@@ -186,7 +204,7 @@ describe('BuildingNow and QueuedList', () => {
         ])}
       />,
     );
-    expect(paragraph(`$0.42 ${legal.spentSoFar} · ${copy.sources.board}`)).toBeTruthy();
+    expect(paragraph(`${copy.sources.board} · $0.42 ${legal.spentSoFar}`)).toBeTruthy();
     expect(within(boxFor('Gated one')).getByText(copy.statusGated)).toBeTruthy();
     // No studio-billed spend yet (or founder-billed work, which is never published): no cost shown.
     expect(within(boxFor('Gated one')).getByText(copy.sources.agent).textContent).toBe(copy.sources.agent);
@@ -298,7 +316,7 @@ describe('example mode', () => {
     const open = card({ id: 'e1', title: 'Fundable', intent: 'Do the thing.', funding_target_usd: 10, funded_usd: 2 });
     const { container } = render(
       <ul>
-        <CardBox card={open} snapshot={snapshot([open])} example />
+        <CardFace card={open} snapshot={snapshot([open])} mode="example" />
       </ul>,
     );
     expect(screen.getByRole('progressbar')).toBeTruthy();

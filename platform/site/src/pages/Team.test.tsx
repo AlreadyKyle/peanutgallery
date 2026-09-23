@@ -176,4 +176,26 @@ describe('Team', () => {
     renderTeam(null);
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
+
+  it('draws every agent asleep while the agents are paused, and awake otherwise or when the studio row did not load', async () => {
+    const poses = () => [...document.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    renderTeam(sourceOf(snapshot({ paused: true })));
+    await screen.findByRole('region', { name: team.running });
+    expect(new Set(poses())).toEqual(new Set(['asleep']));
+    cleanup();
+    renderTeam(sourceOf(snapshot({ paused: false })));
+    await screen.findByRole('region', { name: team.running });
+    expect(new Set(poses())).toEqual(new Set(['awake']));
+    cleanup();
+    renderTeam(sourceOf(snapshot({ paused: true, missing: ['studio'] })));
+    await screen.findByRole('region', { name: team.running });
+    expect(new Set(poses())).toEqual(new Set(['awake']));
+  });
+
+  it('lists each agent as a plain row, never a card', async () => {
+    renderTeam(sourceOf(snapshot()));
+    await screen.findByRole('region', { name: team.running });
+    expect(document.querySelectorAll('li.card')).toHaveLength(0);
+    expect(document.querySelectorAll('li.agent').length).toBe(ROLES.length);
+  });
 });

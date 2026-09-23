@@ -100,3 +100,11 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
     Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; form-action 'self'"
     Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"
+
+# The unlisted design guide (docs/specs/design-system.md) shows sample figures, so it asks search
+# engines not to index it in the response itself, not only in the meta tag the page adds once it
+# runs. Netlify adds these to the headers above for this path.
+[[headers]]
+  for = "/design-kit-7q4m"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

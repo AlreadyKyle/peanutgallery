@@ -60,6 +60,11 @@ export const legal = {
   shippedOn: 'shipped',
   spentSoFar: 'spent so far',
   fundThis: 'Fund this card',
+  // A card's spec rows: "Funded $1.50 of $3.00" and "Contributors 2".
+  fundedLabel: 'Funded',
+  contributorsLabel: 'Contributors',
+  // A card that was not built (the design guide's sample face until a public read lists them).
+  notBuiltMoney: 'Its unspent money went to the next cards in line.',
   folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
   // Shown while the board has paused the agents, for any reason: before the first payout, at the
   // cutover, after a failed revert or in an incident. It follows the board's Pause and Resume on its own.

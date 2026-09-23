@@ -178,6 +178,50 @@ describe('launch copy', () => {
   });
 });
 
+describe('voice (docs/COPY.md, Voice)', () => {
+  it('never makes coins a currency: no coin counts, balances or buying', () => {
+    const currency = /\b\d[\d,.]*\+?\s*coins?\b|\bcoins?\s+(balance|left|remaining|to spend)\b|\bbuy(ing)?\s+(\w+\s+)?coins?\b|\bin coins\b/i;
+    expect(offenders((t) => currency.test(t))).toEqual([]);
+  });
+
+  it('puts no chance words beside money: every money and /contribute string', () => {
+    const chance = /\b(luck|lucky|mystery|surprise|random|spin|jackpot|bet|odds|prize|loot|win|winner|gamble|chance)\b/i;
+    const money = /\$|\bmoney\b|\bfund|\bcontribut|\bcoin|\bpool\b|\bspent\b|\bcheckout\b/i;
+    const moneyStrings = all.filter(([path, text]) => path.startsWith('legal') || money.test(text));
+    expect(moneyStrings.length).toBeGreaterThan(20);
+    expect(moneyStrings.filter(([, text]) => chance.test(text)).map(([path, text]) => `${path}: ${text}`)).toEqual([]);
+  });
+
+  it('writes money out with the minus sign (U+2212) and no space, never a hyphen before a dollar figure', () => {
+    expect(offenders((t) => /(^|[\s(])-\s?\$\d/.test(t))).toEqual([]);
+    expect(offenders((t) => /−(?!\$\d)/.test(t))).toEqual([]);
+  });
+
+  it('uses only characters inside the font subset that scripts/fonts.sh cuts', () => {
+    const script = readFileSync(resolve(process.cwd(), 'scripts/fonts.sh'), 'utf8');
+    const ranges = (/^UNICODES='([^']+)'/m.exec(script)?.[1] ?? '')
+      .split(',')
+      .map((range) => range.replace(/^U\+/, '').split('-').map((hex) => parseInt(hex, 16)))
+      .map(([from, to]) => [from!, to ?? from!] as const);
+    expect(ranges).toEqual([
+      [0x20, 0x7e],
+      [0xa0, 0xff],
+      [0x2010, 0x2027],
+      [0x2212, 0x2212],
+    ]);
+    const outside = all.flatMap(([path, text]) =>
+      [...text]
+        .filter((ch) => !ranges.some(([from, to]) => ch.codePointAt(0)! >= from && ch.codePointAt(0)! <= to))
+        .map((ch) => `${path}: U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`),
+    );
+    expect(outside).toEqual([]);
+  });
+
+  it('calls a game by its name, never a numbered cartridge', () => {
+    expect(offenders((t) => /\bcartridge\s*\d/i.test(t))).toEqual([]);
+  });
+});
+
 describe('copy.ts and legal.ts (docs/specs/board-site.md)', () => {
   it('share no key, so every money statement is read from legal.ts', () => {
     expect(Object.keys(copy).filter((key) => key in legal)).toEqual([]);
