@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded by `mac-host.md` for now: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), and the dispatcher runs unattended on the board's Mac until the studio has a server. This spec and its scripts are kept: the planned Google Cloud server reuses the Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud).
+
 ## Problem
 
 The dispatcher runs on the founder's Mac in attended mode. A public studio needs it running around the clock on the studio's API key, spending only funded money, restarting on its own, and telling the board when it stops or a card fails.
@@ -27,7 +29,7 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 
 **Repository.** ~~The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` keeps `/srv/peanutgallery` as uid 10001's work clone for git state only, runs the dispatcher from a root-owned code clone at `/srv/peanutgallery-code` mounted read-only at `/opt/peanutgallery`, and puts worktrees in `/srv/peanutgallery-worktrees` (2026-09-16). The image holds only the toolchain.
 
-**GitHub access.** A fine-grained token for this repository only: Contents read/write, Pull requests read/write, Checks read, Metadata read, no Workflows. `launch-managed.md` adds a second fine-grained token, `GITHUB_READ_TOKEN`, Contents read only, which Managed Agents sessions clone with; the dispatcher and `provision.sh` refuse it unless GitHub denies it a write. The dispatcher already pushes with a one-off https extraheader; the clone and the deploy fetch use the same header for one command and never store it on disk.
+**GitHub access.** A fine-grained token for this repository only: Contents read/write, Pull requests read/write, ~~Checks read~~ Actions read (superseded 23 September 2026: GitHub refuses check runs to a fine-grained token, so the dispatcher reads the gate workflow's runs), Metadata read, no Workflows. `launch-managed.md` adds a second fine-grained token, `GITHUB_READ_TOKEN`, Contents read only, which Managed Agents sessions clone with; the dispatcher and `provision.sh` refuse it unless GitHub denies it a write. The dispatcher already pushes with a one-off https extraheader; the clone and the deploy fetch use the same header for one command and never store it on disk.
 
 **Image.** `platform/ops/Dockerfile.dispatcher`, built with `platform/ops` as the context:
 - `FROM node:22-bookworm-slim`, not alpine: the claude CLI's bundled ripgrep needs glibc. The README records how to pin the base by digest at provision time.

@@ -141,7 +141,7 @@ function namesCompany(line) {
   });
 }
 
-test("the docs and prompts name none of the founder's other companies, and Clayhouse only as the footer credit", () => {
+test("the docs and prompts name none of the founder's other companies, and Clayhouse only as the footer credit and the contact address", () => {
   assert.ok(GUARDED_DOCS.includes(join('docs', 'BOARD-SETUP.md')), 'the guard reads docs/BOARD-SETUP.md');
   assert.ok(GUARDED_DOCS.some((file) => file.startsWith(join('docs', 'specs'))), 'the guard reads docs/specs');
   for (const file of GUARDED_DOCS) {
@@ -150,7 +150,7 @@ test("the docs and prompts name none of the founder's other companies, and Clayh
       const where = `${file}:${number + 1}`;
       assert.ok(!namesCompany(line), `${where} names one of the founder's other companies`);
       if (/clayhouse/i.test(line)) {
-        assert.match(line, /"Created by Clayhouse"/, `${where} names Clayhouse outside the footer credit`);
+        assert.match(line, /"Created by Clayhouse"|hello@clayhouse\.studio/, `${where} names Clayhouse outside the footer credit and the contact address`);
       }
     });
   }

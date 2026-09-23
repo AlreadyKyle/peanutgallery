@@ -115,7 +115,7 @@ The Read, Glob and Grep tools, which the sandbox does not cover, are denied the 
 
 **Why the VPS stays.** The VPS no longer builds anything, but something must hold each session's event stream, meter it, apply and check the patch with the dispatcher's own write token, and drive the gate, merge and deploy. None of that belongs in the agent's container, and the Mac sleeps.
 
-The Oracle Always Free box is now mostly idle, which is the pattern Oracle reclaims. The runbook states this and names the board's choice: upgrade the account to pay-as-you-go, which stays free within the Always Free limits, or accept reclaim. `oracle-launch.sh` starts a stopped instance, and healthchecks.io alerts on one.
+(Superseded by `mac-host.md`, 23 September 2026: Oracle is dropped and the dispatcher runs on the board's Mac until the studio has a server.) The Oracle Always Free box is now mostly idle, which is the pattern Oracle reclaims. The runbook states this and names the board's choice: upgrade the account to pay-as-you-go, which stays free within the Always Free limits, or accept reclaim. `oracle-launch.sh` starts a stopped instance, and healthchecks.io alerts on one.
 
 ## Acceptance criteria
 

@@ -16,7 +16,8 @@
 # 3. tar the dumps and encrypt them with age to BACKUP_AGE_RECIPIENT, the board's public key; the
 #    private key stays offline, so this host cannot read its own backups. The plaintext is deleted
 #    before anything leaves the host, and on every exit.
-# 4. Upload to Oracle Object Storage through BACKUP_PAR_URL, a write-only pre-authenticated request
+# 4. Upload to Object Storage through BACKUP_PAR_URL, a write-only pre-authenticated request (Oracle's
+#    shape; Oracle is dropped, so a server's store waits on the Google Cloud move, docs/specs/mac-host.md),
 #    for BACKUP_BUCKET: this host can add objects and can neither read, list nor delete them. A write
 #    to a name that exists replaces it, so the bucket keeps object versions (the runbook's step 1):
 #    a replaced backup stays as a previous version.

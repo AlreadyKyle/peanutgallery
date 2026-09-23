@@ -14,7 +14,7 @@ import { toNumber } from './format';
  * -head:card/ leaves out exactly the card branches, and no one has to remember to label anything.
  */
 export const BOARD_PULLS_URL = 'https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F';
-export const CONTACT_EMAIL = 'hello@peanutgallery.games';
+export const CONTACT_EMAIL = 'hello@clayhouse.studio';
 export const STRIPE_DISPUTES_URL = 'https://dashboard.stripe.com/disputes';
 export const CONSOLE_BILLING_URL = 'https://console.anthropic.com/settings/billing';
 export const STRIPE_PAYOUT_SETTINGS_URL = 'https://dashboard.stripe.com/settings/payouts';

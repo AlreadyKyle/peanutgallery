@@ -8,7 +8,7 @@ This is a monorepo: `platform/` (site, dispatcher, gate, supabase, agents, ops) 
 
 Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps, the default 80/20 split and 10% reserve, the incident reserve, the gate, rollback, the content filter and all-ages rating, the art policy, the broadcast delay and kill switch, and the read/write separation. No agent with write access reads free text from the public.
 
-Nothing in this repo references the founder's other companies or projects, with one exception: the public site's footer carries a single "Created by Clayhouse" credit linking to clayhouse.studio.
+Nothing in this repo references the founder's other companies or projects, with two exceptions: the public site's footer carries a single "Created by Clayhouse" credit linking to clayhouse.studio, and the public contact address is hello@clayhouse.studio (`docs/PLAN.md` §10 decision 37).
 
 ## Spec-driven development
 

@@ -158,7 +158,7 @@ export const legal = {
     'The money available to the agents, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
   // The footer links and the text pages they open.
   footerLinks: { terms: 'Terms', privacy: 'Privacy', refunds: 'Refunds', contact: 'Contact' },
-  contactEmail: 'hello@peanutgallery.games',
+  contactEmail: 'hello@clayhouse.studio',
   refundsPageLink: 'Refunds page',
   legalUpdated: 'Last updated 22 September 2026.',
   terms: {

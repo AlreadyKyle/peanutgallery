@@ -373,7 +373,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 39
 - summary: Run the studio's card runner from events instead of keeping a server on all the time.
-- intent: The dispatcher runs on an always-on Oracle instance to hold each Managed Agents session's event stream, answer submit_patch, meter usage, hold the lease and drive the gate, merge and deploy. A dispatcher driven by Managed Agents webhooks would remove the server and Oracle's idle-reclaim risk. It is not built yet.
+- intent: The dispatcher runs all the time, on the board's Mac for now, to hold each Managed Agents session's event stream, answer submit_patch, meter usage, hold the lease and drive the gate, merge and deploy. A dispatcher driven by Managed Agents webhooks would need no always-on machine, and so no Mac kept awake and no server to pay for or look after. It is not built yet.
 
 ### Steam release path
 - bucket: studio
@@ -382,3 +382,19 @@ everything else, in the order the board would take it.
 - rank: 40
 - summary: Release a finished game on Steam, only if it holds 500 daily players for two weeks.
 - intent: Version 1.0 ships free on the web and itch.io first; Steam follows only past that threshold, with the $100 Steamworks app fee recoupable after $1,000, and a paid supporter pack at a season's end is an option. It is not built yet.
+
+### Move the dispatcher to Google Cloud
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 41
+- summary: Move the studio's card runner from the board's laptop to a free cloud server, so it keeps working when the laptop sleeps.
+- intent: Move the dispatcher and the daily jobs (the backup, the Controller and the quota check) from the board's Mac to a free Google Cloud Compute Engine e2-micro under the board's existing Google account, with the Ubuntu provisioning already in platform/ops (provision.sh, deploy.sh, the systemd units). The e2-micro has 1 GB of memory, so the dispatcher container's 3 GB limit must drop and be load-tested with a card running; it is free only in three US regions; a $1 budget alert goes on the billing account; the backups need a new store, since Oracle is dropped. It waits on the board opening a Google Cloud billing account. It is not built yet.
+
+### Split slider on the site, in place of the checkout dropdown
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 42
+- summary: Choose where your contribution goes with sliders on the site, the way Humble Bundle does, instead of a dropdown at checkout.
+- intent: Humble Bundle style sliders on the contribute page set the supporter's Agents/Studio split (default 80/20, which stays the default and is not votable, PLAN.md §4 Kernel), with the 10% chargeback reserve and the incident share shown as fixed and not movable; the site creates the Stripe Checkout Session with the chosen split in its metadata through a Supabase function, replacing the Payment Link's custom dropdown (SPLIT_MAP in platform/supabase/functions/_shared/split.ts); the webhook must still accept only valid splits and keep crediting old Payment Link sessions. Continuous values or 1% steps are a choice to make when it is specced. This is one payment's Agents/Studio split, not the pool's weekly bucket allocation. Requested by the board on 23 September 2026. It is not built yet.

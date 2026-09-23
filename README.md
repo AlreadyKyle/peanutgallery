@@ -13,7 +13,7 @@ Backseat is the working name. The package names (`@backseat/*`) still use it.
 | Game | https://peanutgallery-seed-1.netlify.app | Netlify site `peanutgallery-seed-1`, base `seed-1`. Phaser 3 and Vite. |
 | Database | Supabase project `lyxndueoeisyqzewflpu` | Postgres holds the money logic (crediting, usage, reversals, the daily hold), the `stripe-webhook` edge function, and pg_cron, which releases held credit hourly. |
 | Payments | Stripe | A Payment Link with a split dropdown, and a webhook to the edge function. |
-| Dispatcher | The founder's Mac, attended | Moves to a VPS on Oracle Cloud Always Free in Toronto at the cutover (`docs/specs/vps.md`), where unattended card sessions run as Claude Managed Agents sessions. The image, units and runbook are merged; the cutover is on the launch checklist in `docs/ROADMAP.md`. |
+| Dispatcher | The founder's Mac, attended | At the cutover it runs unattended on the board's Mac under launchd (`docs/specs/mac-host.md`), and card sessions run as Claude Managed Agents sessions. It moves to a free Google Cloud server once the studio has one (`docs/BACKLOG.md`); the server's image, units and runbook are kept for that. The cutover is on the launch checklist in `docs/ROADMAP.md`. |
 | Gate | GitHub Actions workflow `gate` | Runs on every pull request and every push to `main`. |
 
 The repository is private. `main` has no branch protection; the dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha.

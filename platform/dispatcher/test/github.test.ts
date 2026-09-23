@@ -184,23 +184,31 @@ describe('request timeout', () => {
 });
 
 describe('gateStatus', () => {
-  const ACTIONS = { id: 15368, slug: 'github-actions' };
-  const gate = (status: string, conclusion: string | null, app: unknown = ACTIONS) => ({ name: 'gate', status, conclusion, app });
-  const status = async (...runs: unknown[]) => gateStatus({ ...base, fetchFn: mockFetch(200, { check_runs: runs }).fetchFn }, 'sha');
+  const GATE = '.github/workflows/gate.yml';
+  const gate = (status: string, conclusion: string | null, path: unknown = GATE) => ({ name: 'gate', path, status, conclusion });
+  const status = async (...runs: unknown[]) => gateStatus({ ...base, fetchFn: mockFetch(200, { workflow_runs: runs }).fetchFn }, 'sha');
 
-  it('maps the gate check-run to pass, fail, pending and missing', async () => {
-    const run = (status: string, conclusion: string | null) => ({ check_runs: [gate(status, conclusion), { name: 'detect', status: 'completed', conclusion: 'success', app: ACTIONS }] });
+  it('maps the gate workflow run to pass, fail, pending and missing', async () => {
+    const run = (status: string, conclusion: string | null) => ({ workflow_runs: [gate(status, conclusion), { name: 'other', path: '.github/workflows/other.yml', status: 'completed', conclusion: 'failure' }] });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('completed', 'success')).fetchFn }, 'sha')).toEqual({ state: 'pass' });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('completed', 'failure')).fetchFn }, 'sha')).toEqual({ state: 'fail', conclusion: 'failure' });
     expect(await gateStatus({ ...base, fetchFn: mockFetch(200, run('in_progress', null)).fetchFn }, 'sha')).toEqual({ state: 'pending' });
-    expect(await gateStatus({ ...base, fetchFn: mockFetch(200, { check_runs: [] }).fetchFn }, 'sha')).toEqual({ state: 'missing' });
+    expect(await gateStatus({ ...base, fetchFn: mockFetch(200, { workflow_runs: [] }).fetchFn }, 'sha')).toEqual({ state: 'missing' });
   });
 
-  it('counts only gate runs the GitHub Actions app created', async () => {
-    expect(await status(gate('completed', 'success', { id: 1, slug: 'some-app' }))).toEqual({ state: 'missing' });
+  it('counts only runs of the gate workflow file', async () => {
+    expect(await status(gate('completed', 'success', '.github/workflows/other.yml'))).toEqual({ state: 'missing' });
     expect(await status(gate('completed', 'success', null))).toEqual({ state: 'missing' });
     expect(await status({ name: 'gate', status: 'completed', conclusion: 'success' })).toEqual({ state: 'missing' });
-    expect(await status(gate('completed', 'success', { id: 1, slug: 'some-app' }), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
+    expect(await status(gate('completed', 'success', '.github/workflows/other.yml'), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
+  });
+
+  it('treats a workflow that never started as a failure with its conclusion', async () => {
+    expect(await status(gate('completed', 'startup_failure'))).toEqual({ state: 'fail', conclusion: 'startup_failure' });
+  });
+
+  it('throws on a refused read, as a token without Actions read gets', async () => {
+    await expect(gateStatus({ ...base, fetchFn: mockFetch(403, { message: 'Resource not accessible by personal access token' }).fetchFn }, 'sha')).rejects.toThrow(/workflow runs: http 403/);
   });
 
   it('fails when one gate run on the sha failed, whatever the others say', async () => {
@@ -210,15 +218,15 @@ describe('gateStatus', () => {
     expect(await status(gate('in_progress', null), gate('completed', 'failure'))).toEqual({ state: 'fail', conclusion: 'failure' });
   });
 
-  it('passes only when every Actions gate run completed with success', async () => {
+  it('passes only when every gate workflow run completed with success', async () => {
     expect(await status(gate('completed', 'success'), gate('completed', 'success'))).toEqual({ state: 'pass' });
     expect(await status(gate('completed', 'success'), gate('queued', null))).toEqual({ state: 'pending' });
   });
 
-  it('queries check-runs for the exact sha filtered by name', async () => {
-    const { fetchFn, calls } = mockFetch(200, { check_runs: [] });
+  it('queries the workflow runs for the exact sha', async () => {
+    const { fetchFn, calls } = mockFetch(200, { workflow_runs: [] });
     await gateStatus({ ...base, fetchFn }, 'abc123');
-    expect(calls[0]?.url).toBe('https://api.github.com/repos/owner/repo/commits/abc123/check-runs?check_name=gate&per_page=50');
+    expect(calls[0]?.url).toBe('https://api.github.com/repos/owner/repo/actions/runs?head_sha=abc123&per_page=50');
   });
 });
 

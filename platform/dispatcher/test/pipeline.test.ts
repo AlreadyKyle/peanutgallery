@@ -28,7 +28,7 @@ const GITHUB = 'https://api.github.com/repos/owner/repo';
 const NETLIFY = 'https://api.netlify.com/api/v1/sites';
 const SITE_URL = 'https://platform.local';
 const SEED_URL = 'https://seed.local';
-const CHECK_RUNS = /^https:\/\/api\.github\.com\/repos\/owner\/repo\/commits\/([^/]+)\/check-runs/;
+const CHECK_RUNS = /^https:\/\/api\.github\.com\/repos\/owner\/repo\/actions\/runs\?head_sha=([^&]+)/;
 const deploysUrl = (site: string) => `${NETLIFY}/${site}/deploys?page=1&per_page=50`;
 
 let dir: string;
@@ -182,7 +182,7 @@ function remote(over: Remote = {}) {
       return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) {
-      const green = { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' }] } };
+      const green = { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'success' }] } };
       if (CHECK_RUNS.exec(url)?.[1] === initialSha) return over.baseGate ?? green;
       return over.gate ?? green;
     }
@@ -262,7 +262,7 @@ describe('runCardPipeline', () => {
     expect(state.head).toMatch(/^[0-9a-f]{40}$/);
     expect(urls(calls)).toEqual([
       `POST ${GITHUB}/pulls`,
-      `GET ${GITHUB}/commits/${state.head}/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/actions/runs?head_sha=${state.head}&per_page=50`,
       `GET ${GITHUB}/git/ref/heads/main`,
       `GET ${GITHUB}/compare/${initialSha}...${state.head}`,
       `GET ${GITHUB}/git/trees/${initialSha}?recursive=1`,
@@ -272,7 +272,7 @@ describe('runCardPipeline', () => {
       `GET ${NETLIFY}/site-platform`,
       `GET ${SITE_URL}/`,
       `GET ${SITE_URL}/version.json`,
-      `GET ${GITHUB}/commits/${MERGE_SHA}/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/actions/runs?head_sha=${MERGE_SHA}&per_page=50`,
     ]);
     expect(calls[6]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
     expect(calls[0]?.body).toMatchObject({ head: 'card/4c2f5a1e-code', base: 'main' });
@@ -468,7 +468,7 @@ describe('runCardPipeline', () => {
   it('rejects on a failed gate without merging', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn, calls } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
+    const { fetchFn, calls } = remote({ gate: { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', commit_sha: null });
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_fail']);
@@ -551,7 +551,7 @@ describe('runCardPipeline', () => {
     db.cards = [{ ...c, stage: 'building' }];
     const stop = new AbortController();
     const { fetchFn, calls } = remote({
-      gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'in_progress', conclusion: null }] } },
+      gate: { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status:'in_progress', conclusion: null }] } },
       created: (head) => {
         stop.abort('dispatcher stopping');
         return { status: 201, json: { number: 5, head: { sha: head } } };
@@ -650,7 +650,7 @@ describe('runCardPipeline', () => {
         heads.set(number, head);
         return { status: 201, json: { number, head: { sha: head } } };
       }
-      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
+      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status:'completed', conclusion: 'success' }] } };
       const git = github(method, url) ?? mainRoute(method, url);
       if (git) return git;
       const merge = /\/pulls\/(\d+)\/merge$/.exec(url);
@@ -703,7 +703,7 @@ describe('runCardPipeline', () => {
     const gets = calls.filter((call) => call.method === 'GET').map((call) => call.url);
     expect(gets).toContain(`${SEED_URL}/config/spawn-table.json`);
     expect(gets).toContain(`${SEED_URL}/content/strings.json`);
-    expect(gets).toContain(`${GITHUB}/commits/${state.merged}/check-runs?check_name=gate&per_page=50`);
+    expect(gets).toContain(`${GITHUB}/actions/runs?head_sha=${state.merged}&per_page=50`);
     expect(db.deploys.at(-1)).toMatchObject({ sha: state.merged, is_green: true, smoke_result: expect.stringContaining('2 served file(s) match the merge commit; gate green at the merge sha') });
     expect(existsSync(path.join(config.worktreeRoot, 'smoke-dddddddd'))).toBe(false);
     expect(await git(['worktree', 'list', '--porcelain'], repo)).not.toContain('smoke-');
@@ -1052,7 +1052,7 @@ describe('runCardPipeline', () => {
     expect(adapter.specs).toEqual([]);
   });
 
-  // Runs fn when the gate's check-runs are first read, as a board action would land during the wait.
+  // Runs fn when the gate's workflow runs are first read, as a board action would land during the wait.
   function duringGate(fetchFn: typeof fetch, fn: () => void): typeof fetch {
     let done = false;
     return (async (input: string | URL | Request, init?: RequestInit) => {
@@ -1259,7 +1259,7 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
+    const { fetchFn } = remote({ gate: { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
     expect(JSON.parse(seen)).toEqual(SPAWN_TABLE);
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', branch: 'card/4c2f5a1e-config' });
@@ -1283,7 +1283,7 @@ function seedRemote(options: { tamper?: string; mergeGate?: string } = {}) {
     const checks = CHECK_RUNS.exec(url);
     if (method === 'GET' && checks) {
       const conclusion = checks[1] === state.merged && options.mergeGate ? options.mergeGate : 'success';
-      return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status: 'completed', conclusion }] } };
+      return { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status: 'completed', conclusion }] } };
     }
     const git = github(method, url) ?? mainRoute(method, url);
     if (git) return git;
@@ -1381,7 +1381,7 @@ describe('a card with a stored patch', () => {
 // goes back to funded on its stored patch and is re-gated with no session; without a stored patch, or
 // at the limit of stops in a row, it pauses. A card whose own change fails is still rejected.
 describe('a paid card and an infrastructure failure', () => {
-  const RUN = (status: string, conclusion: string | null) => ({ status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status, conclusion }] } });
+  const RUN = (status: string, conclusion: string | null) => ({ status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status, conclusion }] } });
   const SLOW: Partial<PipelineTimings> = { ...FAST, gateTimeoutMs: 20, gateIntervalMs: 5 };
 
   async function withPatch(id: string) {
@@ -1399,7 +1399,7 @@ describe('a paid card and an infrastructure failure', () => {
   }
 
   it.each<[string, Remote, string]>([
-    ['no gate run ever starts', { gate: { status: 200, json: { check_runs: [] } } }, 'gate_missing'],
+    ['no gate run ever starts', { gate: { status: 200, json: { workflow_runs: [] } } }, 'gate_missing'],
     ['the gate is still running at the deadline', { gate: RUN('in_progress', null) }, 'gate_pending'],
     ['the gate run was cancelled', { gate: RUN('completed', 'cancelled') }, 'gate_infrastructure'],
     ['the gate run failed to start', { gate: RUN('completed', 'startup_failure') }, 'gate_infrastructure'],

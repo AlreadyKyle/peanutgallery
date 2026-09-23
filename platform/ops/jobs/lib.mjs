@@ -1,6 +1,7 @@
-// Shared pieces of the VPS jobs (docs/specs/money-safety.md): the env checks, read-only Stripe and
-// GitHub requests, the Supabase calls and the alerts. No dependency beyond Node 22: the jobs run from
-// the read-only code clone in the dispatcher image with no node_modules of their own.
+// Shared pieces of the jobs (docs/specs/money-safety.md, docs/specs/mac-host.md): the env checks,
+// read-only Stripe and GitHub requests, the Supabase calls and the alerts. No dependency beyond Node
+// 22: the jobs run from the read-only code clone, in the dispatcher image on a server or under launchd
+// on the board's Mac, with no node_modules of their own.
 import { readFileSync } from 'node:fs';
 
 // Every key a job's env file may hold, by job. provision.sh refuses a file with any other key, so a
@@ -21,7 +22,19 @@ export const JOB_KEYS = {
     // auth schema, and leaves the auth dump out.
     optional: ['RESTORE_CHECK_WEEKDAY', 'BACKUP_SKIP_AUTH'],
   },
+  // The Mac host's backup (platform/ops/mac/backup-mac.sh, docs/specs/mac-host.md): the same login and
+  // key, written to BACKUP_DIR, a folder the board chooses (a Google Drive for desktop folder, so the
+  // file leaves the Mac), keeping BACKUP_KEEP_DAYS days (default 30).
+  'backup-mac': {
+    required: ['BACKUP_DB_URL', 'BACKUP_AGE_RECIPIENT', 'BACKUP_DIR', 'BACKUP_HEALTHCHECK_URL'],
+    optional: ['BACKUP_KEEP_DAYS', 'BACKUP_SKIP_AUTH'],
+  },
 };
+
+// The jobs a server runs, each with its unit and timer (provision.sh's JOBS). The Mac host runs
+// backup-mac in place of backup.
+export const VPS_JOBS = ['backup', 'controller', 'quota'];
+export const MAC_JOBS = ['backup-mac', 'controller', 'quota'];
 
 // A Postgres connection string that signs in as the database owner, pooled (postgres.<ref>) or direct.
 // The owner can drop the append-only triggers, so no job holds one under any name.
@@ -88,7 +101,9 @@ export function jobEnvProblems(job, env) {
     if (!match) problems.push('BACKUP_PAR_URL must be an Object Storage pre-authenticated request for a bucket, ending in /o/');
     else if (bucket && match[1] !== bucket) problems.push('BACKUP_PAR_URL names another bucket than BACKUP_BUCKET');
   }
-  for (const key of ['DATABASE_ALERT_MB', 'ACTIONS_MINUTES_INCLUDED', 'ACTIONS_MINUTES_FLOOR']) {
+  const dir = env.BACKUP_DIR ?? '';
+  if (dir && !/^\/[^\r\n]*[^/\r\n]$/.test(dir)) problems.push('BACKUP_DIR must be an absolute path to a folder, with no trailing slash');
+  for (const key of ['DATABASE_ALERT_MB', 'ACTIONS_MINUTES_INCLUDED', 'ACTIONS_MINUTES_FLOOR', 'BACKUP_KEEP_DAYS']) {
     const value = (env[key] ?? '').trim();
     if (value && !/^[1-9][0-9]*$/.test(value)) problems.push(`${key} must be a whole number above zero`);
   }
