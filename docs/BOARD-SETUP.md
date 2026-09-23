@@ -514,7 +514,8 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - **The emergency fund:** convert its credit when an S1 card needs it. The inbox lists S1 cards that
   may draw on it.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
-  The inbox links the open pull requests labelled `kernel`.
+  The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
+  only those, so every other one waits for you.
 - **New models:** add a price-table row to `.env` before any role uses a new model. The board site
   cannot read `.env`, so the inbox does not list this one; I tell you when a model change needs it.
 
@@ -708,7 +709,7 @@ this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/i
 
 Generated an unguessable topic without printing it, saved the URL as `NTFY_TOPIC_URL` in `.env.vps`
 at the repository root (gitignored, mode 0600), and posted a test to it: HTTP 200. Subscribing your
-phone is still open (step 2b).
+phone is still open (step 10).
 
 ### 9. Viewer-count kill lines: DONE 22 September 2026
 

@@ -103,7 +103,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the VPS jobs' first runs and the backups repository |
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
-| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the first sign-ins (board steps 17 and 18), then `platform_lane_open` |
+| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
 ### Draft
 
