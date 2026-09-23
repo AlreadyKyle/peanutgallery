@@ -75,7 +75,7 @@ export interface EventRow {
 }
 
 export class FakeDb implements Db {
-  studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500 };
+  studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500, anthropic_tier_cap_usd: null };
   pool: Pool = { balance_usd: 50, reserve_usd: 0, incident_reserve_usd: 0, daily_spent_usd: 0, day: '2026-09-14' };
   boardActive = true;
   cards: Card[] = [];
@@ -128,14 +128,19 @@ export class FakeDb implements Db {
     }
     return spend;
   }
-  async creditPurchasedUsd() {
-    return this.creditPurchased;
-  }
-  async studioSpend(since: Date) {
+  // The arguments of every spendTotals call, as ISO strings.
+  spendTotalsCalls: [string, string][] = [];
+  // studio_spend_totals: the credit bought, and the studio and overhead rows in all, since the month
+  // start and since the tier month start.
+  async spendTotals(monthStart: Date, tierStart: Date) {
+    this.spendTotalsCalls.push([monthStart.toISOString(), tierStart.toISOString()]);
     const rows = this.ledger.filter((row) => row.billed_to === 'studio' || row.billed_to === 'overhead');
+    const since = (start: Date) => round4(rows.filter((row) => (row.created_at ? Date.parse(row.created_at) : this.clock()) >= start.getTime()).reduce((total, row) => total + row.usd, 0));
     return {
-      totalUsd: round4(rows.reduce((total, row) => total + row.usd, 0)),
-      sinceUsd: round4(rows.filter((row) => (row.created_at ? Date.parse(row.created_at) : this.clock()) >= since.getTime()).reduce((total, row) => total + row.usd, 0)),
+      creditPurchasedUsd: this.creditPurchased,
+      spentUsd: round4(rows.reduce((total, row) => total + row.usd, 0)),
+      monthUsd: since(monthStart),
+      tierUsd: since(tierStart),
     };
   }
   async dispatcherHeartbeat(now: Date) {

@@ -15,8 +15,8 @@
 // paused, and a card no longer gated is left as the board set it. The merge goes ahead only while
 // main's head is still the card's base sha, so what merges is exactly what the gate tested; otherwise
 // the card goes back to funded to be built on the new main. A revert that fails pauses the studio, since
-// main may then still carry the failed change. An API error that says the Console credit ran out pauses
-// the studio and the card.
+// main may then still carry the failed change. An API error that says the Console credit ran out, or
+// that the organisation reached its usage tier's monthly cap, pauses the studio and the card.
 //
 // A stop the card did not cause is never a rejection (docs/specs/money-safety.md): a gate that never
 // started or never finished, one GitHub cancelled or could not start, a failure main already had at the
@@ -34,6 +34,7 @@ import type { AgentAdapter, CardFolder } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
 import type { DispatcherConfig } from './config.js';
+import { REFUSAL_CHECK } from './credit.js';
 import type { Card, CardPatch, Db, Role } from './db.js';
 import { gitConfigViolations } from './gitconfig.js';
 import {
@@ -631,7 +632,18 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
       } Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.`,
     );
-    throw new CardStop('paused', 'console_credit', run.detail);
+    throw new CardStop('paused', REFUSAL_CHECK.credit, run.detail);
+  }
+  if (run.outcome === 'tier_cap') {
+    // Buying credit does not clear it: the organisation's usage tier caps its spend for the month, so
+    // the studio stops until the month turns or Anthropic raises the tier.
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: usage tier cap reached (card ${shortId(card.id)})`, deps.now()));
+    await deps.alert.notify(
+      `Usage tier cap reached: card ${shortId(card.id)} stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. ${
+        unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
+      } Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.`,
+    );
+    throw new CardStop('paused', REFUSAL_CHECK.tier_cap, run.detail);
   }
   const pausing = PAUSING_OUTCOMES[run.outcome];
   if (pausing) throw new CardStop('paused', pausing, run.detail);

@@ -371,18 +371,18 @@ printf 'x2\n' > "$D/seed-1/sim/a.ts"; git -C "$D" commit -q -am "code"; C2=$(git
 printf 'y2\n' > "$D/platform/site/a.ts"; git -C "$D" commit -q -am "platform"; C3=$(git -C "$D" rev-parse HEAD)
 printf 'z2\n' > "$D/README.md"; git -C "$D" commit -q -am "root"; C4=$(git -C "$D" rev-parse HEAD)
 expect "changed: usage without refs" 2 '^$' -- bash "$CHANGED"
-expect "changed: config-only change is the config lane" 0 '^seed=true platform=false lane=config$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C1"
-expect "changed: seed code change is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C1" "$C2"
-expect "changed: platform change" 0 '^seed=false platform=true lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C2" "$C3"
-expect "changed: root change touches both folders" 0 '^seed=true platform=true lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C3" "$C4"
-expect "changed: range spanning config and code is the code lane" 0 '^seed=true platform=true lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C4"
-expect "changed: identical refs change nothing" 0 '^seed=false platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C4"
-expect "changed: zero base counts every file" 0 '^seed=true platform=true lane=code$' -- bash "$CHANGED" --repo-root "$D" 0000000000000000000000000000000000000000 "$C1"
+expect "changed: config-only change is the config lane" 0 '^seed=true platform=false lane=config site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C1"
+expect "changed: seed code change is the code lane" 0 '^seed=true platform=false lane=code site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C1" "$C2"
+expect "changed: a site change selects the site steps and not the functions tests" 0 '^seed=false platform=true lane=code site=true functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C2" "$C3"
+expect "changed: root change touches both folders and every step" 0 '^seed=true platform=true lane=code site=true functions=true$' -- bash "$CHANGED" --repo-root "$D" "$C3" "$C4"
+expect "changed: range spanning config and code is the code lane" 0 '^seed=true platform=true lane=code site=true functions=true$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C4"
+expect "changed: identical refs change nothing" 0 '^seed=false platform=false lane=code site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C4"
+expect "changed: zero base counts every file" 0 '^seed=true platform=true lane=code site=true functions=true$' -- bash "$CHANGED" --repo-root "$D" 0000000000000000000000000000000000000000 "$C1"
 expect "changed: --list prints the files" 0 '^seed-1/config/spawn-table.json$' -- bash "$CHANGED" --repo-root "$D" --list "$C0" "$C1"
 expect "changed: unknown head ref is an error" 2 '^$' -- bash "$CHANGED" --repo-root "$D" "$C0" not-a-ref
 git -C "$D" checkout -q -b card/abcd1234-config "$C0"
 printf '{"rows":[{"id":"cart"}]}\n' > "$D/seed-1/config/spawn-table.json"; git -C "$D" commit -q -am "branch config"; C5=$(git -C "$D" rev-parse HEAD)
-expect "changed: branch diff uses the merge base, not main's later commits" 0 '^seed=true platform=false lane=config$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C5"
+expect "changed: branch diff uses the merge base, not main's later commits" 0 '^seed=true platform=false lane=config site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C4" "$C5"
 # A rename lists both names, so a kernel file moved into a config folder is still seen, and the
 # change is the code lane. The repository's own rename settings do not change that.
 git -C "$D" checkout -q main
@@ -393,14 +393,14 @@ git -C "$D" mv seed-1/tests/invariants.test.ts seed-1/content/x.json; git -C "$D
 bash "$CHANGED" --repo-root "$D" --list "$C6" "$C7" > "$T/renamed.txt"
 assert "changed: a rename lists both names" test "$(cat "$T/renamed.txt")" = "seed-1/content/x.json
 seed-1/tests/invariants.test.ts"
-expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
+expect "changed: a kernel file renamed into content is the code lane" 0 '^seed=true platform=false lane=code site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C6" "$C7"
 expect "changed: kernel-guard fails the old name of a renamed kernel file" 1 '^FAIL: kernel-guard path=seed-1/tests/invariants.test.ts$' -- bash "$GATE_DIR/kernel-guard.sh" "$T/renamed.txt"
 # The config lane holds .json files only; a card branch stays inside seed-1/ while the platform
 # code lane is closed.
 git -C "$D" checkout -q -b lane-page "$C0"
 mkdir -p "$D/seed-1/content"
 printf '<p>x</p>\n' > "$D/seed-1/content/page.html"; git -C "$D" add -A; git -C "$D" commit -q -m "page"; C8=$(git -C "$D" rev-parse HEAD)
-expect "changed: a non-JSON file in content is the code lane" 0 '^seed=true platform=false lane=code$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C8"
+expect "changed: a non-JSON file in content is the code lane" 0 '^seed=true platform=false lane=code site=false functions=false$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C8"
 expect "lane: a non-JSON file on a config branch fails" 1 '^FAIL: lane-check path=seed-1/content/page.html rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C0" "$C8"
 expect "lane: the same file on a code branch passes" 0 '^PASS: lane-check files=1 lane=code$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0" "$C8"
 expect "lane: JSON under config passes on a config branch" 0 '^PASS: lane-check files=1 lane=config$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C0" "$C1"
@@ -409,6 +409,35 @@ expect "lane: a platform change fails on a card branch while the platform code l
 expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=README.md rule=seed-1-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
 expect "lane: a branch that names no lane fails" 1 '^FAIL: lane-check branch=card/abcd1234 rule=branch-name$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234 "$C0" "$C1"
 expect "lane: --check-lane needs a branch and two refs" 2 '^$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0"
+git -C "$D" checkout -q main
+
+# Which of the platform job's slower steps a change selects (docs/specs/scale-launch.md). Each
+# commit changes one file on top of $C4, so each range holds exactly that file.
+scope_of() {
+  local file=$1 base
+  git -C "$D" checkout -q "$C4"
+  mkdir -p "$D/$(dirname "$file")"
+  printf 'scope %s\n' "$file" >> "$D/$file"
+  git -C "$D" add -A && git -C "$D" commit -q -m "scope $file"
+  base=$C4
+  bash "$CHANGED" --repo-root "$D" "$base" "$(git -C "$D" rev-parse HEAD)"
+}
+for pair in \
+  'docs/PLAN.md seed=false platform=true lane=code site=false functions=false' \
+  'platform/dispatcher/src/tick.ts seed=false platform=true lane=code site=false functions=false' \
+  'platform/ops/deploy.sh seed=false platform=true lane=code site=false functions=false' \
+  'platform/supabase/migrations/x.sql seed=false platform=true lane=code site=false functions=true' \
+  'platform/agents/builder-a.json seed=false platform=true lane=code site=true functions=false' \
+  'platform/site/src/App.tsx seed=false platform=true lane=code site=true functions=false' \
+  'platform/gate/ship-gate.sh seed=false platform=true lane=code site=true functions=true' \
+  'platform/board/src/main.tsx seed=false platform=true lane=code site=true functions=true' \
+  '.github/workflows/gate.yml seed=true platform=true lane=code site=true functions=true' \
+  'pnpm-lock.yaml seed=true platform=true lane=code site=true functions=true' \
+  'seed-1/sim/b.ts seed=true platform=false lane=code site=false functions=false'; do
+  file=${pair%% *}
+  want=${pair#* }
+  assert "changed: $file gives $want" test "$(scope_of "$file")" = "$want"
+done
 git -C "$D" checkout -q main
 
 # ---------------------------------------------------------------- headless-bot/run.mjs and ship-gate.sh
@@ -696,7 +725,30 @@ for pair in 'seed-code SEED_CODE' 'platform PLATFORM_JOB' 'build BUILD'; do
   set -- $pair
   assert "workflow: the gate job requires $1 to pass when detect selects it" workflow_has "want $1 \"\\\$$2\""
 done
-assert "workflow: the gate job requires the build job whenever detect selects a folder" workflow_has 'if \[ "\$SEED" = true \] \|\| \[ "\$PLATFORM" = true \]; then want build'
+assert "workflow: the gate job requires the build job whenever detect selects the seed or the site" workflow_has 'if \[ "\$SEED" = true \] \|\| \[ "\$SITE" = true \]; then want build'
+assert "workflow: the gate job requires the platform job whenever detect selects any platform step" workflow_has 'if \[ "\$PLATFORM" = true \] \|\| \[ "\$SITE" = true \] \|\| \[ "\$FUNCTIONS" = true \]; then want platform'
+for flag in seed platform lane site functions; do
+  assert "workflow: detect outputs $flag" test "$(job_block detect | grep -c "^      $flag: \\\${{ steps.paths.outputs.$flag }}\$")" = 1
+  assert "workflow: detect writes $flag to its outputs" detect_runs "echo \"$flag=\$$flag\" >> \"\$GITHUB_OUTPUT\""
+done
+assert "workflow: detect fails a flag that is not true or false before writing any output" order detect 'for flag in "seed=$seed" "platform=$platform" "site=$site" "functions=$functions"; do' 'echo "seed=$seed" >> "$GITHUB_OUTPUT"'
+assert "workflow: the gate job fails a flag that is not true or false" order gate 'for flag in "seed=$SEED" "platform=$PLATFORM" "site=$SITE" "functions=$FUNCTIONS"; do' 'want() {'
+# step_if <job> <step line> <if line>: the step's next line is exactly the condition.
+step_if() {
+  job_block "$1" | STEP="$2" COND="$3" awk 'index($0, ENVIRON["STEP"]) { getline nxt; if (nxt ~ /^ +if: / && index(nxt, ENVIRON["COND"])) ok = 1; else bad = 1 } END { exit !(ok && !bad) }'
+}
+for step in 'uses: denoland/setup-deno' 'name: Stripe webhook function tests'; do
+  assert "workflow: the platform job runs '$step' only when detect selects the functions" step_if platform "$step" "if: needs.detect.outputs.functions == 'true'"
+done
+for step in 'name: Build the site for the end-to-end suite' 'name: Install Chromium for Playwright' 'name: Site end-to-end'; do
+  assert "workflow: the platform job runs '$step' only when detect selects the site" step_if platform "$step" "if: needs.detect.outputs.site == 'true'"
+done
+assert "workflow: the platform job gates exactly five steps on detect's flags" test "$(job_block platform | grep -cE "^        if: needs\.detect\.outputs\.(site|functions) == 'true'\$")" = 5
+assert "workflow: the platform job's checks, gate, agent, ops and docs tests run on every platform change" test "$(job_block platform | grep -cE '^        if: ')" = 6
+assert "workflow: the build job builds the site only when detect selects it" step_if build 'name: Build the site and scan the build' "if: needs.detect.outputs.site == 'true'"
+for job in seed-code platform; do
+  assert "workflow: $job caches the pnpm store" test "$(job_block "$job" | grep -c '^          cache: pnpm$')" = 1
+done
 for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
   assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
@@ -713,7 +765,7 @@ build_runs_no_card_tests() { ! job_block build | grep -qE -- '--phase checks|pnp
 build_has_no_cache() { ! job_block build | grep -qE '^ +cache:'; }
 assert "workflow: the build job runs no card tests" build_runs_no_card_tests
 assert "workflow: the build job uses no dependency cache" build_has_no_cache
-assert "workflow: the build job runs when detect selects a folder" test "$(job_block build | grep -c "^    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.platform == 'true'$")" = 1
+assert "workflow: the build job runs when detect selects the seed or the site" test "$(job_block build | grep -c "^    if: needs.detect.outputs.seed == 'true' || needs.detect.outputs.site == 'true'$")" = 1
 assert "workflow: the build job restores kernel files on card branches only" order build 'name: Restore every kernel file from the base commit on a card branch' "if: startsWith(github.head_ref, 'card/')" 'restore-kernel.sh "$BASE"'
 assert "workflow: a newer push to a pull request cancels its older run" workflow_has "^  cancel-in-progress: \\\$\\{\\{ github.event_name == 'pull_request' \\}\\}$"
 
@@ -754,6 +806,74 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
 done
 assert "workflow audit: gate.yml runs checkout four times" test "$(grep -c 'uses: actions/checkout@' "$WORKFLOW")" = 4
 
+# The run block of the named step in a job, dedented, as the runner writes it to a script.
+step_script() {
+  job_block "$1" | awk -v step="      - name: $2" '
+    $0 == step { s = 1; next }
+    s && /^      - / { exit }
+    s && /^        run: \|$/ { r = 1; next }
+    r && /^          / { print substr($0, 11); next }
+    r && /^ {0,9}[^ ]/ { exit }
+  '
+}
+GATE_SCRIPT="$T/gate-verdict.sh"
+step_script gate 'Require detect and every job it selected to pass' > "$GATE_SCRIPT"
+assert "workflow: the gate job's verdict script is found" test -s "$GATE_SCRIPT"
+# verdict <exit> <name> KEY=value ...: runs the verdict with GitHub's env, success by default.
+verdict() {
+  local want=$1 name=$2
+  shift 2
+  expect "gate verdict: $name" "$want" '' -- env -i PATH="$PATH" RESULTS='{}' DETECT=success SEED=false PLATFORM=false SITE=false FUNCTIONS=false LANE=code \
+    SEED_CODE=skipped PLATFORM_JOB=skipped BUILD=skipped "$@" bash -e "$GATE_SCRIPT"
+}
+verdict 0 "a docs-only change passes with platform alone" PLATFORM=true PLATFORM_JOB=success
+verdict 0 "a dispatcher change passes without the build job" PLATFORM=true PLATFORM_JOB=success
+verdict 1 "a site change fails when the build job did not run" PLATFORM=true SITE=true PLATFORM_JOB=success
+verdict 0 "a site change passes with platform and build" PLATFORM=true SITE=true PLATFORM_JOB=success BUILD=success
+verdict 1 "a functions change fails when the platform job did not run" PLATFORM=true FUNCTIONS=true
+verdict 1 "a site flag without the platform flag still needs the platform job" SITE=true BUILD=success
+verdict 1 "a seed code change fails when seed-code did not run" SEED=true BUILD=success
+verdict 0 "a seed code change passes with seed-code and build" SEED=true SEED_CODE=success BUILD=success
+verdict 0 "a config change passes with build alone" SEED=true LANE=config BUILD=success
+verdict 1 "a failed detect fails the gate" DETECT=failure
+verdict 1 "a missing site flag fails the gate" PLATFORM=true PLATFORM_JOB=success SITE=
+verdict 1 "a malformed functions flag fails the gate" PLATFORM=true PLATFORM_JOB=success FUNCTIONS=yes
+verdict 1 "a failed job named in the results fails the gate" PLATFORM=true PLATFORM_JOB=success RESULTS='{"build": {"result": "failure"}}'
+verdict 0 "a change to nothing passes with detect alone"
+
+DETECT_SCRIPT="$T/detect-paths.sh"
+step_script detect 'Detect folders and lane' > "$DETECT_SCRIPT"
+assert "workflow: detect's parsing script is found" test -s "$DETECT_SCRIPT"
+# detect_with <exit> <name> <changed-paths line> [branch]: runs detect's script against a stand-in
+# changed-paths.sh that prints the line, and keeps what it wrote to GITHUB_OUTPUT in $T/detect-out.txt.
+detect_with() {
+  local want=$1 name=$2 line=$3 branch=${4:-launch/x}
+  rm -rf "$T/detect" && mkdir -p "$T/detect/platform/gate"
+  printf 'printf "%%s\\n" "%s"\n' "$line" > "$T/detect/platform/gate/changed-paths.sh"
+  : > "$T/detect-out.txt"
+  expect "detect: $name" "$want" '' -- env -i PATH="$PATH" BASE=a HEAD=b BRANCH="$branch" GITHUB_OUTPUT="$T/detect-out.txt" bash -e -c "cd '$T/detect' && bash -e '$DETECT_SCRIPT'"
+}
+detect_with 0 "passes every flag through" 'seed=false platform=true lane=code site=false functions=true'
+assert "detect: writes all five outputs" test "$(cat "$T/detect-out.txt")" = "seed=false
+platform=true
+lane=code
+site=false
+functions=true"
+detect_with 0 "puts a -code card branch in the code lane" 'seed=true platform=false lane=config site=false functions=false' card/abcd1234-code
+assert "detect: a -code branch is the code lane" grep -qx 'lane=code' "$T/detect-out.txt"
+detect_with 1 "fails an output from an older changed-paths.sh with no site or functions flag" 'seed=true platform=true lane=code'
+assert "detect: writes nothing when a flag is missing" test ! -s "$T/detect-out.txt"
+detect_with 1 "fails a malformed lane" 'seed=true platform=true lane=other site=true functions=true'
+
+# The constitution's description of the gate (docs/PLAN.md Appendix A) says what the workflow does:
+# the work is selected by changed path, the site build and its suite run only for a change that can
+# reach the site, and the gate job fails closed.
+PLAN="$REPO_ROOT/docs/PLAN.md"
+assert "plan: Appendix A names the selection by changed path" grep -qF 'The detect job selects the work by changed path (`platform/gate/changed-paths.sh`)' "$PLAN"
+assert "plan: Appendix A runs the site build and the end-to-end suite only when a change can reach the site" grep -qF 'then, when it can reach the site, the site build and the Playwright end-to-end suite.' "$PLAN"
+assert "plan: Appendix A says the gate job fails closed" grep -qF 'The `gate` job fails closed: it fails when detect failed, when a flag is missing or not exactly true or false, and when a job detect selected did not pass.' "$PLAN"
+assert "plan: Appendix A no longer says every platform change builds the site" test "$(grep -cF 'supabase and site packages, then the site build and the Playwright end-to-end suite.' "$PLAN")" = 0
+
 # ---------------------------------------------------------------- netlify.toml
 # A card branch's pull request is opened before the gate runs, so neither site may build a deploy
 # preview of it. Netlify runs the ignore command with bash in the site's folder; exit 0 skips.
@@ -782,6 +902,39 @@ for pair in 'platform/site/netlify.toml platform/site' 'seed-1/netlify.toml seed
 done
 assert "netlify: the site skips a main build that changed nothing it uses" test "$(ignore_exit platform/site/netlify.toml platform/site main "$N0" "$N1")" = 0
 assert "netlify: the seed builds main when its folder changed" test "$(ignore_exit seed-1/netlify.toml seed-1 main "$N0" "$N1")" != 0
+# Only the site that changed builds; a workspace file the builds read rebuilds both, and a change
+# neither build reads (docs, the dispatcher) rebuilds neither (docs/specs/scale-launch.md).
+netlify_commit() {
+  local f=$1
+  mkdir -p "$SITES/$(dirname "$f")"
+  printf 'z %s\n' "$f" >> "$SITES/$f"
+  git -C "$SITES" add -A && git -C "$SITES" commit -q -m "$f"
+  git -C "$SITES" rev-parse HEAD
+}
+N2=$(netlify_commit platform/site/src/App.tsx)
+assert "netlify: a site change builds the site" test "$(ignore_exit platform/site/netlify.toml platform/site main "$N1" "$N2")" != 0
+assert "netlify: a site change skips the seed" test "$(ignore_exit seed-1/netlify.toml seed-1 main "$N1" "$N2")" = 0
+for f in tsconfig.base.json pnpm-workspace.yaml pnpm-lock.yaml package.json; do
+  B=$(git -C "$SITES" rev-parse HEAD)
+  A=$(netlify_commit "$f")
+  for pair in 'platform/site/netlify.toml platform/site' 'seed-1/netlify.toml seed-1'; do
+    set -- $pair
+    assert "netlify: a $f change builds $2" test "$(ignore_exit "$1" "$2" main "$B" "$A")" != 0
+  done
+done
+for f in docs/PLAN.md platform/dispatcher/src/tick.ts; do
+  B=$(git -C "$SITES" rev-parse HEAD)
+  A=$(netlify_commit "$f")
+  for pair in 'platform/site/netlify.toml platform/site' 'seed-1/netlify.toml seed-1'; do
+    set -- $pair
+    assert "netlify: a $f change skips $2" test "$(ignore_exit "$1" "$2" main "$B" "$A")" = 0
+  done
+done
+for pair in 'platform/site/netlify.toml platform/site' 'seed-1/netlify.toml seed-1'; do
+  set -- $pair
+  assert "netlify: $1 skips a dependabot branch's deploy preview" test "$(ignore_exit "$1" "$2" dependabot/npm_and_yarn/vite-8.3.1 '' "$N1")" = 0
+  assert "netlify: $1 builds a branch that only mentions dependabot" test "$(ignore_exit "$1" "$2" launch/dependabot '' "$N1")" != 0
+done
 
 # ---------------------------------------------------------------- summary
 if [ "$FAILED" -eq 0 ]; then

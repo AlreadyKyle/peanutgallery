@@ -103,6 +103,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/carry-over.md` | built | the production steps: migration `20260923000200`, the role re-seed, and the live check on production |
 | `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the VPS jobs' first runs and the backups repository |
+| `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
 
 ### Draft
 

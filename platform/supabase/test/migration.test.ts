@@ -1637,6 +1637,63 @@ describe("anon-negative-test covers the money-safety objects", () => {
   });
 });
 
+// The scale migration (docs/specs/scale-launch.md): the dispatcher's spend totals in SQL and the
+// usage tier cap.
+
+const SPEND_TOTALS_FILE = "20260923000100_spend_totals.sql";
+const spendTotalsSql = launchFile(SPEND_TOTALS_FILE);
+
+describe("spend-totals migration", () => {
+  it("comes after every launch file and sets a lock timeout first", () => {
+    expect(Object.values(LAUNCH_FILES).every((name) => name < SPEND_TOTALS_FILE)).toBe(true);
+    expect(withoutComments(spendTotalsSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+  });
+
+  it("can run twice: every statement is guarded or replaces what it creates", () => {
+    const statements = withoutComments(spendTotalsSql)
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => /^(create|alter|drop)\b/.test(statement) && !statement.startsWith("create or replace function"));
+    expect(statements.length).toBeGreaterThan(0);
+    for (const statement of statements) {
+      expect(statement, statement).toMatch(/if (not )?exists|^alter table public\.studio_state add constraint/);
+    }
+    // The constraint is dropped first, so adding it again does not fail.
+    expect(spendTotalsSql.indexOf("drop constraint if exists studio_state_anthropic_tier_cap_check")).toBeLessThan(
+      spendTotalsSql.indexOf("add constraint studio_state_anthropic_tier_cap_check"),
+    );
+  });
+
+  it("adds an optional, positive tier cap to studio_state and nothing to the public views", () => {
+    expect(spendTotalsSql).toContain("alter table public.studio_state add column if not exists anthropic_tier_cap_usd numeric(12,4);");
+    expect(spendTotalsSql).toContain("check (anthropic_tier_cap_usd is null or anthropic_tier_cap_usd > 0)");
+    expect(withoutComments(spendTotalsSql)).not.toMatch(/create or replace view|grant select/);
+  });
+
+  it("indexes the ledger by billing and time, carrying usd", () => {
+    expect(spendTotalsSql).toContain("create index if not exists ledger_billed_created_idx on public.ledger (billed_to, created_at) include (usd);");
+  });
+
+  it("sums studio and overhead rows only, from the month and tier starts, and every credit purchase", () => {
+    const block = functionBlockIn(spendTotalsSql, "studio_spend_totals");
+    expect(block).toContain("where l.billed_to in ('studio', 'overhead');");
+    expect(block).toContain("'month_usd', coalesce(sum(l.usd) filter (where l.created_at >= p_month_start), 0)");
+    expect(block).toContain("'tier_usd', coalesce(sum(l.usd) filter (where l.created_at >= p_tier_start), 0)");
+    expect(block).toContain("(select coalesce(sum(p.amount_usd), 0) from public.credit_purchases p)");
+    expect(functionBlockIn(spendTotalsSql, "card_ledger_usd")).toContain("from public.ledger l where l.card_id = p_card_id;");
+  });
+
+  it("gives both functions to the service role only, read-only, strict and with a fixed search path", () => {
+    for (const [name, types] of [["studio_spend_totals", "timestamptz, timestamptz"], ["card_ledger_usd", "uuid"]] as const) {
+      const block = functionBlockIn(spendTotalsSql, name);
+      expect(block, name).toContain("\nstable\nstrict\nsecurity definer\nset search_path = public\n");
+      expect(block, name).not.toMatch(/\b(insert|update|delete)\b/);
+      expect(spendTotalsSql).toContain(`revoke all on function public.${name}(${types}) from public, anon, authenticated;`);
+      expect(spendTotalsSql).toContain(`grant execute on function public.${name}(${types}) to service_role;`);
+    }
+  });
+});
+
 // The Biz Dev rename and the roster columns (docs/specs/carry-over.md).
 const RENAME_BIZ_DEV_FILE = "20260923000200_rename_biz_dev.sql";
 const renameSql = launchFile(RENAME_BIZ_DEV_FILE);
