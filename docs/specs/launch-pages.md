@@ -29,7 +29,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - The Right now panel reads "Latest shipped: <title>" when a card has shipped.
 
 **Legal and contact.** Plain-language text pages, drafted by Claude for board review (not legal advice). Each follows the text-page layout: one h1 and a lede, then sections with an h2. Every string lives in `copy.ts`. The pages say "contributions", never "donations", and do not print the word draft.
-- **Operator.** "Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada." Contact address hello@peanutgallery.games, as a mailto link.
+- **Operator.** "Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada." Contact address hello@clayhouse.studio (PLAN §10 decision 37), as a mailto link.
 - **Terms.**
   - Who operates the studio.
   - A contribution funds agent compute and the studio as the supporter splits it at checkout. It buys no goods, no ownership, no equity, no guaranteed outcome and no vote weight.
@@ -43,7 +43,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
   - No ads, no analytics, no tracking cookies.
   - Board sign-in uses Supabase Auth, and only board members can sign in.
   - Hosting logs (Netlify, Supabase) may record IP addresses for security.
-  - Deletion or a copy of your data: email hello@peanutgallery.games. The public pages never show names or emails.
+  - Deletion or a copy of your data: email hello@clayhouse.studio. The public pages never show names or emails.
 - **Refunds.**
   - Ask within 14 days by email with the receipt. Refunds go back through Stripe to the original payment method.
   - A refund or dispute reverses that contribution's credit on the meter and on any card bar it funded. Work already shipped stays shipped.
@@ -174,6 +174,7 @@ Out: a stream, a kill switch, display names, personal decisions, a `public_shipp
 - 2026-09-14: legal pages are drafted by Claude for board review, not legal advice.
 - 2026-09-15: no `public_shipped` view and no commit link (board). The repository is private, so a GitHub link would 404. ~~Anon already reads `cards` at table level, so the site's card select adds `live` and `updated_at` instead.~~ Superseded: `card-columns-and-open-funding.md` replaces the table-level read with column grants. The site's card select, with `live` in its stages and `updated_at` in its columns, names only granted columns (2026-09-16).
 - 2026-09-15: the legal and contact pages carry the operator line "Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada." and the address hello@peanutgallery.games (board). The content is as listed under Behaviour.
+- 2026-09-23: the contact address is hello@clayhouse.studio, superseding hello@peanutgallery.games (board, PLAN §10 decision 37).
 - 2026-09-15: the 14-day hold above $50 of agent credit a day is stated on the Terms page as the rule, before phase 4 builds it (board).
 - 2026-09-15: link previews use a typographic `og.png` drawn by a committed Playwright script from the site's stylesheet (board). No generated imagery.
 - 2026-09-15: two-factor is enforced in the database through `board_aal2()` (board). The moderator's pause stays at `aal1`. The heartbeat, `board_role` and `board_studio_state` stay at `aal1`, so attended dispatcher runs keep a board session before the second factor.

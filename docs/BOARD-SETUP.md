@@ -26,24 +26,10 @@ players put in (`docs/PLAN.md` §10 decision 35).
 This list replaces the item numbers used before 22 September 2026. The **Done** entries at the
 bottom keep their old numbers.
 
-### 1. hello@ email (10 minutes, free)
+### 1. Contact email: DONE 23 September 2026
 
-**Why.** The Contact page links hello@peanutgallery.games (live criterion 4). I checked on
-22 September: the domain's DNS is at GoDaddy (`ns45/ns46.domaincontrol.com`) and it has no MX
-records, so mail to any @peanutgallery.games address bounces today. A forwarder needs an account in
-your name, so this one is yours.
-
-**Do this.**
-
-1. Sign up at improvmx.com on the free plan with the domain peanutgallery.games, and forward
-   `hello` to your own inbox.
-2. ImprovMX shows two MX records and an SPF record (a TXT record). Add all three in GoDaddy → the
-   domain → DNS.
-3. Send a test message to hello@peanutgallery.games from another address and confirm it arrives.
-
-Then I check the MX and SPF records with `dig` and record them here.
-
-**Tell me:** "hello@ works, test mail arrived."
+The public contact address is hello@clayhouse.studio, the board's own mailbox (`docs/PLAN.md` §10
+decision 37). The site, the legal pages and Stripe's public details use it. Nothing to set up.
 
 ### 2. Alerts and GitHub access (15 minutes, free)
 
@@ -297,7 +283,6 @@ At /board, press **Go live**. It works once and cannot be undone. Then post, in 
 
 ## What only you can do
 
-- The ImprovMX account and the GoDaddy MX and SPF records.
 - The healthchecks.io account.
 - Subscribing to the ntfy topic on your phone.
 - The three fine-grained GitHub tokens.
@@ -359,7 +344,6 @@ different numbers.
 
 Copy any of these back to me as you finish:
 
-- "hello@ works, test mail arrived."
 - "healthchecks check is created."
 - "subscribed to ntfy."
 - "tokens are set."

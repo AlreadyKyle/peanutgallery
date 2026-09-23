@@ -248,7 +248,7 @@ export const copy = {
   // In a paragraph, {email} becomes the contact address as a mailto link, {refunds} a link to
   // the Refunds page and {discord} the Discord invite.
   footerLinks: { terms: 'Terms', privacy: 'Privacy', refunds: 'Refunds', contact: 'Contact' },
-  contactEmail: 'hello@peanutgallery.games',
+  contactEmail: 'hello@clayhouse.studio',
   refundsPageLink: 'Refunds page',
   legalUpdated: 'Last updated 22 September 2026.',
   terms: {

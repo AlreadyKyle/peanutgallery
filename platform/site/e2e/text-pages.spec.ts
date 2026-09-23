@@ -11,9 +11,9 @@ for (const { path, title } of PAGES) {
   test(`${path} renders one h1 at 375 px without horizontal overflow`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
-    await expect(page.getByRole('main').getByRole('link', { name: 'hello@peanutgallery.games' }).first()).toHaveAttribute(
+    await expect(page.getByRole('main').getByRole('link', { name: 'hello@clayhouse.studio' }).first()).toHaveAttribute(
       'href',
-      'mailto:hello@peanutgallery.games',
+      'mailto:hello@clayhouse.studio',
     );
     const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflows).toBe(false);

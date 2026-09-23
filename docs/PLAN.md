@@ -294,6 +294,7 @@ Numbered once and never renumbered; specs cite them as "§10 default N". A decis
 34. Smoke (22 September 2026): the production smoke test runs no card code, on the VPS or in CI: the served build sha, the served config checks, served config files byte-equal to the merge commit, and the gate green at the merge sha.
 35. Free infrastructure (22 September 2026): everything the studio runs on is free; players' money funds the studio, and the founder's money never does.
 36. Models (23 September 2026): every role that runs is on `claude-opus-5-5`, the builders, QA and the Platform Builder as well as the directors (`MODEL_BUILDER` and `MODEL_DIRECTOR`). Its price row is 4 USD input, 20 USD output, 0.20 USD cache read, and 5 and 8 USD for five-minute and one-hour cache writes, per million tokens. The Host keeps `claude-haiku-4-5` (`MODEL_HOST`) while it does not run. Attended sessions need Claude Code 2.1.280 or newer, because 2.1.139 refuses `claude-opus-5-5`. Supersedes 22.
+37. Contact address (23 September 2026): the public contact address on the site, the legal pages and Stripe is hello@clayhouse.studio, the board's own mailbox, in place of hello@peanutgallery.games. It is the second allowed mention of Clayhouse, beside the footer credit.
 
 ## 11. Names
 
