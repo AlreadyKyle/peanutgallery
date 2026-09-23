@@ -4,7 +4,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 
 ## What runs where
 
-- **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto: free, in Canada, 4 cores and 24 GB of memory. Everything below is the same on any Ubuntu 24.04 host.
+- **Host.** Ubuntu 24.04, arm64 or x86, with Docker from Docker's apt repository, ufw, unattended upgrades and key-only SSH. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto: free, in Canada, 2 cores and 12 GB of memory, the Always Free limit (`docs/specs/money-safety.md`). Everything below is the same on any Ubuntu 24.04 host.
 - **Two clones and a worktree folder** (`docs/specs/ops-separation.md`). The dispatcher runs as uid 10001 and writes agent-supplied files into card worktrees, so nothing uid 10001 can write is ever run by root or loaded as the dispatcher's code.
 
   | Host path | Owner | In the container | Holds |
@@ -27,6 +27,12 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `Dockerfile.dispatcher`, `dispatcher-entrypoint.sh` | the VPS | the image |
 | `platform/agents/managed/*.yaml`, `pnpm --filter @backseat/dispatcher managed:apply` | the Mac | the Managed Agents agent and environment, applied to the studio organization |
 | `dispatcher.service`, `dispatcher-alert.service` | the VPS | the units |
+| `make-jobs-env.sh` | the Mac | writes the three jobs' env files (Backups and the Controller, below) |
+| `backup/backup.sh`, `peanutgallery-backup.service`, `.timer` | the VPS, as root | the nightly encrypted database backup and the weekly restore check |
+| `jobs/main.mjs`, `peanutgallery-controller.service`, `.timer` | the VPS, in the image, as nobody | the Controller: the daily reconciliation with Stripe |
+| `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
+| `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
+| `backups-repo/` | a separate private repository | the weekly fallback backup's workflow template |
 
 ## Operator inputs
 
@@ -42,7 +48,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
 
 ## Provision
 
-1. **Create the instance.** Oracle Cloud, region `ca-toronto-1` (or `ca-montreal-1`): Always Free, shape `VM.Standard.A1.Flex` with 4 OCPUs and 24 GB, image Ubuntu 24.04, the board's SSH key, no root password. `platform/ops/oracle-launch.sh` does all of this after one `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` (docs/specs/oracle-launch.md): it builds the network, retries "Out of host capacity" across availability domains, checks the firewall, gives root the same key as `ubuntu` so the `ssh root@` steps below work, and prints `VPS_IP=<address>`. Export that address as `VPS_IP`. On any other Ubuntu 24.04 host, which works unchanged, root may refuse ssh: run the steps as `ssh ubuntu@$VPS_IP sudo ...` there.
+1. **Create the instance.** Oracle Cloud, region `ca-toronto-1` (or `ca-montreal-1`): Always Free, shape `VM.Standard.A1.Flex` with 2 OCPUs and 12 GB (the Always Free limit; a larger shape is refused on a free tenancy and billed on Pay As You Go), image Ubuntu 24.04, the board's SSH key, no root password. `platform/ops/oracle-launch.sh` does all of this after one `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` (docs/specs/oracle-launch.md): it builds the network, retries "Out of host capacity" across availability domains, checks the firewall, gives root the same key as `ubuntu` so the `ssh root@` steps below work, and prints `VPS_IP=<address>`. Export that address as `VPS_IP`. On any other Ubuntu 24.04 host, which works unchanged, root may refuse ssh: run the steps as `ssh ubuntu@$VPS_IP sudo ...` there.
 2. **Provider firewall.** Inbound: TCP 22 only. Outbound: everything. On Oracle that is the subnet's security list (its default already allows SSH only); leave the instance's pre-installed iptables rules alone. The dispatcher publishes no port, and Docker's `-p` would bypass ufw, so this firewall matches ufw rather than trusting it.
 3. **The GitHub tokens.** Two fine-grained tokens, both limited to this one repository; unattended mode refuses any other kind (a classic `ghp_` or OAuth `gho_` token).
    - **The dispatcher's token.** Start from the pre-filled form, https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read , then choose the repository. By hand: GitHub, Settings, Developer settings, Fine-grained tokens: resource owner AlreadyKyle, only the `peanutgallery` repository. Permissions: Contents read and write, Pull requests read and write, Checks read, Metadata read. No Workflows, no Actions. Export it as `VPS_GITHUB_TOKEN`.
@@ -218,4 +224,98 @@ What uid 10001 can and cannot change (`docs/specs/ops-separation.md`):
 
 ## Oracle idle reclaim
 
-Oracle stops an Always Free instance it finds idle for a stretch, and the dispatcher is idle by design between funded cards. When that happens the healthchecks.io check alerts the board. Recovery: run `platform/ops/oracle-launch.sh` again after `oci session authenticate`; it starts the stopped instance, and `dispatcher.service` is enabled, so the dispatcher comes back on boot. Moving the tenancy to Pay As You Go ends reclaims at no cost inside the Always Free limits, but puts a card on file, so it is the board's call (`docs/BOARD-SETUP.md`).
+Oracle stops an Always Free instance whose CPU (at the 95th percentile), network and memory all stay under 20% for 7 days, and the dispatcher is idle by design between funded cards. When that happens the healthchecks.io checks alert the board.
+
+**Recovery needs no laptop.** On a phone, sign in at cloud.oracle.com, then Compute, Instances, `peanutgallery-dispatcher`, Start. `dispatcher.service` and the job timers are enabled, so the dispatcher comes back on boot, and each timer's `Persistent=` runs the backup, the Controller or the quota check it missed while the instance was stopped. If Oracle answers that it has no capacity, try again later. From the Mac, `platform/ops/oracle-launch.sh` after `oci session authenticate` does the same and retries capacity by itself.
+
+Oracle's documentation does not say that moving the tenancy to Pay As You Go ends idle reclaim, so nothing here relies on it; it would also put a card on file, which is the board's call (`docs/BOARD-SETUP.md`).
+
+## Backups and the Controller
+
+Three jobs run on the VPS beside the dispatcher and outside it (`docs/specs/money-safety.md`), each a oneshot unit started by its own timer, each with its own env file in `/etc/peanutgallery`, root 0600, holding only that job's keys. They do not need the dispatcher running, so they run before the cutover too. A job that cannot run posts "Peanut Gallery job <unit> failed" to ntfy through `peanutgallery-job-alert@.service`.
+
+| Job | When (UTC) | Env file | Does |
+|---|---|---|---|
+| `peanutgallery-backup` | daily, 06:17 | `backup.env` | `backup/backup.sh`: dumps the database through the Session pooler as the read-only `peanutgallery_backup` login, encrypts the dumps to the board's age public key, uploads them to the backup bucket, pings the backup check. Once a week it first restores the plaintext into a scratch Postgres with no network and checks the ledger identity on it. |
+| `peanutgallery-controller` | daily, 07:07 | `controller.env` | the Controller: reconciles the books with Stripe, puts back won disputes, computes the next Console credit purchase and the Minimum balance, writes a `controller_runs` row, and alerts on any mismatch |
+| `peanutgallery-quota` | daily, 07:37 | `quota.env` | the database's size (alert at 350 MB) and this month's Actions minutes (alert under 400 left), written to `controller_runs` |
+
+Supabase egress and Netlify bandwidth and build minutes are not measured here: they come from the providers' own usage emails to the board, so no account-wide token sits on the VPS.
+
+### What the Controller reads from Stripe
+
+Only these requests, all GET, with `STRIPE_READ_KEY`, the restricted `rk_live_` key the board created with read on Balance, Balance transactions, Payouts, Charges and Refunds, Checkout Sessions, Payment Links, Events and Disputes and nothing else. The key cannot refund, charge or pay out.
+
+- `GET /v1/checkout/sessions?status=complete`: every completed Checkout Session, to find payments the webhook missed;
+- `GET /v1/charges` with each charge's balance transaction expanded: amounts, fees and refunded totals;
+- `GET /v1/disputes`: every dispute, its status, its due date and its balance movements;
+- `GET /v1/payouts?status=paid`, then `GET /v1/balance_transactions?payout=<id>` for each: what each payout carried;
+- `GET /v1/events?delivery_success=false`, for the webhook's five event types over the last 30 days: events Stripe could not deliver;
+- `GET /v1/balance`: the account's balance, against the Minimum balance figure.
+
+It holds no key that could re-send an event, so a missed event is named in the alert with the fix: resend it from the Stripe Dashboard (Developers, Events) while it is under 30 days old.
+
+### Set them up
+
+With `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery` done on the Mac, and the tenancy's OCID as `TENANCY` (the `tenancy=` line of `~/.oci/config`):
+
+1. **The bucket**, private, once: `oci os bucket create --auth security_token --profile peanutgallery -c "$TENANCY" --name peanutgallery-backups --public-access-type NoPublicAccess`. Always Free Object Storage holds 20 GB, far more than these dumps.
+2. **Two write-only pre-authenticated requests**, one for the VPS and one for the backups repository, so either can be revoked alone: `oci os preauth-request create --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --name vps-backup --access-type AnyObjectWrite --time-expires <the expiry the board chooses>`, and again with `--name actions-backup`. Each prints a `full-path`; the whole URL, ending in `/o/`, is the secret. Put the VPS's in `.env` as `BACKUP_PAR_URL=` with `BACKUP_BUCKET=peanutgallery-backups`. When a request expires, uploads fail and the backup check alerts; create a new one then. A request with `AnyObjectWrite` can add objects and cannot read, list or delete any.
+3. **The board's age public key** in `.env` as `BACKUP_AGE_RECIPIENT=age1...` (`docs/BOARD-SETUP.md`). The private key never comes near the VPS or the repository.
+4. **The backup login's password.** Migration `20260923000010_backup_role.sql` creates `peanutgallery_backup` with no password. Set one once through the Management API query endpoint (`alter role peanutgallery_backup with password '<a new random password>'`), never in a file in the repository, and put the Session pooler string in `.env` as `BACKUP_DB_URL=postgresql://peanutgallery_backup.<project ref>:<password>@<the Session pooler host from Dashboard, Connect>:5432/postgres`. Read back what it can do: `select rolbypassrls, rolconfig from pg_roles where rolname = 'peanutgallery_backup'` and `select has_table_privilege('peanutgallery_backup', 'auth.users', 'select')`. If it cannot read the auth schema, the board resets the database password once and the owner's Session pooler string goes in `.env` as `BACKUP_OWNER_DB_URL=`; only the roles and auth dumps use it.
+5. **The env files.** On the Mac, with `.env.vps` exported: `platform/ops/make-jobs-env.sh`. It prints the folder it wrote. Upload each file and delete the local copies:
+   ```sh
+   scp <folder>/backup.env <folder>/controller.env <folder>/quota.env root@$VPS_IP:/etc/peanutgallery/
+   ssh root@$VPS_IP 'chown root:root /etc/peanutgallery/*.env && chmod 600 /etc/peanutgallery/*.env'
+   rm -r <folder>
+   ```
+   A job whose keys are not all in `.env` yet (the Stripe read key, say) is refused and named, and the others are written.
+6. **Provision again:** `ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh`. It installs `age` and the pinned Supabase CLI (checked against its release's checksum file), installs the backup script from the commit, checks each job env file in the image, and enables each timer whose file passes.
+7. **The first runs, by hand, quoted in the spec:**
+   ```sh
+   ssh root@$VPS_IP '/usr/local/lib/peanutgallery/backup.sh --restore-check'
+   ssh root@$VPS_IP 'docker run --rm --pull never --env-file /etc/peanutgallery/controller.env --user 65534:65534 --read-only --cap-drop ALL \
+     --volume /srv/peanutgallery-code:/opt/peanutgallery:ro --entrypoint node peanutgallery/dispatcher:current \
+     /opt/peanutgallery/platform/ops/jobs/main.mjs controller --dry-run'
+   ssh root@$VPS_IP 'systemctl start peanutgallery-quota.service; journalctl -u peanutgallery-quota -n 5 --no-pager'
+   ```
+   The backup's output must include `PASS: restore check`, and each job's first line must read `PASS:`. The Controller's dry run reads everything and writes, reinstates and alerts nothing; run it only after the board has been told what it reads (above).
+
+Before the cutover `deploy.sh` refuses to run while the dispatcher is stopped, so the jobs' code in the code clone moves only when `provision.sh` makes a fresh clone (move the old one aside first, as in Roll back). After the cutover every deploy updates it.
+
+### What the board does with the Controller's run
+
+- **After each payout:** buy the Console credit the run names ("Credit to buy now") and raise Stripe's Minimum balance to the figure it names, in the settlement currency. The purchase is never more than the agent money Stripe has paid out and not yet converted, plus the overhead, so it never needs anyone's own money.
+- **A dispute to answer:** answer it in Stripe before the due date the alert names.
+- **A fee Stripe kept that the books do not carry:** record the adjustment the alert names with `record_adjustment` at /board.
+- **A missed or undelivered webhook event:** resend it from the Stripe Dashboard.
+
+Read the runs as the service role: `select job, started_at, ok, mismatches, figures from controller_runs order by created_at desc limit 5`, or `journalctl -u peanutgallery-controller -n 50 --no-pager` on the VPS.
+
+## Restore the database
+
+The encrypted backups are in the `peanutgallery-backups` bucket, and only the board's offline age key opens them. Every step runs on the Mac.
+
+1. **Fetch a backup.** `oci os object list --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --query 'data[].name'`, then `oci os object get --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --name <object> --file <object>`.
+2. **Decrypt it** with the key the board brings: `age -d -i <path to the key> -o backup.tar <object> && tar -xf backup.tar`. It holds `roles.sql`, `schema.sql`, `data.sql`, `auth.sql`, `history_schema.sql` and `history_data.sql`.
+3. **Pick the target.** For the restore drill, a scratch database: a second free Supabase project, or Supabase's Postgres image in local Docker, as the weekly check uses. For a real recovery, a new Supabase project in the same region.
+4. **Restore**, as Supabase documents it, with the target's owner connection string:
+   ```sh
+   psql --single-transaction --variable ON_ERROR_STOP=1 --file roles.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' --file data.sql --dbname "<target>"
+   psql --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
+   psql --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
+   ```
+5. **Check it:** `psql --dbname "<target>" -At -c 'select public.ledger_identity()'` must show `"holds": true`. Quote it.
+6. **For a real recovery, then:**
+   - put the new project's URL and keys in `.env` and in the VPS's env files, and set the stripe-webhook function's secrets there;
+   - deploy the webhook to the new project and create its Stripe endpoint with `platform/supabase/scripts/create-webhook-endpoint.ts`, which gives a new signing secret;
+   - change the project ref in `platform/site/netlify.toml`, a kernel file, through a board pull request;
+   - the board signs in again and re-enrols its second factor if the new project asks;
+   - resend from the Stripe Dashboard every event since the backup's time (Developers, Events), then run the Controller to find anything still missing;
+   - set a password for `peanutgallery_backup` in the new project and update `BACKUP_DB_URL`.
+7. **Delete the decrypted copy** (`rm -r backup.tar peanutgallery-*`) and put the key back offline.
+
+## Migration history
+
+Production's migrations were applied through the Management API query endpoint, which records nothing in `supabase_migrations.schema_migrations`. Once, with the board's allow, `npx supabase@2.117.0 migration repair --status applied <each applied version> --linked` (after `npx supabase link --project-ref lyxndueoeisyqzewflpu`) records every applied file, and `npx supabase migration list --linked` must then show local and remote in step. Later migrations can then go through `supabase db push`. The nightly dump carries the history (`history_schema.sql`, `history_data.sql`), so a restore keeps it.

@@ -14,12 +14,12 @@ Out: the Oracle account itself (the board signs up; an agent may not create acco
 ## Behaviour
 
 - The board signs in once with `oci session authenticate --region ca-toronto-1 --profile-name peanutgallery`. No API signing key is created or uploaded.
-- The script finds or creates a VCN `peanutgallery-vcn`, an internet gateway, a `0.0.0.0/0` route and one public subnet, then finds or launches `peanutgallery-dispatcher`: Canonical Ubuntu 24.04 (not Minimal), `VM.Standard.A1.Flex`, 4 OCPUs, 24 GB, public IPv4, the Mac's `~/.ssh/id_ed25519.pub`.
+- The script finds or creates a VCN `peanutgallery-vcn`, an internet gateway, a `0.0.0.0/0` route and one public subnet, then finds or launches `peanutgallery-dispatcher`: Canonical Ubuntu 24.04 (not Minimal), `VM.Standard.A1.Flex`, 2 OCPUs and 12 GB, the Always Free limit (corrected by `money-safety.md`; the shape this spec first named was larger than the limit), public IPv4, the Mac's `~/.ssh/id_ed25519.pub`.
 - On "Out of host capacity" it tries every availability domain in turn, waits `ROUND_SECONDS` (60) and goes again, up to `ROUNDS` (240), refreshing the session each round. Any other launch error stops it with Oracle's message.
 - It refuses to continue if the subnet's security list admits any TCP or UDP ingress other than TCP 22.
 - cloud-init sets `disable_root: false`, so root accepts the same key as `ubuntu` (key only; Ubuntu's `PermitRootLogin prohibit-password` default is untouched) and the ops runbook's `ssh root@` steps work as written.
 - It waits for `ssh ubuntu@IP echo ok` and `ssh root@IP echo ok`, and its last line is `VPS_IP=<address>`.
-- A rerun creates nothing new and prints the same address.
+- A rerun creates nothing new and prints the same address. A rerun that finds the instance stopped starts it, retrying "Out of host capacity" the same way (added by `money-safety.md`).
 
 ## Acceptance criteria
 

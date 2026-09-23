@@ -11,6 +11,9 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
+import { JOB_KEYS } from '../jobs/lib.mjs';
+// The jobs' own tests (the Controller, the quota check and their env rules) run with these.
+import './jobs.test.mjs';
 
 const OPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(OPS_DIR, '..', '..');
@@ -401,11 +404,12 @@ describe('deploy.sh wait_for_probe', () => {
   });
 });
 
-const SHELL_SCRIPTS = readdirSync(OPS_DIR).filter((name) => name.endsWith('.sh'));
+// Every shell script under platform/ops, as a path relative to it.
+const SHELL_SCRIPTS = readdirSync(OPS_DIR, { recursive: true }).filter((name) => name.endsWith('.sh') && !name.startsWith('test/'));
 
 describe('shell scripts', () => {
   test('parse with bash -n (the entrypoint with sh -n too)', () => {
-    assert.deepEqual(SHELL_SCRIPTS.sort(), ['deploy.sh', 'dispatcher-entrypoint.sh', 'make-dispatcher-env.sh', 'oracle-launch.sh', 'provision.sh']);
+    assert.deepEqual(SHELL_SCRIPTS.sort(), ['backup/backup.sh', 'deploy.sh', 'dispatcher-entrypoint.sh', 'make-dispatcher-env.sh', 'make-jobs-env.sh', 'oracle-launch.sh', 'provision.sh']);
     for (const script of SHELL_SCRIPTS) {
       const run = spawnSync('bash', ['-n', path.join(OPS_DIR, script)], { encoding: 'utf8' });
       assert.equal(run.status, 0, `${script}: ${run.stderr}`);
@@ -430,7 +434,7 @@ describe('shell scripts', () => {
 
   test('are executable in git', () => {
     const run = spawnSync('git', ['-C', REPO_ROOT, 'ls-files', '-s', 'platform/ops'], { encoding: 'utf8' });
-    const modes = new Map(run.stdout.trim().split('\n').filter(Boolean).map((line) => [path.basename(line.split('\t')[1]), line.split(' ')[0]]));
+    const modes = new Map(run.stdout.trim().split('\n').filter(Boolean).map((line) => [path.relative('platform/ops', line.split('\t')[1]), line.split(' ')[0]]));
     for (const script of SHELL_SCRIPTS) {
       if (modes.has(script)) assert.equal(modes.get(script), '100755', `${script} is committed without the executable bit`);
     }
@@ -935,4 +939,358 @@ describe('the CI workflows that run card code', () => {
       assert.doesNotMatch(text, /pull_request_target|workflow_run/, 'no trigger that runs with a privileged token');
     });
   }
+});
+
+// docs/specs/money-safety.md: the backup, the Controller and the quota check on the VPS.
+describe('the jobs on the VPS', () => {
+  const JOB_UNITS = [
+    'peanutgallery-job-alert@.service',
+    'peanutgallery-backup.service',
+    'peanutgallery-backup.timer',
+    'peanutgallery-controller.service',
+    'peanutgallery-controller.timer',
+    'peanutgallery-quota.service',
+    'peanutgallery-quota.timer',
+  ];
+  const listed = (script, name) => new RegExp(`^${name}="([^"]+)"$`, 'm').exec(read(`platform/ops/${script}`))?.[1].split(' ');
+
+  test('provision.sh and deploy.sh install every unit file in platform/ops, and verify all but the alert template', () => {
+    const files = readdirSync(OPS_DIR).filter((name) => name.endsWith('.service') || name.endsWith('.timer')).sort();
+    assert.deepEqual(files, ['dispatcher-alert.service', 'dispatcher.service', ...JOB_UNITS].sort());
+    for (const script of ['provision.sh', 'deploy.sh']) {
+      assert.deepEqual([...listed(script, 'UNITS')].sort(), files, script);
+      assert.deepEqual([...listed(script, 'VERIFY_UNITS')].sort(), files.filter((name) => !name.includes('@')), script);
+      assert.match(read(`platform/ops/${script}`), /^JOB_LIB=\/usr\/local\/lib\/peanutgallery$/m);
+      assert.match(read(`platform/ops/${script}`), /verify_units \|\| die "systemd-analyze verify failed on/);
+    }
+    // The backup script root runs comes from the commit, like the units.
+    assert.match(read('platform/ops/provision.sh'), /unit_text "\$sha" backup\/backup\.sh > "\$text"\n {2}install_file "\$JOB_LIB\/backup\.sh" 0755 < "\$text"/);
+    assert.match(read('platform/ops/deploy.sh'), /unit_text "\$new" backup\/backup\.sh > "\$WORK\/backup\.sh"/);
+    assert.match(read('platform/ops/provision.sh'), /^ {2}install_units\n {2}install_jobs\n/m);
+    assert.deepEqual([...listed('provision.sh', 'JOBS')].sort(), Object.keys(JOB_KEYS).sort());
+    assert.match(read('platform/ops/provision.sh'), /for pkg in git ufw unattended-upgrades curl jq ca-certificates age; do/);
+    assert.match(read('platform/ops/provision.sh'), /^SUPABASE_CLI_VERSION=\d+\.\d+\.\d+$/m);
+  });
+
+  test('each job runs as a oneshot, only once its env file exists, and tells the board when it fails', () => {
+    for (const job of ['backup', 'controller', 'quota']) {
+      const unit = read(`platform/ops/peanutgallery-${job}.service`);
+      assert.match(unit, /^Type=oneshot$/m, job);
+      assert.match(unit, new RegExp(`^ConditionPathExists=/etc/peanutgallery/${job}\\.env$`, 'm'), job);
+      assert.match(unit, /^OnFailure=peanutgallery-job-alert@%n\.service$/m, job);
+      assert.doesNotMatch(unit, /^EnvironmentFile=/m, job);
+      const timer = read(`platform/ops/peanutgallery-${job}.timer`);
+      assert.match(timer, /^OnCalendar=\*-\*-\* \d{2}:\d{2}:00 UTC$/m, job);
+      assert.match(timer, /^Persistent=true$/m, job);
+      assert.match(timer, /^WantedBy=timers\.target$/m, job);
+    }
+    assert.match(read('platform/ops/peanutgallery-backup.service'), /^ExecStart=\/usr\/local\/lib\/peanutgallery\/backup\.sh$/m);
+    const alert = read('platform/ops/peanutgallery-job-alert@.service');
+    assert.match(alert, /f=\/etc\/peanutgallery\/ntfy\.url; \[ -s "\$\$f" \] \|\| exit 0/);
+  });
+
+  test('the Controller and the quota check run from the read-only code clone, as nobody, with their own env file and nothing else', () => {
+    for (const job of ['controller', 'quota']) {
+      const unit = read(`platform/ops/peanutgallery-${job}.service`);
+      for (const flag of [
+        '--pull never',
+        `--env-file /etc/peanutgallery/${job}.env`,
+        '--user 65534:65534',
+        '--read-only',
+        '--cap-drop ALL',
+        '--security-opt no-new-privileges',
+        '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro',
+        '--entrypoint node',
+        'peanutgallery/dispatcher:current',
+        `/opt/peanutgallery/platform/ops/jobs/main.mjs ${job}`,
+      ]) {
+        assert.ok(unit.includes(flag), `${job}: ${flag}`);
+      }
+      const mounts = [...unit.matchAll(/--volume (\S+)/g)].map((match) => match[1]);
+      assert.deepEqual(mounts, ['/srv/peanutgallery-code:/opt/peanutgallery:ro'], job);
+      assert.doesNotMatch(unit, /dispatcher\.env|\/srv\/peanutgallery:|worktrees/, job);
+    }
+  });
+
+  test('provision.sh checks each job env file in the image, as nobody, with no network, from stdin', () => {
+    const text = logicalLinesOf(read('platform/ops/provision.sh'));
+    const check = /docker run --rm -i --pull never --network none --user 65534:65534[^\n]*check-env\.mjs" "\$job" \/dev\/stdin < "\$file"/.exec(text)?.[0];
+    assert.ok(check, 'the job env check runs in a container');
+    assert.match(check, /--cap-drop ALL/);
+    assert.match(check, /--volume "\$CODE_DIR:\$CODE_MOUNT:ro"/);
+    assert.match(text, /\[ "\$\(stat -c '%U:%G %a' "\$file"\)" = "root:root 600" \] \|\| die/);
+    assert.match(text, /if check_job_env "\$job" && ! systemctl is-enabled --quiet "\$timer"; then\n {6}systemctl enable --now "\$timer"/);
+  });
+
+  test("the dispatcher's env file may hold none of the jobs' secrets", () => {
+    for (const key of ['STRIPE_READ_KEY', 'BACKUP_DB_URL', 'BACKUP_OWNER_DB_URL']) assert.ok(FORBIDDEN_KEYS.includes(key), key);
+    const made = makeEnv();
+    const file = path.join(scratch, `with-read-key-${runs++}.env`);
+    writeFileSync(file, `${readFileSync(made.out, 'utf8')}STRIPE_READ_KEY=rk_live_fixture\n`);
+    const check = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'check_env_lines "$ENV_TO_CHECK"', { ENV_TO_CHECK: file });
+    assert.equal(check.status, 1);
+    assert.match(check.stdout, /STRIPE_READ_KEY must not be in the dispatcher's env file/);
+  });
+});
+
+function logicalLinesOf(text) {
+  return text
+    .replace(/\\\n\s*/g, ' ')
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+describe('make-jobs-env.sh', () => {
+  const AGE = `age1${'q'.repeat(58)}`;
+  const DOTENV = {
+    GITHUB_REPO: 'AlreadyKyle/peanutgallery',
+    SUPABASE_URL: 'https://fixture.supabase.local',
+    SUPABASE_SERVICE_ROLE_KEY: 'fixture-service-role-key',
+    SUPABASE_SECRET_KEY: 'sb_secret_fixture',
+    STRIPE_SECRET_KEY: 'fixture-stripe-key',
+    STRIPE_READ_KEY: 'rk_live_fixture',
+    ANTHROPIC_API_KEY: 'fixture-founder-key',
+    BACKUP_DB_URL: 'postgresql://peanutgallery_backup.fixtureref:fixture-password@aws-0-ca-central-1.pooler.supabase.com:5432/postgres',
+    BACKUP_AGE_RECIPIENT: AGE,
+    BACKUP_PAR_URL: 'https://objectstorage.ca-toronto-1.oraclecloud.com/p/fixture-par/n/fixturens/b/peanutgallery-backups/o/',
+    BACKUP_BUCKET: 'peanutgallery-backups',
+  };
+  const JOB_OPERATOR = {
+    NTFY_TOPIC_URL: 'https://ntfy.sh/fixture-topic',
+    BACKUP_HEALTHCHECK_URL: 'https://hc-ping.com/fixture-backup',
+    VPS_GITHUB_TOKEN: 'github_pat_-fixture-vps',
+  };
+  const makeJobs = (dotenv = DOTENV, operator = JOB_OPERATOR, args = []) => {
+    runs += 1;
+    const dotenvFile = path.join(scratch, `jobs-${runs}.env`);
+    writeFileSync(dotenvFile, Object.entries(dotenv).map(([key, value]) => `${key}=${value}`).join('\n'));
+    const tmp = mkdtempSync(path.join(scratch, 'jobs-tmp-'));
+    const result = spawnSync('bash', [path.join(OPS_DIR, 'make-jobs-env.sh'), ...args], {
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: tmp, DOTENV: dotenvFile, ...operator },
+      encoding: 'utf8',
+    });
+    const dir = readdirSync(tmp).map((name) => path.join(tmp, name))[0] ?? null;
+    const files = dir ? Object.fromEntries(readdirSync(dir).map((name) => [name, parseEnvFile(readFileSync(path.join(dir, name), 'utf8'))])) : {};
+    return { ...result, dir, files, output: `${result.stdout}${result.stderr}` };
+  };
+
+  test("writes each job's env file with its own keys only, at mode 0600, printing no value", () => {
+    const run = makeJobs();
+    assert.equal(run.status, 0, run.output);
+    assert.deepEqual(run.files['backup.env'], [
+      ['BACKUP_DB_URL', DOTENV.BACKUP_DB_URL],
+      ['BACKUP_AGE_RECIPIENT', AGE],
+      ['BACKUP_PAR_URL', DOTENV.BACKUP_PAR_URL],
+      ['BACKUP_BUCKET', 'peanutgallery-backups'],
+      ['BACKUP_HEALTHCHECK_URL', 'https://hc-ping.com/fixture-backup'],
+    ]);
+    assert.deepEqual(run.files['controller.env'], [
+      ['SUPABASE_URL', 'https://fixture.supabase.local'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'sb_secret_fixture'],
+      ['STRIPE_READ_KEY', 'rk_live_fixture'],
+      ['NTFY_TOPIC_URL', 'https://ntfy.sh/fixture-topic'],
+    ]);
+    assert.deepEqual(run.files['quota.env'], [
+      ['SUPABASE_URL', 'https://fixture.supabase.local'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'sb_secret_fixture'],
+      ['GITHUB_BILLING_TOKEN', 'github_pat_-fixture-vps'],
+      ['GITHUB_BILLING_USER', 'AlreadyKyle'],
+      ['NTFY_TOPIC_URL', 'https://ntfy.sh/fixture-topic'],
+    ]);
+    for (const name of Object.keys(run.files)) assert.equal(statSync(path.join(run.dir, name)).mode & 0o777, 0o600, name);
+    for (const value of [...Object.values(DOTENV), ...Object.values(JOB_OPERATOR)].filter((value) => /fixture/.test(value))) {
+      assert.ok(!run.output.includes(value), 'the output names keys only');
+    }
+    // Every file it writes passes the check provision.sh runs on the VPS.
+    for (const job of ['backup', 'controller', 'quota']) {
+      const check = spawnSync(process.execPath, [path.join(OPS_DIR, 'jobs', 'check-env.mjs'), job, path.join(run.dir, `${job}.env`)], { encoding: 'utf8' });
+      assert.equal(check.status, 0, `${job}: ${check.stdout}`);
+      assert.equal(check.stdout, 'valid\n');
+    }
+  });
+
+  test('refuses a job whose keys are not all set, names it, and still writes the others', () => {
+    const { STRIPE_READ_KEY: _unused, ...withoutReadKey } = DOTENV;
+    const run = makeJobs(withoutReadKey);
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /controller\.env not written:\n {2}- STRIPE_READ_KEY is missing or empty/);
+    assert.deepEqual(Object.keys(run.files).sort(), ['backup.env', 'quota.env']);
+  });
+
+  test('refuses a Stripe secret key as the read key, and writes nothing when every job asked for is refused', () => {
+    const run = makeJobs({ ...DOTENV, STRIPE_READ_KEY: 'sk_live_fixture' }, JOB_OPERATOR, ['controller']);
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /STRIPE_READ_KEY holds a Stripe secret key; no job may hold one, under any name/);
+    assert.ok(!run.output.includes('sk_live_fixture'));
+    assert.equal(run.dir, null, 'the empty temporary folder is removed');
+    assert.equal(makeJobs(DOTENV, JOB_OPERATOR, ['stripe']).status, 2);
+  });
+});
+
+// backup.sh with every tool it calls replaced by a fake on PATH that records its arguments: supabase
+// writes each file it is asked for, age copies its input with a marker, docker answers the restore
+// check, curl reads its config file, and date and id answer as the VPS would.
+describe('backup.sh', () => {
+  const setup = ({ env = {}, identity = '{"holds": true, "lines": []}', weekday } = {}) => {
+    const root = mkdtempSync(path.join(scratch, 'backup-'));
+    const bin = path.join(root, 'bin');
+    mkdirSync(bin);
+    const log = path.join(root, 'calls.log');
+    const fake = (name, body) => writeFileSync(path.join(bin, name), `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+    fake('id', 'echo 0');
+    fake('stat', 'echo "root:root 600"');
+    fake('supabase', `echo "supabase $*" >> "${log}"; while [ $# -gt 0 ]; do if [ "$1" = -f ]; then echo "-- dump of $*" > "$2"; fi; shift; done`);
+    fake('age', `echo "age $1 $2 $3 $4 $5" >> "${log}"; { echo AGE-ENCRYPTED; cat "$5"; } > "$4"`);
+    fake('curl', `config=""; while [ $# -gt 0 ]; do [ "$1" = -K ] && config="$2"; shift; done; { echo "curl"; cat "$config"; } >> "${log}"; exit \${FAKE_CURL_STATUS:-0}`);
+    fake('docker', `echo "docker $*" >> "${log}"; case "$1 $2" in "image ls") echo "public.ecr.aws/supabase/postgres:17.6.1.011";; "exec "*) case "$*" in *ledger_identity*) echo '${identity}';; esac;; esac; exit 0`);
+    const today = ((new Date().getUTCDay() + 6) % 7) + 1;
+    const envFile = path.join(root, 'backup.env');
+    const values = {
+      BACKUP_DB_URL: 'postgresql://peanutgallery_backup.fixtureref:fixture-password@aws-0-ca-central-1.pooler.supabase.com:5432/postgres',
+      BACKUP_AGE_RECIPIENT: `age1${'q'.repeat(58)}`,
+      BACKUP_PAR_URL: 'https://objectstorage.ca-toronto-1.oraclecloud.com/p/fixture-par/n/fixturens/b/peanutgallery-backups/o/',
+      BACKUP_BUCKET: 'peanutgallery-backups',
+      BACKUP_HEALTHCHECK_URL: 'https://hc-ping.com/fixture-backup',
+      RESTORE_CHECK_WEEKDAY: String(weekday ?? (today % 7) + 1),
+      ...env,
+    };
+    writeFileSync(envFile, `${Object.entries(values).filter(([, value]) => value !== null).map(([key, value]) => `${key}=${value}`).join('\n')}\n`);
+    const state = path.join(root, 'state');
+    const run = (args = [], extra = {}) => {
+      const result = spawnSync('bash', [path.join(OPS_DIR, 'backup', 'backup.sh'), ...args], {
+        env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME, BACKUP_ENV_FILE: envFile, BACKUP_STATE_DIR: state, TMPDIR: root, ...extra },
+        encoding: 'utf8',
+      });
+      const calls = existsSync(log) ? readFileSync(log, 'utf8') : '';
+      return { ...result, calls, output: `${result.stdout}${result.stderr}`, left: existsSync(state) ? readdirSync(state) : [] };
+    };
+    return { run };
+  };
+
+  test('dumps the six files as the read-only login, encrypts them to the board key, uploads through the request and pings the check', () => {
+    const { run } = setup();
+    const result = run();
+    assert.equal(result.status, 0, result.output);
+    const dumps = result.calls.split('\n').filter((line) => line.startsWith('supabase '));
+    assert.deepEqual(
+      dumps.map((line) => line.replace(/--db-url \S+ -f \S+\//, '')),
+      [
+        'supabase db dump roles.sql --role-only',
+        'supabase db dump schema.sql',
+        'supabase db dump data.sql --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes',
+        'supabase db dump auth.sql --schema auth --use-copy --data-only',
+        'supabase db dump history_schema.sql --schema supabase_migrations',
+        'supabase db dump history_data.sql --use-copy --data-only --schema supabase_migrations',
+      ],
+    );
+    for (const line of dumps) assert.match(line, /--db-url postgresql:\/\/peanutgallery_backup\.fixtureref:/);
+    assert.match(result.calls, /^age -r age1q{58} -o \S+\/peanutgallery-\d{8}T\d{6}Z\.tar\.age \S+\/peanutgallery-\d{8}T\d{6}Z\.tar$/m);
+    assert.match(result.calls, /^url = "https:\/\/objectstorage\.ca-toronto-1\.oraclecloud\.com\/p\/fixture-par\/n\/fixturens\/b\/peanutgallery-backups\/o\/peanutgallery-\d{8}T\d{6}Z\.tar\.age"\nupload-file = /m);
+    assert.match(result.calls, /^url = "https:\/\/hc-ping\.com\/fixture-backup"\nrequest = "POST"/m);
+    assert.doesNotMatch(result.calls, /\/fail"/);
+    assert.doesNotMatch(result.calls, /^docker (run|exec)/m, 'not the restore check day');
+    assert.deepEqual(result.left, [], 'nothing, plaintext or encrypted, is left on the host');
+    assert.match(result.stdout, /backup: uploaded peanutgallery-\d{8}T\d{6}Z\.tar\.age to peanutgallery-backups/);
+  });
+
+  test("uses the owner's login for the roles and auth dumps only, when the board set one", () => {
+    const owner = 'postgresql://postgres.fixtureref:fixture-owner@aws-0-ca-central-1.pooler.supabase.com:5432/postgres';
+    const { run } = setup({ env: { BACKUP_OWNER_DB_URL: owner } });
+    const result = run();
+    assert.equal(result.status, 0, result.output);
+    const owners = result.calls.split('\n').filter((line) => line.includes('postgres.fixtureref'));
+    assert.deepEqual(owners.map((line) => /-f \S+\/(\w+)\.sql/.exec(line)[1]), ['roles', 'auth']);
+  });
+
+  test('on its weekday, restores the plaintext into a scratch container with no network and checks the ledger identity before encrypting', () => {
+    const today = ((new Date().getUTCDay() + 6) % 7) + 1;
+    const { run } = setup({ weekday: today });
+    const result = run();
+    assert.equal(result.status, 0, result.output);
+    assert.match(result.stdout, /PASS: restore check: the restored copy's ledger identity holds/);
+    const docker = result.calls.split('\n').filter((line) => line.startsWith('docker '));
+    const started = docker.find((line) => line.startsWith('docker run -d'));
+    assert.match(started, /--network none -e POSTGRES_PASSWORD --volume \S+:\/restore:ro public\.ecr\.aws\/supabase\/postgres:17\.6\.1\.011$/);
+    assert.ok(docker.some((line) => /psql -h localhost -U supabase_admin -d postgres -q --single-transaction -v ON_ERROR_STOP=1 -f \/restore\/roles\.sql -f \/restore\/schema\.sql -c SET session_replication_role = replica -f \/restore\/data\.sql/.test(line)));
+    assert.ok(result.calls.indexOf('select public.ledger_identity()') < result.calls.indexOf('age -r'), 'checked before encrypting');
+    assert.ok(!started.includes('fixture-password'));
+  });
+
+  test('stops before uploading when the restored copy does not hold, pings /fail and leaves no plaintext', () => {
+    const { run } = setup({ identity: '{"holds": false, "lines": [{"name": "I2", "drift": 0.25}]}' });
+    const result = run(['--restore-check']);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /FAIL: restore check/);
+    assert.match(result.stderr, /the restore check failed; nothing was uploaded/);
+    assert.doesNotMatch(result.calls, /objectstorage/);
+    assert.match(result.calls, /^url = "https:\/\/hc-ping\.com\/fixture-backup\/fail"/m);
+    assert.deepEqual(result.left, []);
+  });
+
+  test('pings /fail when the upload fails', () => {
+    const { run } = setup();
+    const result = run([], { FAKE_CURL_STATUS: '22' });
+    assert.equal(result.status, 22);
+    assert.match(result.calls, /\/fail"/);
+    assert.deepEqual(result.left, []);
+  });
+
+  test('refuses a Stripe secret key under any name, a login other than the backup one and a request for another bucket', () => {
+    for (const [env, message] of [
+      [{ OTHER_KEY: 'sk_live_fixture' }, 'OTHER_KEY holds a Stripe secret key; no job may hold one, under any name'],
+      [{ BACKUP_DB_URL: 'postgresql://postgres.fixtureref:owner@aws-0-ca-central-1.pooler.supabase.com:5432/postgres' }, 'BACKUP_DB_URL must sign in as peanutgallery_backup.<project ref>'],
+      [{ BACKUP_BUCKET: 'another-bucket' }, 'BACKUP_PAR_URL must be a pre-authenticated request for BACKUP_BUCKET'],
+      [{ BACKUP_AGE_RECIPIENT: null }, 'BACKUP_AGE_RECIPIENT is missing or empty'],
+    ]) {
+      const { run } = setup({ env });
+      const result = run();
+      assert.equal(result.status, 1, message);
+      assert.ok(result.stderr.includes(message), `${message}\n${result.output}`);
+      assert.doesNotMatch(result.calls, /^supabase /m);
+      assert.ok(!result.output.includes('sk_live_fixture') && !result.output.includes('fixture-password'));
+    }
+  });
+});
+
+describe('the Oracle instance', () => {
+  test('asks for no more than the Always Free Ampere allowance, 2 OCPUs and 12 GB', () => {
+    const script = read('platform/ops/oracle-launch.sh');
+    const shape = JSON.parse(/^SHAPE_CONFIG='([^']+)'$/m.exec(script)?.[1] ?? 'null');
+    assert.ok(shape.ocpus <= 2 && shape.memoryInGBs <= 12, JSON.stringify(shape));
+    assert.deepEqual(shape, { ocpus: 2, memoryInGBs: 12 });
+    // The dispatcher container's memory cap fits inside it.
+    assert.match(read('platform/ops/dispatcher.service'), /--memory 3g/);
+    for (const doc of ['platform/ops/README.md', 'docs/specs/vps.md', 'docs/specs/oracle-launch.md', 'platform/ops/oracle-launch.sh']) {
+      assert.doesNotMatch(read(doc), /\b4 OCPUs|\b24 GB|\b4 cores|\b4 arm64 cores/, doc);
+    }
+  });
+
+  test('retries a start that finds no capacity the same way the launch does', () => {
+    const script = read('platform/ops/oracle-launch.sh');
+    assert.match(script, /until out=\$\(oci_ compute instance action --instance-id "\$INSTANCE" --action START --wait-for-state RUNNING 2>&1\); do\n {6}if ! is_capacity_error "\$out"; then die "start failed: \$out"; fi/);
+    assert.match(script, /if ! is_capacity_error "\$out"; then die "launch failed: \$out"; fi/);
+  });
+
+  test('the runbook says how to start a stopped instance from a phone, without the laptop', () => {
+    const readme = read('platform/ops/README.md');
+    assert.match(readme, /cloud\.oracle\.com/);
+    assert.match(readme, /Compute, Instances, `peanutgallery-dispatcher`, Start/);
+    assert.doesNotMatch(readme, /Pay As You Go ends reclaims/);
+  });
+});
+
+describe('the backups repository template', () => {
+  test('lives outside .github, needs no token, uses only its own secrets and checks the CLI it installs', () => {
+    const workflow = read('platform/ops/backups-repo/workflows/backup.yml');
+    assert.match(workflow, /^permissions: \{\}$/m);
+    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_DB_URL', 'BACKUP_OWNER_DB_URL', 'BACKUP_PAR_URL']);
+    assert.match(workflow, /sha256sum -c -/);
+    assert.match(workflow, /^ {4}- cron: '\d+ \d+ \* \* \d'$/m);
+    assert.doesNotMatch(workflow, /uses: /, 'no third-party action');
+    assert.doesNotMatch(workflow, /pull_request/);
+    const workflows = readdirSync(path.join(REPO_ROOT, '.github', 'workflows'));
+    assert.ok(!workflows.includes('backup.yml'), 'the template is not a workflow of this repository');
+    assert.match(read('platform/ops/backups-repo/README.md'), /never in the studio repository/);
+  });
 });

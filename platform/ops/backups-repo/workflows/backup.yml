@@ -1,0 +1,69 @@
+# The weekly fallback backup of Peanut Gallery's database (docs/specs/money-safety.md in the studio
+# repository). A template: copy it to .github/workflows/backup.yml in the separate private backups
+# repository (README.md beside this file), never into the studio repository, whose gate runs card
+# code. It runs the same dumps as the VPS's nightly backup, encrypts them to the board's age public
+# key and uploads them through its own write-only pre-authenticated request, so the backups survive
+# the VPS. It needs no GitHub token. A scheduled run that fails emails the repository's owner.
+name: backup
+
+on:
+  schedule:
+    - cron: '41 8 * * 3'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_CLI_VERSION: ${{ vars.SUPABASE_CLI_VERSION }}
+      SUPABASE_CLI_SHA256: ${{ vars.SUPABASE_CLI_SHA256 }}
+    steps:
+      - name: Install age and the pinned Supabase CLI
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_CLI_VERSION" || { echo "set the SUPABASE_CLI_VERSION variable"; exit 1; }
+          test -n "$SUPABASE_CLI_SHA256" || { echo "set the SUPABASE_CLI_SHA256 variable"; exit 1; }
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends age
+          deb="supabase_${SUPABASE_CLI_VERSION}_linux_amd64.deb"
+          curl -fsSL -o "$RUNNER_TEMP/$deb" "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/$deb"
+          echo "${SUPABASE_CLI_SHA256}  $RUNNER_TEMP/$deb" | sha256sum -c -
+          sudo dpkg -i "$RUNNER_TEMP/$deb"
+
+      - name: Dump, encrypt and upload
+        env:
+          BACKUP_DB_URL: ${{ secrets.BACKUP_DB_URL }}
+          BACKUP_OWNER_DB_URL: ${{ secrets.BACKUP_OWNER_DB_URL }}
+          BACKUP_PAR_URL: ${{ secrets.BACKUP_PAR_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          umask 077
+          case "$BACKUP_AGE_RECIPIENT" in age1*) ;; *) echo "set the BACKUP_AGE_RECIPIENT variable to the board's age public key"; exit 1 ;; esac
+          owner=${BACKUP_OWNER_DB_URL:-$BACKUP_DB_URL}
+          name="peanutgallery-actions-$(date -u +%Y%m%dT%H%M%SZ)"
+          dir="$RUNNER_TEMP/$name"
+          mkdir -p "$dir"
+          supabase db dump --db-url "$owner" -f "$dir/roles.sql" --role-only
+          supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/schema.sql"
+          supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/data.sql" --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes
+          supabase db dump --db-url "$owner" -f "$dir/auth.sql" --schema auth --use-copy --data-only
+          supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/history_schema.sql" --schema supabase_migrations
+          supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/history_data.sql" --use-copy --data-only --schema supabase_migrations
+          for file in roles schema data auth history_schema history_data; do
+            test -s "$dir/$file.sql" || { echo "the $file dump is empty"; exit 1; }
+          done
+          tar -C "$RUNNER_TEMP" -cf "$RUNNER_TEMP/$name.tar" "$name"
+          age -r "$BACKUP_AGE_RECIPIENT" -o "$RUNNER_TEMP/$name.tar.age" "$RUNNER_TEMP/$name.tar"
+          rm -rf "$dir" "$RUNNER_TEMP/$name.tar"
+          printf 'url = "%s%s"\nupload-file = "%s"\noutput = "/dev/null"\n' "$BACKUP_PAR_URL" "$name.tar.age" "$RUNNER_TEMP/$name.tar.age" > "$RUNNER_TEMP/curl.conf"
+          curl -fsS --retry 3 --max-time 900 -K "$RUNNER_TEMP/curl.conf"
+          rm -f "$RUNNER_TEMP/curl.conf" "$RUNNER_TEMP/$name.tar.age"
+          echo "uploaded $name.tar.age"

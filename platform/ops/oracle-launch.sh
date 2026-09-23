@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # oracle-launch.sh: creates the dispatcher's Oracle Cloud instance from the Mac
 # (docs/specs/oracle-launch.md). It builds the network if there is none, launches Ubuntu 24.04 on
-# VM.Standard.A1.Flex with 4 OCPUs and 24 GB, retries every availability domain while Oracle
-# answers "Out of host capacity", waits for RUNNING, and proves ssh as ubuntu and as root.
-# Idempotent: every step finds what exists before it creates, so a rerun reuses the network and an
-# instance already named peanutgallery-dispatcher, starts it if Oracle stopped it, and prints the same
-# address.
+# VM.Standard.A1.Flex with 2 OCPUs and 12 GB, the Always Free limit, retries every availability
+# domain while Oracle answers "Out of host capacity", waits for RUNNING, and proves ssh as ubuntu and
+# as root. Idempotent: every step finds what exists before it creates, so a rerun reuses the network
+# and an instance already named peanutgallery-dispatcher, starts it if Oracle stopped it (retrying
+# capacity the same way), and prints the same address.
 #
 # Before the first run, the board signs in once in a terminal (a browser login, no API key):
 #   oci session authenticate --region ca-toronto-1 --profile-name peanutgallery
@@ -26,12 +26,22 @@ ROUND_SECONDS=${ROUND_SECONDS:-60}
 NAME=peanutgallery-dispatcher
 VCN_NAME=peanutgallery-vcn
 SHAPE=VM.Standard.A1.Flex
-SHAPE_CONFIG='{"ocpus":4,"memoryInGBs":24}'
+# Oracle's Always Free Ampere allowance is 1,500 OCPU-hours and 9,000 GB-hours a month, which its
+# docs equate to 2 OCPUs and 12 GB (docs/specs/money-safety.md): a larger shape is refused on a free
+# tenancy and billed on Pay As You Go. The dispatcher container is capped at 3 GB.
+SHAPE_CONFIG='{"ocpus":2,"memoryInGBs":12}'
 OCI_CONFIG=${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}
 
 log() { printf 'oracle-launch: %s\n' "$*" >&2; }
 die() { log "$*"; exit 1; }
 oci_() { oci --auth security_token --profile "$OCI_PROFILE" "$@"; }
+# is_capacity_error <oci output>: Oracle's answer when no host in the domain has room for the shape.
+is_capacity_error() {
+  case $1 in
+    *"Out of host capacity"* | *"out of host capacity"* | *InternalError*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 command -v oci > /dev/null 2>&1 || die "oci is not on PATH (brew install oci-cli)"
 [ -f "$SSH_PUBLIC_KEY" ] || die "$SSH_PUBLIC_KEY not found (ssh-keygen -t ed25519 -f ${SSH_PUBLIC_KEY%.pub})"
@@ -90,8 +100,17 @@ if [ -n "$INSTANCE" ]; then
   # here, so recovering from a reclaim is: sign in, run this script.
   STATE=$(oci_ compute instance get --instance-id "$INSTANCE" --raw-output --query 'data."lifecycle-state"')
   if [ "$STATE" = STOPPED ]; then
-    log "$NAME is stopped; starting it"
-    oci_ compute instance action --instance-id "$INSTANCE" --action START --wait-for-state RUNNING > /dev/null
+    # A start needs host capacity just as a launch does, so it retries the same rounds.
+    round=1
+    until out=$(oci_ compute instance action --instance-id "$INSTANCE" --action START --wait-for-state RUNNING 2>&1); do
+      if ! is_capacity_error "$out"; then die "start failed: $out"; fi
+      log "round $round/$ROUNDS: no capacity to start $NAME"
+      [ "$round" -lt "$ROUNDS" ] || die "no capacity to start $NAME after $ROUNDS rounds; rerun later, or start it from the Oracle console"
+      round=$((round + 1))
+      sleep "$ROUND_SECONDS"
+      oci_ session refresh > /dev/null 2>&1 || die "the session could not be refreshed: sign in again and rerun"
+    done
+    log "$NAME started"
   fi
   log "reusing $NAME"
   oci_ compute instance get --instance-id "$INSTANCE" --wait-for-state RUNNING > /dev/null
@@ -118,10 +137,8 @@ else
         [ -n "$INSTANCE" ] || die "launch succeeded but printed no instance id: $out"
         break
       fi
-      case $out in
-        *"Out of host capacity"* | *"out of host capacity"* | *InternalError*) log "no capacity in $ad" ;;
-        *) die "launch failed: $out" ;;
-      esac
+      if ! is_capacity_error "$out"; then die "launch failed: $out"; fi
+      log "no capacity in $ad"
     done
     [ -n "$INSTANCE" ] && break
     [ "$round" -lt "$ROUNDS" ] || die "no capacity after $ROUNDS rounds; rerun later, or use any Ubuntu 24.04 host"

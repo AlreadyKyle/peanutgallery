@@ -23,7 +23,7 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 
 ## Behaviour
 
-**Host.** Ubuntu 24.04 with systemd 255, which supports `RestartSteps`. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto (`ca-toronto-1`): 4 arm64 cores and 24 GB of memory at no cost, in Canada. The image, the units and the scripts are the same on arm64 and x86, so any Ubuntu 24.04 host with Docker works.
+**Host.** Ubuntu 24.04 with systemd 255, which supports `RestartSteps`. The board's instance is an Oracle Cloud Always Free Ampere shape in Toronto (`ca-toronto-1`): 2 arm64 cores and 12 GB of memory, the Always Free limit, at no cost, in Canada (corrected by `money-safety.md`: Oracle's allowance is 1,500 OCPU-hours and 9,000 GB-hours a month, which it equates to 2 OCPUs and 12 GB; the shape this spec first named was larger than that). The image, the units and the scripts are the same on arm64 and x86, so any Ubuntu 24.04 host with Docker works.
 
 **Repository.** ~~The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` keeps `/srv/peanutgallery` as uid 10001's work clone for git state only, runs the dispatcher from a root-owned code clone at `/srv/peanutgallery-code` mounted read-only at `/opt/peanutgallery`, and puts worktrees in `/srv/peanutgallery-worktrees` (2026-09-16). The image holds only the toolchain.
 

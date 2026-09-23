@@ -174,9 +174,10 @@ grant select, insert on table public.controller_runs to service_role;
 -- The database side of the Controller's run in one snapshot: the pool, the
 -- Console credit bought and spent, the remaining ceilings of funded cards
 -- (150% of the estimate, capped by the per-card maximum, less the card's studio
--- spend, as the dispatcher's throttle computes it), and every Stripe payment
--- with its refunds, disputes, reinstatements, adjustments and the agent money
--- it still holds: agents less the incident share less any hold.
+-- spend, as the dispatcher's throttle computes it), and every payment with its
+-- refunds, disputes, reinstatements, adjustments, the net the books carry for
+-- it, and the agent money it still holds: agents less the incident share less
+-- any hold.
 
 create or replace function public.controller_figures() returns jsonb
 language plpgsql
@@ -237,6 +238,7 @@ begin
       -coalesce(sum(c.amount_usd) filter (where c.entry = 'dispute'), 0) as disputed_usd,
       coalesce(sum(c.amount_usd) filter (where c.entry = 'reinstated'), 0) as reinstated_usd,
       coalesce(sum(c.net_usd) filter (where c.entry = 'adjustment'), 0) as adjusted_net_usd,
+      p.net_usd + coalesce(sum(c.net_usd), 0) as books_net_usd,
       (p.agents_usd - p.incident_usd - p.held_usd) + coalesce(sum(c.agents_usd - c.incident_usd - c.held_usd), 0) as agent_money_usd,
       p.held_usd + coalesce(sum(c.held_usd), 0) as held_usd
     from public.contributions p

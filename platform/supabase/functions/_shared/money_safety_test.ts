@@ -364,7 +364,9 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       const disputed = figures.families.find((f: Row) => f.session_id === "cs_d");
       assertEquals([disputed.refunded_usd, disputed.disputed_usd, disputed.reinstated_usd, disputed.agent_money_usd], [10, 10, 10, 0]);
       const adjusted = figures.families.find((f: Row) => f.session_id === "cs_nodec");
-      assertEquals(adjusted.adjusted_net_usd, 0.67);
+      // The payment's net 0.66, less the 0.33 fee booked, plus the 1.00 correction.
+      assertEquals([adjusted.adjusted_net_usd, adjusted.books_net_usd], [0.67, 1.33]);
+      assertEquals(disputed.books_net_usd, 0);
       assert(Number((await row<{ n: string }>(`select public.ops_database_size() as n`)).n) > 0);
       for (const role of ["anon", "authenticated"]) {
         await asRole(role, async () => {
