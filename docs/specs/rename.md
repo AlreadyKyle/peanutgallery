@@ -48,7 +48,8 @@ Out: history, which is never rewritten: specs under `docs/specs/` other than thi
 
 The files are `TIERS[1]` in `scripts/rename.mjs`. By surface:
 
-- The site: `index.html` (title, og tags, image alt), `src/lib/copy.ts` (the studio name, and the Terms' "operated by" and "not a charity" lines), `src/pages/Board.tsx` (the authenticator line), `styles.css` and `DESIGN.md` headers, `netlify.toml`, `scripts/live-check.mjs`, and the unit and e2e tests that pin them.
+- The site: `index.html` (title, og tags, image alt), `src/lib/copy.ts` (the studio name), `src/lib/legal.ts` (the Terms' "operated by" and "not a charity" lines), `styles.css` and `DESIGN.md` headers, `netlify.toml`, `scripts/live-check.mjs`, and the unit and e2e tests that pin them.
+- The board's own site, `platform/board`: `index.html` (the title), `src/Board.tsx` (the authenticator line), and the tests that pin them (`src/Board.test.tsx`, `e2e/board.spec.ts`, and `platform/supabase/test/board-users.test.ts` for the board's sign-in addresses).
 - The game (protected, a board change): `seed-1/index.html` (title, meta, og tags, the studio line and link), `seed-1/content/strings.json` (`tabTitle`), `seed-1/CLAUDE.md`, directive D3 in `platform/supabase/lib/directives.ts`, its test, the launch-cards seed and the refresh-cards fixture.
 - The agents: `platform/agents/managed/agent.yaml` and `environment.yaml` (description and system text), the agents' git author `agents@peanutgallery.games` in `platform/dispatcher/src/worktree.ts` and `platform/ops/Dockerfile.dispatcher`, which shows on every public commit. The new address need not receive mail.
 - The constitution and the root docs: `CLAUDE.md`, `README.md`, `docs/PLAN.md`, `docs/ROADMAP.md`'s standing facts.
