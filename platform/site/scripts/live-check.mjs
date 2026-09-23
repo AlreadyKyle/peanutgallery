@@ -272,7 +272,15 @@ try {
     const avatars = await page.getByRole('main').locator('svg.avatar[role="img"]').count();
     const named = await page.getByRole('main').locator('svg.avatar title').allTextContents();
     check(avatars > 0 && named.length === avatars && named.every((note) => note.trim() !== ''), `/team ${avatars} avatars, each named`);
-    check((await page.getByText('claude-opus', { exact: false }).count()) === 0, '/team shows no model for a role that does not run');
+    // Every role that runs is on a claude-* model and shows it (PLAN.md §10 decision 36); a role that
+    // does not run shows none, since no model runs it.
+    const running = page.getByRole('region', { name: 'Running', exact: true });
+    const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
+    const runningRoles = await running.locator('li.role').count();
+    const runningModels = await running.locator('li.role .card-meta').filter({ hasText: /^claude-[a-z0-9-]+ · / }).count();
+    check(runningModels === runningRoles, `/team ${runningRoles} running roles, ${runningModels} showing a model`);
+    const waitingModels = (await waiting.count()) === 0 ? 0 : await waiting.getByText(/\bclaude-/).count();
+    check(waitingModels === 0, `/team shows no model for a role that does not run (${waitingModels} found)`);
   }
 
   await open(page, '/roadmap');
