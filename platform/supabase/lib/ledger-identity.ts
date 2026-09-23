@@ -3,6 +3,11 @@
 //   I1  pool.reserve_usd                                        = sum(contributions.reserve_usd)
 //   I2  pool.balance_usd + pool.incident_reserve_usd + held_usd = sum(contributions.agents_usd) - sum(studio ledger.usd)
 //   I3  pool.held_usd                                           = sum(contributions.held_usd)
+// and every allocation the waterfall wrote (docs/specs/money-logic.md), each line
+// a count of what drifts:
+//   I4  payments whose allocations differ from their family's credit
+//       (agents less incident less held, over the payment and its child rows)
+//   I5  cards whose funded_usd differs from their allocations
 // Amounts are numeric(12,4) strings; they are summed as integer ten-thousandths
 // so no float rounding can hide or invent a drift.
 //
@@ -22,6 +27,27 @@ export interface ContributionSums {
   reserve_usd: string | number;
   agents_usd: string | number;
   held_usd: string | number;
+}
+
+/** A contribution row as I4 reads it: its family and its credit. */
+export interface ContributionCredit {
+  id: string;
+  parent_id: string | null;
+  agents_usd: string | number;
+  incident_usd: string | number;
+  held_usd: string | number;
+}
+
+export interface AllocationRow {
+  payment_id: string;
+  destination: "card" | "unassigned" | "board_test";
+  card_id: string | null;
+  amount_usd: string | number;
+}
+
+export interface CardBar {
+  id: string;
+  funded_usd: string | number;
 }
 
 export type LedgerBilling = "studio" | "founder" | "overhead";
@@ -46,7 +72,7 @@ export function ledgerTotals(ledger: LedgerRow[]): { studio: string; overhead: s
 }
 
 export interface IdentityLine {
-  name: "I1" | "I2" | "I3";
+  name: "I1" | "I2" | "I3" | "I4" | "I5";
   left: string;
   right: string;
   drift: string;
@@ -85,4 +111,33 @@ export function checkIdentity(pool: PoolRow, contributions: ContributionSums[], 
     line("I2", toUnits(pool.balance_usd) + toUnits(pool.incident_reserve_usd) + toUnits(pool.held_usd), agents - spent),
     line("I3", toUnits(pool.held_usd), held),
   ];
+}
+
+/**
+ * I4 and I5 as counts: left is how many payments (I4) or cards (I5) drift, right
+ * is 0. A payment with no allocation and no credit, and a card with no allocation
+ * and an empty bar, hold.
+ */
+export function checkAllocations(contributions: ContributionCredit[], allocations: AllocationRow[], cards: CardBar[]): IdentityLine[] {
+  const credit = new Map<string, bigint>();
+  for (const c of contributions) {
+    const family = c.parent_id ?? c.id;
+    credit.set(family, (credit.get(family) ?? 0n) + toUnits(c.agents_usd) - toUnits(c.incident_usd) - toUnits(c.held_usd));
+  }
+  const placed = new Map<string, bigint>();
+  const bars = new Map<string, bigint>();
+  for (const a of allocations) {
+    placed.set(a.payment_id, (placed.get(a.payment_id) ?? 0n) + toUnits(a.amount_usd));
+    if (a.destination === "card" && a.card_id) bars.set(a.card_id, (bars.get(a.card_id) ?? 0n) + toUnits(a.amount_usd));
+  }
+  let payments = 0n;
+  for (const id of new Set([...credit.keys(), ...placed.keys()])) {
+    if ((credit.get(id) ?? 0n) !== (placed.get(id) ?? 0n)) payments += 1n;
+  }
+  let drifting = 0n;
+  for (const card of cards) {
+    if (toUnits(card.funded_usd) !== (bars.get(card.id) ?? 0n)) drifting += 1n;
+  }
+  const count = (name: "I4" | "I5", n: bigint): IdentityLine => ({ name, left: String(n), right: "0", drift: String(n), holds: n === 0n });
+  return [count("I4", payments), count("I5", drifting)];
 }
