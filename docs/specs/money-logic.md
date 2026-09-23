@@ -379,6 +379,8 @@ The first `waterfall-sweep` run: `cron.job_run_details` `succeeded`, "1 row", 20
 10. The dispatcher and Controller changes wait for the cutover's `install.sh --start`, as the spec says; nothing was installed.
 11. Every Verification line has run with its output quoted above or in the build Evidence, so the status is done.
 
+After the docs follow-up (#72, https://github.com/AlreadyKyle/peanutgallery/pull/72) merged as e56ebcf at 2026-09-23T22:56:41Z (both Netlify builds cancelled for no content change), the live check on main at e56ebcf again: `PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0`. Recorded in money-surfaces' branch (#71), which merged main after #72.
+
 ## Decisions
 
 - 2026-09-23, ship (decided with sensible defaults, as the board ordered; none changes a kernel rule):
