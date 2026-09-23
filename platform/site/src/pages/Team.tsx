@@ -19,12 +19,13 @@ export function shippedBy(role: Role, cards: readonly Card[]): number {
 /**
  * The facts line under a role. A running role shows its model, when it was hired, what it has
  * shipped and what it changes. A role that does not run yet shows none of that, because none of it
- * is true of the studio today; it says it is not running, and why when a closed lane is the reason.
+ * is true of the studio today; under its Not running yet heading it says why only when a closed lane
+ * is the reason.
  */
 export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen = false): string {
   if (!runsCards(role, platformLaneOpen)) {
-    const folder = cardRoleFolder(role);
-    return folder === null ? `${team.notRunning}.` : `${team.notRunning}. ${team.siteClosed}`;
+    // The section heading already says the role is not running; only a closed lane adds a reason.
+    return cardRoleFolder(role) === null ? '' : team.siteClosed;
   }
   const shipped = shippedBy(role, cards);
   const shippedLine = shipped === 1 ? team.shippedOne : team.shippedMany.replace('{n}', formatInteger(shipped));
@@ -37,13 +38,14 @@ export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen =
 function RoleRow({ role, cards, platformLaneOpen, asleep }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean; asleep: boolean }) {
   const titleId = `role-${role.id}`;
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
+  const facts = roleFacts(role, cards, platformLaneOpen);
   return (
     <li className="agent" id={`agent-${role.id}`}>
       <Avatar note={role.species_note} asleep={asleep} />
       <h3 id={titleId}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      <p className="card-meta">{roleFacts(role, cards, platformLaneOpen)}</p>
+      {facts === '' ? null : <p className="card-meta">{facts}</p>}
     </li>
   );
 }

@@ -103,7 +103,7 @@ for (const width of [375, 768, 1440]) {
 test('finds each planted gap', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.setContent(`<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
-    <header class="topbar" style="height:60px;background:#1a2fc8"></header>
+    <header class="topbar" style="height:60px;background:#111111"></header>
     <main>
       <div class="band" style="padding:40px;background:#fff">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">

@@ -37,12 +37,12 @@
   --ink-hover: #333333; /* outline hover and press on ink */
   --muted-on-ink: #a3a3a3; /* secondary text in ink bands */
   --line-on-ink: #333333; /* hairlines in ink bands (decorative) */
-  --signal: #1a2fc8; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit */
-  --signal-deep: #1526a0; /* hover of every signal fill */
-  --signal-press: #12218c; /* press of every signal fill */
-  --muted-on-signal: #c8d0fa; /* secondary text on signal; the quiet label and edge there */
-  --line-on-signal: #4859d3; /* hairlines on signal (decorative) */
-  --work: #dfe2f7; /* the Building and Being checked card face: the signal at 14% on paper */
+  --signal: #111111; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit. Ink since the board's call of 23 Sep 2026 (the blue read as MS-DOS) */
+  --signal-deep: #333333; /* hover of every signal fill */
+  --signal-press: #333333; /* press of every signal fill */
+  --muted-on-signal: #a3a3a3; /* secondary text on signal; the quiet label and edge there */
+  --line-on-signal: #333333; /* hairlines on signal (decorative) */
+  --work: #d4e1ee; /* the Building and Being checked card face: a pale blue, Dust's bar blue lightened */
   --suit-game: #b0226a; /* the Dust suit tile, on paper and the work face only */
   --suit-studio: var(--signal); /* the studio suit tile: the studio is the site */
   --live: #16701f; /* Live only: its glyph and the stamp's edge, on paper */
@@ -107,7 +107,7 @@
   --space-3: 1.5rem;
   --space-4: 2.5rem;
   --space-5: 4rem;
-  --band-pad: var(--space-3); /* block padding inside a band; --space-4 from 48rem */
+  --band-pad: var(--space-4); /* block padding inside a band; --space-5 from 48rem (the board, 23 Sep 2026: more room between sections) */
 
   /* Layout */
   --wrap: 72rem;
@@ -130,6 +130,6 @@
 
 @media (min-width: 48rem) {
   :root {
-    --band-pad: var(--space-4);
+    --band-pad: var(--space-5);
   }
 }

@@ -19,7 +19,7 @@ A quiet, precise table (Teenage Engineering's precision) where real cards (Cards
 7. **Every public string lives in `src/lib/copy.ts`, or in `src/lib/legal.ts`.** The words of each Terms version (the Terms and the Refunds page) live in `src/lib/terms-versions.ts`, kernel as well, and a posted version is never edited. `legal.ts` is kernel and holds the legal pages, the fixed rules and every statement of money: the money rules, the labels and descriptions of money and ledger figures (including a card's spec-row labels), the ledger's row words and the funding caption. Pages read it directly; `copy.ts` never repeats it. The unlisted guide's colour table keeps its words beside the data they describe, in `src/lib/colour.ts`.
 8. **Three text styles to a block, four on a card.** A block uses at most a heading, body text and one small muted line, plus its button. A card has four: the index row, the title, the summary and the spec rows, because the spec rows are the precision the table asks for.
 9. **Headings balance their lines** (`text-wrap: balance`) **(tested)**.
-10. **One colour, one meaning.** Coin amber means money, signal cobalt means the studio, green means Live. No colour is ever a text colour **(tested)**, and every coin shape has an ink edge on paper (coin on paper is 2.25).
+10. **One colour, one meaning.** Coin amber means money, signal (ink, since the board's call of 23 September 2026) means the studio, green means Live. No colour is ever a text colour **(tested)**, and every coin shape has an ink edge on paper (coin on paper is 2.25).
 11. **Motion records a real change or answers a press.** First paint is still. Nothing a viewer might tap moves while they look (see Motion).
 12. **No dead space.** Side-by-side blocks balance or stack; nothing leaves an empty column, a hollow in a band, or an empty grid cell. The layout audit checks it on every page, and every mockup passes it before anyone sees it **(e2e: layout balance)**.
 
@@ -38,12 +38,12 @@ Colours are written only in `tokens.css`, and there only in `:root` **(tested)**
 | `--ink-hover` | `#333333` | Outline hover and press on ink | paper on it 12.63 |
 | `--muted-on-ink` | `#a3a3a3` | Secondary text on ink | on ink 7.49 |
 | `--line-on-ink` | `#333333` | Hairlines on ink (decorative) | 1.49 |
-| `--signal` | `#1a2fc8` | The studio: band 1 and the top bar; on paper the primary fill, the focus ring and the Picked ribbon; the studio suit | paper on it 9.19; coin on it 4.09 |
-| `--signal-deep` | `#1526a0` | Hover of every signal fill | paper on it 11.56 |
-| `--signal-press` | `#12218c` | Press of every signal fill | paper on it 12.95 |
-| `--muted-on-signal` | `#c8d0fa` | Secondary text on signal; the quiet label and edge there | on signal 6.07 |
-| `--line-on-signal` | `#4859d3` | Hairlines on signal (decorative) | 1.60 |
-| `--work` | `#dfe2f7` | The Building and Being checked face: the signal at 14% on paper | ink 14.71, muted 5.21 |
+| `--signal` | `#111111` | The studio: band 1 and the top bar; on paper the primary fill, the focus ring and the Picked ribbon; the studio suit | paper on it 18.88; coin on it 8.40 |
+| `--signal-deep` | `#333333` | Hover of every signal fill | paper on it 12.63 |
+| `--signal-press` | `#333333` | Press of every signal fill | paper on it 12.63 |
+| `--muted-on-signal` | `#a3a3a3` | Secondary text on signal; the quiet label and edge there | on signal 7.49 |
+| `--line-on-signal` | `#333333` | Hairlines on signal (decorative) | 1.49 |
+| `--work` | `#d4e1ee` | The Building and Being checked face: a pale blue | ink 14.21, muted 5.03 |
 | `--suit-game` | `#b0226a` | The Dust suit tile, on paper and work only | paper glyph on it 6.40 |
 | `--suit-studio` | `var(--signal)` | The studio suit tile | paper glyph on it 9.19 |
 | `--live` | `#16701f` | Live only: its glyph and the stamp edge, on paper | on paper 6.23 |
@@ -89,7 +89,7 @@ Five sizes on a 1.2 ratio from a 17px body; every font-size is one of them **(te
 
 Money and counts use tabular figures.
 
-**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. `--band-pad` is the block padding inside a band: `--space-3` below 48rem, `--space-4` from 48rem. `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
+**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. `--band-pad` is the block padding inside a band and the space between sections in one band: `--space-4` below 48rem, `--space-5` from 48rem (raised on 23 September 2026 at the board's call that sections sat too close). `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
 
 **Focus.** `:focus-visible` is a 3px solid outline in `--focus-colour` at a 2px offset **(tested)**: signal on paper (9.19; 7.16 on the work face), paper on the signal plate (9.19) and in an ink band (18.88) **(e2e)**. The offset gap, which shows the ground, keeps a paper ring apart from a paper-filled button or Contribute.
 
@@ -97,7 +97,7 @@ Money and counts use tabular figures.
 
 ## Colour
 
-**The board's decision (23 September 2026):** the site takes real colour. The colour system (`docs/specs/home-and-design.md`, Decisions) replaces the direction's black-and-white-only rule: the page stays white with black bands and cards stay on white, every page opens on one cobalt signal plate, and each colour has one meaning.
+**The board's decision (23 September 2026):** the site takes real colour. The colour system (`docs/specs/home-and-design.md`, Decisions) replaces the direction's black-and-white-only rule: the page stays white with black bands and cards stay on white, every page opens on one signal plate, and each colour has one meaning. **Later the same day** the board judged the cobalt signal to read as MS-DOS and set it to ink (`#111111`) for now: the top bar and band 1 are black, the primary button and focus ring on paper are black, and pulling past the top of the page shows black, not white: browsers fill the overscroll with the root's solid background colour, so `html` paints `--signal`, `body` paints nothing (WebKit blends body's colour over the root's) and `.page` paints the paper. Pulling past the bottom shows black too **(tested)**.
 
 **One colour, one meaning.**
 - **Amber is money**: Contribute, the funding bar's fill, the coin mark and the Funded glyph's fill. Every amber shape keeps an ink edge on paper **(tested: `--coin` appears only in those rules)**.

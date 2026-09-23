@@ -31,7 +31,7 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/cutover/);
   });
 
-  it("gives every role a description, and every role without write tools says it is not running yet", async () => {
+  it("gives every role a description of its job, and leaves whether it runs to the site", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     for (const spec of specs) {
       expect(spec.description.length, spec.name).toBeGreaterThan(0);
@@ -40,8 +40,10 @@ describe("readRoleSpecs against platform/agents", () => {
     const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
     expect(idle).toEqual(["Biz Dev", "Community", "Game Designer", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
     expect(specs.some((s) => s.name === "Scout")).toBe(false);
-    for (const spec of specs.filter((s) => !s.write_access)) {
-      expect(spec.description, spec.name).toContain("not running yet");
+    // Running is a fact the site derives (Team.tsx, runsCards) and says once, as the heading a role
+    // sits under; a description that also said it would repeat it, or go stale when the role starts.
+    for (const spec of specs) {
+      expect(spec.description, spec.name).not.toMatch(/not running/i);
     }
   });
 
