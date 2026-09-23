@@ -376,9 +376,10 @@ try {
     const missing = await linksWithoutAgreement(page);
     check(missing.length === 0, `/contribute: the agreement line under the first choice covers every Payment Link${missing.length === 0 ? '' : `: missing on ${missing.slice(0, 3).join(' | ')}`}`);
   }
+  // The checkout links only: the agreement line under the first choice links the Terms and Refunds.
   const choices = await page
     .getByRole('main')
-    .getByRole('link')
+    .locator('a[href^="https://buy.stripe.com/"]')
     .evaluateAll((as) => as.map((a) => [a.textContent ?? '', a.href]));
   if (choices.length === 0) {
     skip('contribute choices: no payment link in this build');
