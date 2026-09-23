@@ -8,7 +8,7 @@ import { Glyph, STATE_TAGS, SUITS, type GlyphName } from '../components/Glyph';
 import { LiveUpdates } from '../components/LiveUpdates';
 import { PageHeader } from '../components/PageHeader';
 import { FACES, type CategoryFilter, type Face } from '../lib/cards';
-import { contrast } from '../lib/contrast';
+import { contrast, sixDigit } from '../lib/contrast';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDateTime, formatUsd, percent } from '../lib/format';
@@ -161,9 +161,9 @@ function Swatches({ pairs, values }: { pairs: Pair[]; values: Record<string, str
   return (
     <ul className="swatches">
       {pairs.map((pair) => {
-        const fg = values[pair.fg] ?? '';
-        const bg = values[pair.bg] ?? '';
-        const measured = /^#[0-9a-f]{6}$/i.test(fg) && /^#[0-9a-f]{6}$/i.test(bg) ? contrast(fg, bg).toFixed(2) : '';
+        const fg = sixDigit(values[pair.fg] ?? '') ?? '';
+        const bg = sixDigit(values[pair.bg] ?? '') ?? '';
+        const measured = fg !== '' && bg !== '' ? contrast(fg, bg).toFixed(2) : '';
         const chip: CSSProperties =
           pair.kind === 'text'
             ? { background: `var(${pair.bg})`, color: `var(${pair.fg})`, borderColor: 'var(--field)' }
@@ -181,7 +181,7 @@ function Swatches({ pairs, values }: { pairs: Pair[]; values: Record<string, str
                 {fg} / {bg}
               </dd>
               <dd>
-                <strong className="figure">{measured}</strong>
+                <strong className="figure">{measured}</strong>{' '}
                  ({pair.min > 0 ? guide.atLeast.replace('{n}', String(pair.min)) : guide.decorative})
               </dd>
             </dl>
@@ -281,7 +281,9 @@ function InkBand({ values, studio }: { values: Record<string, string>; studio: R
               <Link to="/how-it-works">{copy.howItWorks}</Link>
             </p>
             <p className="caption">{guide.primaryNote}</p>
+            <h3>{guide.liveHeading}</h3>
             <LiveUpdatesDemo />
+            <p className="caption">{guide.liveIntro}</p>
             <p className="caption">
               {guide.outlineNote} {guide.pressedNote}
             </p>
@@ -295,11 +297,8 @@ function InkBand({ values, studio }: { values: Record<string, string>; studio: R
             <h3>{guide.statusHeading}</h3>
             <p className="status-line is-paused">
               <span>
-                <strong>{guide.statusFigure}</strong> {guide.statusRest}
+                <strong>{guide.statusFigure}</strong> {guide.statusRest} <Sample />
               </span>
-            </p>
-            <p>
-              <Sample />
             </p>
             <p className="notice">{legal.pausedNotice}</p>
             <p className="caption">{guide.noticeNote}</p>
@@ -610,11 +609,6 @@ function PaperBand({ values }: { values: Record<string, string> }) {
         <Suits />
         <PaperButtons />
       </div>
-      <section className="section" aria-labelledby="guide-live">
-        <h2 id="guide-live">{guide.liveHeading}</h2>
-        <p>{guide.liveIntro}</p>
-        <p className="caption">{guide.focusIntro}</p>
-      </section>
       <section className="section" aria-labelledby="guide-paper-rows">
         <h2 id="guide-paper-rows">{guide.rowsHeading}</h2>
         <SampleRows />

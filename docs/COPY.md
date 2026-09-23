@@ -42,6 +42,19 @@ A first-time reader does not know these. Either explain in the same sentence or 
 
 A number appears only with what it means to the reader. "About $3.10 of every $5 reaches the bar" fails: the reader does not know why $1.90 went missing. Either explain the whole path where there is room (How it works) or leave the number out.
 
+## Voice
+
+The site is a quiet, precise table with real cards on it. The words match: plain first, playful only where nothing is at stake.
+
+- **Wink, don't shout.** At most one wink per page, and none in money, legal, status, notice or error copy.
+- **Plain headings win.** "Building now", "Fund what's next", "Queued", "Shipped", "Planned next", "Where the money goes". A deck, hand, table, pile or discard word appears only where it makes a page clearer at a glance.
+- **Games are called games.** Dust is "Dust", never "Cartridge 1". The cartridge is a glyph, not a name. **(tested: no numbered cartridge)**
+- **Coins are never a currency.** Amounts are always dollars. No "coins" as a count or a unit, no coin balance, no "buy coins". The coin is a mark beside a dollar figure, nothing more. **(tested)**
+- **No chance words beside money.** luck, lucky, mystery, surprise, random, spin, jackpot, bet, odds, prize, loot, win, winner, gamble, chance: none of them in a money string or on `/contribute`. Every money action names where the money goes. **(tested on every `legal.ts` string and every string that mentions money)**
+- **Money format.** "$" figures. `/contribute` and `/ledger` say once "All amounts are in US dollars (USD)". Money out uses the minus sign (U+2212) with no space and a direction word: "−$0.42 spent", never a hyphen before a dollar figure. **(tested)**
+- **Inside the font.** Every character in `copy.ts` and `legal.ts` is inside the font subset `platform/site/scripts/fonts.sh` cuts: Basic Latin, Latin-1, U+2010 to U+2027 and U+2212. Arrows are glyphs, never characters. **(tested)**
+- **No origin story for the name**, and no theatre, balcony, curtain or seat imagery in words either.
+
 ## Still true
 
 These carry over from the design guide:
