@@ -10,7 +10,7 @@ import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { alertMessage, OPERATIONS_BUCKET_USD, readStripe, reconcile, runController, webhookEventTypes } from '../jobs/controller.mjs';
 import { envFileProblems } from '../jobs/check-env.mjs';
-import { jobEnvProblems, stripeApiVersion, stripeReader, supabaseClient } from '../jobs/lib.mjs';
+import { JOB_KEYS, jobEnvProblems, stripeApiVersion, stripeReader, supabaseClient } from '../jobs/lib.mjs';
 import { main } from '../jobs/main.mjs';
 import { actionsMinutes, evaluateQuota, runQuota } from '../jobs/quota.mjs';
 
@@ -127,18 +127,41 @@ describe('job env rules', () => {
     const cases = [
       [{ BACKUP_DB_URL: BACKUP_ENV.BACKUP_DB_URL.replace('peanutgallery_backup.', 'postgres.') }, 'BACKUP_DB_URL must be the Session pooler (port 5432) as peanutgallery_backup.<project ref>'],
       [{ BACKUP_DB_URL: BACKUP_ENV.BACKUP_DB_URL.replace(':5432/', ':6543/') }, 'BACKUP_DB_URL must be the Session pooler'],
-      [{ BACKUP_OWNER_DB_URL: BACKUP_ENV.BACKUP_DB_URL }, 'BACKUP_OWNER_DB_URL must be the Session pooler (port 5432) as postgres.<project ref>'],
       [{ BACKUP_AGE_RECIPIENT: 'AGE-SECRET-KEY-1FIXTURE' }, 'BACKUP_AGE_RECIPIENT must be one age public key'],
       [{ BACKUP_BUCKET: 'another-bucket' }, 'BACKUP_PAR_URL names another bucket than BACKUP_BUCKET'],
       [{ BACKUP_PAR_URL: 'https://objectstorage.ca-toronto-1.oraclecloud.com/n/fixturens/b/peanutgallery-backups/o/' }, 'must be an Object Storage pre-authenticated request'],
       [{ BACKUP_HEALTHCHECK_URL: 'http://hc-ping.com/fixture-backup' }, 'BACKUP_HEALTHCHECK_URL must be an https URL'],
       [{ RESTORE_CHECK_WEEKDAY: '8' }, 'RESTORE_CHECK_WEEKDAY must be 1 (Monday) to 7 (Sunday)'],
+      [{ BACKUP_SKIP_AUTH: 'true' }, 'BACKUP_SKIP_AUTH must be 1 or absent'],
     ];
     for (const [change, message] of cases) {
       const problems = jobEnvProblems('backup', { ...BACKUP_ENV, ...change });
       assert.ok(problems.some((problem) => problem.includes(message)), `${message}: ${problems.join('; ')}`);
     }
-    assert.deepEqual(jobEnvProblems('backup', { ...BACKUP_ENV, BACKUP_OWNER_DB_URL: BACKUP_ENV.BACKUP_DB_URL.replace('peanutgallery_backup.', 'postgres.') }), []);
+    assert.deepEqual(jobEnvProblems('backup', { ...BACKUP_ENV, BACKUP_SKIP_AUTH: '1' }), []);
+    assert.ok(!JOB_KEYS.backup.required.concat(JOB_KEYS.backup.optional).some((key) => /OWNER/.test(key)), 'no job key holds the owner');
+  });
+
+  // The owner can drop the append-only triggers, so its password reaches no job, whatever the key.
+  test("refuse the database owner's login under any name, pooled or direct, in every job", () => {
+    const owners = [
+      BACKUP_ENV.BACKUP_DB_URL.replace('peanutgallery_backup.', 'postgres.'),
+      'postgres://postgres:fixture-owner@db.fixtureref.supabase.co:5432/postgres',
+      'postgresql://postgres@db.fixtureref.supabase.co:5432/postgres',
+    ];
+    for (const [job, env] of [
+      ['controller', CONTROLLER_ENV],
+      ['quota', QUOTA_ENV],
+      ['backup', BACKUP_ENV],
+    ]) {
+      for (const owner of owners) {
+        const problems = jobEnvProblems(job, { ...env, ANY_NAME: owner });
+        assert.ok(problems.includes("ANY_NAME signs in as the database owner; no job may hold the owner's password, under any name"), `${job} ${owner}`);
+        assert.ok(!problems.join('\n').includes('fixture-owner'), 'names keys only');
+      }
+    }
+    const asBackup = jobEnvProblems('backup', { ...BACKUP_ENV, BACKUP_DB_URL: owners[0] });
+    assert.ok(asBackup.includes("BACKUP_DB_URL signs in as the database owner; no job may hold the owner's password, under any name"));
   });
 
   test("check-env refuses another job's key, a quote, a duplicate and a line that is not KEY=value", () => {

@@ -724,17 +724,30 @@ describe('the code clone and the work clone', () => {
   });
 
   // I3: a roll back stays on main, at or after the floor, and keeps the read-only code mount.
-  test('check_ref refuses a roll back with no floor, below the floor, off main or without the read-only code mount', () => {
+  test('check_ref refuses a roll back with no floor, below the floor, off main, without the read-only code mount or without the jobs', () => {
     const repo = fixtureRepo();
-    const unit = path.join(repo, 'platform', 'ops', 'dispatcher.service');
+    const ops = path.join(repo, 'platform', 'ops');
+    const unit = path.join(ops, 'dispatcher.service');
     const readOnly = '[Service]\nExecStart=/usr/bin/docker run --rm \\\n  --volume /srv/peanutgallery-code:/opt/peanutgallery:ro \\\n  peanutgallery/dispatcher:current\n';
     const below = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     writeFileSync(unit, readOnly);
-    hostGit(repo, 'commit', '-q', '-am', 'the floor');
+    // Every file deploy.sh installs from the target.
+    const units = /^UNITS="([^"]+)"$/m.exec(read('platform/ops/deploy.sh'))[1].split(' ');
+    for (const name of units.filter((name) => name !== 'dispatcher.service')) writeFileSync(path.join(ops, name), '[Unit]\n');
+    mkdirSync(path.join(ops, 'backup'));
+    writeFileSync(path.join(ops, 'backup', 'backup.sh'), '#!/bin/sh\n');
+    hostGit(repo, 'add', '-A');
+    hostGit(repo, 'commit', '-q', '-m', 'the floor');
     const floor = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     writeFileSync(unit, readOnly.replace('run --rm', 'run --rm --name peanutgallery-dispatcher'));
     hostGit(repo, 'commit', '-q', '-am', 'after the floor');
     const after = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    hostGit(repo, 'rm', '-q', 'platform/ops/backup/backup.sh');
+    hostGit(repo, 'commit', '-q', '-m', 'no backup script');
+    const noBackup = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    hostGit(repo, 'rm', '-q', 'platform/ops/peanutgallery-quota.timer');
+    hostGit(repo, 'commit', '-q', '-m', 'no quota timer');
+    const noTimer = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
     writeFileSync(unit, readOnly.replace(':ro', ''));
     hostGit(repo, 'commit', '-q', '-am', 'code clone mounted writable');
     const writable = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
@@ -755,6 +768,9 @@ describe('the code clone and the work clone', () => {
     assert.match(check(below).stdout, /is older than the rollback floor/);
     assert.match(check(side).stdout, /is not a commit on origin\/main/);
     assert.match(check(writable).stdout, /dispatcher\.service does not mount the code clone read-only/);
+    assert.match(check(noBackup).stdout, new RegExp(`^${noBackup} has no platform/ops/backup/backup\\.sh, so it is older than the jobs`));
+    assert.match(check(noTimer).stdout, /has no platform\/ops\/peanutgallery-quota\.timer, so it is older than the jobs/);
+    assert.equal(check(noTimer).status, 1);
     assert.match(check('0'.repeat(40)).stdout, /is not a commit in/);
     assert.match(read('platform/ops/dispatcher.service'), /--volume \/srv\/peanutgallery-code:\/opt\/peanutgallery:ro/);
   });
@@ -972,6 +988,39 @@ describe('the jobs on the VPS', () => {
     assert.match(read('platform/ops/provision.sh'), /^SUPABASE_CLI_VERSION=\d+\.\d+\.\d+$/m);
   });
 
+  // systemd-analyze verify fails a unit whose ExecStart is not on the host, so on a fresh VPS the
+  // backup script must be in place before the units are verified, or provision.sh stops there and never
+  // enables the dispatcher or a timer.
+  test('provision.sh installs the backup script before it verifies the units, so a fresh host gets through', () => {
+    const root = mkdtempSync(path.join(scratch, 'install-units-'));
+    const bin = path.join(root, 'bin');
+    mkdirSync(bin);
+    const log = path.join(root, 'calls.log');
+    const lib = path.join(root, 'lib');
+    writeFileSync(
+      path.join(bin, 'systemd-analyze'),
+      `#!/bin/bash\necho "systemd-analyze $1" >> "${log}"\n[ -x "${lib}/backup.sh" ] || { echo "Command ${lib}/backup.sh is not executable: No such file or directory" >&2; exit 1; }\n`,
+      { mode: 0o755 },
+    );
+    writeFileSync(path.join(bin, 'systemctl'), `#!/bin/bash\necho "systemctl $*" >> "${log}"\n[ "$1" = is-enabled ] && exit 1\nexit 0\n`, { mode: 0o755 });
+    const body = [
+      `JOB_LIB="${lib}"`,
+      'code_git() { echo fixture-sha; }',
+      'unit_text() { echo "# $2 at $1"; }',
+      // Writes only the backup script, under the test folder; a unit is logged, not written.
+      `install_file() { cat > /dev/null; echo "install $1" >> "${log}"; if [ "$1" = "$JOB_LIB/backup.sh" ]; then mkdir -p "$JOB_LIB"; printf '#!/bin/sh\\n' > "$1"; chmod 0755 "$1"; fi; WROTE=1; }`,
+      'install_units',
+    ].join('\n');
+    const run = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', body, { PATH: `${bin}:${process.env.PATH}` });
+    assert.equal(run.status, 0, `${run.stdout}${run.stderr}`);
+    const calls = readFileSync(log, 'utf8').trim().split('\n');
+    const script = calls.indexOf(`install ${lib}/backup.sh`);
+    const verify = calls.indexOf('systemd-analyze verify');
+    assert.ok(script >= 0 && verify > script, calls.join('\n'));
+    assert.ok(calls.includes('systemctl enable dispatcher'), calls.join('\n'));
+    assert.equal(calls.filter((call) => call.startsWith('install /etc/systemd/system/')).length, listed('provision.sh', 'UNITS').length);
+  });
+
   test('each job runs as a oneshot, only once its env file exists, and tells the board when it fails', () => {
     for (const job of ['backup', 'controller', 'quota']) {
       const unit = read(`platform/ops/peanutgallery-${job}.service`);
@@ -1023,7 +1072,7 @@ describe('the jobs on the VPS', () => {
   });
 
   test("the dispatcher's env file may hold none of the jobs' secrets", () => {
-    for (const key of ['STRIPE_READ_KEY', 'BACKUP_DB_URL', 'BACKUP_OWNER_DB_URL']) assert.ok(FORBIDDEN_KEYS.includes(key), key);
+    for (const key of ['STRIPE_READ_KEY', 'BACKUP_DB_URL', 'SUPABASE_DB_PASSWORD']) assert.ok(FORBIDDEN_KEYS.includes(key), key);
     const made = makeEnv();
     const file = path.join(scratch, `with-read-key-${runs++}.env`);
     writeFileSync(file, `${readFileSync(made.out, 'utf8')}STRIPE_READ_KEY=rk_live_fixture\n`);
@@ -1140,7 +1189,9 @@ describe('make-jobs-env.sh', () => {
 // writes each file it is asked for, age copies its input with a marker, docker answers the restore
 // check, curl reads its config file, and date and id answer as the VPS would.
 describe('backup.sh', () => {
-  const setup = ({ env = {}, identity = '{"holds": true, "lines": []}', weekday } = {}) => {
+  // The restore check's query answers "<top-level holds>|<identity json>", as psql -At -F '|' prints it.
+  const HOLDING = 'true|{"holds": true, "lines": [{"name": "I1", "drift": 0, "holds": true}, {"name": "I2", "drift": 0, "holds": true}, {"name": "I3", "drift": 0, "holds": true}]}';
+  const setup = ({ env = {}, identity = HOLDING, weekday } = {}) => {
     const root = mkdtempSync(path.join(scratch, 'backup-'));
     const bin = path.join(root, 'bin');
     mkdirSync(bin);
@@ -1202,13 +1253,27 @@ describe('backup.sh', () => {
     assert.match(result.stdout, /backup: uploaded peanutgallery-\d{8}T\d{6}Z\.tar\.age to peanutgallery-backups/);
   });
 
-  test("uses the owner's login for the roles and auth dumps only, when the board set one", () => {
-    const owner = 'postgresql://postgres.fixtureref:fixture-owner@aws-0-ca-central-1.pooler.supabase.com:5432/postgres';
-    const { run } = setup({ env: { BACKUP_OWNER_DB_URL: owner } });
+  test("never holds the owner's login, under any name, and leaves the auth dump out with BACKUP_SKIP_AUTH=1", () => {
+    for (const owner of [
+      'postgresql://postgres.fixtureref:fixture-owner@aws-0-ca-central-1.pooler.supabase.com:5432/postgres',
+      'postgres://postgres:fixture-owner@db.fixtureref.supabase.co:5432/postgres',
+    ]) {
+      const { run } = setup({ env: { SOME_OWNER_URL: owner } });
+      const refused = run();
+      assert.equal(refused.status, 1, refused.output);
+      assert.ok(refused.stderr.includes("SOME_OWNER_URL signs in as the database owner; no job may hold the owner's password, under any name"), refused.output);
+      assert.doesNotMatch(refused.calls, /^supabase /m);
+      assert.ok(!refused.output.includes('fixture-owner'));
+    }
+    const { run } = setup({ env: { BACKUP_SKIP_AUTH: '1' } });
     const result = run();
     assert.equal(result.status, 0, result.output);
-    const owners = result.calls.split('\n').filter((line) => line.includes('postgres.fixtureref'));
-    assert.deepEqual(owners.map((line) => /-f \S+\/(\w+)\.sql/.exec(line)[1]), ['roles', 'auth']);
+    const dumps = result.calls.split('\n').filter((line) => line.startsWith('supabase '));
+    assert.deepEqual(dumps.map((line) => /-f \S+\/(\w+)\.sql/.exec(line)[1]), ['roles', 'schema', 'data', 'history_schema', 'history_data']);
+    for (const line of dumps) assert.match(line, /--db-url postgresql:\/\/peanutgallery_backup\.fixtureref:/);
+    assert.match(result.stdout, /the auth schema is not dumped \(BACKUP_SKIP_AUTH=1\)/);
+    const { run: other } = setup({ env: { BACKUP_SKIP_AUTH: 'yes' } });
+    assert.ok(other().stderr.includes('BACKUP_SKIP_AUTH must be 1 or absent'));
   });
 
   test('on its weekday, restores the plaintext into a scratch container with no network and checks the ledger identity before encrypting', () => {
@@ -1225,15 +1290,37 @@ describe('backup.sh', () => {
     assert.ok(!started.includes('fixture-password'));
   });
 
-  test('stops before uploading when the restored copy does not hold, pings /fail and leaves no plaintext', () => {
-    const { run } = setup({ identity: '{"holds": false, "lines": [{"name": "I2", "drift": 0.25}]}' });
-    const result = run(['--restore-check']);
-    assert.equal(result.status, 1);
-    assert.match(result.stdout, /FAIL: restore check/);
-    assert.match(result.stderr, /the restore check failed; nothing was uploaded/);
-    assert.doesNotMatch(result.calls, /objectstorage/);
-    assert.match(result.calls, /^url = "https:\/\/hc-ping\.com\/fixture-backup\/fail"/m);
-    assert.deepEqual(result.left, []);
+  // ledger_identity() gives each line its own "holds", so only the top-level field may decide: here I1
+  // holds and I2 does not, and the copy must fail.
+  test('stops before uploading when the restored copy does not hold, even with lines that do, pings /fail and leaves no plaintext', () => {
+    for (const identity of [
+      'false|{"holds": false, "lines": [{"name": "I1", "drift": 0, "holds": true}, {"name": "I2", "drift": 1, "holds": false}, {"name": "I3", "drift": 0, "holds": true}]}',
+      '',
+    ]) {
+      const { run } = setup({ identity });
+      const result = run(['--restore-check']);
+      assert.equal(result.status, 1, result.output);
+      assert.match(result.stdout, /FAIL: restore check/);
+      assert.doesNotMatch(result.stdout, /PASS/);
+      assert.match(result.stderr, /the restore check failed; nothing was uploaded/);
+      assert.doesNotMatch(result.calls, /objectstorage/);
+      assert.match(result.calls, /^url = "https:\/\/hc-ping\.com\/fixture-backup\/fail"/m);
+      assert.deepEqual(result.left, []);
+    }
+    assert.match(read('platform/ops/backup/backup.sh'), /-c "select i->>'holds', i::text from \(select public\.ledger_identity\(\) as i\) s"/);
+    assert.match(read('platform/ops/README.md'), /select public\.ledger_identity\(\)->>'holds'"` must print exactly `true`/);
+  });
+
+  // A write-only request can still write to a name that exists, and backup names are predictable, so
+  // the bucket keeps versions: a replaced backup stays as a previous version.
+  test('the runbook makes the bucket versioned and restores from the oldest version of a name', () => {
+    const readme = read('platform/ops/README.md');
+    assert.match(readme, /oci os bucket create [^`]*--name peanutgallery-backups --public-access-type NoPublicAccess --versioning Enabled`/);
+    assert.match(readme, /oci os bucket update [^`]*--bucket-name peanutgallery-backups --versioning Enabled`/);
+    assert.match(readme, /oci os object list-object-versions /);
+    assert.match(readme, /--version-id <version>/);
+    assert.doesNotMatch(readme, /cannot read, list or delete any\.(?! It can write to a name that already exists)/);
+    assert.match(read('platform/ops/backup/backup.sh'), /the bucket keeps object versions/);
   });
 
   test('pings /fail when the upload fails', () => {
@@ -1292,7 +1379,10 @@ describe('the backups repository template', () => {
   test('lives outside .github, needs no token, uses only its own secrets and checks the CLI it installs', () => {
     const workflow = read('platform/ops/backups-repo/workflows/backup.yml');
     assert.match(workflow, /^permissions: \{\}$/m);
-    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_DB_URL', 'BACKUP_OWNER_DB_URL', 'BACKUP_PAR_URL']);
+    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_DB_URL', 'BACKUP_PAR_URL']);
+    // Every dump signs in as the backup login; the owner's password is never a secret there.
+    assert.equal([...workflow.matchAll(/supabase db dump --db-url "\$BACKUP_DB_URL"/g)].length, 6);
+    assert.doesNotMatch(workflow, /OWNER|postgres\./);
     assert.match(workflow, /sha256sum -c -/);
     assert.match(workflow, /^ {4}- cron: '\d+ \d+ \* \* \d'$/m);
     assert.doesNotMatch(workflow, /uses: /, 'no third-party action');

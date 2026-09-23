@@ -51,9 +51,9 @@ SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 # URLs, which are optional on the Mac and required here. platform/ops/test/ops.test.mjs keeps this
 # list equal to config.ts.
 REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID_SEED NETLIFY_SITE_ID_PLATFORM MODEL_BUILDER PRICE_TABLE_JSON GITHUB_READ_TOKEN MANAGED_AGENT_ID MANAGED_AGENT_VERSION MANAGED_ENVIRONMENT_ID STUDIO_ANTHROPIC_API_KEY HEALTHCHECK_URL NTFY_TOPIC_URL"
-# Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key, and
-# the jobs' own secrets, which live in their env files only.
-FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY STRIPE_READ_KEY BACKUP_DB_URL BACKUP_OWNER_DB_URL"
+# Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key, the
+# jobs' own secrets, which live in their env files only, and the database owner's password.
+FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY STRIPE_READ_KEY BACKUP_DB_URL SUPABASE_DB_PASSWORD"
 # The jobs, each with its env file /etc/peanutgallery/<job>.env and its timer peanutgallery-<job>.timer.
 JOBS="backup controller quota"
 # The Supabase CLI the backup dumps with, pinned; provision.sh checks its package against the release's
@@ -725,7 +725,9 @@ build_image() {
   fi
 }
 
-# The units as committed at the code clone's HEAD.
+# The units as committed at the code clone's HEAD, and the backup script peanutgallery-backup.service
+# runs. systemd-analyze verify refuses a unit whose ExecStart does not exist, so the script goes in
+# before the units are verified, on a fresh host too.
 install_units() {
   local unit sha text reload=0
   sha=$(code_git rev-parse HEAD)
@@ -738,6 +740,7 @@ install_units() {
       reload=1
     fi
   done
+  install_job_scripts
   if [ "$reload" = 1 ]; then
     systemctl daemon-reload
   fi
@@ -801,12 +804,11 @@ $problems"
   say "$job env file: valid"
 }
 
-# The jobs: the backup's tools and script, then each timer whose env file passes. A timer only
-# schedules its job; nothing here runs one.
+# The jobs: the backup's tools (install_units installed its script), then each timer whose env file
+# passes. A timer only schedules its job; nothing here runs one.
 install_jobs() {
   local job timer
   install_supabase_cli
-  install_job_scripts
   for job in $JOBS; do
     timer=peanutgallery-$job.timer
     if check_job_env "$job" && ! systemctl is-enabled --quiet "$timer"; then

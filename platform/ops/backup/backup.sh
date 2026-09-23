@@ -3,11 +3,12 @@
 # VPS by peanutgallery-backup.service; provision.sh and deploy.sh install it from the commit at
 # /usr/local/lib/peanutgallery/backup.sh.
 #
-# 1. `supabase db dump` through the Session pooler as the read-only peanutgallery_backup login: the
-#    roles, the schema, the data (--use-copy), the auth schema's data and the migration history, the
-#    set Supabase documents for a project with no platform backups. The roles and auth dumps use
-#    BACKUP_OWNER_DB_URL instead when the board has set it, the fallback for a login that cannot read
-#    them.
+# 1. `supabase db dump` through the Session pooler as the read-only peanutgallery_backup login, and
+#    only that login: the roles, the schema, the data (--use-copy), the auth schema's data and the
+#    migration history, the set Supabase documents for a project with no platform backups. The
+#    database owner's password never comes to this host. BACKUP_SKIP_AUTH=1, set only when the
+#    login was refused the auth schema, leaves the auth dump out; a restore then signs the board in
+#    afresh (platform/ops/README.md, Restore the database).
 # 2. Once a week (RESTORE_CHECK_WEEKDAY, 1 Monday to 7 Sunday, default 7, in UTC), or with
 #    --restore-check, before encrypting: restore that plaintext into a scratch Postgres container
 #    with no network (the Supabase Postgres image the dump itself pulled) and run the SQL ledger
@@ -16,7 +17,9 @@
 #    private key stays offline, so this host cannot read its own backups. The plaintext is deleted
 #    before anything leaves the host, and on every exit.
 # 4. Upload to Oracle Object Storage through BACKUP_PAR_URL, a write-only pre-authenticated request
-#    for BACKUP_BUCKET: this host can add objects and can neither read, list nor delete them.
+#    for BACKUP_BUCKET: this host can add objects and can neither read, list nor delete them. A write
+#    to a name that exists replaces it, so the bucket keeps object versions (the runbook's step 1):
+#    a replaced backup stays as a previous version.
 # 5. Ping BACKUP_HEALTHCHECK_URL on success and its /fail on failure; the unit's OnFailure posts to
 #    ntfy. The dump's query also counts as activity, which keeps a free Supabase project from pausing.
 #
@@ -60,12 +63,26 @@ check_env() {
       ;;
     esac
   done < "$ENV_FILE"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in '' | '#'*) continue ;; esac
+    key=${line%%=*}
+    case "${line#*=}" in postgres://postgres[.:@]* | postgresql://postgres[.:@]*)
+      echo "$key signs in as the database owner; no job may hold the owner's password, under any name"
+      problems=1
+      ;;
+    esac
+  done < "$ENV_FILE"
   for key in $REQUIRED_KEYS; do
     if [ -z "$(env_value "$key")" ]; then
       echo "$key is missing or empty"
       problems=1
     fi
   done
+  case "$(env_value BACKUP_SKIP_AUTH)" in '' | 1) ;; *)
+    echo "BACKUP_SKIP_AUTH must be 1 or absent"
+    problems=1
+    ;;
+  esac
   case "$(env_value BACKUP_DB_URL)" in '' | postgresql://peanutgallery_backup.* | postgres://peanutgallery_backup.*) ;; *)
     echo "BACKUP_DB_URL must sign in as peanutgallery_backup.<project ref>"
     problems=1
@@ -106,20 +123,23 @@ curl_to() {
   rm -f "$config"
 }
 
-# dump_all <folder>: the six dumps.
+# dump_all <folder>: the six dumps, or five with BACKUP_SKIP_AUTH=1, all as the backup login.
 dump_all() {
-  local dir=$1 db owner
+  local dir=$1 db files="roles schema data auth history_schema history_data"
   db=$(env_value BACKUP_DB_URL)
-  owner=$(env_value BACKUP_OWNER_DB_URL)
-  owner=${owner:-$db}
   install -d -m 0700 "$dir"
-  supabase db dump --db-url "$owner" -f "$dir/roles.sql" --role-only
+  supabase db dump --db-url "$db" -f "$dir/roles.sql" --role-only
   supabase db dump --db-url "$db" -f "$dir/schema.sql"
   supabase db dump --db-url "$db" -f "$dir/data.sql" --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes
-  supabase db dump --db-url "$owner" -f "$dir/auth.sql" --schema auth --use-copy --data-only
+  if [ "$(env_value BACKUP_SKIP_AUTH)" = 1 ]; then
+    files="roles schema data history_schema history_data"
+    say "the auth schema is not dumped (BACKUP_SKIP_AUTH=1): a restore signs the board in afresh"
+  else
+    supabase db dump --db-url "$db" -f "$dir/auth.sql" --schema auth --use-copy --data-only
+  fi
   supabase db dump --db-url "$db" -f "$dir/history_schema.sql" --schema supabase_migrations
   supabase db dump --db-url "$db" -f "$dir/history_data.sql" --use-copy --data-only --schema supabase_migrations
-  for file in roles schema data auth history_schema history_data; do
+  for file in $files; do
     [ -s "$dir/$file.sql" ] || die "the $file dump is empty"
   done
 }
@@ -132,7 +152,7 @@ restore_image() {
 # restore_check <folder>: restores the plaintext into a scratch container with no network and prints
 # the ledger identity. Returns 1 when the restore or the identity fails.
 restore_check() {
-  local dir=$1 image password identity tries=0
+  local dir=$1 image password result holds identity tries=0
   image=$(restore_image)
   [ -n "$image" ] || die "no $RESTORE_IMAGE_REPO image on this host to restore into"
   password=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -150,18 +170,19 @@ restore_check() {
     echo "the dump did not restore into $image"
     return 1
   fi
-  identity=$(PGPASSWORD=$password docker exec -e PGPASSWORD "$SCRATCH_NAME" psql -h localhost -U supabase_admin -d postgres -At \
-    -c 'select public.ledger_identity()')
+  # The top-level "holds" alone decides: each line of the identity carries its own "holds" too, so a
+  # match anywhere in the JSON would pass a copy where I1 holds and I2 does not.
+  result=$(PGPASSWORD=$password docker exec -e PGPASSWORD "$SCRATCH_NAME" psql -h localhost -U supabase_admin -d postgres -At -F '|' \
+    -c "select i->>'holds', i::text from (select public.ledger_identity() as i) s")
   docker rm -f "$SCRATCH_NAME" > /dev/null 2>&1 || true
-  case "$identity" in
-    *'"holds": true'*)
-      echo "PASS: restore check: the restored copy's ledger identity holds: $identity"
-      ;;
-    *)
-      echo "FAIL: restore check: the restored copy's ledger identity does not hold: $identity"
-      return 1
-      ;;
-  esac
+  holds=${result%%|*}
+  identity=${result#*|}
+  if [ "$holds" = true ]; then
+    echo "PASS: restore check: the restored copy's ledger identity holds: $identity"
+  else
+    echo "FAIL: restore check: the restored copy's ledger identity does not hold: $identity"
+    return 1
+  fi
 }
 
 # finish <status>: deletes the plaintext and the scratch container whatever happened, and pings the
@@ -201,7 +222,7 @@ $problems"
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   name=peanutgallery-$stamp
   dump_all "$WORK/$name"
-  say "dumped roles, schema, data, auth and migration history"
+  say "dumped the database as the backup login"
   if restore_due "$force"; then
     restore_check "$WORK/$name" || die "the restore check failed; nothing was uploaded"
   fi

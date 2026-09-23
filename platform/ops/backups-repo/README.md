@@ -2,7 +2,7 @@
 
 A weekly fallback for the VPS's nightly database backup (`docs/specs/money-safety.md`). It lives in its own private repository, never in the studio repository: the studio's gate runs card code, so no backup secret may sit where that code runs. `workflows/backup.yml` here is its template.
 
-It dumps the database as the VPS does (`platform/ops/backup/backup.sh`): the roles, the schema, the data, the auth schema's data and the migration history, through the Session pooler as the read-only `peanutgallery_backup` login. It encrypts the dumps to the board's age public key and uploads them to the backup bucket through a write-only pre-authenticated request of its own. It holds no GitHub token (`permissions: {}`) and nothing that can read a backup back.
+It dumps the database as the VPS does (`platform/ops/backup/backup.sh`): the roles, the schema, the data, the auth schema's data and the migration history, through the Session pooler as the read-only `peanutgallery_backup` login and no other. It encrypts the dumps to the board's age public key and uploads them to the backup bucket through a write-only pre-authenticated request of its own. It holds no GitHub token (`permissions: {}`), nothing that can read a backup back, and never the database owner's password.
 
 ## Set it up (once)
 
@@ -11,8 +11,8 @@ It dumps the database as the VPS does (`platform/ops/backup/backup.sh`): the rol
 3. In that repository's Settings, Secrets and variables, Actions:
    - Secret `BACKUP_DB_URL`: the same Session pooler connection string as the VPS's backup env, signing in as `peanutgallery_backup.<project ref>`.
    - Secret `BACKUP_PAR_URL`: a second write-only pre-authenticated request for the bucket, made for this repository alone (`platform/ops/README.md`, Backups), so either one can be revoked without the other.
-   - Secret `BACKUP_OWNER_DB_URL`: only if the VPS's backup uses it (the backup login could not dump the roles or the auth schema).
    - Variable `BACKUP_AGE_RECIPIENT`: the board's age public key, the `age1...` line. It is public.
+   - Variable `BACKUP_SKIP_AUTH`: `1` only if the VPS's backup sets it (the backup login was refused the auth schema); otherwise leave it unset.
    - Variables `SUPABASE_CLI_VERSION` and `SUPABASE_CLI_SHA256`: the version `platform/ops/provision.sh` pins, and the SHA-256 of its `supabase_<version>_linux_amd64.deb` from that release's `supabase_<version>_checksums.txt`.
 4. Run the workflow once from the Actions tab (Run workflow), then check that the bucket holds a new `peanutgallery-actions-<time>.tar.age`.
 

@@ -37,7 +37,7 @@ export function jobEnvEntries(job, dotenvText, operator) {
     ACTIONS_MINUTES_INCLUDED: fromDotenv('ACTIONS_MINUTES_INCLUDED'),
     ACTIONS_MINUTES_FLOOR: fromDotenv('ACTIONS_MINUTES_FLOOR'),
     BACKUP_DB_URL: fromDotenv('BACKUP_DB_URL'),
-    BACKUP_OWNER_DB_URL: fromDotenv('BACKUP_OWNER_DB_URL'),
+    BACKUP_SKIP_AUTH: fromDotenv('BACKUP_SKIP_AUTH'),
     BACKUP_AGE_RECIPIENT: fromDotenv('BACKUP_AGE_RECIPIENT'),
     BACKUP_PAR_URL: fromDotenv('BACKUP_PAR_URL'),
     BACKUP_BUCKET: fromDotenv('BACKUP_BUCKET'),

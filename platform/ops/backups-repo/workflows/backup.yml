@@ -40,24 +40,30 @@ jobs:
       - name: Dump, encrypt and upload
         env:
           BACKUP_DB_URL: ${{ secrets.BACKUP_DB_URL }}
-          BACKUP_OWNER_DB_URL: ${{ secrets.BACKUP_OWNER_DB_URL }}
           BACKUP_PAR_URL: ${{ secrets.BACKUP_PAR_URL }}
           BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          BACKUP_SKIP_AUTH: ${{ vars.BACKUP_SKIP_AUTH }}
         run: |
           set -euo pipefail
           umask 077
           case "$BACKUP_AGE_RECIPIENT" in age1*) ;; *) echo "set the BACKUP_AGE_RECIPIENT variable to the board's age public key"; exit 1 ;; esac
-          owner=${BACKUP_OWNER_DB_URL:-$BACKUP_DB_URL}
+          case "$BACKUP_DB_URL" in postgres://peanutgallery_backup.* | postgresql://peanutgallery_backup.*) ;; *) echo "BACKUP_DB_URL must sign in as peanutgallery_backup.<project ref>"; exit 1 ;; esac
           name="peanutgallery-actions-$(date -u +%Y%m%dT%H%M%SZ)"
           dir="$RUNNER_TEMP/$name"
           mkdir -p "$dir"
-          supabase db dump --db-url "$owner" -f "$dir/roles.sql" --role-only
+          files="roles schema data auth history_schema history_data"
+          supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/roles.sql" --role-only
           supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/schema.sql"
           supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/data.sql" --use-copy --data-only -x storage.buckets_vectors -x storage.vector_indexes
-          supabase db dump --db-url "$owner" -f "$dir/auth.sql" --schema auth --use-copy --data-only
+          if [ "$BACKUP_SKIP_AUTH" = 1 ]; then
+            files="roles schema data history_schema history_data"
+            echo "the auth schema is not dumped (BACKUP_SKIP_AUTH=1)"
+          else
+            supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/auth.sql" --schema auth --use-copy --data-only
+          fi
           supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/history_schema.sql" --schema supabase_migrations
           supabase db dump --db-url "$BACKUP_DB_URL" -f "$dir/history_data.sql" --use-copy --data-only --schema supabase_migrations
-          for file in roles schema data auth history_schema history_data; do
+          for file in $files; do
             test -s "$dir/$file.sql" || { echo "the $file dump is empty"; exit 1; }
           done
           tar -C "$RUNNER_TEMP" -cf "$RUNNER_TEMP/$name.tar" "$name"

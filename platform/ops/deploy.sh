@@ -339,7 +339,7 @@ exclude_store() {
 # check_ref <sha>: returns 0 when a roll back may go to sha, else prints why and returns 1. The sha
 # must be on origin/main, at or after ROLLBACK_FLOOR, and its dispatcher.service must mount the code
 # clone read-only, so a roll back never returns to a layout where the dispatcher runs from a clone it
-# can write.
+# can write. It must also carry every unit and the backup script this script installs.
 check_ref() {
   local ref=$1
   if ! [[ "$ROLLBACK_FLOOR" =~ ^[0-9a-f]{40}$ ]]; then
@@ -358,12 +358,20 @@ check_ref() {
     echo "$ref is older than the rollback floor $ROLLBACK_FLOOR"
     return 1
   fi
-  local unit
+  local unit file
   unit=$(code_git show "$ref:platform/ops/dispatcher.service" 2> /dev/null) || unit=""
   if ! grep -qF -- '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro' <<< "$unit"; then
     echo "$ref's platform/ops/dispatcher.service does not mount the code clone read-only"
     return 1
   fi
+  # Every file main() installs from the target must be in it, or the deploy would stop after moving
+  # the code clone and before the units (docs/specs/money-safety.md): no roll back behind the jobs.
+  for file in $UNITS backup/backup.sh; do
+    if ! code_git cat-file -e "$ref:platform/ops/$file" 2> /dev/null; then
+      echo "$ref has no platform/ops/$file, so it is older than the jobs; take the change out with a revert on main instead"
+      return 1
+    fi
+  done
 }
 
 # review_target <deployed sha> <target sha>: what the deploy would change, for a person to read: the

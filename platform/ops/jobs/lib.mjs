@@ -16,12 +16,16 @@ export const JOB_KEYS = {
   },
   backup: {
     required: ['BACKUP_DB_URL', 'BACKUP_AGE_RECIPIENT', 'BACKUP_PAR_URL', 'BACKUP_BUCKET', 'BACKUP_HEALTHCHECK_URL'],
-    // BACKUP_OWNER_DB_URL is the fallback the plan names: set only when the backup login cannot dump
-    // the roles or the auth schema, with the database owner's password (docs/specs/money-safety.md).
-    // Those two dumps use it; every other dump stays on the read-only login.
-    optional: ['RESTORE_CHECK_WEEKDAY', 'BACKUP_OWNER_DB_URL'],
+    // Every dump runs as the read-only login; the database owner's password never reaches the VPS
+    // (docs/specs/money-safety.md). BACKUP_SKIP_AUTH=1 is set only when that login was refused the
+    // auth schema, and leaves the auth dump out.
+    optional: ['RESTORE_CHECK_WEEKDAY', 'BACKUP_SKIP_AUTH'],
   },
 };
+
+// A Postgres connection string that signs in as the database owner, pooled (postgres.<ref>) or direct.
+// The owner can drop the append-only triggers, so no job holds one under any name.
+const OWNER_DB_URL = /^postgres(ql)?:\/\/postgres[.:@]/;
 
 // Keys whose value must be an https URL.
 export const URL_KEYS = ['SUPABASE_URL', 'NTFY_TOPIC_URL', 'CONTROLLER_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'BACKUP_PAR_URL', 'BACKUP_HEALTHCHECK_URL'];
@@ -56,6 +60,9 @@ export function jobEnvProblems(job, env) {
     if (typeof value === 'string' && STRIPE_SECRET_PREFIXES.some((prefix) => value.trim().startsWith(prefix))) {
       problems.push(`${key} holds a Stripe secret key; no job may hold one, under any name`);
     }
+    if (typeof value === 'string' && OWNER_DB_URL.test(value.trim())) {
+      problems.push(`${key} signs in as the database owner; no job may hold the owner's password, under any name`);
+    }
   }
   for (const key of spec.required) {
     if (!(env[key] ?? '').trim()) problems.push(`${key} is missing or empty`);
@@ -68,15 +75,12 @@ export function jobEnvProblems(job, env) {
   if (read && !read.startsWith(STRIPE_READ_PREFIX)) problems.push(`STRIPE_READ_KEY must be a restricted live key (${STRIPE_READ_PREFIX}...)`);
   const recipient = (env.BACKUP_AGE_RECIPIENT ?? '').trim();
   if (recipient && !/^age1[0-9a-z]{58}$/.test(recipient)) problems.push('BACKUP_AGE_RECIPIENT must be one age public key (age1...)');
-  for (const [key, user] of [
-    ['BACKUP_DB_URL', 'peanutgallery_backup'],
-    ['BACKUP_OWNER_DB_URL', 'postgres'],
-  ]) {
-    const dbUrl = (env[key] ?? '').trim();
-    if (dbUrl && !new RegExp(`^postgres(ql)?://${user}\\.[a-z0-9]+:[^@/]+@[a-z0-9.-]+\\.pooler\\.supabase\\.com:5432/postgres(\\?.*)?$`).test(dbUrl)) {
-      problems.push(`${key} must be the Session pooler (port 5432) as ${user}.<project ref>`);
-    }
+  const dbUrl = (env.BACKUP_DB_URL ?? '').trim();
+  if (dbUrl && !/^postgres(ql)?:\/\/peanutgallery_backup\.[a-z0-9]+:[^@/]+@[a-z0-9.-]+\.pooler\.supabase\.com:5432\/postgres(\?.*)?$/.test(dbUrl)) {
+    problems.push('BACKUP_DB_URL must be the Session pooler (port 5432) as peanutgallery_backup.<project ref>');
   }
+  const skipAuth = (env.BACKUP_SKIP_AUTH ?? '').trim();
+  if (skipAuth && skipAuth !== '1') problems.push('BACKUP_SKIP_AUTH must be 1 or absent');
   const par = (env.BACKUP_PAR_URL ?? '').trim();
   const bucket = (env.BACKUP_BUCKET ?? '').trim();
   if (par) {
