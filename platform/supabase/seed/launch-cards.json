@@ -111,7 +111,7 @@
   "new": [
     {
       "title": "Stop the unlock count from showing more unlocks than exist",
-      "summary": "The count above the unlock list counts every unlock in your save, even ones the game no longer has, so it can read 13 of 12. It should count only unlocks that exist.",
+      "summary": "If a card ever removes or renames an unlock, the count above the unlock list would include unlocks the game no longer has, such as 13 of 12. It should count only unlocks that exist.",
       "intent": [
         "render/scene.ts fills labels.unlockedCount ('{unlocked} of {total} unlocked') with state.unlocked.length for {unlocked} and the number of rows in config/unlocks.json for {total}. state.unlocked holds every unlock event the player's save recorded, and parseSavedState keeps events whose id the config no longer has. So after a card removes an unlock row, a returning player who had earned them all sees '13 of 12 unlocked', and after a card renames an unlock id they see '14 of 13', because settleUnlocks adds the new id and the old event stays. The '{count} unlocks earned' line below is already right, because layoutUnlockList counts only config rows.",
         "Count only unlocks that exist. Export a pure earnedUnlockCount(rows, earnedIds) from render/layout.ts that counts the rows whose id is earned, each row once, and use it in layoutUnlockList and for the count. Rename the placeholder so the label in content/strings.json reads '{earned} of {total} unlocked', and fill {earned} with that count. The save format and sim/ do not change, and old saves still load.",
