@@ -1,5 +1,6 @@
-// The agent adapter interface. Attended mode runs Claude Code on the founder's subscription;
-// unattended mode runs the same command line on the studio organisation's key.
+// The agent adapter interface. Attended mode runs Claude Code on the founder's subscription on the
+// Mac; unattended mode runs each card as a Claude Managed Agents session on the studio organisation's
+// key, in a container Anthropic hosts, so no agent-written code runs where the dispatcher runs.
 import type { AgentMode } from '../throttle.js';
 import type { TurnUsage } from '../pricing.js';
 
@@ -19,6 +20,11 @@ export interface SessionSpec {
   folder: CardFolder;
   maxTurns: number;
   maxBudgetUsd: number;
+  // The executor role, for the ledger rows an adapter writes itself (the managed adapter); null for
+  // the probe.
+  roleId?: string | null;
+  // The lane's paths, which a patch the managed adapter receives must stay inside.
+  allowedPaths?: readonly string[];
 }
 
 // One model's totals from the result line's modelUsage block. cost_usd is the command line's own
@@ -36,7 +42,10 @@ export type AgentEvent =
   // apiKeySource is the init line's account report: 'ANTHROPIC_API_KEY' when the session bills
   // an API key, another value (Claude Code reports 'none' for a subscription sign-in) otherwise,
   // null when the line carries no such field. The session refuses the wrong source for its mode.
-  | { type: 'start'; sessionId: string | null; model: string | null; tools: string[]; apiKeySource: string | null }
+  // ledger is 'adapter' when the adapter writes the session's ledger rows itself (the managed
+  // adapter: one row per model request, a runtime row and a settle row to the platform's list cost),
+  // so the session records none and settles nothing.
+  | { type: 'start'; sessionId: string | null; model: string | null; tools: string[]; apiKeySource: string | null; ledger?: 'adapter' }
   // contentChars is the length of the turn's text, thinking and tool input, so a meter can estimate
   // output tokens the stream under-reports; thinking is true when the turn had a thinking block,
   // whose text Claude Code does not write. requestId, when the adapter has one (a Managed Agents
@@ -83,12 +92,50 @@ export interface SessionResult {
 
 export type EventSink = (event: AgentEvent) => void | Promise<void>;
 
+// Thrown by an adapter that stopped a session, or never started one, for a reason that is not the
+// card's: an earlier session not yet settled, a read-only token that could not be checked, a Managed
+// Agents API or an event stream that did not answer, a ledger that refused its rows. The card pauses
+// with failingCheck and keeps its money, and the board resumes it; whatever the session spent is
+// already on the ledger. Any other throw ends the card as a session error.
+export class SessionPaused extends Error {
+  readonly failingCheck: string;
+  constructor(failingCheck: string, message: string) {
+    super(message);
+    this.name = 'SessionPaused';
+    this.failingCheck = failingCheck;
+  }
+}
+
 // A tap on the raw stream lines of one run, before parsing. The probe uses it to scan the whole
 // stream for forbidden names and to save the recording; card sessions pass nothing.
 export type RawLineSink = (line: string) => void;
 
+// What a card's managed sessions left when recovery closed them: each session settled to the ledger
+// and archived, or the reason one could not be.
+export interface ClosedSessions {
+  sessionIds: string[];
+  // A patch the agent submitted that no one answered, now stored for the card (card_patches).
+  patchStored: boolean;
+  unsettled: string[];
+}
+
+// The unattended controls only the managed adapter has: the containment check and the probe at
+// startup, and the orphan sessions recovery closes before it pauses a card.
+export interface ManagedControl {
+  // Throws a StartupError (fatal or not) unless the ids, the read-only token, the agent and the
+  // environment are exactly what the repository declares.
+  checkContainment(): Promise<void>;
+  // One minimal session billed as overhead; throws a StartupError when it fails.
+  probe(): Promise<void>;
+  // Settles and archives every unarchived session the agent holds, keyed by the card it ran for.
+  // Throws when the sessions cannot be listed.
+  closeOrphans(): Promise<Map<string, ClosedSessions>>;
+}
+
 export interface AgentAdapter {
   readonly mode: AgentMode;
+  // Present on the managed adapter only.
+  readonly managed?: ManagedControl;
   preflight(spec: SessionSpec): Promise<void>;
   run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal, onRawLine?: RawLineSink): Promise<SessionResult>;
 }

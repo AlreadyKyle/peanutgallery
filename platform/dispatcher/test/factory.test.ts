@@ -1,9 +1,15 @@
+import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AttendedAdapter } from '../src/adapters/attended.js';
 import { createAdapter } from '../src/adapters/factory.js';
+import { ManagedAdapter } from '../src/adapters/managed.js';
 import { UnattendedAdapter } from '../src/adapters/unattended.js';
 import type { DispatcherConfig } from '../src/config.js';
+import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
+import { RecordingAlerter } from './helpers/fake-alert.js';
+import { FakeDb } from './helpers/fake-db.js';
+import { AGENT_ID, CODE_ROOT, ENVIRONMENT_ID, FakeManagedClient } from './helpers/fake-managed.js';
 
 const base: DispatcherConfig = {
   codeRoot: '/repo',
@@ -38,19 +44,28 @@ const base: DispatcherConfig = {
 };
 
 describe('createAdapter', () => {
+  const managed = { agentId: AGENT_ID, agentVersion: 3, environmentId: ENVIRONMENT_ID, readToken: 'github_pat_-fixture-read' };
+  const unattended: DispatcherConfig = { ...base, codeRoot: CODE_ROOT, agentMode: 'unattended', studioAnthropicApiKey: 'studio-key', managed };
+  const adapterDeps = () => ({ db: new FakeDb(), alert: new RecordingAlerter(), log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })), patches: null, client: new FakeManagedClient() });
+
   it('builds the attended adapter for attended mode', () => {
     const adapter = createAdapter(base);
     expect(adapter).toBeInstanceOf(AttendedAdapter);
     expect(adapter.mode).toBe('attended');
+    expect(adapter.managed).toBeUndefined();
   });
 
-  it('builds the unattended adapter for unattended mode when the studio key is set', () => {
-    const adapter = createAdapter({ ...base, agentMode: 'unattended', studioAnthropicApiKey: 'studio-key' });
+  it('builds the managed adapter for unattended mode, reading the agent and environment files from the code root, whatever CLAUDE_BIN says', () => {
+    const adapter = createAdapter({ ...unattended, claudeBin: '/nowhere/claude' }, adapterDeps());
     expect(adapter).toBeInstanceOf(UnattendedAdapter);
+    expect(adapter).toBeInstanceOf(ManagedAdapter);
     expect(adapter.mode).toBe('unattended');
+    expect(adapter.managed).toBe(adapter);
   });
 
-  it('refuses unattended mode without the studio key', () => {
-    expect(() => createAdapter({ ...base, agentMode: 'unattended' })).toThrow('STUDIO_ANTHROPIC_API_KEY is required in unattended mode');
+  it('refuses unattended mode without the studio key, the managed ids or the ledger it meters to', () => {
+    expect(() => createAdapter({ ...unattended, studioAnthropicApiKey: null }, adapterDeps())).toThrow('STUDIO_ANTHROPIC_API_KEY is required in unattended mode');
+    expect(() => createAdapter({ ...unattended, managed: null }, adapterDeps())).toThrow('GITHUB_READ_TOKEN and the managed agent and environment ids are required in unattended mode');
+    expect(() => createAdapter(unattended)).toThrow('unattended mode meters to the ledger');
   });
 });

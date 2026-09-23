@@ -7,7 +7,7 @@ import type { DispatcherConfig } from '../src/config.js';
 import { StartupError } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
-import { meterProbe, checkRoleModels, startupChecks } from '../src/startup.js';
+import { checkRoleModels, startupChecks } from '../src/startup.js';
 import { resolveRoleModel, roleModelTokens } from '../src/role-model.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
@@ -126,41 +126,14 @@ describe('startupChecks in attended mode', () => {
     const db = new FakeDb();
     db.roles = [role({ name: 'Builder A' })];
     const { log, lines } = capture();
-    let probes = 0;
     await startupChecks({
       db,
       adapter: new FakeAdapter(async () => undefined),
       config: config({ githubToken: 'gho_fake-token' }),
       log,
-      runProbe: async () => {
-        probes += 1;
-        throw new Error('no probe in attended mode');
-      },
     });
-    expect(probes).toBe(0);
     expect(lines()).toEqual([
       expect.objectContaining({ level: 'warn', msg: 'GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes', mode: 'attended' }),
     ]);
-  });
-});
-
-describe('the attended probe', () => {
-  it("is billed to the founder, never to the public overhead, so the founder's usage stays private", async () => {
-    const db = new FakeDb();
-    const row = { model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 10, usd: 0.0032, request_id: 'probe/attended/turn/1' };
-    const probe = {
-      ok: true,
-      reason: null,
-      fatal: false,
-      tools: ['Read'],
-      apiKeySource: 'none',
-      costUsd: null,
-      metering: { rows: [row], basis: 'result' as const, fallbackModels: [], turnModels: ['builder-class'], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] },
-      turns: 1,
-      exitCode: 0,
-    };
-    await meterProbe(db, config(), probe, createLogger(new Writable({ write: (_c, _e, cb) => cb() })), 1);
-    expect(db.ledger.map((entry) => entry.billed_to)).toEqual(['founder']);
-    expect(db.pool.balance_usd).toBe(50);
   });
 });

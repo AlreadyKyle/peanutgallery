@@ -1,9 +1,10 @@
 // Dispatcher entry: loads .env from the repository root, validates configuration, takes the
 // dispatcher lease (waiting while another dispatcher holds it), checks that the database agrees on
-// the agent mode, probes the account in unattended mode, recovers cards left mid-flight by a previous
-// process, starts the scheduler, and runs the tick loop until SIGINT or SIGTERM. Stopping leaves
-// studio_state.paused alone, so a restart resumes work, releases the lease once running cards have
-// stopped, and a restart also clears a halt.
+// the agent mode, checks containment and probes the account in unattended mode, closes Managed
+// Agents sessions and recovers cards left mid-flight by a previous process, starts the scheduler,
+// and runs the tick loop until SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a
+// restart resumes work, releases the lease once running cards have stopped, and a restart also
+// clears a halt.
 // A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -16,8 +17,8 @@ import { loadConfig } from './config.js';
 import { createSupabaseDb, type Card, type Db } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
 import { createLogger, errorMessage } from './log.js';
+import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
-import { runProbe } from './probe-core.js';
 import { recoverOrphans } from './recovery.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
 import { checkRepositoryGit, startupChecks } from './startup.js';
@@ -51,13 +52,15 @@ async function main(): Promise<void> {
   loadDotenv({ path: path.join(CODE_ROOT, '.env'), quiet: true });
   const config = loadConfig(process.env, CODE_ROOT);
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
-  const adapter = createAdapter(config);
+  const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
+  // Accepted managed-session patches, re-applied when their card re-queues; attended cards have none.
+  const patches = config.agentMode === 'unattended' ? createSupabasePatchStore(config.supabaseUrl, config.supabaseServiceRoleKey) : null;
+  const adapter = createAdapter(config, { db, alert, log, patches });
   const stop = new AbortController();
   const running = new Map<string, Date>();
   const now = () => new Date();
-  const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
   const budgets = new SessionBudgets();
-  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets };
+  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches };
   const leaseHolder = `${os.hostname()}/${process.pid}/${randomUUID().slice(0, 8)}`;
   const ttlSeconds = leaseTtlSeconds(config.tickMs);
 
@@ -73,7 +76,8 @@ async function main(): Promise<void> {
   await checkRepositoryGit(config.repoRoot, config.githubRepo);
   if (!(await acquireLease(db, leaseHolder, ttlSeconds, config.tickMs, stop.signal))) return;
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
-  await startupChecks({ db, adapter, config, log, runProbe });
+  await startupChecks({ db, adapter, config, log });
+  const managed = adapter.managed;
   await recoverOrphans({
     db,
     config,
@@ -83,6 +87,7 @@ async function main(): Promise<void> {
     now,
     resume: (card: Card) => resumeMerged(card, pipeline),
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
+    ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
   const tasks = startScheduler(config.schedulerEnabled, log);
   log.info('main', 'dispatcher started', {

@@ -16,6 +16,16 @@ const FULL: Env = {
   PRICE_TABLE_JSON: JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }),
 };
 
+// What unattended mode needs beyond FULL: the managed ids and the read-only token, with both GitHub
+// tokens fine-grained.
+const MANAGED: Env = {
+  GITHUB_TOKEN: 'github_pat_-fixture-write',
+  GITHUB_READ_TOKEN: 'github_pat_-fixture-read',
+  MANAGED_AGENT_ID: 'agent_fixture',
+  MANAGED_AGENT_VERSION: '3',
+  MANAGED_ENVIRONMENT_ID: 'env_fixture',
+};
+
 describe('loadConfig', () => {
   it('applies the documented defaults', () => {
     const config = loadConfig(FULL, REPO);
@@ -49,6 +59,7 @@ describe('loadConfig', () => {
     const config = loadConfig(
       {
         ...FULL,
+        ...MANAGED,
         AGENT_MODE: 'unattended',
         STUDIO_ANTHROPIC_API_KEY: 'studio-key',
         POOL_DAILY_CAP_USD: '40',
@@ -191,7 +202,7 @@ describe('the GitHub token', () => {
         new ConfigError('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes'),
       );
     }
-    expect(loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).githubToken).toBe('github_pat_fake-token');
+    expect(loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).githubToken).toBe('github_pat_-fixture-write');
   });
 
   it('accepts one in attended mode, where startup warns instead', () => {
@@ -206,7 +217,7 @@ describe('the studio key', () => {
   });
 
   it('is read in unattended mode', () => {
-    const config = loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', ANTHROPIC_API_KEY: 'founder-key' }, REPO);
+    const config = loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', ANTHROPIC_API_KEY: 'founder-key' }, REPO);
     expect(config.studioAnthropicApiKey).toBe('studio-key');
   });
 
@@ -219,5 +230,34 @@ describe('the studio key', () => {
   it('is null and ignored in attended mode', () => {
     expect(loadConfig({ ...FULL, STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).studioAnthropicApiKey).toBeNull();
     expect(loadConfig({ ...FULL, AGENT_MODE: 'attended', STUDIO_ANTHROPIC_API_KEY: '' }, REPO).studioAnthropicApiKey).toBeNull();
+  });
+});
+
+describe('the managed agent settings', () => {
+  const unattended: Env = { ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' };
+
+  it('are read in unattended mode', () => {
+    expect(loadConfig(unattended, REPO).managed).toEqual({ agentId: 'agent_fixture', agentVersion: 3, environmentId: 'env_fixture', readToken: 'github_pat_-fixture-read' });
+  });
+
+  it('are required in unattended mode, one by one', () => {
+    for (const name of ['GITHUB_READ_TOKEN', 'MANAGED_AGENT_ID', 'MANAGED_AGENT_VERSION', 'MANAGED_ENVIRONMENT_ID']) {
+      expect(() => loadConfig({ ...unattended, [name]: '' }, REPO), name).toThrow(new ConfigError(`${name} is not set`));
+    }
+    expect(() => loadConfig({ ...unattended, MANAGED_AGENT_VERSION: '2.5' }, REPO)).toThrow('MANAGED_AGENT_VERSION must be a positive integer');
+  });
+
+  it('refuse a read token equal to the write token, in either mode', () => {
+    expect(() => loadConfig({ ...unattended, GITHUB_READ_TOKEN: MANAGED.GITHUB_TOKEN }, REPO)).toThrow(new ConfigError('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN: sessions clone with a token that cannot write'));
+    expect(() => loadConfig({ ...FULL, GITHUB_READ_TOKEN: FULL.GITHUB_TOKEN }, REPO)).toThrow('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN');
+  });
+
+  it('refuse a GitHub token that is not fine-grained in unattended mode', () => {
+    expect(() => loadConfig({ ...unattended, GITHUB_TOKEN: 'gho_oauth_fixture' }, REPO)).toThrow('GITHUB_TOKEN is not a fine-grained token (github_pat_...)');
+    expect(() => loadConfig({ ...unattended, GITHUB_READ_TOKEN: 'ghp_classic_fixture' }, REPO)).toThrow('GITHUB_READ_TOKEN must be a fine-grained personal access token');
+  });
+
+  it('are null and not required in attended mode', () => {
+    expect(loadConfig(FULL, REPO).managed).toBeNull();
   });
 });

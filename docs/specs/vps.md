@@ -10,9 +10,9 @@ The dispatcher runs on the founder's Mac in attended mode. A public studio needs
 
 In:
 - An always-free Oracle Cloud instance with Docker and systemd.
-- The dispatcher image with the `claude` CLI pinned, ~~over a bind-mounted clone of the repository~~. Superseded: `ops-separation.md` runs it from a read-only code clone beside a work clone (2026-09-16).
+- The dispatcher image ~~with the `claude` CLI pinned~~ (superseded: the image holds no claude CLI, and unattended cards run as Claude Managed Agents sessions, `launch-managed.md`, 22 September 2026), ~~over a bind-mounted clone of the repository~~. Superseded: `ops-separation.md` runs it from a read-only code clone beside a work clone (2026-09-16).
 - Startup exit codes that stop systemd from restarting a failure that cannot recover.
-- Child processes and git hooks that cannot read the dispatcher's secrets.
+- Child processes and git hooks that cannot read the dispatcher's secrets. Under `launch-managed.md` no agent-written code runs on the VPS at all.
 - A seed that cannot flip the live agent mode.
 - A provisioning script, an env file generator, a deploy script and two systemd units.
 - The healthchecks.io check and the ntfy topic.
@@ -27,26 +27,27 @@ Out: OBS, the stream, the host, Twitch, a separate OS user for agent sessions (s
 
 **Repository.** ~~The repository is cloned over https at `/srv/peanutgallery`, owned by uid 10001, and bind-mounted at the same path in the container. Git worktree metadata lives in the clone's `.git`, so it survives container restarts, and a code update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` keeps `/srv/peanutgallery` as uid 10001's work clone for git state only, runs the dispatcher from a root-owned code clone at `/srv/peanutgallery-code` mounted read-only at `/opt/peanutgallery`, and puts worktrees in `/srv/peanutgallery-worktrees` (2026-09-16). The image holds only the toolchain.
 
-**GitHub access.** A fine-grained token for this repository only: Contents read/write, Pull requests read/write, Checks read, Metadata read, no Workflows. The dispatcher already pushes with a one-off https extraheader; the clone and the deploy fetch use the same header for one command and never store it on disk.
+**GitHub access.** A fine-grained token for this repository only: Contents read/write, Pull requests read/write, Checks read, Metadata read, no Workflows. `launch-managed.md` adds a second fine-grained token, `GITHUB_READ_TOKEN`, Contents read only, which Managed Agents sessions clone with; the dispatcher and `provision.sh` refuse it unless GitHub denies it a write. The dispatcher already pushes with a one-off https extraheader; the clone and the deploy fetch use the same header for one command and never store it on disk.
 
 **Image.** `platform/ops/Dockerfile.dispatcher`, built with `platform/ops` as the context:
 - `FROM node:22-bookworm-slim`, not alpine: the claude CLI's bundled ripgrep needs glibc. The README records how to pin the base by digest at provision time.
-- `ARG CLAUDE_CODE_VERSION=2.1.139`, the version on the Mac and in the probe fixture; `ARG PNPM_VERSION=11.0.9`.
-- apt installs git, ca-certificates and tini. `npm install -g` installs the claude CLI and pnpm at those versions (not corepack: a root corepack cache is invisible to the non-root user).
+- ~~`ARG CLAUDE_CODE_VERSION=2.1.139`, the version on the Mac and in the probe fixture;~~ (superseded: no claude CLI, `launch-managed.md`) `ARG PNPM_VERSION=11.0.9`.
+- apt installs git, ca-certificates and tini. `npm install -g` installs ~~the claude CLI and~~ pnpm at ~~those versions~~ its version (not corepack: a root corepack cache is invisible to the non-root user).
 - User `agent`, uid and gid 10001, with the git identity "Peanut Gallery agents" <agents@peanutgallery.games>.
-- `CLAUDE_BIN=/usr/local/bin/claude`, `DISABLE_AUTOUPDATER=1`, `CI=true`, and ~~the pnpm store on the bind mount at `/srv/peanutgallery/.pnpm-store`~~ (superseded: `ops-separation.md` puts it in the code clone at `/opt/peanutgallery/.pnpm-store`, 2026-09-16). No `NODE_ENV=production`, which drops devDependencies such as tsx.
+- ~~`CLAUDE_BIN=/usr/local/bin/claude`, `DISABLE_AUTOUPDATER=1`,~~ (superseded: no claude CLI, `launch-managed.md`) `CI=true`, and ~~the pnpm store on the bind mount at `/srv/peanutgallery/.pnpm-store`~~ (superseded: `ops-separation.md` puts it in the code clone at `/opt/peanutgallery/.pnpm-store`, 2026-09-16). No `NODE_ENV=production`, which drops devDependencies such as tsx.
 - ~~`WORKDIR /srv/peanutgallery`~~ (superseded: `WORKDIR /opt/peanutgallery`, `ops-separation.md`, 2026-09-16); tini runs `platform/ops/dispatcher-entrypoint.sh`, copied into the image.
 
-**Entrypoint.** Checks that `claude --version` is `$CLAUDE_CODE_VERSION` and that `origin` is an https github.com URL, ~~runs `pnpm install --frozen-lockfile --prefer-offline` with no secret in its environment, then execs the dispatcher from `platform/dispatcher`~~. Superseded: `ops-separation.md` installs nothing in the entrypoint, checks the work clone's origin, and execs the dispatcher from the read-only code clone (2026-09-16).
+**Entrypoint.** Checks ~~that `claude --version` is `$CLAUDE_CODE_VERSION` and~~ (superseded: no claude CLI, `launch-managed.md`) that `origin` is an https github.com URL, ~~runs `pnpm install --frozen-lockfile --prefer-offline` with no secret in its environment, then execs the dispatcher from `platform/dispatcher`~~. Superseded: `ops-separation.md` installs nothing in the entrypoint, checks the work clone's origin, and execs the dispatcher from the read-only code clone (2026-09-16).
 
 **Service.** `platform/ops/dispatcher.service` runs the container with `docker run --rm` as 10001:10001, all capabilities dropped, no new privileges, 3 GB of memory, 512 pids and 10 MB logs. It restarts always, with a delay growing from 30 seconds to 30 minutes over 6 steps, at most 8 starts in 6 hours, and never after exit 78. It waits 90 seconds to stop. `docker stop` gives the container 60 of them, and the dispatcher waits up to 50 for a running card: SIGINT to the session, SIGTERM 15 seconds later, SIGKILL 5 after that, then the settle rows and the pause. On failure it starts `dispatcher-alert.service`, a oneshot that posts "Peanut Gallery dispatcher unit failed on <hostname>" to the URL in `/etc/peanutgallery/ntfy.url`, and does nothing when that file is absent.
 
 **Env file.** `/etc/peanutgallery/dispatcher.env`, root 0600, read only by docker's `--env-file`: `KEY=value`, no quotes, no `export`, JSON minified on one line. No systemd `EnvironmentFile`, which strips quotes and would corrupt `PRICE_TABLE_JSON`. It carries:
 - `AGENT_MODE=unattended` and `STUDIO_ANTHROPIC_API_KEY`
-- `GITHUB_REPO` and the VPS's own `GITHUB_TOKEN`
+- `GITHUB_REPO` and the VPS's own `GITHUB_TOKEN`, and (`launch-managed.md`) `GITHUB_READ_TOKEN`
 - the Netlify token and both site ids
 - the Supabase URL and service key (the secret key when the Mac's `.env` has one)
 - `PRICE_TABLE_JSON`, `MODEL_BUILDER`
+- (`launch-managed.md`) `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION`, `MANAGED_ENVIRONMENT_ID`
 - `HEALTHCHECK_URL`, `NTFY_TOPIC_URL`
 - any optional dispatcher setting the Mac's `.env` sets, except the two paths that exist only on the Mac (`CLAUDE_BIN`, `DISPATCHER_WORKTREE_ROOT`)
 
@@ -54,11 +55,11 @@ It never carries `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_
 
 **Exit codes.** A startup failure that cannot change on retry exits 78, so systemd does not restart it and re-meter the probe:
 - a `ConfigError` from `loadConfig`
-- a probe verdict of forbidden tools, registered memory paths, the wrong `apiKeySource`, or no tools
+- ~~a probe verdict of forbidden tools, registered memory paths, the wrong `apiKeySource`, or no tools~~ (superseded, `launch-managed.md`: a managed agent or environment that differs from `platform/agents/managed/`, a read token GitHub would let write, a probe session whose agent drifted, an unpriced probe model, or probe rows the ledger refused)
 
-A transient failure exits 1 and backs off: a probe with no stream, no init line or an error result, a spawn failure, and a `studio_state.agent_mode` mismatch (fixing it from /board costs nothing).
+A transient failure exits 1 and backs off: ~~a probe with no stream, no init line or an error result, a spawn failure,~~ (superseded: an API that does not answer, or a probe session that stops without a reply, `launch-managed.md`) and a `studio_state.agent_mode` mismatch (fixing it from /board costs nothing).
 
-**Secrets and child processes.** The smoke test's headless bot runs agent-written seed code, so it runs with the same allowlisted environment as an agent session. Every git command the dispatcher runs passes `-c core.hooksPath=/dev/null`, so a hook planted by agent-written code never runs with the dispatcher's environment.
+**Secrets and child processes.** ~~The smoke test's headless bot runs agent-written seed code, so it runs with the same allowlisted environment as an agent session.~~ Superseded: production smoke runs no card code, only the served build, the served config, the served bytes against the merge commit and the gate at the merge sha (`launch-managed.md`). Every git command the dispatcher runs passes `-c core.hooksPath=/dev/null`, so a hook planted by agent-written code never runs with the dispatcher's environment.
 
 **Seed.** `seed.ts` inserts `studio_state` row 1 only when it is missing, reads it back and logs the live values. When `.env`'s `AGENT_MODE` or caps differ from the live row it prints a warning and writes nothing. Running the seed from the Mac after cutover never flips the VPS back to attended.
 
@@ -80,22 +81,22 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 2. Stop the Mac dispatcher.
 3. Set agent mode to unattended from /board, with the board's second factor once the `launch-pages.md` migration is applied to the live project.
 4. `systemctl start dispatcher`.
-5. The startup probe passes with `apiKeySource` `ANTHROPIC_API_KEY` and bills the studio.
+5. The startup probe passes with `apiKeySource` `ANTHROPIC_API_KEY` and ~~bills the studio~~ (superseded: after the containment check and the toolchain check, it is a managed session billed as `overhead`, `launch-managed.md`).
 6. Resume from /board.
 
 **Money guardrail.** The studio Console organization holds prepaid credit with auto-reload off and a $500 monthly limit. The board tops it up by hand as Stripe payouts arrive, so API spend can never outrun customer money.
 
-**Known risk.** Agent-written test code runs as the dispatcher's OS user and could read the dispatcher's environment from `/proc`. In place: the allowlisted child environment for sessions, the smoke bot and the install; git hooks off; the Console limit. The follow-up, a separate uid for agent sessions through a sudo wrapper at `CLAUDE_BIN`, is specified before any card source other than the board opens.
+**Known risk.** ~~Agent-written test code runs as the dispatcher's OS user and could read the dispatcher's environment from `/proc`. In place: the allowlisted child environment for sessions, the smoke bot and the install; git hooks off; the Console limit. The follow-up, a separate uid for agent sessions through a sudo wrapper at `CLAUDE_BIN`, is specified before any card source other than the board opens.~~ Superseded by `launch-managed.md` (22 September 2026): agent-written code runs only in a Managed Agents container Anthropic hosts, and the VPS applies the returned patch as data and runs none of it. The VPS is now mostly idle, which is the pattern Oracle reclaims on Always Free; `platform/ops/README.md` (Oracle idle reclaim) names the board's choice.
 
 ## Acceptance criteria
 
-- [x] A `ConfigError` exits 78; a probe failure for forbidden tools, memory paths, the wrong `apiKeySource` or no tools exits 78; a probe with no stream, no init line or an error result, a spawn failure and a mode mismatch exit 1.
-- [x] The smoke bot's environment is the allowlisted child environment, and `GITHUB_TOKEN` and the Supabase keys are absent from it.
+- [x] A `ConfigError` exits 78; ~~a probe failure for forbidden tools, memory paths, the wrong `apiKeySource` or no tools exits 78; a probe with no stream, no init line or an error result, a spawn failure~~ (superseded: the managed containment and probe exit codes, `launch-managed.md`) and a mode mismatch exit 1.
+- [x] ~~The smoke bot's environment is the allowlisted child environment, and `GITHUB_TOKEN` and the Supabase keys are absent from it.~~ Superseded: no smoke bot runs on the VPS (`launch-managed.md`).
 - [x] Every git command in `worktree.ts` passes `core.hooksPath=/dev/null`, and a hook planted in a repository does not run on commit.
 - [x] `seed.ts` inserts `studio_state` with ignore-duplicates, never updates it, and warns without writing when `.env`'s mode or caps differ from the live row.
 - [x] `make-dispatcher-env.sh` writes exactly the dispatcher's keys at mode 0600, with `AGENT_MODE=unattended`, the VPS token, the secret key preferred and one-line `PRICE_TABLE_JSON`; it prints no secret value and refuses when an operator variable is missing or the VPS token equals the Mac's.
 - [x] The new shell scripts pass `bash -n`, and `shellcheck` where it is installed.
-- [x] `provision.sh`'s required keys equal the keys `config.ts` requires plus the studio key and both alert URLs.
+- [x] `provision.sh`'s required keys equal the keys `config.ts` requires plus the studio key and both alert URLs (with `launch-managed.md`, the read token and the three managed ids among them).
 - [x] Every file under `platform/ops` is under a kernel path.
 - [x] `platform/ops/README.md` covers provision, cutover, deploy an update, rotate a key, read logs, pause from /board, roll back, the money guardrail and the known risk.
 - [ ] On the VPS, `provision.sh` runs twice and the second run changes nothing, and `systemd-analyze verify` passes on both units.
@@ -139,15 +140,15 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 - 2026-09-15: Ubuntu 24.04 with systemd 255, which has `RestartSteps` (board).
 - ~~2026-09-15: a bind-mounted host clone, not a `COPY` of the repository (board). Worktree metadata survives restarts and an update is a fast-forward plus a restart.~~ Superseded: `ops-separation.md` (2026-09-16). The container ran the dispatcher from that clone, which uid 10001 owned, so agent-written code could change the code the next start ran with every secret, and root's deploy acted on the same tree. Still no `COPY`: the code is a root-owned host clone mounted read-only, and the work clone and worktree folder stay bind-mounted.
 - 2026-09-15: a fine-grained GitHub token for this repository replaces the deploy key (board). The dispatcher's https push already needs a token, and no Workflows permission means no agent branch can change the gate workflow through it.
-- 2026-09-15: `node:22-bookworm-slim`, the claude CLI and pnpm through `npm install -g` at pinned versions, and no `NODE_ENV=production` (board). The CLI's ripgrep needs glibc, corepack's root cache is invisible to uid 10001, and tsx is a devDependency.
+- 2026-09-15: `node:22-bookworm-slim`, ~~the claude CLI and~~ pnpm through `npm install -g` at ~~pinned versions~~ a pinned version, and no `NODE_ENV=production` (board). The CLI's ripgrep needs glibc, corepack's root cache is invisible to uid 10001, and tsx is a devDependency. (The claude CLI left the image with `launch-managed.md`, 22 September 2026.)
 - 2026-09-15: docker's env file is the only reader of the secrets (board). systemd's `EnvironmentFile` strips quotes.
 - 2026-09-15: exit 78 for startup failures that cannot recover, and `RestartPreventExitStatus=78` (board). A restart loop would re-meter the probe on every start.
-- 2026-09-15: the smoke bot runs with the child allowlist and git runs with hooks off (board). Both run agent-written code or files next to the dispatcher's secrets.
+- 2026-09-15: ~~the smoke bot runs with the child allowlist and~~ git runs with hooks off (board). Both run agent-written code or files next to the dispatcher's secrets. (Superseded for the smoke bot: none runs on the VPS, `launch-managed.md`.)
 - 2026-09-15: the seed inserts `studio_state` only when missing (board). The board sets the mode from /board; a stale `.env` on the Mac must not undo it.
-- 2026-09-15: the separate uid for agent sessions is a follow-up, specified before any card source other than the board opens (board). Today every card comes from the board.
+- ~~2026-09-15: the separate uid for agent sessions is a follow-up, specified before any card source other than the board opens (board). Today every card comes from the board.~~ Superseded: `launch-managed.md` (22 September 2026) moves agent sessions off the VPS.
 - 2026-09-15: the image sets `pnpm_config_store_dir`, not `npm_config_store_dir`. pnpm 11.0.9 ignores the npm name: with it set, `pnpm store path` still printed the default store; with `pnpm_config_store_dir` it printed the override.
 - 2026-09-15: a model missing from `PRICE_TABLE_JSON` at the startup probe exits 78, and a malformed `PRICE_TABLE_JSON` is a `ConfigError`. Both are the same on every start, and each start spends on a probe it cannot meter.
-- 2026-09-15: the entrypoint's own checks (the claude CLI version, the clone, the https origin) exit 78; ~~a failed `pnpm install` exits non-zero otherwise and is retried~~ (superseded: the entrypoint installs nothing, `ops-separation.md`, 2026-09-16).
+- 2026-09-15: the entrypoint's own checks (~~the claude CLI version,~~ the clone, the https origin) exit 78; ~~a failed `pnpm install` exits non-zero otherwise and is retried~~ (superseded: the entrypoint installs nothing, `ops-separation.md`, 2026-09-16).
 - 2026-09-15: the unit runs `docker run --pull never` and its `ExecStop` ignores a container already gone. A same-named image is never fetched from a registry, and a stop after the container exited on its own does not fail the unit.
 - 2026-09-15: the env file generator copies no `CLAUDE_BIN` or `DISPATCHER_WORKTREE_ROOT` from the Mac (paths on the Mac do not exist on the VPS), and refuses a `MODEL_BUILDER` with no price row. provision.sh also refuses duplicate keys, CRLF lines, a `GITHUB_REPO` other than the clone's, non-https URLs and an unpriced `MODEL_BUILDER`.
 - 2026-09-15: the one-off GitHub header reaches git through `GIT_CONFIG_COUNT` variables, not `-c` on the command line, in provision.sh and deploy.sh, so the token is in no process list. provision.sh clones with the env file's `GITHUB_TOKEN` when none is passed, so the operator never types it on an ssh command line.
@@ -157,4 +158,4 @@ A transient failure exits 1 and backs off: a probe with no stream, no init line 
 
 ## Needs the board
 
-An Oracle Cloud Always Free Ubuntu 24.04 instance (Ampere, `ca-toronto-1`) and its IP, the healthchecks.io check URL, the ntfy topic, a fine-grained GitHub token for this repository, and prepaid credit on the studio Console organization.
+An Oracle Cloud Always Free Ubuntu 24.04 instance (Ampere, `ca-toronto-1`) and its IP, the healthchecks.io check URL, the ntfy topic, a fine-grained GitHub token for this repository, a second read-only one for Managed Agents sessions (`launch-managed.md`), and prepaid credit on the studio Console organization.

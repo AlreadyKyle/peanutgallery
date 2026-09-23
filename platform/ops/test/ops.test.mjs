@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { FORBIDDEN_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
+import { FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
 
 const OPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(OPS_DIR, '..', '..');
@@ -49,9 +49,13 @@ const MAC_DOTENV = {
   DISPATCHER_SCHEDULER: 'on',
   CLAUDE_BIN: '/Users/board/.local/bin/claude',
   BOARD_SESSION_TTL_MIN: '',
+  MANAGED_AGENT_ID: 'agent_fixture',
+  MANAGED_AGENT_VERSION: '3',
+  MANAGED_ENVIRONMENT_ID: 'env_fixture',
 };
 const OPERATOR = {
-  VPS_GITHUB_TOKEN: 'fixture-vps-github-token',
+  VPS_GITHUB_TOKEN: 'github_pat_-fixture-vps',
+  GITHUB_READ_TOKEN: 'github_pat_-fixture-read',
   HEALTHCHECK_URL: 'https://hc-ping.com/fixture-check',
   NTFY_TOPIC_URL: 'https://ntfy.sh/fixture-topic',
 };
@@ -91,6 +95,7 @@ const SECRET_VALUES = [
     .filter(([key]) => /KEY|TOKEN|SECRET/.test(key))
     .map(([, value]) => value),
   OPERATOR.VPS_GITHUB_TOKEN,
+  OPERATOR.GITHUB_READ_TOKEN,
 ];
 
 describe('make-dispatcher-env.sh', () => {
@@ -103,7 +108,8 @@ describe('make-dispatcher-env.sh', () => {
       ['AGENT_MODE', 'unattended'],
       ['STUDIO_ANTHROPIC_API_KEY', 'fixture-studio-key'],
       ['GITHUB_REPO', 'AlreadyKyle/peanutgallery'],
-      ['GITHUB_TOKEN', 'fixture-vps-github-token'],
+      ['GITHUB_TOKEN', 'github_pat_-fixture-vps'],
+      ['GITHUB_READ_TOKEN', 'github_pat_-fixture-read'],
       ['NETLIFY_AUTH_TOKEN', 'fixture-netlify-token'],
       ['NETLIFY_SITE_ID_SEED', 'fixture-site-seed'],
       ['NETLIFY_SITE_ID_PLATFORM', 'fixture-site-platform'],
@@ -111,6 +117,9 @@ describe('make-dispatcher-env.sh', () => {
       ['SUPABASE_SERVICE_ROLE_KEY', 'fixture-supabase-secret-key'],
       ['PRICE_TABLE_JSON', JSON.stringify(PRICE_TABLE)],
       ['MODEL_BUILDER', 'builder-class'],
+      ['MANAGED_AGENT_ID', 'agent_fixture'],
+      ['MANAGED_AGENT_VERSION', '3'],
+      ['MANAGED_ENVIRONMENT_ID', 'env_fixture'],
       ['HEALTHCHECK_URL', 'https://hc-ping.com/fixture-check'],
       ['NTFY_TOPIC_URL', 'https://ntfy.sh/fixture-topic'],
       ['POOL_DAILY_CAP_USD', '100'],
@@ -122,7 +131,7 @@ describe('make-dispatcher-env.sh', () => {
       ['DISPATCHER_SCHEDULER', 'on'],
     ]);
     for (const value of SECRET_VALUES) assert.ok(!run.output.includes(value), 'the output names keys only');
-    assert.match(run.stdout, /with 20 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
+    assert.match(run.stdout, /with 24 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
   });
 
   test('copies the director and host models and the session wall clock when .env sets them', () => {
@@ -155,6 +164,11 @@ describe('make-dispatcher-env.sh', () => {
       [{ ...OPERATOR, HEALTHCHECK_URL: '' }, 'HEALTHCHECK_URL is not set in the operator environment'],
       [{ ...OPERATOR, NTFY_TOPIC_URL: '' }, 'NTFY_TOPIC_URL is not set in the operator environment'],
       [{ ...OPERATOR, VPS_GITHUB_TOKEN: MAC_DOTENV.GITHUB_TOKEN }, "VPS_GITHUB_TOKEN equals .env's GITHUB_TOKEN"],
+      [{ ...OPERATOR, GITHUB_READ_TOKEN: '' }, 'GITHUB_READ_TOKEN is not set in the operator environment'],
+      [{ ...OPERATOR, GITHUB_READ_TOKEN: OPERATOR.VPS_GITHUB_TOKEN }, 'GITHUB_READ_TOKEN equals a token that can write'],
+      [{ ...OPERATOR, GITHUB_READ_TOKEN: MAC_DOTENV.GITHUB_TOKEN }, 'GITHUB_READ_TOKEN equals a token that can write'],
+      [{ ...OPERATOR, GITHUB_READ_TOKEN: 'ghp_classic_fixture' }, 'GITHUB_READ_TOKEN is not a fine-grained personal access token'],
+      [{ ...OPERATOR, VPS_GITHUB_TOKEN: 'gho_oauth_fixture' }, 'VPS_GITHUB_TOKEN is not a fine-grained personal access token'],
       [{ ...OPERATOR, NTFY_TOPIC_URL: 'http://ntfy.sh/fixture-topic' }, 'NTFY_TOPIC_URL must be an https URL'],
     ];
     for (const [operator, message] of cases) {
@@ -176,6 +190,9 @@ describe('make-dispatcher-env.sh', () => {
       [dotenvText(MAC_DOTENV, '{"builder-class":'), 'PRICE_TABLE_JSON in .env is not valid JSON'],
       [dotenvText(MAC_DOTENV, null), 'PRICE_TABLE_JSON is not set in .env'],
       [dotenvText({ ...MAC_DOTENV, NETLIFY_AUTH_TOKEN: "\"'quoted'\"" }), 'NETLIFY_AUTH_TOKEN starts with a quote'],
+      [dotenvText({ ...MAC_DOTENV, MANAGED_AGENT_ID: '' }), 'MANAGED_AGENT_ID is not set in .env'],
+      [dotenvText({ ...MAC_DOTENV, MANAGED_ENVIRONMENT_ID: '' }), 'MANAGED_ENVIRONMENT_ID is not set in .env'],
+      [dotenvText({ ...MAC_DOTENV, MANAGED_AGENT_VERSION: 'latest' }), 'MANAGED_AGENT_VERSION must be a positive integer'],
     ];
     for (const [dotenv, message] of cases) {
       const run = makeEnv({ dotenv });
@@ -219,6 +236,10 @@ describe('provision.sh env file checks', () => {
       [good.replace('GITHUB_REPO=', 'GITHUB_REPO=AlreadyKyle/peanutgallery\r\nX='), 'carriage return'],
       [`${good}DISPATCHER_REPO_ROOT=/srv/elsewhere\n`, 'DISPATCHER_REPO_ROOT is set by dispatcher.service'],
       [`${good}DISPATCHER_CODE_READONLY=off\n`, 'DISPATCHER_CODE_READONLY is set by dispatcher.service'],
+      [good.replace('GITHUB_READ_TOKEN=github_pat_-fixture-read', 'GITHUB_READ_TOKEN=github_pat_-fixture-vps'), 'GITHUB_READ_TOKEN equals GITHUB_TOKEN'],
+      [good.replace('GITHUB_READ_TOKEN=github_pat_-fixture-read', 'GITHUB_READ_TOKEN=ghp_classic_fixture'), 'GITHUB_READ_TOKEN is not a fine-grained personal access token'],
+      [good.replace(/^MANAGED_ENVIRONMENT_ID=.*\n/m, ''), 'MANAGED_ENVIRONMENT_ID is missing or empty'],
+      [good.replace('MANAGED_AGENT_VERSION=3', 'MANAGED_AGENT_VERSION=v3'), 'MANAGED_AGENT_VERSION must be a positive integer'],
     ];
     for (const [text, message] of variants) {
       const file = path.join(scratch, `variant-${runs++}.env`);
@@ -270,7 +291,8 @@ describe('dispatcher-env.mjs key lists', () => {
     const accounted = new Set([...written, ...OPTIONAL_KEYS, ...Object.keys(NOT_COPIED)]);
     for (const name of read_) assert.ok(accounted.has(name), `${name} is read by config.ts but neither written nor listed in NOT_COPIED`);
     for (const name of FORBIDDEN_KEYS) assert.ok(!written.has(name), `${name} is never written`);
-    assert.deepEqual(OPERATOR_KEYS, ['VPS_GITHUB_TOKEN', 'HEALTHCHECK_URL', 'NTFY_TOPIC_URL']);
+    assert.deepEqual(OPERATOR_KEYS, ['VPS_GITHUB_TOKEN', 'GITHUB_READ_TOKEN', 'HEALTHCHECK_URL', 'NTFY_TOPIC_URL']);
+    for (const name of MANAGED_KEYS) assert.ok(written.has(name), `${name} is copied from .env`);
   });
 });
 
@@ -416,12 +438,8 @@ describe('shell scripts', () => {
 });
 
 describe('values that must agree across files', () => {
-  test('the image pins the claude CLI version the probe fixture recorded and the root pnpm version', () => {
+  test('the image pins the root pnpm version', () => {
     const dockerfile = read('platform/ops/Dockerfile.dispatcher');
-    const fixture = read('platform/dispatcher/test/fixtures/probe.jsonl');
-    const recorded = /"claude_code_version":"([^"]+)"/.exec(fixture)?.[1];
-    assert.equal(recorded, '2.1.139');
-    assert.equal(/^ARG CLAUDE_CODE_VERSION=(.+)$/m.exec(dockerfile)?.[1], recorded);
     const packageManager = JSON.parse(read('package.json')).packageManager;
     assert.equal(`pnpm@${/^ARG PNPM_VERSION=(.+)$/m.exec(dockerfile)?.[1]}`, packageManager);
     assert.match(dockerfile, /^ARG NODE_IMAGE=node:22-bookworm-slim$/m);
@@ -431,9 +449,9 @@ describe('values that must agree across files', () => {
     assert.match(dockerfile, /pnpm_config_store_dir=\/opt\/peanutgallery\/\.pnpm-store/);
   });
 
-  test('the build context admits only the entrypoint and the managed settings', () => {
+  test('the build context admits only the entrypoint', () => {
     const rules = read('platform/ops/Dockerfile.dispatcher.dockerignore').split('\n').filter((line) => line && !line.startsWith('#'));
-    assert.deepEqual(rules, ['*', '!dispatcher-entrypoint.sh', '!managed-settings.json']);
+    assert.deepEqual(rules, ['*', '!dispatcher-entrypoint.sh']);
   });
 
   test("the unit's no-restart exit status is the dispatcher's fatal exit code, and it has no EnvironmentFile", () => {
@@ -499,7 +517,6 @@ describe('the code clone and the work clone', () => {
     writeFileSync(path.join(repo, '.gitignore'), 'node_modules/\n');
     writeFileSync(path.join(repo, 'platform', 'ops', 'Dockerfile.dispatcher'), 'FROM scratch\n');
     writeFileSync(path.join(repo, 'platform', 'ops', 'dispatcher.service'), '[Service]\nExecStart=/bin/true\n');
-    writeFileSync(path.join(repo, 'platform', 'ops', 'managed-settings.json'), '{}\n');
     hostGit(repo, 'add', '-A');
     const commit = hostGit(repo, 'commit', '-q', '-m', 'fixture');
     assert.equal(commit.status, 0, commit.stderr);
@@ -598,7 +615,7 @@ describe('the code clone and the work clone', () => {
     assert.equal(unit.stdout, '[Service]\nExecStart=/bin/true\n');
     const listing = sourced('deploy.sh', repo, `build_context ${sha} | tar -tf -`);
     assert.equal(listing.status, 0, listing.stderr);
-    assert.deepEqual(listing.stdout.trim().split('\n').sort(), ['Dockerfile.dispatcher', 'dispatcher.service', 'managed-settings.json']);
+    assert.deepEqual(listing.stdout.trim().split('\n').sort(), ['Dockerfile.dispatcher', 'dispatcher.service']);
 
     for (const script of ['deploy.sh', 'provision.sh']) {
       const text = logicalLines(read(`platform/ops/${script}`)).join('\n');
@@ -702,23 +719,22 @@ describe('the code clone and the work clone', () => {
     }
   });
 
-  // I3: a roll back stays on main, at or after the floor, and keeps the managed settings.
-  test('check_ref refuses a roll back with no floor, below the floor, off main or without the managed settings', () => {
+  // I3: a roll back stays on main, at or after the floor, and keeps the read-only code mount.
+  test('check_ref refuses a roll back with no floor, below the floor, off main or without the read-only code mount', () => {
     const repo = fixtureRepo();
-    hostGit(repo, 'rm', '-q', 'platform/ops/managed-settings.json');
-    hostGit(repo, 'commit', '-q', '-m', 'before the floor');
+    const unit = path.join(repo, 'platform', 'ops', 'dispatcher.service');
+    const readOnly = '[Service]\nExecStart=/usr/bin/docker run --rm \\\n  --volume /srv/peanutgallery-code:/opt/peanutgallery:ro \\\n  peanutgallery/dispatcher:current\n';
     const below = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    writeFileSync(path.join(repo, 'platform', 'ops', 'managed-settings.json'), '{}\n');
-    hostGit(repo, 'add', '-A');
-    hostGit(repo, 'commit', '-q', '-m', 'the floor');
+    writeFileSync(unit, readOnly);
+    hostGit(repo, 'commit', '-q', '-am', 'the floor');
     const floor = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    writeFileSync(path.join(repo, 'platform', 'ops', 'dispatcher.service'), '[Service]\nExecStart=/bin/echo\n');
+    writeFileSync(unit, readOnly.replace('run --rm', 'run --rm --name peanutgallery-dispatcher'));
     hostGit(repo, 'commit', '-q', '-am', 'after the floor');
     const after = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    hostGit(repo, 'rm', '-q', 'platform/ops/managed-settings.json');
-    hostGit(repo, 'commit', '-q', '-m', 'settings removed');
-    const removed = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
-    hostGit(repo, 'update-ref', 'refs/remotes/origin/main', removed);
+    writeFileSync(unit, readOnly.replace(':ro', ''));
+    hostGit(repo, 'commit', '-q', '-am', 'code clone mounted writable');
+    const writable = hostGit(repo, 'rev-parse', 'HEAD').stdout.trim();
+    hostGit(repo, 'update-ref', 'refs/remotes/origin/main', writable);
     hostGit(repo, 'checkout', '-q', '-b', 'side', after);
     writeFileSync(path.join(repo, 'platform', 'ops', 'side.txt'), 'side\n');
     hostGit(repo, 'add', '-A');
@@ -734,8 +750,9 @@ describe('the code clone and the work clone', () => {
     assert.equal(check(floor).status, 0);
     assert.match(check(below).stdout, /is older than the rollback floor/);
     assert.match(check(side).stdout, /is not a commit on origin\/main/);
-    assert.match(check(removed).stdout, /has no platform\/ops\/managed-settings\.json/);
+    assert.match(check(writable).stdout, /dispatcher\.service does not mount the code clone read-only/);
     assert.match(check('0'.repeat(40)).stdout, /is not a commit in/);
+    assert.match(read('platform/ops/dispatcher.service'), /--volume \/srv\/peanutgallery-code:\/opt\/peanutgallery:ro/);
   });
 
   // I4: the gate verdict, the review and the confirmation.
@@ -837,34 +854,85 @@ describe('the code clone and the work clone', () => {
     assert.match(commands, /^exec node --import tsx src\/main\.ts$/m);
     assert.match(commands, /git -C "\$REPO" /);
     assert.match(commands, /^export TSX_DISABLE_CACHE$/m);
+    assert.doesNotMatch(commands, /claude/);
   });
 
-  test('the image installs the sandbox tools and root-owned managed settings', () => {
+  // docs/specs/launch-managed.md: no agent runs on the VPS, so the image carries no claude CLI, no
+  // sandbox tools and no Claude Code settings.
+  test('the image installs no claude CLI, no sandbox tools and no Claude Code settings', () => {
     const dockerfile = read('platform/ops/Dockerfile.dispatcher');
-    const apt = /apt-get install -y --no-install-recommends ([^\n&]+)/.exec(dockerfile)?.[1].trim().split(/\s+/);
-    for (const pkg of ['git', 'ca-certificates', 'tini', 'bubblewrap', 'socat']) assert.ok(apt?.includes(pkg), pkg);
-    const copy = /^COPY --chmod=0644 managed-settings\.json \/etc\/claude-code\/managed-settings\.json$/m.exec(dockerfile);
-    assert.ok(copy, 'the managed settings are copied to the path Claude Code reads on Linux');
-    assert.ok(copy.index < dockerfile.indexOf('USER 10001:10001'), 'copied as root, before USER');
-    assert.doesNotMatch(dockerfile, /--chown[^\n]*managed-settings/);
+    const instructions = dockerfile.split('\n').filter((line) => !line.startsWith('#')).join('\n');
+    const apt = /apt-get install -y --no-install-recommends ([^\n&]+)/.exec(dockerfile)?.[1].trim().split(/\s+/).filter((word) => word !== '\\');
+    assert.deepEqual(apt, ['git', 'ca-certificates', 'tini']);
+    assert.doesNotMatch(instructions, /claude|bubblewrap|socat|managed-settings|CLAUDE_/i);
+    assert.equal(existsSync(path.join(OPS_DIR, 'managed-settings.json')), false);
+  });
+});
+
+// The read-only token check provision.sh makes, with the answers GitHub gives.
+describe('provision.sh read_token_verdict', () => {
+  const verdict = (read, write, body) => {
+    const file = path.join(scratch, `write-body-${runs++}.json`);
+    writeFileSync(file, body);
+    return callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'read_token_verdict "$READ" "$WRITE" "$BODY"', { READ: read, WRITE: write, BODY: file });
+  };
+
+  test('passes a token that reads the repository and is refused a ref write for want of permission', () => {
+    const ok = verdict('200', '403', '{"message":"Resource not accessible by personal access token"}');
+    assert.equal(ok.status, 0, ok.stdout);
+    assert.equal(ok.stdout, '');
   });
 
-  test('managed-settings.json turns hooks off and denies the reads and edits a session never needs', () => {
-    const settings = JSON.parse(read('platform/ops/managed-settings.json'));
-    assert.equal(settings.disableAllHooks, true);
-    assert.deepEqual(settings.permissions.deny, [
-      'Read(//proc/**)',
-      'Read(//etc/peanutgallery/**)',
-      'Read(//srv/peanutgallery/.env*)',
-      'Read(//opt/peanutgallery/.env*)',
-      'Read(~/.ssh/**)',
-      'Read(~/.aws/**)',
-      'Read(~/.config/**)',
-      'Read(~/.claude/**)',
-      'Read(~/.claude.json)',
-      'Read(~/.netrc)',
-      'Edit(//opt/peanutgallery/**)',
-      'Edit(//srv/peanutgallery/**)',
-    ]);
+  test('refuses a token that can write, cannot read, or got any other answer', () => {
+    assert.match(verdict('200', '422', '{"message":"Object does not exist"}').stdout, /GITHUB_READ_TOKEN can write to AlreadyKyle\/peanutgallery/);
+    assert.match(verdict('404', '403', '{}').stdout, /cannot read AlreadyKyle\/peanutgallery \(GET returned 404\)/);
+    assert.match(verdict('200', '403', '{"message":"API rate limit exceeded"}').stdout, /only a 403 permission denial proves/);
+    assert.match(verdict('200', '000', '').stdout, /write check returned 000/);
+    assert.match(read('platform/ops/provision.sh'), /^ {2}check_env_file\n {2}check_read_token\n/m);
   });
+});
+
+// The CI audit (docs/specs/launch-managed.md): card code runs in the gate workflow, so no job there may
+// hold a credential. The workflow reads contents only, persists no checkout credential, names no
+// secret and runs on no trigger that carries a privileged token.
+describe('the CI workflows that run card code', () => {
+  const workflows = readdirSync(path.join(REPO_ROOT, '.github', 'workflows')).filter((file) => /\.ya?ml$/.test(file));
+  // Each step that uses actions/checkout, as the step's lines.
+  const checkoutSteps = (text) => {
+    const lines = text.split('\n');
+    const steps = [];
+    lines.forEach((line, index) => {
+      const match = /^(\s*)- uses: actions\/checkout@/.exec(line);
+      if (!match) return;
+      const indent = match[1].length;
+      const step = [line];
+      for (const next of lines.slice(index + 1)) {
+        if (next.trim() === '') continue;
+        if (next.length - next.trimStart().length <= indent) break;
+        step.push(next);
+      }
+      steps.push(step.join('\n'));
+    });
+    return steps;
+  };
+
+  test('gate.yml is among them', () => {
+    assert.ok(workflows.includes('gate.yml'), workflows.join(', '));
+  });
+
+  for (const file of ['gate.yml']) {
+    test(`${file} reads contents only, persists no checkout credential and uses no secret`, () => {
+      const text = read(`.github/workflows/${file}`);
+      assert.match(text, /^permissions:\n {2}contents: read\n(?! )/m, 'top-level permissions are contents: read and nothing else');
+      for (const block of text.match(/^\s+permissions:[^\n]*(\n\s{6,}[^\n]+)*/gm) ?? []) {
+        assert.doesNotMatch(block, /write/, `a job widens its permissions: ${block.trim()}`);
+      }
+      const steps = checkoutSteps(text);
+      assert.ok(steps.length > 0, 'the workflow checks out the repository');
+      for (const step of steps) assert.match(step, /persist-credentials: false/, `a checkout keeps its credential:\n${step}`);
+      assert.doesNotMatch(text, /secrets\./, 'no secret is referenced');
+      assert.doesNotMatch(text, /github\.token|GITHUB_TOKEN/, 'the job token is never handed to a step');
+      assert.doesNotMatch(text, /pull_request_target|workflow_run/, 'no trigger that runs with a privileged token');
+    });
+  }
 });

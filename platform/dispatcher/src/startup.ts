@@ -1,8 +1,9 @@
-// Startup rules for the dispatcher: on the VPS its code root must be read-only to it, the database must agree on the agent mode, every writing role's
-// model must have a price, and in unattended mode the one-turn probe must pass and be metered before
-// any card runs. The probe runner is passed in so tests can run these rules without git, a network or
-// a real adapter. A failure that cannot change on retry is a fatal StartupError, which main.ts turns
-// into exit 78.
+// Startup rules for the dispatcher: on the VPS its code root must be read-only to it, the database
+// must agree on the agent mode, every writing role's model must have a price, and in unattended mode
+// the containment check and the managed probe must pass, the probe metered as overhead, before any
+// card runs (docs/specs/launch-managed.md). The adapter is passed in, so tests run these rules with a
+// fake Managed Agents client and no network. A failure that cannot change on retry is a fatal
+// StartupError, which main.ts turns into exit 78.
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, open, rm } from 'node:fs/promises';
@@ -13,22 +14,15 @@ import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
 import { gitConfigViolations, originUrl } from './gitconfig.js';
 import { errorMessage, type Logger } from './log.js';
-import type { MeterRow } from './metering.js';
 import { modelPrice } from './pricing.js';
 import { resolveRoleModel } from './role-model.js';
-import { LEDGER_RETRY_MS, LEDGER_TRIES, billedToWrongAccount } from './session.js';
-import { billingFor } from './throttle.js';
-import { retry } from './time.js';
-import type { ProbeOptions, ProbeResult } from './probe-core.js';
 
-export type ProbeRunner = (adapter: AgentAdapter, options: ProbeOptions) => Promise<ProbeResult>;
 
 export interface StartupDeps {
   db: Db;
   adapter: AgentAdapter;
   config: DispatcherConfig;
   log: Logger;
-  runProbe: ProbeRunner;
 }
 
 // The board sets the mode from /board and the process reads its own from AGENT_MODE; when they
@@ -65,27 +59,6 @@ export async function checkRepositoryGit(repoRoot: string, githubRepo: string): 
   }
 }
 
-// The probe's own model had no price. Its rows were written at the fallback rates first.
-export class FallbackPricedError extends StartupError {
-  readonly models: string[];
-  constructor(models: string[]) {
-    super(`no price for model ${models.join(', ')}`, true);
-    this.name = 'FallbackPricedError';
-    this.models = models;
-  }
-}
-
-// Rows the ledger refused after every retry. The probe's spend is already made, so the process stops
-// for good rather than restart and pay for another probe; the rows are named for the board to post.
-export class UnwrittenRowsError extends StartupError {
-  readonly rows: Array<MeterRow & { error: string }>;
-  constructor(rows: Array<MeterRow & { error: string }>) {
-    super(`the ledger refused probe rows: ${rows.map((row) => `${row.request_id} ${row.model} ${row.usd} USD (${row.error})`).join(', ')}`, true);
-    this.name = 'UnwrittenRowsError';
-    this.rows = rows;
-  }
-}
-
 // A session runs on the model its role resolves to when the session starts (role-model.ts): the env
 // value of the role's MODEL_* token, else roles.model, else MODEL_BUILDER. A writing role whose model
 // has no price could not be metered, and the price table and the roles are the same on every restart,
@@ -105,51 +78,19 @@ export async function checkRoleModels(db: Db, config: DispatcherConfig, log?: Lo
   }
 }
 
-// The probe costs money whether or not it passes, so it is metered before the verdict is acted
-// on. A ledger row with no card and no role is the studio's own spend; a probe that ran on the
-// wrong account for the mode, or with no init line to say, is recorded as the founder's. A model the
-// probe's turns ran on that is missing from the table is treated as a card turn treats it: the rows
-// are written at the fallback rates, and then the caller stops, since the model is missing on every
-// start and each start would spend on a probe it cannot price. A side model seen only in modelUsage
-// is metered at the fallback rates and logged, and does not stop the process.
-export async function meterProbe(db: Db, config: DispatcherConfig, probe: ProbeResult, log: Logger, retryMs: number = LEDGER_RETRY_MS): Promise<void> {
-  const { rows, basis, fallbackModels, turnModels, overcountUsd, mismatch, anomaly } = probe.metering;
-  if (rows.length === 0) {
-    log.warn('probe', 'the probe reported no token usage; nothing metered', { ok: probe.ok, turns: probe.turns });
+// Unattended mode runs only on the managed adapter. Before any card: the containment check (the
+// managed ids, a read-only token that cannot write, the agent and environment exactly as the
+// repository declares them), then the probe, one minimal Managed Agents session billed as overhead.
+// A drifted config, a token that can write or an unpriced probe model cannot change on retry and is
+// fatal; an API that does not answer is not.
+export async function unattendedStartup(deps: StartupDeps): Promise<void> {
+  const managed = deps.adapter.managed;
+  if (deps.adapter.mode !== 'unattended' || !managed) {
+    throw new StartupError('unattended mode runs only on the managed adapter, which this process did not build', true);
   }
-  const billedTo = billedToWrongAccount(config.agentMode, probe.apiKeySource) ? 'founder' : billingFor(config.agentMode);
-  const unwritten: Array<MeterRow & { error: string }> = [];
-  for (const row of rows) {
-    try {
-      const recorded = await retry(
-        () => db.recordUsage({ billed_to: billedTo, card_id: null, role_id: null, ...row }),
-        LEDGER_TRIES,
-        retryMs,
-        (error, attempt) => log.warn('probe', 'ledger write failed', { request_id: row.request_id, usd: row.usd, attempt, error: errorMessage(error) }),
-      );
-      log.info('probe', 'probe metered', { ledger: recorded.ledger_id, request_id: row.request_id, model: row.model, usd: row.usd, billedTo, balance: recorded.balance_usd });
-    } catch (error) {
-      log.error('probe', 'probe row not metered', { request_id: row.request_id, model: row.model, usd: row.usd, error: errorMessage(error) });
-      unwritten.push({ ...row, error: errorMessage(error) });
-    }
-  }
-  if (rows.length > 0 && (basis === 'estimate' || overcountUsd > 0 || mismatch)) {
-    log.warn('probe', 'probe metering needs review', { basis, anomaly, mismatch, overcountUsd, cliTotalCostUsd: probe.costUsd });
-  }
-  const sideFallbacks = fallbackModels.filter((model) => !turnModels.includes(model));
-  if (sideFallbacks.length > 0) log.warn('probe', 'side models metered at fallback rates; add them to PRICE_TABLE_JSON', { models: sideFallbacks });
-  if (unwritten.length > 0) throw new UnwrittenRowsError(unwritten);
-  const turnFallbacks = fallbackModels.filter((model) => turnModels.includes(model));
-  if (turnFallbacks.length > 0) throw new FallbackPricedError(turnFallbacks);
-}
-
-export async function startupProbe(deps: StartupDeps): Promise<void> {
-  const { db, adapter, config, log } = deps;
-  log.info('probe', 'running the startup probe', { mode: adapter.mode, model: config.modelBuilder });
-  const probe = await deps.runProbe(adapter, { repoRoot: config.repoRoot, worktreeRoot: config.worktreeRoot, model: config.modelBuilder, priceTable: config.priceTable });
-  await meterProbe(db, config, probe, log);
-  if (!probe.ok) throw new StartupError(`startup probe failed: ${probe.reason}`, probe.fatal);
-  log.info('probe', 'startup probe passed', { apiKeySource: probe.apiKeySource, tools: probe.tools, turns: probe.turns, costUsd: probe.costUsd });
+  await managed.checkContainment();
+  deps.log.info('probe', 'running the startup probe', { mode: 'unattended', model: deps.config.modelBuilder, billed_to: 'overhead' });
+  await managed.probe();
 }
 
 // The folders of the code root the read-only check looks at: the root, the workspace's node_modules
@@ -207,5 +148,5 @@ export async function startupChecks(deps: StartupDeps): Promise<void> {
   if (tokenProblem) deps.log.warn('startup', tokenProblem, { mode: deps.config.agentMode });
   await checkMode(deps.db, deps.config);
   await checkRoleModels(deps.db, deps.config, deps.log);
-  if (deps.config.agentMode === 'unattended') await startupProbe(deps);
+  if (deps.config.agentMode === 'unattended') await unattendedStartup(deps);
 }

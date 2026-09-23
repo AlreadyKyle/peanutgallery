@@ -1,52 +1,47 @@
-// Production smoke test after a deploy: the served build carries the merge sha, every checked
-// config path serves the expected value, and (seed-1 only) the headless bot runs against the
-// served config within a real-second budget. The bot runs from a checkout of the merge commit,
-// which an agent wrote, so it starts with the agent session's allowlisted environment and none of
-// the dispatcher's secrets.
-import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { promisify } from 'node:util';
+// Production smoke test after a deploy. It runs no card code: the headless bot no longer runs on the
+// VPS, so agent-written code is never executed beside the dispatcher's secrets
+// (docs/specs/launch-managed.md). Four checks, in order:
+// 1. the served build carries the merge sha (the page's build-sha meta and /version.json);
+// 2. every acceptance check line on a served config path holds on the served file;
+// 3. for seed-1, every file under seed-1/config and seed-1/content at the merge commit is served at
+//    /config/... and /content/... byte for byte (the build copies them unchanged), compared by git
+//    blob id, so what players get is exactly the data the gate's bot ran on;
+// 4. the gate check from GitHub Actions concluded success at the merge sha: gate.yml runs on the
+//    push to main, bot included, on the merged tree.
+// A failed check is a verdict and the pipeline rolls the merge back. A page that never answers, a
+// merge commit git cannot read, or a gate still running when the wait ends is no verdict: runSmoke
+// throws and the pipeline decides.
+import { createHash } from 'node:crypto';
 import { evaluateCheck, type ConfigCheck } from './acceptance.js';
-import { childEnv } from './adapters/claude-cli.js';
 import type { CardFolder } from './adapters/types.js';
-import { requestSignal } from './github.js';
+import { requestSignal, type GateStatus } from './github.js';
 import { retry } from './time.js';
+import { fetchMain, git } from './worktree.js';
 
-const execFileAsync = promisify(execFile);
+// How long the smoke test waits for the gate at the merge sha. The push run starts at the merge, as
+// the deploy does, and has run for as long as the deploy took when the wait begins.
+export const SMOKE_GATE_TIMEOUT_MS = 12 * 60_000;
+// The seed folders the build copies into dist/ byte for byte (seed-1/scripts/postbuild.mjs).
+export const SERVED_FOLDERS: readonly string[] = ['seed-1/config', 'seed-1/content'];
 
-export interface BotExecOptions {
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  timeout: number;
-  maxBuffer: number;
+// A file at the merge commit and the route it is served at.
+export interface MergedFile {
+  path: string;
+  route: string;
+  mode: string;
+  blob: string;
 }
-
-// Runs a command and resolves with its stdout, or rejects when it exits non-zero.
-export type BotExec = (file: string, args: string[], options: BotExecOptions) => Promise<{ stdout: string }>;
-
-const defaultExec: BotExec = async (file, args, options) => {
-  const { stdout } = await execFileAsync(file, args, options);
-  return { stdout };
-};
-
-export const BOT_RUNNER = path.join('platform', 'gate', 'headless-bot', 'run.mjs');
-export const BOT_SEED = '20260914';
-export const BOT_HOURS = '10';
-export const BOT_CONFIG_FILES = ['spawn-table.json', 'unlocks.json'];
-const BOT_PASS_LINE = /^PASS: headless-bot simulatedSeconds=(\d+) unlocks=(\d+)/m;
 
 export interface SmokeInput {
   baseUrl: string;
   sha: string;
   folder: CardFolder;
   checks: readonly ConfigCheck[];
-  // A checkout of the merge commit; the bot runs there. Unused for platform.
-  botRoot: string;
-  botSeconds: number;
+  // The files under SERVED_FOLDERS at the merge commit (seed-1 only).
+  mergedFiles: () => Promise<MergedFile[]>;
+  // The gate at the merge sha, waited on; pending or missing means it did not finish.
+  gate: () => Promise<GateStatus>;
   fetchFn?: typeof fetch;
-  exec?: BotExec;
   // Per request; a page with no answer by then throws.
   timeoutMs?: number;
   // The first wait before a page request is tried again.
@@ -65,9 +60,42 @@ export function servedPath(folder: CardFolder, file: string): string | null {
   return null;
 }
 
+// The id git gives a blob with these bytes: sha1 (or sha256, for a repository in that object format)
+// over "blob <length>\0" and the bytes.
+export function gitBlobId(bytes: Uint8Array, length: 40 | 64 = 40): string {
+  const hash = createHash(length === 64 ? 'sha256' : 'sha1');
+  hash.update(`blob ${bytes.byteLength}\0`);
+  hash.update(bytes);
+  return hash.digest('hex');
+}
+
+// `ls-tree -r -z` output: "<mode> <type> <object>\t<path>", each ended by NUL.
+export function parseLsTree(output: string): Array<{ mode: string; type: string; object: string; path: string }> {
+  return output
+    .split('\0')
+    .filter((entry) => entry.length > 0)
+    .map((entry) => {
+      const tab = entry.indexOf('\t');
+      const [mode = '', type = '', object = ''] = entry.slice(0, tab).split(' ');
+      return { mode, type, object, path: entry.slice(tab + 1) };
+    });
+}
+
+// Fetches main so the merge commit is local, then lists the served files it holds.
+export async function mergedServedFiles(repoRoot: string, mergeSha: string, authEnv: NodeJS.ProcessEnv): Promise<MergedFile[]> {
+  await fetchMain(repoRoot, authEnv);
+  const listed = parseLsTree(await git(['ls-tree', '-r', '-z', `${mergeSha}^{commit}`, '--', ...SERVED_FOLDERS], repoRoot));
+  return listed.map((entry) => ({ path: entry.path, route: servedPath('seed-1', entry.path) ?? '', mode: entry.mode, blob: entry.object }));
+}
+
 async function getText(fetchFn: typeof fetch, url: string): Promise<{ status: number; body: string }> {
   const response = await fetchFn(url, { headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'backseat-dispatcher' } });
   return { status: response.status, body: await response.text() };
+}
+
+async function getBytes(fetchFn: typeof fetch, url: string): Promise<{ status: number; bytes: Uint8Array }> {
+  const response = await fetchFn(url, { headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'backseat-dispatcher' } });
+  return { status: response.status, bytes: new Uint8Array(await response.arrayBuffer()) };
 }
 
 function parseJson(body: string): { ok: true; doc: unknown } | { ok: false } {
@@ -104,32 +132,16 @@ async function checkConfig(fetchFn: typeof fetch, baseUrl: string, folder: CardF
   return null;
 }
 
-type BotRun = { ok: true; summary: string } | { ok: false; reason: string };
-
-// The bot runs at maximum speed until ten simulated hours or the real-second budget elapse;
-// the summary reports what the runner printed, not the budget.
-async function runBot(fetchFn: typeof fetch, exec: BotExec, baseUrl: string, botRoot: string, seconds: number): Promise<BotRun> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-smoke-'));
-  try {
-    for (const file of BOT_CONFIG_FILES) {
-      const served = await getText(fetchFn, `${baseUrl}/config/${file}`);
-      if (served.status !== 200) return { ok: false, reason: `GET /config/${file} returned ${served.status}` };
-      await writeFile(path.join(dir, file), served.body, 'utf8');
-    }
-    const args = [BOT_RUNNER, '--config-dir', dir, '--hours', BOT_HOURS, '--seed', BOT_SEED, '--real-seconds', String(seconds), '--repo-root', botRoot];
-    let stdout: string;
-    try {
-      ({ stdout } = await exec('node', args, { cwd: botRoot, env: childEnv(process.env), timeout: (seconds + 120) * 1000, maxBuffer: 16 * 1024 * 1024 }));
-    } catch (error) {
-      const detail = error instanceof Error ? (error.message.split('\n')[0] ?? error.message) : String(error);
-      return { ok: false, reason: `headless bot failed on the served config: ${detail}` };
-    }
-    const pass = BOT_PASS_LINE.exec(stdout);
-    if (!pass) return { ok: false, reason: 'headless bot exited 0 without a PASS line' };
-    return { ok: true, summary: `bot: ${pass[1]} simulated seconds, ${pass[2]} unlocks, budget ${seconds} s` };
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+async function checkServedBytes(fetchFn: typeof fetch, baseUrl: string, files: readonly MergedFile[], sha: string): Promise<string | null> {
+  if (files.length === 0) return `the merge commit ${sha.slice(0, 8)} has no files under ${SERVED_FOLDERS.join(' or ')}`;
+  for (const file of files) {
+    if (file.mode !== '100644' && file.mode !== '100755') return `${file.path} at the merge commit is not a regular file (mode ${file.mode})`;
+    const served = await getBytes(fetchFn, `${baseUrl}${file.route}`);
+    if (served.status !== 200) return `GET ${file.route} returned ${served.status}`;
+    const id = gitBlobId(served.bytes, file.blob.length === 64 ? 64 : 40);
+    if (id !== file.blob) return `served ${file.route} differs from ${file.path} at the merge commit ${sha.slice(0, 8)}`;
   }
+  return null;
 }
 
 export const SMOKE_TRIES = 3;
@@ -171,10 +183,15 @@ export async function runSmoke(input: SmokeInput): Promise<SmokeResult> {
   if (build) return { ok: false, summary: `fail: ${build}` };
   const config = await checkConfig(fetchFn, input.baseUrl, input.folder, input.checks);
   if (config) return { ok: false, summary: `fail: ${config}` };
+  let served = '';
   if (input.folder === 'seed-1') {
-    const bot = await runBot(fetchFn, input.exec ?? defaultExec, input.baseUrl, input.botRoot, input.botSeconds);
-    if (!bot.ok) return { ok: false, summary: `fail: ${bot.reason}` };
-    return { ok: true, summary: `pass: build ${input.sha.slice(0, 8)} served; ${input.checks.length} config check(s) hold; ${bot.summary}` };
+    const files = await input.mergedFiles();
+    const bytes = await checkServedBytes(fetchFn, input.baseUrl, files, input.sha);
+    if (bytes) return { ok: false, summary: `fail: ${bytes}` };
+    served = `; ${input.checks.length} config check(s) hold; ${files.length} served file(s) match the merge commit`;
   }
-  return { ok: true, summary: `pass: build ${input.sha.slice(0, 8)} served` };
+  const gate = await input.gate();
+  if (gate.state === 'fail') return { ok: false, summary: `fail: the gate at the merge sha concluded ${gate.conclusion}` };
+  if (gate.state !== 'pass') throw new Error(`the gate at the merge sha ${input.sha.slice(0, 8)} was still ${gate.state} when the smoke wait ended`);
+  return { ok: true, summary: `pass: build ${input.sha.slice(0, 8)} served${served}; gate green at the merge sha` };
 }

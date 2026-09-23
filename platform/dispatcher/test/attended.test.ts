@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 import { rolePromptFile } from '../src/session.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AttendedAdapter, CHILD_ENV_SWITCHES, DISALLOWED_TOOLS, allowedToolRules, baseToolNames, childEnv, claudeArgs, refusedTools } from '../src/adapters/attended.js';
+import { AttendedAdapter, CHILD_ENV_SWITCHES, DISALLOWED_TOOLS, HOME_DENY, allowedToolRules, attendedSettings, baseToolNames, childEnv, claudeArgs, refusedTools } from '../src/adapters/attended.js';
 import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
 
 const fixture = readFileSync(new URL('./fixtures/sample-stream.jsonl', import.meta.url), 'utf8');
@@ -339,3 +339,96 @@ describe('the session process group', () => {
     }
   });
 });
+
+describe('the attended sandbox', () => {
+  const paths = { worktree: '/work/card-4c2f5a1e', repoRoot: '/Users/board/peanutgallery', home: '/Users/board', tmpdir: '/var/folders/tmp', uid: 501 };
+
+  it('runs Bash sandboxed with no host, no way out and no socket but tsx IPC, reading only the worktree, the git data, the pnpm store, the corepack cache and the temp folder', () => {
+    const settings = attendedSettings(paths) as { sandbox: Record<string, unknown>; permissions: { deny: string[] } };
+    expect(settings.sandbox).toEqual({
+      enabled: true,
+      failIfUnavailable: true,
+      allowUnsandboxedCommands: false,
+      autoAllowBashIfSandboxed: false,
+      network: { allowedDomains: [], allowUnixSockets: ['/tmp/claude-501/tsx-501', '/private/tmp/claude-501/tsx-501', '/var/folders/tmp/tsx-501'] },
+      filesystem: {
+        denyRead: ['/Users/board', '/Users/board/peanutgallery'],
+        allowRead: ['/work/card-4c2f5a1e', '/Users/board/peanutgallery/.git', '/Users/board/Library/pnpm/store', '/Users/board/.cache/node/corepack', '/Users/board/Library/Caches/node/corepack', '/var/folders/tmp'],
+        allowWrite: ['/work/card-4c2f5a1e', '/var/folders/tmp'],
+      },
+    });
+  });
+
+  it('runs git in the session with no global or system configuration', async () => {
+    const child = new FakeChild();
+    const capture: { env?: NodeJS.ProcessEnv } = {};
+    const adapter = new AttendedAdapter({
+      claudeBin: 'claude',
+      spawnFn: (_bin, _args, options) => {
+        capture.env = options.env;
+        setImmediate(() => child.finish(0));
+        return child as unknown as ChildProcess;
+      },
+    });
+    await adapter.run(spec, () => undefined, new AbortController().signal);
+    expect(capture.env).toMatchObject({ GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' });
+  });
+
+  it('denies the Read, Glob and Grep tools the credential paths, the .env files and the dispatcher, and Edit the git folder', () => {
+    const { permissions } = attendedSettings(paths) as { permissions: { deny: string[] } };
+    for (const rel of ['.ssh/**', '.config/**', 'Library/Keychains/**', '.claude/**', '.claude.json', '.netrc']) expect(HOME_DENY).toContain(rel);
+    expect(permissions.deny).toEqual([...HOME_DENY.map((rel) => `Read(~/${rel})`), 'Read(//Users/board/peanutgallery/.env*)', 'Read(//Users/board/peanutgallery/platform/dispatcher/**)', 'Edit(//Users/board/peanutgallery/.git/**)']);
+  });
+
+  it('scopes Edit and Write to the worktree, and passes the settings on the command line', () => {
+    expect(allowedToolRules(['Read', 'Edit', 'Write'], 'seed-1', '/work/card-4c2f5a1e')).toEqual(['Read', 'Edit(//work/card-4c2f5a1e/**)', 'Write(//work/card-4c2f5a1e/**)']);
+    const args = claudeArgs(spec, null, '{"sandbox":{}}', '/work/card-4c2f5a1e');
+    expect(args[args.indexOf('--settings') + 1]).toBe('{"sandbox":{}}');
+    expect(args.indexOf('--settings')).toBeGreaterThan(args.indexOf('--setting-sources'));
+    expect(args).toContain('Edit(//work/card-4c2f5a1e/**)');
+  });
+
+  it('installs the dependencies before it starts a session that can run Bash, and runs every session with the sandbox settings', async () => {
+    const worktree = mkdtempSync(path.join(os.tmpdir(), 'backseat-attended-'));
+    writeFileSync(path.join(worktree, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n');
+    const order: string[] = [];
+    const child = new FakeChild();
+    try {
+      const adapter = new AttendedAdapter({
+        claudeBin: 'claude',
+        repoRoot: '/Users/board/peanutgallery',
+        home: '/Users/board',
+        tmpdir: '/var/folders/tmp',
+        install: async (dir) => {
+          order.push(`install ${dir}`);
+        },
+        spawnFn: (_bin, args) => {
+          order.push('spawn');
+          const settings = JSON.parse(args[args.indexOf('--settings') + 1]!) as { sandbox: { filesystem: { allowWrite: string[] } } };
+          order.push(`writes ${settings.sandbox.filesystem.allowWrite.join(',')}`);
+          setImmediate(() => child.finish(0));
+          return child as unknown as ChildProcess;
+        },
+      });
+      await adapter.run({ ...spec, worktree }, () => undefined, new AbortController().signal);
+      expect(order).toEqual([`install ${worktree}`, 'spawn', `writes ${worktree},/var/folders/tmp`]);
+      order.length = 0;
+      const second = new FakeChild();
+      const readOnly = new AttendedAdapter({
+        claudeBin: 'claude',
+        install: async () => {
+          order.push('install');
+        },
+        spawnFn: () => {
+          setImmediate(() => second.finish(0));
+          return second as unknown as ChildProcess;
+        },
+      });
+      await readOnly.run({ ...spec, worktree, roleTools: ['Read', 'Glob', 'Grep'] }, () => undefined, new AbortController().signal);
+      expect(order).toEqual([]);
+    } finally {
+      rmSync(worktree, { recursive: true, force: true });
+    }
+  });
+});
+

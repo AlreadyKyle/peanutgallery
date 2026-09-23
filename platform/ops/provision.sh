@@ -40,10 +40,11 @@ NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
 UNITS="dispatcher.service dispatcher-alert.service"
 SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 
-# The keys loadConfig requires (requireEnv in platform/dispatcher/src/config.ts), plus the studio key
-# unattended mode requires and both alert URLs, which are optional on the Mac and required here.
-# platform/ops/test/ops.test.mjs keeps this list equal to config.ts.
-REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID_SEED NETLIFY_SITE_ID_PLATFORM MODEL_BUILDER PRICE_TABLE_JSON STUDIO_ANTHROPIC_API_KEY HEALTHCHECK_URL NTFY_TOPIC_URL"
+# The keys loadConfig requires (requireEnv in platform/dispatcher/src/config.ts, the managed agent ids
+# and the read-only token among them), plus the studio key unattended mode requires and both alert
+# URLs, which are optional on the Mac and required here. platform/ops/test/ops.test.mjs keeps this
+# list equal to config.ts.
+REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID_SEED NETLIFY_SITE_ID_PLATFORM MODEL_BUILDER PRICE_TABLE_JSON GITHUB_READ_TOKEN MANAGED_AGENT_ID MANAGED_AGENT_VERSION MANAGED_ENVIRONMENT_ID STUDIO_ANTHROPIC_API_KEY HEALTHCHECK_URL NTFY_TOPIC_URL"
 # Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key.
 FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY"
 # Set by dispatcher.service, so the env file never carries a second value.
@@ -121,6 +122,24 @@ check_env_lines() {
       problems=1
     fi
   done
+  value=$(env_value GITHUB_READ_TOKEN "$file")
+  if [ -n "$value" ] && [ "$value" = "$(env_value GITHUB_TOKEN "$file")" ]; then
+    echo "GITHUB_READ_TOKEN equals GITHUB_TOKEN; Managed Agents sessions need a token that cannot write"
+    problems=1
+  fi
+  for name in GITHUB_TOKEN GITHUB_READ_TOKEN; do
+    value=$(env_value "$name" "$file")
+    case "$value" in '' | github_pat_*) ;; *)
+      echo "$name is not a fine-grained personal access token (github_pat_...)"
+      problems=1
+      ;;
+    esac
+  done
+  value=$(env_value MANAGED_AGENT_VERSION "$file")
+  if [ -n "$value" ] && ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+    echo "MANAGED_AGENT_VERSION must be a positive integer"
+    problems=1
+  fi
   value=$(env_value GITHUB_REPO "$file")
   if [ -n "$value" ] && [ "$value" != "$REPO_SLUG" ]; then
     echo "GITHUB_REPO is not $REPO_SLUG, the repository this VPS clones"
@@ -145,7 +164,7 @@ check_host() {
   [ "$os" = "ubuntu 24.04" ] || die "this is $os; the dispatcher's units are written for Ubuntu 24.04"
   case "$(uname -m)" in
     x86_64 | aarch64) ;;
-    *) die "this is $(uname -m); the image and the claude CLI are built for x86_64 and arm64 (aarch64)" ;;
+    *) die "this is $(uname -m); the image is built for x86_64 and arm64 (aarch64)" ;;
   esac
   systemd_version=$(systemctl --version | awk 'NR == 1 { print $2 }')
   [ "${systemd_version%%.*}" -ge 254 ] || die "systemd $systemd_version has no RestartSteps (254 or later)"
@@ -592,6 +611,46 @@ create_work_clone() {
   ensure_dir "$WORKTREE_DIR" "$AGENT_UID" 0700
 }
 
+# read_token_verdict <GET status> <POST status> <POST body file>: the read-only token check, as the
+# dispatcher makes it (platform/dispatcher/src/adapters/read-token.ts). Prints nothing and returns 0
+# when the token reads the repository and GitHub refuses it a ref write for want of permission; else
+# prints why and returns 1.
+read_token_verdict() {
+  local read=$1 write=$2 body=$3
+  if [ "$read" != 200 ]; then
+    echo "GITHUB_READ_TOKEN cannot read $REPO_SLUG (GET returned $read)"
+    return 1
+  fi
+  if [ "$write" = 422 ]; then
+    echo "GITHUB_READ_TOKEN can write to $REPO_SLUG: a ref write was refused only on validation (422); create a token with Contents read and nothing else"
+    return 1
+  fi
+  if [ "$write" != 403 ] || ! grep -qiE 'resource not accessible by (personal access token|integration)' "$body"; then
+    echo "GITHUB_READ_TOKEN write check returned $write; only a 403 permission denial proves the token cannot write"
+    return 1
+  fi
+}
+
+# check_read_token: proves GITHUB_READ_TOKEN reads the repository and cannot write it, with a ref write
+# at the all-zero sha, which changes nothing whatever the answer. The token goes to curl in a header
+# file, never on a command line.
+check_read_token() {
+  local work token read_status write_status problem
+  token=$(env_value GITHUB_READ_TOKEN)
+  [ -n "$token" ] || die "GITHUB_READ_TOKEN is missing from $ENV_FILE"
+  work=$(mktemp -d)
+  printf 'Authorization: Bearer %s\nAccept: application/vnd.github+json\nX-GitHub-Api-Version: 2022-11-28\nUser-Agent: peanutgallery-provision\n' "$token" > "$work/headers"
+  read_status=$(curl -sS -g --max-time 20 -o /dev/null -w '%{http_code}' -H @"$work/headers" "https://api.github.com/repos/$REPO_SLUG") || read_status=000
+  write_status=$(curl -sS -g --max-time 20 -o "$work/body" -w '%{http_code}' -H @"$work/headers" -X POST \
+    -d '{"ref":"refs/heads/_read-token-probe","sha":"0000000000000000000000000000000000000000"}' "https://api.github.com/repos/$REPO_SLUG/git/refs") || write_status=000
+  if ! problem=$(read_token_verdict "$read_status" "$write_status" "$work/body"); then
+    rm -rf "$work"
+    die "$problem"
+  fi
+  rm -rf "$work"
+  say "GITHUB_READ_TOKEN: reads $REPO_SLUG and cannot write it"
+}
+
 check_env_file() {
   local problems
   if [ ! -f "$ENV_FILE" ]; then
@@ -673,6 +732,7 @@ main() {
   configure_upgrades
   clone_code
   check_env_file
+  check_read_token
   build_image
   install_dependencies
   lock_code_clone
