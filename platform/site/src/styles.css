@@ -59,11 +59,6 @@ main:not(.wide) > * {
   max-width: var(--measure);
 }
 
-/* Terms, Privacy, Refunds and Contact: short prose sections sit closer together than landing sections. */
-.text-page .section {
-  margin-bottom: var(--space-4);
-}
-
 /* Type ------------------------------------------------------------------ */
 
 h1,
@@ -76,26 +71,17 @@ h3 {
 }
 
 h1 {
-  font-size: var(--size-display);
+  font-size: var(--size-h1);
+  line-height: var(--leading-display);
 }
 
 h2 {
-  font-size: var(--size-large);
-  margin-bottom: var(--space-2);
+  font-size: var(--size-h2);
+  margin-bottom: var(--space-3);
 }
 
 h3 {
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-}
-
-/* Roadmap card titles, under a category h3. */
-h4 {
-  margin: 0;
-  text-wrap: balance;
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-  line-height: var(--leading-heading);
+  font-size: var(--size-lead);
 }
 
 p {
@@ -361,11 +347,6 @@ main > .band:first-child,
   border: 0;
 }
 
-/* Band 1 sits under the top bar it shares a ground with, with room for the headline to breathe. */
-main > .band:first-child {
-  padding-top: var(--space-4);
-}
-
 /* Top bar ---------------------------------------------------------------
    The peanut mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
@@ -525,7 +506,7 @@ a.target {
 }
 
 .hero h1 {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .lede {
@@ -790,7 +771,7 @@ button.link:hover:not(:disabled) {
 /* The Live stamp (the guide and a card's own page): ink-bordered, turned -3 degrees. Rows use the
    plain tag. */
 .tag-stamp {
-  padding: 0.125rem 0.5rem;
+  padding: 0.125rem var(--space-1);
   margin-block: -0.25rem;
   border: 2px solid var(--live-mark);
   border-radius: var(--radius);
@@ -799,8 +780,6 @@ button.link:hover:not(:disabled) {
 
 .card h3 {
   margin-bottom: var(--space-2);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-bold);
 }
 
 .card-summary {
@@ -977,10 +956,6 @@ button.link:hover:not(:disabled) {
   background: var(--primary-hover);
 }
 
-.choices-heading {
-  font-size: var(--size-large);
-}
-
 .choice-group {
   margin-bottom: var(--space-3);
 }
@@ -1122,7 +1097,7 @@ button.link:hover:not(:disabled) {
 .status-line {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-1);
   max-width: var(--measure);
 }
 
@@ -1466,7 +1441,7 @@ textarea {
   width: 100%;
   max-width: 100%;
   min-height: var(--target);
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-1) 0.75em;
   border: 1px solid var(--field);
   border-radius: var(--radius);
   background: var(--paper);
@@ -1697,8 +1672,10 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play Dust and the How it works link, side by side. */
+/* Play Dust and the How it works link, side by side, clear of the lede above and the status line
+   below. */
 .hero-actions {
+  margin-top: var(--space-4);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1706,7 +1683,7 @@ input[type='radio'] {
 }
 
 .hero .status-line {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .hero .live-updates {
