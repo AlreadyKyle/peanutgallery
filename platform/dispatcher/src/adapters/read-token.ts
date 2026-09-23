@@ -71,8 +71,9 @@ export async function checkReadToken(opts: ReadTokenOptions): Promise<ReadTokenV
     return { ok: false, fatal: false, reason: `GITHUB_READ_TOKEN write check could not reach GitHub: ${error instanceof Error ? error.message : String(error)}` };
   }
   const why = await message(write);
+  // A rate-limited answer, a 403 among them, says nothing about the token's permissions.
+  if (rateLimited(write)) return { ok: false, fatal: false, reason: `GITHUB_READ_TOKEN write check was rate limited (${write.status}); it proves nothing` };
   if (write.status === 403) {
-    if (rateLimited(write)) return { ok: false, fatal: false, reason: 'GITHUB_READ_TOKEN write check was rate limited; it proves nothing' };
     const accepted = write.headers.get('x-accepted-github-permissions') ?? '';
     if (PERMISSION_DENIED.test(why) || /contents=write/.test(accepted)) return { ok: true };
     return { ok: false, fatal: true, reason: `GITHUB_READ_TOKEN write check got a 403 that is not a permission denial (${why || 'no message'})` };

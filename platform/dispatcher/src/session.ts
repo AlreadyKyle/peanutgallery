@@ -2,7 +2,7 @@
 // record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
 // and wall-clock ceilings, and aborts when the board session lapses or the board pauses the studio.
 import { randomUUID } from 'node:crypto';
-import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, SessionSpec } from './adapters/types.js';
+import { SessionPaused, type AgentAdapter, type AgentEvent, type AgentMode, type EndEvent, type SessionSpec } from './adapters/types.js';
 import { refusedTools } from './adapters/attended.js';
 import type { Alerter } from './alert.js';
 import type { Billing, Card, Db, Role, StudioState } from './db.js';
@@ -24,12 +24,17 @@ export type SessionOutcome =
   | 'wall_clock'
   | 'refused'
   | 'stopped'
+  // The adapter stopped the session, or started none, for a reason that is not the card's.
+  | 'adapter_paused'
   | 'error';
 
 export interface SessionRun {
   outcome: SessionOutcome;
   detail: string;
   turns: number;
+  // With outcome adapter_paused: the failing check the card pauses with (adapters/types.ts
+  // SessionPaused).
+  failingCheck?: string;
 }
 
 export interface SessionDeps {
@@ -292,6 +297,10 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   try {
     result = await deps.adapter.run(spec, onEvent, controller.signal);
   } catch (error) {
+    if (error instanceof SessionPaused) {
+      if (state.aborted) return { outcome: state.aborted.outcome, detail: state.aborted.detail, turns };
+      return { outcome: 'adapter_paused', detail: error.message, turns, failingCheck: error.failingCheck };
+    }
     return { outcome: 'error', detail: errorMessage(error), turns };
   } finally {
     clearInterval(watch);

@@ -6,8 +6,11 @@
 // and deploy as before.
 //
 // One session, in order:
-// 1. Sessions a previous process left for this card are settled and archived first, the read-only
-//    token is proved unable to write, and the base commit is checked for repository skills.
+// 1. Sessions a previous process left for this card are settled and archived first (a patch one of
+//    them submitted is applied instead of paying for a new session), the read-only token is proved
+//    unable to write, and the base commit is checked for repository skills. A failure here that is
+//    not the card's (an API or GitHub that did not answer, a session that could not be settled)
+//    throws SessionPaused: the card pauses with no session started, rather than being rejected.
 // 2. The session is created idle, spending nothing, with the role's model and a system prompt built
 //    from the role prompt and the CLAUDE.md files at the base commit, a dollar budget, and metadata
 //    naming the card. Its id goes on the card's start event before any spend.
@@ -23,7 +26,9 @@
 //    an error result and one more try.
 // 6. Once idle, the session's usage is read, the runtime and settle rows are written so its rows add
 //    up to the platform's list cost, the output files are deleted and the session archived. A session
-//    whose rows could not all be written is left unarchived for recovery to settle.
+//    whose rows could not all be written is left unarchived for recovery to settle. A stream that
+//    could not be held or a ledger that refused rows pauses the card (SessionPaused) once the session
+//    is settled.
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
@@ -32,7 +37,7 @@ import type { Db } from '../db.js';
 import { StartupError } from '../exit-code.js';
 import { haltDispatcher } from '../halt.js';
 import { errorMessage, type Logger } from '../log.js';
-import { PATCH_FILE, PATCH_MAX_BYTES, patchSha256, patchTextProblem, storedPatch, validateAndApply, type PatchStore } from '../patch.js';
+import { applyStoredPatch, PATCH_FILE, PATCH_MAX_BYTES, patchSha256, patchTextProblem, storedPatch, validateAndApply, type PatchStore } from '../patch.js';
 import { fallbackPrice, modelPrice, priceWith, round4, type PriceTable } from '../pricing.js';
 import { sleep } from '../time.js';
 import { git, headSha, shortId } from '../worktree.js';
@@ -41,7 +46,7 @@ import { agentProblems, enabledToolNames, environmentProblems, SUBMIT_PATCH, typ
 import type { EventStream, ManagedClient, ManagedSession, OutputFile, SessionEvent, StreamEvent } from './managed-client.js';
 import { ManagedMeter, listCostUsd, turnUsage, type ManagedBilling, type SettleReport } from './managed-meter.js';
 import { checkReadToken } from './read-token.js';
-import type { AgentAdapter, AgentEvent, ClosedSessions, EventSink, ManagedControl, SessionResult, SessionSpec } from './types.js';
+import { SessionPaused, type AgentAdapter, type AgentEvent, type ClosedSessions, type EventSink, type ManagedControl, type SessionResult, type SessionSpec } from './types.js';
 
 export const API_KEY_SOURCE = 'ANTHROPIC_API_KEY';
 export const REPO_MOUNT = '/workspace/peanutgallery';
@@ -550,7 +555,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   }
 
   // Before every card session. A token found able to write halts the dispatcher: no card runs again
-  // until someone has replaced it and restarted.
+  // until someone has replaced it and restarted. Either way the card pauses with no session.
   private async assertReadToken(): Promise<void> {
     const verdict = await checkReadToken({ token: this.opts.readToken, repo: this.opts.githubRepo, fetchFn: this.opts.fetchFn });
     if (verdict.ok) return;
@@ -558,7 +563,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
       haltDispatcher(`read_token: ${verdict.reason}`);
       await this.opts.alert.notify(`The dispatcher halted: ${verdict.reason}. No card runs until the token is replaced and the dispatcher restarted.`);
     }
-    throw new Error(verdict.reason);
+    throw new SessionPaused('read_token', `no session was started: ${verdict.reason}`);
   }
 
   // --- sessions ----------------------------------------------------------------------------------
@@ -716,26 +721,8 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
 
   // --- a card ------------------------------------------------------------------------------------
 
-  async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
-    const allowed = spec.allowedPaths ?? [];
-    if (allowed.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
-    const baseSha = await headSha(spec.worktree);
-    const leftovers = await this.closeOrphans((session) => session.metadata?.card_id === spec.cardId);
-    const unsettled = [...leftovers.values()].flatMap((closed) => closed.unsettled);
-    if (unsettled.length > 0) throw new Error(`card ${shortId(spec.cardId)} has an earlier session that could not be settled: ${unsettled.join('; ')}`);
-    await this.assertReadToken();
-    await this.assertNoRepoSkills(spec.worktree, baseSha);
-    const system = await this.systemPrompt(spec, baseSha);
-    const cents = budgetCents(spec.maxBudgetUsd, this.marginUsd(spec.model));
-    if (cents < 1) {
-      this.log.warn('managed', `card ${spec.cardId} has less than a cent of budget after the margin; no session`, { max_budget_usd: spec.maxBudgetUsd });
-      return { exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'error_max_budget_usd', totalCostUsd: 0, numTurns: 0, isError: false };
-    }
-    if (signal.aborted) {
-      return { exitCode: null, killed: true, killReason: String(signal.reason ?? 'aborted'), turns: 0, endSubtype: null, totalCostUsd: null, numTurns: 0, isError: false };
-    }
-
-    const session = await this.client.sessions.create({
+  private createCardSession(spec: SessionSpec, baseSha: string, system: string, cents: number): Promise<ManagedSession> {
+    return this.client.sessions.create({
       agent: {
         type: 'agent_with_overrides',
         id: this.opts.agentId,
@@ -757,6 +744,62 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
       budget: { type: 'limit', max_list_cost: { amount: String(cents), currency: 'USD' } },
       metadata: { purpose: 'card', card_id: spec.cardId, role_id: spec.roleId ?? '', base_sha: baseSha, run: randomUUID() },
     });
+  }
+
+  async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
+    const allowed = spec.allowedPaths ?? [];
+    if (allowed.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
+    const baseSha = await headSha(spec.worktree);
+    let leftovers: Map<string, ClosedSessions>;
+    try {
+      leftovers = await this.closeOrphans((session) => session.metadata?.card_id === spec.cardId);
+    } catch (error) {
+      throw new SessionPaused('session_unsettled', `the Managed Agents sessions could not be listed, so no new session was started: ${errorMessage(error)}`);
+    }
+    const unsettled = [...leftovers.values()].flatMap((closed) => closed.unsettled);
+    if (unsettled.length > 0) throw new SessionPaused('session_unsettled', `card ${shortId(spec.cardId)} has an earlier session that could not be settled: ${unsettled.join('; ')}`);
+    // An earlier session of this card had submitted a patch no one answered; it is used, not paid for
+    // again.
+    if (leftovers.get(spec.cardId)?.patchStored && this.opts.patches) {
+      const reused = await applyStoredPatch(this.opts.patches, spec.cardId, spec.worktree, allowed);
+      if (reused.kind === 'applied') {
+        await onEvent({ type: 'message', text: `the patch an earlier session submitted (sha256 ${reused.sha256}) was applied; no new session: ${reused.files.join(', ')}` });
+        return { exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'success', totalCostUsd: 0, numTurns: 0, isError: false };
+      }
+      if (reused.kind === 'conflict') {
+        throw new SessionPaused('patch_conflict', `the patch an earlier session submitted no longer applies (${reused.detail}); it was discarded, so resuming the card runs a new session`);
+      }
+    }
+    await this.assertReadToken();
+    try {
+      await this.assertNoRepoSkills(spec.worktree, baseSha);
+    } catch (error) {
+      throw new SessionPaused('repo_skills', errorMessage(error));
+    }
+    let system: string;
+    try {
+      system = await this.systemPrompt(spec, baseSha);
+    } catch (error) {
+      throw new SessionPaused('system_prompt', `the session's system prompt could not be built: ${errorMessage(error)}`);
+    }
+    const cents = budgetCents(spec.maxBudgetUsd, this.marginUsd(spec.model));
+    if (cents < 1) {
+      this.log.warn('managed', `card ${spec.cardId} has less than a cent of budget after the margin; no session`, { max_budget_usd: spec.maxBudgetUsd });
+      return { exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'error_max_budget_usd', totalCostUsd: 0, numTurns: 0, isError: false };
+    }
+    if (signal.aborted) {
+      return { exitCode: null, killed: true, killReason: String(signal.reason ?? 'aborted'), turns: 0, endSubtype: null, totalCostUsd: null, numTurns: 0, isError: false };
+    }
+
+    let session: ManagedSession;
+    try {
+      session = await this.createCardSession(spec, baseSha, system, cents);
+    } catch (error) {
+      // As an event first, so a refusal for want of credit is seen for what it is.
+      const message = `the Managed Agents session could not be created: ${errorMessage(error)}`;
+      await onEvent({ type: 'error', message });
+      throw new SessionPaused('managed_api', message);
+    }
     const sessionId = session.id;
     const meter = this.meter(sessionId, spec.model, this.billing('card', { card_id: spec.cardId, role_id: spec.roleId ?? '' }));
     let drive: DriveResult;
@@ -813,6 +856,9 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     }
     const end = this.endEvent(drive, meter, spec.model, listUsd);
     await onEvent(end);
+    // The dispatcher's own side failed, not the card: the card pauses with what was spent recorded.
+    if (drive.stop === 'stream_lost') throw new SessionPaused('stream_lost', `session ${sessionId}: ${drive.errors.join('; ')}`);
+    if (drive.stop === 'ledger_refused') throw new SessionPaused('ledger', `session ${sessionId} was interrupted: ${drive.errors.join('; ')}`);
     return this.result(drive);
   }
 

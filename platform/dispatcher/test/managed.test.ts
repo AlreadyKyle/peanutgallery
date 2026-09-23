@@ -11,7 +11,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { budgetCents, exportCommand, MARGIN_CACHE_READ_TOKENS, MARGIN_OUTPUT_TOKENS, ManagedAdapter, toolchainProblem, type ManagedTimings } from '../src/adapters/managed.js';
 import { FILES, AGENT_ID, ENVIRONMENT_ID, FakeManagedClient, agentFromFile, environmentFromFile, type FakeSession } from './helpers/fake-managed.js';
-import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
+import { SessionPaused, type AgentEvent, type SessionSpec } from '../src/adapters/types.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
@@ -439,7 +439,9 @@ describe('a card session', () => {
     raw(['-c', 'user.name=t', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'skills']);
     try {
       const h = harness();
-      await expect(run(h)).rejects.toThrow(/\.claude\/skills/);
+      const error = await run(h).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(SessionPaused);
+      expect(error).toMatchObject({ failingCheck: 'repo_skills', message: expect.stringMatching(/\.claude\/skills/) });
       expect(h.client.sessions_).toEqual([]);
     } finally {
       raw(['checkout', '-q', 'main']);
@@ -449,17 +451,50 @@ describe('a card session', () => {
 
   it('halts the dispatcher and creates no session when the read token turns out able to write', async () => {
     const h = harness({ fetchFn: github({ status: 422, json: { message: 'Object does not exist' } }).fetchFn });
-    await expect(run(h)).rejects.toThrow(/GITHUB_READ_TOKEN can write to owner\/repo/);
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'read_token', message: expect.stringMatching(/GITHUB_READ_TOKEN can write to owner\/repo/) });
     expect(haltReason()).toMatch(/^read_token: /);
     expect(h.client.sessions_).toEqual([]);
     expect(h.alert.messages[0]).toMatch(/The dispatcher halted/);
+  });
+
+  it('pauses the card, with no session and no halt, when GitHub rate-limits the read-token check', async () => {
+    const h = harness({ fetchFn: github({ status: 429, json: { message: 'API rate limit exceeded' } }).fetchFn });
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'read_token' });
+    expect(haltReason()).toBeNull();
+    expect(h.client.sessions_).toEqual([]);
+  });
+
+  it('pauses the card, and reports the API error as an event, when the session cannot be created', async () => {
+    const h = harness();
+    h.client.failCreate = new Error('529 overloaded_error');
+    const events: AgentEvent[] = [];
+    const error = await h.adapter.run(spec(), (event) => void events.push(event), new AbortController().signal).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'managed_api' });
+    expect(events).toEqual([{ type: 'error', message: 'the Managed Agents session could not be created: 529 overloaded_error' }]);
+    expect(h.db.ledger).toEqual([]);
+  });
+
+  it('pauses the card as stream_lost, after settling and archiving the session, when its event stream cannot be held', async () => {
+    const h = harness();
+    h.client.failStream = new Error('socket hang up');
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'stream_lost', message: expect.stringMatching(/the event stream dropped 4 times/) });
+    expect(h.client.streamsOpened).toBe(4);
+    expect(h.client.sent).toEqual([]);
+    expect(h.client.last.archived).toBe(true);
   });
 });
 
 describe('orphan sessions', () => {
   // A card session a crashed dispatcher left running: two requests metered by nobody, and a patch the
   // agent submitted that no one answered.
-  async function orphan(h: Harness, patch: Buffer): Promise<FakeSession> {
+  async function orphan(h: Harness, patch: Buffer, options: { submitted?: boolean } = {}): Promise<FakeSession> {
     await h.client.sessions.create({
       agent: { type: 'agent_with_overrides', id: AGENT_ID, version: 3, model: { id: 'builder-class' } },
       environment_id: ENVIRONMENT_ID,
@@ -468,7 +503,8 @@ describe('orphan sessions', () => {
     const session = h.client.last;
     h.client.addOutput(session.id, 'card.patch', patch);
     session.cost = { cents: FIXTURE_CENTS, activeSeconds: 900 };
-    session.emit(...fixtureEvents(patch).slice(0, -1), { type: 'session.status_running' });
+    const history = fixtureEvents(patch).slice(0, -1);
+    session.emit(...(options.submitted === false ? history.filter((event) => event.type !== 'agent.custom_tool_use') : history), { type: 'session.status_running' });
     h.client.react = (s, event) => {
       if (event.type === 'user.interrupt') s.emit({ type: 'session.status_idle', stop_reason: { type: 'end_turn' } });
     };
@@ -496,15 +532,17 @@ describe('orphan sessions', () => {
     const patch = await costPatch();
     const session = await orphan(h, patch);
     h.client.react = () => undefined;
-    await expect(run(h)).rejects.toThrow(/has an earlier session that could not be settled/);
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'session_unsettled', message: expect.stringMatching(/has an earlier session that could not be settled/) });
     expect(h.client.sessions_).toEqual([session]);
     expect(session.archived).toBe(false);
   });
 
-  it('settles an orphan before the next session for the same card runs', async () => {
+  it('settles an orphan that submitted nothing before the next session for the same card runs', async () => {
     const h = harness();
     const patch = await costPatch();
-    const session = await orphan(h, patch);
+    const session = await orphan(h, patch, { submitted: false });
     const react = h.client.react;
     runsFixture(h.client, patch);
     const fixture = h.client.react;
@@ -516,6 +554,19 @@ describe('orphan sessions', () => {
     expect(session.archived).toBe(true);
     expect(h.client.sessions_).toHaveLength(2);
     expect(result).toMatchObject({ endSubtype: 'success' });
+  });
+
+  it("applies the patch an orphan submitted instead of paying for a second session", async () => {
+    const h = harness();
+    const patch = await costPatch();
+    const session = await orphan(h, patch);
+    const { result, events } = await run(h);
+    expect(session.archived).toBe(true);
+    expect(h.client.sessions_).toEqual([session]);
+    expect(result).toMatchObject({ exitCode: 0, endSubtype: 'success', turns: 0, isError: false });
+    expect(events).toEqual([{ type: 'message', text: expect.stringMatching(/^the patch an earlier session submitted \(sha256 [0-9a-f]{64}\) was applied; no new session: seed-1\/config\/spawn-table\.json$/) }]);
+    expect(await readFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), 'utf8')).toContain('"baseCost": 11');
+    expect(ledgerTotal(h.db)).toBe(0.07);
   });
 });
 
@@ -702,5 +753,15 @@ describe('runAgentSession on the managed adapter', () => {
     const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h, { sessionMaxTurns: 2 }));
     expect(run.outcome).toBe('turn_cap');
     expect(sentTypes(h.client)).toContain('user.interrupt');
+  });
+
+  it('ends as adapter_paused, naming the failing check, when the adapter starts no session for a reason that is not the card', async () => {
+    const h = harness({ fetchFn: github({ status: 429, json: { message: 'API rate limit exceeded' } }).fetchFn });
+    h.db.studio.agent_mode = 'unattended';
+    const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
+    expect(run).toMatchObject({ outcome: 'adapter_paused', failingCheck: 'read_token', turns: 0 });
+    expect(h.client.sessions_).toEqual([]);
+    expect(h.db.ledger).toEqual([]);
+    expect(h.alert.messages).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SessionPaused } from '../src/adapters/types.js';
 import type { DispatcherConfig } from '../src/config.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
@@ -925,6 +926,41 @@ describe('runCardPipeline', () => {
     });
     await runCardPipeline(c, deps(db, adapter, remote().fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'acceptance' });
+  });
+
+  for (const [name, target] of [
+    ['a file outside the worktree', 'outside'],
+    ['/dev/zero', '/dev/zero'],
+  ] as const) {
+    it(`fails the acceptance check, never reading through it, when the session leaves a symlink to ${name} at the checked file`, async () => {
+      const c = card();
+      db.cards = [{ ...c, stage: 'building' }];
+      const outside = path.join(dir, 'outside-spawn-table.json');
+      await writeFile(outside, `${JSON.stringify({ rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) })}\n`, 'utf8');
+      const adapter = new FakeAdapter(async (spec, emit) => {
+        await emit(startEvent());
+        const file = path.join(spec.worktree, 'seed-1', 'config', 'spawn-table.json');
+        await rm(file);
+        await symlink(target === 'outside' ? outside : target, file);
+        await emit(usageEvent(1, 10));
+      });
+      await runCardPipeline(c, deps(db, adapter, remote().fetchFn));
+      expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'acceptance' });
+    });
+  }
+
+  it('pauses, not rejects, a card whose adapter started no session for a reason that is not the card', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const adapter = new FakeAdapter(async () => {
+      throw new SessionPaused('managed_api', 'the Managed Agents session could not be created: 529 overloaded_error');
+    });
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'managed_api' });
+    expect(calls).toEqual([]);
+    expect(alert.messages[0]).toMatch(/paused \(managed_api\).*529 overloaded_error/);
   });
 
   it('rejects when the session changes nothing under the lane', async () => {

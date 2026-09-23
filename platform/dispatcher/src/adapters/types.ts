@@ -91,6 +91,20 @@ export interface SessionResult {
 
 export type EventSink = (event: AgentEvent) => void | Promise<void>;
 
+// Thrown by an adapter that stopped a session, or never started one, for a reason that is not the
+// card's: an earlier session not yet settled, a read-only token that could not be checked, a Managed
+// Agents API or an event stream that did not answer, a ledger that refused its rows. The card pauses
+// with failingCheck and keeps its money, and the board resumes it; whatever the session spent is
+// already on the ledger. Any other throw ends the card as a session error.
+export class SessionPaused extends Error {
+  readonly failingCheck: string;
+  constructor(failingCheck: string, message: string) {
+    super(message);
+    this.name = 'SessionPaused';
+    this.failingCheck = failingCheck;
+  }
+}
+
 // A tap on the raw stream lines of one run, before parsing. The probe uses it to scan the whole
 // stream for forbidden names and to save the recording; card sessions pass nothing.
 export type RawLineSink = (line: string) => void;

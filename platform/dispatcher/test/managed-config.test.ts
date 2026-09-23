@@ -98,6 +98,8 @@ describe('checkReadToken', () => {
 
   it('proves nothing, and says so without refusing for good, on a rate limit, a 5xx or no answer', async () => {
     expect(await check(answers({ status: 200, json: {} }, { status: 403, json: { message: 'API rate limit exceeded' } }, { 'x-ratelimit-remaining': '0' }).fetchFn)).toMatchObject({ ok: false, fatal: false });
+    expect(await check(answers({ status: 200, json: {} }, { status: 429, json: { message: 'API rate limit exceeded' } }).fetchFn)).toMatchObject({ ok: false, fatal: false, reason: expect.stringContaining('rate limited (429)') });
+    expect(await check(answers({ status: 200, json: {} }, { status: 403, json: { message: 'You have exceeded a secondary rate limit' } }, { 'retry-after': '60' }).fetchFn)).toMatchObject({ ok: false, fatal: false });
     expect(await check(answers({ status: 502, text: '' }, denied).fetchFn)).toMatchObject({ ok: false, fatal: false });
     const failing = (async () => {
       throw new TypeError('fetch failed');

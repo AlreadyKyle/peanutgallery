@@ -448,6 +448,7 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   });
   deps.log.info('pipeline', `session for card ${card.id} ended`, { outcome: run.outcome, turns: run.turns, detail: run.detail });
   if (run.outcome === 'completed') return;
+  if (run.outcome === 'adapter_paused') throw new CardStop('paused', run.failingCheck ?? 'adapter', run.detail);
   const pausing = PAUSING_OUTCOMES[run.outcome];
   if (pausing) throw new CardStop('paused', pausing, run.detail);
   if (run.outcome === 'refused') throw new CardStop('rejected', 'tool_allowlist', run.detail);

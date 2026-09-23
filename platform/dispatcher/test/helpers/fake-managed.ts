@@ -177,6 +177,8 @@ export class FakeManagedClient implements ManagedClient {
   dropAfter: number | null = null;
   streamsOpened = 0;
   failCreate: Error | null = null;
+  // Every stream open throws this, as a connection that cannot be made does.
+  failStream: Error | null = null;
   private fileCounter = 0;
 
   session(id: string): FakeSession {
@@ -277,6 +279,7 @@ export class FakeManagedClient implements ManagedClient {
       },
       stream: async (sessionId: string) => {
         this.streamsOpened += 1;
+        if (this.failStream) throw this.failStream;
         const dropAfter = this.dropAfter;
         this.dropAfter = null;
         return this.session(sessionId).openStream(dropAfter);
