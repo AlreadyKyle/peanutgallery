@@ -3,6 +3,7 @@ import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
+import { LinkedText } from '../components/TextPage';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
@@ -10,7 +11,7 @@ import { CATEGORY_FILTERS, categoryOf, fundableCards, fundLink, type CardCategor
 import { useStudio } from '../lib/studio';
 
 // Kernel (docs/specs/board-site.md): the page that sends money to the Payment Link. Its strings come
-// from legal.ts; which cards it offers, in what order and under which heading, and their links, come
+// from legal.ts, the agreement line directly under the first choice among them (docs/specs/legal-copy.md); which cards it offers, in what order and under which heading, and their links, come
 // from payment.ts; every module it reads is kernel but copy.ts (the category names) and PageHeader.
 
 const CATEGORIES = CATEGORY_FILTERS.filter((filter): filter is CardCategory => filter !== 'all');
@@ -41,6 +42,9 @@ export function Contribute() {
               <span className="choice-title">{legal.pickForMe}</span>
               <span className="choice-body">{legal.pickForMeBody}</span>
             </a>
+            <p className="muted small">
+              <LinkedText text={legal.contributeAgreement} />
+            </p>
 
             <h2 className="choices-heading">{legal.orPickACard}</h2>
             <Guarded studio={studio}>

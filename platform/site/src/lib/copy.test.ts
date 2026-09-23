@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { copy } from './copy';
 import { legal } from './legal';
+import { NEWEST_TERMS, TERMS_VERSIONS } from './terms-versions';
 
 // docs/COPY.md is the copy guide; these tests keep every public string to the rules it marks tested.
 
@@ -15,8 +16,14 @@ function strings(value: unknown, path: string, out: Array<[string, string]>): Ar
   return out;
 }
 
-// Every public string: the site's words in copy.ts and the legal pages and money statements in legal.ts.
-const all = [...strings(copy, 'copy', []), ...strings(legal, 'legal', [])];
+// Every public string the rules apply to: the site's words in copy.ts, the legal pages and money
+// statements in legal.ts, and the newest Terms version. An older version was checked when it was
+// written, and a later rule never forces an edit to posted words (docs/specs/legal-copy.md).
+const all = [
+  ...strings(copy, 'copy', []),
+  ...strings(legal, 'legal', []),
+  ...strings(NEWEST_TERMS, `terms-v${NEWEST_TERMS.version}`, []),
+];
 
 // The one contrast the guide allows: the legal line about contributions.
 const ALLOWED_CONTRAST = 'These are contributions, not donations.';
@@ -91,6 +98,7 @@ describe('copy rules', () => {
       copy.shipped,
       copy.plannedNext,
       copy.roadmapLink,
+      legal.fundAgreement,
       legal.moneyHeading,
       legal.splitLine,
       legal.notDonations,
@@ -155,7 +163,7 @@ describe('launch copy', () => {
   });
 
   it('names both hold triggers wherever a hold is described', () => {
-    const large = legal.terms.sections.find((section) => section.heading === 'Large contributions')?.paragraphs.join(' ') ?? '';
+    const large = NEWEST_TERMS.terms.sections.find((section) => section.heading === 'Large contributions')?.paragraphs.join(' ') ?? '';
     const holds = legal.howMoneyMoves.sections.find((section) => section.heading === 'Holds and refunds')?.paragraphs[0] ?? '';
     const bar = legal.howMoneyMoves.blocks.find((block) => block.heading === 'The bar fills')?.body[0] ?? '';
     for (const text of [legal.describeHeld, large, holds, bar]) {
@@ -174,7 +182,7 @@ describe('launch copy', () => {
     const stores = legal.privacy.sections.find((section) => section.heading === 'What the studio stores')?.paragraphs.join(' ') ?? '';
     expect(stores).toMatch(/one-way hash of the identifier Stripe gives your payment card/);
     expect(stores).toMatch(/used only to apply the \$50 daily limit/);
-    expect(legal.legalUpdated).toBe('Last updated 22 September 2026.');
+    expect(legal.privacyUpdated).toMatch(/^Last updated \d{1,2} [A-Z][a-z]+ \d{4}\.$/);
   });
 
   it('describes no founding contributions, gate or player decision', () => {
@@ -242,5 +250,100 @@ describe('voice (docs/COPY.md, Voice)', () => {
 describe('copy.ts and legal.ts (docs/specs/board-site.md)', () => {
   it('share no key, so every money statement is read from legal.ts', () => {
     expect(Object.keys(copy).filter((key) => key in legal)).toEqual([]);
+  });
+});
+
+/** Every paragraph of one text page, joined, with each heading before its paragraphs. */
+function pageText(page: { sections: readonly { heading: string; paragraphs: readonly string[] }[] }): string {
+  return page.sections.map((section) => [section.heading, ...section.paragraphs].join(' ')).join(' ');
+}
+
+function section(page: { sections: readonly { heading: string; paragraphs: readonly string[] }[] }, heading: string): string {
+  return page.sections.find((candidate) => candidate.heading === heading)?.paragraphs.join(' ') ?? '';
+}
+
+describe('the Terms and the Refunds page in force (docs/specs/legal-copy.md)', () => {
+  const terms = pageText(NEWEST_TERMS.terms);
+  const refunds = pageText(NEWEST_TERMS.refunds);
+
+  it('numbers the versions from 1, oldest first, with no gap and no repeat', () => {
+    expect(TERMS_VERSIONS.map((entry) => entry.version)).toEqual(TERMS_VERSIONS.map((_, index) => index + 1));
+    expect(NEWEST_TERMS).toBe(TERMS_VERSIONS[TERMS_VERSIONS.length - 1]);
+  });
+
+  it("names the operator and how to reach them", () => {
+    expect(section(NEWEST_TERMS.terms, 'Who runs the studio')).toMatch(/operated by Kyle Smith, an individual in Ontario, Canada\. Write to \{email\}/);
+  });
+
+  it('states who may contribute: an adult, or with a parent or guardian', () => {
+    expect(section(NEWEST_TERMS.terms, 'Who can contribute')).toContain(
+      'To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
+    );
+  });
+
+  it('charges in US dollars and adds no tax', () => {
+    const price = section(NEWEST_TERMS.terms, 'Price and currency');
+    expect(price).toContain('charged in US dollars');
+    expect(price).toContain('the studio adds no tax or other charge');
+  });
+
+  it('refunds the full amount within 14 days, and another way when Stripe cannot', () => {
+    expect(section(NEWEST_TERMS.refunds, 'Asking for a refund')).toMatch(/within 14 days of your contribution.*You get back the full amount you paid\./);
+    expect(section(NEWEST_TERMS.refunds, 'How refunds are paid')).toContain(
+      'If Stripe cannot refund a payment, for example because the card has been closed, the studio returns the money another way agreed with you by email.',
+    );
+  });
+
+  it('winds down per contribution: its own share of each bar it reached, the reserves after 120 days, never the studio share', () => {
+    const stops = section(NEWEST_TERMS.terms, 'If the studio stops');
+    for (const phrase of [
+      'its credit still on hold',
+      'its share of what is left on each card bar it reached',
+      "its share of the agents' unspent money that is on no card's bar",
+      '120 days',
+      "The studio's share is not refunded.",
+      'could not be returned',
+    ]) {
+      expect(stops, phrase).toContain(phrase);
+    }
+  });
+
+  it('says a card that is not built pays for later cards, and the 14-day refund still stands', () => {
+    expect(section(NEWEST_TERMS.terms, 'If a card is not built')).toMatch(/pays for later cards\. You can still ask for a refund within 14 days/);
+    expect(section(NEWEST_TERMS.refunds, 'A card that is not built')).toMatch(/pays for later cards\. You can still ask for a refund within 14 days/);
+  });
+
+  it('says the studio has no cryptocurrency, coin, token or NFT, and what the drawn coin is', () => {
+    const crypto = section(NEWEST_TERMS.terms, 'No cryptocurrency');
+    expect(crypto).toMatch(/has no cryptocurrency, crypto coin, token or NFT\./);
+    expect(crypto).toContain('The coin drawn on this site is a symbol for money in US dollars.');
+  });
+
+  it('applies a change only to contributions made after it is posted', () => {
+    expect(section(NEWEST_TERMS.terms, 'Changes to these terms')).toContain('A change applies only to contributions made after it is posted.');
+  });
+
+  it('keeps every link token one the text pages turn into a link', () => {
+    const tokens = [...`${terms} ${refunds}`.matchAll(/\{(\w+)\}/g)].map((match) => match[1]);
+    expect(new Set(tokens)).toEqual(new Set(['email', 'refunds', 'terms']));
+  });
+
+  it('states the agreement before checkout with both pages and the age condition', () => {
+    for (const line of [legal.contributeAgreement, legal.fundAgreement]) {
+      expect(line).toContain('{terms}');
+      expect(line).toContain('{refunds}');
+      expect(line).toMatch(/adult/);
+      expect(line).toMatch(/guardian/);
+    }
+  });
+});
+
+describe('no display name (docs/specs/legal-copy.md)', () => {
+  it('no public string says display name, and Privacy says the name stays with Stripe', () => {
+    const every = [...all, ...TERMS_VERSIONS.flatMap((entry) => strings(entry, `terms-v${entry.version}`, []))];
+    expect(every.filter(([, text]) => /display name/i.test(text)).map(([path]) => path)).toEqual([]);
+    expect(section(legal.privacy, 'What the studio stores')).toContain(
+      "The studio's database does not store your name. Stripe keeps the name on your card with its record of the payment.",
+    );
   });
 });

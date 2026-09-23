@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { CoinMark } from './components/Funding';
-import { PageHeader } from './components/PageHeader';
+import { NotFound } from './components/NotFound';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
 import { legal } from './lib/legal';
 import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
-import { Contact, Privacy, Refunds, Terms } from './pages/Legal';
+import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { pageNav, pageRoutes, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
-// links and the credit, and the not found page) and the routes of the Contribute, Ledger and legal
-// pages. The card lane's pages come from routes.tsx and never take one of these paths.
+// links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
+// the Contribute, Ledger and legal pages, each Terms and Refunds version among them. The card lane's pages come from routes.tsx and never take one of these paths.
 
 /** First path segments only the kernel's pages use; /board is here so it stays the not found page. */
 export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board'];
@@ -44,8 +44,10 @@ export function App() {
           <Route path="/contribute" element={<Contribute />} />
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/terms" element={<Terms />} />
+          <Route path="/terms/:version" element={<TermsVersion />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/refunds" element={<Refunds />} />
+          <Route path="/refunds/:version" element={<RefundsVersion />} />
           <Route path="/contact" element={<Contact />} />
           {cardRoutes(pageRoutes).map((route) => (
             <Route key={route.path} path={route.path} element={route.element} />
@@ -186,26 +188,5 @@ function SiteFooter() {
         </p>
       </div>
     </footer>
-  );
-}
-
-/** The not found page: its title on the signal plate, then the message and the way home together. */
-function NotFound() {
-  return (
-    <main>
-      <div className="band">
-        <PageHeader title={copy.notFound} />
-      </div>
-      <div className="band">
-        <div className="prose">
-          <p className="lede">{copy.notFoundBody}</p>
-          <p>
-            <Link className="button" to="/">
-              {copy.home}
-            </Link>
-          </p>
-        </div>
-      </div>
-    </main>
   );
 }

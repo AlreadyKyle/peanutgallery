@@ -61,6 +61,28 @@ export function formatDate(iso: string): string {
   return Number.isFinite(date.getTime()) ? threeLetterMonth(dateOnly, date) : iso;
 }
 
+const toronto = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/Toronto',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * When a Terms version took effect, the same for every reader wherever they are:
+ * "22 Sep 2026 at 21:32 Toronto time" (docs/specs/legal-copy.md, Times).
+ */
+export function formatPostedAt(iso: string): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return iso;
+  const parts = toronto.formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('day')} ${value('month').slice(0, 3)} ${value('year')} at ${value('hour')}:${value('minute')} Toronto time`;
+}
+
 const clock = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
   minute: '2-digit',

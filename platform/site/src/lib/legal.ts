@@ -7,8 +7,9 @@
 // reads these from here.
 //
 // The text pages are drafted for board review; not legal advice. In a paragraph, {email} becomes the
-// contact address as a mailto link, {refunds} a link to the Refunds page and {discord} the Discord
-// invite.
+// contact address as a mailto link, {refunds} a link to the Refunds page, {terms} a link to the Terms
+// and {discord} the Discord invite. The words of the Terms and the Refunds page are not here: every
+// posted version of them is in terms-versions.ts (docs/specs/legal-copy.md).
 export const legal = {
   contributeUnavailable: 'Contributions are not open yet.',
   split:
@@ -180,63 +181,25 @@ export const legal = {
   footerLinks: { terms: 'Terms', privacy: 'Privacy', refunds: 'Refunds', contact: 'Contact' },
   contactEmail: 'hello@clayhouse.studio',
   refundsPageLink: 'Refunds page',
-  legalUpdated: 'Last updated 22 September 2026.',
-  terms: {
-    title: 'Terms',
-    lede: 'What a contribution pays for, what it does not buy, and the rules that apply.',
-    sections: [
-      {
-        heading: 'Who runs the studio',
-        paragraphs: ['Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada.'],
-      },
-      {
-        heading: 'What a contribution pays for',
-        paragraphs: [
-          "A contribution pays for the agents' compute and for the studio, in the split you choose at checkout.",
-          'It buys no goods, no ownership and no equity. It does not guarantee any outcome. Peanut Gallery is not a charity, and contributions are not donations.',
-        ],
-      },
-      {
-        heading: 'Funding a card',
-        paragraphs: [
-          "You fund a card to have it built. When a card's bar is full, the card moves to the queue and the agents build it in turn.",
-          "Every change must pass the gate, the studio's automated checks, before it goes live. The gate may reject a change even when its card is fully funded.",
-        ],
-      },
-      {
-        heading: 'Rules contributions cannot change',
-        paragraphs: [
-          'No contribution or card can change these rules: the public ledger, the spend caps, the default 80/20 split and the 10% reserve, the emergency fund rule, the gate, rollback, the content filter and the all-ages rating, the art policy, and the rule that no agent that can change the game or the site reads text from the public.',
-        ],
-      },
-      {
-        heading: 'Large contributions',
-        paragraphs: [
-          "Up to $50 of agent credit per person per day reaches the meter within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days before it reaches the meter.",
-        ],
-      },
-      {
-        heading: 'Refunds',
-        paragraphs: ['Refunds and disputes are handled as the {refunds} describes.'],
-      },
-      {
-        heading: 'The games',
-        paragraphs: ['The games are free to play.'],
-      },
-      {
-        heading: 'Law',
-        paragraphs: ['These terms are governed by the laws of Ontario and the laws of Canada that apply there.'],
-      },
-      {
-        heading: 'Changes to these terms',
-        paragraphs: ['When these terms change, the new version is posted on this page with its date.'],
-      },
-      {
-        heading: 'Contact',
-        paragraphs: ['Questions about these terms go to {email}.'],
-      },
-    ],
-  },
+  // The Terms and Refunds pages name the version they show and when it took effect
+  // (docs/specs/legal-copy.md). {n} is the version, {time}, {from} and {until} a posted time
+  // (format.ts formatPostedAt) and {title} the page's own title.
+  termsVersionLine: 'Version {n}, in force since {time}.',
+  termsPastLine: 'Version {n}, in force from {from} until {until}. It applies to contributions whose checkout started in that time.',
+  termsCurrentLink: 'Read the version in force now',
+  termsEarlier: 'Earlier versions',
+  termsEarlierItem: 'Version {n}, in force from {from} until {until}',
+  termsVersionTitle: '{title}, version {n}',
+  termsLoading: 'Loading the terms.',
+  termsUnconfirmed:
+    'This page cannot confirm which version is in force right now. Email {email} to ask which version applies to your contribution.',
+  // Before every path to checkout: directly under the first choice on /contribute, and under every
+  // live Fund this card link (Contribute.tsx, Funding.tsx).
+  contributeAgreement:
+    'Contributing means you accept the {terms} in force when your checkout starts, including the {refunds}. To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
+  fundAgreement: "By funding you accept the {terms} and the {refunds}, and confirm you are an adult or have a guardian's permission.",
+  // Privacy is a notice with its own date, not part of a Terms version.
+  privacyUpdated: 'Last updated 23 September 2026.',
   privacy: {
     title: 'Privacy',
     lede: 'What the studio stores when you contribute, and what it does not.',
@@ -250,7 +213,7 @@ export const legal = {
         paragraphs: [
           "For each contribution the studio stores the amount, the split you chose, the card you funded, the time, Stripe's reference for the payment, a one-way hash of the email address Stripe collects and, when Stripe provides one, a one-way hash of the identifier Stripe gives your payment card. The email address and the card number are not stored.",
           'The card hash is used only to apply the $50 daily limit, so one person paying with several email addresses shares one limit.',
-          'If you give a display name at checkout, it is stored and kept private until names are reviewed.',
+          "The studio's database does not store your name. Stripe keeps the name on your card with its record of the payment.",
         ],
       },
       {
@@ -277,30 +240,6 @@ export const legal = {
           'To ask for a copy of your data or for its deletion, email {email} and include the email address you paid with, so the matching record can be found.',
           'Payment records the law requires the studio to keep are kept for as long as the law requires.',
         ],
-      },
-    ],
-  },
-  refunds: {
-    title: 'Refunds',
-    lede: 'How to ask for a refund, and what a refund changes.',
-    sections: [
-      {
-        heading: 'Asking for a refund',
-        paragraphs: ['Email {email} within 14 days of your contribution, with your Stripe receipt.'],
-      },
-      {
-        heading: 'How refunds are paid',
-        paragraphs: ['Refunds go back through Stripe to the card or account you paid with.'],
-      },
-      {
-        heading: 'What a refund changes',
-        paragraphs: [
-          "A refund or a dispute takes that contribution's credit off the meter and off any card bar it funded. Work that has already shipped stays shipped.",
-        ],
-      },
-      {
-        heading: 'Disputes',
-        paragraphs: ['Disputes go through Stripe. The 10% reserve covers disputes first.'],
       },
     ],
   },

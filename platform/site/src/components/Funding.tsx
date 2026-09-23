@@ -6,6 +6,7 @@ import { legal } from '../lib/legal';
 import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, RESERVE_PCT } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
+import { LinkedText } from './TextPage';
 
 // A card's money: its funding bar and spec rows (and the "$0.00 of $3.00 · 0 contributors" line a
 // /contribute choice shows), what a building or shipped card has spent, the Fund this card link, the
@@ -151,10 +152,17 @@ export function CardMoney({
       </button>
     );
   } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && canFund(card)) {
+    // The agreement goes with every live link to checkout, so no card layout can draw one without it
+    // (docs/specs/legal-copy.md). A sample or example card links nowhere and carries none.
     action = (
-      <a className="button button-secondary button-block" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
-        {legal.fundThis}
-      </a>
+      <>
+        <a className="button button-secondary button-block" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
+          {legal.fundThis}
+        </a>
+        <p className="muted small">
+          <LinkedText text={legal.fundAgreement} />
+        </p>
+      </>
     );
   }
   return (

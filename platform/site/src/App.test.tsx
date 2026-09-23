@@ -9,6 +9,7 @@ import { Glyph } from './components/Glyph';
 import { copy } from './lib/copy';
 import { legal } from './lib/legal';
 import type { Snapshot, StudioSource } from './lib/source';
+import { NEWEST_TERMS } from './lib/terms-versions';
 import { SourceProvider } from './lib/studio';
 
 const snapshot: Snapshot = {
@@ -92,19 +93,23 @@ describe('App routes', () => {
   });
 });
 
+// With no database in the unit run, Terms and Refunds show the newest version in the bundle with
+// the notice that the version in force cannot be confirmed (src/pages/Legal.test.tsx covers every
+// state of the versions read).
 const TEXT_PAGES = [
-  { path: '/terms', page: legal.terms, dated: true },
-  { path: '/privacy', page: legal.privacy, dated: true },
-  { path: '/refunds', page: legal.refunds, dated: true },
-  { path: '/contact', page: legal.contact, dated: false },
+  { path: '/terms', page: NEWEST_TERMS.terms, footer: null },
+  { path: '/privacy', page: legal.privacy, footer: legal.privacyUpdated },
+  { path: '/refunds', page: NEWEST_TERMS.refunds, footer: null },
+  { path: '/contact', page: legal.contact, footer: null },
 ] as const;
 
 describe('Terms, Privacy, Refunds and Contact', () => {
-  for (const { path, page, dated } of TEXT_PAGES) {
-    it(`renders ${path} as a text page: one h1, the lede, every section and no unreplaced token`, () => {
+  for (const { path, page, footer } of TEXT_PAGES) {
+    it(`renders ${path} as a text page: one h1, the lede, every section and no unreplaced token`, async () => {
       renderAt(path);
-      expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([page.title]);
+      await waitFor(() => expect(screen.queryByText(legal.termsLoading)).toBeNull());
       const main = screen.getByRole('main');
+      expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([page.title]);
       expect(main.classList.contains('wide')).toBe(false);
       expect(main.classList.contains('text-page')).toBe(true);
       expect(within(main).getByText(page.lede)).toBeTruthy();
@@ -117,14 +122,15 @@ describe('Terms, Privacy, Refunds and Contact', () => {
       expect(main.textContent).not.toMatch(/[{}]/);
       // The pages go to the board for review, but nothing public says draft.
       expect(main.textContent).not.toMatch(/draft/i);
-      expect(within(main).queryAllByText(legal.legalUpdated)).toHaveLength(dated ? 1 : 0);
+      expect(within(main).queryAllByText(legal.privacyUpdated)).toHaveLength(footer === null ? 0 : 1);
       expect(screen.queryByText(copy.pitchBody)).toBeNull();
     });
   }
 
-  it('links the contact address as mailto on Terms, Privacy, Refunds and Contact', () => {
+  it('links the contact address as mailto on Terms, Privacy, Refunds and Contact', async () => {
     for (const { path } of TEXT_PAGES) {
       renderAt(path);
+      await waitFor(() => expect(screen.queryByText(legal.termsLoading)).toBeNull());
       const mail = within(screen.getByRole('main')).getAllByRole('link', { name: legal.contactEmail });
       expect(mail.length, path).toBeGreaterThan(0);
       for (const link of mail) expect(link.getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
@@ -132,12 +138,15 @@ describe('Terms, Privacy, Refunds and Contact', () => {
     }
   });
 
-  it('names the operator on Terms and links Terms to the Refunds page', () => {
+  it('names the operator on Terms and links Terms to the Refunds page', async () => {
     renderAt('/terms');
-    expect(screen.getByText('Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada.')).toBeTruthy();
-    expect(within(screen.getByRole('main')).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe(
-      '/refunds',
+    await waitFor(() => expect(screen.queryByText(legal.termsLoading)).toBeNull());
+    const main = screen.getByRole('main');
+    const operator = within(main).getByText((_, element) =>
+      element?.tagName === 'P' && (element.textContent ?? '').startsWith('Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada.'),
     );
+    expect(within(operator).getByRole('link', { name: legal.contactEmail })).toBeTruthy();
+    expect(within(main).getAllByRole('link', { name: legal.refundsPageLink })[0]!.getAttribute('href')).toBe('/refunds');
   });
 
   it('adds the Discord section to Contact only when the invite is set', () => {

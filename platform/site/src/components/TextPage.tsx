@@ -10,11 +10,12 @@ export type TextSection = {
   readonly paragraphs: readonly string[];
 };
 
-const TOKENS = /(\{email\}|\{refunds\}|\{discord\})/;
+const TOKENS = /(\{email\}|\{refunds\}|\{terms\}|\{discord\})/;
 
 /**
- * A paragraph from legal.ts with its {email}, {refunds} and {discord} tokens turned into links.
- * Kernel (docs/specs/board-site.md): it renders the legal pages.
+ * A paragraph from legal.ts or terms-versions.ts with its {email}, {refunds}, {terms} and {discord}
+ * tokens turned into links. Kernel (docs/specs/board-site.md): it renders the legal pages and the
+ * agreement lines before checkout.
  */
 export function LinkedText({ text }: { text: string }) {
   const env = siteEnv();
@@ -32,6 +33,13 @@ export function LinkedText({ text }: { text: string }) {
           return (
             <Link key={index} to="/refunds">
               {legal.refundsPageLink}
+            </Link>
+          );
+        }
+        if (part === '{terms}') {
+          return (
+            <Link key={index} to="/terms">
+              {legal.footerLinks.terms}
             </Link>
           );
         }
@@ -64,23 +72,30 @@ function TextBlock({ id, section }: { id: string; section: TextSection }) {
 /**
  * The text-page layout: one h1 and a lede on the first band (the signal plate), then sections that
  * each open with an h2 on the second (paper) band, all held to the reading measure. `name` prefixes
- * the heading ids; `extra` sections follow the page's own.
+ * the heading ids; `extra` sections follow the page's own. `status` sits under the lede on the first
+ * band (the Terms version line); `title` replaces the page's own title (a Terms version's page).
  */
 export function TextPage({
   name,
   page,
+  title,
   extra = [],
+  status,
   footer,
 }: {
   name: string;
   page: { readonly title: string; readonly lede: string; readonly sections: readonly TextSection[] };
+  title?: string;
   extra?: readonly TextSection[];
+  status?: ReactNode;
   footer?: ReactNode;
 }) {
   return (
     <main className="text-page">
       <div className="band">
-        <PageHeader title={page.title} lede={page.lede} />
+        <PageHeader title={title ?? page.title} lede={page.lede}>
+          {status}
+        </PageHeader>
       </div>
       <div className="band">
         {[...page.sections, ...extra].map((section, index) => (

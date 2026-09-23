@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { categoryOf, FACES, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
@@ -49,9 +50,11 @@ function snapshot(cards: Card[], funding: Snapshot['funding'] = {}): Snapshot {
 
 function one(c: Card, props: Partial<Parameters<typeof CardFace>[0]> = {}): HTMLElement {
   const { container } = render(
-    <ul>
-      <CardFace card={c} snapshot={snapshot([c], { [c.id]: { contributors: 2, credited_usd: 1.5 } })} {...props} />
-    </ul>,
+    <MemoryRouter>
+      <ul>
+        <CardFace card={c} snapshot={snapshot([c], { [c.id]: { contributors: 2, credited_usd: 1.5 } })} {...props} />
+      </ul>
+    </MemoryRouter>,
   );
   return container.querySelector('li.card') as HTMLElement;
 }
@@ -159,6 +162,29 @@ describe('the card faces', () => {
     expect(fund.getAttribute('href')).toBe('https://buy.stripe.com/test-link?client_reference_id=o');
     expect(fund.getAttribute('aria-describedby')).toBe(within(box).getByRole('heading', { level: 3 }).id);
     expect(box.querySelector('.funding-bar-fill')?.getAttribute('style')).toContain('--fill: 50%');
+  });
+
+  it('states the agreement under every live Fund this card link, with the Terms, the Refunds page and the age condition', () => {
+    const box = one(card({ id: 'o', title: 'Open one' }));
+    const fund = within(box).getByRole('link', { name: legal.fundThis });
+    const agreement = fund.nextElementSibling as HTMLElement;
+    expect(agreement.tagName).toBe('P');
+    expect(agreement.textContent).toBe(legal.fundAgreement.replace('{terms}', legal.footerLinks.terms).replace('{refunds}', legal.refundsPageLink));
+    expect(agreement.textContent).toMatch(/adult or have a guardian's permission/);
+    expect(within(agreement).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms');
+    expect(within(agreement).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
+  });
+
+  it('draws no agreement on a sample or example card, which links nowhere, nor on a card with no Payment Link', () => {
+    for (const mode of ['sample', 'example'] as const) {
+      const box = one(card(), { mode });
+      expect(box.textContent, mode).not.toContain(legal.fundAgreement.slice(0, 20));
+      expect(within(box).queryByRole('link'), mode).toBeNull();
+      cleanup();
+    }
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
+    const box = one(card());
+    expect(box.textContent).not.toContain(legal.fundAgreement.slice(0, 20));
   });
 
   it('draws no fill for an empty bar, so a zero never shows as a sliver', () => {

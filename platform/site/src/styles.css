@@ -800,6 +800,11 @@ button.link:hover:not(:disabled) {
   margin-top: var(--space-2);
 }
 
+/* The agreement line under a live Fund this card link (Funding.tsx, docs/specs/legal-copy.md). */
+.card-bottom > .button + p {
+  margin: var(--space-1) 0 0;
+}
+
 .card-meta {
   margin-bottom: 0;
   color: var(--text-muted);

@@ -60,14 +60,15 @@ describe('netlify.toml security headers', () => {
     expect(rules.slice(1, spa)).toEqual([
       ['/board', '/index.html', '404', 'force'],
       ['/board/*', '/index.html', '404', 'force'],
-      ...['/contribute', '/ledger', '/terms', '/privacy', '/refunds', '/contact'].map((path) => [path, '/index.html', '200', 'force']),
+      ...['/contribute', '/ledger', '/terms', '/terms/*', '/privacy', '/refunds', '/refunds/*', '/contact'].map((path) => [path, '/index.html', '200', 'force']),
     ]);
-    // The same paths App.tsx keeps from the card lane's routes.
+    // The same paths App.tsx keeps from the card lane's routes; /board/*, /terms/* and /refunds/* (the
+    // posted Terms versions, docs/specs/legal-copy.md) sit under a segment already listed.
     expect(KERNEL_SEGMENTS.map((segment) => `/${segment}`).sort()).toEqual(
       rules
         .slice(1, spa)
         .map(([from]) => from)
-        .filter((from) => from !== '/board/*')
+        .filter((from) => !from!.endsWith('/*'))
         .sort(),
     );
     expect(rules[spa]).toEqual(['/*', '/index.html', '200', 'no force']);
