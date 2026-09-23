@@ -341,6 +341,36 @@ export async function createWorktree(repoRoot: string, root: string, cardId: str
   });
 }
 
+// A scratch checkout of origin/main for one job run (docs/specs/agent-workflows.md): detached, on no
+// branch, under the worktree root as job-<id8>, and removed after the run.
+export function scratchPath(root: string, runId: string): string {
+  return path.join(root, `job-${shortId(runId)}`);
+}
+
+export async function createScratchWorktree(repoRoot: string, root: string, runId: string, authEnv: NodeJS.ProcessEnv): Promise<{ path: string; baseSha: string }> {
+  return repoLock.run(async () => {
+    const target = scratchPath(root, runId);
+    await mkdir(root, { recursive: true });
+    if (existsSync(target)) await removeWorktreeUnlocked(repoRoot, target, null);
+    await git(['worktree', 'prune'], repoRoot);
+    const baseSha = await fetchMain(repoRoot, authEnv);
+    await git(['worktree', 'add', '--detach', target, baseSha], repoRoot);
+    return { path: target, baseSha };
+  });
+}
+
+// A file's text at a commit, or null when the commit has no such file.
+export async function readFileAtSha(repoRoot: string, sha: string, file: string): Promise<string | null> {
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`not a commit sha: ${sha}`);
+  if (file.startsWith('/') || file.split('/').some((part) => part === '' || part === '.' || part === '..')) throw new Error(`not a repository path: ${file}`);
+  try {
+    await git(['cat-file', '-e', `${sha}:${file}`], repoRoot);
+  } catch {
+    return null;
+  }
+  return gitRaw(['show', `${sha}:${file}`], repoRoot);
+}
+
 export async function removeWorktree(repoRoot: string, target: string, branch: string | null): Promise<void> {
   await repoLock.run(() => removeWorktreeUnlocked(repoRoot, target, branch));
 }

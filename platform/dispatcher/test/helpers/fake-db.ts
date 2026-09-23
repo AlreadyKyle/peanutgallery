@@ -9,10 +9,13 @@ import type {
   Db,
   Deploy,
   DeployInput,
+  DraftFields,
   EnqueueInput,
   Job,
   JobRun,
+  OpenCardRow,
   Pool,
+  RankingMove,
   RecordUsageResult,
   Role,
   StudioState,
@@ -83,6 +86,30 @@ export interface EventRow {
   payload: Record<string, unknown>;
 }
 
+// A draft as card_drafts keeps it (20260924400000_agent_workflows.sql).
+export interface FakeDraft {
+  id: string;
+  job_run_id: string | null;
+  role_id: string;
+  fields: DraftFields;
+  content_sha256: string;
+  status: 'drafted' | 'approved' | 'withdrawn';
+  reason_codes: string[];
+  maker_ref: string;
+  grader_ref: string | null;
+  card_id: string | null;
+}
+
+// A card approval_card_draft inserted, as the handler tests read it.
+export interface FakeDraftCard {
+  id: string;
+  draft_id: string;
+  approver_role_id: string;
+  grader_ref: string;
+  verdict: Record<string, unknown>;
+  content_sha256: string;
+}
+
 // A job run as job_runs keeps it.
 export interface FakeJobRun extends JobRun {
   idem_key: string;
@@ -120,6 +147,13 @@ export class FakeDb implements Db {
   resumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
   resumeCalls = 0;
   resumeError: Error | null = null;
+  // The role jobs (docs/specs/agent-workflows.md): the open cards the handlers read, the drafts, the
+  // cards approval inserted, the rankings applied, and the failure an RPC is set to raise.
+  openCardRows: OpenCardRow[] = [];
+  drafts: FakeDraft[] = [];
+  draftCards: FakeDraftCard[] = [];
+  rankings: Array<{ runId: string; order: string[]; moves: RankingMove[] }> = [];
+  rpcError: Partial<Record<'recordCardDraft' | 'approveCardDraft' | 'withdrawCardDraft' | 'applyCardRanking', Error>> = {};
 
   async getStudioState() {
     return { ...this.studio };
@@ -323,6 +357,55 @@ export class FakeDb implements Db {
     const found = this.roles.find((r) => r.id === roleId);
     if (!found) throw new Error(`db role state: no row for ${roleId}`);
     return { paused: found.paused, state: 'active' };
+  }
+  async openCards() {
+    return this.openCardRows.map((row) => ({ ...row }));
+  }
+  async recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string) {
+    if (this.rpcError.recordCardDraft) throw this.rpcError.recordCardDraft;
+    const id = `draft-${this.drafts.length + 1}`;
+    const content_sha256 = `sha-${JSON.stringify(fields)}`;
+    this.drafts.push({ id, job_run_id: runId, role_id: roleId, fields: { ...fields }, content_sha256, status: 'drafted', reason_codes: [], maker_ref: makerRef, grader_ref: null, card_id: null });
+    return { id, content_sha256 };
+  }
+  async approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>) {
+    if (this.rpcError.approveCardDraft) throw this.rpcError.approveCardDraft;
+    const draft = this.drafts.find((d) => d.id === draftId);
+    if (!draft || draft.status !== 'drafted') throw new Error(`db approve_card_draft: Draft ${draftId} is not drafted`);
+    if (graderRef === draft.maker_ref) throw new Error('db approve_card_draft: The grader ref must differ from the maker ref');
+    if (approverRoleId === draft.role_id || approverRoleId === draft.fields.executor_role_id) throw new Error("db approve_card_draft: The approver cannot be the card's proposer, drafter or executor");
+    const cardId = `card-from-${draftId}`;
+    this.draftCards.push({ id: cardId, draft_id: draftId, approver_role_id: approverRoleId, grader_ref: graderRef, verdict: { ...verdict }, content_sha256: draft.content_sha256 });
+    draft.status = 'approved';
+    draft.grader_ref = graderRef;
+    draft.card_id = cardId;
+    return cardId;
+  }
+  async withdrawCardDraft(draftId: string, reasonCodes: readonly string[]) {
+    if (this.rpcError.withdrawCardDraft) throw this.rpcError.withdrawCardDraft;
+    const draft = this.drafts.find((d) => d.id === draftId);
+    if (!draft || draft.status !== 'drafted') throw new Error(`db withdraw_card_draft: Draft ${draftId} is not drafted`);
+    if (reasonCodes.length === 0) throw new Error('db withdraw_card_draft: A withdrawal names at least one reason code');
+    draft.status = 'withdrawn';
+    draft.reason_codes = [...reasonCodes];
+  }
+  async applyCardRanking(runId: string, order: readonly string[]) {
+    if (this.rpcError.applyCardRanking) throw this.rpcError.applyCardRanking;
+    const moves: RankingMove[] = [];
+    let unapplied = 0;
+    order.forEach((id, index) => {
+      const card = this.openCardRows.find((row) => row.id === id);
+      if (!card) throw new Error(`db apply_card_ranking: Card ${id} does not exist`);
+      if (card.rank === index + 1) return;
+      if (moves.length >= 10) {
+        unapplied += 1;
+        return;
+      }
+      moves.push({ card_id: id, from: card.rank, to: index + 1 });
+      card.rank = index + 1;
+    });
+    this.rankings.push({ runId, order: [...order], moves });
+    return { moves, unapplied };
   }
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);
