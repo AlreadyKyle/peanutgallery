@@ -138,7 +138,7 @@ export function parseBacklog(text: string): BacklogEntry[] {
   return entries;
 }
 
-/** A card already in the table with a backlog title. */
+/** A card already in the table: one with a backlog title, or a planned card the file may no longer hold. */
 export interface ExistingCard {
   id: string;
   title: string;
@@ -149,7 +149,20 @@ export interface ExistingCard {
   folder: string;
   summary: string | null;
   intent: string | null;
+  source: string;
+  funded_usd: number | string;
+  funding_target_usd: number | string;
+  executor_role_id: string | null;
+  // docs/specs/agent-system-core.md: an agent drafted it, it is approved and waiting to be dealt, or
+  // the board vetoed it. file-backlog leaves such a card alone.
+  drafter_role_id: string | null;
+  opens_at: string | null;
+  board_vetoed: boolean;
 }
+
+/** The columns file-backlog reads for ExistingCard. */
+export const EXISTING_CARD_COLUMNS =
+  "id, title, stage, horizon, rank, bucket, folder, summary, intent, source, funded_usd, funding_target_usd, executor_role_id, drafter_role_id, opens_at, board_vetoed";
 
 /** The row file-backlog inserts: a board goal card, proposed, off now, with no target, executor or acceptance test yet. */
 export interface BacklogInsert {
@@ -177,6 +190,35 @@ export interface BacklogPlan {
   update: { id: string; title: string; patch: BacklogPatch }[];
   unchanged: string[];
   skipped: { title: string; reason: string }[];
+  // Planned cards whose entries left the file, which --apply deletes in one statement.
+  remove: { id: string; title: string }[];
+}
+
+/** Why file-backlog leaves a card alone that an agent drafted, that waits to be dealt or that the board vetoed. */
+export function untouchable(card: Pick<ExistingCard, "drafter_role_id" | "opens_at" | "board_vetoed">): string | null {
+  if (card.drafter_role_id) return "drafted";
+  if (card.opens_at) return "waiting to be dealt";
+  if (card.board_vetoed) return "vetoed";
+  return null;
+}
+
+/**
+ * A card file-backlog filed and nothing else touched: board-filed, proposed, on next or later, with
+ * no money, no target, no executor, never drafted, not waiting to be dealt and not vetoed. Only such a
+ * card is removed when its entry leaves the file; the delete repeats every condition as a filter, and
+ * the foreign keys refuse the whole statement if anything references one of them (a payment, an
+ * allocation, a ledger row, a board action, an event, an approval or a job run).
+ */
+export function removable(card: ExistingCard): boolean {
+  return (
+    card.source === "board" &&
+    card.stage === "proposed" &&
+    (card.horizon === "next" || card.horizon === "later") &&
+    Number(card.funded_usd) === 0 &&
+    Number(card.funding_target_usd) === 0 &&
+    card.executor_role_id === null &&
+    untouchable(card) === null
+  );
 }
 
 function insertRow(entry: BacklogEntry): BacklogInsert {
@@ -208,7 +250,7 @@ function insertRow(entry: BacklogEntry): BacklogInsert {
  * or cancelled entry is never pulled back to the backlog.
  */
 export function planBacklog(entries: readonly BacklogEntry[], existing: readonly ExistingCard[]): BacklogPlan {
-  const plan: BacklogPlan = { insert: [], update: [], unchanged: [], skipped: [] };
+  const plan: BacklogPlan = { insert: [], update: [], unchanged: [], skipped: [], remove: [] };
   for (const entry of entries) {
     const matches = existing.filter((card) => card.title === entry.title);
     if (matches.length === 0) {
@@ -221,6 +263,11 @@ export function planBacklog(entries: readonly BacklogEntry[], existing: readonly
       plan.skipped.push({ title: entry.title, reason: `card ${first.id} is at stage ${first.stage} on ${first.horizon}` });
       continue;
     }
+    const leave = untouchable(backlog);
+    if (leave) {
+      plan.skipped.push({ title: entry.title, reason: `card ${backlog.id} is ${leave}` });
+      continue;
+    }
     const want = insertRow(entry);
     const patch: BacklogPatch = {};
     if (backlog.bucket !== want.bucket) patch.bucket = want.bucket;
@@ -231,6 +278,13 @@ export function planBacklog(entries: readonly BacklogEntry[], existing: readonly
     if (backlog.intent !== want.intent) patch.intent = want.intent;
     if (Object.keys(patch).length === 0) plan.unchanged.push(entry.title);
     else plan.update.push({ id: backlog.id, title: entry.title, patch });
+  }
+  const titles = new Set(entries.map((entry) => entry.title));
+  const seen = new Set<string>();
+  for (const card of existing) {
+    if (seen.has(card.id)) continue;
+    seen.add(card.id);
+    if (!titles.has(card.title) && removable(card)) plan.remove.push({ id: card.id, title: card.title });
   }
   return plan;
 }
