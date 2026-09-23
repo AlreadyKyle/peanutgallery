@@ -1,0 +1,52 @@
+{
+  "_about": "A made-up Stripe account for the Controller's tests (docs/specs/money-safety.md), in the shapes of Stripe's API objects at the webhook's pinned version, with only the fields the Controller reads. No value comes from a real account. It settles in CAD at 1.37 CAD to the USD: two USD payments, $10 and $5, the second refunded by $2 with the fee Stripe kept booked as an adjustment, and both paid out in one payout. The database side is what ledger_identity() and controller_figures() return for the same books.",
+  "now": "2026-09-23T07:07:00Z",
+  "sessions": [
+    { "id": "cs_fixture_a", "object": "checkout.session", "mode": "payment", "status": "complete", "payment_status": "paid", "amount_total": 1000, "currency": "usd", "payment_intent": "pi_fixture_a", "created": 1789905600 },
+    { "id": "cs_fixture_b", "object": "checkout.session", "mode": "payment", "status": "complete", "payment_status": "paid", "amount_total": 500, "currency": "usd", "payment_intent": "pi_fixture_b", "created": 1790004600 },
+    { "id": "cs_fixture_open", "object": "checkout.session", "mode": "payment", "status": "complete", "payment_status": "unpaid", "amount_total": 700, "currency": "usd", "payment_intent": null, "created": 1790004600 }
+  ],
+  "charges": [
+    {
+      "id": "ch_fixture_a", "object": "charge", "amount": 1000, "amount_refunded": 0, "currency": "usd", "payment_intent": "pi_fixture_a", "status": "succeeded", "created": 1789905600,
+      "balance_transaction": { "id": "txn_fixture_a", "object": "balance_transaction", "type": "charge", "amount": 1370, "fee": 81, "net": 1289, "currency": "cad", "exchange_rate": 1.37 }
+    },
+    {
+      "id": "ch_fixture_b", "object": "charge", "amount": 500, "amount_refunded": 200, "currency": "usd", "payment_intent": "pi_fixture_b", "status": "succeeded", "created": 1790004600,
+      "balance_transaction": { "id": "txn_fixture_b", "object": "balance_transaction", "type": "charge", "amount": 685, "fee": 52, "net": 633, "currency": "cad", "exchange_rate": 1.37 }
+    }
+  ],
+  "disputes": [],
+  "payouts": [
+    { "id": "po_fixture_1", "object": "payout", "amount": 1648, "currency": "cad", "status": "paid", "arrival_date": 1790294400 }
+  ],
+  "payout_transactions": {
+    "po_fixture_1": [
+      { "id": "txn_fixture_a", "object": "balance_transaction", "type": "charge", "source": "ch_fixture_a", "amount": 1370, "fee": 81, "net": 1289, "currency": "cad" },
+      { "id": "txn_fixture_b", "object": "balance_transaction", "type": "charge", "source": "ch_fixture_b", "amount": 685, "fee": 52, "net": 633, "currency": "cad" },
+      { "id": "txn_fixture_refund", "object": "balance_transaction", "type": "refund", "source": "re_fixture_b", "amount": -274, "fee": 0, "net": -274, "currency": "cad" },
+      { "id": "txn_fixture_payout", "object": "balance_transaction", "type": "payout", "source": "po_fixture_1", "amount": -1648, "fee": 0, "net": -1648, "currency": "cad" }
+    ]
+  },
+  "balance": { "object": "balance", "available": [{ "amount": 5000, "currency": "cad" }], "pending": [{ "amount": 0, "currency": "cad" }] },
+  "undelivered_events": [],
+  "identity": {
+    "holds": true,
+    "lines": [
+      { "name": "I1", "left": 1.2, "right": 1.2, "drift": 0, "holds": true },
+      { "name": "I2", "left": 8.5906, "right": 8.5906, "drift": 0, "holds": true },
+      { "name": "I3", "left": 0, "right": 0, "drift": 0, "holds": true }
+    ]
+  },
+  "figures": {
+    "pool": { "balance_usd": 8.1906, "reserve_usd": 1.2, "incident_reserve_usd": 0.4, "held_usd": 0 },
+    "studio_reserve_usd": 0,
+    "card_max_usd": 25,
+    "credit": { "bought_usd": 5, "purchases": 1, "last_purchase_at": "2026-09-22T09:00:00Z", "studio_spend_usd": 3.1, "overhead_usd": 0.2, "overhead_since_last_purchase_usd": 0.05 },
+    "funded_cards": { "count": 2, "remaining_ceilings_usd": 7.5 },
+    "families": [
+      { "payment_id": "pay-fixture-a", "session_id": "cs_fixture_a", "rail": "stripe", "created_at": "2026-09-20T12:00:01Z", "amount_usd": 10, "net_usd": 9.4088, "refunded_usd": 0, "disputed_usd": 0, "reinstated_usd": 0, "adjusted_net_usd": 0, "books_net_usd": 9.4088, "agent_money_usd": 6.4356, "held_usd": 0 },
+      { "payment_id": "pay-fixture-b", "session_id": "cs_fixture_b", "rail": "stripe", "created_at": "2026-09-21T15:30:01Z", "amount_usd": 5, "net_usd": 4.6204, "refunded_usd": 2, "disputed_usd": 0, "reinstated_usd": 0, "adjusted_net_usd": -0.1518, "books_net_usd": 2.6204, "agent_money_usd": 1.755, "held_usd": 0 }
+    ]
+  }
+}

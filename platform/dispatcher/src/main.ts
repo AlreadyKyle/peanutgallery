@@ -16,6 +16,7 @@ import { SessionBudgets } from './budgets.js';
 import { loadConfig } from './config.js';
 import { createSupabaseDb, type Card, type Db } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
+import { gateStatus, mainHead } from './github.js';
 import { createLogger, errorMessage } from './log.js';
 import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
@@ -60,7 +61,12 @@ async function main(): Promise<void> {
   const running = new Map<string, Date>();
   const now = () => new Date();
   const budgets = new SessionBudgets();
-  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches };
+  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches, infraStops: new Map() };
+  const github = { token: config.githubToken, repo: config.githubRepo };
+  const mainGate = async () => {
+    const sha = await mainHead(github);
+    return { sha, status: await gateStatus(github, sha) };
+  };
   const leaseHolder = `${os.hostname()}/${process.pid}/${randomUUID().slice(0, 8)}`;
   const ttlSeconds = leaseTtlSeconds(config.tickMs);
 
@@ -113,6 +119,7 @@ async function main(): Promise<void> {
     log,
     alert,
     runCard: (card: Card) => runCardPipeline(card, pipeline),
+    mainGate,
   };
 
   while (!stop.signal.aborted) {

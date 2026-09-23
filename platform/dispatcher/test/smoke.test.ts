@@ -121,6 +121,14 @@ describe('runSmoke gate at the merge sha', () => {
     await expect(runSmoke({ ...base, fetchFn: fetchFor(GOOD).fetchFn, gate: gateIs({ state: 'missing' }) })).rejects.toThrow('still missing');
   });
 
+  it('is no verdict, and throws, when the gate run there was cancelled, failed to start or went stale (docs/specs/money-safety.md)', async () => {
+    for (const conclusion of ['cancelled', 'startup_failure', 'stale']) {
+      await expect(runSmoke({ ...base, fetchFn: fetchFor(GOOD).fetchFn, gate: gateIs({ state: 'fail', conclusion }) })).rejects.toThrow(
+        `the gate run at the merge sha merge-sh concluded ${conclusion} without judging the change`,
+      );
+    }
+  });
+
   it('checks the gate only after the served build passes', async () => {
     let asked = 0;
     const result = await runSmoke({

@@ -37,7 +37,13 @@ NTFY_FILE=$ETC_DIR/ntfy.url
 AGENT_UID=10001
 IMAGE=peanutgallery/dispatcher
 NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
-UNITS="dispatcher.service dispatcher-alert.service"
+# The dispatcher's units, then the jobs' (docs/specs/money-safety.md): the backup, the Controller and
+# the quota check, each a oneshot service run by its timer, and the alert their failures start.
+UNITS="dispatcher.service dispatcher-alert.service peanutgallery-job-alert@.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+# Every unit but the alert template, which systemd-analyze verify cannot load on its own.
+VERIFY_UNITS="dispatcher.service dispatcher-alert.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+# Where root runs the backup script from: installed from the commit, like the units.
+JOB_LIB=/usr/local/lib/peanutgallery
 SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 
 # The keys loadConfig requires (requireEnv in platform/dispatcher/src/config.ts, the managed agent ids
@@ -45,8 +51,14 @@ SSHD_DROPIN=/etc/ssh/sshd_config.d/10-peanutgallery.conf
 # URLs, which are optional on the Mac and required here. platform/ops/test/ops.test.mjs keeps this
 # list equal to config.ts.
 REQUIRED_KEYS="GITHUB_REPO SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY GITHUB_TOKEN NETLIFY_AUTH_TOKEN NETLIFY_SITE_ID_SEED NETLIFY_SITE_ID_PLATFORM MODEL_BUILDER PRICE_TABLE_JSON GITHUB_READ_TOKEN MANAGED_AGENT_ID MANAGED_AGENT_VERSION MANAGED_ENVIRONMENT_ID STUDIO_ANTHROPIC_API_KEY HEALTHCHECK_URL NTFY_TOPIC_URL"
-# Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key.
-FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY"
+# Secrets the dispatcher never needs: payments, the Supabase management token, the founder's key, the
+# jobs' own secrets, which live in their env files only, and the database owner's password.
+FORBIDDEN_KEYS="STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET SUPABASE_ACCESS_TOKEN ANTHROPIC_API_KEY STRIPE_READ_KEY BACKUP_DB_URL SUPABASE_DB_PASSWORD"
+# The jobs, each with its env file /etc/peanutgallery/<job>.env and its timer peanutgallery-<job>.timer.
+JOBS="backup controller quota"
+# The Supabase CLI the backup dumps with, pinned; provision.sh checks its package against the release's
+# own checksum file before installing it.
+SUPABASE_CLI_VERSION=2.117.0
 # Set by dispatcher.service, so the env file never carries a second value.
 UNIT_KEYS="DISPATCHER_CODE_ROOT DISPATCHER_REPO_ROOT DISPATCHER_WORKTREE_ROOT DISPATCHER_CODE_READONLY"
 
@@ -60,6 +72,13 @@ changed() {
 die() {
   printf 'provision: stopped: %s\n' "$*" >&2
   exit 1
+}
+
+# verify_units: systemd-analyze verify over every installed unit but the alert template.
+verify_units() {
+  local unit paths=()
+  for unit in $VERIFY_UNITS; do paths+=("/etc/systemd/system/$unit"); done
+  systemd-analyze verify "${paths[@]}"
 }
 
 # env_value <key> [file]: the value of KEY in a docker env file, or nothing.
@@ -96,6 +115,13 @@ check_env_lines() {
     seen="$seen$key "
     case "$value" in \"* | \'*)
       echo "$key starts with a quote; docker keeps quotes as part of the value"
+      problems=1
+      ;;
+    esac
+    # A Stripe secret key can move money; nothing on the VPS holds one, under any name
+    # (docs/specs/money-safety.md).
+    case "$value" in sk_live_* | sk_test_*)
+      echo "$key holds a Stripe secret key; nothing on the VPS may hold one, under any name"
       problems=1
       ;;
     esac
@@ -173,7 +199,7 @@ check_host() {
 
 install_packages() {
   local pkg status missing=()
-  for pkg in git ufw unattended-upgrades curl jq ca-certificates; do
+  for pkg in git ufw unattended-upgrades curl jq ca-certificates age; do
     # shellcheck disable=SC2016 # ${Status} is dpkg-query's format field, not a shell variable
     status=$(dpkg-query -W -f='${Status}' "$pkg" 2> /dev/null || true)
     [ "$status" = "install ok installed" ] || missing+=("$pkg")
@@ -699,7 +725,9 @@ build_image() {
   fi
 }
 
-# The units as committed at the code clone's HEAD.
+# The units as committed at the code clone's HEAD, and the backup script peanutgallery-backup.service
+# runs. systemd-analyze verify refuses a unit whose ExecStart does not exist, so the script goes in
+# before the units are verified, on a fresh host too.
 install_units() {
   local unit sha text reload=0
   sha=$(code_git rev-parse HEAD)
@@ -712,14 +740,82 @@ install_units() {
       reload=1
     fi
   done
+  install_job_scripts
   if [ "$reload" = 1 ]; then
     systemctl daemon-reload
   fi
-  systemd-analyze verify /etc/systemd/system/dispatcher.service /etc/systemd/system/dispatcher-alert.service || die "systemd-analyze verify failed on the units"
+  verify_units || die "systemd-analyze verify failed on the units"
   if ! systemctl is-enabled --quiet dispatcher; then
     systemctl enable dispatcher
     changed "dispatcher enabled (not started)"
   fi
+}
+
+# The backup script, as committed at the code clone's HEAD.
+install_job_scripts() {
+  local sha text
+  sha=$(code_git rev-parse HEAD)
+  text=$(mktemp)
+  unit_text "$sha" backup/backup.sh > "$text"
+  install_file "$JOB_LIB/backup.sh" 0755 < "$text"
+  rm -f "$text"
+}
+
+# install_supabase_cli: the pinned Supabase CLI, from its GitHub release, checked against the
+# release's checksum file. The backup's `supabase db dump` runs pg_dump in Docker, so no Postgres
+# client is installed on the host.
+install_supabase_cli() {
+  local arch work deb base
+  if [ "$(supabase --version 2> /dev/null || true)" = "$SUPABASE_CLI_VERSION" ]; then
+    return 0
+  fi
+  arch=$(dpkg --print-architecture)
+  deb="supabase_${SUPABASE_CLI_VERSION}_linux_${arch}.deb"
+  base="https://github.com/supabase/cli/releases/download/v$SUPABASE_CLI_VERSION"
+  work=$(mktemp -d)
+  curl -fsSL -o "$work/$deb" "$base/$deb" || die "could not download $deb"
+  curl -fsSL -o "$work/checksums.txt" "$base/supabase_${SUPABASE_CLI_VERSION}_checksums.txt" || die "could not download the Supabase CLI checksums"
+  if ! (cd "$work" && grep -E " \*?$deb\$" checksums.txt | sha256sum -c - > /dev/null); then
+    rm -rf "$work"
+    die "$deb does not match the checksum its release publishes"
+  fi
+  dpkg -i "$work/$deb" > /dev/null
+  rm -rf "$work"
+  [ "$(supabase --version)" = "$SUPABASE_CLI_VERSION" ] || die "the Supabase CLI did not install as $SUPABASE_CLI_VERSION"
+  changed "Supabase CLI $SUPABASE_CLI_VERSION installed"
+}
+
+# check_job_env <job>: returns 0 when /etc/peanutgallery/<job>.env exists and passes the job's checks
+# (platform/ops/jobs/check-env.mjs, in the image, as nobody, with no network; the file goes in on
+# stdin, so it stays root 0600), 1 when it is missing. Stops on a file that fails.
+check_job_env() {
+  local job=$1 file=$ETC_DIR/$1.env problems
+  if [ ! -f "$file" ]; then
+    say "note: $file is missing, so peanutgallery-$job.timer stays off (README.md, Backups and the Controller)"
+    return 1
+  fi
+  [ "$(stat -c '%U:%G %a' "$file")" = "root:root 600" ] || die "$file must be owned by root:root with mode 0600"
+  if ! problems=$(docker run --rm -i --pull never --network none --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges \
+    --volume "$CODE_DIR:$CODE_MOUNT:ro" --entrypoint node "$IMAGE:current" \
+    "$CODE_MOUNT/platform/ops/jobs/check-env.mjs" "$job" /dev/stdin < "$file"); then
+    die "$file:
+$problems"
+  fi
+  say "$job env file: valid"
+}
+
+# The jobs: the backup's tools (install_units installed its script), then each timer whose env file
+# passes. A timer only schedules its job; nothing here runs one.
+install_jobs() {
+  local job timer
+  install_supabase_cli
+  for job in $JOBS; do
+    timer=peanutgallery-$job.timer
+    if check_job_env "$job" && ! systemctl is-enabled --quiet "$timer"; then
+      systemctl enable --now "$timer"
+      changed "$timer enabled"
+    fi
+  done
 }
 
 main() {
@@ -738,6 +834,7 @@ main() {
   lock_code_clone
   create_work_clone
   install_units
+  install_jobs
   if systemctl is-active --quiet dispatcher; then
     say "the dispatcher is running"
   else

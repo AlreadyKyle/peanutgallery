@@ -36,7 +36,13 @@ ENV_FILE=/etc/peanutgallery/dispatcher.env
 IMAGE=peanutgallery/dispatcher
 BUILD_UID=10002
 NODE_IMAGE=${NODE_IMAGE:-node:22-bookworm-slim}
-UNITS="dispatcher.service dispatcher-alert.service"
+# The dispatcher's units, then the jobs' (docs/specs/money-safety.md): the backup, the Controller and
+# the quota check, each a oneshot service run by its timer, and the alert their failures start.
+UNITS="dispatcher.service dispatcher-alert.service peanutgallery-job-alert@.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+# Every unit but the alert template, which systemd-analyze verify cannot load on its own.
+VERIFY_UNITS="dispatcher.service dispatcher-alert.service peanutgallery-backup.service peanutgallery-backup.timer peanutgallery-controller.service peanutgallery-controller.timer peanutgallery-quota.service peanutgallery-quota.timer"
+# Where root runs the backup script from: installed from the commit, like the units.
+JOB_LIB=/usr/local/lib/peanutgallery
 PROBE_WAIT_SECONDS=${PROBE_WAIT_SECONDS:-600}
 CONFIRM_TTY=${CONFIRM_TTY:-/dev/tty}
 USAGE="usage: deploy.sh [--ref <commit sha>] [--confirm <first 12 characters of the target sha>]"
@@ -50,6 +56,13 @@ say() { printf 'deploy: %s\n' "$*"; }
 die() {
   printf 'deploy: stopped: %s\n' "$*" >&2
   exit 1
+}
+
+# verify_units: systemd-analyze verify over every installed unit but the alert template.
+verify_units() {
+  local unit paths=()
+  for unit in $VERIFY_UNITS; do paths+=("/etc/systemd/system/$unit"); done
+  systemd-analyze verify "${paths[@]}"
 }
 
 # env_value <key>: the value of KEY in the env file, or nothing.
@@ -326,7 +339,7 @@ exclude_store() {
 # check_ref <sha>: returns 0 when a roll back may go to sha, else prints why and returns 1. The sha
 # must be on origin/main, at or after ROLLBACK_FLOOR, and its dispatcher.service must mount the code
 # clone read-only, so a roll back never returns to a layout where the dispatcher runs from a clone it
-# can write.
+# can write. It must also carry every unit and the backup script this script installs.
 check_ref() {
   local ref=$1
   if ! [[ "$ROLLBACK_FLOOR" =~ ^[0-9a-f]{40}$ ]]; then
@@ -345,12 +358,20 @@ check_ref() {
     echo "$ref is older than the rollback floor $ROLLBACK_FLOOR"
     return 1
   fi
-  local unit
+  local unit file
   unit=$(code_git show "$ref:platform/ops/dispatcher.service" 2> /dev/null) || unit=""
   if ! grep -qF -- '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro' <<< "$unit"; then
     echo "$ref's platform/ops/dispatcher.service does not mount the code clone read-only"
     return 1
   fi
+  # Every file main() installs from the target must be in it, or the deploy would stop after moving
+  # the code clone and before the units (docs/specs/money-safety.md): no roll back behind the jobs.
+  for file in $UNITS backup/backup.sh; do
+    if ! code_git cat-file -e "$ref:platform/ops/$file" 2> /dev/null; then
+      echo "$ref has no platform/ops/$file, so it is older than the jobs; take the change out with a revert on main instead"
+      return 1
+    fi
+  done
 }
 
 # review_target <deployed sha> <target sha>: what the deploy would change, for a person to read: the
@@ -579,9 +600,15 @@ main() {
       say "installed /etc/systemd/system/$unit from $new"
     fi
   done
+  # The backup script root runs, from the same commit (docs/specs/money-safety.md).
+  unit_text "$new" backup/backup.sh > "$WORK/backup.sh" || die "platform/ops/backup/backup.sh is not in $new"
+  if ! cmp -s "$WORK/backup.sh" "$JOB_LIB/backup.sh"; then
+    install -D -m 0755 "$WORK/backup.sh" "$JOB_LIB/backup.sh"
+    say "installed $JOB_LIB/backup.sh from $new"
+  fi
   if [ "$reload" = 1 ]; then
     systemctl daemon-reload
-    systemd-analyze verify /etc/systemd/system/dispatcher.service /etc/systemd/system/dispatcher-alert.service || die "systemd-analyze verify failed on the new units"
+    verify_units || die "systemd-analyze verify failed on the new units"
   fi
 
   if [ "$old" = "$new" ] && [ "$before" = "$(image_id "$IMAGE:current")" ] && [ "$reload" = 0 ] && systemctl is-active --quiet dispatcher; then

@@ -132,6 +132,8 @@ interface Remote {
   existing?: Answer;
   pull?: Answer;
   gate?: Reply;
+  // The gate at the card's base, main's head when the card was claimed; green when unset.
+  baseGate?: Reply;
   merge?: Answer;
   deploys?: Answer;
   site?: Answer;
@@ -180,7 +182,9 @@ function remote(over: Remote = {}) {
       return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) {
-      return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
+      const green = { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' }] } };
+      if (CHECK_RUNS.exec(url)?.[1] === initialSha) return over.baseGate ?? green;
+      return over.gate ?? green;
     }
     const git = github(method, url);
     if (git) return git;
@@ -328,7 +332,7 @@ describe('runCardPipeline', () => {
       {},
     ],
     ['the deploy list returns 502 up to the deadline', { deploys: { status: 502, json: {} } }, 'netlify deploys: http 502', { deployTimeoutMs: 30 }],
-  ])('restores, reverts and rejects post_merge when %s after the merge', async (_name, over, detail, timings) => {
+  ])('restores and reverts, then pauses the card rather than rejecting it, when %s after the merge', async (_name, over, detail, timings) => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     db.deploys = [OLDER_GREEN];
@@ -336,17 +340,17 @@ describe('runCardPipeline', () => {
     const alert = new RecordingAlerter();
     await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert), timings: { ...FAST, ...timings } });
 
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'post_merge', commit_sha: MERGE_SHA });
-    expect(db.events.at(-1)).toMatchObject({
-      type: 'revert',
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'post_merge_outage', commit_sha: MERGE_SHA });
+    expect(db.events.find((event) => event.type === 'revert')).toMatchObject({
       payload: { failed_sha: MERGE_SHA, reason: `post-merge check failed: ${detail}`, restored_sha: 'older-sha', revert_sha: 'revert-sha' },
     });
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'infrastructure', check: 'post_merge_outage', stage: 'paused' } });
     expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
     expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
     expect(db.deploys.filter((row) => row.is_green)).toEqual([OLDER_GREEN]);
     expect(alert.messages).toEqual([
       `Card 4c2f5a1e was reverted on main (revert-): post-merge check failed: ${detail}`,
-      `Card 4c2f5a1e rejected (post_merge): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}`,
+      `Card 4c2f5a1e stopped by infrastructure, not by its change (post_merge_outage): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}. The change was rolled back as unverified; the card is paused with its money and is not rejected. Resume it from /board once the outage is over.`,
     ]);
   });
 
@@ -492,7 +496,9 @@ describe('runCardPipeline', () => {
     expect(alert.messages[0]).toContain('platform/gate/ship-gate.sh');
   });
 
-  it('waits for an existing pull request to show the pushed sha, then rejects pr_head without gating on the stale head', async () => {
+  // GitHub lagging behind a push is an infrastructure stop (docs/specs/money-safety.md): never a
+  // rejection. With no stored patch to re-gate (attended mode), the card pauses with its money.
+  it('waits for an existing pull request to show the pushed sha, then pauses on pr_head, unrejected, without gating on the stale head', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
     const { fetchFn, calls } = remote({
@@ -500,8 +506,11 @@ describe('runCardPipeline', () => {
       existing: { status: 200, json: [{ number: 5, head: { sha: 'stale-sha' } }] },
       pull: { status: 200, json: { number: 5, head: { sha: 'stale-sha' }, merged: false } },
     });
-    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'pr_head', commit_sha: null });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert), infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'pr_head', commit_sha: null });
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'infrastructure', check: 'pr_head', stops: 1, stage: 'paused' } });
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card 4c2f5a1e stopped by infrastructure, not by its change \(pr_head\): .*did not show the pushed sha/)]);
     expect(urls(calls).filter((call) => call === `GET ${GITHUB}/pulls/5`).length).toBeGreaterThan(1);
     expect(urls(calls).some((call) => CHECK_RUNS.test(call.slice(4)) || call.startsWith('PUT'))).toBe(false);
   });
@@ -601,7 +610,7 @@ describe('runCardPipeline', () => {
     });
     const alert = new RecordingAlerter();
     await runCardPipeline(c, deps(noSha, new FakeAdapter(editSite), fetchFn, stop, alert));
-    expect(noSha.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'post_merge', commit_sha: null });
+    expect(noSha.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'dispatcher_stopped', commit_sha: null });
     expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
     expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
     expect(alert.messages[0]).toBe('Card 4c2f5a1e merged as merge-sh but its commit_sha was not written (db update card: connection reset). Verification goes on.');
@@ -1014,14 +1023,32 @@ describe('runCardPipeline', () => {
     expect(adapter.specs).toEqual([]);
   });
 
-  it('rejects with dispatcher_error and a role-less event when the role cannot be read', async () => {
+  // A database error before any session is not the card's failure (docs/specs/money-safety.md): the
+  // card goes back to funded, and pauses at the third such stop in a row. It is never rejected.
+  it('puts the card back in funded, unrejected, with a role-less event when the role cannot be read, and pauses it at the third stop', async () => {
     const c = card();
     db.cards = [{ ...c, stage: 'building' }];
     db.roles = [];
     const adapter = new FakeAdapter(async () => undefined);
-    await runCardPipeline(c, deps(db, adapter, remote().fetchFn));
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'dispatcher_error', branch: null });
-    expect(db.events).toEqual([{ card_id: c.id, role_id: null, type: 'error', payload: { step: 'pipeline', message: 'db role: no row for role-builder-a' } }]);
+    const infraStops = new Map<string, number>();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), infraStops });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'dispatcher_error', branch: null });
+    expect(db.events).toEqual([
+      {
+        card_id: c.id,
+        role_id: null,
+        type: 'message',
+        payload: { step: 'infrastructure', check: 'dispatcher_error', detail: 'db role: no row for role-builder-a', stops: 1, stage: 'funded' },
+      },
+    ]);
+    expect(alert.messages[0]).toMatch(/It stopped before any session ran, so it is back in funded to be claimed again \(stop 1; it pauses at 3 in a row\)\.$/);
+    for (const expected of ['funded', 'paused']) {
+      db.cards = [{ ...db.cards[0]!, stage: 'building' }];
+      await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), infraStops });
+      expect(db.cards[0]).toMatchObject({ stage: expected, failing_check: 'dispatcher_error' });
+    }
+    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money; resume it from \/board/);
     expect(adapter.specs).toEqual([]);
   });
 
@@ -1116,9 +1143,10 @@ describe('runCardPipeline', () => {
     const building = { id: 'dep-2', state: 'building', commit_ref: MERGE_SHA, context: 'production' };
     const { fetchFn, calls } = remote({ deploys: { status: 200, json: [building] } });
     await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn), timings: { ...FAST, deployTimeoutMs: 30 } });
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'deploy' });
+    // Netlify not finishing is not the card's failure: rolled back, then paused rather than rejected.
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'deploy_timeout' });
     expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
-    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { reason: 'deploy did not finish: deploy dep-2 still building after 0.03 s', restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
+    expect(db.events.find((event) => event.type === 'revert')).toMatchObject({ payload: { reason: 'deploy did not finish: deploy dep-2 still building after 0.03 s', restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
   });
 
   it('pauses the studio and the card, keeping its money, when the API says the Console credit ran out, and nothing more is claimed', async () => {
@@ -1346,6 +1374,169 @@ describe('a card with a stored patch', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'patch_conflict' });
     expect(calls).toEqual([]);
     expect(alert.messages[0]).toMatch(/paused \(patch_conflict\).*no longer applies on main/);
+  });
+});
+
+// docs/specs/money-safety.md: an infrastructure failure never rejects a paid card. Before the merge it
+// goes back to funded on its stored patch and is re-gated with no session; without a stored patch, or
+// at the limit of stops in a row, it pauses. A card whose own change fails is still rejected.
+describe('a paid card and an infrastructure failure', () => {
+  const RUN = (status: string, conclusion: string | null) => ({ status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status, conclusion }] } });
+  const SLOW: Partial<PipelineTimings> = { ...FAST, gateTimeoutMs: 20, gateIntervalMs: 5 };
+
+  async function withPatch(id: string) {
+    const db = new FakeDb();
+    const c = platformCard({ id });
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    const patches = new MemoryPatchStore();
+    await patches.save(storedPatch(c.id, initialSha, Buffer.from(storedSitePatch('<title>Studio</title>')), 'Name the page Studio', 'sesn_earlier'));
+    let sessions = 0;
+    const adapter = new FakeAdapter(async () => {
+      sessions += 1;
+    });
+    return { db, c, patches, adapter, sessions: () => sessions };
+  }
+
+  it.each<[string, Remote, string]>([
+    ['no gate run ever starts', { gate: { status: 200, json: { check_runs: [] } } }, 'gate_missing'],
+    ['the gate is still running at the deadline', { gate: RUN('in_progress', null) }, 'gate_pending'],
+    ['the gate run was cancelled', { gate: RUN('completed', 'cancelled') }, 'gate_infrastructure'],
+    ['the gate run failed to start', { gate: RUN('completed', 'startup_failure') }, 'gate_infrastructure'],
+    ['main was already red at the card\'s base', { gate: RUN('completed', 'failure'), baseGate: RUN('completed', 'failure') }, 'main_red'],
+    [
+      'the pull request never shows the pushed sha',
+      {
+        created: { status: 422, json: { message: 'A pull request already exists for owner:card/eeeeeeee-code.' } },
+        existing: { status: 200, json: [{ number: 5, head: { sha: 'stale-sha' } }] },
+        pull: { status: 200, json: { number: 5, head: { sha: 'stale-sha' }, merged: false } },
+      },
+      'pr_head',
+    ],
+  ])('re-queues the card on its stored patch, unmerged and unrejected, when %s', async (_name, over, check) => {
+    const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000011');
+    const infraStops = new Map<string, number>();
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote(over);
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), timings: SLOW, patches, infraStops });
+    expect(sessions()).toBe(0);
+    expect(db.ledger).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: check, commit_sha: null });
+    expect(patches.rows).toHaveLength(1);
+    expect(db.events.map((e) => e.type)).not.toContain('gate_fail');
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'infrastructure', check, stops: 1, stage: 'funded' } });
+    expect(urls(calls).some((call) => call.startsWith('PUT') || call.includes('/git/commits') || call.includes('/rerun'))).toBe(false);
+    expect(alert.messages).toEqual([expect.stringMatching(new RegExp(`^Card eeeeeeee stopped by infrastructure, not by its change \\(${check}\\): .* It is back in funded and is re-gated from its stored patch with no new session \\(stop 1; it pauses at 3 in a row\\)\\.$`))]);
+    expect(infraStops.get(c.id)).toBe(1);
+  });
+
+  it('re-queues on a GitHub outage before the merge, and pauses at the third stop in a row', async () => {
+    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000012');
+    const infraStops = new Map<string, number>();
+    const alert = new RecordingAlerter();
+    const { fetchFn } = remote({ created: { status: 502, json: { message: 'Bad Gateway' } } });
+    for (const expected of ['funded', 'funded', 'paused']) {
+      db.cards = [{ ...db.cards[0]!, stage: 'building' }];
+      await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), timings: SLOW, patches, infraStops });
+      expect(db.cards[0]).toMatchObject({ stage: expected, failing_check: 'outage' });
+    }
+    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money and its stored patch/);
+    expect(patches.rows).toHaveLength(1);
+  });
+
+  it('puts a card back in funded, with no session and nothing pushed, when the fetch of main fails before any work', async () => {
+    const db = new FakeDb();
+    const c = platformCard({ id: 'eeeeeeee-0000-4000-8000-000000000016' });
+    db.cards = [{ ...c, stage: 'building' }];
+    let sessions = 0;
+    const adapter = new FakeAdapter(async () => {
+      sessions += 1;
+    });
+    setGitRunner((call) => {
+      if (call.args.includes('fetch')) return Promise.reject(new Error('fatal: unable to access https://github.com/owner/repo.git/: Could not resolve host: github.com'));
+      return defaultGitRunner(call);
+    });
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), patches: new MemoryPatchStore(), infraStops: new Map() });
+    setGitRunner(null);
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'dispatcher_error', commit_sha: null });
+    expect(sessions).toBe(0);
+    expect(db.ledger).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'infrastructure', check: 'dispatcher_error', stops: 1, stage: 'funded' } });
+    expect(alert.messages).toEqual([expect.stringMatching(/Could not resolve host: github\.com\. It stopped before any session ran, so it is back in funded to be claimed again \(stop 1; it pauses at 3 in a row\)\.$/)]);
+  });
+
+  it('re-queues on a database error after the gate passes, instead of rejecting the card', async () => {
+    class FlakyDb extends FakeDb {
+      override async insertEvent(cardId: string, roleId: string | null, type: Parameters<FakeDb['insertEvent']>[2], payload: Record<string, unknown>) {
+        if (type === 'gate_pass') throw new Error('db event: TypeError: fetch failed');
+        return super.insertEvent(cardId, roleId, type, payload);
+      }
+    }
+    const { c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000017');
+    const db = new FlakyDb();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'dispatcher_error', commit_sha: null });
+    expect(sessions()).toBe(0);
+    expect(patches.rows).toHaveLength(1);
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+  });
+
+  it('clears the count of stops once the gate passes, and ships from the stored patch', async () => {
+    const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000013');
+    const infraStops = new Map<string, number>([['eeeeeeee-0000-4000-8000-000000000013', 2]]);
+    const { fetchFn } = remote();
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), patches, infraStops });
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+    expect(sessions()).toBe(0);
+    expect(infraStops.has(c.id)).toBe(false);
+  });
+
+  it('pauses rather than re-queueing a card with no stored patch, so no new session starts', async () => {
+    const db = new FakeDb();
+    const c = platformCard({ id: 'eeeeeeee-0000-4000-8000-000000000014' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const alert = new RecordingAlerter();
+    const { fetchFn } = remote({ gate: RUN('completed', 'startup_failure') });
+    await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert), timings: SLOW, patches: new MemoryPatchStore(), infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'gate_infrastructure' });
+    expect(alert.messages[0]).toMatch(/It has no stored patch to re-gate, so it is paused with its money rather than starting a new session/);
+  });
+
+  it("still rejects a card whose own change fails the gate on a green base", async () => {
+    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
+    const { fetchFn, calls } = remote({ gate: RUN('completed', 'failure') });
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
+    expect(db.events.at(-1)).toMatchObject({ type: 'gate_fail', payload: { detail: 'gate concluded failure' } });
+    expect(urls(calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
+  });
+
+  it('still rolls back and rejects a card whose gate fails at the merge sha, and pauses one whose gate there was cancelled', async () => {
+    for (const [mergeGate, stage, check] of [
+      ['failure', 'rejected', 'smoke'],
+      ['cancelled', 'paused', 'post_merge_outage'],
+    ] as const) {
+      // The seed remote merges for real and its revert is mocked, so each case starts from the initial commit.
+      await git(['update-ref', 'refs/heads/main', initialSha], origin);
+      const db = new FakeDb();
+      const c = card();
+      db.cards = [{ ...c, stage: 'building' }];
+      db.deploys = [{ ...OLDER_GREEN, folder: 'seed-1' }];
+      const adapter = new FakeAdapter(async (spec, emit) => {
+        await emit(startEvent());
+        await editSpawnTable(spec.worktree, 11);
+        await emit(usageEvent(1, 10));
+      });
+      const { fetchFn, calls } = seedRemote({ mergeGate });
+      await runCardPipeline(c, { ...deps(db, adapter, fetchFn), infraStops: new Map() });
+      expect(db.cards[0]).toMatchObject({ stage, failing_check: check });
+      expect(urls(calls)).toContain(`PATCH ${GITHUB}/git/refs/heads/main`);
+    }
   });
 });
 

@@ -9,12 +9,12 @@
 // 4. the gate check from GitHub Actions concluded success at the merge sha: gate.yml runs on the
 //    push to main, bot included, on the merged tree.
 // A failed check is a verdict and the pipeline rolls the merge back. A page that never answers, a
-// merge commit git cannot read, or a gate still running when the wait ends is no verdict: runSmoke
-// throws and the pipeline decides.
+// merge commit git cannot read, a gate still running when the wait ends, or a gate run cancelled or
+// never started (docs/specs/money-safety.md) is no verdict: runSmoke throws and the pipeline decides.
 import { createHash } from 'node:crypto';
 import { evaluateCheck, type ConfigCheck } from './acceptance.js';
 import type { CardFolder } from './adapters/types.js';
-import { requestSignal, type GateStatus } from './github.js';
+import { isInfrastructureConclusion, requestSignal, type GateStatus } from './github.js';
 import { retry } from './time.js';
 import { fetchMain, git } from './worktree.js';
 
@@ -191,6 +191,9 @@ export async function runSmoke(input: SmokeInput): Promise<SmokeResult> {
     served = `; ${input.checks.length} config check(s) hold; ${files.length} served file(s) match the merge commit`;
   }
   const gate = await input.gate();
+  if (gate.state === 'fail' && isInfrastructureConclusion(gate.conclusion)) {
+    throw new Error(`the gate run at the merge sha ${input.sha.slice(0, 8)} concluded ${gate.conclusion} without judging the change`);
+  }
   if (gate.state === 'fail') return { ok: false, summary: `fail: the gate at the merge sha concluded ${gate.conclusion}` };
   if (gate.state !== 'pass') throw new Error(`the gate at the merge sha ${input.sha.slice(0, 8)} was still ${gate.state} when the smoke wait ended`);
   return { ok: true, summary: `pass: build ${input.sha.slice(0, 8)} served${served}; gate green at the merge sha` };

@@ -1442,6 +1442,201 @@ describe("roles-revoke migration", () => {
   });
 });
 
+// docs/specs/money-safety.md: the backup login, the ledger identity in SQL, the Controller's tables and
+// the append-only money tables.
+const MONEY_SAFETY_FILES = {
+  entries: "20260923000000_contribution_entries.sql",
+  backup: "20260923000010_backup_role.sql",
+  appendOnly: "20260923000020_append_only.sql",
+} as const;
+const entriesSql = launchFile(MONEY_SAFETY_FILES.entries);
+const backupSql = launchFile(MONEY_SAFETY_FILES.backup);
+const appendOnlySql = launchFile(MONEY_SAFETY_FILES.appendOnly);
+const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs"];
+
+describe("money-safety migrations: order", () => {
+  it("carry 14-digit stamps in order, after every launch file", () => {
+    const names: string[] = Object.values(MONEY_SAFETY_FILES);
+    for (const name of names) expect(name).toMatch(/^\d{14}_[a-z0-9_]+\.sql$/);
+    expect([...names].sort()).toEqual(names);
+    expect(names[0]! > LAUNCH_FILES.revoke).toBe(true);
+  });
+
+  it("add the two entry labels alone, so no file uses them in the transaction that adds them", () => {
+    expect(withoutComments(entriesSql)).toBe(
+      [
+        "alter type public.contribution_entry add value if not exists 'reinstated';",
+        "alter type public.contribution_entry add value if not exists 'adjustment';",
+      ].join("\n"),
+    );
+    for (const name of Object.values(LAUNCH_FILES)) expect(launchFile(name)).not.toMatch(/'(reinstated|adjustment)'/);
+  });
+});
+
+describe("backup-role migration", () => {
+  it("creates the backup login with no password, and a second run never touches one", () => {
+    expect(withoutComments(backupSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(backupSql)).not.toMatch(/password\s+(null|'|")|encrypted\s+password/i);
+    expect(backupSql).toContain(
+      "  create role peanutgallery_backup with login nosuperuser nocreatedb nocreaterole noreplication inherit connection limit 4;\nexception\n  when duplicate_object then null;",
+    );
+    expect(backupSql).toContain("alter role peanutgallery_backup set default_transaction_read_only = on;");
+  });
+
+  it("grants reads only: select on every table and sequence, never a write", () => {
+    const grants = withoutComments(backupSql)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^(grant|alter default privileges)/.test(line) && line.includes("peanutgallery_backup"));
+    expect(grants).toEqual([
+      "grant pg_read_all_data to peanutgallery_backup;",
+      "grant usage on schema public to peanutgallery_backup;",
+      "grant select on all tables in schema public to peanutgallery_backup;",
+      "grant select on all sequences in schema public to peanutgallery_backup;",
+      "alter default privileges in schema public grant select on tables to peanutgallery_backup;",
+      "alter default privileges in schema public grant select on sequences to peanutgallery_backup;",
+      "grant usage on schema auth to peanutgallery_backup;",
+      "grant select on all tables in schema auth to peanutgallery_backup;",
+      "grant usage on schema supabase_migrations to peanutgallery_backup;",
+      "grant select on all tables in schema supabase_migrations to peanutgallery_backup;",
+      "grant execute on function public.ledger_identity() to service_role, peanutgallery_backup;",
+    ]);
+    expect(withoutComments(backupSql)).not.toMatch(/pg_write_all_data|grant (all|insert|update|delete)[^;]*peanutgallery_backup/);
+  });
+
+  it("computes the three identity lines the ledger-identity script checks, in one function", () => {
+    const block = functionBlockIn(backupSql, "ledger_identity");
+    expect(block).toContain("v_i1 := v_pool.reserve_usd - v_reserve;");
+    expect(block).toContain("v_i2 := (v_pool.balance_usd + v_pool.incident_reserve_usd + v_pool.held_usd) - (v_agents - v_studio);");
+    expect(block).toContain("v_i3 := v_pool.held_usd - v_held;");
+    expect(block).toContain("coalesce(sum(usd) filter (where billed_to = 'studio'), 0),");
+    expect(block).toContain("stable\nsecurity definer\nset search_path = public");
+  });
+
+  it("keeps controller_runs private to the service role, which may insert and read but not change a row", () => {
+    expect(backupSql).toContain("alter table public.controller_runs enable row level security;");
+    expect(backupSql).toContain("revoke all on table public.controller_runs from anon, authenticated;");
+    expect(backupSql).toContain("grant select, insert on table public.controller_runs to service_role;");
+    expect(backupSql).toContain("check (job in ('reconcile', 'quota'))");
+  });
+
+  it("measures remaining ceilings the way the throttle does, and gives the two job functions to the service role only", () => {
+    const figures = functionBlockIn(backupSql, "controller_figures");
+    expect(figures).toContain("least(round(1.5 * c.estimate_usd, 4), v_state.card_max_usd) - coalesce(s.usd, 0)");
+    expect(figures).toContain("where c.stage in ('funded', 'building');");
+    expect(figures).toContain("(p.agents_usd - p.incident_usd - p.held_usd) + coalesce(sum(c.agents_usd - c.incident_usd - c.held_usd), 0) as agent_money_usd");
+    for (const name of ["controller_figures", "ops_database_size"]) {
+      expect(backupSql).toContain(`revoke all on function public.${name}() from public, anon, authenticated;\ngrant execute on function public.${name}() to service_role;`);
+    }
+  });
+});
+
+describe("append-only migration", () => {
+  it("guards exactly the five money tables against update, delete and truncate", () => {
+    expect(appendOnlySql).toContain(`foreach v_table in array array[${APPEND_ONLY_TABLES.map((t) => `'${t}'`).join(", ")}] loop`);
+    expect(appendOnlySql).toContain("before update or delete on public.%I for each row execute function public.refuse_money_change()");
+    expect(appendOnlySql).toContain("before truncate on public.%I for each statement execute function public.refuse_money_change()");
+    expect(appendOnlySql).toContain("contribution_allocations and card_approvals do not exist yet");
+  });
+
+  it("lets through only the plan's two exceptions: decision_id set once and display_name nulled inside the privacy RPC", () => {
+    const guard = functionBlockIn(appendOnlySql, "refuse_money_change");
+    expect(guard).not.toContain("security definer");
+    expect(guard.match(/return new;/g)).toHaveLength(3);
+    expect(guard).toContain("if old.decision_id is null and new.decision_id is not null\n      and v_new - 'decision_id' = v_old - 'decision_id' then");
+    expect(guard).toContain(
+      "if old.display_name is not null and new.display_name is null\n      and v_new - 'display_name' = v_old - 'display_name'\n      and current_setting('peanutgallery.redact_name', true) = 'on' then",
+    );
+    expect(guard).not.toContain("card_id");
+    // A card a board action names cannot be deleted, so no foreign key ever rewrites an action.
+    expect(appendOnlySql).toContain(
+      "alter table public.board_actions drop constraint if exists board_actions_card_id_fkey;\nalter table public.board_actions add constraint board_actions_card_id_fkey\n  foreign key (card_id) references public.cards (id) on delete restrict;",
+    );
+    const redact = functionBlockIn(appendOnlySql, "redact_contribution_name");
+    expect(redact).toContain(
+      "perform set_config('peanutgallery.redact_name', 'on', true);\n  update public.contributions set display_name = null\n  where id = p_contribution_id and display_name is not null;\n  v_nulled := found;\n  perform set_config('peanutgallery.redact_name', 'off', true);",
+    );
+  });
+
+  it("keeps reverse_contribution's money-fixes body except that reinstated rows count as given back", () => {
+    const block = functionBlockIn(appendOnlySql, "reverse_contribution");
+    expect(
+      undo(block, [
+        [
+          "    -coalesce(sum(amount_usd) filter (where entry in ('refund', 'dispute', 'reinstated')), 0),",
+          "    -coalesce(sum(amount_usd) filter (where entry in ('refund', 'dispute')), 0),",
+        ],
+      ]),
+    ).toBe(functionBlockIn(moneySql, "reverse_contribution"));
+  });
+
+  it("opens record_adjustment and redact_contribution_name with the board preamble, records each, and grants them to authenticated", () => {
+    for (const name of ["record_adjustment", "redact_contribution_name"]) {
+      const block = functionBlockIn(appendOnlySql, name);
+      expect(block.slice(block.indexOf("\nbegin\n") + "\nbegin\n".length)).toMatch(new RegExp(`^${escape(BOARD_PREAMBLE)}`));
+      expect(block).toContain("insert into public.board_actions (action, card_id, actor_email, reason, details)");
+    }
+    expect(appendOnlySql).toContain("grant execute on function public.record_adjustment(uuid, numeric, numeric, numeric, numeric, text) to authenticated, service_role;");
+    expect(appendOnlySql).toContain("grant execute on function public.redact_contribution_name(uuid, text) to authenticated, service_role;");
+    expect(appendOnlySql).toContain(
+      "check (action in ('set_caps', 'record_credit_purchase', 'file_card', 'set_card_horizon', 'cancel_card', 'resume_card', 'record_adjustment', 'redact_display_name'));",
+    );
+  });
+
+  it("writes a reinstated row that negates the disputes, keyed on the dispute, for the service role only", () => {
+    const block = functionBlockIn(appendOnlySql, "record_dispute_reinstated");
+    expect(block).toContain("v_ref := p_dispute_id || ':reinstated';");
+    expect(block).toContain("where parent_id = v_payment.id and entry in ('dispute', 'reinstated');");
+    expect(block).toContain(
+      "'reinstated', v_payment.id, v_payment.rail, v_payment.contributor_id, -v_amount, -v_net,\n    -v_reserve, -v_agents, -v_studio, -v_incident, v_payment.studio_pct_chosen, v_payment.kind,\n    v_payment.public, v_payment.goal_card_id, v_ref, 0, now()",
+    );
+    expect(block).toContain("balance_usd = balance_usd - (v_agents - v_incident)");
+    // The card's bar gets back what the pool balance does, so a later refund never takes it below zero.
+    expect(block).toContain("set funded_usd = funded_usd - (v_agents - v_incident)\n    where id = v_payment.goal_card_id;");
+    expect(block.indexOf("from public.cards where id = v_payment.goal_card_id for update")).toBeLessThan(block.indexOf("from public.pool where id = 1 for update"));
+    expect(appendOnlySql).toContain(
+      "revoke all on function public.record_dispute_reinstated(text, text, numeric) from public, anon, authenticated;\ngrant execute on function public.record_dispute_reinstated(text, text, numeric) to service_role;",
+    );
+  });
+});
+
+// The production proof after the money-safety files are applied is anon-negative-test.ts, so it must
+// probe every private object they add: each new table as a private table, and each new function as an
+// RPC anon is refused with 42501.
+describe("anon-negative-test covers the money-safety objects", () => {
+  const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+  const block = (name: string) => {
+    const start = script.indexOf(`const ${name}`);
+    return script.slice(start, script.indexOf("];", start));
+  };
+  const moneySafety = [backupSql, appendOnlySql].map(withoutComments).join("\n");
+
+  it("lists every table the files create as private", () => {
+    const tables = [...moneySafety.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]!);
+    expect(tables).toEqual(["controller_runs"]);
+    for (const table of tables) expect(block("PRIVATE_TABLES")).toContain(`"${table}"`);
+  });
+
+  it("probes every function the files revoke from anon", () => {
+    const functions = [...new Set([...moneySafety.matchAll(/revoke all on function public\.(\w+)\([^)]*\) from public, anon/g)].map((m) => m[1]!))].sort();
+    expect(functions).toEqual([
+      "controller_figures",
+      "ledger_identity",
+      "ops_database_size",
+      "record_adjustment",
+      "record_dispute_reinstated",
+      "redact_contribution_name",
+      "refuse_money_change",
+      "reverse_contribution",
+    ]);
+    // The trigger function is not an RPC PostgREST serves, and reverse_contribution's grant predates
+    // these files and is unchanged by them.
+    for (const name of functions.filter((f) => f !== "refuse_money_change" && f !== "reverse_contribution")) {
+      expect(block("RPC_PROBES")).toContain(`["${name}", {`);
+    }
+  });
+});
+
 // The scale migration (docs/specs/scale-launch.md): the dispatcher's spend totals in SQL and the
 // usage tier cap.
 

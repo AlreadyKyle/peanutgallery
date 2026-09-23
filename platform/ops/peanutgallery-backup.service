@@ -1,0 +1,19 @@
+# The nightly backup of the money database (docs/specs/money-safety.md): backup.sh as root on the host,
+# since `supabase db dump` runs pg_dump in a container. Started by peanutgallery-backup.timer.
+# provision.sh installs it and enables the timer only once /etc/peanutgallery/backup.env passes its
+# check. On failure the script pings the backup healthcheck's /fail and OnFailure= posts to ntfy.
+[Unit]
+Description=Peanut Gallery nightly database backup
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+ConditionPathExists=/etc/peanutgallery/backup.env
+OnFailure=peanutgallery-job-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/peanutgallery/backup.sh
+TimeoutStartSec=2h
+Nice=10
+PrivateTmp=true
+UMask=0077

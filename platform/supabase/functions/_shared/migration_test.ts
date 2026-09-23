@@ -104,6 +104,14 @@ const BOARD_STATE_KEYS = [
   "paused_by",
 ];
 
+/** The tables 20260923000020_append_only.sql guards, each with a <table>_append_only trigger. */
+const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs"];
+
+/** SQL that turns every append-only row trigger off or back on (fixture writes only). */
+function setAppendOnly(state: "disable" | "enable"): string {
+  return APPEND_ONLY_TABLES.map((table) => `alter table public.${table} ${state} trigger ${table}_append_only;`).join("\n");
+}
+
 const BOARD_EMAIL = "board@peanutgallery.games";
 const MODERATOR_EMAIL = "mod@peanutgallery.games";
 const OUTSIDER_EMAIL = "someone@peanutgallery.games";
@@ -224,6 +232,9 @@ Deno.test("migrations on PGlite", {
         "20260922000300_backlog.sql",
         "20260922000400_public_roles.sql",
         "20260922000500_roles_revoke.sql",
+        "20260923000000_contribution_entries.sql",
+        "20260923000010_backup_role.sql",
+        "20260923000020_append_only.sql",
         "20260923000100_spend_totals.sql",
         "20260923000200_rename_biz_dev.sql",
       ]);
@@ -243,6 +254,12 @@ Deno.test("migrations on PGlite", {
         await db.exec(m.sql.replaceAll(PGCRYPTO_LINE, ""));
         if (index > 0) await db.exec(m.sql.replaceAll(PGCRYPTO_LINE, ""));
       }
+      // The steps below rewrite fixtures by hand (a hold that has ended, a
+      // payment made before midnight, a row removed so a call can run again),
+      // which the append-only triggers refuse. They run with those triggers
+      // off; "the money tables are append-only" runs every money path with
+      // them on.
+      await db.exec(setAppendOnly("disable"));
 
       const tables = await rows<{ table_name: string }>(
         `select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1`,
@@ -255,6 +272,7 @@ Deno.test("migrations on PGlite", {
         "card_patches",
         "cards",
         "contributions",
+        "controller_runs",
         "credit_purchases",
         "decisions",
         "deploys",
@@ -1276,6 +1294,9 @@ Deno.test("migrations on PGlite", {
           await row(`select funding_target_usd, estimate_usd, horizon::text as horizon from public.cards where id = $1`, [above.id]),
           { funding_target_usd: "26.0000", estimate_usd: "26.0000", horizon: "later" },
         );
+        // A card a board action names cannot be deleted (20260923000020_append_only.sql); the
+        // fixture's own action goes first, with the append-only triggers off in this test.
+        await db.query(`delete from public.board_actions where card_id = $1`, [above.id]);
         await db.query(`delete from public.cards where id = $1`, [above.id]);
 
         const CHECK =
@@ -1395,6 +1416,7 @@ Deno.test("migrations on PGlite", {
           await row(`select horizon::text as horizon from public.cards where id = $1`, [named.id]),
           { horizon: "now" },
         );
+        await db.query(`delete from public.board_actions where card_id = $1`, [named.id]);
         await db.query(`delete from public.cards where id = $1`, [named.id]);
         await refuses(
           `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
@@ -1571,7 +1593,8 @@ Deno.test("migrations on PGlite", {
           },
         );
         await db.exec(
-          `delete from public.cards where id in ('${directive.id}', '${card.id}'); delete from public.board_notes where id = '${note.id}';`,
+          `delete from public.board_actions where card_id in ('${directive.id}', '${card.id}');
+           delete from public.cards where id in ('${directive.id}', '${card.id}'); delete from public.board_notes where id = '${note.id}';`,
         );
       },
     );
@@ -3578,7 +3601,7 @@ Deno.test("migrations on PGlite", {
     });
 
     await t.step(
-      "function privileges: anon none, authenticated the sixteen board RPCs, service_role the rest, one file_card",
+      "function privileges: anon none, authenticated the eighteen board RPCs, service_role the rest, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -3603,7 +3626,9 @@ Deno.test("migrations on PGlite", {
           "file_directive",
           "file_note",
           "is_board_member",
+          "record_adjustment",
           "record_credit_purchase",
+          "redact_contribution_name",
           "resume_card",
           "set_agent_mode",
           "set_caps",
@@ -3615,7 +3640,11 @@ Deno.test("migrations on PGlite", {
           "apply_contribution",
           "card_ledger_usd",
           "claim_dispatcher_lease",
+          "controller_figures",
           "credit_held_contributions",
+          "ledger_identity",
+          "ops_database_size",
+          "record_dispute_reinstated",
           "record_usage",
           "release_dispatcher_lease",
           "reverse_contribution",
@@ -3626,6 +3655,7 @@ Deno.test("migrations on PGlite", {
           [
             ...board,
             ...service,
+            "refuse_money_change",
             "restrict_auth_users_to_board",
             "set_live_at",
             "set_updated_at",
@@ -3653,11 +3683,11 @@ Deno.test("migrations on PGlite", {
         }
         // Every function authenticated may run is security definer, so the board's
         // RPCs read cards with the owner's rights and the column grants do not
-        // limit them. The two trigger functions run with the caller's rights.
+        // limit them. The three trigger functions run with the caller's rights.
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["set_live_at", "set_updated_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at"]);
       },
     );
 

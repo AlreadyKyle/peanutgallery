@@ -48,8 +48,10 @@ export const NOT_COPIED = {
   DISPATCHER_CODE_READONLY: 'dispatcher.service sets required',
 };
 
-// Never in the VPS env file (provision.sh refuses a file that has one).
-export const FORBIDDEN_KEYS = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SUPABASE_ACCESS_TOKEN', 'ANTHROPIC_API_KEY'];
+// Never in the VPS env file (provision.sh refuses a file that has one). The jobs' secrets (the Stripe
+// read key and the backup login, docs/specs/money-safety.md) live in the jobs' own env files only; the
+// database owner's password stays on the Mac.
+export const FORBIDDEN_KEYS = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'SUPABASE_ACCESS_TOKEN', 'ANTHROPIC_API_KEY', 'STRIPE_READ_KEY', 'BACKUP_DB_URL', 'SUPABASE_DB_PASSWORD'];
 
 export class EnvFileError extends Error {
   constructor(problems) {

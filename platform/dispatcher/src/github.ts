@@ -94,6 +94,16 @@ function toPullRequest(json: Record<string, unknown>): PullRequest {
 
 export type GateStatus = { state: 'pass' } | { state: 'fail'; conclusion: string } | { state: 'pending' } | { state: 'missing' };
 
+// Conclusions a gate run reaches without having judged the change (docs/specs/money-safety.md):
+// cancelled (stopped by a person or a newer run), startup_failure (the workflow never started, as
+// when the account's Actions minutes are gone) and stale (GitHub gave up on it). A card is never
+// rejected for one of these.
+export const INFRASTRUCTURE_CONCLUSIONS: readonly string[] = ['cancelled', 'startup_failure', 'stale'];
+
+export function isInfrastructureConclusion(conclusion: string): boolean {
+  return INFRASTRUCTURE_CONCLUSIONS.includes(conclusion);
+}
+
 // The GitHub Actions app. Any app with checks:write can post a check run named gate, so only the
 // ones Actions created count. Among workflows only gate.yml defines a job named gate: the gate
 // tests read every file in .github/workflows (a kernel path) and fail on a second one, so an
