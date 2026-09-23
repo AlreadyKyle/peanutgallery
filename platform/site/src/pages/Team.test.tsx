@@ -129,10 +129,12 @@ describe('Team', () => {
   it('shows no model or hired date for a role that does not run, so the director model claims nothing', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.notRunning });
+    // The Not running yet heading says it once; a row adds a reason only when a closed lane is it.
     for (const name of ['Studio Head', 'Game Director', 'Host', 'Biz Dev', 'Community']) {
-      expect(within(box(name)).getByText(`${team.notRunning}.`)).toBeTruthy();
+      expect(within(box(name)).queryByText(team.notRunning, { exact: false })).toBeNull();
+      expect(box(name).querySelector('.card-meta')).toBeNull();
     }
-    expect(within(box('Platform Builder')).getByText(`${team.notRunning}. ${team.siteClosed}`)).toBeTruthy();
+    expect(within(box('Platform Builder')).getByText(team.siteClosed)).toBeTruthy();
     expect(screen.queryByText(/claude-opus-5-5/)).toBeNull();
     expect(screen.queryByText(/claude-haiku/)).toBeNull();
   });

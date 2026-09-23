@@ -35,6 +35,7 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
 | `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
 | `backups-repo/` | a separate private repository | the weekly fallback backup's workflow template |
+| `after-restore.sql` | the Mac, on a restored copy | what the migrations make outside the dumped schemas: the sign-in trigger, Realtime's tables, the backup login's reads and the pg_cron jobs |
 
 ## Operator inputs
 
@@ -312,7 +313,7 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
    psql --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
    psql --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
    ```
-   Skip the `auth.sql` line when the backup has none.
+   Skip the `auth.sql` line when the backup has none. Then run `platform/ops/after-restore.sql` on the target, as [Restore a Mac backup](#restore-a-mac-backup), step 4, does: no dump carries what it makes.
 5. **Check it:** `psql --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`; then `psql --dbname "<target>" -At -c 'select public.ledger_identity()'` for the lines. Only the top-level `holds` counts: each line carries its own. Quote both.
 6. **For a real recovery, then:**
    - put the new project's URL and keys in `.env` and in the VPS's env files, and set the stripe-webhook function's secrets there;
@@ -456,7 +457,7 @@ launchctl print gui/$(id -u)/studio.peanutgallery.dispatcher | grep -E 'state|pi
 
 ### Backups on the Mac
 
-`backup-mac.sh` dumps as the read-only `peanutgallery_backup` login through the Session pooler, with the same refusals as the server's `backup.sh`: no owner's connection string and no Stripe secret key, under any name, in its env file. The password reaches libpq in a service file inside the run's private folder, never on a command line. It needs `pg_dump` at least the server's major version, and says so otherwise (`brew upgrade libpq`). The dump set is `roles.sql` (`pg_dumpall --roles-only --no-role-passwords`, Supabase's own roles commented out as the Supabase CLI does; if the login is refused this, the run fails and says so), `schema.sql` and `data.sql` (the public schema), `auth.sql` (left out with `BACKUP_SKIP_AUTH=1`), `history_schema.sql`, `history_data.sql`, and `identity.json`, the live ledger identity when the dump was taken. They are tarred, encrypted to the board's age key, and written to `BACKUP_DIR` as `peanutgallery-<UTC time>.tar.age` under a hidden name first and then renamed, so Drive never copies half a file. The plaintext is deleted on every exit. Backups older than `BACKUP_KEEP_DAYS` (30 unless set) are deleted, keeping at least the newest 7; Drive keeps a deleted file in its trash for 30 days. Success pings `BACKUP_HEALTHCHECK_URL`; failure pings its `/fail`, and `run-job.sh` posts to ntfy.
+`backup-mac.sh` dumps as the read-only `peanutgallery_backup` login through the Session pooler, with the same refusals as the server's `backup.sh`: no owner's connection string and no Stripe secret key, under any name, in its env file. The password reaches libpq in a service file inside the run's private folder, never on a command line. It needs `pg_dump` at least the server's major version, and says so otherwise (`brew upgrade libpq`). The dump set is `roles.sql` (`pg_dumpall --roles-only --no-role-passwords`, Supabase's own roles commented out as the Supabase CLI does; if the login is refused this, the run fails and says so), `schema.sql` and `data.sql` (the public and `money` schemas: every schema the migrations create, because `pg_dump --schema` leaves out what a named schema depends on), `auth.sql` (left out with `BACKUP_SKIP_AUTH=1`), `history_schema.sql`, `history_data.sql`, and `identity.json`, the live ledger identity when the dump was taken. They are tarred, encrypted to the board's age key, and written to `BACKUP_DIR` as `peanutgallery-<UTC time>.tar.age` under a hidden name first and then renamed, so Drive never copies half a file. The plaintext is deleted on every exit. Backups older than `BACKUP_KEEP_DAYS` (30 unless set) are deleted, keeping at least the newest 7; Drive keeps a deleted file in its trash for 30 days. Success pings `BACKUP_HEALTHCHECK_URL`; failure pings its `/fail`, and `run-job.sh` posts to ntfy.
 
 There is no weekly restore check on the Mac: it needs a scratch Supabase Postgres, which the server ran in Docker and the Mac has not got. The restore drill below is the check, by hand.
 
@@ -473,8 +474,11 @@ There is no weekly restore check on the Mac: it needs a scratch Supabase Postgre
    $PSQL --single-transaction --variable ON_ERROR_STOP=1 --command 'SET session_replication_role = replica' --file auth.sql --dbname "<target>"
    $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file history_schema.sql --file history_data.sql --dbname "<target>"
    ```
-   Skip the `auth.sql` line when the backup has none. The pg_cron job is not in the dumps: run the `cron.schedule` statement from `platform/supabase/migrations/20260920000000_refunds_and_holds.sql` on the target.
-5. **Check it:** `$PSQL --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`, and `select public.ledger_identity()` must show the same lines as `identity.json`. Quote both in `docs/specs/mac-host.md`.
+   Skip the `auth.sql` line when the backup has none. Then, from the repository, make what the migrations make outside the dumped schemas, which no dump carries: the trigger that limits sign-in to board accounts, Realtime's tables, the backup login's reads and the pg_cron jobs:
+   ```sh
+   $PSQL --single-transaction --variable ON_ERROR_STOP=1 --file platform/ops/after-restore.sql --dbname "<target>"
+   ```
+5. **Check it:** `$PSQL --dbname "<target>" -At -c "select public.ledger_identity()->>'holds'"` must print exactly `true`, `select public.ledger_identity()` must show the same lines as `identity.json`, and `select jobname, schedule from cron.job order by jobname` must list every job `after-restore.sql` schedules. Quote all three in `docs/specs/mac-host.md`.
 6. **A real recovery** then follows [Restore the database](#restore-the-database), step 6.
 7. **Delete the decrypted copy** (`rm -r backup.tar peanutgallery-*`, leaving the `.tar.age`) and put the key back offline.
 

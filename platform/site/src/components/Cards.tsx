@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { MoreLink } from './MoreLink';
 import { categoryOf, groupCards, inCategory, openForFunding, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
@@ -191,7 +192,7 @@ export function ShippedList({ cards, snapshot }: { cards: Card[]; snapshot: Snap
         ))}
       </ul>
       <p className="more">
-        <Link to="/roadmap">{copy.roadmapLink}</Link>
+        <MoreLink to="/roadmap">{copy.roadmapLink}</MoreLink>
       </p>
     </section>
   );
@@ -225,7 +226,7 @@ export function PlannedNext({ cards }: { cards: Card[] }) {
         ))}
       </ul>
       <p className="more">
-        <Link to="/roadmap">{copy.roadmapLink}</Link>
+        <MoreLink to="/roadmap">{copy.roadmapLink}</MoreLink>
       </p>
     </section>
   );

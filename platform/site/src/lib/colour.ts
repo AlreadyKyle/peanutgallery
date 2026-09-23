@@ -21,7 +21,7 @@ export const COLOUR_TOKENS: readonly ColourToken[] = [
   { name: '--signal-press', role: 'Press of every signal fill' },
   { name: '--muted-on-signal', role: 'Secondary text on signal; the quiet label and edge there' },
   { name: '--line-on-signal', role: 'Hairlines on signal' },
-  { name: '--work', role: 'The Building and Being checked face: the signal at 14% on paper' },
+  { name: '--work', role: 'The Building and Being checked face: a pale blue' },
   { name: '--suit-game', role: 'The Dust suit tile, on paper and work only' },
   { name: '--suit-studio', role: 'The studio suit tile: the signal' },
   { name: '--live', role: 'Live only: its glyph and the stamp edge, on paper' },
@@ -92,12 +92,9 @@ export const COLOUR_PAIRS: readonly ColourPair[] = [
   // Banned: each measures below its floor, so a rule keeps it off the page.
   { fg: '--signal', bg: '--ink', floor: 3, banned: true, use: 'Signal never touches ink: band 2 is always paper' },
   { fg: '--ink', bg: '--signal', floor: 3, banned: true, use: 'No ink text on signal; the Contribute edge merges there and its amber carries it' },
-  { fg: '--coin-down', bg: '--signal', floor: 3, banned: true, use: 'Contribute hovers to coin-up on signal' },
-  { fg: '--field', bg: '--signal', floor: 3, banned: true, use: 'The quiet edge on signal is muted-on-signal' },
   { fg: '--muted', bg: '--signal', floor: 4.5, banned: true, use: 'Secondary text on signal is muted-on-signal' },
   { fg: '--suit-game', bg: '--signal', floor: 3, banned: true, use: 'Suit tiles reset to none on signal' },
   { fg: '--suit-game', bg: '--ink', floor: 3, banned: true, use: 'Suit tiles reset to none on ink' },
-  { fg: '--live', bg: '--signal', floor: 3, banned: true, use: 'The Live mark resets to paper on signal and ink' },
 ];
 
 /** Marks that can share a card index or a row: each pair stays at least 25 delta-E apart under normal vision and three colour-vision simulations. */

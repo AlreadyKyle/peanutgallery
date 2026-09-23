@@ -431,12 +431,14 @@ describe('Landing', () => {
     expect(
       within(team)
         .getAllByRole('link')
+        .filter((a) => a.classList.contains('member'))
         .map((a) => [a.querySelector('.member-name')?.textContent, a.querySelector('.member-job')?.textContent, a.getAttribute('href')]),
     ).toEqual([
       ['Builder A', 'Builds funded game cards.', '/team#agent-r-a'],
       ['Builder B', 'Builds funded game cards, too.', '/team#agent-r-b'],
       ['QA', 'Finds problems in Dust.', '/team#agent-r-q'],
     ]);
+    expect(within(team).getByRole('link', { name: copy.team.meetAll }).getAttribute('href')).toBe('/team');
     cleanup();
     const { container } = renderLanding(fakeSource({ roles: [] }));
     await screen.findByRole('heading', { level: 2, name: copy.shipped });
