@@ -179,19 +179,16 @@ describe('Team', () => {
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 
-  it('draws every agent asleep while the agents are paused, and awake otherwise or when the studio row did not load', async () => {
-    const poses = () => [...document.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
-    renderTeam(sourceOf(snapshot({ paused: true })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['asleep']));
-    cleanup();
-    renderTeam(sourceOf(snapshot({ paused: false })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['awake']));
-    cleanup();
-    renderTeam(sourceOf(snapshot({ paused: true, missing: ['studio'] })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['awake']));
+  it('draws running agents awake and the roles still to come asleep, whether or not the studio is paused', async () => {
+    const poses = (region: HTMLElement) => [...region.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    for (const paused of [true, false]) {
+      renderTeam(sourceOf(snapshot({ paused })));
+      const running = await screen.findByRole('region', { name: team.running });
+      const waiting = screen.getByRole('region', { name: team.notRunning });
+      expect(new Set(poses(running))).toEqual(new Set(['awake']));
+      expect(new Set(poses(waiting))).toEqual(new Set(['asleep']));
+      cleanup();
+    }
   });
 
   it('lists each agent as a plain row, never a card', async () => {

@@ -1298,6 +1298,40 @@ button.link:hover:not(:disabled) {
   font-weight: var(--weight-strong);
 }
 
+/* The roles still to come: equal compact tiles, each a small sleeping avatar beside the name and
+   the job in small type, flowing down balanced columns (CSS columns), so no row is left part-empty
+   however many roles there are. */
+.team-coming {
+  columns: 16rem 3;
+  column-gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-coming > li {
+  break-inside: avoid;
+  margin-bottom: var(--space-3);
+}
+
+.agent-coming {
+  grid-template-rows: auto 1fr auto;
+}
+
+.agent-coming .avatar {
+  width: 3.5rem;
+}
+
+.agent-coming h3 {
+  font-size: var(--size-body);
+}
+
+.agent-coming p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
 /* The team strip: borderless links, avatar beside the name and job. */
 .team-strip {
   display: grid;
