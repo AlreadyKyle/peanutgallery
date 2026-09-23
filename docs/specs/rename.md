@@ -110,7 +110,7 @@ Counted by the script, never rewritten, each because renaming it costs more than
 
 ## Evidence
 
-- Prep (23 September 2026): `node --test scripts/rename.test.mjs` passes 5 of 5; `node scripts/rename.mjs` lists 29 tier-1 files, 33 tier-2, 69 tier-3 and 39 history, none unclassified. The trial run is quoted in the prep pull request.
+- Prep (23 September 2026): `node --test scripts/rename.test.mjs` passes 5 of 5; `node scripts/rename.mjs` lists 29 tier-1 files, 33 tier-2, 69 tier-3 and 39 history, none unclassified. Trial on a working copy, then reverted: `--apply --tier 1 --name "Trial Name" --domain trialname.example` rewrote 29 files, `--tier 2` rewrote 33, `--check` printed "tier 1 is clean", `pnpm verify` exited 0, and `pnpm --filter @backseat/site e2e` printed "27 passed".
 
 ## Decisions
 
