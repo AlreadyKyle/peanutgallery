@@ -50,7 +50,8 @@ const pitchBody = copyString(copySource, 'pitchBody');
 const ogUrl = read('index.html').match(/<meta property="og:url" content="([^"]+)"/);
 if (ogUrl === null) throw new Error('index.html has no og:url');
 const address = new URL(ogUrl[1]).host;
-const stylesheet = read('src/styles.css');
+// styles.css starts by importing tokens.css; the page here has no bundler, so inline both.
+const stylesheet = `${read('src/tokens.css')}\n${read('src/styles.css').replace(/^@import [^;]+;\n/m, '')}`;
 const mark = readFileSync(resolve(SITE, 'public/peanut.png')).toString('base64');
 
 // The site's type scale is in rem, so a larger root size scales every token together: at 175% the

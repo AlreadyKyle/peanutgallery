@@ -34,14 +34,14 @@ export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen =
     .join(' · ');
 }
 
-function RoleCard({ role, cards, platformLaneOpen }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean }) {
+function RoleRow({ role, cards, platformLaneOpen, asleep }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean; asleep: boolean }) {
   const titleId = `role-${role.id}`;
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
   return (
-    <li className="card role">
-      <Avatar note={role.species_note} />
+    <li className="agent" id={`agent-${role.id}`}>
+      <Avatar note={role.species_note} asleep={asleep} />
       <h3 id={titleId}>{role.name}</h3>
-      <p className="card-category">{kind}</p>
+      <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
       <p className="card-meta">{roleFacts(role, cards, platformLaneOpen)}</p>
     </li>
@@ -53,6 +53,8 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
   const laneOpen = snapshot.platformLaneOpen === true;
+  // Asleep only once the studio row has loaded and says the agents are paused.
+  const asleep = snapshot.paused && !snapshot.missing.includes('studio');
   const running = roles.filter((role) => runsCards(role, laneOpen));
   const waiting = roles.filter((role) => !runsCards(role, laneOpen));
   return (
@@ -63,7 +65,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           <p className="muted">{team.runningIntro}</p>
           <ul className="team-grid">
             {running.map((role) => (
-              <RoleCard key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} />
+              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
             ))}
           </ul>
         </section>
@@ -76,7 +78,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           </p>
           <ul className="team-grid">
             {waiting.map((role) => (
-              <RoleCard key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} />
+              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
             ))}
           </ul>
         </section>

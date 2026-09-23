@@ -6,12 +6,12 @@ import type { Card } from './source';
 // (platform/gate/kernel-paths.txt, docs/specs/board-site.md); the gate's payment-host scan also fails
 // a build that carries any other payment address. cards.ts re-exports what the card layout uses.
 
-/** What a card spends money on: the current game, the studio itself, or the next game. */
-export type CardCategory = 'game' | 'studio' | 'next';
+/** What a card spends money on: the current game or the studio itself. Each is a suit (Glyph.tsx). */
+export type CardCategory = 'game' | 'studio';
 export type CategoryFilter = 'all' | CardCategory;
-export const CATEGORY_FILTERS: readonly CategoryFilter[] = ['all', 'game', 'studio', 'next'];
+export const CATEGORY_FILTERS: readonly CategoryFilter[] = ['all', 'game', 'studio'];
 
-/** Platform cards change the studio; every seed-1 card changes the current game. No card funds the next game yet. */
+/** Platform cards change the studio; every seed-1 card changes the current game. */
 export function categoryOf(card: Card): CardCategory {
   return card.folder === 'platform' ? 'studio' : 'game';
 }

@@ -33,6 +33,6 @@ describe('the /team model check live-check.mjs runs on production', () => {
   it('is what live-check.mjs runs on the Running section', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/live-check.mjs'), 'utf8');
     expect(script).toContain("import { runningModelsCheck } from './team-models.mjs';");
-    expect(script).toMatch(/runningModelsCheck\(await running\.locator\('li\.role \.card-meta'\)\.allTextContents\(\)\)/);
+    expect(script).toMatch(/runningModelsCheck\(await running\.locator\('li\.agent \.card-meta'\)\.allTextContents\(\)\)/);
   });
 });

@@ -86,7 +86,7 @@ for (const viewport of WIDTHS) {
       await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(3);
       await expect(waiting.getByText('claude-', { exact: false })).toHaveCount(0);
       // The check scripts/live-check.mjs runs on production, on the same locators.
-      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
       expect(models).toEqual({ ok: true, message: `/team 3 running roles, each on ${RUNNING_MODEL}: ${Array(3).fill(RUNNING_MODEL).join(', ')}` });
       await expect(waiting.getByText(/\bclaude-/)).toHaveCount(0);
       await expect(running.getByText('2 cards shipped', { exact: false })).toBeVisible();
@@ -131,7 +131,7 @@ test.describe('the production /team model check', () => {
       await page.goto('/team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
-      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
       expect(models).toEqual({ ok: false, message: `/team 3 running roles, each on ${RUNNING_MODEL}: claude-sonnet-5, claude-sonnet-5, claude-sonnet-5` });
     });
   });
@@ -146,7 +146,7 @@ test.describe('the production /team model check', () => {
       await expect(page.getByRole('region', { name: 'Not running yet', exact: true })).toBeVisible();
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running).toHaveCount(0);
-      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
       expect(models).toEqual({ ok: false, message: `/team 0 running roles, each on ${RUNNING_MODEL}: none` });
     });
   });

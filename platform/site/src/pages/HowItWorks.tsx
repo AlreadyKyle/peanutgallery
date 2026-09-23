@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CardBox, ShippedRow } from '../components/Cards';
+import { CardFace, ShippedRow } from '../components/Cards';
 import { DeployList } from '../components/DeployList';
 import { EventList } from '../components/EventList';
 import { Example } from '../components/Example';
@@ -78,7 +78,7 @@ function CardExample({ card, snapshot, real }: { card: Card; snapshot: Snapshot;
   return (
     <Example real={real}>
       <ul className="card-grid">
-        <CardBox card={card} snapshot={snapshot} example />
+        <CardFace card={card} snapshot={snapshot} mode="example" />
       </ul>
     </Example>
   );

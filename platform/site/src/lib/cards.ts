@@ -16,8 +16,6 @@ export {
   type CategoryFilter,
 } from './payment';
 
-export type CardStatus = 'building' | 'gated' | 'queued' | 'picked' | 'open' | 'shipped';
-
 const NOW_STAGES = new Set(['building', 'gated']);
 const QUEUED_STAGE = 'funded';
 const SHIPPED_STAGE = 'live';
@@ -94,11 +92,18 @@ export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Car
   };
 }
 
-export function statusOf(card: Card): CardStatus {
+/**
+ * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage.
+ * Paused and rejected are drawn only on the design guide until a public read lists those cards.
+ */
+export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected';
+export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected'];
+
+export function faceOf(card: Card): Face {
   if (card.stage === 'building') return 'building';
-  if (card.stage === 'gated') return 'gated';
-  if (card.stage === QUEUED_STAGE) return 'queued';
-  if (card.stage === SHIPPED_STAGE) return 'shipped';
+  if (card.stage === 'gated') return 'checks';
+  if (card.stage === QUEUED_STAGE) return 'funded';
+  if (card.stage === SHIPPED_STAGE) return 'live';
   if (card.stage === 'voted') return 'picked';
   return 'open';
 }
@@ -108,9 +113,9 @@ export function inCategory(card: Card, filter: CategoryFilter): boolean {
 }
 
 /**
- * The category chips to show for these cards: All and Dust always, The studio and Next game only
- * while at least one card is in them. The platform code lane is closed at launch, so the studio
- * chip stays hidden until the board files studio cards again.
+ * The category chips to show for these cards: All and Dust always, The studio only while at least
+ * one card is in it. The platform code lane is closed at launch, so the studio chip stays hidden
+ * until the board files studio cards again.
  */
 export function visibleFilters(cards: readonly Card[]): CategoryFilter[] {
   return CATEGORY_FILTERS.filter(

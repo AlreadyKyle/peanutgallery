@@ -1,3 +1,4 @@
+import { Glyph, SUITS } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { CATEGORY_FILTERS, categoryOf, plannedCards, PLANNED_HORIZONS, type CardCategory } from '../lib/cards';
@@ -40,7 +41,10 @@ function Horizons({ snapshot }: { snapshot: Snapshot }) {
                 if (inCategory.length === 0) return null;
                 return (
                   <div key={category} className="planned-group">
-                    <h3>{copy.categories[category]}</h3>
+                    <h3 className="with-glyph">
+                      <Glyph name={SUITS[category].glyph} />
+                      {SUITS[category].label}
+                    </h3>
                     <PlannedList cards={inCategory} />
                   </div>
                 );
