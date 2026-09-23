@@ -17,6 +17,19 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(specs.reduce((sum, s) => sum + s.budget_share, 0)).toBeCloseTo(1, 6);
   });
 
+  it("gives every role a description, and the three without write tools say they are not running yet", async () => {
+    const specs = await readRoleSpecs(AGENTS_DIR);
+    for (const spec of specs) {
+      expect(spec.description.length, spec.name).toBeGreaterThan(0);
+      expect(spec.description.endsWith("."), spec.name).toBe(true);
+    }
+    const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
+    expect(idle).toEqual(["Community", "Host", "Scout"]);
+    for (const spec of specs.filter((s) => !s.write_access)) {
+      expect(spec.description, spec.name).toContain("not running yet");
+    }
+  });
+
   it("includes the week-1 executor role that seed.ts looks up by name", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     const executor = specs.find((s) => s.name === WEEK1_EXECUTOR_ROLE);

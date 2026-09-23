@@ -20,8 +20,8 @@
 // reverse only what is still due. A dispute inquiry withdraws no funds and
 // reverses nothing. Every reversal and every new dispute is posted to the board.
 
-import { type Amounts, computeAmounts, roundUsd } from "./split.ts";
-import { type Parsed, parseSession, type SessionLike } from "./session.ts";
+import { type Amounts, computeAmounts, payerKey, roundUsd } from "./split.ts";
+import { type ChargeFacts, type Parsed, parseSession, type SessionLike } from "./session.ts";
 import {
   CHARGE_UPDATED_EVENT,
   COMPLETED_EVENT,
@@ -84,14 +84,20 @@ export interface ReversalInput {
 export interface HandlerDeps {
   /** Verifies the Stripe signature over the raw body; throws when it does not match. */
   constructEvent(body: string, signature: string): Promise<WebhookEvent>;
-  /** Fee in USD from the session's balance transaction; null while it is not available. */
-  lookupFee(sessionId: string): Promise<number | null>;
+  /**
+   * The fee in USD from the session's balance transaction and the card's
+   * fingerprint from the same charge, in one retrieve; null while the fee is
+   * not available. The fingerprint is null for Link and other methods without
+   * a card.
+   */
+  lookupCharge(sessionId: string): Promise<ChargeFacts | null>;
   /** The Checkout session paid by this payment intent; null when the payment did not come through Checkout. */
   findSession(paymentIntentId: string): Promise<CheckoutSession | null>;
-  /** The apply_contribution RPC; resolves to its jsonb result. */
+  /** The apply_contribution RPC; resolves to its jsonb result. payerKey keys the $50 daily window. */
   applyContribution(
     parsed: Parsed,
     amounts: Amounts,
+    payerKey: string,
   ): Promise<Record<string, unknown>>;
   /** The reverse_contribution RPC; resolves to its jsonb result. */
   reverseContribution(input: ReversalInput): Promise<Record<string, unknown>>;
@@ -308,6 +314,11 @@ export function reversalMessage(
       parts.push("the card is past voting and now below its target");
     }
   }
+  // A reversal of money already spent comes out of the balance: money that names
+  // no card goes first, then the bars of cards waiting for the agents.
+  if (Number(result.shortfall_usd) > 0) {
+    parts.push(`cards waiting for the agents are short by ${usd(result.shortfall_usd)} until new money arrives`);
+  }
   if (Number(result.pool_balance_usd) < 0) parts.push("the pool balance is below zero");
   // Absent fields read as NaN, which is never below zero.
   if (Number(result.pool_reserve_usd) < 0) parts.push("the 10% reserve is below zero");
@@ -433,8 +444,10 @@ async function apply(
   deps: HandlerDeps,
   parsed: Parsed,
   amounts: Amounts,
+  charge: ChargeFacts,
 ): Promise<Record<string, unknown>> {
-  const result = await deps.applyContribution(parsed, amounts);
+  const payer = await payerKey(charge.card_fingerprint, parsed.contributor_id);
+  const result = await deps.applyContribution(parsed, amounts, payer);
   if (
     result.inserted === true && parsed.goal_card_id &&
     result.goal_card_id == null
@@ -470,19 +483,19 @@ async function creditSession(
       response: json(200, { ignored: true, reason: "unusable checkout session", detail: errorMessage(err) }),
     };
   }
-  const feeUsd = await deps.lookupFee(parsed.session_id);
-  if (feeUsd === null) {
+  const charge = await deps.lookupCharge(parsed.session_id);
+  if (charge === null) {
     return {
       status: "stopped",
       response: json(500, { error: "Balance transaction is not available yet" }),
     };
   }
-  const result = await apply(deps, parsed, computeAmounts(parsed.amount_total, feeUsd));
+  const result = await apply(deps, parsed, computeAmounts(parsed.amount_total, charge.fee_usd), charge);
   return { status: "credited", result };
 }
 
 /**
- * Parses a paid session, looks its fee up and calls the RPC. When the fee is
+ * Parses a paid session, looks its fee and card up and calls the RPC. When the fee is
  * not there yet, the completed event acknowledges (a charge.updated will
  * credit) and charge.updated answers 500 so Stripe sends it again. A session
  * that cannot be parsed answers 500 so a fixed handler can still credit it on a
@@ -510,36 +523,38 @@ async function credit(
   }
 
   if (dryRun) {
-    let feeUsd: number | null = null;
+    let charge: ChargeFacts | null = null;
     try {
-      feeUsd = await deps.lookupFee(parsed.session_id);
+      charge = await deps.lookupCharge(parsed.session_id);
     } catch (_err) {
-      feeUsd = null;
+      charge = null;
     }
     let amounts: ReturnType<typeof computeAmounts>;
     try {
-      amounts = computeAmounts(parsed.amount_total, feeUsd ?? 0);
+      amounts = computeAmounts(parsed.amount_total, charge?.fee_usd ?? 0);
     } catch (err) {
       return json(500, { error: "Invalid amounts", detail: errorMessage(err) });
     }
     return json(200, {
       dry_run: true,
       parsed,
-      fee_lookup: feeUsd === null ? "failed" : "ok",
+      fee_lookup: charge === null ? "failed" : "ok",
+      // Which key the $50 window would count by; the key itself is not shown.
+      payer: charge?.card_fingerprint ? "card" : "email",
       amounts: { ...amounts, studio_pct: parsed.studio_pct },
     });
   }
 
-  let feeUsd: number | null;
+  let charge: ChargeFacts | null;
   try {
-    feeUsd = await deps.lookupFee(parsed.session_id);
+    charge = await deps.lookupCharge(parsed.session_id);
   } catch (err) {
     return json(500, {
       error: "Fee lookup failed",
       detail: errorMessage(err),
     });
   }
-  if (feeUsd === null) {
+  if (charge === null) {
     if (trigger === "completed") {
       return json(200, {
         deferred: true,
@@ -551,8 +566,8 @@ async function credit(
   }
 
   try {
-    const amounts = computeAmounts(parsed.amount_total, feeUsd);
-    const result = await apply(deps, parsed, amounts);
+    const amounts = computeAmounts(parsed.amount_total, charge.fee_usd);
+    const result = await apply(deps, parsed, amounts, charge);
     return json(200, { ...result, event_id: parsed.event_id });
   } catch (err) {
     return json(500, {

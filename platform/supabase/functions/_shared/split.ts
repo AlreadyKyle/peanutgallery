@@ -139,6 +139,22 @@ export function contributorId(source: ContributorSource): Promise<string> {
   return sha256Hex(contributorSource(source));
 }
 
+/**
+ * The key apply_contribution's $50 daily window counts by: "card:" and a hash
+ * of the card's Stripe fingerprint, or "email:" and the contributor id when
+ * the payment carries no card (Link, for one). The window also counts every
+ * payment with the same contributor id, so a second card on one email shares
+ * the $50 too.
+ */
+export async function payerKey(
+  cardFingerprint: string | null | undefined,
+  contributor: string,
+): Promise<string> {
+  const fingerprint = cardFingerprint?.trim();
+  if (fingerprint) return `card:${await sha256Hex(fingerprint)}`;
+  return `email:${contributor}`;
+}
+
 /** A goal card id is accepted only when it is a well-formed uuid; the RPC checks the card itself. */
 export function goalCardId(
   clientReferenceId: string | null | undefined,

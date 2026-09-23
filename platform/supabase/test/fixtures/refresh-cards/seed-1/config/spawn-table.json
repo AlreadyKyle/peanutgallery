@@ -1,0 +1,9 @@
+{
+  "rows": [
+    { "id": "gatherer", "name": "Gatherer", "baseCost": 11, "rate": 0.2 },
+    { "id": "cart", "name": "Cart", "baseCost": 150, "rate": 1.5 },
+    { "id": "mill", "name": "Mill", "baseCost": 2600, "rate": 12 },
+    { "id": "forge", "name": "Forge", "baseCost": 41000, "rate": 90 },
+    { "id": "foundry", "name": "Foundry", "baseCost": 700000, "rate": 700 }
+  ]
+}
