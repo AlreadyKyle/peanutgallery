@@ -378,9 +378,10 @@ supporter-loop pull requests are live, and the launch cards are open to fund.
 
 ### 19. Restore drill (once, about 10 minutes)
 
-Bring the offline backup key (step 3). I decrypt one stored backup on your Mac with it, restore it
-and quote the ledger identity on it. Then the key goes back offline and the decrypted copy is
-deleted.
+Bring the offline backup key (step 3). I decrypt one stored backup taken after the money-logic
+migration is live on your Mac with it, restore it by the runbook (`platform/ops/README.md`, Restore a
+Mac backup, `after-restore.sql` included) and quote the ledger identity and the pg_cron jobs on it.
+Then the key goes back offline and the decrypted copy is deleted.
 
 **Tell me:** "ready for the restore drill."
 
