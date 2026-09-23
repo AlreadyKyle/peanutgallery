@@ -18,7 +18,12 @@
 // rest; /roadmap shows no bar and no fund link. Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
 // in public_terms_versions since it took effect, lists the earlier ones and answers the next number
-// with the not found page (docs/specs/legal-copy.md). Assets, og:image as an absolute URL, and
+// with the not found page (docs/specs/legal-copy.md). /contribute's Fund the next card in line is first
+// and names the next card in line (the first card choice) or says the money waits; /ledger shows
+// exactly one reconciliation line, and its received figure (or "No contributions yet.") matches
+// public_money read with the publishable key; while public_studio says the agents are paused for
+// awaiting_credit, home and /contribute say the payout sentence (docs/specs/money-surfaces.md).
+// Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect runs only against production. The
@@ -86,8 +91,18 @@ const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned nex
 const SIGNAL = 'rgb(26, 47, 200)';
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
+// The status line: the open and building counts, then while paused the paused sentence
+// (PausedNotice.tsx pausedSentence, the same sentence as the paused notice).
 const STATUS_LINE =
-  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?( The agents are paused\.)?$/;
+  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?( (The agents are paused|The board has paused the agents)\b.*)?$/;
+// legal.pauseReasons.awaiting_credit, said on home and /contribute while the studio waits for a payout.
+const PAYOUT_SENTENCE =
+  "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.";
+// Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
+const NEXT_IN_LINE = /^Next in line: (.+)$/;
+const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
+const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 // The headers netlify.toml sends on every path, by exact value (docs/specs/site-truth-pass.md).
@@ -147,6 +162,19 @@ async function postedTerms() {
     if (!response.ok) return null;
     const rows = await response.json();
     return Array.isArray(rows) && rows.length > 0 ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One row of a public view read the way the site reads it, with the publishable key; null when the read fails. */
+async function publicRow(view, columns) {
+  if (SUPABASE_URL === '' || SUPABASE_ANON_KEY === '') return null;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${view}?select=${columns}`, { headers: { apikey: SUPABASE_ANON_KEY } });
+    if (!response.ok) return null;
+    const rows = await response.json();
+    return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
   } catch {
     return null;
   }
@@ -320,6 +348,12 @@ try {
   } else {
     const status = ((await main.locator('p.status-line').textContent()) ?? '').trim();
     check(STATUS_LINE.test(status), `status line: ${status}`);
+    const home = await publicRow('public_studio', 'paused,pause_reason');
+    if (home !== null && home.paused === true && home.pause_reason === 'awaiting_credit') {
+      check(status.endsWith(` ${PAYOUT_SENTENCE}`), 'home status line says the payout sentence while paused for awaiting_credit');
+    } else {
+      skip(`home payout sentence: the studio is not paused for awaiting_credit`);
+    }
     const available = (await pool.textContent()) ?? '';
     check(/^\$[\d,]+\.\d\d$/.test(available) && (await money.locator('.pool-line svg.coin').count()) === 1, `pool figure with the coin shows ${available}`);
 
@@ -387,9 +421,20 @@ try {
     const [first] = choices;
     check(first[0].startsWith('Fund the next card in line') && STRIPE_LINK.test(first[1]), `Fund the next card in line first -> ${first[1]}`);
     check(
-      choices.slice(1).every(([, href]) => href.includes('client_reference_id=')),
-      `${choices.length - 1} card choices carry card ids`,
+      choices.slice(1).every(([, href]) => /client_reference_id=[0-9a-f-]{36}$/.test(href)),
+      `${choices.length - 1} card choices carry card uuids`,
     );
+    // Its second line names the next card in line, the first card choice, or says the money waits.
+    const body = ((await page.getByRole('main').locator('a.choice-primary .choice-body').textContent()) ?? '').trim();
+    const titles = await page.getByRole('main').locator('ul.choices .choice-title').allTextContents();
+    const next = NEXT_IN_LINE.exec(body);
+    if (!hasData || (await publicRow('public_money', 'payments')) === null) {
+      noData('Fund the next card in line names the next card in line (public_money)');
+    } else if (next !== null) {
+      check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
+    } else {
+      check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
+    }
     try {
       const stripe = await fetch(first[1], { redirect: 'manual' });
       check(stripe.status < 400, `Payment Link responds ${stripe.status}`);
@@ -397,6 +442,42 @@ try {
       check(false, `Payment Link fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  // The pause reason (docs/specs/money-surfaces.md): while the studio waits for a payout, /contribute's
+  // notice says the payout sentence; home's status line is checked with the landing below.
+  const studioRow = await publicRow('public_studio', 'paused,pause_reason');
+  const awaitingCredit = studioRow !== null && studioRow.paused === true && studioRow.pause_reason === 'awaiting_credit';
+  if (studioRow === null) {
+    noData('the pause reason on /contribute');
+  } else if (!awaitingCredit) {
+    skip(`the payout sentence: the studio is not paused for awaiting_credit (paused ${studioRow.paused}, reason ${studioRow.pause_reason})`);
+  } else {
+    const notice = ((await page.getByRole('main').locator('p.notice').first().textContent().catch(() => '')) ?? '').trim();
+    check(notice === PAYOUT_SENTENCE, `/contribute says the payout sentence while paused for awaiting_credit: "${notice}"`);
+  }
+
+  // /ledger: exactly one reconciliation line, and money in as public_money has it.
+  await open(page, '/ledger');
+  {
+    const lines = await page
+      .getByRole('main')
+      .locator('p')
+      .evaluateAll((ps) => ps.map((p) => (p.textContent ?? '').trim()).filter((text) => /reconciled with Stripe/i.test(text)));
+    const books = await publicRow('public_money', 'payments,received_usd');
+    if (!hasData || books === null) {
+      noData('/ledger reconciliation line and money in');
+    } else {
+      check(lines.length === 1 && RECONCILE_LINE.test(lines[0]), `/ledger shows exactly one reconciliation line: ${JSON.stringify(lines)}`);
+      const moneyIn = page.getByRole('region', { name: 'Money in' });
+      if (Number(books.payments) === 0) {
+        check((await moneyIn.getByText('No contributions yet.', { exact: true }).count()) === 1, '/ledger says No contributions yet. with public_money.payments 0');
+      } else {
+        const want = USD.format(Number(books.received_usd));
+        const shown = ((await moneyIn.locator('.stat', { hasText: 'Received' }).locator('dd').first().textContent()) ?? '').trim();
+        check(shown === want, `/ledger received ${shown} matches public_money.received_usd ${want} (${books.payments} payments)`);
+      }
+    }
+  }
+
   await open(page, '/how-it-works');
   const how = await page.content();
   const examples = await page.locator('figure.example').count();
