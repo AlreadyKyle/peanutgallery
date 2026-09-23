@@ -9,7 +9,7 @@ import { expect, test } from './fixtures';
 // production Content Security Policy: frame-ancestors, connect-src and form-action enforced, the full
 // policy report-only. Any report, enforced or report-only, fails a page load; a connection to a host outside
 // connect-src is refused.
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page'];
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page', '/design-kit-7q4m'];
 const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.url)), 'utf8');
 const enforced = toml.match(/^\s*Content-Security-Policy\s*=\s*"([^"]*)"/m)?.[1] ?? '';
 const host = new URL(SUPABASE_URL).host;
