@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "card-draft.schema.json",
+  "title": "Card draft",
+  "description": "The Game Designer's answer to a Draft a game card run: one new seed-1 game card. The estimate is also the card's funding target. The dispatcher fills in the bucket (game) and the folder (seed-1), resolves the executor's name to an active, unpaused writer role, and runs the checks before the Game Director grades it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "summary", "intent", "acceptance_test", "lane", "executor", "estimate_usd"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 120, "description": "What changes, in a few plain words." },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 200, "description": "The public summary a supporter reads: one plain sentence, all-ages, that the check lines back." },
+    "intent": { "type": "string", "minLength": 1, "maxLength": 2000, "description": "The brief the builder reads: what to change and why." },
+    "acceptance_test": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "Plain lines, then one or more machine lines of the form check: config <file> <path> == <json>, each false on main today and true once the card is built."
+    },
+    "lane": { "enum": ["config", "code"], "description": "config changes JSON under seed-1/config or seed-1/content only; code changes seed-1 outside the kernel paths." },
+    "executor": { "type": "string", "minLength": 1, "maxLength": 60, "description": "The name of the writer role that builds it, from the list the prompt gives." },
+    "estimate_usd": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000, "description": "What the card should cost to build, which is also its funding target." }
+  }
+}

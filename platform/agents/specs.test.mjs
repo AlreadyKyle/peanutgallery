@@ -14,13 +14,16 @@ const WRITE_SET = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'];
 // The Studio Head and the two Directors read the repository and write nothing in it (docs/specs/agent-system-core.md).
 const READ_SET = ['Read', 'Glob', 'Grep'];
 const WRITE_TOOLS = ['Edit', 'Write', 'Bash'];
+// The Game Designer reads the repository and runs seed-1's package scripts in a scratch checkout;
+// it writes card drafts, never files (docs/specs/agent-workflows.md).
+const DESIGNER_SET = ['Read', 'Glob', 'Grep', 'Bash'];
 const CLASSES = ['writer', 'planner', 'reviewer', 'read_only', 'web_only'];
 
 // The roster: the nine launch roles and the seven added on 23 September 2026 with no tools and a
 // budget_share of 0, each with its place in the launch roster (README.md).
 const LAUNCH_VALUES = {
   'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'running' },
-  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: [], metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
+  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: DESIGNER_SET, metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
   'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'reviewer', status: 'running' },
   'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
   'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
@@ -231,3 +234,63 @@ test('game-director.md carries the seven pillars verbatim from docs/PLAN.md', ()
   const spec = specs.find(({ file }) => file === 'game-director.json').spec;
   assert.ok(readPrompt(spec).includes(pillarsFromPlan()), 'the pillars sentence from docs/PLAN.md appears in the prompt');
 });
+
+// docs/specs/agent-workflows.md: the three roles that run jobs answer with one object valid against
+// their schema, the Director grades with the rubric, no role job holds Write or Edit, and the two
+// roles that read outside text propose nothing that passes a board review and name no source that
+// is neither free nor allowed.
+const JOB_SCHEMAS = {
+  'studio-head': 'platform/agents/schemas/ranking.schema.json',
+  'game-designer': 'platform/agents/schemas/card-draft.schema.json',
+  'game-director': 'platform/agents/schemas/draft-verdict.schema.json',
+};
+
+for (const [role, schemaPath] of Object.entries(JOB_SCHEMAS)) {
+  test(`${role}.md names its schema, which is a JSON Schema object with no other keys allowed`, () => {
+    const spec = specs.find(({ file }) => file === `${role}.json`).spec;
+    assert.ok(readPrompt(spec).includes(schemaPath), `${spec.prompt_path} names ${schemaPath}`);
+    const schema = JSON.parse(readFileSync(join(repoRoot, schemaPath), 'utf8'));
+    assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+    assert.equal(schema.type, 'object');
+    assert.equal(schema.additionalProperties, false);
+  });
+}
+
+test('the Game Designer holds Read, Glob, Grep and Bash, and no role that runs a job holds Write or Edit', () => {
+  const tools = (file) => specs.find((s) => s.file === file).spec.tools;
+  assert.deepEqual(tools('game-designer.json'), DESIGNER_SET);
+  for (const file of ['studio-head.json', 'game-designer.json', 'game-director.json']) {
+    assert.deepEqual(tools(file).filter((tool) => tool === 'Write' || tool === 'Edit'), [], file);
+  }
+});
+
+test('the card draft carries one estimate and no target; the verdict names its reason codes from a closed list', () => {
+  const draft = JSON.parse(readFileSync(join(repoRoot, JOB_SCHEMAS['game-designer']), 'utf8'));
+  assert.ok(draft.required.includes('estimate_usd'));
+  assert.ok(!Object.keys(draft.properties).some((key) => /target/.test(key)), 'no target field');
+  const verdict = JSON.parse(readFileSync(join(repoRoot, JOB_SCHEMAS['game-director']), 'utf8'));
+  assert.deepEqual(verdict.properties.result.enum, ['approved', 'revise', 'flagged']);
+  assert.ok(Array.isArray(verdict.properties.reason_codes.items.enum) && verdict.properties.reason_codes.items.enum.length > 1);
+});
+
+test('rubrics/draft-game.md carries the seven pillars and the all-ages rating verbatim from docs/PLAN.md', () => {
+  const rubric = readFileSync(join(agentsDir, 'rubrics', 'draft-game.md'), 'utf8');
+  assert.ok(rubric.includes(pillarsFromPlan()), 'the pillars sentence');
+  const plan = readFileSync(join(repoRoot, 'docs', 'PLAN.md'), 'utf8');
+  const rating = /Games meet an ESRB E \/ PEGI 3 bar: [^.]+\./.exec(plan);
+  assert.ok(rating, 'docs/PLAN.md states the rating');
+  assert.ok(rubric.includes(rating[0]), 'the rating sentence');
+  assert.ok(rubric.includes('Answer with one draft-verdict object'), 'the answer line');
+  assert.ok(readFileSync(join(repoRoot, 'platform/agents/prompts/game-director.md'), 'utf8').includes('platform/agents/rubrics/draft-game.md'));
+});
+
+for (const role of ['biz-dev', 'community']) {
+  test(`${role}.md proposes nothing for a board review, names no Reddit or X, puts nothing on the ledger page and says it is not running yet`, () => {
+    const prompt = readFileSync(join(repoRoot, 'platform', 'agents', 'prompts', `${role}.md`), 'utf8');
+    assert.doesNotMatch(prompt, /reddit|subreddit/i);
+    assert.ok(!prompt.includes(' X '), 'no X source');
+    assert.doesNotMatch(prompt, /board's review/i);
+    assert.doesNotMatch(prompt, /ledger page/i);
+    assert.match(prompt, /not running yet/);
+  });
+}

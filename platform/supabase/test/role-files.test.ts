@@ -31,14 +31,14 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/cutover/);
   });
 
-  it("gives every role a description, and every role without write tools says it is not running yet", async () => {
+  it("gives every role a description, and every role without write tools but the Game Director, which grades drafts, says it is not running yet", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     for (const spec of specs) {
       expect(spec.description.length, spec.name).toBeGreaterThan(0);
       expect(spec.description.endsWith("."), spec.name).toBe(true);
     }
     const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
-    expect(idle).toEqual(["Biz Dev", "Community", "Game Designer", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
+    expect(idle).toEqual(["Biz Dev", "Community", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
     // The trust classes (docs/specs/agent-system-core.md), and write access exactly for a writer or planner with tools.
     const byClass = (klass: string) => specs.filter((s) => s.class === klass).map((s) => s.name).sort();
     expect(byClass("writer")).toEqual(["Builder A", "Builder B", "Platform Builder", "QA", "Tech Artist"]);
@@ -48,7 +48,8 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(byClass("web_only")).toEqual(["Biz Dev", "Community", "Head of Product", "Host"]);
     for (const spec of specs) expect(spec.write_access, spec.name).toBe((spec.class === "writer" || spec.class === "planner") && spec.tools.length > 0);
     expect(specs.some((s) => s.name === "Scout")).toBe(false);
-    for (const spec of specs.filter((s) => !s.write_access)) {
+    // The Game Director has no write tools and runs one job: grading drafts (docs/specs/agent-workflows.md).
+    for (const spec of specs.filter((s) => !s.write_access && s.name !== "Game Director")) {
       expect(spec.description, spec.name).toContain("not running yet");
     }
   });

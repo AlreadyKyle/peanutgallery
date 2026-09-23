@@ -1,15 +1,15 @@
 {
   "name": "Game Designer",
   "title": "Game Designer",
-  "description": "Designs each game card the Studio Head ranks, with its numbers, check lines and estimate, for the Game Director to grade, but is not running yet.",
+  "description": "Drafts a new game card with its numbers, check lines and estimate when the board asks, for the Game Director to grade.",
   "species_note": "A small red creature with three short arms and a curled tail.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,
   "voice": "precise",
   "prompt_path": "platform/agents/prompts/game-designer.md",
-  "tools": [],
+  "tools": ["Read", "Glob", "Grep", "Bash"],
   "metrics": ["estimate_accuracy", "first_pass_rate"],
   "class": "planner",
-  "write_access": false,
+  "write_access": true,
   "status": "running"
 }

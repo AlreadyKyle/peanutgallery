@@ -1,7 +1,7 @@
 {
   "name": "Studio Head",
   "title": "Studio Head",
-  "description": "Keeps the studio's roadmap and numbers and proposes what to work on next, but is not running yet; the board files the cards for now.",
+  "description": "Keeps the studio's roadmap and numbers and ranks the open cards when the board asks; the board files most cards for now.",
   "species_note": "A small grey creature with one large eye and a flat, wide head.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0.10,
