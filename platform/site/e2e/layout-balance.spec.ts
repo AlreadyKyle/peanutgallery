@@ -58,6 +58,14 @@ for (const count of [1, 2, 4, 5, 7]) {
   const money = { ...LIVE_STUDIO.money, funding_order: fundingOrder(cards.map((card) => card.id)) };
   auditRoutes(`home with ${count} open ${count === 1 ? 'card' : 'cards'}`, { ...LIVE_STUDIO, cards: [...cards, ...rest], money }, [768, 1024, 1440], ['/', '/contribute']);
 }
+// An open card the waterfall's order leaves out (a vetoed card): it takes no money, so it must not sit
+// in a row of Fund this card buttons without one, which misaligns the row's bars.
+auditRoutes(
+  'home with an open card left out of the funding order',
+  { ...LIVE_STUDIO, money: { ...LIVE_STUDIO.money, funding_order: fundingOrder(open.slice(0, -1).map((card) => card.id)) } },
+  [768, 1024, 1440],
+  ['/', '/contribute'],
+);
 auditRoutes(
   'home with a card that has no brief',
   { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card === open[1] ? { ...card, intent: '' } : card)) },

@@ -209,7 +209,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **Home** (`pages/Landing.tsx`), in the board's order, drawn from one snapshot held still while the page is open (`lib/live.ts`):
 1. **What it is** (signal): the pitch as `h1`, the lede, Play Dust (primary, the cartridge) and How it works, the status line, then the live-updates row.
-2. **Building now** (only while a card builds), **Fund what's next** (its sentence, the filters, the grid in funding order; a phone shows three cards and "Show all *n* cards", which reveals the rest and focuses the fourth card's title) and **Queued** (rows) (paper, the only band with cards).
+2. **Building now** (only while a card builds), **Fund what's next** (its sentence, the filters, the grid in funding order; a phone shows three cards and "Show all *n* cards", which reveals the rest and focuses the fourth card's title; with the waterfall's order loaded, only the open cards in it, so a card that takes no money, such as a vetoed one, is neither counted by the status line nor drawn without its Fund this card in a row of cards that have one; with the order unread, every open card, none with Fund this card) and **Queued** (rows) (paper, the only band with cards).
 3. **The team** (ink): the team strip.
 4. **Shipped** (the latest three) and **Planned next** (the next three planned titles) as rail rows, side by side from 64rem (3:2), each linking to `/roadmap`; one alone takes the row (paper).
 5. **Where the money goes** (ink): the pool with the coin, the split sentence from the fixed constants in `payment.ts`, "These are contributions, not donations.", the five latest agent actions and Full ledger.

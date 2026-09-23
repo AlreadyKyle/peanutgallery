@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { categoryOf, groupCards, inCategory, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
+import { categoryOf, groupCards, inCategory, openForFunding, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
@@ -71,7 +71,7 @@ export function FilterChip({
  */
 export function FundBoard({
   snapshot,
-  cards = groupCards(snapshot.cards).fund,
+  cards = groupCards(snapshot.cards, openForFunding(snapshot)).fund,
   changed = {},
 }: {
   snapshot: Snapshot;
