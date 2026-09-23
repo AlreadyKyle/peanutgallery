@@ -249,3 +249,34 @@ describe('the card faces', () => {
     expect(box.querySelector('[data-row="contributors"]')?.className ?? '').toBe('');
   });
 });
+
+describe('the AI-agent byline (docs/specs/agent-workflows.md)', () => {
+  const designer = { id: 'r-designer', name: 'Game Designer', title: 'Game Designer', description: null, species_note: 'A small red creature.', model: 'claude-opus-5-5', write_access: true, state: 'active', hired_at: '2026-09-14T00:00:00Z' };
+
+  function face(c: Card, roles: Snapshot['roles']): HTMLElement {
+    const snap = { ...snapshot([c], { [c.id]: { contributors: 0, credited_usd: 0 } }), roles };
+    const { container } = render(
+      <MemoryRouter>
+        <ul>
+          <CardFace card={c} snapshot={snap} />
+        </ul>
+      </MemoryRouter>,
+    );
+    return container.querySelector('li.card')!;
+  }
+
+  it('says which role wrote an agent card, under its summary, with the title from the roles loaded', () => {
+    const li = face(card({ source: 'agent', summary: 'The gatherer costs one more.', drafter_role_id: 'r-designer' }), [designer]);
+    const byline = li.querySelector('.card-byline');
+    expect(byline?.textContent).toBe('Written by the Game Designer, an AI agent');
+    expect(li.querySelector('.card-summary')?.nextElementSibling).toBe(byline);
+  });
+
+  it('says an AI agent wrote it when the roles did not load, and nothing on a card the board filed', () => {
+    expect(face(card({ source: 'agent', drafter_role_id: 'r-designer' }), []).querySelector('.card-byline')?.textContent).toBe(copy.writtenByAgent);
+    cleanup();
+    const board = face(card({ source: 'board', summary: 'Filed by the board.', drafter_role_id: null }), [designer]);
+    expect(board.querySelector('.card-byline')).toBeNull();
+    expect(board.textContent).not.toContain('AI agent');
+  });
+});

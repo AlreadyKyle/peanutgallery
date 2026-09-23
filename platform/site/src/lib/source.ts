@@ -30,6 +30,11 @@ export type Card = {
   rank: number | null;
   /** The role that builds the card, or null. */
   executor_role_id: string | null;
+  /**
+   * The role that drafted the card when an agent wrote it (docs/specs/agent-workflows.md); null or
+   * absent for a card the board filed. The card then carries 'Written by the <role>, an AI agent'.
+   */
+  drafter_role_id?: string | null;
   funding_target_usd: number;
   funded_usd: number;
   /**
@@ -214,6 +219,7 @@ type CardRow = {
   horizon: string | null;
   rank: Numeric | null;
   executor_role_id: string | null;
+  drafter_role_id?: string | null;
   funding_target_usd: Numeric;
   funded_usd: Numeric;
   created_at: string;
@@ -314,7 +320,7 @@ export const STOPPED_COLUMNS = 'card_id,title,stage,failing_check,spent_usd,fund
 export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
 /** The card columns the site reads. Each one must be in the anon column grant on cards. */
 export const CARD_COLUMNS =
-  'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at';
+  'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,drafter_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at';
 /** The public_roles columns the site reads. The site never reads the roles table itself. */
 export const ROLE_COLUMNS = 'id,name,title,description,species_note,model,write_access,state,hired_at';
 export const REALTIME_LISTENERS = [
@@ -380,6 +386,7 @@ function cardFrom(row: CardRow, spend: Record<string, number>): Card {
     horizon: horizonFrom(row.horizon),
     rank: rankFrom(row.rank),
     executor_role_id: row.executor_role_id ?? null,
+    drafter_role_id: row.drafter_role_id ?? null,
     funding_target_usd: money(row.funding_target_usd),
     funded_usd: money(row.funded_usd),
     spent_usd: spend[row.id] ?? 0,

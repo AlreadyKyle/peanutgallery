@@ -1,14 +1,15 @@
+import { writtenBy } from '../components/Card';
 import { PlannedRow } from '../components/Cards';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { plannedCards, PLANNED_HORIZONS, type PlannedHorizon } from '../lib/cards';
 import { copy } from '../lib/copy';
-import type { Card } from '../lib/source';
+import type { Card, Snapshot } from '../lib/source';
 import { unavailableLine, useStudio } from '../lib/studio';
 
 const roadmap = copy.roadmap;
 
-function Horizon({ horizon, cards }: { horizon: PlannedHorizon; cards: Card[] }) {
+function Horizon({ horizon, cards, snapshot }: { horizon: PlannedHorizon; cards: Card[]; snapshot: Snapshot }) {
   return (
     <section className="section" aria-labelledby={`roadmap-${horizon}`}>
       <h2 id={`roadmap-${horizon}`}>{roadmap.horizons[horizon]}</h2>
@@ -18,7 +19,7 @@ function Horizon({ horizon, cards }: { horizon: PlannedHorizon; cards: Card[] })
       ) : (
         <ul className="rows rail">
           {cards.map((card) => (
-            <PlannedRow key={card.id} card={card} detail />
+            <PlannedRow key={card.id} card={card} detail byline={writtenBy(card, snapshot)} />
           ))}
         </ul>
       )}
@@ -43,7 +44,7 @@ export function Roadmap() {
       {studio.state === 'ready' ? (
         PLANNED_HORIZONS.map((horizon) => (
           <div key={horizon} className="band">
-            <Horizon horizon={horizon} cards={plannedCards(studio.snapshot.cards)[horizon]} />
+            <Horizon horizon={horizon} cards={plannedCards(studio.snapshot.cards)[horizon]} snapshot={studio.snapshot} />
           </div>
         ))
       ) : (

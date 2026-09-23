@@ -198,7 +198,7 @@ export function ShippedList({ cards, snapshot }: { cards: Card[]; snapshot: Snap
 }
 
 /** A planned card as a rail row: its suit in the rail, then its title, and on /roadmap its summary and state. */
-export function PlannedRow({ card, detail = false }: { card: Card; detail?: boolean }) {
+export function PlannedRow({ card, detail = false, byline = null }: { card: Card; detail?: boolean; byline?: string | null }) {
   return (
     <li>
       <span className="row-rail">
@@ -207,6 +207,7 @@ export function PlannedRow({ card, detail = false }: { card: Card; detail?: bool
       <div className="row-body">
         <h3 className="row-title">{card.title}</h3>
         {!detail || blank(card.summary) ? null : <p>{card.summary}</p>}
+        {detail && byline ? <p className="card-meta card-byline">{byline}</p> : null}
         {detail ? <p className="card-meta">{copy.roadmap.planned}</p> : null}
       </div>
     </li>

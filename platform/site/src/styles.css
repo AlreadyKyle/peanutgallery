@@ -811,6 +811,15 @@ button.link:hover:not(:disabled) {
   font-size: var(--size-small);
 }
 
+/* Who wrote an agent card, under its summary (docs/specs/agent-workflows.md). */
+.card-summary:has(+ .card-byline) {
+  margin-bottom: var(--space-1);
+}
+
+.card > .card-byline {
+  margin: 0 0 var(--space-2);
+}
+
 /* Funded: the button slot holds a plain line, 44px tall so the row stays aligned. */
 .card-waiting {
   display: flex;

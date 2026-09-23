@@ -70,6 +70,10 @@ export const copy = {
   waitingForAgents: 'Waiting for the agents',
   buildingBy: '{name} is building this',
   agentBrief: 'What the agents are told',
+  // Beside agent-written card text only (docs/specs/agent-workflows.md): the drafting role's title,
+  // or the plain line when the roles did not load.
+  writtenBy: 'Written by the {role}, an AI agent',
+  writtenByAgent: 'Written by an AI agent',
   // The live-updates row and the one polite announcer.
   pauseLiveUpdates: 'Pause live updates',
   upToDate: 'Up to date',
