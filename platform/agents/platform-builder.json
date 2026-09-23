@@ -1,6 +1,7 @@
 {
   "name": "Platform Builder",
   "title": "Platform Builder",
+  "description": "Builds changes to the public site's pages and presentation from studio cards, which are not open for funding yet.",
   "species_note": "A squat purple creature with a domed shell and a pair of wide eyes.",
   "model": "MODEL_BUILDER",
   "budget_share": 0.15,

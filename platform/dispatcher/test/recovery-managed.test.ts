@@ -102,10 +102,10 @@ describe('recoverOrphans with managed sessions', () => {
         [unsettledCard.id, { sessionIds: ['sesn_2'], patchStored: false, unsettled: ['sesn_2: session sesn_2 was still running; it is left for recovery to settle'] }],
       ]);
     };
-    const updateCard = db.updateCard.bind(db);
-    db.updateCard = async (id, patch) => {
+    const updateCardIf = db.updateCardIf.bind(db);
+    db.updateCardIf = async (id, stages, patch) => {
       order.push(`pause ${id.slice(0, 8)}`);
-      return updateCard(id, patch);
+      return updateCardIf(id, stages, patch);
     };
     await recoverOrphans(deps(db, alert, closeSessions));
     expect(order).toEqual(['close', 'pause aaaaaaaa', 'pause bbbbbbbb']);

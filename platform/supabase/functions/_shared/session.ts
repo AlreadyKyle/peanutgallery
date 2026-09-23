@@ -24,8 +24,27 @@ export interface BalanceTransactionLike {
   exchange_rate: number | null;
 }
 
+/**
+ * The card a charge was paid with. Stripe's fingerprint identifies the card
+ * number within this Stripe account. A wallet payment (Apple Pay, Google Pay)
+ * is a card payment with card.wallet set, and its fingerprint may be of the
+ * device's token rather than the card itself.
+ */
+export interface CardDetailsLike {
+  fingerprint?: string | null;
+  wallet?: { type: string } | null;
+}
+
+/** Link, buy-now-pay-later and other methods without a card carry no card object. */
+export interface PaymentMethodDetailsLike {
+  type?: string;
+  card?: CardDetailsLike | null;
+  link?: { country?: string | null } | null;
+}
+
 export interface ChargeLike {
   balance_transaction: string | BalanceTransactionLike | null;
+  payment_method_details?: PaymentMethodDetailsLike | null;
 }
 
 export interface PaymentIntentLike {
@@ -102,13 +121,37 @@ export async function parseSession(
   };
 }
 
-/** Fee in USD from the charge's expanded balance transaction; null while any link in the chain is a bare id or missing. */
-export function feeFromSession(session: SessionLike): number | null {
+/** What the webhook reads from the charge behind a session: the fee, and the card's fingerprint when it was paid by card. */
+export interface ChargeFacts {
+  fee_usd: number;
+  card_fingerprint: string | null;
+}
+
+/** The session's latest charge when the payment intent and the charge are both expanded; otherwise null. */
+function expandedCharge(session: SessionLike): ChargeLike | null {
   const intent = session.payment_intent;
   if (!intent || typeof intent === "string") return null;
   const charge = intent.latest_charge;
   if (!charge || typeof charge === "string") return null;
-  const tx = charge.balance_transaction;
+  return charge;
+}
+
+/** Fee in USD from the charge's expanded balance transaction; null while any link in the chain is a bare id or missing. */
+export function feeFromSession(session: SessionLike): number | null {
+  const tx = expandedCharge(session)?.balance_transaction;
   if (!tx || typeof tx === "string") return null;
   return feeToUsd(tx.fee, tx.currency, tx.exchange_rate);
+}
+
+/** The card's Stripe fingerprint from the expanded charge; null for Link and other methods without a card. */
+export function cardFingerprintFromSession(session: SessionLike): string | null {
+  const fingerprint = expandedCharge(session)?.payment_method_details?.card?.fingerprint;
+  return typeof fingerprint === "string" && fingerprint.trim() !== "" ? fingerprint.trim() : null;
+}
+
+/** The fee and the card fingerprint, from the one retrieve; null while the fee is not available. */
+export function chargeFromSession(session: SessionLike): ChargeFacts | null {
+  const fee = feeFromSession(session);
+  if (fee === null) return null;
+  return { fee_usd: fee, card_fingerprint: cardFingerprintFromSession(session) };
 }

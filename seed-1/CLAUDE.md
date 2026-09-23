@@ -14,9 +14,9 @@ Idle/incremental. One screen. Numbers go up. Every feature is visible within 60 
   - `render/layout.ts` is the Phaser-free unlock-list layout: earned unlocks collapse to one line and the next three unearned show below, so the list fits the canvas at any count (`tests/layout.test.ts`).
   - The scene saves to localStorage under the key `dust.save` every 5 seconds, when the tab is hidden and on `pagehide`, and `render/main.ts` resumes from that save on load.
   - `render/favicon.svg` is the hand-drawn tab icon, linked from `index.html` so Vite bundles it.
-- Strings. The tab title the game sets once its data loads and every string the canvas draws come from `content/strings.json`, except unit and unlock names, which come from the `config/` files. Some text lives in code instead, because it shows before `strings.json` loads, when it fails to load, or outside the canvas; changing any of it is a code-lane card:
-  - `index.html`: the initial `<title>`, the meta description and the Open Graph tags, the "Loading the game data." status line, and the studio line "Made by AI agents at Peanut Gallery · All ages" with its link to https://peanutgallery.games.
-  - `render/main.ts`: "The game data did not load. Reload the page to try again."
+- Strings. The tab title the game sets once its data loads and every string the canvas draws come from `content/strings.json`, except unit and unlock names, which come from the `config/` files. Some text lives in code instead, because it shows before `strings.json` loads, when it fails to load, or outside the canvas:
+  - `index.html`: the initial `<title>`, the meta description and the Open Graph tags, the "Loading the game data." status line, and the studio line "Made by AI agents at Peanut Gallery · All ages" with its link to https://peanutgallery.games. The page carries the all-ages label and the studio link, so it is protected: the board changes it.
+  - `render/main.ts`: "The game data did not load. Reload the page to try again." Changing it is a code-lane card.
 - `bots/` holds the greedy bot and its command line. `loadConfigFromDir(dir)` lives here because it reads the filesystem.
 - `tests/` are vitest suites. `tests/fixtures/config/` is a frozen copy of the config; the pinned unlock timeline runs against the fixture, not the live config, so a config-lane card cannot break the pinned test.
 
@@ -26,11 +26,11 @@ Production per second is `1 + sum(rate x owned)` times every unlocked multiplier
 
 ## Lanes
 
-A config-lane card changes values inside `config/` or `content/` and nothing else: costs, rates, thresholds, names, descriptions, unlock order. It runs the bot and the build, not the test suite. A card that needs a new function, a new field, a new file or any change under `sim/`, `render/` or the tests is a code-lane card and runs the full gate.
+A config-lane card changes values inside the `.json` files of `config/` or `content/` and nothing else: costs, rates, thresholds, names, descriptions, unlock order. Those folders hold `.json` files only; the dispatcher and the gate refuse any other file there on a config-lane card. It runs the bot and the build, not the test suite. A card that needs a new function, a new field, a new file or any change under `sim/`, `render/` or the tests is a code-lane card and runs the full gate.
 
 ## Protected paths
 
-No agent may change these, in any lane; the dispatcher rejects the card and the gate fails a card branch that touches one (`platform/gate/kernel-paths.txt` is the list): this `CLAUDE.md`, `bots/`, `scripts/`, `package.json`, `netlify.toml`, `vite.config.ts`, `tsconfig.json`, `sim/invariants.ts`, `tests/bot.test.ts` and `tests/invariants.test.ts`. They are the gate's harness for this game: the board changes them.
+No agent may change these, in any lane; the dispatcher rejects the card and the gate fails a card branch that touches one (`platform/gate/kernel-paths.txt` is the list): this `CLAUDE.md`, `bots/`, `scripts/`, `index.html`, `package.json`, `netlify.toml`, `vite.config.ts`, `tsconfig.json`, `sim/hash.ts`, `sim/rng.ts`, `sim/invariants.ts`, `tests/bot.test.ts`, `tests/invariants.test.ts` and `tests/timeline.test.ts`. They are the gate's harness for this game, its determinism and the page that carries the rating: the board changes them. No agent may create or change a file with a name from `platform/gate/kernel-names.txt` either, at any depth: build, package, env and deploy configs such as a PostCSS config, a nested tsconfig, an env file or a Netlify headers file.
 
 ## Commands
 

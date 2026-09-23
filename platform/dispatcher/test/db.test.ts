@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSupabaseDb, fetchWithTimeout, type UsageInput } from '../src/db.js';
+import { PAGE_ROWS, createSupabaseDb, fetchWithTimeout, toCard, type UsageInput } from '../src/db.js';
 import { NOW } from './helpers/fake-db.js';
 import { mockFetch } from './helpers/mock-fetch.js';
 
@@ -110,6 +110,90 @@ describe('createSupabaseDb queries', () => {
     expect(url.searchParams.get('order')).toBe('created_at.desc');
     expect(url.searchParams.get('limit')).toBe('1');
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: rest([]).fetchFn }).findEvent('card-1', 'smoke_pass')).toBeNull();
+  });
+
+  it('writes a stage only while the card is in an expected stage, and says whether it did', async () => {
+    const hit = rest([{ id: 'card-1' }]);
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn: hit.fetchFn });
+    expect(await db.updateCardIf('card-1', ['building', 'gated'], { stage: 'paused', failing_check: 'ceiling' })).toBe(true);
+    expect(hit.seen[0]?.method).toBe('PATCH');
+    expect(hit.seen[0]?.url.pathname).toBe('/rest/v1/cards');
+    expect(hit.seen[0]?.url.searchParams.get('id')).toBe('eq.card-1');
+    expect(hit.seen[0]?.url.searchParams.get('stage')).toBe('in.(building,gated)');
+    expect(hit.seen[0]?.body).toEqual({ stage: 'paused', failing_check: 'ceiling' });
+    const miss = rest([]);
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: miss.fetchFn }).updateCardIf('card-1', ['gated'], { stage: 'live' })).toBe(false);
+  });
+
+  it('claims and releases the dispatcher lease through its functions', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => {
+      if (method === 'POST' && url.endsWith('/rest/v1/rpc/claim_dispatcher_lease')) return { status: 200, json: false };
+      if (method === 'POST' && url.endsWith('/rest/v1/rpc/release_dispatcher_lease')) return { status: 200, json: null };
+      return undefined;
+    });
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.claimLease('mac/123/abcd', 300)).toBe(false);
+    await db.releaseLease('mac/123/abcd');
+    expect(calls.map((call) => call.body)).toEqual([{ p_holder: 'mac/123/abcd', p_ttl_seconds: 300 }, { p_holder: 'mac/123/abcd' }]);
+    const granted = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/claim_dispatcher_lease') ? { status: 200, json: true } : undefined));
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: granted.fetchFn }).claimLease('vps/1/ffff', 300)).toBe(true);
+  });
+
+  it('pauses the studio only when it is not paused already, naming the dispatcher', async () => {
+    const { fetchFn, seen } = rest([]);
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).pauseStudio('dispatcher: Console credit needed (card 4c2f5a1e)', NOW);
+    expect(seen[0]?.method).toBe('PATCH');
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/studio_state');
+    expect(seen[0]?.url.searchParams.get('id')).toBe('eq.1');
+    expect(seen[0]?.url.searchParams.get('paused')).toBe('eq.false');
+    expect(seen[0]?.body).toEqual({ paused: true, paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString() });
+  });
+
+  it("reads each card's studio-billed spend from public_card_spend, and asks nothing for no cards", async () => {
+    const { fetchFn, seen } = rest([{ card_id: 'a', spent_usd: '1.2500' }]);
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.cardSpend(['a', 'b'])).toEqual(new Map([['a', 1.25]]));
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/public_card_spend');
+    expect(seen[0]?.url.searchParams.get('card_id')).toBe('in.(a,b)');
+    expect(await db.cardSpend([])).toEqual(new Map());
+    expect(seen).toHaveLength(1);
+  });
+
+  it('sums every page of the Console credit bought and of the studio and overhead ledger', async () => {
+    const seen: URL[] = [];
+    const fetchFn = (async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      seen.push(url);
+      const first = (url.searchParams.get('offset') ?? '0') === '0';
+      const rows =
+        url.pathname === '/rest/v1/credit_purchases'
+          ? first
+            ? Array.from({ length: PAGE_ROWS }, () => ({ amount_usd: '0.0100' }))
+            : [{ amount_usd: '5' }]
+          : first
+            ? Array.from({ length: PAGE_ROWS }, (_row, i) => ({ usd: '0.0010', created_at: i === 0 ? '2026-08-31T12:00:00.000Z' : '2026-09-02T12:00:00.000Z' }))
+            : [{ usd: '2', created_at: '2026-09-10T12:00:00.000Z' }];
+      return new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.creditPurchasedUsd()).toBe(15);
+    expect(await db.studioSpend(new Date('2026-09-01T04:00:00.000Z'))).toEqual({ totalUsd: 3, sinceUsd: 2.999 });
+    const ledger = seen.filter((url) => url.pathname === '/rest/v1/ledger');
+    expect(ledger).toHaveLength(2);
+    expect(ledger[0]?.searchParams.get('billed_to')).toBe('in.(studio,overhead)');
+    expect(ledger.map((url) => [url.searchParams.get('offset'), url.searchParams.get('limit')])).toEqual([
+      ['0', String(PAGE_ROWS)],
+      [String(PAGE_ROWS), String(PAGE_ROWS)],
+    ]);
+  });
+
+  it('reads a card with no horizon column as horizon now, and a studio with no monthly cap as null', async () => {
+    expect(toCard({ id: 'a', funded_usd: '2.5000' })).toMatchObject({ horizon: 'now', funded_usd: 2.5 });
+    expect(toCard({ id: 'a', horizon: 'later' }).horizon).toBe('later');
+    const state = mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json: { paused: false, agent_mode: 'attended', daily_cap_usd: 100 } } : undefined));
+    expect((await createSupabaseDb('https://db.local', 'service-role', { fetchFn: state.fetchFn }).getStudioState()).monthly_cap_usd).toBeNull();
+    const capped = mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json: { paused: false, monthly_cap_usd: '500.0000' } } : undefined));
+    expect((await createSupabaseDb('https://db.local', 'service-role', { fetchFn: capped.fetchFn }).getStudioState()).monthly_cap_usd).toBe(500);
   });
 
   it('clears commit_sha when it claims a card', async () => {

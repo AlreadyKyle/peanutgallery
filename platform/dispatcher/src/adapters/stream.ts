@@ -48,7 +48,16 @@ export function readUsage(raw: unknown): TurnUsage | null {
     cache_creation_1h_input_tokens: creation - fiveMinute,
     cache_read_input_tokens: count(raw.cache_read_input_tokens),
     output_tokens: count(raw.output_tokens),
+    // A premium tier is carried on so the meter prices it high and the session alerts (metering.ts);
+    // standard, the only tier the price table holds, is left out.
+    ...premium(raw, 'speed'),
+    ...premium(raw, 'service_tier'),
   };
+}
+
+function premium(raw: Record<string, unknown>, key: 'speed' | 'service_tier'): Partial<Pick<TurnUsage, 'speed' | 'service_tier'>> {
+  const value = raw[key];
+  return typeof value === 'string' && value.length > 0 && value !== 'standard' ? { [key]: value } : {};
 }
 
 // The result line's modelUsage block is keyed by model id. Claude Code writes camelCase counts;

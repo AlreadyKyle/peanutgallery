@@ -13,13 +13,16 @@ export interface ModelPrice {
 export type PriceTable = Readonly<Record<string, ModelPrice>>;
 
 // cache_creation_1h_input_tokens is the part of cache_creation_input_tokens written to the one-hour
-// cache; the rest was written to the five-minute cache.
+// cache; the rest was written to the five-minute cache. speed and service_tier are the usage block's
+// own fields, when it carries them; anything but standard is a premium the table does not price.
 export interface TurnUsage {
   input_tokens: number;
   cache_creation_input_tokens: number;
   cache_creation_1h_input_tokens: number;
   cache_read_input_tokens: number;
   output_tokens: number;
+  speed?: string | null;
+  service_tier?: string | null;
 }
 
 export interface LedgerUsage {

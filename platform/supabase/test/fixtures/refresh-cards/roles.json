@@ -1,0 +1,47 @@
+[
+  {
+    "id": "e95256d4-170e-4038-82af-9586e9be4fe2",
+    "name": "Builder A",
+    "state": "active"
+  },
+  {
+    "id": "c2fa19a1-d828-4888-8ceb-b8d5180d733e",
+    "name": "Builder B",
+    "state": "active"
+  },
+  {
+    "id": "de4da3a4-07a3-44bd-8422-23e8b74791dd",
+    "name": "Community",
+    "state": "active"
+  },
+  {
+    "id": "c7179995-c868-4b08-a17a-d5f6892b55d9",
+    "name": "Game Director",
+    "state": "active"
+  },
+  {
+    "id": "0878eb47-9c44-4ee2-8b12-e9bace7661b2",
+    "name": "Host",
+    "state": "active"
+  },
+  {
+    "id": "bd4462ae-f584-4eb4-b07b-7c27561079b3",
+    "name": "Platform Builder",
+    "state": "active"
+  },
+  {
+    "id": "5aedc4d4-a4a4-4edf-9aca-b7c0e74d142d",
+    "name": "QA",
+    "state": "active"
+  },
+  {
+    "id": "14a155d8-cb35-4044-803e-80651f3daf1e",
+    "name": "Scout",
+    "state": "active"
+  },
+  {
+    "id": "4b4bddc3-a632-4c7b-ab3d-597ad9088437",
+    "name": "Studio Head",
+    "state": "active"
+  }
+]

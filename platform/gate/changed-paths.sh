@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # changed-paths.sh: which folders a change touches and which lane it belongs to.
 #
-# usage: changed-paths.sh [--list | --check-modes] [--repo-root d] <base-ref> <head-ref>
+# usage: changed-paths.sh [--list | --check-modes | --check-lane <branch>] [--repo-root d] <base-ref> <head-ref>
 #
 # Compares the merge base of the two refs with head (a pull request diff). When base is the
 # all-zero sha or shares no history with head, every file in head counts as changed. Rename
@@ -11,7 +11,9 @@
 # Output: seed=true|false platform=true|false lane=config|code
 #   seed      a changed file lies under seed-1/, or outside both folders (workspace-level change)
 #   platform  a changed file lies under platform/, or outside both folders
-#   lane      config only when every changed file lies under seed-1/config/ or seed-1/content/
+#   lane      config only when every changed file is a .json file under seed-1/config/ or
+#             seed-1/content/: the build copies those folders into the game verbatim, and the config
+#             lane runs no typecheck or tests
 # --list prints the changed files, one per line, instead. Paths are not quoted for non-ASCII bytes;
 # git still quotes a path holding a tab, newline, double quote or backslash, and kernel-guard.sh
 # fails a quoted line.
@@ -19,6 +21,13 @@
 # submodule (mode 160000): a link can point a lane path at a kernel file, and a submodule's contents
 # are never listed. First stdout line: PASS: mode-check entries=<n> or
 # FAIL: mode-check path=<file> mode=<mode>; exit 0 pass, 1 fail.
+# --check-lane <branch> fails when a card branch leaves its lane. The branch is card/<id>-config or
+# card/<id>-code. Every changed file must lie under seed-1/: the platform code lane is closed until
+# the board has its own origin (docs/specs/launch-gate.md), so no card branch may change platform/ or
+# a root file. On a -config branch every changed file must also be a .json file under seed-1/config/
+# or seed-1/content/. First stdout line: PASS: lane-check files=<n> lane=<lane> or
+# FAIL: lane-check path=<file> rule=seed-1-only|config-json-only, or
+# FAIL: lane-check branch=<branch> rule=branch-name; exit 0 pass, 1 fail.
 # --repo-root names another repository.
 # Exit 0, or 2 on usage or when a ref does not resolve.
 set -u
@@ -27,15 +36,17 @@ GATE_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(gate_repo_root)
 
 usage() {
-  echo "usage: changed-paths.sh [--list | --check-modes] [--repo-root d] <base-ref> <head-ref>" >&2
+  echo "usage: changed-paths.sh [--list | --check-modes | --check-lane <branch>] [--repo-root d] <base-ref> <head-ref>" >&2
   exit 2
 }
 
 MODE=lanes
+BRANCH=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --list) [ "$MODE" = lanes ] || usage; MODE=list; shift ;;
     --check-modes) [ "$MODE" = lanes ] || usage; MODE=modes; shift ;;
+    --check-lane) [ "$MODE" = lanes ] && [ $# -ge 2 ] || usage; MODE=lane-check; BRANCH=$2; shift 2 ;;
     --repo-root) [ $# -ge 2 ] || usage; REPO_ROOT=$(gate_abs_path "$2"); shift 2 ;;
     --*) usage ;;
     *) break ;;
@@ -119,6 +130,43 @@ if [ "$MODE" = list ]; then
   exit 0
 fi
 
+if [ "$MODE" = lane-check ]; then
+  case "$BRANCH" in
+    card/?*-config) BRANCH_LANE=config ;;
+    card/?*-code) BRANCH_LANE=code ;;
+    *) echo "FAIL: lane-check branch=$BRANCH rule=branch-name"; exit 1 ;;
+  esac
+  count=0
+  failed=""
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    count=$((count + 1))
+    rule=""
+    case "$f" in
+      seed-1/*) ;;
+      *) rule=seed-1-only ;;
+    esac
+    if [ -z "$rule" ] && [ "$BRANCH_LANE" = config ]; then
+      case "$f" in
+        seed-1/config/*.json|seed-1/content/*.json) ;;
+        *) rule=config-json-only ;;
+      esac
+    fi
+    if [ -n "$rule" ]; then
+      [ -n "$failed" ] || failed="path=$f rule=$rule"
+      echo "lane-check: $f breaks $rule" >&2
+    fi
+  done <<EOF_FILES
+$FILES
+EOF_FILES
+  if [ -n "$failed" ]; then
+    echo "FAIL: lane-check $failed"
+    exit 1
+  fi
+  echo "PASS: lane-check files=$count lane=$BRANCH_LANE"
+  exit 0
+fi
+
 SEED=false
 PLATFORM=false
 LANE=code
@@ -126,7 +174,7 @@ if [ -n "$FILES" ]; then
   LANE=config
   while IFS= read -r f; do
     case "$f" in
-      seed-1/config/*|seed-1/content/*) SEED=true ;;
+      seed-1/config/*.json|seed-1/content/*.json) SEED=true ;;
       seed-1/*) SEED=true; LANE=code ;;
       platform/*) PLATFORM=true; LANE=code ;;
       *) SEED=true; PLATFORM=true; LANE=code ;;

@@ -1,6 +1,7 @@
-# Paths no agent may change, in any lane (docs/specs/launch-hardening.md, PLAN.md §4 Kernel).
-# One repository-relative path per line; a folder covers everything under it. The dispatcher
-# refuses a card that changes one, and the gate fails a card branch that does.
+# Paths no agent may change, in any lane (docs/specs/launch-hardening.md, docs/specs/launch-gate.md,
+# PLAN.md §4 Kernel). One repository-relative path per line; a folder covers everything under it.
+# The dispatcher refuses a card that changes one, the gate fails a card branch that does, and the
+# gate's build job restores every one of them from the base commit before it installs or builds.
 .github
 CLAUDE.md
 docs
@@ -18,14 +19,20 @@ platform/site/netlify.toml
 platform/site/package.json
 platform/site/playwright.config.ts
 platform/site/scripts
+platform/site/src/lib/board.ts
+platform/site/src/lib/env.ts
 platform/site/vite.config.ts
 seed-1/CLAUDE.md
 seed-1/bots
+seed-1/index.html
 seed-1/netlify.toml
 seed-1/package.json
 seed-1/scripts
+seed-1/sim/hash.ts
 seed-1/sim/invariants.ts
+seed-1/sim/rng.ts
 seed-1/tests/bot.test.ts
 seed-1/tests/invariants.test.ts
+seed-1/tests/timeline.test.ts
 seed-1/tsconfig.json
 seed-1/vite.config.ts

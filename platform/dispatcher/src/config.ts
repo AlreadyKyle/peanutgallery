@@ -115,6 +115,24 @@ export function agentModeEnv(env: Env): AgentMode {
 }
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+// A fine-grained personal access token: one repository, and only the permissions docs/BOARD-SETUP.md
+// names. A gh sign-in token (gho_) or a classic token (ghp_) reaches every repository the account can.
+export const FINE_GRAINED_TOKEN_PREFIX = 'github_pat_';
+
+// Why GITHUB_TOKEN is not a fine-grained token, or null when it is.
+export function githubTokenProblem(token: string): string | null {
+  if (token.startsWith(FINE_GRAINED_TOKEN_PREFIX)) return null;
+  return `GITHUB_TOKEN is not a fine-grained token (${FINE_GRAINED_TOKEN_PREFIX}...); create one for this repository alone as docs/BOARD-SETUP.md describes`;
+}
+
+// Unattended mode runs with no one watching, so it refuses a token that can reach more than this
+// repository; attended mode warns at startup (startup.ts).
+export function githubTokenEnv(env: Env, mode: AgentMode): string {
+  const token = requireEnv(env, 'GITHUB_TOKEN');
+  const problem = githubTokenProblem(token);
+  if (problem && mode === 'unattended') throw new ConfigError(problem);
+  return token;
+}
 const STUDIO_KEY = 'STUDIO_ANTHROPIC_API_KEY';
 const FOUNDER_KEY = 'ANTHROPIC_API_KEY';
 
@@ -180,9 +198,17 @@ function inside(target: string, root: string): boolean {
 
 export type Roots = Pick<DispatcherConfig, 'codeRoot' | 'codeReadonly' | 'repoRoot' | 'worktreeRoot'>;
 
+// The default worktree root: a folder beside the clone, named after it (<clone>-worktrees), as the
+// VPS's /srv/peanutgallery-worktrees sits beside its clone.
+export function defaultWorktreeRoot(repoRoot: string): string {
+  return path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
+}
+
 // DISPATCHER_CODE_ROOT, when set, must name the checkout the process really runs from, or the
 // read-only check would look at a folder the code is not loaded from. A read-only code root cannot
-// hold the git state and the worktrees the dispatcher writes.
+// hold the git state and the worktrees the dispatcher writes. Card worktrees live outside the clone,
+// in every mode: a session started inside the clone would read the clone's own CLAUDE.md files and
+// sit next to its .env, and the attended sandbox allows writes to the worktree alone.
 export function rootsEnv(env: Env, codeRoot: string): Roots {
   const declared = optionalEnv(env, 'DISPATCHER_CODE_ROOT', '');
   if (declared && path.resolve(declared) !== path.resolve(codeRoot)) {
@@ -191,7 +217,11 @@ export function rootsEnv(env: Env, codeRoot: string): Roots {
   const readonly = optionalEnv(env, 'DISPATCHER_CODE_READONLY', 'off');
   if (readonly !== 'required' && readonly !== 'off') throw new ConfigError('DISPATCHER_CODE_READONLY must be required or off');
   const repoRoot = path.resolve(codeRoot, optionalEnv(env, 'DISPATCHER_REPO_ROOT', '.'));
-  const worktreeRoot = path.resolve(repoRoot, optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '.worktrees'));
+  const declaredWorktrees = optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '');
+  const worktreeRoot = declaredWorktrees ? path.resolve(repoRoot, declaredWorktrees) : defaultWorktreeRoot(repoRoot);
+  if (inside(worktreeRoot, repoRoot)) {
+    throw new ConfigError(`DISPATCHER_WORKTREE_ROOT must be outside the repository clone ${repoRoot}; leave it unset for ${defaultWorktreeRoot(repoRoot)}`);
+  }
   if (readonly === 'required') {
     const writable: Array<[string, string]> = [
       ['DISPATCHER_REPO_ROOT', repoRoot],
@@ -215,7 +245,7 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
   const priceTable = priceTableEnv(env);
   pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
   const roots = rootsEnv(env, codeRoot);
-  const githubToken = requireEnv(env, 'GITHUB_TOKEN');
+  const githubToken = githubTokenEnv(env, agentMode);
   return {
     ...roots,
     agentMode,

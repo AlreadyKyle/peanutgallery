@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkIdentity, fromUnits, toUnits } from "../lib/ledger-identity.js";
+import { checkIdentity, fromUnits, ledgerTotals, toUnits } from "../lib/ledger-identity.js";
 
 describe("toUnits and fromUnits", () => {
   it("round-trip four-decimal amounts exactly, negatives included", () => {
@@ -43,5 +43,16 @@ describe("checkIdentity", () => {
   it("names the drift when studio spend is missing from the pool", () => {
     const lines = checkIdentity(pool, [paid], [{ usd: "0.2500" }]);
     expect(lines[1]).toEqual({ name: "I2", left: "0.5283", right: "0.2783", drift: "0.2500", holds: false });
+  });
+
+  it("leaves overhead and founder rows out, since neither touches the pool", () => {
+    const rows = [
+      { usd: "0.0312", billed_to: "overhead" as const },
+      { usd: "0.4000", billed_to: "founder" as const },
+    ];
+    expect(checkIdentity(pool, [paid], rows).every((l) => l.holds)).toBe(true);
+    // A studio row is still counted, with or without billed_to.
+    expect(checkIdentity(pool, [paid], [...rows, { usd: "0.2500", billed_to: "studio" as const }])[1]!.drift).toBe("0.2500");
+    expect(ledgerTotals([...rows, { usd: "0.2500" }])).toEqual({ studio: "0.2500", overhead: "0.0312" });
   });
 });

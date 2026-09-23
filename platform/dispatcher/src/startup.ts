@@ -9,12 +9,14 @@ import { constants as fsConstants } from 'node:fs';
 import { access, open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentAdapter } from './adapters/types.js';
-import type { DispatcherConfig } from './config.js';
+import { githubTokenProblem, type DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
 import { gitConfigViolations, originUrl } from './gitconfig.js';
 import { errorMessage, type Logger } from './log.js';
 import { modelPrice } from './pricing.js';
+import { resolveRoleModel } from './role-model.js';
+
 
 export interface StartupDeps {
   db: Db;
@@ -57,17 +59,22 @@ export async function checkRepositoryGit(repoRoot: string, githubRepo: string): 
   }
 }
 
-// A session runs on its role's model, or MODEL_BUILDER when the role names none. A writing role whose
-// model has no price could not be metered, and the price table and the roles are the same on every
-// restart, so it is fatal.
-export async function checkRoleModels(db: Db, config: DispatcherConfig): Promise<void> {
+// A session runs on the model its role resolves to when the session starts (role-model.ts): the env
+// value of the role's MODEL_* token, else roles.model, else MODEL_BUILDER. A writing role whose model
+// has no price could not be metered, and the price table and the roles are the same on every restart,
+// so it is fatal. A roles.model that differs from the model the env resolves means /team shows a model
+// that is not the one running; it is logged so the board re-seeds the roles.
+export async function checkRoleModels(db: Db, config: DispatcherConfig, log?: Logger): Promise<void> {
   const roles = await db.listActiveRoles();
-  const unpriced = roles
-    .filter((role) => role.write_access)
-    .map((role) => ({ name: role.name, model: role.model || config.modelBuilder }))
-    .filter((role) => !modelPrice(config.priceTable, role.model));
+  const writers = roles.filter((role) => role.write_access).map((role) => ({ role, resolved: resolveRoleModel(role, config) }));
+  const unpriced = writers.filter(({ resolved }) => !modelPrice(config.priceTable, resolved.model));
   if (unpriced.length > 0) {
-    throw new StartupError(`no price in PRICE_TABLE_JSON for ${unpriced.map((role) => `${role.name} (${role.model})`).join(', ')}`, true);
+    throw new StartupError(`no price in PRICE_TABLE_JSON for ${unpriced.map(({ role, resolved }) => `${role.name} (${resolved.model})`).join(', ')}`, true);
+  }
+  for (const { role, resolved } of writers) {
+    if (resolved.source === 'env' && role.model !== resolved.model) {
+      log?.warn('startup', `${role.name} runs on ${resolved.model} from ${resolved.token}, but roles.model is ${role.model || 'unset'}; re-seed the roles so /team shows it`, { role: role.name });
+    }
   }
 }
 
@@ -136,7 +143,10 @@ export async function startupChecks(deps: StartupDeps): Promise<void> {
     await checkCodeReadonly(deps.config.codeRoot);
     deps.log.info('startup', 'code root is read-only', { codeRoot: deps.config.codeRoot });
   }
+  // Unattended mode refuses such a token when the config loads (config.ts).
+  const tokenProblem = githubTokenProblem(deps.config.githubToken);
+  if (tokenProblem) deps.log.warn('startup', tokenProblem, { mode: deps.config.agentMode });
   await checkMode(deps.db, deps.config);
-  await checkRoleModels(deps.db, deps.config);
+  await checkRoleModels(deps.db, deps.config, deps.log);
   if (deps.config.agentMode === 'unattended') await unattendedStartup(deps);
 }

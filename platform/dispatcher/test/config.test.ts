@@ -1,6 +1,5 @@
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadConfig, type Env } from '../src/config.js';
+import { ConfigError, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
 
 const REPO = '/repo';
 
@@ -8,7 +7,8 @@ const FULL: Env = {
   GITHUB_REPO: 'owner/repo',
   SUPABASE_URL: 'https://db.local',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role',
-  GITHUB_TOKEN: 'github-token',
+  // A fine-grained token's shape, too short to be one (secret-scan.sh).
+  GITHUB_TOKEN: 'github_pat_fake-token',
   NETLIFY_AUTH_TOKEN: 'netlify-token',
   NETLIFY_SITE_ID_SEED: 'site-seed',
   NETLIFY_SITE_ID_PLATFORM: 'site-platform',
@@ -40,7 +40,7 @@ describe('loadConfig', () => {
       sessionMaxTurns: 60,
       agentHourlyRateUsd: 5,
       tickMs: 60_000,
-      worktreeRoot: path.join(REPO, '.worktrees'),
+      worktreeRoot: '/repo-worktrees',
       maxConcurrency: 1,
       schedulerEnabled: true,
       claudeBin: 'claude',
@@ -145,12 +145,27 @@ describe('the code, repository and worktree roots', () => {
   });
 
   it('resolves a relative repository root against the code root and a relative worktree root against the repository', () => {
-    expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work', DISPATCHER_WORKTREE_ROOT: 'trees' }, REPO)).toMatchObject({
+    expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work', DISPATCHER_WORKTREE_ROOT: '../trees' }, REPO)).toMatchObject({
       codeRoot: REPO,
       repoRoot: '/work',
-      worktreeRoot: '/work/trees',
+      worktreeRoot: '/trees',
     });
     expect(loadConfig({ ...FULL, DISPATCHER_CODE_READONLY: 'off' }, REPO).codeReadonly).toBe(false);
+  });
+
+  it('puts card worktrees beside the clone by default, outside it', () => {
+    expect(defaultWorktreeRoot('/Users/board/peanutgallery')).toBe('/Users/board/peanutgallery-worktrees');
+    expect(loadConfig(FULL, '/Users/board/peanutgallery').worktreeRoot).toBe('/Users/board/peanutgallery-worktrees');
+    expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work' }, REPO).worktreeRoot).toBe('/work-worktrees');
+  });
+
+  it('refuses a worktree root inside the clone, in every mode', () => {
+    const refusal = new ConfigError('DISPATCHER_WORKTREE_ROOT must be outside the repository clone /repo; leave it unset for /repo-worktrees');
+    expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '.worktrees' }, REPO)).toThrow(refusal);
+    expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '/repo/.worktrees' }, REPO)).toThrow(refusal);
+    expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '.' }, REPO)).toThrow(refusal);
+    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', DISPATCHER_WORKTREE_ROOT: '/repo/trees' }, REPO)).toThrow(refusal);
+    expect(loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '/repo-other/trees' }, REPO).worktreeRoot).toBe('/repo-other/trees');
   });
 
   it('refuses a code root other than the one the process runs from', () => {
@@ -170,6 +185,28 @@ describe('the code, repository and worktree roots', () => {
     expect(() => loadConfig({ ...FULL, ...VPS, DISPATCHER_WORKTREE_ROOT: '/opt/peanutgallery/.worktrees' }, '/opt/peanutgallery')).toThrow(
       new ConfigError('DISPATCHER_WORKTREE_ROOT must be outside the code root when DISPATCHER_CODE_READONLY is required'),
     );
+  });
+});
+
+describe('the GitHub token', () => {
+  it('names a token that is not fine-grained', () => {
+    expect(githubTokenProblem('github_pat_fake-token')).toBeNull();
+    for (const token of ['gho_fake-token', 'ghp_fake-token', 'plain-token']) {
+      expect(githubTokenProblem(token)).toBe('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes');
+    }
+  });
+
+  it('refuses a gh sign-in or classic token in unattended mode', () => {
+    for (const token of ['gho_fake-token', 'ghp_fake-token']) {
+      expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', GITHUB_TOKEN: token }, REPO)).toThrow(
+        new ConfigError('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes'),
+      );
+    }
+    expect(loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).githubToken).toBe('github_pat_-fixture-write');
+  });
+
+  it('accepts one in attended mode, where startup warns instead', () => {
+    expect(loadConfig({ ...FULL, GITHUB_TOKEN: 'gho_fake-token' }, REPO).githubToken).toBe('gho_fake-token');
   });
 });
 
@@ -216,7 +253,7 @@ describe('the managed agent settings', () => {
   });
 
   it('refuse a GitHub token that is not fine-grained in unattended mode', () => {
-    expect(() => loadConfig({ ...unattended, GITHUB_TOKEN: 'gho_oauth_fixture' }, REPO)).toThrow('GITHUB_TOKEN must be a fine-grained personal access token (github_pat_...) in unattended mode');
+    expect(() => loadConfig({ ...unattended, GITHUB_TOKEN: 'gho_oauth_fixture' }, REPO)).toThrow('GITHUB_TOKEN is not a fine-grained token (github_pat_...)');
     expect(() => loadConfig({ ...unattended, GITHUB_READ_TOKEN: 'ghp_classic_fixture' }, REPO)).toThrow('GITHUB_READ_TOKEN must be a fine-grained personal access token');
   });
 
