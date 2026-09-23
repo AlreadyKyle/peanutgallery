@@ -50,6 +50,36 @@ function Item({
       </li>
     );
   }
+  if (item.kind === 'approval_void') {
+    return (
+      <li>
+        <p>
+          <strong>
+            Card {item.card.title} holds {formatUsd(item.card.funded_usd)} but its approval is not current.
+          </strong>{' '}
+          Its text was changed outside a board control, so the public does not see it, no session runs it and it takes
+          no money. <a href={`#card-${item.card.id}`}>Cancel it under Cards</a>, which moves its unspent money to the next
+          cards in line.
+        </p>
+      </li>
+    );
+  }
+  if (item.kind === 'rule_blocked') {
+    return (
+      <li>
+        <p>
+          <strong>
+            Card {item.card.title} is paused at its ceiling
+            {item.card.why === 'card_max'
+              ? ` at the card maximum of ${formatUsd(item.card.card_max_usd)}.`
+              : ' a second time, after the rule resumed it once.'}
+          </strong>{' '}
+          It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
+          <a href={`#card-${item.card.id}`}>resume it with a new estimate, or cancel it, under Cards</a>.
+        </p>
+      </li>
+    );
+  }
   if (item.kind === 'incident') {
     return (
       <li>
@@ -172,7 +202,7 @@ export function NeedsYou({
             <ul className="needs">
               {items.map((item) => (
                 <Item
-                  key={item.kind === 'dispute' ? item.dispute : item.kind === 'incident' ? item.card.id : 'credit'}
+                  key={item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}-${item.card.id}`}
                   item={item}
                   canRecord={canRecord}
                   onFillCredit={onFillCredit}

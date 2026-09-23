@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { boardCardOrder, cancelCard, cardRoleFolder, isCardRole, PAUSE_REASONS, setPaused, studioStateFrom, type BoardCard, type Role } from './board';
+import {
+  agentWritten,
+  boardCardOrder,
+  cancelCard,
+  canUnveto,
+  canVeto,
+  cardRoleFolder,
+  enqueueManualJob,
+  fetchBoardCards,
+  fetchBoardJobs,
+  fetchBoardRoles,
+  isCardRole,
+  JOB_INPUT_MAX_BYTES,
+  PAUSE_REASONS,
+  parseJobInput,
+  setCardVeto,
+  setCoolingWindow,
+  setPaused,
+  setRolePause,
+  studioStateFrom,
+  undealt,
+  type BoardCard,
+  type Role,
+} from './board';
 import { BOARD_AUTH_OPTIONS } from './supabase';
 
 function role(title: string, overrides: Partial<Role> = {}): Role {
@@ -74,6 +97,12 @@ describe('boardCardOrder', () => {
       funded_usd: 0,
       estimate_usd: 0,
       created_at,
+      source: 'board',
+      drafter_role_id: null,
+      opens_at: null,
+      board_vetoed: false,
+      board_veto_reason: null,
+      approval: 'none',
     });
     const cards = [
       card('later', 'later', 1),
@@ -117,5 +146,92 @@ describe('pause and cancel', () => {
     expect(await cancelCard(client({ card_id: 'x', moved_usd: 2.5 }).client, 'x', 'why')).toBe(2.5);
     expect(await cancelCard(client({ card_id: 'x' }).client, 'x', 'why')).toBe(0);
     expect(await cancelCard(client(null).client, 'x', 'why')).toBe(0);
+  });
+});
+
+// docs/specs/agent-system-core.md: the veto, the cooling window, role pauses and the job queue.
+describe('agent system controls', () => {
+  function recording(results: Record<string, unknown> = {}) {
+    const calls: { name: string; args: Record<string, unknown> | undefined }[] = [];
+    const rpc = (name: string, args?: Record<string, unknown>) => {
+      calls.push({ name, args });
+      return Promise.resolve({ data: results[name] ?? null, error: null });
+    };
+    return { calls, client: { rpc } as unknown as SupabaseClient };
+  }
+
+  it('calls set_cooling_window, set_card_veto, set_role_pause and enqueue_manual_job with the contract arguments', async () => {
+    const { calls, client: c } = recording({ enqueue_manual_job: 'run-1' });
+    await setCoolingWindow(c, 60, 'An hour');
+    await setCardVeto(c, 'card-1', true, 'Not now');
+    await setRolePause(c, 'role-1', false, 'Back to work');
+    expect(await enqueueManualJob(c, { name: 'studio_ranking', card_id: null, reason: 'Rank now', input: { floor: 3 } })).toBe('run-1');
+    expect(calls).toEqual([
+      { name: 'set_cooling_window', args: { p_minutes: 60, p_reason: 'An hour' } },
+      { name: 'set_card_veto', args: { p_card: 'card-1', p_vetoed: true, p_reason: 'Not now' } },
+      { name: 'set_role_pause', args: { p_role: 'role-1', p_paused: false, p_reason: 'Back to work' } },
+      { name: 'enqueue_manual_job', args: { p_job: 'studio_ranking', p_card: null, p_reason: 'Rank now', p_input: { floor: 3 } } },
+    ]);
+  });
+
+  it('reads each job with its runs and each role with its class and pause', async () => {
+    const { client: c } = recording({
+      board_jobs: [{ name: 'tidy_up', role_name: null, calls_model: false, runs_when_paused: true, description: null, runs: [{ id: 'r1', origin: 'board', status: 'skipped', reason: 'role_paused', created_at: '2026-09-24T00:00:00Z', finished_at: null }] }],
+      board_roles: [{ id: 'role-1', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking' }],
+    });
+    expect(await fetchBoardJobs(c)).toEqual([
+      { name: 'tidy_up', role_name: null, calls_model: false, runs_when_paused: true, description: null, runs: [{ id: 'r1', origin: 'board', status: 'skipped', reason: 'role_paused', created_at: '2026-09-24T00:00:00Z', finished_at: null }] },
+    ]);
+    expect(await fetchBoardRoles(c)).toEqual([{ id: 'role-1', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking' }]);
+  });
+
+  it('takes blank typed input as {}, and refuses input that is not a JSON object of at most 4 KB', () => {
+    expect(parseJobInput('  ')).toEqual({});
+    expect(parseJobInput('{"floor": 3}')).toEqual({ floor: 3 });
+    expect(() => parseJobInput('[1]')).toThrow('The input must be a JSON object.');
+    expect(() => parseJobInput('{nope')).toThrow('The input must be JSON.');
+    expect(() => parseJobInput(JSON.stringify({ x: 'y'.repeat(JOB_INPUT_MAX_BYTES) }))).toThrow('at most 4 KB');
+  });
+
+  it('marks an approved agent card on next with an opens_at as undealt, and offers the veto only on an open card with no money', () => {
+    const base = { stage: 'proposed', horizon: 'next' as const, opens_at: '2026-09-24T01:00:00Z', approval: 'current' as const, board_vetoed: false, funded_usd: 0 };
+    expect(undealt(base)).toBe(true);
+    expect(undealt({ ...base, horizon: 'now' })).toBe(false);
+    expect(undealt({ ...base, approval: 'missing' })).toBe(false);
+    expect(agentWritten({ source: 'agent', drafter_role_id: null })).toBe(true);
+    expect(agentWritten({ source: 'board', drafter_role_id: 'role-1' })).toBe(true);
+    expect(agentWritten({ source: 'board', drafter_role_id: null })).toBe(false);
+    expect(canVeto(base)).toBe(true);
+    expect(canVeto({ ...base, funded_usd: 1 })).toBe(false);
+    expect(canVeto({ ...base, stage: 'funded' })).toBe(false);
+    expect(canVeto({ ...base, board_vetoed: true })).toBe(false);
+    expect(canUnveto({ ...base, board_vetoed: true })).toBe(true);
+    expect(canUnveto(base)).toBe(false);
+  });
+
+  it('reads the cooling window from board_studio_state, and 0 before the column exists', () => {
+    const state = { paused: false, daily_cap_usd: 1, card_max_usd: 1 };
+    expect(studioStateFrom({ ...state, cooling_window_minutes: 90 }).cooling_window_minutes).toBe(90);
+    expect(studioStateFrom(state).cooling_window_minutes).toBe(0);
+  });
+
+  it('asks card_is_public only about agent-written cards, and marks one without a current approval as missing', async () => {
+    const rows = [
+      { id: 'board', title: 'Board', stage: 'proposed', horizon: 'now', rank: null, folder: 'seed-1', lane: 'config', funding_target_usd: 1, funded_usd: 0, estimate_usd: 1, created_at: '2026-09-01T00:00:00Z', source: 'board', drafter_role_id: null, opens_at: null, board_vetoed: false, board_veto_reason: null },
+      { id: 'agent-ok', title: 'Agent ok', stage: 'proposed', horizon: 'next', rank: null, folder: 'seed-1', lane: 'config', funding_target_usd: 1, funded_usd: 0, estimate_usd: 1, created_at: '2026-09-02T00:00:00Z', source: 'agent', drafter_role_id: 'r', opens_at: '2026-09-24T00:00:00Z', board_vetoed: false, board_veto_reason: null },
+      { id: 'agent-void', title: 'Agent void', stage: 'proposed', horizon: 'next', rank: null, folder: 'seed-1', lane: 'config', funding_target_usd: 1, funded_usd: 0, estimate_usd: 1, created_at: '2026-09-03T00:00:00Z', source: 'agent', drafter_role_id: 'r', opens_at: null, board_vetoed: false, board_veto_reason: null },
+    ];
+    const asked: string[] = [];
+    const builder = { select: () => builder, in: () => builder, order: () => builder, returns: () => Promise.resolve({ data: rows, error: null }) };
+    const c = {
+      from: () => builder,
+      rpc: (name: string, args: { p_card: string }) => {
+        asked.push(`${name}:${args.p_card}`);
+        return Promise.resolve({ data: args.p_card === 'agent-ok', error: null });
+      },
+    } as unknown as SupabaseClient;
+    const cards = await fetchBoardCards(c);
+    expect(asked.sort()).toEqual(['card_is_public:agent-ok', 'card_is_public:agent-void']);
+    expect(cards.map((card) => [card.id, card.approval])).toEqual([['board', 'none'], ['agent-ok', 'current'], ['agent-void', 'missing']]);
   });
 });

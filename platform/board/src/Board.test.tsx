@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Board, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, GO_LIVE_CONFIRM, TIER_CAP_LABEL } from './Board';
 import {
+  BOARD_CARD_COLUMNS,
   BOARD_SESSION_TTL_MIN,
   DISPATCHER_STALE_MS,
   HEARTBEAT_MS,
@@ -29,6 +30,7 @@ type FakeStudio = {
   credit_studio_daily_cap_usd?: number;
   anthropic_tier_cap_usd?: number | null;
   platform_lane_open?: boolean;
+  cooling_window_minutes?: number;
 };
 
 type FakeCard = {
@@ -43,6 +45,11 @@ type FakeCard = {
   funded_usd: string;
   estimate_usd: string;
   created_at: string;
+  source?: string;
+  drafter_role_id?: string | null;
+  opens_at?: string | null;
+  board_vetoed?: boolean;
+  board_veto_reason?: string | null;
 };
 
 const fake = vi.hoisted(() => ({
@@ -67,6 +74,10 @@ const fake = vi.hoisted(() => ({
   mfaCalls: [] as { name: string; args: Record<string, unknown> | undefined }[],
   // What cancel_card returns (docs/specs/money-logic.md): the amount it moved on.
   cancelResult: null as Record<string, unknown> | null,
+  // docs/specs/agent-system-core.md: board_jobs, board_roles and which agent cards card_is_public passes.
+  jobs: [] as Record<string, unknown>[],
+  boardRoles: [] as Record<string, unknown>[],
+  publicCards: [] as string[],
 }));
 
 vi.mock('./lib/supabase', async (importOriginal) => {
@@ -137,7 +148,11 @@ vi.mock('./lib/supabase', async (importOriginal) => {
       if (name === 'set_launched' && fake.launchFails) {
         return Promise.resolve({ data: null, error: { message: 'launch refused' } });
       }
+      if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
       const data: Record<string, unknown> = {
+        board_jobs: fake.jobs,
+        board_roles: fake.boardRoles,
+        enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         board_role: fake.role,
         board_heartbeat: fake.seenAt,
         board_studio_state: fake.studio,
@@ -299,6 +314,9 @@ beforeEach(() => {
   };
   fake.cards = [];
   fake.cancelResult = null;
+  fake.jobs = [];
+  fake.boardRoles = [];
+  fake.publicCards = [];
   fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
@@ -661,7 +679,7 @@ describe('Board card controls', () => {
     expect(fake.selects.filter((select) => select.table === 'cards')).toEqual([
       {
         table: 'cards',
-        columns: 'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at',
+        columns: BOARD_CARD_COLUMNS,
         filters: ['in stage proposed,designing,voted,funded,paused', 'order created_at'],
       },
     ]);
@@ -1139,7 +1157,26 @@ describe('Board signed in as the moderator', () => {
     expect(fake.mfaCalls).toEqual([]);
   });
 
-  it('shows only pause and resume and never heartbeats', async () => {
+  it('pauses a role at aal1 and is never offered a resume (docs/specs/agent-system-core.md)', async () => {
+    fake.role = 'moderator';
+    fake.aal = 'aal1';
+    fake.factors = [];
+    fake.boardRoles = [
+      { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: false, paused_reason: null },
+      { id: 'r-studio-head', name: 'Studio Head', agent_class: 'planner', state: 'active', paused: true, paused_reason: 'Checking' },
+    ];
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    expect(roles.getByText('Only the board resumes a role.', { exact: false })).toBeTruthy();
+    expect(roles.queryByRole('button', { name: 'Resume Studio Head' })).toBeNull();
+    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Looks wrong' } });
+    fireEvent.click(roles.getByRole('button', { name: 'Pause QA' }));
+    await flush();
+    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: true, p_reason: 'Looks wrong' }]);
+  });
+
+  it('shows only pause and resume, and the role pauses, and never heartbeats', async () => {
     fake.role = 'moderator';
     await renderBoard();
     await flush(HEARTBEAT_MS);
@@ -1180,5 +1217,122 @@ describe('Board signed in without membership', () => {
     await renderBoard();
     expect(screen.getByText('This account is not on the board.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Pause agents' })).toBeNull();
+  });
+});
+
+// docs/specs/agent-system-core.md: the cooling window, role pauses, the job list with Run now, each
+// card's veto (undealt and hidden agent cards included) and Needs you's two new lists.
+describe('Board agent system controls', () => {
+  it('shows the cooling window beside the caps and saves it with a reason, refusing more than a week before calling', async () => {
+    fake.studio = { ...fake.studio, cooling_window_minutes: 0 };
+    await renderBoard();
+    const form = within(screen.getByRole('form', { name: 'Set the cooling window' }));
+    expect((form.getByLabelText('Cooling window (minutes)') as HTMLInputElement).value).toBe('0');
+    fireEvent.change(form.getByLabelText('Cooling window (minutes)'), { target: { value: '10081' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Too long' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Set the cooling window' }));
+    await flush();
+    expect(callsNamed('set_cooling_window')).toEqual([]);
+    expect(form.getByText('The cooling window must be a whole number of minutes from 0 to 10,080.')).toBeTruthy();
+    fireEvent.change(form.getByLabelText('Cooling window (minutes)'), { target: { value: '60' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'An hour to look' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Set the cooling window' }));
+    await flush();
+    expect(callsNamed('set_cooling_window').map((call) => call.args)).toEqual([{ p_minutes: 60, p_reason: 'An hour to look' }]);
+  });
+
+  it("lists each role's class and pause, pauses and resumes with a reason, and keeps the buttons for the second factor", async () => {
+    fake.boardRoles = [
+      { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
+      { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
+    ];
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    expect(roles.getByText('reviewer · not paused', { exact: false })).toBeTruthy();
+    expect(roles.getByText('writer · paused: Checking the gate', { exact: false })).toBeTruthy();
+    fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
+    await flush();
+    expect(roles.getByText('A reason is required.')).toBeTruthy();
+    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Fixed' } });
+    fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
+    await flush();
+    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: false, p_reason: 'Fixed' }]);
+    cleanup();
+    fake.aal = 'aal1';
+    await renderBoard();
+    await flush();
+    const readOnly = within(screen.getByRole('region', { name: 'Roles' }));
+    expect(readOnly.getByText('Game Director', { exact: false })).toBeTruthy();
+    expect(readOnly.queryByRole('button', { name: 'Pause Game Director' })).toBeNull();
+  });
+
+  it('lists each job with its last runs, their origin and reason, and queues a board-origin run with typed input', async () => {
+    fake.jobs = [
+      {
+        name: 'studio_ranking',
+        role_name: 'Studio Head',
+        calls_model: true,
+        runs_when_paused: true,
+        description: null,
+        runs: [{ id: 'run-1', origin: 'schedule', status: 'skipped', reason: 'not_board_origin', created_at: '2026-09-14T11:00:00Z', finished_at: '2026-09-14T11:00:05Z' }],
+      },
+    ];
+    await renderBoard();
+    await flush();
+    const job = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    expect(job.getByText('Studio Head · calls a model, on the board plan while you are signed in · runs while the studio is paused')).toBeTruthy();
+    expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · schedule · skipped: not_board_origin`)).toBeTruthy();
+    fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '[1]' } });
+    fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Rank now' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    await flush();
+    expect(job.getByText('The input must be a JSON object.')).toBeTruthy();
+    fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '{"floor": 3}' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    await flush();
+    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([{ p_job: 'studio_ranking', p_card: null, p_reason: 'Rank now', p_input: { floor: 3 } }]);
+    expect(job.getByText('Queued. It runs while a board member is signed in here.')).toBeTruthy();
+  });
+
+  it('marks an undealt agent card and a hidden one, vetoes the undealt one with a reason, and lifts a veto', async () => {
+    fake.cards = [
+      card({ id: 'undealt', title: 'Approved, waiting', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer', opens_at: '2026-09-14T13:00:00Z' }),
+      card({ id: 'hidden', title: 'No current approval', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer' }),
+      card({ id: 'vetoed', title: 'Vetoed card', horizon: 'next', board_vetoed: true, board_veto_reason: 'Off pillar' }),
+    ];
+    fake.publicCards = ['undealt'];
+    await renderBoard();
+    await flush();
+    expect(cardForm('Approved, waiting').getByText(`Waiting to be dealt: moves to now at ${formatDateTime('2026-09-14T13:00:00Z')}.`)).toBeTruthy();
+    expect(cardForm('No current approval').getByText(/^Hidden: written by an agent with no current approval/)).toBeTruthy();
+    expect(cardForm('Vetoed card').getByText('Vetoed by the board: Off pillar. It is never dealt or run.')).toBeTruthy();
+    expect(cardForm('Vetoed card').queryByRole('button', { name: 'Veto card' })).toBeNull();
+    fireEvent.change(cardForm('Approved, waiting').getByLabelText('Reason'), { target: { value: 'Not this week' } });
+    fireEvent.click(cardForm('Approved, waiting').getByRole('button', { name: 'Veto card' }));
+    await flush();
+    fireEvent.change(cardForm('Vetoed card').getByLabelText('Reason'), { target: { value: 'Fine now' } });
+    fireEvent.click(cardForm('Vetoed card').getByRole('button', { name: 'Lift veto' }));
+    await flush();
+    expect(callsNamed('set_card_veto').map((call) => call.args)).toEqual([
+      { p_card: 'undealt', p_vetoed: true, p_reason: 'Not this week' },
+      { p_card: 'vetoed', p_vetoed: false, p_reason: 'Fine now' },
+    ]);
+    // Only agent-written cards are asked about their approval; the board-filed one is not.
+    expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt']));
+  });
+
+  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each pointing at Cards', async () => {
+    fake.needs = {
+      ...EMPTY_NEEDS,
+      rule_blocked: [{ id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 }],
+      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: 2 }],
+    };
+    await renderBoard();
+    const needs = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(needs.getByText('Card At the maximum is paused at its ceiling at the card maximum of $25.00.')).toBeTruthy();
+    expect(needs.getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).getAttribute('href')).toBe('#card-max');
+    expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
+    expect(needs.getByRole('link', { name: 'Cancel it under Cards' }).getAttribute('href')).toBe('#card-void');
   });
 });

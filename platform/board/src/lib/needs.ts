@@ -45,11 +45,22 @@ export type ControllerRun = {
 
 export type S1Card = { id: string; title: string; stage: string };
 
+/**
+ * A card paused at its ceiling that the resume rule will not resume (docs/specs/agent-system-core.md):
+ * at the card maximum, or paused at its ceiling a second time.
+ */
+export type RuleBlockedCard = { id: string; title: string; why: 'card_max' | 'resumed_before'; actual_usd: number; card_max_usd: number };
+
+/** A card holding money whose approval is not current: hidden, not runnable, taking no money. */
+export type VoidCard = { id: string; title: string; stage: string; funded_usd: number };
+
 export type NeedsYouData = {
   controller: ControllerRun | null;
   last_credit_purchase: { created_at: string; amount_usd: number } | null;
   incident_reserve_usd: number;
   s1_cards: S1Card[];
+  rule_blocked: RuleBlockedCard[];
+  approval_void: VoidCard[];
 };
 
 /** What the credit item fills into the Record a credit purchase form. */
@@ -65,7 +76,9 @@ export type NeedsItem =
       draft: CreditDraft;
     }
   | { kind: 'dispute'; dispute: string; status: string; due_by: string | null; amount_usd: number }
-  | { kind: 'incident'; card: S1Card; incident_reserve_usd: number };
+  | { kind: 'incident'; card: S1Card; incident_reserve_usd: number }
+  | { kind: 'rule_blocked'; card: RuleBlockedCard }
+  | { kind: 'approval_void'; card: VoidCard };
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -119,6 +132,8 @@ export function needsYouFrom(raw: unknown): NeedsYouData {
   const purchaseAt = text(purchase?.created_at);
   const purchaseUsd = num(purchase?.amount_usd);
   const cards = Array.isArray(row.s1_cards) ? row.s1_cards : [];
+  const list = (value: unknown) =>
+    (Array.isArray(value) ? value : []).map(record).filter((card): card is Record<string, unknown> => card !== null && text(card.id) !== null);
   return {
     controller: controllerFrom(row.controller),
     last_credit_purchase: purchaseAt === null || purchaseUsd === null ? null : { created_at: purchaseAt, amount_usd: purchaseUsd },
@@ -127,6 +142,19 @@ export function needsYouFrom(raw: unknown): NeedsYouData {
       .map(record)
       .filter((card): card is Record<string, unknown> => card !== null && text(card.id) !== null)
       .map((card) => ({ id: String(card.id), title: text(card.title) ?? String(card.id), stage: text(card.stage) ?? '' })),
+    rule_blocked: list(row.rule_blocked).map((card) => ({
+      id: String(card.id),
+      title: text(card.title) ?? String(card.id),
+      why: card.why === 'resumed_before' ? 'resumed_before' : 'card_max',
+      actual_usd: num(card.actual_usd) ?? 0,
+      card_max_usd: num(card.card_max_usd) ?? 0,
+    })),
+    approval_void: list(row.approval_void).map((card) => ({
+      id: String(card.id),
+      title: text(card.title) ?? String(card.id),
+      stage: text(card.stage) ?? '',
+      funded_usd: num(card.funded_usd) ?? 0,
+    })),
   };
 }
 
@@ -144,7 +172,8 @@ export function purchasedSinceRun(data: NeedsYouData): boolean {
 
 /**
  * The duties that are due now, most urgent first: disputes by their due date, then an S1 card that
- * may need the emergency fund converted, then the credit purchase after a payout.
+ * may need the emergency fund converted, then the cards holding money whose approval is not current,
+ * then the ceiling pauses the resume rule will not resume, then the credit purchase after a payout.
  */
 export function dueItems(data: NeedsYouData): NeedsItem[] {
   const items: NeedsItem[] = [];
@@ -152,6 +181,8 @@ export function dueItems(data: NeedsYouData): NeedsItem[] {
   const disputes = [...(run?.disputes_to_answer ?? [])].sort((a, b) => (a.due_by ?? '9999').localeCompare(b.due_by ?? '9999'));
   for (const dispute of disputes) items.push({ kind: 'dispute', ...dispute });
   for (const card of data.s1_cards) items.push({ kind: 'incident', card, incident_reserve_usd: data.incident_reserve_usd });
+  for (const card of data.approval_void) items.push({ kind: 'approval_void', card });
+  for (const card of data.rule_blocked) items.push({ kind: 'rule_blocked', card });
   if (run !== null && run.credit_purchase_usd > 0 && !purchasedSinceRun(data)) {
     items.push({
       kind: 'credit',

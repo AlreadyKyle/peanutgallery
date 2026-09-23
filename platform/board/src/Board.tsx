@@ -5,11 +5,17 @@ import {
   boardStudioState,
   buckets,
   cancelCard,
+  canUnveto,
+  canVeto,
   cardStages,
+  COOLING_WINDOW_MAX,
   dispatcherSeenAgoMs,
+  enqueueManualJob,
   enrolTotp,
   fetchBoardCards,
+  fetchBoardJobs,
   fetchBoardRole,
+  fetchBoardRoles,
   fetchCardRoles,
   fileCard,
   fileDirective,
@@ -21,6 +27,7 @@ import {
   horizons,
   lanes,
   movesToNow,
+  parseJobInput,
   recordCreditPurchase,
   resumeCard,
   sendMagicLink,
@@ -28,16 +35,22 @@ import {
   setAgentMode,
   setCaps,
   setCardHorizon,
+  setCardVeto,
+  setCoolingWindow,
   setLaunched,
+  setRolePause,
   PAUSE_REASONS,
   type PauseReason,
   setPaused,
   STUDIO_STATE_POLL_MS,
   TOTP_CODE,
   twoFactorState,
+  undealt,
   verifyTotp,
   type AgentMode,
   type BoardCard,
+  type BoardJob,
+  type BoardRoleRow,
   type BoardRole,
   type BoardStudioState,
   type Caps,
@@ -170,7 +183,12 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
         </p>
       ) : null}
       {/* The moderator's pause works at aal1; the board's needs the second factor. */}
-      {role === 'moderator' ? <PauseControls client={client} /> : null}
+      {role === 'moderator' ? (
+        <>
+          <PauseControls client={client} />
+          <RolePauses client={client} canPause canResume={false} />
+        </>
+      ) : null}
       {role === 'board' ? <BoardControls client={client} secondFactor={secondFactor} onVerified={setSecondFactor} /> : null}
     </>
   );
@@ -396,9 +414,12 @@ function BoardControls({
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
       <StudioStatus client={client} studio={studio} canChange={secondFactor} />
       <SessionStatus client={client} />
+      <RolePauses client={client} canPause={secondFactor} canResume={secondFactor} />
+      <JobsPanel client={client} canRun={secondFactor} />
       {secondFactor ? (
         <>
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
+          <CoolingWindowForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CreditPurchaseForm client={client} draft={draft} formRef={creditForm} />
           <CardControls client={client} />
           <SecondFactorForms client={client} />
@@ -944,8 +965,14 @@ function CardControl({
     await run(() => resumeCard(client, card.id, value, why), 'Card resumed.');
   }
 
+  async function veto(vetoed: boolean) {
+    const why = needReason();
+    if (why === null) return;
+    await run(() => setCardVeto(client, card.id, vetoed, why), vetoed ? 'Card vetoed.' : 'Veto lifted.');
+  }
+
   return (
-    <li>
+    <li id={`card-${card.id}`}>
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
         <p>
@@ -953,6 +980,7 @@ function CardControl({
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
           {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
         </p>
+        <CardMarks card={card} />
         {movable ? (
           <label>
             Horizon
@@ -1020,6 +1048,16 @@ function CardControl({
               Resume card
             </button>
           ) : null}
+          {canVeto(card) ? (
+            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(true)}>
+              Veto card
+            </button>
+          ) : null}
+          {canUnveto(card) ? (
+            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(false)}>
+              Lift veto
+            </button>
+          ) : null}
           <button type="button" className="button-secondary" disabled={busy} onClick={() => void cancel()}>
             Cancel card
           </button>
@@ -1027,6 +1065,26 @@ function CardControl({
         {message === '' ? null : <p role="status">{message}</p>}
       </form>
     </li>
+  );
+}
+
+/**
+ * What the public does not see about a card (docs/specs/agent-system-core.md): an approved agent card
+ * waiting to be dealt, an agent card with no current approval, and the board's veto.
+ */
+function CardMarks({ card }: { card: BoardCard }) {
+  const marks: string[] = [];
+  if (card.approval === 'current') marks.push('Written by an agent; its approval is current.');
+  if (undealt(card)) marks.push(`Waiting to be dealt: moves to now at ${formatDateTime(card.opens_at!)}.`);
+  if (card.approval === 'missing') marks.push('Hidden: written by an agent with no current approval. The public does not see it, no session runs it and it takes no money.');
+  if (card.board_vetoed) marks.push(`Vetoed by the board${card.board_veto_reason ? `: ${card.board_veto_reason}` : ''}. It is never dealt or run.`);
+  if (marks.length === 0) return null;
+  return (
+    <ul className="marks">
+      {marks.map((mark) => (
+        <li key={mark}>{mark}</li>
+      ))}
+    </ul>
   );
 }
 
@@ -1052,8 +1110,9 @@ function CardControls({ client }: { client: SupabaseClient }) {
     <section aria-label="Cards">
       <h2>Cards</h2>
       <p>
-        Move a card between now, next and later, rank it, set its target, cancel it, or resume a paused card with a new
-        estimate. Each change needs a reason and is recorded.
+        Move a card between now, next and later, rank it, set its target, veto it, cancel it, or resume a paused card
+        with a new estimate. Each change needs a reason and is recorded. Undealt and hidden agent cards are listed
+        here, and nowhere public.
       </p>
       {cards === null ? <p role="status">{loadError === '' ? 'Loading the cards.' : loadError}</p> : null}
       {cards !== null && cards.length === 0 ? <p>No cards to manage.</p> : null}
@@ -1065,6 +1124,302 @@ function CardControls({ client }: { client: SupabaseClient }) {
         </ul>
       ) : null}
       {cards !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * The cooling window (docs/specs/agent-system-core.md): how long an approved agent card waits on next
+ * before the tick deals it to now, and money can reach it. It ships at 0; the board sets it, up to a
+ * week, with a reason.
+ */
+function CoolingWindowForm({
+  client,
+  state,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  state: BoardStudioState | null;
+  onChanged: () => Promise<void>;
+}) {
+  const [minutes, setMinutes] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const value = minutes ?? (state === null ? '' : String(state.cooling_window_minutes));
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const n = Number(value);
+    if (value.trim() === '' || !Number.isInteger(n) || n < 0 || n > COOLING_WINDOW_MAX) {
+      setMessage('The cooling window must be a whole number of minutes from 0 to 10,080.');
+      return;
+    }
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setCoolingWindow(client, n, reason.trim());
+      setMessage(n === 0 ? 'Cooling window saved: an approved agent card is dealt on the next tick.' : `Cooling window saved: ${n} minutes.`);
+      setMinutes(null);
+      setReason('');
+      await onChanged();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={submit} aria-label="Set the cooling window">
+      <h2>Cooling window</h2>
+      <p>How long an approved agent card waits on next before it moves to now and can take money. 0 deals it on the next tick.</p>
+      <label>
+        Cooling window (minutes)
+        <input type="number" inputMode="numeric" min="0" max={COOLING_WINDOW_MAX} step="1" required value={value} onChange={(event) => setMinutes(event.target.value)} />
+      </label>
+      <label>
+        Reason
+        <input required value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <button type="submit" disabled={busy}>
+        Save cooling window
+      </button>
+      {message === '' ? null : <p role="status">{message}</p>}
+    </form>
+  );
+}
+
+const CLASS_WORDS: Record<string, string> = {
+  writer: 'writer',
+  planner: 'planner',
+  reviewer: 'reviewer',
+  read_only: 'read only',
+  web_only: 'web only',
+};
+
+function RolePause({
+  client,
+  role,
+  canPause,
+  canResume,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  role: BoardRoleRow;
+  canPause: boolean;
+  canResume: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const can = role.paused ? canResume : canPause;
+
+  async function apply() {
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setRolePause(client, role.id, !role.paused, reason.trim());
+      setMessage(role.paused ? `${role.name} resumed.` : `${role.name} paused.`);
+      setReason('');
+      await onChanged();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li>
+      <p>
+        <strong>{role.name}</strong> · {role.agent_class === null ? 'no class yet' : (CLASS_WORDS[role.agent_class] ?? role.agent_class)}
+        {role.state === 'retired' ? ' · retired' : ''} ·{' '}
+        {role.paused ? `paused${role.paused_reason ? `: ${role.paused_reason}` : ''}` : 'not paused'}
+      </p>
+      {can ? (
+        <div className="row">
+          <label>
+            Reason
+            <input aria-label={`Reason for ${role.name}`} value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <button type="button" className="button-secondary" disabled={busy} onClick={() => void apply()}>
+            {role.paused ? `Resume ${role.name}` : `Pause ${role.name}`}
+          </button>
+        </div>
+      ) : null}
+      {message === '' ? null : <p role="status">{message}</p>}
+    </li>
+  );
+}
+
+/**
+ * Each role with its trust class and pause (board_roles). A paused role starts nothing and its running
+ * session stops at the next watch; its card returns to funded. The board or the moderator pauses a
+ * role; only the board resumes one, at the second factor.
+ */
+function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; canPause: boolean; canResume: boolean }) {
+  const [roles, setRoles] = useState<BoardRoleRow[] | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      setRoles(await fetchBoardRoles(client));
+      setLoadError('');
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return (
+    <section aria-label="Roles">
+      <h2>Roles</h2>
+      <p>
+        Pause a role to stop its work: it starts nothing, and a session it is running stops and its card goes back to
+        funded. {canResume ? 'Resuming needs a reason too.' : 'Only the board resumes a role.'}
+      </p>
+      {roles === null ? <p role="status">{loadError === '' ? 'Loading the roles.' : loadError}</p> : null}
+      {roles !== null ? (
+        <ul className="board-roles">
+          {roles.map((role) => (
+            <RolePause key={`${role.id}-${role.paused}`} client={client} role={role} canPause={canPause} canResume={canResume} onChanged={refresh} />
+          ))}
+        </ul>
+      ) : null}
+      {roles !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
+    </section>
+  );
+}
+
+const RUN_WORDS: Record<string, string> = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'done',
+  failed: 'failed',
+  skipped: 'skipped',
+};
+
+function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; job: BoardJob; canRun: boolean; onChanged: () => Promise<void> }) {
+  const [reason, setReason] = useState('');
+  const [input, setInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function runNow(event: FormEvent) {
+    event.preventDefault();
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    let typed: Record<string, unknown>;
+    try {
+      typed = parseJobInput(input);
+    } catch (error) {
+      setMessage(errorMessage(error));
+      return;
+    }
+    setBusy(true);
+    try {
+      await enqueueManualJob(client, { name: job.name, card_id: null, reason: reason.trim(), input: typed });
+      setMessage(job.calls_model ? 'Queued. It runs while a board member is signed in here.' : 'Queued. It runs on the next dispatcher tick.');
+      setReason('');
+      setInput('');
+      await onChanged();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li>
+      <form className="stack" onSubmit={runNow} aria-label={`Job ${job.name}`}>
+        <h3>{job.name}</h3>
+        <p>
+          {job.role_name ?? 'No role'} · {job.calls_model ? 'calls a model, on the board plan while you are signed in' : 'code only'}
+          {job.runs_when_paused ? ' · runs while the studio is paused' : ''}
+        </p>
+        {job.description ? <p>{job.description}</p> : null}
+        {job.runs.length === 0 ? (
+          <p className="muted">No runs yet.</p>
+        ) : (
+          <ul className="job-runs">
+            {job.runs.map((run) => (
+              <li key={run.id}>
+                {formatDateTime(run.created_at)} · {run.origin} · {RUN_WORDS[run.status] ?? run.status}
+                {run.reason ? `: ${run.reason}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canRun ? (
+          <>
+            <label>
+              Input (JSON, optional)
+              <textarea rows={2} value={input} onChange={(event) => setInput(event.target.value)} />
+            </label>
+            <label>
+              Reason
+              <input value={reason} onChange={(event) => setReason(event.target.value)} />
+            </label>
+            <button type="submit" disabled={busy}>
+              Run now
+            </button>
+          </>
+        ) : null}
+        {message === '' ? null : <p role="status">{message}</p>}
+      </form>
+    </li>
+  );
+}
+
+/**
+ * The job queue (board_jobs): each job with its last runs, their origin and why a run was skipped or
+ * failed. Run now queues a board-origin run; a model-calling one runs only while a board member is
+ * signed in here, billed to the board's plan.
+ */
+function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean }) {
+  const [jobs, setJobs] = useState<BoardJob[] | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      setJobs(await fetchBoardJobs(client));
+      setLoadError('');
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return (
+    <section aria-label="Jobs">
+      <h2>Jobs</h2>
+      {jobs === null ? <p role="status">{loadError === '' ? 'Loading the jobs.' : loadError}</p> : null}
+      {jobs !== null && jobs.length === 0 ? <p>No jobs yet. Each is added with the work it runs.</p> : null}
+      {jobs !== null && jobs.length > 0 ? (
+        <ul className="board-cards">
+          {jobs.map((job) => (
+            <JobRow key={job.name} client={client} job={job} canRun={canRun} onChanged={refresh} />
+          ))}
+        </ul>
+      ) : null}
+      {jobs !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
     </section>
   );
 }

@@ -71,6 +71,11 @@ export type BoardStudioState = {
   anthropic_tier_cap_usd: number | null;
   /** Whether the platform code lane is open (studio_state.platform_lane_open); false until the board site is live. */
   platform_lane_open: boolean;
+  /**
+   * How long an approved agent card waits on next before the tick deals it to now, in minutes (0 to
+   * 10,080; docs/specs/agent-system-core.md). 0 when board_studio_state does not return it.
+   */
+  cooling_window_minutes: number;
 };
 
 /**
@@ -99,6 +104,19 @@ export type BoardCard = {
   funded_usd: number;
   estimate_usd: number;
   created_at: string;
+  source: string;
+  /** docs/specs/agent-system-core.md: the drafting role, when an agent drafted it. */
+  drafter_role_id: string | null;
+  /** When an approved agent card is dealt to now: its approval plus the cooling window. */
+  opens_at: string | null;
+  board_vetoed: boolean;
+  board_veto_reason: string | null;
+  /**
+   * none: the board filed it, so it needs no approval. current: an agent wrote it and its approval is
+   * current. missing: an agent wrote it and it has no current approval, so the public does not see it,
+   * no session runs it and it takes no money.
+   */
+  approval: 'none' | 'current' | 'missing';
 };
 
 /** The stages /board lists: every card the board can still move, cancel or resume. */
@@ -114,7 +132,26 @@ export function movesToNow(card: { horizon: Horizon }, horizon: Horizon): boolea
   return horizon === 'now' && card.horizon !== 'now';
 }
 export const BOARD_CARD_COLUMNS =
-  'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at';
+  'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at,source,drafter_role_id,opens_at,board_vetoed,board_veto_reason';
+
+/** An agent wrote some of the card: it needs an approval (card_needs_approval). */
+export function agentWritten(card: Pick<BoardCard, 'source' | 'drafter_role_id'>): boolean {
+  return card.source === 'agent' || card.drafter_role_id !== null;
+}
+
+/** An approved agent card on the roadmap that the tick deals to now at opens_at. */
+export function undealt(card: Pick<BoardCard, 'approval' | 'horizon' | 'opens_at' | 'stage'>): boolean {
+  return card.approval === 'current' && card.horizon !== 'now' && card.opens_at !== null && card.stage === 'proposed';
+}
+
+/** set_card_veto takes a proposed, designing or voted card; a card holding money is cancelled instead. */
+export function canVeto(card: Pick<BoardCard, 'stage' | 'board_vetoed' | 'funded_usd'>): boolean {
+  return HORIZON_STAGES.includes(card.stage) && !card.board_vetoed && card.funded_usd === 0;
+}
+
+export function canUnveto(card: Pick<BoardCard, 'stage' | 'board_vetoed'>): boolean {
+  return HORIZON_STAGES.includes(card.stage) && card.board_vetoed;
+}
 
 /**
  * The roles that build cards, and the folder each builds in. Only these are offered as a card's
@@ -360,6 +397,115 @@ export async function setCaps(client: SupabaseClient, caps: Caps, reason: string
   );
 }
 
+/** The cooling window: 0 to 10,080 minutes, with a reason (set_cooling_window). */
+export const COOLING_WINDOW_MAX = 10_080;
+
+export async function setCoolingWindow(client: SupabaseClient, minutes: number, reason: string): Promise<void> {
+  unwrap(await client.rpc('set_cooling_window', { p_minutes: minutes, p_reason: reason }));
+}
+
+/** Vetoes or unvetoes a card, with a reason (set_card_veto). The Director's stance is a separate field. */
+export async function setCardVeto(client: SupabaseClient, id: string, vetoed: boolean, reason: string): Promise<void> {
+  unwrap(await client.rpc('set_card_veto', { p_card: id, p_vetoed: vetoed, p_reason: reason }));
+}
+
+/** Pauses or resumes a role, with a reason (set_role_pause): the moderator may pause, only the board resumes. */
+export async function setRolePause(client: SupabaseClient, roleId: string, paused: boolean, reason: string): Promise<void> {
+  unwrap(await client.rpc('set_role_pause', { p_role: roleId, p_paused: paused, p_reason: reason }));
+}
+
+/** The largest typed input Run now sends, as enqueue_manual_job accepts it. */
+export const JOB_INPUT_MAX_BYTES = 4096;
+
+/** A job's typed input from the Run now box: blank is {}, otherwise a JSON object of at most 4 KB. */
+export function parseJobInput(text: string): Record<string, unknown> {
+  if (text.trim() === '') return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error('The input must be JSON.');
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('The input must be a JSON object.');
+  if (new TextEncoder().encode(JSON.stringify(value)).length > JOB_INPUT_MAX_BYTES) throw new Error('The input must be at most 4 KB.');
+  return value as Record<string, unknown>;
+}
+
+/** Run now: a board-origin run of the job (enqueue_manual_job); the run's id. */
+export async function enqueueManualJob(
+  client: SupabaseClient,
+  job: { name: string; card_id: string | null; reason: string; input: Record<string, unknown> },
+): Promise<string> {
+  const id = unwrap<string>(await client.rpc('enqueue_manual_job', { p_job: job.name, p_card: job.card_id, p_reason: job.reason, p_input: job.input }));
+  if (id === null) throw new Error('enqueue_manual_job returned no run id');
+  return id;
+}
+
+export type JobRunRow = {
+  id: string;
+  origin: string;
+  status: string;
+  reason: string | null;
+  created_at: string;
+  finished_at: string | null;
+};
+
+export type BoardJob = {
+  name: string;
+  role_name: string | null;
+  calls_model: boolean;
+  runs_when_paused: boolean;
+  description: string | null;
+  runs: JobRunRow[];
+};
+
+function jobFrom(row: Record<string, unknown>): BoardJob {
+  const runs = Array.isArray(row.runs) ? (row.runs as Record<string, unknown>[]) : [];
+  return {
+    name: String(row.name),
+    role_name: textOrNull(row, 'role_name'),
+    calls_model: row.calls_model === true,
+    runs_when_paused: row.runs_when_paused === true,
+    description: textOrNull(row, 'description'),
+    runs: runs.map((run) => ({
+      id: String(run.id),
+      origin: String(run.origin),
+      status: String(run.status),
+      reason: textOrNull(run, 'reason'),
+      created_at: String(run.created_at),
+      finished_at: textOrNull(run, 'finished_at'),
+    })),
+  };
+}
+
+/** Each job with its last ten runs (board_jobs). */
+export async function fetchBoardJobs(client: SupabaseClient): Promise<BoardJob[]> {
+  const rows = unwrap<unknown>(await client.rpc('board_jobs'));
+  return (Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []).map(jobFrom);
+}
+
+export type BoardRoleRow = {
+  id: string;
+  name: string;
+  agent_class: string | null;
+  state: string;
+  paused: boolean;
+  paused_reason: string | null;
+};
+
+/** Each role with its class and pause (board_roles). */
+export async function fetchBoardRoles(client: SupabaseClient): Promise<BoardRoleRow[]> {
+  const rows = unwrap<unknown>(await client.rpc('board_roles'));
+  return (Array.isArray(rows) ? (rows as Record<string, unknown>[]) : []).map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    agent_class: textOrNull(row, 'agent_class'),
+    state: String(row.state),
+    paused: row.paused === true,
+    paused_reason: textOrNull(row, 'paused_reason'),
+  }));
+}
+
 /** Records Console credit bought for the agents, with the Stripe payout that paid for it. */
 export async function recordCreditPurchase(
   client: SupabaseClient,
@@ -390,6 +536,12 @@ function boardCardFrom(row: Record<string, unknown>): BoardCard {
     funded_usd: amount(row, 'funded_usd', 'cards'),
     estimate_usd: amount(row, 'estimate_usd', 'cards'),
     created_at: String(row.created_at),
+    source: typeof row.source === 'string' ? row.source : 'board',
+    drafter_role_id: textOrNull(row, 'drafter_role_id'),
+    opens_at: textOrNull(row, 'opens_at'),
+    board_vetoed: row.board_vetoed === true,
+    board_veto_reason: textOrNull(row, 'board_veto_reason'),
+    approval: 'none',
   };
 }
 
@@ -406,7 +558,11 @@ export function boardCardOrder(a: BoardCard, b: BoardCard): number {
   return a.created_at < b.created_at ? -1 : 1;
 }
 
-/** Every card the board can still move, cancel or resume, in board order. */
+/**
+ * Every card the board can still move, cancel or resume, in board order. Board members read every
+ * card (cards_board_read), undealt and hidden agent cards included; each agent-written card is asked
+ * whether its approval is current (card_is_public), which the public's policy applies.
+ */
 export async function fetchBoardCards(client: SupabaseClient): Promise<BoardCard[]> {
   const rows = unwrap(
     await client
@@ -416,7 +572,14 @@ export async function fetchBoardCards(client: SupabaseClient): Promise<BoardCard
       .order('created_at', { ascending: true })
       .returns<Record<string, unknown>[]>(),
   );
-  return (rows ?? []).map(boardCardFrom).sort(boardCardOrder);
+  const cards = (rows ?? []).map(boardCardFrom);
+  await Promise.all(
+    cards.filter(agentWritten).map(async (card) => {
+      const current = unwrap<boolean>(await client.rpc('card_is_public', { p_card: card.id }));
+      card.approval = current === true ? 'current' : 'missing';
+    }),
+  );
+  return cards.sort(boardCardOrder);
 }
 
 export async function fileNote(client: SupabaseClient, text: string): Promise<string> {
@@ -461,6 +624,7 @@ export function studioStateFrom(raw: unknown): BoardStudioState {
     credit_studio_daily_cap_usd: optionalAmount(row, 'credit_studio_daily_cap_usd'),
     anthropic_tier_cap_usd: optionalAmount(row, 'anthropic_tier_cap_usd'),
     platform_lane_open: row.platform_lane_open === true,
+    cooling_window_minutes: optionalAmount(row, 'cooling_window_minutes') ?? 0,
   };
 }
 
