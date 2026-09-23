@@ -1,4 +1,6 @@
-import { Link, NavLink, Route, Routes } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { CoinMark } from './components/Funding';
 import { PageHeader } from './components/PageHeader';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
@@ -56,35 +58,96 @@ export function App() {
   );
 }
 
+/**
+ * The Play link's cartridge: the same drawing as the game suit in Glyph.tsx (App.test.tsx compares
+ * them). App.tsx is kernel and may import only kernel files, so it draws its own copy.
+ */
+export function CartridgeMark() {
+  return (
+    <svg className="glyph" viewBox="0 0 16 16" width={16} height={16} aria-hidden="true" focusable="false" data-glyph="cartridge">
+      <path className="glyph-line" d="M3.75 1.75h6.75l1.75 1.75v10.75h-8.5z" />
+      <path className="glyph-line" d="M6 4.5h4.25v3.25H6z" />
+      <path className="glyph-line" d="M6 11.25v1.25M8 11.25v1.25M10 11.25v1.25" />
+    </svg>
+  );
+}
+
+/**
+ * The top bar (DESIGN.md, Top bar): the peanut mark (with the name from 32rem), Play, Contribute and
+ * a Menu button that opens the page links as an inline list; from 64rem the links sit in the row and
+ * the Menu button goes. Below 22.5rem Play moves into the list. Escape closes the list and returns
+ * focus to the button, and moving to another page closes it.
+ */
 function TopBar() {
   const env = siteEnv();
+  const [open, setOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const { pathname } = useLocation();
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+  const play = env.playUrl === '' ? null : env.playUrl;
   return (
     <header className="topbar">
-      <div className="wrap topbar-row">
-        <div className="brand">
-          <Link className="wordmark" to="/">
-            <img className="mark" src="/peanut.png" alt="" width={256} height={256} />
-            {copy.studioName}
+      <nav
+        className="wrap topbar-row"
+        aria-label="Site"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && open) {
+            setOpen(false);
+            menuButton.current?.focus();
+          }
+        }}
+      >
+        <Link className="wordmark" to="/">
+          <img className="mark" src="/peanut.png" alt="" width={256} height={256} />
+          <span className="wordmark-text">{copy.studioName}</span>
+        </Link>
+        {play === null ? null : (
+          <a className="button button-secondary nav-play" href={play}>
+            <CartridgeMark />
+            {copy.play}
+          </a>
+        )}
+        {env.stripePaymentLinkUrl === '' ? null : (
+          <Link className="button btn-coin nav-contribute" to="/contribute">
+            <CoinMark />
+            {copy.contribute}
           </Link>
-        </div>
-        <nav aria-label="Site">
+        )}
+        <button
+          ref={menuButton}
+          type="button"
+          className="button button-secondary menu-button"
+          aria-expanded={open}
+          aria-controls="site-menu"
+          onClick={() => setOpen((was) => !was)}
+        >
+          {copy.menu}
+        </button>
+        <ul id="site-menu" className="nav-links" data-open={open ? 'true' : undefined}>
           {pageNav
             .filter((item) => PLAIN_PATH.test(item.to))
             .map((item) => (
-              <NavLink key={item.to} to={item.to}>
-                {item.label}
-              </NavLink>
+              <li key={item.to}>
+                <NavLink to={item.to}>{item.label}</NavLink>
+              </li>
             ))}
-          <NavLink to="/ledger">{legal.ledger}</NavLink>
-          {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
-          {env.discordInvite === '' ? null : <a href={env.discordInvite}>{copy.discord}</a>}
-          {env.stripePaymentLinkUrl === '' ? null : (
-            <NavLink className="nav-primary" to="/contribute">
-              {copy.contribute}
-            </NavLink>
+          <li>
+            <NavLink to="/ledger">{legal.ledger}</NavLink>
+          </li>
+          {env.discordInvite === '' ? null : (
+            <li>
+              <a href={env.discordInvite}>{copy.discord}</a>
+            </li>
           )}
-        </nav>
-      </div>
+          {play === null ? null : (
+            <li className="menu-play">
+              <a href={play}>{copy.play}</a>
+            </li>
+          )}
+        </ul>
+      </nav>
     </header>
   );
 }
@@ -94,7 +157,9 @@ function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="wrap footer-row">
-        <p>{copy.footer}</p>
+        <p>
+          {copy.footer} {legal.allAges}
+        </p>
         <ul className="footer-links">
           <li>
             <Link to="/terms">{legal.footerLinks.terms}</Link>
@@ -126,10 +191,16 @@ function SiteFooter() {
 function NotFound() {
   return (
     <main>
-      <PageHeader title={copy.notFound} lede={copy.notFoundBody} />
-      <p>
-        <Link to="/">{copy.home}</Link>
-      </p>
+      <div className="band">
+        <PageHeader title={copy.notFound} lede={copy.notFoundBody} />
+      </div>
+      <div className="band">
+        <p>
+          <Link className="button" to="/">
+            {copy.home}
+          </Link>
+        </p>
+      </div>
     </main>
   );
 }

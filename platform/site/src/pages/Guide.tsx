@@ -7,6 +7,7 @@ import { CoinMark, FundingBar, type SpecRow } from '../components/Funding';
 import { Glyph, STATE_TAGS, SUITS, type GlyphName } from '../components/Glyph';
 import { LiveUpdates } from '../components/LiveUpdates';
 import { PageHeader } from '../components/PageHeader';
+import { TeamStrip } from '../components/TeamStrip';
 import { FACES, type CategoryFilter, type Face } from '../lib/cards';
 import { contrast, sixDigit } from '../lib/contrast';
 import { copy } from '../lib/copy';
@@ -637,24 +638,6 @@ function PaperBand({ values }: { values: Record<string, string> }) {
 }
 
 // ---------------------------------------------------------------- band 3: the team strip on ink
-
-function TeamStrip({ roles, asleep }: { roles: Role[]; asleep: boolean }) {
-  return (
-    <ul className="team-strip">
-      {roles.map((role) => (
-        <li key={role.id}>
-          <Link className="member" to={`/team#agent-${role.id}`}>
-            <Avatar note={role.species_note} asleep={asleep} size={72} />
-            <span>
-              <span className="member-name">{role.name}</span>
-              <span className="member-job">{role.description ?? role.title}</span>
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function TeamBand({ studio }: { studio: ReturnType<typeof useStudio> }) {
   const roles = studio.state === 'ready' ? studio.snapshot.roles.filter((role) => runsCards(role)).slice(0, 3) : [];

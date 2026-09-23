@@ -200,8 +200,20 @@ code {
    ones that do. */
 
 main:has(> .band) {
+  display: flex;
+  flex-direction: column;
   max-width: none;
   padding: 0;
+}
+
+/* The last band takes any height the page has left, so its ground runs down to the footer. */
+main > .band:last-child {
+  flex-grow: 1;
+}
+
+/* A page that is not wide keeps each band's blocks to the reading measure. */
+main:not(.wide) > .band > * {
+  max-width: var(--measure);
 }
 
 main > .band {
@@ -251,7 +263,10 @@ main > .band:nth-child(even),
   border: 0;
 }
 
-/* Top bar --------------------------------------------------------------- */
+/* Top bar ---------------------------------------------------------------
+   The peanut mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
+   first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
+   sit in the row and Menu goes. Below 22.5rem Play moves into the list. Not sticky. */
 
 .topbar {
   border-bottom: 1px solid var(--hairline);
@@ -261,9 +276,8 @@ main > .band:nth-child(even),
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
-  padding-block: var(--space-2);
+  gap: var(--space-1) 0.375rem;
+  padding-block: var(--space-1);
 }
 
 /* The wordmark: the studio's name as a mark, uppercase and bold, upright (the font has no italic). */
@@ -271,6 +285,7 @@ main > .band:nth-child(even),
   display: inline-flex;
   align-items: center;
   min-height: var(--target);
+  margin-right: auto;
   gap: var(--space-1);
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
@@ -279,24 +294,12 @@ main > .band:nth-child(even),
   text-decoration: none;
 }
 
-/* The mark and the name stay together, and wrap inside the bar rather than past it at large text. */
-.brand {
-  max-width: 100%;
-}
-
 /* The peanut mark is one colour: on ink it inverts to paper. */
 .mark {
   display: block;
   width: auto;
   height: 1.5em;
   filter: var(--mark-filter);
-}
-
-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--space-3);
 }
 
 nav a {
@@ -313,8 +316,84 @@ nav a.active {
   text-decoration-thickness: 2px;
 }
 
-nav a.nav-primary {
-  font-weight: var(--weight-bold);
+/* Play, Contribute and Menu keep their 44px height with less side padding, so the row fits 360px. */
+.topbar-row .button {
+  padding-inline: 0.625em;
+}
+
+.nav-links {
+  display: none;
+  flex-basis: 100%;
+  flex-direction: column;
+  padding-block: 0 var(--space-1);
+}
+
+.nav-links[data-open='true'] {
+  display: flex;
+}
+
+.nav-links li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.nav-links a {
+  width: 100%;
+}
+
+.menu-play {
+  display: none;
+}
+
+@media (max-width: 22.49rem) {
+  .nav-play {
+    display: none;
+  }
+
+  .menu-play {
+    display: block;
+  }
+}
+
+/* Below 32rem the name is read out but not drawn: the peanut mark stands for it. */
+@media (max-width: 31.99rem) {
+  .wordmark-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 64rem) {
+  .topbar-row {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .wordmark {
+    order: -2;
+  }
+
+  .nav-links,
+  .nav-links[data-open='true'] {
+    display: flex;
+    order: -1;
+    flex-basis: auto;
+    flex-direction: row;
+    gap: 0 var(--space-3);
+    margin-right: var(--space-1);
+    padding: 0;
+  }
+
+  .nav-links li + li {
+    border-top: 0;
+  }
+
+  .topbar-row .menu-button,
+  .menu-play {
+    display: none;
+  }
 }
 
 /* Page heading and sections --------------------------------------------- */
@@ -329,42 +408,17 @@ nav a.nav-primary {
   max-width: var(--measure);
 }
 
-/* Landing intro: the pitch beside the Right now panel on a wide screen, stacked on a narrow one. */
-.intro {
-  display: grid;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-
-.intro .hero {
-  margin-bottom: 0;
-}
-
-.panel {
-  padding: var(--space-3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  align-self: start;
-}
-
-.panel h2 {
-  font-size: var(--size-body);
-  margin-bottom: var(--space-1);
-}
-
-.panel .stats {
-  margin-bottom: var(--space-2);
+/* A link on its own line: a 44px target that takes one line of layout. */
+.more a,
+a.target {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  margin-block: calc(-1 * max(0px, (var(--target) - 1lh) / 2));
 }
 
 .row-strong {
   font-weight: var(--weight-strong);
-}
-
-/* Two sections side by side on a wide screen. */
-.columns {
-  display: grid;
-  gap: var(--space-5);
-  margin-bottom: var(--space-5);
 }
 
 .hero h1 {
@@ -379,32 +433,16 @@ nav a.nav-primary {
   margin-bottom: var(--space-5);
 }
 
-.section:last-child,
-.columns > .section {
+.section:last-child {
   margin-bottom: 0;
 }
 
-main > .columns:last-child {
-  margin-bottom: 0;
-}
-
-.steps,
 .rules {
   margin: 0 0 var(--space-2);
   padding-left: 1.4em;
-}
-
-.steps {
-  list-style: decimal outside;
-  display: grid;
-  gap: var(--space-2) var(--space-4);
-}
-
-.rules {
   list-style: disc outside;
 }
 
-.steps li,
 .rules li {
   margin-bottom: var(--space-1);
   padding-left: 0.2em;
@@ -831,14 +869,16 @@ button.link:hover:not(:disabled) {
   gap: var(--space-2);
 }
 
-/* The agent brief: a native disclosure, closed by default. */
+/* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
+   one line of layout, so the card's bottom space matches its top. */
 .brief {
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
 }
 
 .brief summary {
   /* Padding, not flex, so the disclosure triangle stays: a 44px target around one line. */
   padding-block: max(0px, calc((var(--target) - 1lh) / 2));
+  margin-block: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
   width: fit-content;
   color: var(--text-muted);
   font-size: var(--size-small);
@@ -848,57 +888,17 @@ button.link:hover:not(:disabled) {
 }
 
 .brief p {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   padding-left: var(--space-2);
   border-left: 2px solid var(--hairline);
 }
 
-/* Shipped and the roadmap: rows at the reading measure, hairlines between them. */
-.shipped,
-.planned {
-  max-width: var(--measure);
+/* Rows: small text, hairlines between them, a constant 0.5rem inset (room for the change marker).
+   Queued, Shipped, planned cards and the ledger's rows are rows, never cards. */
+
+.rows {
   margin: 0 0 var(--space-2);
 }
-
-.shipped li,
-.planned li {
-  padding-block: var(--space-2);
-  border-top: 1px solid var(--hairline);
-}
-
-.shipped li:last-child,
-.planned li:last-child {
-  border-bottom: 1px solid var(--hairline);
-}
-
-.shipped h3,
-.shipped p,
-.planned h4,
-.planned p {
-  margin-bottom: var(--space-1);
-}
-
-.shipped p:last-child,
-.planned p:last-child {
-  margin-bottom: 0;
-}
-
-.planned-group {
-  margin-bottom: var(--space-3);
-}
-
-.planned-group h3 {
-  margin-bottom: var(--space-1);
-  font-size: var(--size-small);
-}
-
-.shipped-category {
-  color: var(--text-muted);
-  font-size: var(--size-small);
-  font-weight: var(--weight-strong);
-}
-
-/* Event and deploy rows ---------------------------------------------------- */
 
 .rows li {
   display: flex;
@@ -916,6 +916,48 @@ button.link:hover:not(:disabled) {
 .row-time {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Rail rows: the time (or the suit) on its own line, then in a 9rem rail from 48rem. */
+.rows.rail li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.125rem var(--space-2);
+}
+
+.rail .row-time {
+  white-space: nowrap;
+}
+
+.row-body {
+  min-width: 0;
+}
+
+.row-body > * {
+  margin: 0;
+}
+
+.row-body > * + * {
+  margin-top: 0.125rem;
+}
+
+.row-title {
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  text-wrap: pretty;
+}
+
+.row-title .tag {
+  margin-right: 0.25rem;
+  font-weight: var(--weight-strong);
+  vertical-align: -0.125rem;
+}
+
+/* A small muted label above a list of rows. */
+.rows-heading {
+  margin: var(--space-3) 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--size-small);
 }
 
 .failed {
@@ -992,7 +1034,8 @@ button.link:hover:not(:disabled) {
 .how-steps {
   display: grid;
   gap: var(--space-5);
-  margin: 0 0 var(--space-5);
+  margin: 0;
+  padding: 0;
   counter-reset: how-step;
 }
 
@@ -1012,7 +1055,7 @@ button.link:hover:not(:disabled) {
 
 .example {
   margin: 0;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px dashed var(--field);
   border-radius: var(--radius);
 }
@@ -1031,7 +1074,7 @@ button.link:hover:not(:disabled) {
 }
 
 .example .card-grid,
-.example .shipped,
+.example .rows,
 .example .stats {
   margin: 0;
 }
@@ -1045,6 +1088,17 @@ button.link:hover:not(:disabled) {
   display: grid;
   gap: var(--space-4) var(--space-3);
   margin: 0 0 var(--space-2);
+}
+
+.agent {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The facts line sits at the bottom of each row, so the lines align across a row of agents. */
+.agent .card-meta {
+  margin-top: auto;
+  padding-top: var(--space-1);
 }
 
 .agent .avatar {
@@ -1149,7 +1203,7 @@ main > .band:nth-child(odd) .avatar {
 .footer-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-1) var(--space-3);
   padding-block: var(--space-3);
   color: var(--text-muted);
@@ -1166,7 +1220,7 @@ main > .band:nth-child(odd) .avatar {
   gap: var(--space-1) var(--space-2);
 }
 
-.footer-links a {
+.footer-row a {
   display: inline-flex;
   align-items: center;
   min-height: var(--target);
@@ -1454,7 +1508,46 @@ input[type='radio'] {
   }
 }
 
+/* Home ---------------------------------------------------------------------- */
+
+/* Play Dust and the How it works link, side by side. */
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.hero .status-line {
+  margin-top: var(--space-3);
+}
+
+/* A phone shows the first three cards until the viewer presses Show all. */
+.show-all {
+  margin-top: var(--space-3);
+}
+
+.home-columns {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.home-columns > .section {
+  margin-bottom: 0;
+}
+
+.money-split {
+  max-width: var(--measure);
+  margin-top: var(--space-2);
+}
+
 /* Wider screens ------------------------------------------------------------ */
+
+@media (max-width: 47.99rem) {
+  .fund-grid:not([data-all]) > li:nth-child(n + 4) {
+    display: none;
+  }
+}
 
 @media (min-width: 48rem) {
   .card-grid,
@@ -1465,8 +1558,13 @@ input[type='radio'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .steps {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  .show-all {
+    display: none;
+  }
+
+  .rows.rail li {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    align-items: baseline;
   }
 
   .how-step {
@@ -1487,11 +1585,6 @@ input[type='radio'] {
 }
 
 @media (min-width: 64rem) {
-  .intro {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    align-items: start;
-  }
-
   .card-grid,
   .team-grid,
   .team-strip {
@@ -1502,21 +1595,12 @@ input[type='radio'] {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .columns {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-/* Narrow screens ----------------------------------------------------------- */
-
-@media (max-width: 30rem) {
-  .topbar-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
+  .home-columns {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    align-items: start;
   }
 
-  nav {
-    gap: 0 var(--space-2);
+  .example {
+    padding: var(--space-3);
   }
 }

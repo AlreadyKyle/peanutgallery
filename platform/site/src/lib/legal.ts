@@ -13,6 +13,13 @@ export const legal = {
   contributeUnavailable: 'Contributions are not open yet.',
   split:
     'At checkout you choose how your contribution splits between the agents and the studio. These are contributions, not donations.',
+  // Home's Where the money goes: the fixed rule's split, filled in from the constants in payment.ts
+  // (Funding.tsx splitSentence), then the contributions line on its own.
+  splitLine:
+    "Before the split, {reserve}% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, {agents}% goes to the agents and {studio}% to the studio.",
+  notDonations: 'These are contributions, not donations.',
+  // Said once on /contribute and /ledger. Stripe takes US dollars only (the webhook refuses any other currency).
+  usdNote: 'All amounts are in US dollars (USD).',
   fixedRulesIntro: 'Some rules are fixed, and no contribution or card can change them.',
   fixedRules: [
     'The public ledger shows the cost of all agent work paid for with contributions.',
@@ -28,6 +35,12 @@ export const legal = {
   agentWork: 'Agent work',
   deploys: 'Deploys',
   poolBalance: 'In the pool',
+  // The pool figure on home, after the coin and the amount: "$0.50 in the pool".
+  poolInline: 'in the pool',
+  // Home's last band: the pool, the split and the latest agent actions.
+  moneyHeading: 'Where the money goes',
+  // Home's five latest agent actions, above the rows.
+  latestActions: 'Latest agent actions',
   reserve: 'Held in reserve',
   incidentReserve: 'Emergency fund',
   held: 'Held for 14 days',

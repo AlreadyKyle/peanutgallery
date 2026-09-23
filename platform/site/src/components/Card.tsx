@@ -45,13 +45,15 @@ export type CardFaceProps = {
   reason?: string;
   /** Spec rows that changed since the last poll: they carry the change marker. */
   changed?: readonly SpecRow[];
+  /** The title takes focus from script (the fund grid's Show all moves focus to it). */
+  focusable?: boolean;
 };
 
 /**
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [] }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const suit = SUITS[categoryOf(card)];
@@ -70,7 +72,9 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
           {state.word}
         </span>
       </p>
-      <h3 id={titleId}>{card.title}</h3>
+      <h3 id={titleId} tabIndex={focusable ? -1 : undefined}>
+        {card.title}
+      </h3>
       {blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>}
       <div className="card-bottom">
         {shown === 'rejected' ? (

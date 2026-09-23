@@ -3,7 +3,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
-import { canFund, exampleSplit, fundLink } from '../lib/payment';
+import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, RESERVE_PCT } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 
@@ -171,14 +171,33 @@ export function CardMoney({
  * When the funding figures did not load, a goal card leaves its count out instead of showing 0.
  */
 export function shippedCaption(card: Card, snapshot: Snapshot, source: string): string {
+  return [...shippedParts(card, snapshot, source), `${legal.shippedOn} ${formatDate(card.live_at ?? card.updated_at)}`].join(' · ');
+}
+
+/**
+ * A shipped row's money line when its date sits in the row's rail: "$1.23 spent · 3 contributors",
+ * or the card's source when nobody funded it. The same parts as shippedCaption, without the date.
+ */
+export function shippedMeta(card: Card, snapshot: Snapshot, source: string): string {
+  return shippedParts(card, snapshot, source).join(' · ');
+}
+
+function shippedParts(card: Card, snapshot: Snapshot, source: string): string[] {
   const funding = snapshot.funding[card.id];
   let who: string | null = source;
   if (card.shape === 'goal' || funding !== undefined) {
     who = snapshot.missing.includes('funding') ? null : contributorsLine(funding?.contributors ?? 0);
   }
-  const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${legal.spent} · ` : '';
-  const count = who === null ? '' : `${who} · `;
-  return `${cost}${count}${legal.shippedOn} ${formatDate(card.live_at ?? card.updated_at)}`;
+  const cost = card.spent_usd > 0 ? `${formatUsd(card.spent_usd)} ${legal.spent}` : null;
+  return [cost, who].filter((part): part is string => part !== null);
+}
+
+/** The split, from the fixed constants in payment.ts: the reserve first, then the default share of each side. */
+export function splitSentence(): string {
+  return legal.splitLine
+    .replace('{reserve}', String(RESERVE_PCT))
+    .replace('{agents}', String(100 - DEFAULT_STUDIO_PCT))
+    .replace('{studio}', String(DEFAULT_STUDIO_PCT));
 }
 
 // The split example's contribution after Stripe's fee: its rows' notes in legal.ts are worked for it.

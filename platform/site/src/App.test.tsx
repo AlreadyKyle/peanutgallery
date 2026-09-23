@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { strayNetlifyHosts } from '../scripts/board-address.mjs';
-import { App } from './App';
+import { App, CartridgeMark } from './App';
+import { Glyph } from './components/Glyph';
 import { copy } from './lib/copy';
 import { legal } from './lib/legal';
 import type { Snapshot, StudioSource } from './lib/source';
@@ -186,13 +187,14 @@ describe('Site chrome', () => {
         .getAllByRole('link')
         .map((link) => [link.textContent, link.getAttribute('href')]),
     ).toEqual([
+      [copy.studioName, '/'],
       [copy.howItWorksNav, '/how-it-works'],
       [copy.teamNav, '/team'],
       [copy.roadmapNav, '/roadmap'],
       [legal.ledger, '/ledger'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
-    expect(within(screen.getByRole('contentinfo')).getByText(copy.footer)).toBeTruthy();
+    expect(within(screen.getByRole('contentinfo')).getByText(`${copy.footer} ${legal.allAges}`)).toBeTruthy();
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: copy.createdByName }).getAttribute('href')).toBe(copy.createdByUrl);
   });
 
@@ -214,7 +216,7 @@ describe('Site chrome', () => {
       expect(screen.queryByRole('heading', { level: 1, name: 'Board' }), path).toBeNull();
       expect(screen.queryByRole('form', { name: 'Sign in' }), path).toBeNull();
       expect(screen.queryByLabelText('Email'), path).toBeNull();
-      expect(within(nav()).getByRole('link', { name: copy.play }).getAttribute('href'), path).toBe(playUrl);
+      for (const play of within(nav()).getAllByRole('link', { name: copy.play })) expect(play.getAttribute('href'), path).toBe(playUrl);
       expect(strayNetlifyHosts(document.body.innerHTML, [playHost]), path).toEqual([]);
       cleanup();
     }
@@ -247,9 +249,47 @@ describe('Site chrome', () => {
     cleanup();
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
     renderAt('/');
-    expect(within(nav()).getByRole('link', { name: copy.play }).getAttribute('href')).toBe(
-      'https://play.example',
-    );
+    // In the row, and in the Menu list for screens below 22.5rem (styles.css shows one of the two).
+    const plays = within(nav()).getAllByRole('link', { name: copy.play });
+    expect(plays.map((a) => [a.getAttribute('href'), a.className])).toEqual([
+      ['https://play.example', 'button button-secondary nav-play'],
+      ['https://play.example', ''],
+    ]);
+    expect(plays[1]!.closest('li')?.className).toBe('menu-play');
+  });
+
+  it('opens and closes the Menu: aria-expanded follows it, and Escape closes it and returns focus', () => {
+    renderAt('/');
+    const button = within(nav()).getByRole('button', { name: copy.menu });
+    const list = document.getElementById('site-menu')!;
+    expect(button.getAttribute('aria-controls')).toBe('site-menu');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(list.hasAttribute('data-open')).toBe(false);
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(list.getAttribute('data-open')).toBe('true');
+    const link = within(list).getByRole('link', { name: copy.teamNav });
+    link.focus();
+    fireEvent.keyDown(link, { key: 'Escape' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('draws the Play cartridge exactly as the game suit glyph', () => {
+    const kernel = render(<CartridgeMark />).container.innerHTML;
+    cleanup();
+    const lane = render(<Glyph name="cartridge" />).container.innerHTML;
+    expect(kernel).toBe(lane);
+  });
+
+  it('puts every page on bands: each direct child of main is a band', () => {
+    for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/no-such-page']) {
+      renderAt(path);
+      const children = [...screen.getByRole('main').children];
+      expect(children.length, path).toBeGreaterThanOrEqual(2);
+      expect(children.every((child) => child.classList.contains('band')), path).toBe(true);
+      cleanup();
+    }
   });
 
   it('loads the snapshot once for the whole page tree', async () => {

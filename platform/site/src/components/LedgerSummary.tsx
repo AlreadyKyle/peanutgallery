@@ -4,8 +4,9 @@ import { unavailableLine, type StudioState } from '../lib/studio';
 import { EventList } from './EventList';
 import { Stat } from './Stat';
 
-// Kernel (docs/specs/board-site.md). Agent spend and tokens, then the latest agent actions. A part that did not load says so instead
-// of showing zero or an empty list.
+// Kernel (docs/specs/board-site.md). Agent spend, with its tokens as a second line under the figure,
+// then the latest agent actions. A part that did not load says so instead of showing zero or an
+// empty list.
 export function LedgerSummary({ studio }: { studio: StudioState }) {
   if (studio.state === 'loading') {
     return <p className="muted">{legal.loadingLedger}</p>;
@@ -23,12 +24,9 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
       {missing.includes('totals') ? (
         <p className="muted">{legal.partUnavailable}</p>
       ) : (
-        <>
-          <dl className="stats">
-            <Stat label={legal.agentSpend} description={legal.describeAgentSpend} value={formatUsd(totals.usd_total)} />
-          </dl>
-          <p className="muted small">{tokens}</p>
-        </>
+        <dl className="stats">
+          <Stat label={legal.agentSpend} description={legal.describeAgentSpend} note={tokens} value={formatUsd(totals.usd_total)} />
+        </dl>
       )}
       {missing.includes('events') ? (
         <p className="muted">{legal.partUnavailable}</p>
