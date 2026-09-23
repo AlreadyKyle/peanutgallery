@@ -71,14 +71,6 @@ everything else, in the order the board would take it.
 - summary: Show the fees Stripe keeps on refunds and disputes on the public ledger, so the figures always add up.
 - intent: Each fee Stripe keeps on a refunded payment or charges for a dispute becomes its own ledger row paid from the studio share, so the public figures reconcile with Stripe's balance after a reversal. It is not built yet.
 
-### Handling a dispute the studio wins
-- bucket: budget
-- folder: platform
-- horizon: later
-- rank: 2
-- summary: When a payment dispute is decided in the studio's favour, the money comes back to the agents and the ledger shows it.
-- intent: A won dispute re-credits the contribution the dispute reversed, without crediting a card's bar twice, and records any dispute fee Stripe returns. Today a dispute reverses the contribution and nothing handles a win. It is not built yet.
-
 ### Two rare accounting edge cases
 - bucket: budget
 - folder: platform
@@ -94,14 +86,6 @@ everything else, in the order the board would take it.
 - rank: 4
 - summary: A public page listing every action the board takes, each with its one-line reason.
 - intent: Directives, cards the board files, funding by board members and cap changes appear with their reasons and a running count. The board's actions carry reasons today and no public page lists them. It is not built yet.
-
-### Split aggregate on the meter
-- bucket: platform
-- folder: platform
-- horizon: later
-- rank: 5
-- summary: Show the share supporters actually choose to send to the studio, next to the default 80/20 split.
-- intent: The meter shows the live average studio share across contributions beside the default, computed from each contribution's chosen split, so the choice supporters make is public. It is not built yet.
 
 ### Board rollback button
 - bucket: platform

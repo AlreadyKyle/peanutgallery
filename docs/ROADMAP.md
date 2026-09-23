@@ -117,7 +117,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 |---|---|---|---|
 | 1 | `specs/legal-copy.md` | built | numbered Terms versions, the refund policy, age, currency and wind-down terms, the agreement line before every checkout |
 | 2 | `specs/money-logic.md` | built | one waterfall with allocations, refunds unwound from every card reached, the fee Stripe keeps, supporter numbers, the terms stamp, the pause reason |
-| 3 | `specs/money-surfaces.md` | agreed | the next card in line on /contribute; money in, reconciliation, Not on a card yet and stopped cards on /ledger; the pause reason |
+| 3 | `specs/money-surfaces.md` | built | the next card in line on /contribute; money in, reconciliation, Not on a card yet and stopped cards on /ledger; the pause reason |
 | 4 | `specs/agent-system-core.md` | agreed | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
 | 5 | `specs/agent-workflows.md` | agreed | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
 | 6 | `specs/site-snapshot.md` | agreed | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |

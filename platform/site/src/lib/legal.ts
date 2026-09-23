@@ -77,7 +77,8 @@ export const legal = {
   // A card's spec rows: "Funded $1.50 of $3.00" and "Contributors 2".
   fundedLabel: 'Funded',
   contributorsLabel: 'Contributors',
-  // A card that was not built (the design guide's sample face until a public read lists them).
+  // A card that was not built, on the design guide's sample face; /ledger's Stopped rows say where the
+  // money went card by card (movedTo).
   notBuiltMoney: 'Its unspent money went to the next cards in line.',
   folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
   // Shown while the agents are paused and public_studio names no reason. It follows the board's Pause

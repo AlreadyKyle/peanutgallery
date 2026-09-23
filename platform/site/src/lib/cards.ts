@@ -96,7 +96,8 @@ export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Car
 
 /**
  * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage.
- * Paused and rejected are drawn only on the design guide until a public read lists those cards.
+ * Paused and rejected faces are drawn only on the design guide; /ledger lists stopped cards as rows
+ * (Stopped.tsx), never as faces (docs/specs/money-surfaces.md).
  */
 export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected';
 export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected'];
