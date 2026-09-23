@@ -118,6 +118,36 @@ for (const viewport of WIDTHS) {
   });
 }
 
+// Every path to checkout states the agreement first (docs/specs/legal-copy.md): each Payment Link on
+// /, /roadmap and /contribute has the Terms, the Refunds page and the age condition in its own card,
+// or, on /contribute, in the agreement line directly under the first choice.
+for (const path of ['/', '/roadmap', '/contribute']) {
+  test(`${path}: every Payment Link carries the agreement`, async ({ page }) => {
+    await page.goto(path);
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+    const missing = await page.evaluate((link) => {
+      const out: string[] = [];
+      const hasAgreement = (box: Element | null) =>
+        box !== null &&
+        box.querySelector('a[href="/terms"]') !== null &&
+        box.querySelector('a[href="/refunds"]') !== null &&
+        /adult/.test(box.textContent ?? '') &&
+        /guardian/.test(box.textContent ?? '');
+      const first = document.querySelector('main a.choice-primary');
+      const firstAgreement = first?.nextElementSibling ?? null;
+      for (const a of document.querySelectorAll(`main a[href^="${link}"]`)) {
+        const inCard = hasAgreement(a.closest('li.card'));
+        const onContribute = location.pathname === '/contribute' && hasAgreement(firstAgreement) && firstAgreement?.tagName === 'P';
+        if (!inCard && !onContribute) out.push(`${a.textContent?.trim()} -> ${a.getAttribute('href')}`);
+      }
+      return out;
+    }, PAYMENT_LINK);
+    expect(missing).toEqual([]);
+    if (path === '/contribute') await expect(page.locator(`main a[href^="${PAYMENT_LINK}"]`)).not.toHaveCount(0);
+    if (path === '/') await expect(page.getByRole('main').getByRole('link', { name: 'Fund this card' })).not.toHaveCount(0);
+  });
+}
+
 // The /team check live-check.mjs runs on production (scripts/team-models.mjs), on rosters it must fail.
 const CARD_ROLES = new Set(['Builder A', 'Builder B', 'QA', 'Platform Builder']);
 

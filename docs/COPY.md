@@ -64,6 +64,7 @@ These carry over from the design guide:
 - Money is `$0.00`. Counts use thousands separators.
 - Never describe something that does not exist yet.
 - No dates or deadlines the board has not set.
+- **A posted Terms version is never edited.** Its words in `src/lib/terms-versions.ts` are what applied to the money given while it was in force. A change, even a typo fix, is a new version posted by the procedure in `docs/specs/legal-copy.md`. These rules are checked on the newest version only, so a later rule never forces an edit to posted words.
 
 ## Checking a draft
 

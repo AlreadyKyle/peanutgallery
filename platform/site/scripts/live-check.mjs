@@ -7,7 +7,7 @@
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
+// pages, Terms and Refunds version 1, and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
@@ -15,7 +15,10 @@
 // Planned next appear only when there is something to show. The status line, the pool figure, the
 // shipped rows, the fund links, the category filters and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
-// rest; /roadmap shows no bar and no fund link. Assets, og:image as an absolute URL, and
+// rest; /roadmap shows no bar and no fund link. Every Payment Link on home and /contribute carries the
+// agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
+// in public_terms_versions since it took effect, lists the earlier ones and answers the next number
+// with the not found page (docs/specs/legal-copy.md). Assets, og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect runs only against production. The
@@ -40,11 +43,17 @@ import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
+const TOML = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
+// The public read the Terms pages make (docs/specs/legal-copy.md): the project and the publishable key
+// the site is built with, from netlify.toml, where both are public.
+const SUPABASE_URL = TOML.match(/^\s*VITE_SUPABASE_URL\s*=\s*"([^"]+)"/m)?.[1] ?? '';
+const SUPABASE_ANON_KEY = TOML.match(/^\s*VITE_SUPABASE_ANON_KEY\s*=\s*"([^"]+)"/m)?.[1] ?? '';
+const AGREEMENT_TOKENS = ['/terms', '/refunds'];
 // The game's netlify.app host, which every page's top bar links to, from the netlify.toml the site is
 // built with; and the board site's host, from BOARD_SITE_URL in the environment when it is set (the
 // address lives in .env and never in the repository). No page may name any other netlify.app host,
 // nor the board site's (docs/specs/board-site.md).
-const PLAY_HOST = playHostFrom(readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8'));
+const PLAY_HOST = playHostFrom(TOML);
 const BOARD_HOST = boardHostFrom(process.env.BOARD_SITE_URL);
 const args = process.argv.slice(2);
 const allowNoData = args.includes('--allow-no-data');
@@ -58,8 +67,10 @@ const ROUTES = [
   '/team',
   '/roadmap',
   '/terms',
+  '/terms/1',
   '/privacy',
   '/refunds',
+  '/refunds/1',
   '/contact',
   '/no-such-page',
 ];
@@ -108,6 +119,57 @@ function skip(message) {
 function noData(message) {
   if (allowNoData) skip(`${message}: the site has no live data`);
   else check(false, `${message}: the site has no live data`);
+}
+
+/** format.ts formatPostedAt: "22 Sep 2026 at 21:32 Toronto time", whatever this machine's time zone. */
+const TORONTO = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'America/Toronto',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+function postedAt(iso) {
+  const parts = TORONTO.formatToParts(new Date(iso));
+  const value = (type) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('day')} ${value('month').slice(0, 3)} ${value('year')} at ${value('hour')}:${value('minute')} Toronto time`;
+}
+
+/** The posted Terms versions, oldest first, read the way the site reads them; null when the read fails. */
+async function postedTerms() {
+  if (SUPABASE_URL === '' || SUPABASE_ANON_KEY === '') return null;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/public_terms_versions?select=version,posted_at&order=version`, {
+      headers: { apikey: SUPABASE_ANON_KEY },
+    });
+    if (!response.ok) return null;
+    const rows = await response.json();
+    return Array.isArray(rows) && rows.length > 0 ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every Payment Link in main that does not carry the agreement: the Terms and Refunds links and the
+ * age condition in its own card, or on /contribute in the line directly under the first choice.
+ */
+function linksWithoutAgreement(page) {
+  return page.evaluate((tokens) => {
+    const has = (box) =>
+      box !== null &&
+      tokens.every((href) => box.querySelector(`a[href="${href}"]`) !== null) &&
+      /adult/.test(box.textContent ?? '') &&
+      /guardian/.test(box.textContent ?? '');
+    const first = document.querySelector('main a.choice-primary');
+    const line = first?.nextElementSibling ?? null;
+    const underFirst = location.pathname === '/contribute' && line?.tagName === 'P' && has(line);
+    return [...document.querySelectorAll('main a[href^="https://buy.stripe.com/"]')]
+      .filter((a) => !underFirst && !has(a.closest('li.card')))
+      .map((a) => `${(a.textContent ?? '').trim()} -> ${a.getAttribute('href')}`);
+  }, AGREEMENT_TOKENS);
 }
 
 /** Width and height from a PNG's IHDR chunk, or null when the bytes are not a PNG. */
@@ -302,7 +364,18 @@ try {
     }
   }
 
+  {
+    const stripeLinks = await main.locator('a[href^="https://buy.stripe.com/"]').count();
+    const missing = await linksWithoutAgreement(page);
+    if (stripeLinks === 0) skip('the agreement on home: no Payment Link on home');
+    else check(missing.length === 0, `home: ${stripeLinks} Payment Links, each with the agreement${missing.length === 0 ? '' : `: missing on ${missing.slice(0, 3).join(' | ')}`}`);
+  }
+
   await open(page, '/contribute');
+  {
+    const missing = await linksWithoutAgreement(page);
+    check(missing.length === 0, `/contribute: the agreement line under the first choice covers every Payment Link${missing.length === 0 ? '' : `: missing on ${missing.slice(0, 3).join(' | ')}`}`);
+  }
   const choices = await page
     .getByRole('main')
     .getByRole('link')
@@ -353,8 +426,36 @@ try {
   check((await roadmap.getByRole('progressbar').count()) === 0, '/roadmap shows no funding bar');
   check((await roadmap.getByRole('link').count()) === 0, '/roadmap has no fund link');
 
+  // The Terms versions (docs/specs/legal-copy.md): /terms shows the newest posted version with when it
+  // took effect, never the cannot-confirm notice, and lists each earlier one; the next number is not
+  // found.
+  const terms = await postedTerms();
+  if (terms === null) {
+    noData('the Terms version in force');
+  } else {
+    const newest = terms[terms.length - 1];
+    await open(page, '/terms');
+    const text = (await page.getByRole('main').textContent()) ?? '';
+    const since = `Version ${newest.version}, in force since ${postedAt(newest.posted_at)}.`;
+    check(text.includes(since) && !text.includes('cannot confirm'), `/terms shows "${since}"`);
+    const earlier = terms.slice(0, -1).map((row) => `/terms/${row.version}`);
+    const listed = await page
+      .getByRole('region', { name: 'Earlier versions' })
+      .getByRole('link')
+      .evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    check(JSON.stringify([...listed].sort()) === JSON.stringify([...earlier].sort()), `/terms lists the earlier versions ${JSON.stringify(listed)}`);
+    for (const row of terms.slice(0, -1)) {
+      await open(page, `/refunds/${row.version}`);
+      const h1 = await page.locator('h1').allTextContents();
+      check(JSON.stringify(h1) === JSON.stringify([`Refunds, version ${row.version}`]), `/refunds/${row.version} shows ${JSON.stringify(h1)}`);
+    }
+    await open(page, `/terms/${newest.version + 1}`);
+    const missing = await page.locator('h1').allTextContents();
+    check(JSON.stringify(missing) === JSON.stringify(['Not found']), `/terms/${newest.version + 1} is the not found page: ${JSON.stringify(missing)}`);
+  }
+
   await page.waitForTimeout(500);
-  checkPolicy(reports, 'landing, contribute, how it works, team and roadmap interactions');
+  checkPolicy(reports, 'landing, contribute, how it works, team, roadmap and terms interactions');
   await page.close();
 
   for (const asset of ['/favicon.ico', '/peanut.png', '/version.json']) {

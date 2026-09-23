@@ -8,7 +8,7 @@ import { LIVE_STUDIO } from './live-studio';
 // element past the viewport, no seam between bands, side-by-side blocks within max(160px, 35%) of
 // each other, no run of empty space over 240px inside a band, grids that fill every row, card rows
 // that line up with no hollow over 80px, buttons on one line, no orphaned glyph and a one-row top bar.
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/no-such-page', '/design-kit-7q4m'];
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
 
 async function audit(page: Page, path: string): Promise<string[]> {
   await page.goto(path);

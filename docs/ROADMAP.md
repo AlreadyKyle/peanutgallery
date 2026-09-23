@@ -23,6 +23,7 @@ These are two different states.
 3. **The money is safe.** Refunds and disputes reverse cleanly. Credit above $50 a day per payer (keyed on the card fingerprint), or above the studio-wide daily limit, is held for 14 days. A refund of money already spent takes the shortfall from unearmarked money first and alerts the board.
 4. **The site is ready for strangers.**
    - Shipped work is visible; the Terms, Privacy, Refunds and Contact pages exist; hello@clayhouse.studio receives mail.
+   - The Terms and Refunds pages are numbered versions that show when each took effect, and state the refund policy, who may contribute (age), the currency, what happens to money on a card not built or if the studio stops, and that the studio has no token; the agreement is stated before every path to checkout (`specs/legal-copy.md`).
    - /how-it-works, /team and /roadmap are live.
    - Link previews render, and the board's own site requires a second factor.
    - The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).
@@ -35,7 +36,7 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 ## The order from here
 
 1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
-2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 11), in order: the contact address (done), the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, the GitHub tokens, healthchecks.io, the Discord webhooks, the Netlify plan check, the ntfy subscription, the business contact for the Terms and the Claude Code pin.
+2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 11), in order: the contact address (done), the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, the GitHub tokens, healthchecks.io, the Discord webhooks, the Netlify plan check, the ntfy subscription, the business contact for the Terms (it no longer blocks: the Terms shipped without an address or phone, and a later version adds them) and the Claude Code pin.
 3. **Board section B** (steps 12 to 18), before the announcement: the Stripe settings, retiring the full Stripe key, the legal pages, passkeys, a moderator, the first sign-in on the board's own site and the studio daily credit limit.
 4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live.
 
@@ -114,7 +115,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 
 | Order | Spec | Status | What it delivers |
 |---|---|---|---|
-| 1 | `specs/legal-copy.md` | agreed | numbered Terms versions, the refund policy, age, currency and wind-down terms, the agreement line before every checkout |
+| 1 | `specs/legal-copy.md` | built | numbered Terms versions, the refund policy, age, currency and wind-down terms, the agreement line before every checkout |
 | 2 | `specs/money-logic.md` | agreed | one waterfall with allocations, refunds unwound from every card reached, the fee Stripe keeps, supporter numbers, the terms stamp, the pause reason |
 | 3 | `specs/money-surfaces.md` | agreed | the next card in line on /contribute; money in, reconciliation, Not on a card yet and stopped cards on /ledger; the pause reason |
 | 4 | `specs/agent-system-core.md` | agreed | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
