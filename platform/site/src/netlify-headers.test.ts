@@ -111,3 +111,11 @@ describe('netlify.toml security headers', () => {
     expect(policy['connect-src']).toEqual(["'self'", `https://${host}`, `wss://${host}`]);
   });
 });
+
+describe('the design guide is not indexed', () => {
+  it('sends X-Robots-Tag noindex, nofollow on the guide path from netlify.toml', async () => {
+    const { GUIDE_PATH } = await import('./pages/Guide');
+    expect(headersFor(GUIDE_PATH)['X-Robots-Tag']).toBe('noindex, nofollow');
+  });
+});
+

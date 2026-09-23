@@ -76,3 +76,4 @@ Out, and what each waits on:
 - 2026-09-23: The guide's route is `/design-kit-7q4m`, a plain path the kernel frame accepts, with no top bar link and a `noindex, nofollow` meta tag while open.
 - 2026-09-23: Spec rows and event rows keep a constant 0.5rem inset so the change marker (an inset 3px line) never covers text and still takes no layout.
 - 2026-09-23: The wordmark may wrap inside the top bar, so 200% text never scrolls sideways before the new top bar lands.
+- 2026-09-23: the guide route also sends `X-Robots-Tag: noindex, nofollow` from `netlify.toml`, found in review: the page's meta tag is added only once its script runs, and the guide shows sample figures.
