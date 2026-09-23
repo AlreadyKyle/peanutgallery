@@ -224,6 +224,7 @@ Deno.test("migrations on PGlite", {
         "20260922000300_backlog.sql",
         "20260922000400_public_roles.sql",
         "20260922000500_roles_revoke.sql",
+        "20260923000200_rename_biz_dev.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -2125,6 +2126,8 @@ Deno.test("migrations on PGlite", {
               "write_access",
               "state",
               "hired_at",
+              "status",
+              "trigger",
             ]);
             assertEquals(roles[0]!.description, "Builds funded game cards as small, tested changes to Dust.");
             for (const table of ["roles", "dispatcher_lease", "card_patches", "board_actions", "credit_purchases"]) {
@@ -3845,7 +3848,7 @@ Deno.test("the launch migrations upgrade a live database in production order", {
   try {
     const migrations = await readMigrations();
     const earlier = migrations.filter((m) => m.name < LAUNCH);
-    const launch = migrations.filter((m) => m.name >= LAUNCH);
+    const launch = migrations.filter((m) => m.name.startsWith(LAUNCH));
     assertEquals(launch.map((m) => m.name.slice(0, 14)), [
       "20260922000000",
       "20260922000100",
@@ -3917,4 +3920,71 @@ Deno.test("the launch migrations upgrade a live database in production order", {
   } finally {
     await db.close();
   }
+});
+
+// 20260923000200 renames the Scout's row in place on a database that already holds the launch
+// roles, so the seed's upsert on name updates it instead of adding Biz Dev beside it
+// (docs/specs/carry-over.md).
+Deno.test("the Biz Dev rename keeps the Scout's row and adds status and trigger", {
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  const RENAME = "20260923000200_rename_biz_dev.sql";
+  const exec = (db: PGlite, sql: string) => db.exec(sql.replaceAll(PGCRYPTO_LINE, ""));
+  const migrations = await readMigrations();
+  const rename = migrations.find((m) => m.name === RENAME);
+  assert(rename, `${RENAME} exists`);
+  const before = migrations.filter((m) => m.name < RENAME);
+  const fresh = async () => {
+    const db = new PGlite();
+    await db.exec(SHIM);
+    for (const m of before) await exec(db, m.sql);
+    return db;
+  };
+  const role = (name: string, prompt: string) =>
+    `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path) values ('${name}', '${name}', 'A slim teal creature.', 'model-id', 0.025, 'curious', '${prompt}') returning id`;
+
+  await t.step("the Scout's row becomes Biz Dev in place, once, and a second run changes nothing", async () => {
+    const db = await fresh();
+    try {
+      const scout = (await db.query<{ id: string }>(role("Scout", "platform/agents/prompts/scout.md"))).rows[0]!.id;
+      await exec(db, rename.sql);
+      await exec(db, rename.sql);
+      const rows = (await db.query<Row>(`select id, name, title, prompt_path, state, status, trigger from public.roles order by name`)).rows;
+      assertEquals(rows, [{ id: scout, name: "Biz Dev", title: "Biz Dev", prompt_path: "platform/agents/prompts/biz-dev.md", state: "active", status: null, trigger: null }]);
+      // What the seed then writes on the same row.
+      await db.query(`update public.roles set status = 'starts', trigger = 'Starts last, once every other role is built.' where name = 'Biz Dev'`);
+      await db.exec(`set role anon`);
+      try {
+        assertEquals(
+          (await db.query<Row>(`select name, status, trigger from public.public_roles`)).rows,
+          [{ name: "Biz Dev", status: "starts", trigger: "Starts last, once every other role is built." }],
+        );
+      } finally {
+        await db.exec(`reset role`);
+      }
+      await assertRejects(() => db.query(`update public.roles set status = 'busy'`), Error, "roles_status_check");
+      await assertRejects(() => db.query(`update public.roles set trigger = 'one' || chr(10) || 'two'`), Error, "roles_trigger_check");
+      await assertRejects(() => db.query(`update public.roles set trigger = repeat('a', 201)`), Error, "roles_trigger_check");
+    } finally {
+      await db.close();
+    }
+  });
+
+  await t.step("when the seed wrote Biz Dev first, the Scout's row is retired, not duplicated or deleted", async () => {
+    const db = await fresh();
+    try {
+      await db.query(role("Scout", "platform/agents/prompts/scout.md"));
+      await db.query(role("Biz Dev", "platform/agents/prompts/biz-dev.md"));
+      await exec(db, rename.sql);
+      await exec(db, rename.sql);
+      const rows = (await db.query<Row>(`select name, state, retired_at is not null as retired from public.roles order by name`)).rows;
+      assertEquals(rows, [
+        { name: "Biz Dev", state: "active", retired: false },
+        { name: "Scout", state: "retired", retired: true },
+      ]);
+    } finally {
+      await db.close();
+    }
+  });
 });

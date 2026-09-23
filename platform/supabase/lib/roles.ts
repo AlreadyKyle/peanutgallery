@@ -7,6 +7,9 @@ export type ModelEnvName = (typeof MODEL_ENV_NAMES)[number];
 
 export const TOOL_NAMES = ["Read", "Edit", "Write", "Glob", "Grep", "Bash"] as const;
 export const METRIC_NAMES = ["first_pass_rate", "cost_per_ship", "estimate_accuracy", "reopen_rate"] as const;
+/** A role's place in the launch roster (platform/agents/README.md). */
+export const ROLE_STATUSES = ["running", "starts", "planned"] as const;
+export type RoleStatus = (typeof ROLE_STATUSES)[number];
 
 const REQUIRED_KEYS = [
   "name",
@@ -20,9 +23,12 @@ const REQUIRED_KEYS = [
   "tools",
   "metrics",
   "write_access",
+  "status",
 ] as const;
+/** Present exactly when status is not running. */
+const OPTIONAL_KEYS = ["trigger"] as const;
 
-/** The longest description roles.description accepts. */
+/** The longest description roles.description accepts, and the longest trigger roles.trigger accepts. */
 export const DESCRIPTION_MAX = 200;
 
 export interface RoleSpec {
@@ -38,6 +44,9 @@ export interface RoleSpec {
   tools: string[];
   metrics: string[];
   write_access: boolean;
+  status: RoleStatus;
+  /** One plain sentence saying when a role that is not running starts; null for a running role. */
+  trigger: string | null;
 }
 
 function fail(source: string, message: string): never {
@@ -75,7 +84,7 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
     if (!(key in obj)) fail(source, `missing key ${key}`);
   }
   for (const key of Object.keys(obj)) {
-    if (!(REQUIRED_KEYS as readonly string[]).includes(key)) fail(source, `unknown key ${key}`);
+    if (![...REQUIRED_KEYS, ...OPTIONAL_KEYS].includes(key as never)) fail(source, `unknown key ${key}`);
   }
 
   const name = nonEmptyString(source, obj, "name");
@@ -94,8 +103,8 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
   }
 
   const budgetShare = obj.budget_share;
-  if (typeof budgetShare !== "number" || !(budgetShare > 0) || budgetShare > 1) {
-    fail(source, "budget_share must be a number above 0 and at most 1");
+  if (typeof budgetShare !== "number" || !Number.isFinite(budgetShare) || budgetShare < 0 || budgetShare > 1) {
+    fail(source, "budget_share must be a number from 0 to 1");
   }
 
   const voice = nonEmptyString(source, obj, "voice");
@@ -116,6 +125,23 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
     fail(source, "write_access must be false exactly when tools is empty");
   }
 
+  const status = nonEmptyString(source, obj, "status");
+  if (!(ROLE_STATUSES as readonly string[]).includes(status)) {
+    fail(source, `status must be one of ${ROLE_STATUSES.join(", ")}`);
+  }
+  let trigger: string | null = null;
+  if (status === "running") {
+    if ("trigger" in obj) fail(source, "a running role has no trigger");
+  } else {
+    if (!("trigger" in obj)) fail(source, `a role that is ${status} must say its trigger`);
+    trigger = nonEmptyString(source, obj, "trigger");
+    if (trigger.includes("\n")) fail(source, "trigger must be one line");
+    if (trigger.length > DESCRIPTION_MAX) fail(source, `trigger must be ${DESCRIPTION_MAX} characters or fewer`);
+    if (trigger.trim() !== trigger) fail(source, "trigger must not start or end with a space");
+    if (trigger.includes("\u2014")) fail(source, "trigger must not use an em dash");
+    if (!trigger.endsWith(".")) fail(source, "trigger must end with a full stop");
+  }
+
   return {
     name,
     title,
@@ -128,6 +154,8 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
     tools,
     metrics,
     write_access: writeAccess,
+    status: status as RoleStatus,
+    trigger,
   };
 }
 
@@ -140,10 +168,13 @@ export function resolveModel(spec: Pick<RoleSpec, "model" | "name">, env: Env): 
   return value;
 }
 
-/** The nine launch shares must sum to 1 (within numeric tolerance). */
+/**
+ * The shares of the roles with a share that is not 0 must sum to 1 (within numeric tolerance). The
+ * roles added on 23 September 2026 carry 0 until the operations budget sets every share.
+ */
 export function assertSharesSumToOne(specs: readonly RoleSpec[]): void {
-  const total = specs.reduce((sum, s) => sum + s.budget_share, 0);
+  const total = specs.filter((s) => s.budget_share !== 0).reduce((sum, s) => sum + s.budget_share, 0);
   if (Math.abs(total - 1) > 1e-6) {
-    throw new Error(`budget_share values sum to ${total}, expected 1`);
+    throw new Error(`budget_share values that are not 0 sum to ${total}, expected 1`);
   }
 }

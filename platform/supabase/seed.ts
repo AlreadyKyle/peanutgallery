@@ -42,6 +42,8 @@ async function seedRoles(db: SupabaseClient, env: Env): Promise<void> {
     tools_json: s.tools,
     metrics_json: s.metrics,
     write_access: s.write_access,
+    status: s.status,
+    trigger: s.trigger,
   }));
   check("roles upsert", await db.from("roles").upsert(rows, { onConflict: "name" }));
   console.log(`roles: ${rows.length} upserted`);

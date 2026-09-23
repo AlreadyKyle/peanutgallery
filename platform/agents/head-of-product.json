@@ -1,0 +1,15 @@
+{
+  "name": "Head of Product",
+  "title": "Head of Product",
+  "description": "Reviews the studio the way a stranger, a supporter and the board meet it, and files typed proposals to the right owner, but is not running yet.",
+  "species_note": "A small teal creature with three eyes in a ring and stubby legs.",
+  "model": "MODEL_DIRECTOR",
+  "budget_share": 0,
+  "voice": "candid",
+  "prompt_path": "platform/agents/prompts/head-of-product.md",
+  "tools": [],
+  "metrics": ["first_pass_rate", "cost_per_ship"],
+  "write_access": false,
+  "status": "starts",
+  "trigger": "Starts with a first review after launch, then runs monthly and after any big change."
+}

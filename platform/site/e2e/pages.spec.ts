@@ -62,20 +62,31 @@ for (const viewport of WIDTHS) {
       const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
       await expect(waiting.getByRole('heading', { level: 3 })).toHaveText([
+        'Biz Dev',
         'Community',
+        'Game Designer',
         'Game Director',
+        'Head of Finance',
+        'Head of Product',
         'Host',
+        'HR',
+        'Janitor',
         'Platform Builder',
-        'Scout',
+        'Platform Director',
         'Studio Head',
+        'Tech Artist',
       ]);
       const avatars = page.getByRole('main').getByRole('img');
       await expect(avatars).toHaveCount(DEFAULT_STUDIO.roles.length);
       for (const role of DEFAULT_STUDIO.roles) {
         await expect(page.getByRole('img', { name: String(role.species_note) })).toBeVisible();
       }
-      await expect(running.getByText('claude-sonnet-5', { exact: false }).first()).toBeVisible();
-      await expect(page.getByText('claude-opus-5-5', { exact: false })).toHaveCount(0);
+      // A running role shows its model; a role that does not run shows none.
+      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(3);
+      await expect(waiting.getByText('claude-', { exact: false })).toHaveCount(0);
+      // The locators scripts/live-check.mjs uses for the same facts on production.
+      await expect(running.locator('li.role .card-meta').filter({ hasText: /^claude-[a-z0-9-]+ · / })).toHaveCount(await running.locator('li.role').count());
+      await expect(waiting.getByText(/\bclaude-/)).toHaveCount(0);
       await expect(running.getByText('2 cards shipped', { exact: false })).toBeVisible();
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'team', viewport.width);
