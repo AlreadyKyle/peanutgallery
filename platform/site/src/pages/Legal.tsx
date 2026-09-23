@@ -20,10 +20,13 @@ function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (token, key: string) => values[key] ?? token);
 }
 
+// .notice lays out the pause bars and the text side by side, so the text and its link go in one span.
 function Unconfirmed() {
   return (
     <p className="notice">
-      <LinkedText text={legal.termsUnconfirmed} />
+      <span>
+        <LinkedText text={legal.termsUnconfirmed} />
+      </span>
     </p>
   );
 }
