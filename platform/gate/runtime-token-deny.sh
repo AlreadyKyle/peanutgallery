@@ -24,6 +24,9 @@
 # minified code cannot be read through the code view in reasonable time. Every string a card writes
 # is still read with the full list in its source file.
 # A file with a NUL byte or a UTF-16 byte order mark fails as pattern=unreadable.
+# The e2e runs' local builds (dist-e2e) and screenshots are never read, like the other output folders
+# lib/common.sh prunes; a file git tracks inside any output folder in scope fails as
+# pattern=tracked-build-output, so a commit cannot hide text there.
 # First output line: PASS: ... or FAIL: ... (file, line and pattern name). Exit 0 pass, 1 fail, 2 usage.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -126,6 +129,25 @@ scope_files | grep -v -E '/node_modules/' | sort -u > "$WORK/files.txt"
 ALL=$(patterns | cut -d '|' -f2 | paste -s -d '|' -)
 : > "$WORK/hits.tsv"
 COUNT=0
+
+# The folders in scope, for the tracked-output check.
+scope_dirs() {
+  if [ -n "$FOLDER" ]; then
+    case "$FOLDER" in
+      seed-1) printf '%s\n' "$REPO_ROOT/seed-1" ;;
+      platform) printf '%s\n' "$REPO_ROOT/platform/site" "$REPO_ROOT/platform/board" "$REPO_ROOT/platform/agents" ;;
+    esac
+  else
+    printf '%s\n' "$PATHS" | grep -v '^$' | while IFS= read -r p; do [ -d "$p" ] && printf '%s\n' "$p"; done
+  fi
+  return 0
+}
+scope_dirs | while IFS= read -r d; do
+  [ -d "$d" ] || continue
+  gate_tracked_output "$REPO_ROOT" "$d"
+done | LC_ALL=C sort -u | while IFS= read -r rel; do
+  printf '%s\t1\ttracked-build-output\n' "$rel"
+done >> "$WORK/hits.tsv"
 while IFS= read -r f; do
   gate_is_generated "$f" && continue
   rel=$(gate_rel_path "$f")

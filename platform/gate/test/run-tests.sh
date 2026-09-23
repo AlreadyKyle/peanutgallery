@@ -288,6 +288,30 @@ expect "tokens: identifier in JSX text fails" 1 '^FAIL: runtime-token-deny hits=
 printf 'export const List = ({ items }: { items: string[] }) => <ul>{items.map((i) => <li key={i}>{i}</li>)}</ul>; // %s\n' "$N" > "$B/platform/site/src/Note.tsx"
 expect "tokens: elements nested inside a JSX expression pass" 0 '^PASS: runtime-token-deny files=4$' -- bash "$TOKENS" --repo-root "$B" --folder platform
 rm -f "$B/platform/site/src/Note.tsx"
+# The e2e runs leave their own build and screenshots behind locally, gitignored; the scans never read
+# them, so a local verify after an e2e run passes as CI does.
+mkdir -p "$B/platform/site/dist-e2e/assets" "$B/platform/board/dist-e2e/assets" "$B/platform/site/e2e-screenshots"
+printf 'var s="%s";var t="%s";\n' "[object"" Object]" "$TD" > "$B/platform/board/dist-e2e/assets/index-a1.js"
+printf '<p>%s</p>\n' "$TD" > "$B/platform/site/dist-e2e/index.html"
+printf '%s\n' "$TD" > "$B/platform/site/e2e-screenshots/home.txt"
+expect "tokens: the e2e runs' local builds and screenshots are not read" 0 '^PASS: runtime-token-deny files=3$' -- bash "$TOKENS" --repo-root "$B" --folder platform
+expect "tokens: a folder argument skips its e2e build too" 0 '^PASS: runtime-token-deny files=0$' -- bash "$TOKENS" --repo-root "$B" "$B/platform/board"
+rm -rf "$B/platform/site/dist-e2e" "$B/platform/board/dist-e2e" "$B/platform/site/e2e-screenshots"
+# A commit cannot hide text in a pruned output folder: a tracked file there fails.
+G="$T/tracked-output"
+mkdir -p "$G/platform/site/src" "$G/platform/board/dist-e2e/assets"
+printf 'export const a = 1;\n' > "$G/platform/site/src/a.ts"
+printf 'var t="%s";\n' "$TD" > "$G/platform/board/dist-e2e/assets/index-b2.js"
+git -C "$G" init -q
+git -C "$G" add platform/site/src/a.ts
+expect "tokens: an untracked e2e build in a git checkout passes" 0 '^PASS: runtime-token-deny files=1$' -- bash "$TOKENS" --repo-root "$G" --folder platform
+git -C "$G" add -f platform/board/dist-e2e/assets/index-b2.js
+expect "tokens: a tracked file in an e2e build folder fails" 1 '^FAIL: runtime-token-deny hits=1 first=platform/board/dist-e2e/assets/index-b2.js:1 pattern=tracked-build-output$' -- bash "$TOKENS" --repo-root "$G" --folder platform
+mkdir -p "$G/platform/site/coverage"
+printf 'x\n' > "$G/platform/site/coverage/lcov.info"
+git -C "$G" add -f platform/site/coverage/lcov.info
+expect "tokens: a tracked file in any pruned output folder fails" 1 '^FAIL: runtime-token-deny hits=2 first=platform/board/dist-e2e/assets/index-b2.js:1 pattern=tracked-build-output$' -- bash "$TOKENS" --repo-root "$G" --folder platform
+rm -rf "$G"
 printf 'Estimate: %s.\n' "TB""D" > "$B/platform/agents/prompts/builder-a.md"
 expect "tokens: platform prompt text is scanned" 1 '^FAIL: runtime-token-deny hits=1 first=platform/agents/prompts/builder-a.md:1 pattern=undecided-marker$' -- bash "$TOKENS" --repo-root "$B" --folder platform
 expect "tokens: explicit path mode scans one file" 1 '^FAIL: runtime-token-deny hits=1 first=platform/agents/prompts/builder-a.md:1 pattern=undecided-marker$' -- bash "$TOKENS" --repo-root "$B" "$B/platform/agents/prompts/builder-a.md"
