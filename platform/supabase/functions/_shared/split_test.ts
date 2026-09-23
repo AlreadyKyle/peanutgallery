@@ -6,6 +6,7 @@ import {
   feeToUsd,
   goalCardId,
   mapSplit,
+  payerKey,
   sanitizeDisplayName,
   sha256Hex,
   SPLIT_MAP,
@@ -139,4 +140,14 @@ Deno.test("goalCardId accepts only a well-formed uuid, client_reference_id first
   assertEquals(goalCardId(a.toUpperCase(), null), a);
   assertEquals(goalCardId("week-1", "week-1"), null);
   assertEquals(goalCardId(null, undefined), null);
+});
+
+Deno.test("payerKey is card: and the hashed fingerprint, or email: and the contributor id", async () => {
+  assertEquals(await payerKey("Xt5EWLLDS7FJjR1c", "c0ffee"), `card:${await sha256Hex("Xt5EWLLDS7FJjR1c")}`);
+  assertEquals(await payerKey(" Xt5EWLLDS7FJjR1c ", "c0ffee"), `card:${await sha256Hex("Xt5EWLLDS7FJjR1c")}`);
+  // The fingerprint itself never appears in the key.
+  assertEquals((await payerKey("Xt5EWLLDS7FJjR1c", "c0ffee")).includes("Xt5EWLLDS7FJjR1c"), false);
+  assertEquals(await payerKey(null, "c0ffee"), "email:c0ffee");
+  assertEquals(await payerKey(undefined, "c0ffee"), "email:c0ffee");
+  assertEquals(await payerKey("   ", "c0ffee"), "email:c0ffee");
 });

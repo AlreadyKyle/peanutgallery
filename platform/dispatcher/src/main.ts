@@ -125,7 +125,13 @@ async function main(): Promise<void> {
   while (running.size > 0 && Date.now() < deadline) {
     await sleep(500);
   }
-  await db.releaseLease(leaseHolder).catch((error: unknown) => log.warn('main', 'lease release failed; it lapses on its own', { error: errorMessage(error), ttlSeconds }));
+  // A card still merging or verifying keeps the lease until it lapses, so another dispatcher
+  // cannot recover or verify that card while this process is still working on it.
+  if (running.size === 0) {
+    await db.releaseLease(leaseHolder).catch((error: unknown) => log.warn('main', 'lease release failed; it lapses on its own', { error: errorMessage(error), ttlSeconds }));
+  } else {
+    log.warn('main', 'cards still running at shutdown; the lease is kept and lapses on its own', { unfinished: running.size, ttlSeconds });
+  }
   log.info('main', 'dispatcher stopped', { unfinished: running.size });
 }
 

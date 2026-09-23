@@ -5,11 +5,12 @@
 # usage: runtime-token-deny.sh --folder seed-1|platform [--repo-root d]
 #        runtime-token-deny.sh [--repo-root d] path ...
 #
-# Scope by folder: seed-1/config, seed-1/content, seed-1/sim, seed-1/render and seed-1/dist HTML;
-# platform/site/src, platform/agents and platform/site/dist HTML. A path argument names a file or a
-# folder; a folder named dist, given directly or found inside a folder argument, contributes only
-# its HTML outside assets/. Test files (*.test.*, *.spec.*, test/, tests/, __tests__/, e2e/),
-# node_modules and dist assets are never read. A path that does not exist is a usage error.
+# Scope by folder: all of seed-1, and seed-1/dist; platform/site and platform/agents, and
+# platform/site/dist. Test files and test folders are read like any other source: a code-lane card
+# writes them, and anything under a folder named tests can be imported and shipped. A path argument
+# names a file or a folder. A folder named dist, given directly or found inside a folder argument, is
+# the build: every file in it is read, and the bundles under its assets/ folder too. node_modules
+# and the Finder's .DS_Store files are never read. A path that does not exist is a usage error.
 #
 # Code files (.ts .tsx .js .mjs .cjs .jsx) are read through lib/js-views.awk: comments are removed
 # first, safe contexts are removed next, and the language identifiers (NaN, undefined, TypeError,
@@ -18,6 +19,11 @@
 # Safe contexts: typeof x === 'undefined', === undefined, !== undefined, ?? undefined,
 # Number.isNaN(, and the input hint attribute the unset-marker pattern names. Math.random( is denied
 # under seed-1/sim.
+# A built bundle (a file under dist/assets/) is read as plain text for the unfinished-work markers
+# only: the language identifiers and [object Object] sit in the libraries' own strings, and
+# minified code cannot be read through the code view in reasonable time. Every string a card writes
+# is still read with the full list in its source file.
+# A file with a NUL byte or a UTF-16 byte order mark fails as pattern=unreadable.
 # First output line: PASS: ... or FAIL: ... (file, line and pattern name). Exit 0 pass, 1 fail, 2 usage.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -32,29 +38,30 @@ usage() {
 
 SAFE_UNDEFINED="s/typeof [^=!]*[=!]==? *['\"]undefined['\"]//g; s/[=!]==? *undefined//g; s/\?\? *undefined//g"
 
-# name | extended regex | safe-context sed | kind (ident or text) | scope (all or sim)
+# name | extended regex | safe-context sed | kind (ident or text) | scope (all or sim) | read in a
+# built bundle (yes or no)
 patterns() {
-  printf '%s|%s|%s|%s|%s\n' \
-    nan '\bNaN\b' 's/Number\.isNaN\(//g' ident all \
-    undefined '\bundefined\b' "$SAFE_UNDEFINED" ident all \
-    type-error '\bTypeError\b' '' ident all \
-    reference-error '\bReferenceError\b' '' ident all \
-    object-object '\[object Object\]' '' text all \
-    open-task-marker '\bT[O]DO\b' '' text all \
-    fix-marker '\bFIX[M]E\b' '' text all \
-    replace-marker 'REPLACE[_]ME' '' text all \
-    latin-filler '[Ll]or[e]m ips[u]m' '' text all \
-    latin-filler-2 'dolor sit am[e]t' '' text all \
-    undecided-marker '\bTB[D]\b' '' text all \
-    x-run 'X{4}' '' text all \
-    unset-marker '\bplaceh[o]lder\b' 's/placeh[o]lder=//g' text all \
-    soon-phrase '[Cc]oming s[o]on' '' text all \
-    soon-paren '\(s[o]on\)' '' text all \
-    stock-name-1 'J[o]hn Doe' '' text all \
-    stock-name-2 'J[a]ne Doe' '' text all \
-    stock-email 'test@exampl[e]\.com' '' text all \
-    stripe-key-stub 'sk_live_[x]' '' text all \
-    math-random 'Math\.rand[o]m\(' '' text sim
+  printf '%s|%s|%s|%s|%s|%s\n' \
+    nan '\bNaN\b' 's/Number\.isNaN\(//g' ident all no \
+    undefined '\bundefined\b' "$SAFE_UNDEFINED" ident all no \
+    type-error '\bTypeError\b' '' ident all no \
+    reference-error '\bReferenceError\b' '' ident all no \
+    object-object '\[object Object\]' '' text all no \
+    open-task-marker '\bT[O]DO\b' '' text all yes \
+    fix-marker '\bFIX[M]E\b' '' text all yes \
+    replace-marker 'REPLACE[_]ME' '' text all yes \
+    latin-filler '[Ll]or[e]m ips[u]m' '' text all yes \
+    latin-filler-2 'dolor sit am[e]t' '' text all yes \
+    undecided-marker '\bTB[D]\b' '' text all yes \
+    x-run 'X{4}' '' text all yes \
+    unset-marker '\bplaceh[o]lder\b' 's/placeh[o]lder=//g' text all yes \
+    soon-phrase '[Cc]oming s[o]on' '' text all yes \
+    soon-paren '\(s[o]on\)' '' text all yes \
+    stock-name-1 'J[o]hn Doe' '' text all yes \
+    stock-name-2 'J[a]ne Doe' '' text all yes \
+    stock-email 'test@exampl[e]\.com' '' text all yes \
+    stripe-key-stub 'sk_live_[x]' '' text all yes \
+    math-random 'Math\.rand[o]m\(' '' text sim no
 }
 
 FOLDER=""
@@ -86,52 +93,59 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/runtime-token-deny.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 export LC_ALL=C
 
-# The HTML of a build folder, outside assets/.
-dist_html() {
-  find "$1" -type f -name '*.html' -not -path '*/assets/*' | LC_ALL=C sort
+# Every file of a build folder, its bundles included.
+dist_files() {
+  find "$1" \( -name node_modules -o -name .DS_Store \) -prune -o -type f -print | LC_ALL=C sort
 }
-# The files of a folder argument: source files, plus built HTML when the folder is or holds dist/.
+# The files of a folder argument: source files, plus the build when the folder is or holds dist/.
 folder_files() {
   if [ "$(basename "$1")" = dist ]; then
-    dist_html "$1"
+    dist_files "$1"
   else
     gate_find_files "$1"
-    if [ -d "$1/dist" ]; then dist_html "$1/dist"; fi
+    if [ -d "$1/dist" ]; then dist_files "$1/dist"; fi
   fi
 }
-# Files in scope, sorted; test files, dependency folders and dist assets removed.
+# Files in scope, sorted, dependency folders removed.
 scope_files() {
   local p
   if [ -n "$FOLDER" ]; then
     case "$FOLDER" in
-      seed-1) set -- "$REPO_ROOT/seed-1/config" "$REPO_ROOT/seed-1/content" "$REPO_ROOT/seed-1/sim" "$REPO_ROOT/seed-1/render" ;;
-      platform) set -- "$REPO_ROOT/platform/site/src" "$REPO_ROOT/platform/agents" ;;
+      seed-1) set -- "$REPO_ROOT/seed-1" ;;
+      platform) set -- "$REPO_ROOT/platform/site" "$REPO_ROOT/platform/agents" ;;
     esac
-    for p in "$@"; do if [ -d "$p" ]; then gate_find_files "$p"; fi; done
-    case "$FOLDER" in seed-1) p="$REPO_ROOT/seed-1/dist" ;; platform) p="$REPO_ROOT/platform/site/dist" ;; esac
-    if [ -d "$p" ]; then dist_html "$p"; fi
+    for p in "$@"; do if [ -d "$p" ]; then folder_files "$p"; fi; done
   else
     printf '%s\n' "$PATHS" | grep -v '^$' | while IFS= read -r p; do
       if [ -d "$p" ]; then folder_files "$p"; else printf '%s\n' "$p"; fi
     done
   fi
 }
-scope_files | grep -v -E '/(node_modules|test|tests|__tests__|e2e)/|\.(test|spec)\.[A-Za-z]+$' | sort -u > "$WORK/files.txt"
+scope_files | grep -v -E '/node_modules/' | sort -u > "$WORK/files.txt"
 
 ALL=$(patterns | cut -d '|' -f2 | paste -s -d '|' -)
 : > "$WORK/hits.tsv"
 COUNT=0
 while IFS= read -r f; do
   gate_is_generated "$f" && continue
-  gate_is_text "$f" || continue
-  COUNT=$((COUNT + 1))
-  grep -qE "$ALL" "$f" || continue
   rel=$(gate_rel_path "$f")
+  gate_text_kind "$f"
+  case $? in
+    1) continue ;;
+    2) printf '%s\t1\tunreadable\n' "$rel" >> "$WORK/hits.tsv"; COUNT=$((COUNT + 1)); continue ;;
+  esac
+  COUNT=$((COUNT + 1))
+  grep -qE -e "$ALL" "$f" || continue
+  case "/$rel" in
+    */dist/assets/*) bundle=1 ;;
+    *) bundle=0 ;;
+  esac
   case "$f" in
     *.tsx|*.jsx) kind=code; jsx=1 ;;
     *.ts|*.js|*.mjs|*.cjs) kind=code; jsx=0 ;;
     *) kind=text; jsx=0 ;;
   esac
+  [ "$bundle" -eq 0 ] || { kind=text; jsx=0; }
   case "$rel" in
     seed-1/sim/*) in_sim=1 ;;
     *) in_sim=0 ;;
@@ -139,14 +153,15 @@ while IFS= read -r f; do
   if [ "$kind" = code ]; then
     awk -v view=code -v jsx="$jsx" -f "$VIEWS_AWK" "$f" > "$WORK/code.txt"
   fi
-  patterns | while IFS='|' read -r name regex safe pkind scope; do
+  patterns | while IFS='|' read -r name regex safe pkind scope in_bundles; do
     [ "$scope" = sim ] && [ "$in_sim" -eq 0 ] && continue
+    [ "$bundle" -eq 1 ] && [ "$in_bundles" = no ] && continue
     if [ "$kind" = code ] && [ "$pkind" = ident ]; then
-      lines=$(sed -E "$safe" "$WORK/code.txt" | awk -v view=strings -v jsx="$jsx" -f "$VIEWS_AWK" | grep -nE "$regex" | cut -d: -f1)
+      lines=$(sed -E "$safe" "$WORK/code.txt" | awk -v view=strings -v jsx="$jsx" -f "$VIEWS_AWK" | grep -nE -e "$regex" | cut -d: -f1)
     elif [ "$kind" = code ]; then
-      lines=$(sed -E "$safe" "$WORK/code.txt" | grep -nE "$regex" | cut -d: -f1)
+      lines=$(sed -E "$safe" "$WORK/code.txt" | grep -nE -e "$regex" | cut -d: -f1)
     else
-      lines=$(sed -E "$safe" "$f" | grep -nE "$regex" | cut -d: -f1)
+      lines=$(sed -E "$safe" "$f" | grep -nE -e "$regex" | cut -d: -f1)
     fi
     [ -n "$lines" ] || continue
     printf '%s\n' "$lines" | while IFS= read -r line; do

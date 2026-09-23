@@ -11,6 +11,7 @@ export const METRIC_NAMES = ["first_pass_rate", "cost_per_ship", "estimate_accur
 const REQUIRED_KEYS = [
   "name",
   "title",
+  "description",
   "species_note",
   "model",
   "budget_share",
@@ -21,9 +22,14 @@ const REQUIRED_KEYS = [
   "write_access",
 ] as const;
 
+/** The longest description roles.description accepts. */
+export const DESCRIPTION_MAX = 200;
+
 export interface RoleSpec {
   name: string;
   title: string;
+  /** One plain sentence saying what the role does; the Meet the Team page shows it. */
+  description: string;
   species_note: string;
   model: ModelEnvName;
   budget_share: number;
@@ -74,6 +80,11 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
 
   const name = nonEmptyString(source, obj, "name");
   const title = nonEmptyString(source, obj, "title");
+  const description = nonEmptyString(source, obj, "description");
+  if (description.includes("\n")) fail(source, "description must be one line");
+  if (description.length > DESCRIPTION_MAX) fail(source, `description must be ${DESCRIPTION_MAX} characters or fewer`);
+  if (description.trim() !== description) fail(source, "description must not start or end with a space");
+  if (description.includes("\u2014")) fail(source, "description must not use an em dash");
   const speciesNote = nonEmptyString(source, obj, "species_note");
   if (speciesNote.includes("\n")) fail(source, "species_note must be one line");
 
@@ -108,6 +119,7 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
   return {
     name,
     title,
+    description,
     species_note: speciesNote,
     model: model as ModelEnvName,
     budget_share: budgetShare,

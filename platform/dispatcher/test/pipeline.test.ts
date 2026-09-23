@@ -179,7 +179,7 @@ function remote(over: Remote = {}) {
       return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) {
-      return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+      return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
     }
     const git = github(method, url);
     if (git) return git;
@@ -462,7 +462,7 @@ describe('runCardPipeline', () => {
   it('rejects on a failed gate without merging', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn, calls } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } } });
+    const { fetchFn, calls } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', commit_sha: null });
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_fail']);
@@ -540,7 +540,7 @@ describe('runCardPipeline', () => {
     db.cards = [{ ...c, stage: 'building' }];
     const stop = new AbortController();
     const { fetchFn, calls } = remote({
-      gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'in_progress', conclusion: null }] } },
+      gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'in_progress', conclusion: null }] } },
       created: (head) => {
         stop.abort('dispatcher stopping');
         return { status: 201, json: { number: 5, head: { sha: head } } };
@@ -639,7 +639,7 @@ describe('runCardPipeline', () => {
         heads.set(number, head);
         return { status: 201, json: { number, head: { sha: head } } };
       }
-      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
       const git = github(method, url) ?? mainRoute(method, url);
       if (git) return git;
       const merge = /\/pulls\/(\d+)\/merge$/.exec(url);
@@ -730,7 +730,7 @@ describe('runCardPipeline', () => {
     const adapter = new FakeAdapter(async (spec, emit) => {
       await emit(startEvent());
       await editSpawnTable(spec.worktree, 11);
-      await symlink('../../.github', path.join(spec.worktree, 'seed-1', 'content', 'gh'));
+      await symlink('../../.github', path.join(spec.worktree, 'seed-1', 'content', 'gh.json'));
       await emit(usageEvent(1, 10));
     });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
@@ -1181,7 +1181,7 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } } });
+    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
     expect(JSON.parse(seen)).toEqual(SPAWN_TABLE);
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', branch: 'card/4c2f5a1e-config' });
@@ -1201,7 +1201,7 @@ function seedRemote() {
     if (method === 'POST' && url === `${GITHUB}/pulls`) {
       return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
     }
-    if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+    if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
     const git = github(method, url) ?? mainRoute(method, url);
     if (git) return git;
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
