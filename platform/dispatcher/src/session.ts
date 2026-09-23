@@ -1,6 +1,7 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
 // record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
-// and wall-clock ceilings, and aborts when the board session lapses or the board pauses the studio.
+// and wall-clock ceilings, and aborts when the board session lapses, the board pauses the studio, or
+// the board or the moderator pauses the card's executor role.
 //
 // The session's dollar budget is the card's remaining ceiling. In unattended mode the tick also
 // passes the budget the throttle allowed (throttle.ts planStart), and the session stops at the lower
@@ -35,6 +36,8 @@ export type SessionOutcome =
   | 'turn_cap'
   | 'board_session_lapsed'
   | 'paused_by_board'
+  // The board or the moderator paused the card's executor role (docs/specs/agent-system-core.md).
+  | 'role_paused'
   | 'unknown_model'
   | 'wall_clock'
   | 'refused'
@@ -214,9 +217,14 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const watch = setInterval(() => {
     void (async () => {
       try {
-        const [active, state] = await Promise.all([deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now()), deps.db.getStudioState()]);
+        const [active, state, executor] = await Promise.all([
+          deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now()),
+          deps.db.getStudioState(),
+          deps.db.roleState(role.id),
+        ]);
         if (deps.adapter.mode === 'attended' && !active) abort('board_session_lapsed', 'no board member seen within the session window');
         if (state.paused) abort('paused_by_board', 'the board paused agents');
+        if (executor.paused) abort('role_paused', `the executor role ${role.name} was paused`);
       } catch (error) {
         deps.log.warn('session', 'board session check failed', { error: errorMessage(error) });
       }

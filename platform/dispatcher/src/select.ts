@@ -19,6 +19,13 @@ export interface SelectableCard {
   horizon: string;
   folder: string;
   lane: string;
+  // dispatcher_cards (docs/specs/agent-system-core.md): an agent-written card runs only while its
+  // approval is current, never while the board has vetoed it, and never while its executor role is
+  // paused.
+  needs_approval: boolean;
+  approved: boolean;
+  board_vetoed: boolean;
+  executor_paused: boolean;
 }
 
 // The platform code lane (platform/site outside the kernel paths) opens once the board signs in on
@@ -30,17 +37,23 @@ export function closedLane(card: Pick<SelectableCard, 'folder' | 'lane'>, platfo
   return card.folder === 'platform' && card.lane === 'code' && !platformLaneOpen;
 }
 
-// A card a session may be started for: funded, on horizon now, from a write-safe source, not
-// vetoed, with an executor, and not in a closed lane.
+// A card a session may be started for: funded, on horizon now, from a write-safe source, approved
+// when an agent wrote it, vetoed by neither the Director nor the board, with an executor that is not
+// paused, and not in a closed lane.
 // money.card_takes_money in platform/supabase/migrations/20260924200000_money_logic.sql mirrors
 // these conditions (plus the stage and the room under the target), so money never waits on a card
 // the dispatcher would never start; a change to either changes both in the same pull request.
+// 20260924300000_agent_system_core.sql adds the approval and the board's veto to it; a paused
+// executor stops the card's session but not its funding, since the pause is the board's to lift.
 export function runnable(card: SelectableCard, platformLaneOpen = false): boolean {
   if (card.stage !== 'funded') return false;
   if (card.horizon !== 'now') return false;
   if (!SESSION_SOURCES.includes(card.source)) return false;
+  if (card.needs_approval && !card.approved) return false;
   if (card.director_stance === 'vetoed') return false;
+  if (card.board_vetoed) return false;
   if (card.executor_role_id === null) return false;
+  if (card.executor_paused) return false;
   return !closedLane(card, platformLaneOpen);
 }
 

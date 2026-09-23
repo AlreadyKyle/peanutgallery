@@ -1,8 +1,9 @@
 // Dispatcher entry: loads .env from the repository root, validates configuration, takes the
-// dispatcher lease (waiting while another dispatcher holds it), checks that the database agrees on
-// the agent mode, checks containment and probes the account in unattended mode, closes Managed
-// Agents sessions and recovers cards left mid-flight by a previous process, starts the scheduler,
-// and runs the tick loop until SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a
+// dispatcher lease (waiting while another dispatcher holds it), finishes job runs a previous process
+// left running as failed, checks that the database agrees on the agent mode, checks containment and
+// probes the account in unattended mode, closes Managed Agents sessions and recovers cards left
+// mid-flight by a previous process, and runs the tick loop, which also drains the job queue
+// (jobs.ts), until SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a
 // restart resumes work, releases the lease once running cards have stopped, and a restart also
 // clears a halt.
 // A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
@@ -21,8 +22,8 @@ import { createLogger, errorMessage } from './log.js';
 import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
 import { recoverOrphans } from './recovery.js';
-import { startScheduler, stopScheduler } from './scheduler.js';
-import { checkRepositoryGit, startupChecks } from './startup.js';
+import { jobTick, type JobState } from './jobs.js';
+import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
 import { leaseTtlSeconds, tick } from './tick.js';
 import { sleep } from './time.js';
 
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
   await checkRepositoryGit(config.repoRoot, config.githubRepo);
   if (!(await acquireLease(db, leaseHolder, ttlSeconds, config.tickMs, stop.signal))) return;
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
+  await failStaleJobRuns(db, leaseHolder, log);
   await startupChecks({ db, adapter, config, log });
   const managed = adapter.managed;
   await recoverOrphans({
@@ -95,7 +97,7 @@ async function main(): Promise<void> {
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
-  const tasks = startScheduler(config.schedulerEnabled, log);
+  const jobState: JobState = { running: null };
   log.info('main', 'dispatcher started', {
     mode: config.agentMode,
     tickMs: config.tickMs,
@@ -120,6 +122,20 @@ async function main(): Promise<void> {
     alert,
     runCard: (card: Card) => runCardPipeline(card, pipeline),
     mainGate,
+    jobTick: () =>
+      jobTick({
+        db,
+        mode: adapter.mode,
+        adapter,
+        log,
+        alert,
+        now,
+        leaseHolder,
+        boardSessionTtlMin: config.boardSessionTtlMin,
+        watchIntervalMs: config.tickMs,
+        state: jobState,
+        stopSignal: stop.signal,
+      }),
   };
 
   while (!stop.signal.aborted) {
@@ -132,13 +148,13 @@ async function main(): Promise<void> {
     await sleep(config.tickMs, stop.signal);
   }
 
-  await stopScheduler(tasks);
   const deadline = Date.now() + SHUTDOWN_GRACE_MS;
-  while (running.size > 0 && Date.now() < deadline) {
+  while ((running.size > 0 || jobState.running) && Date.now() < deadline) {
     await sleep(500);
   }
   // A card still merging or verifying keeps the lease until it lapses, so another dispatcher
-  // cannot recover or verify that card while this process is still working on it.
+  // cannot recover or verify that card while this process is still working on it. A job still
+  // running is failed by the next process's startup.
   if (running.size === 0) {
     await db.releaseLease(leaseHolder).catch((error: unknown) => log.warn('main', 'lease release failed; it lapses on its own', { error: errorMessage(error), ttlSeconds }));
   } else {

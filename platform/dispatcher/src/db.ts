@@ -57,6 +57,13 @@ export interface Card {
   commit_sha: string | null;
   failing_check: string | null;
   created_at: string;
+  // From dispatcher_cards (docs/specs/agent-system-core.md): whether an agent wrote any of the card,
+  // whether its approval is current, the board's veto and whether its executor role is paused. A
+  // card read from cards itself carries the veto and reads the other three as false.
+  needs_approval: boolean;
+  approved: boolean;
+  board_vetoed: boolean;
+  executor_paused: boolean;
 }
 
 export interface Role {
@@ -67,6 +74,42 @@ export interface Role {
   prompt_path: string;
   tools_json: unknown;
   write_access: boolean;
+  // The role's trust class (writer, planner, reviewer, read_only, web_only); null before the seed.
+  agent_class: string | null;
+  // Paused by the board or the moderator: it starts nothing, and its running work stops.
+  paused: boolean;
+}
+
+// A job the queue runs (public.jobs): its role, whether it calls a model, and whether it runs
+// while the studio is paused.
+export interface Job {
+  name: string;
+  role_id: string | null;
+  calls_model: boolean;
+  runs_when_paused: boolean;
+}
+
+export type JobOrigin = 'board' | 'schedule' | 'event' | 'operator';
+export type JobRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped';
+
+export interface JobRun {
+  id: string;
+  job_name: string;
+  origin: JobOrigin;
+  status: JobRunStatus;
+  card_id: string | null;
+  input: Record<string, unknown>;
+  parent_run_id: string | null;
+  created_at: string;
+}
+
+export interface EnqueueInput {
+  job: string;
+  origin: JobOrigin;
+  key?: string | null;
+  cardId?: string | null;
+  input?: Record<string, unknown>;
+  parentRunId?: string | null;
 }
 
 export interface Deploy {
@@ -182,6 +225,24 @@ export interface Db {
   findEvent(cardId: string, step: string): Promise<Record<string, unknown> | null>;
   insertDeploy(input: DeployInput): Promise<void>;
   lastGreen(folder: CardFolder): Promise<Deploy | null>;
+  // Deals every approved agent card whose cooling window has passed to now (deal_due_cards); the
+  // ids dealt.
+  dealDueCards(): Promise<string[]>;
+  // Resumes each card paused at its ceiling for the first time whose bar covers a new ceiling
+  // (resume_due_by_rule); how many resumed and each card's result.
+  resumeDueByRule(): Promise<{ resumed: number; results: Record<string, unknown>[] }>;
+  // The job queue (docs/specs/agent-system-core.md).
+  enqueueJobRun(input: EnqueueInput): Promise<{ id: string; created: boolean }>;
+  // The oldest queued runs, oldest first, up to limit.
+  queuedRuns(limit: number): Promise<JobRun[]>;
+  // Queued to running, only while holder holds the dispatcher lease.
+  claimJobRun(runId: string, holder: string): Promise<boolean>;
+  finishJobRun(runId: string, status: 'succeeded' | 'failed' | 'skipped', reason: string | null, output: Record<string, unknown> | null): Promise<void>;
+  // At startup: every run still marked running, finished as failed; how many.
+  failRunningJobRuns(holder: string, reason: string): Promise<number>;
+  jobs(): Promise<Job[]>;
+  // A role's pause and state, read each watch.
+  roleState(roleId: string): Promise<{ paused: boolean; state: string }>;
 }
 
 type Row = Record<string, unknown>;
@@ -229,6 +290,10 @@ export function toCard(row: Row): Card {
     commit_sha: optionalText(row, 'commit_sha'),
     failing_check: optionalText(row, 'failing_check'),
     created_at: text(row, 'created_at'),
+    needs_approval: row.needs_approval === true,
+    approved: row.approved === true,
+    board_vetoed: row.board_vetoed === true,
+    executor_paused: row.executor_paused === true,
   };
 }
 
@@ -241,6 +306,22 @@ function toRole(row: Row): Role {
     prompt_path: text(row, 'prompt_path'),
     tools_json: row.tools_json,
     write_access: row.write_access === true,
+    agent_class: optionalText(row, 'agent_class'),
+    paused: row.paused === true,
+  };
+}
+
+function toJobRun(row: Row): JobRun {
+  const input = row.input;
+  return {
+    id: text(row, 'id'),
+    job_name: text(row, 'job_name'),
+    origin: text(row, 'origin') as JobOrigin,
+    status: text(row, 'status') as JobRunStatus,
+    card_id: optionalText(row, 'card_id'),
+    input: typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : {},
+    parent_run_id: optionalText(row, 'parent_run_id'),
+    created_at: text(row, 'created_at'),
   };
 }
 
@@ -375,9 +456,11 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return rows(data).map(toCard);
     },
 
+    // dispatcher_cards: the hold stages and building, with the approval, the vetoes and the
+    // executor's pause that runnable() reads.
     async listCardsInStages(stages) {
-      const { data, error } = await client.from('cards').select('*').in('stage', stages);
-      if (error) fail('cards by stage', error);
+      const { data, error } = await client.from('dispatcher_cards').select('*').in('stage', stages);
+      if (error) fail('dispatcher_cards by stage', error);
       return rows(data).map(toCard);
     },
 
@@ -502,6 +585,74 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       const { data, error } = await client.from('last_green').select('*').eq('folder', folder).limit(1).maybeSingle();
       if (error) fail('last_green', error);
       return data ? toDeploy(data as Row) : null;
+    },
+
+    async dealDueCards() {
+      const { data, error } = await client.rpc('deal_due_cards');
+      if (error) fail('deal_due_cards', error);
+      return (Array.isArray(data) ? data : []).map((value) => String(typeof value === 'object' && value !== null ? Object.values(value)[0] : value));
+    },
+
+    async resumeDueByRule() {
+      const { data, error } = await client.rpc('resume_due_by_rule');
+      if (error) fail('resume_due_by_rule', error);
+      const row = (data ?? {}) as Row;
+      return { resumed: num(row, 'resumed'), results: Array.isArray(row.results) ? (row.results as Record<string, unknown>[]) : [] };
+    },
+
+    async enqueueJobRun(input) {
+      const { data, error } = await client.rpc('enqueue_job_run', {
+        p_job: input.job,
+        p_origin: input.origin,
+        p_key: input.key ?? null,
+        p_card: input.cardId ?? null,
+        p_input: input.input ?? {},
+        p_parent: input.parentRunId ?? null,
+      });
+      if (error || !data) fail('enqueue_job_run', error);
+      const row = data as Row;
+      return { id: text(row, 'id'), created: row.created === true };
+    },
+
+    async queuedRuns(limit) {
+      const { data, error } = await client.from('job_runs').select('*').eq('status', 'queued').order('created_at', { ascending: true }).order('id', { ascending: true }).limit(limit);
+      if (error) fail('job_runs queued', error);
+      return rows(data).map(toJobRun);
+    },
+
+    async claimJobRun(runId, holder) {
+      const { data, error } = await client.rpc('claim_job_run', { p_run: runId, p_holder: holder });
+      if (error) fail('claim_job_run', error);
+      return data === true;
+    },
+
+    async finishJobRun(runId, status, reason, output) {
+      const { error } = await client.rpc('finish_job_run', { p_run: runId, p_status: status, p_reason: reason, p_output: output });
+      if (error) fail('finish_job_run', error);
+    },
+
+    async failRunningJobRuns(holder, reason) {
+      const { data, error } = await client.rpc('fail_running_job_runs', { p_holder: holder, p_reason: reason });
+      if (error) fail('fail_running_job_runs', error);
+      return Number(data ?? 0);
+    },
+
+    async jobs() {
+      const { data, error } = await client.from('jobs').select('name, role_id, calls_model, runs_when_paused');
+      if (error) fail('jobs', error);
+      return rows(data).map((row) => ({
+        name: text(row, 'name'),
+        role_id: optionalText(row, 'role_id'),
+        calls_model: row.calls_model === true,
+        runs_when_paused: row.runs_when_paused === true,
+      }));
+    },
+
+    async roleState(roleId) {
+      const { data, error } = await client.from('roles').select('paused, state').eq('id', roleId).single();
+      if (error || !data) fail('role state', error);
+      const row = data as Row;
+      return { paused: row.paused === true, state: text(row, 'state') };
     },
 
   };

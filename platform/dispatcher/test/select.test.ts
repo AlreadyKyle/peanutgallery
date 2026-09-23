@@ -14,6 +14,10 @@ function card(overrides: Partial<SelectableCard> & { id: string }): SelectableCa
     horizon: 'now',
     folder: 'seed-1',
     lane: 'config',
+    needs_approval: false,
+    approved: false,
+    board_vetoed: false,
+    executor_paused: false,
     ...overrides,
   };
 }
@@ -24,6 +28,15 @@ describe('runnable', () => {
     expect(runnable(card({ id: 'a', stage: 'voted' }))).toBe(false);
     expect(runnable(card({ id: 'a', director_stance: 'vetoed' }))).toBe(false);
     expect(runnable(card({ id: 'a', executor_role_id: null }))).toBe(false);
+  });
+  it('refuses an agent card without a current approval, a board-vetoed card and a paused executor (docs/specs/agent-system-core.md)', () => {
+    expect(runnable(card({ id: 'a', source: 'agent', needs_approval: true, approved: true }))).toBe(true);
+    expect(runnable(card({ id: 'a', source: 'agent', needs_approval: true, approved: false }))).toBe(false);
+    expect(runnable(card({ id: 'a', board_vetoed: true }))).toBe(false);
+    expect(runnable(card({ id: 'a', director_stance: 'vetoed', needs_approval: true, approved: true }))).toBe(false);
+    expect(runnable(card({ id: 'a', executor_paused: true }))).toBe(false);
+    // A board card needs no approval.
+    expect(runnable(card({ id: 'a', needs_approval: false, approved: false }))).toBe(true);
   });
   it('accepts board, agent and decision sources and refuses community cards', () => {
     expect(SESSION_SOURCES).toEqual(['board', 'agent', 'decision']);
