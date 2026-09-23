@@ -49,6 +49,12 @@ export function auditLayout(limits) {
     return `${el.tagName.toLowerCase()}${id}${cls} "${text}"`;
   };
   const hidden = (el) => {
+    // A closed <details> lays its content out without painting it (Chrome's ::details-content is
+    // content-visibility: hidden), so its boxes have a size though nothing shows: only its summary
+    // is drawn. checkVisibility() reports that; the closed-details test covers a browser without it.
+    if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) return true;
+    const closed = el.parentElement?.closest('details:not([open])');
+    if (closed && el.closest('summary')?.parentElement !== closed) return true;
     const cs = style(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return true;
     if (cs.position === 'absolute' && cs.clip !== 'auto' && cs.clip !== '') return true;
