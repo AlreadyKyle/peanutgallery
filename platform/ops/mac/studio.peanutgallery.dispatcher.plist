@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The dispatcher on the board's Mac, as a LaunchAgent (docs/specs/mac-host.md). install.sh fills in
+  @HOST_ROOT@ (~/peanutgallery-host) and @PATH@ (node's folder, Homebrew's and the system's) and writes
+  it to ~/Library/LaunchAgents/studio.peanutgallery.dispatcher.plist. It runs run-dispatcher.sh from the
+  read-only code clone, at login and again after any exit that is not 0: run-dispatcher.sh exits 0 only
+  when it must not be restarted (exit 78, 8 starts in 6 hours, or a stop launchd asked for), and waits
+  out its own growing delay before any other exit. ThrottleInterval keeps starts 30 seconds apart at
+  the least, and ExitTimeOut gives the dispatcher's 50-second stop room before launchd kills it.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>studio.peanutgallery.dispatcher</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@HOST_ROOT@/code/platform/ops/mac/run-dispatcher.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>@PATH@</string>
+    <key>PEANUTGALLERY_HOST</key>
+    <string>@HOST_ROOT@</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>@HOST_ROOT@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>ExitTimeOut</key>
+  <integer>90</integer>
+  <key>ProcessType</key>
+  <string>Standard</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>@HOST_ROOT@/logs/launchd-dispatcher.log</string>
+  <key>StandardErrorPath</key>
+  <string>@HOST_ROOT@/logs/launchd-dispatcher.log</string>
+</dict>
+</plist>

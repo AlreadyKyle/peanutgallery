@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  One daily job on the board's Mac, as a LaunchAgent (docs/specs/mac-host.md): backup, controller or
+  quota. install.sh fills in @JOB@, @MINUTE@ (the job's minute past the hour), @HOST_ROOT@ and @PATH@,
+  and writes it to ~/Library/LaunchAgents/studio.peanutgallery.@JOB@.plist. launchd's calendar is in
+  local time, so this wakes run-job.sh every hour at the job's minute and run-job.sh runs the job once
+  per UTC day at its UTC time. A wake missed while the Mac slept runs when it wakes.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>studio.peanutgallery.@JOB@</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@HOST_ROOT@/code/platform/ops/mac/run-job.sh</string>
+    <string>@JOB@</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>@PATH@</string>
+    <key>PEANUTGALLERY_HOST</key>
+    <string>@HOST_ROOT@</string>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>@HOST_ROOT@</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>@MINUTE@</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Standard</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>@HOST_ROOT@/logs/launchd-@JOB@.log</string>
+  <key>StandardErrorPath</key>
+  <string>@HOST_ROOT@/logs/launchd-@JOB@.log</string>
+</dict>
+</plist>

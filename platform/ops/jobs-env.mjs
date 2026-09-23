@@ -4,16 +4,19 @@
 //   backup.env      the read-only backup login, the board's age public key, the bucket's write-only
 //                   pre-authenticated request and the backup healthcheck;
 //   controller.env  the Supabase service key and the restricted Stripe read key;
-//   quota.env       the Supabase service key and the dispatcher's GitHub token for its Plan read.
+//   quota.env       the Supabase service key and the dispatcher's GitHub token for its Plan read;
+//   backup-mac.env  on the Mac host, the backup login, the board's age public key, the folder the
+//                   backups go to and the backup healthcheck (docs/specs/mac-host.md). Written only
+//                   when asked for by name.
 // No value is ever printed; every message names keys only. A job whose keys are not all there yet is
 // refused and named, and the others are still written.
 //
-// usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|controller|quota ...]
+// usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota ...]
 import { chmodSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { JOB_KEYS, jobEnvProblems, jobKeys } from './jobs/lib.mjs';
+import { JOB_KEYS, VPS_JOBS, jobEnvProblems, jobKeys } from './jobs/lib.mjs';
 
 // Exported by the operator in the Mac shell (from .env.vps), never read from .env.
 export const JOB_OPERATOR_KEYS = ['NTFY_TOPIC_URL', 'BACKUP_HEALTHCHECK_URL', 'VPS_GITHUB_TOKEN', 'CONTROLLER_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL'];
@@ -43,6 +46,8 @@ export function jobEnvEntries(job, dotenvText, operator) {
     BACKUP_BUCKET: fromDotenv('BACKUP_BUCKET'),
     BACKUP_HEALTHCHECK_URL: fromOperator('BACKUP_HEALTHCHECK_URL'),
     RESTORE_CHECK_WEEKDAY: fromDotenv('RESTORE_CHECK_WEEKDAY'),
+    BACKUP_DIR: fromDotenv('BACKUP_DIR'),
+    BACKUP_KEEP_DAYS: fromDotenv('BACKUP_KEEP_DAYS'),
   };
   const entries = jobKeys(job)
     .map((key) => [key, source[key] ?? ''])
@@ -56,18 +61,18 @@ export function jobEnvEntries(job, dotenvText, operator) {
 }
 
 export function jobEnvText(job, entries) {
-  const lines = [`# Peanut Gallery ${job} job on the VPS. Written by platform/ops/make-jobs-env.sh; docker --env-file format.`];
+  const lines = [`# Peanut Gallery ${job} job. Written by platform/ops/make-jobs-env.sh; docker --env-file format.`];
   for (const [key, value] of entries) lines.push(`${key}=${value}`);
   return `${lines.join('\n')}\n`;
 }
 
 function main(argv) {
   if (argv.length < 2) {
-    process.stderr.write('usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|controller|quota ...]\n');
+    process.stderr.write('usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota ...]\n');
     return 2;
   }
   const [dotenvFile, outDir, ...asked] = argv;
-  const jobs = asked.length > 0 ? asked : Object.keys(JOB_KEYS);
+  const jobs = asked.length > 0 ? asked : VPS_JOBS;
   let dotenvText;
   try {
     dotenvText = readFileSync(dotenvFile, 'utf8');

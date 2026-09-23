@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded by `mac-host.md` for now: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), so this script is kept and not run. The planned host is Google Cloud (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud), which reuses `provision.sh` and the rest of the Ubuntu provisioning but not this launcher.
+
 ## Problem
 
 `docs/BOARD-SETUP.md` Part 2 had the board create the Oracle instance by hand in the console: about a dozen screens, one easy-to-miss "assign a public IPv4" switch, and the free Ampere tier's common "Out of capacity" answer, which by hand means retrying until it works. None of it was recorded, so rebuilding the box would mean doing it again from memory. The runbook's later steps also `ssh root@`, which Oracle's Ubuntu image refuses by default.

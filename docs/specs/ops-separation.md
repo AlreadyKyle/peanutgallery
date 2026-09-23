@@ -126,7 +126,7 @@ Every step checks before it acts, and folders are fixed one level only, never re
 
 ## Production steps (need the board's allow)
 
-Each runs on the Oracle Cloud instance as root, during the cutover in `platform/ops/README.md`, and its output is quoted here.
+Each runs on the server as root, during the cutover in `platform/ops/README.md`, and its output is quoted here. Oracle is dropped (PLAN.md §10 decision 38); until a server exists the dispatcher runs on the board's Mac, whose steps are in `mac-host.md`.
 
 1. **Provision.** `ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh`. Quote the output. Then quote `stat -c '%U:%G %a %n' /srv/peanutgallery-code /srv/peanutgallery /srv/peanutgallery-worktrees`, which must read `root:root 755`, `10001:10001 755` and `10001:10001 700`. Quote `find /srv/peanutgallery-code \( ! -user 0 -o -perm /022 \) ! -type l | head`, which must print nothing.
 2. **Provision again.** The last line must read `provision: done: 0 change(s)`.

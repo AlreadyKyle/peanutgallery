@@ -1,7 +1,8 @@
-// check-env.mjs: provision.sh's check of one job's env file on the VPS (docs/specs/money-safety.md).
+// check-env.mjs: the check of one job's env file, by provision.sh on a server and by
+// platform/ops/mac/run-job.sh on the Mac host (docs/specs/money-safety.md, docs/specs/mac-host.md).
 // It prints one line per problem, naming keys and line numbers only, never a value, and exits 1 when
 // there is any; else it prints "valid" and exits 0.
-//   node platform/ops/jobs/check-env.mjs controller|quota|backup <env file>
+//   node platform/ops/jobs/check-env.mjs controller|quota|backup|backup-mac <env file>
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JOB_KEYS, jobEnvProblems, jobKeys, parseEnvFile } from './lib.mjs';
@@ -29,7 +30,7 @@ export function envFileProblems(job, text) {
 function main(argv) {
   const [job, file] = argv;
   if (!job || !file || argv.length !== 2) {
-    process.stderr.write('usage: node platform/ops/jobs/check-env.mjs controller|quota|backup <env file>\n');
+    process.stderr.write('usage: node platform/ops/jobs/check-env.mjs controller|quota|backup|backup-mac <env file>\n');
     return 2;
   }
   const problems = envFileProblems(job, readFileSync(file, 'utf8'));

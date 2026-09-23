@@ -1,5 +1,7 @@
 # The backups repository
 
+Waits on a new store. This template uploads through a write-only Oracle Object Storage pre-authenticated request, and the board dropped Oracle on 23 September 2026 (`docs/PLAN.md` §10 decision 38). Until a store is chosen with the planned server, nothing here is set up; the nightly backup runs on the board's Mac and writes to a folder the board chooses (`docs/specs/mac-host.md`).
+
 A weekly fallback for the VPS's nightly database backup (`docs/specs/money-safety.md`). It lives in its own private repository, never in the studio repository: the studio's gate runs card code, so no backup secret may sit where that code runs. `workflows/backup.yml` here is its template.
 
 It dumps the database as the VPS does (`platform/ops/backup/backup.sh`): the roles, the schema, the data, the auth schema's data and the migration history, through the Session pooler as the read-only `peanutgallery_backup` login and no other. It encrypts the dumps to the board's age public key and uploads them to the backup bucket through a write-only pre-authenticated request of its own. It holds no GitHub token (`permissions: {}`), nothing that can read a backup back, and never the database owner's password.

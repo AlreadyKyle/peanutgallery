@@ -4,7 +4,7 @@ Every step that only the board can take, in the order that gets the studio to Go
 says why it is needed, exactly what to do, how you know it worked, and what to tell me afterwards.
 
 Sources: `docs/ROADMAP.md` (the launch checklist), `docs/PLAN.md` §10 (the decisions),
-`platform/ops/README.md` (the VPS runbook), `docs/specs/vps.md`, `.env.example`.
+`platform/ops/README.md` (the runbook, with The Mac host at its end), `docs/specs/mac-host.md`, `.env.example`.
 
 **Two rules.**
 
@@ -33,8 +33,9 @@ decision 37). The site, the legal pages and Stripe's public details use it. Noth
 
 ### 2. Alerts and GitHub access (15 minutes, free)
 
-**Why.** Once the dispatcher runs on the server, these are how you hear that something failed, and
-how the server and the agent sessions reach the repository with no more access than they need.
+**Why.** Once the dispatcher runs unattended (on your Mac for now, `docs/PLAN.md` §10 decision 38),
+these are how you hear that something failed, and how it and the agent sessions reach the repository
+with no more access than they need.
 
 **a. healthchecks.io.**
 
@@ -53,7 +54,7 @@ how the server and the agent sessions reach the repository with no more access t
    topic name is no longer on your clipboard, `grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy`
    in the Terminal tab puts it back. Anyone who knows the topic can read and post your alerts, so it
    stays out of chat.
-3. Tell me, and I post a test so you see it arrive. The cutover repeats that test from the server.
+3. Tell me, and I post a test so you see it arrive. The cutover repeats that test from the host.
 
 **c. Three fine-grained GitHub tokens.** Each is for the peanutgallery repository only, and all
 three must be different. No API creates one, but GitHub takes the settings in a link, so each link
@@ -65,9 +66,9 @@ below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permiss
   own) and **no Workflows**;
 - the token is shown once; copy it straight into the file named, never into chat.
 
-1. **The server's token** (the dispatcher on the VPS): Contents read and write, Pull requests read
-   and write, Checks read. No Actions, no Workflows. If you already made it from the old item 7
-   link, it is right as it is.
+1. **The host's token** (the unattended dispatcher, on your Mac for now and later on a server):
+   Contents read and write, Pull requests read and write, Checks read. No Actions, no Workflows. If
+   you already made it from the old item 7 link, it is right as it is.
 
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
 
@@ -79,7 +80,7 @@ below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permiss
 
    Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. Before the cutover I prove it
    cannot write: a push with it must answer 403, and the unattended startup refuses to run otherwise.
-3. **The Mac's token** (attended runs on your Mac): the same permissions as the server's token.
+3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token.
 
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&checks=read
 
@@ -91,41 +92,50 @@ below fills in the name, the owner AlreadyKyle, a 366-day expiry and the permiss
 
 **Tell me:** "healthchecks check is created", "subscribed to ntfy" and "tokens are set".
 
-### 3. Oracle sign-in (15 minutes, Always Free)
+### 3. The Mac as the studio's host (30 minutes, free)
 
-**Why.** Live criterion 2 is the dispatcher running unattended on a server. `platform/ops/oracle-launch.sh`
-(spec `docs/specs/oracle-launch.md`) builds the network, launches the instance and keeps retrying
-every availability domain while Oracle says "Out of capacity", the free Ampere tier's usual answer.
-It checks the firewall is TCP 22 only and proves ssh. The SSH key is made (see **Done**), so all
-that is left is the account, which only you can create.
+**Why.** Live criterion 2 is the dispatcher running unattended. Oracle is dropped and no card goes on
+file for a cloud server, so until the studio has one the dispatcher and the daily jobs (the backup,
+the Controller and the quota check) run on this Mac under launchd, from a folder of their own,
+`~/peanutgallery-host` (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). A free Google
+Cloud server is the planned later home, once you open a billing account (see **Open decisions**).
 
-1. cloud.oracle.com → **Start for free**. **Home region: Canada Southeast (Toronto),
-   `ca-toronto-1`.** Montreal (`ca-montreal-1`) is the accepted alternative. The home region cannot
-   be changed later. It asks for a card to check you are a real person; that check is not a charge.
-   **Stay on the Free Tier.** Stop once you reach the console home page; create nothing there.
-2. In the **Terminal tab inside Claude**, run:
+**Do this.**
+
+1. **Power.** Keep the Mac plugged in and the lid open whenever the studio runs: the dispatcher holds
+   the Mac awake on power, but closing the lid sleeps it anyway. In System Settings → Battery →
+   Options, turn on **Prevent automatic sleeping on power adapter when the display is off**. The
+   screen may still sleep.
+2. **No surprise restarts.** System Settings → General → Software Update → Automatic updates: turn
+   off installing macOS updates, and install them yourself while the studio is paused. With
+   FileVault on, a restart or a power cut waits at the login screen and nothing runs until you log
+   in; healthchecks.io emails you when that happens.
+3. **Two tools.** In the Terminal tab: `brew install libpq age`. libpq brings the database dump
+   tools the backup uses; age encrypts the backups.
+4. **The backup folder.** Install Google Drive for desktop and sign in with your Google account.
+   In My Drive, create a folder `peanutgallery-backups`. Drive copies each nightly backup off the
+   Mac. Tell me when it exists; I find its full path and put it in `.env` as `BACKUP_DIR=`.
+5. **The backup key.** In the Terminal tab:
 
    ```bash
-   oci session authenticate --region ca-toronto-1 --profile-name peanutgallery
+   age-keygen -o ~/Desktop/peanutgallery-backup-key.txt
    ```
 
-   A browser window opens; sign in with the Oracle account. The CLI is already installed. No API key
-   is created, and the sign-in lasts 24 hours with refresh, which covers a long capacity wait.
+   It prints `Public key: age1...`. Add a line `BACKUP_AGE_RECIPIENT=` followed by that public key to
+   `.env` (it is public; it only locks). The file itself is the only thing that can open a backup:
+   copy it to a USB stick you keep apart and into your password manager, then delete it from the
+   Desktop. It never goes in chat, in the repository or on the host.
+6. **A second healthchecks.io check,** `peanutgallery backup`, **period 1 day**, **grace 12 hours**
+   (the Mac makes a missed night up at its next wake). Add its ping URL to `.env.vps` as
+   `BACKUP_HEALTHCHECK_URL=`.
 
-Then I run the script, with your allow, and quote the `RUNNING` state, the address and both
-`ssh … ok` lines. If capacity never frees up, any Ubuntu 24.04 host works unchanged, including a
-paid instance elsewhere; that would be your call, because it costs money.
+Then I write the host's env files (they print key names only), run `platform/ops/mac/install.sh`
+twice (the second run must print `install: done: 0 change(s)`), and quote the first backup and the
+jobs' first runs. The dispatcher is installed but not started: starting it is the cutover (step 8).
+The backup login's password and `STRIPE_READ_KEY` are production steps I ask your allow for
+(`docs/specs/money-safety.md`); the backup and the Controller wait on them.
 
-**Idle reclaim, your choice.** Oracle stops an Always Free instance after 7 days in which its CPU
-(at the 95th percentile), network and memory all stay under 20%. Once card sessions run as Managed
-Agents, the dispatcher on this box mostly waits, so Oracle will probably stop it at some point. If it
-does, the healthchecks.io ping stops and you get an email. Start it again from the Oracle console
-(Compute → Instances → `peanutgallery-dispatcher` → Start), or tell me and I rerun the launch
-script; the dispatcher starts on boot. The only way to remove reclaim is upgrading the account to
-Pay As You Go, which stays $0 inside the Always Free limits but puts your card on file. My default
-is to stay on the Free Tier and restart if it happens. It is on **Open decisions** below.
-
-**Tell me:** "Oracle is signed in."
+**Tell me:** "the Mac is ready."
 
 ### 4. Your call: how does the first player arrive?
 
@@ -211,25 +221,30 @@ purchase clears it.
 
 **Tell me:** "credit bought and recorded".
 
-### 8. Cutover and soak (about fifteen minutes with me, then a day)
+### 8. Cutover and soak (about twenty minutes with me, then a day)
 
-I prompt you at each point.
+I prompt you at each point. Only one dispatcher ever runs: the dispatcher lease guarantees it, and
+from here the attended dispatcher is not started while the host runs. The runbook is
+`platform/ops/README.md`, The Mac host.
 
 1. You: **Pause** at /board.
-2. Me: stop the Mac dispatcher and confirm no dispatcher process is left.
+2. Me: stop the attended dispatcher and confirm no dispatcher process is left.
 3. Me: create or update the managed agent and environment with the studio key and quote their ids;
-   write the server's env file with `platform/ops/make-dispatcher-env.sh` (it prints key names,
-   never values), upload it root-only, and run `provision.sh` twice. The second run must print
-   `provision: done: 0 change(s)`.
+   write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only) and run
+   `platform/ops/mac/install.sh` twice. The second run must print `install: done: 0 change(s)`.
 4. You: set the agent mode to **unattended** at /board (second factor).
-5. Me: start the service and quote the journal's `startup probe passed` line. The probe is a small
-   Managed Agents session, billed as overhead from the studio share.
-6. You: confirm /board shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
-7. Me: post a test alert to ntfy from the server. You: confirm it arrived on your phone.
-8. You: **Resume**.
-9. Me: restart test and reboot test, then stop the service and wait out the grace so healthchecks
-   emails you, which proves the alert path. Start it again.
-10. A 24-hour soak with no restart loop and no unexpected alert. I quote the results.
+5. Me: the toolchain check from the host's code clone, quoting `PASS: toolchain`.
+6. Me: `platform/ops/mac/install.sh --start`, which starts the dispatcher under launchd and waits
+   for its `startup probe passed` line; I quote it. The probe is a small Managed Agents session,
+   billed as overhead from the studio share.
+7. You: confirm /board shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
+8. Me: post a test alert to ntfy from the host. You: confirm it arrived on your phone.
+9. You: **Resume**.
+10. Me: a restart test (`launchctl kickstart -k`), a kill test (the dispatcher killed outright comes
+    back on its own after 30 seconds), and then you log out and back in, or restart and log in: it
+    comes back with no command. Then I stop it and we wait out the grace so healthchecks emails you,
+    which proves the alert path. I start it again.
+11. A 24-hour soak with the lid open, no restart loop and no unexpected alert. I quote the results.
 
 Then the first player-funded card builds with nobody at the keyboard, billed to the studio, which
 closes live criterion 2.
@@ -286,7 +301,8 @@ At /board, press **Go live**. It works once and cannot be undone. Then post, in 
 - The healthchecks.io account.
 - Subscribing to the ntfy topic on your phone.
 - The three fine-grained GitHub tokens.
-- The Oracle account and `oci session authenticate`.
+- The Mac's power and update settings, `brew install libpq age`, Google Drive for desktop, the
+  backup key and the backup check.
 - The call on how the first player arrives, and the share if you choose it.
 - Confirming Stripe payouts and the bank account, and the studio-wide daily credit limit.
 - Buying Console credit after each payout and recording it at /board.
@@ -307,10 +323,12 @@ Their pivots ("drop 24/7; run a weekly two-hour live show", "drop the meter; run
 "archive; publish the post-mortem; open-source the vote and meter kit") were written for a streamed
 studio. **Tell me:** "keep the pivots", or the pivots you want for a site-first studio.
 
-### Oracle Pay As You Go
+### A Google Cloud billing account
 
-Only if Oracle actually reclaims the instance (step 3). **Tell me:** "upgrade Oracle" if you would
-rather put a card on file than restart it by hand.
+The dispatcher moves from your Mac to a free Google Cloud Compute Engine e2-micro once you open a
+billing account on your Google account (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud).
+It stays inside the free tier, with a $1 budget alert, but the account needs a card on file, which
+is your call. **Tell me:** "the Google Cloud billing account is open", whenever you choose to.
 
 ### The card maximum (old item 10): resolved by the launch batch
 
@@ -347,7 +365,7 @@ Copy any of these back to me as you finish:
 - "healthchecks check is created."
 - "subscribed to ntfy."
 - "tokens are set."
-- "Oracle is signed in."
+- "the Mac is ready."
 - "share quietly" / "announce first"
 - "keep $500" (or a number) and "shared"
 - "payouts are on" / "the first payout arrived"
@@ -356,7 +374,7 @@ Copy any of these back to me as you finish:
 - "moderator email is in .env"
 - "clip recorded"
 - "keep the pivots" (or the pivots you want)
-- "upgrade Oracle" (only if reclaims happen)
+- "the Google Cloud billing account is open" (whenever you choose)
 
 ---
 
@@ -429,7 +447,7 @@ Nothing left for you here. `~/.ssh` had no key pair, so I made one with no passp
 this file already named: `ssh-keygen -t ed25519 -C peanutgallery-vps -f ~/.ssh/id_ed25519`.
 `ssh-keygen -lf ~/.ssh/id_ed25519.pub` prints
 `256 SHA256:1fLWiB1WvhlXXkzbw7/xkUXmRGPsp5NDtozEVZ3ofdk peanutgallery-vps (ED25519)`.
-`oracle-launch.sh` gives the public half to the instance; the private half never leaves the Mac.
+`oracle-launch.sh` gives the public half to the instance; the private half never leaves the Mac. (Oracle is dropped since 23 September 2026, so the key waits for a server.)
 
 ### 5. ntfy topic: made and tested 22 September 2026
 
