@@ -333,8 +333,10 @@ Gate (GitHub Actions workflow `gate`, `platform/gate/ship-gate.sh`). The kernel 
 - Every lane: secret scan; banned phrases (the deny-list scan over the folder, the changed files, the root docs, path names and the commit message); runtime-token deny (NaN, undefined, stray task markers, stand-in text and the rest of the list).
 - seed-1, config lane: the headless bot, then the build.
 - seed-1, code lane: typecheck, tests, the headless bot, then the build.
-- platform: typecheck and tests of the dispatcher, supabase and site packages, then the site build and the Playwright end-to-end suite.
-- Last, in every lane: runtime-token deny over the HTML the build just wrote.
+- platform: typecheck and tests of the dispatcher, supabase and site packages; the Deno function tests when the change can reach `platform/supabase/`; then, when it can reach the site, the site build and the Playwright end-to-end suite.
+- Last, after every build: runtime-token deny over the HTML the build just wrote.
+
+The detect job selects the work by changed path (`platform/gate/changed-paths.sh`), and runs the scans above over each folder it selects. The seed-1 jobs run for a change under `seed-1/`; the platform job for one under `platform/` or `docs/`; the Deno tests for one under `platform/supabase/`; and the site build, its scan and the end-to-end suite for one under `platform/site/` or `platform/agents/`. A change only under `docs/`, `platform/dispatcher/`, `platform/ops/` or `platform/supabase/` builds nothing. A path under `platform/` that no narrower rule names selects all the platform work, and a path outside `seed-1/`, `platform/` and `docs/` selects everything. The `gate` job fails closed: it fails when detect failed, when a flag is missing or not exactly true or false, and when a job detect selected did not pass.
 
 The headless bot runs `seed-1/sim` on a fixed seed for 10 simulated hours and asserts the invariants: dust never negative, every number finite, at least one unlock per simulated hour, and the same seed giving the same state hash. On a `card/*` branch the workflow restores `platform/gate` from the base commit and runs the kernel guard before anything else.
 

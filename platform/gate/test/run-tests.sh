@@ -865,6 +865,15 @@ detect_with 1 "fails an output from an older changed-paths.sh with no site or fu
 assert "detect: writes nothing when a flag is missing" test ! -s "$T/detect-out.txt"
 detect_with 1 "fails a malformed lane" 'seed=true platform=true lane=other site=true functions=true'
 
+# The constitution's description of the gate (docs/PLAN.md Appendix A) says what the workflow does:
+# the work is selected by changed path, the site build and its suite run only for a change that can
+# reach the site, and the gate job fails closed.
+PLAN="$REPO_ROOT/docs/PLAN.md"
+assert "plan: Appendix A names the selection by changed path" grep -qF 'The detect job selects the work by changed path (`platform/gate/changed-paths.sh`)' "$PLAN"
+assert "plan: Appendix A runs the site build and the end-to-end suite only when a change can reach the site" grep -qF 'then, when it can reach the site, the site build and the Playwright end-to-end suite.' "$PLAN"
+assert "plan: Appendix A says the gate job fails closed" grep -qF 'The `gate` job fails closed: it fails when detect failed, when a flag is missing or not exactly true or false, and when a job detect selected did not pass.' "$PLAN"
+assert "plan: Appendix A no longer says every platform change builds the site" test "$(grep -cF 'supabase and site packages, then the site build and the Playwright end-to-end suite.' "$PLAN")" = 0
+
 # ---------------------------------------------------------------- netlify.toml
 # A card branch's pull request is opened before the gate runs, so neither site may build a deploy
 # preview of it. Netlify runs the ignore command with bash in the site's folder; exit 0 skips.
