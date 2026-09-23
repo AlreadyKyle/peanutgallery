@@ -3971,6 +3971,33 @@ Deno.test("the Biz Dev rename keeps the Scout's row and adds status and trigger"
     }
   });
 
+  await t.step("the Scout's planned roadmap card takes the new backlog title; a card past proposed keeps its title", async () => {
+    const db = await fresh();
+    try {
+      const card = (title: string, stage: string, horizon: string) =>
+        db.query<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, horizon) values ('agents', 'board', 'goal', 'code', 'platform', $1, $2, $3) returning id`,
+          [title, stage, horizon],
+        );
+      const planned = (await card("Scout agent for outside tools and trends", "proposed", "later")).rows[0]!.id;
+      await exec(db, rename.sql);
+      await exec(db, rename.sql);
+      assertEquals((await db.query<Row>(`select title from public.cards where id = $1`, [planned])).rows, [{ title: "Biz Dev agent for outside tools and trends" }]);
+      const other = await fresh();
+      try {
+        const building = (await other.query<{ id: string }>(
+          `insert into public.cards (bucket, source, shape, lane, folder, title, stage, horizon) values ('agents', 'board', 'goal', 'code', 'platform', 'Scout agent for outside tools and trends', 'funded', 'now') returning id`,
+        )).rows[0]!.id;
+        await exec(other, rename.sql);
+        assertEquals((await other.query<Row>(`select title from public.cards where id = $1`, [building])).rows, [{ title: "Scout agent for outside tools and trends" }]);
+      } finally {
+        await other.close();
+      }
+    } finally {
+      await db.close();
+    }
+  });
+
   await t.step("when the seed wrote Biz Dev first, the Scout's row is retired, not duplicated or deleted", async () => {
     const db = await fresh();
     try {

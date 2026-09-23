@@ -1461,6 +1461,15 @@ describe("rename-biz-dev migration", () => {
     expect(withoutComments(renameSql)).not.toMatch(/\bdelete\b|\binsert\b|\bdrop table\b/i);
   });
 
+  it("retitles the Scout's planned roadmap card to the new backlog title, so file-backlog finds it", () => {
+    expect(renameSql).toContain(
+      "update public.cards\nset title = 'Biz Dev agent for outside tools and trends'\nwhere title = 'Scout agent for outside tools and trends'\n  and stage = 'proposed'\n  and horizon in ('next', 'later')\n  and not exists (select 1 from public.cards where title = 'Biz Dev agent for outside tools and trends');",
+    );
+    const backlog = readFileSync(resolve(MIGRATIONS_DIR, "..", "..", "..", "docs", "BACKLOG.md"), "utf8");
+    expect(backlog).toContain("### Biz Dev agent for outside tools and trends\n");
+    expect(backlog).not.toMatch(/scout/i);
+  });
+
   it("adds nullable status and trigger, each checked, and runs twice", () => {
     expect(renameSql).toContain("alter table public.roles add column if not exists status text;");
     expect(renameSql).toContain("alter table public.roles add column if not exists trigger text;");

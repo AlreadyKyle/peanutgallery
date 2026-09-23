@@ -7,6 +7,10 @@
 -- seed ran first), that row is the role, and the Scout's row is retired rather than deleted, since
 -- rows elsewhere may name it.
 --
+-- The roadmap card docs/BACKLOG.md filed for the Scout is retitled the same way, so file-backlog,
+-- which matches cards by title, updates it instead of filing a second card beside it. Only a planned
+-- card is touched: stage proposed, on horizon next or later.
+--
 -- status is the role's place in the launch roster: running, starts (on the named trigger) or
 -- planned. trigger is the one line saying when a role that does not run yet starts. Both are seeded
 -- from the role JSON in platform/agents and are null until the seed runs. public_roles gains both at
@@ -24,6 +28,13 @@ set state = 'retired', retired_at = coalesce(retired_at, now())
 where name = 'Scout'
   and state = 'active'
   and exists (select 1 from public.roles where name = 'Biz Dev');
+
+update public.cards
+set title = 'Biz Dev agent for outside tools and trends'
+where title = 'Scout agent for outside tools and trends'
+  and stage = 'proposed'
+  and horizon in ('next', 'later')
+  and not exists (select 1 from public.cards where title = 'Biz Dev agent for outside tools and trends');
 
 alter table public.roles add column if not exists status text;
 alter table public.roles add column if not exists trigger text;
