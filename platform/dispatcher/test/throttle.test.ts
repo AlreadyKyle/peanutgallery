@@ -11,6 +11,7 @@ import {
   newYorkMonthStart,
   planStart,
   spentToday,
+  tierMonth,
   tierMonthStart,
   type MoneyCard,
   type MoneyState,
@@ -97,6 +98,36 @@ describe('tierMonthStart', () => {
     expect(tierMonthStart(new Date('2026-10-01T03:00:00.000Z')).toISOString()).toBe('2026-09-01T04:00:00.000Z');
     // 06:59 UTC: October in New York, still September in Los Angeles.
     expect(tierMonthStart(new Date('2026-10-01T06:59:59.000Z')).toISOString()).toBe('2026-09-01T07:00:00.000Z');
+  });
+
+  it('names one tier month from the moment the last zone turns until it turns again', () => {
+    expect(tierMonth(new Date('2026-09-30T12:00:00.000Z'))).toBe('2026-09');
+    // UTC has turned, then New York, but Los Angeles is still in September.
+    expect(tierMonth(new Date('2026-10-01T01:00:00.000Z'))).toBe('2026-09');
+    expect(tierMonth(new Date('2026-10-01T05:00:00.000Z'))).toBe('2026-09');
+    expect(tierMonth(new Date('2026-10-01T06:59:59.000Z'))).toBe('2026-09');
+    expect(tierMonth(new Date('2026-10-01T07:00:00.000Z'))).toBe('2026-10');
+    // Pacific standard time: Los Angeles turns at 08:00 UTC on 1 December.
+    expect(tierMonth(new Date('2026-12-01T07:59:59.000Z'))).toBe('2026-11');
+    expect(tierMonth(new Date('2026-12-01T08:00:00.000Z'))).toBe('2026-12');
+    // Across the year: December until Los Angeles reaches January.
+    expect(tierMonth(new Date('2027-01-01T05:00:00.000Z'))).toBe('2026-12');
+    expect(tierMonth(new Date('2027-01-01T08:00:00.000Z'))).toBe('2027-01');
+  });
+
+  it('keeps one tier month for every tierMonthStart it counts', () => {
+    // Every quarter hour from 30 September to 2 October: the month changes once, at the instant
+    // tierMonthStart jumps into the next month.
+    const seen = new Map<string, Set<string>>();
+    for (let t = Date.parse('2026-09-30T00:00:00.000Z'); t <= Date.parse('2026-10-02T00:00:00.000Z'); t += 15 * 60_000) {
+      const now = new Date(t);
+      const month = tierMonth(now);
+      if (!seen.has(month)) seen.set(month, new Set());
+      seen.get(month)!.add(tierMonthStart(now).toISOString().slice(0, 7));
+    }
+    expect([...seen.keys()]).toEqual(['2026-09', '2026-10']);
+    expect([...seen.get('2026-09')!]).toEqual(['2026-09']);
+    expect([...seen.get('2026-10')!]).toEqual(['2026-10']);
   });
 
   it('never starts after the month start in UTC, New York or Los Angeles', () => {

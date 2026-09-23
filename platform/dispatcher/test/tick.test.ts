@@ -177,6 +177,38 @@ describe('tick', () => {
     expect(await tick(deps(db, [], { mode: 'unattended', alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
   });
 
+  it('alerts the usage tier cap once across the month turn in UTC, New York and Los Angeles, and again in the next tier month', async () => {
+    const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
+    db.studio.monthly_cap_usd = 500;
+    db.studio.anthropic_tier_cap_usd = 100;
+    const row = (id: string, created_at: string, usd: number) =>
+      ({ id, created_at, billed_to: 'studio', card_id: null, role_id: null, model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd, request_id: id }) as const;
+    db.ledger = [row('sep', '2026-09-15T12:00:00.000Z', 99)];
+    db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
+    const alert = new RecordingAlerter();
+    const at = (iso: string) => tick(deps(db, [], { mode: 'unattended', alert, now: () => new Date(iso) }));
+    expect(await at('2026-09-30T12:00:00.000Z')).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    // Spend in October's first half hour, which September's window counts too.
+    db.ledger.push(row('oct', '2026-10-01T00:30:00.000Z', 99));
+    // The tier month's start moves on 1 October at 00:00 UTC, 04:00 UTC (New York) and 07:00 UTC (Los
+    // Angeles); it is September's window until Los Angeles turns.
+    for (const iso of ['2026-10-01T01:00:00.000Z', '2026-10-01T05:00:00.000Z', '2026-10-01T06:59:00.000Z']) {
+      expect(await at(iso), iso).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    }
+    expect(alert.messages).toEqual([
+      'The usage tier cap of $100.00 a month stopped the agents: the studio key has spent $99.00 since 2026-09-01T00:00:00.000Z. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.',
+    ]);
+    // October's window, once every zone has turned: October's own spend still binds, so it alerts once more.
+    for (const iso of ['2026-10-01T07:00:00.000Z', '2026-10-01T08:00:00.000Z']) {
+      expect(await at(iso), iso).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    }
+    expect(alert.messages).toHaveLength(2);
+    expect(alert.messages[1]).toBe(
+      'The usage tier cap of $100.00 a month stopped the agents: the studio key has spent $99.00 since 2026-10-01T00:00:00.000Z. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.',
+    );
+  });
+
   it('runs no platform code card and no card off horizon now', async () => {
     const db = new FakeDb();
     db.cards = [card({ id: 'site', folder: 'platform', lane: 'code' }), card({ id: 'later', horizon: 'later' })];

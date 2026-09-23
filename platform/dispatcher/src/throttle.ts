@@ -119,6 +119,14 @@ export function tierMonthStart(now: Date): Date {
   return new Date(Math.min(...TIER_MONTH_ZONES.map((zone) => monthStartIn(now, zone).getTime())));
 }
 
+// The month tierMonthStart counts, as YYYY-MM: the earliest of the zones' current months. It changes
+// only when the last of the zones turns, while tierMonthStart moves forward as each one turns, so it
+// is the key for anything that should happen once per tier month.
+export function tierMonth(now: Date): string {
+  const months = TIER_MONTH_ZONES.map((zone) => new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now).slice(0, 7));
+  return months.sort()[0]!;
+}
+
 // daily_spent_usd resets only when usage is recorded, so a row from an earlier day has spent
 // nothing today.
 export function spentToday(pool: { day: string; daily_spent_usd: number }, now: Date): number {

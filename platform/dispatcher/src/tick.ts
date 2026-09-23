@@ -19,6 +19,7 @@ import {
   newYorkMonthStart,
   planStart,
   spentToday,
+  tierMonth,
   tierMonthStart,
   type MoneyReason,
   type MoneyState,
@@ -173,10 +174,11 @@ async function alertMoney(deps: TickDeps, studio: StudioState, money: MoneyState
         : `The monthly cap of $${studio.monthly_cap_usd.toFixed(2)} stopped the agents for ${month}.`;
     await deps.alert.notifyOnce(`monthly_cap:${month}`, message);
   } else if (first.reason === 'tier_cap' && studio.anthropic_tier_cap_usd !== null) {
-    // Once per tier month as the throttle counts it, so the next month can raise it again.
+    // Once per tier month as the throttle counts it, so the next month can raise it again. The key is
+    // the month, not tierMonthStart, which moves forward on the 1st as each zone turns.
     const since = tierMonthStart(now).toISOString();
     await deps.alert.notifyOnce(
-      `tier_cap:${since}`,
+      `tier_cap:${tierMonth(now)}`,
       `The usage tier cap of $${studio.anthropic_tier_cap_usd.toFixed(2)} a month stopped the agents: the studio key has spent $${money.spentThisTierMonthUsd.toFixed(2)} since ${since}. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.`,
     );
   } else if (first.reason === 'console_credit') {
