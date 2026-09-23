@@ -108,17 +108,17 @@ The studio stays paused throughout.
 
 Built on `launch/legal-copy` from main at e629119. The production lines of Verification and the production steps are the ship stage's and are not run here; the studio stays paused.
 
-`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0 (rerun after the review's fixes):
 
 ```
 platform/board test:       Tests  67 passed (67)
 platform/supabase test:       Tests  273 passed (273)
-platform/site test:       Tests  379 passed (379)
+platform/site test:       Tests  383 passed (383)
 seed-1 test:       Tests  77 passed (77)
 platform/dispatcher test:       Tests  619 passed (619)
 platform/gate test: PASS: gate tests passed=508
 ℹ tests 117   ℹ pass 117   ℹ fail 0        (test:agents)
-ok | 82 passed (84 steps) | 0 failed (6s)  (test:functions)
+ok | 82 passed (84 steps) | 0 failed (5s)  (test:functions)
 GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
 PASS: secret-scan files=547
@@ -127,11 +127,11 @@ PASS: secret-scan files=547
 verify exit 0
 ```
 
-The site e2e, on port 4437 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4437 pnpm --filter @backseat/site e2e`
+The site e2e, on port 4463 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4463 pnpm --filter @backseat/site e2e`
 
 ```
   5 skipped
-  105 passed (2.3m)
+  112 passed (2.9m)
 exit 0
 ```
 
@@ -149,11 +149,11 @@ ok | 27 passed (71 steps) | 0 failed (16s)
 
 The handler test "handler credits a session that carries a displayname field exactly as before, with no name" runs in `test:functions` above.
 
-`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts`
+`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts src/version-file.test.ts`
 
 ```
- Test Files  8 passed (8)
-      Tests  130 passed (130)
+ Test Files  9 passed (9)
+      Tests  134 passed (134)
 ```
 
 `TZ=UTC` and `TZ=Pacific/Auckland pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx`
@@ -161,10 +161,10 @@ The handler test "handler credits a session that carries a displayname field exa
 ```
 TZ=UTC
  Test Files  2 passed (2)
-      Tests  24 passed (24)
+      Tests  26 passed (26)
 TZ=Pacific/Auckland
  Test Files  2 passed (2)
-      Tests  24 passed (24)
+      Tests  26 passed (26)
 ```
 
 `node --test scripts/rename.test.mjs`
@@ -197,6 +197,22 @@ FAIL 375px no console errors: Failed to load resource: the server responded with
 The two failures are `public_terms_versions`, which production does not have until production step 2 (`PGRST205 Could not find the table 'public.public_terms_versions' in the schema cache`, 404); step 2 runs before the merge, so the deployed site never makes that request against a database without the view.
 
 Screenshots of /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /privacy at 375 and 1440, with production data and the versions answered as after both migrations, were looked at; one fix came of it (the cannot-confirm notice's link became its own column at 375px, now one span).
+
+The review's fixes, each with a test that fails before it (run against the old code, then the new):
+
+```
+Legal.test.tsx, old pages:  × say they are loading under the lede ... newest bundled words already drawn
+                            × link {refunds} and {terms} to the same version's pages
+                            × say they are loading under the lede ... that version's words already drawn
+text-pages.spec.ts, old:    Expected: "/refunds/1"  Received: "/refunds"
+                            /terms: the title moved  Received: 410.53125 (375px), 468.921875 (768px), 499.3125 (1440px)
+layout-balance.spec.ts, old styles and loading lines:
+  "/contribute rhythm: h2.choices-heading \"Or pick a card\" sits 16px under p.muted.small ..., which sits 40px under the block before it" (375, 768, 1440)
+  "/team: the title moved 451px", "/roadmap: the title moved 451px", "/contribute: the title moved 92px", "/ledger: the title moved 61px" (1440)
+version-file.test.ts, old join:  × writes into an absolute outDir as given, not under the root
+```
+
+All pass after the fixes, in the verify and e2e runs above. Screenshots of /terms, /terms/1, /refunds/1, /team, /roadmap, /contribute and /ledger at 375 and 1440, loading (every data request held) and loaded, were looked at: the Terms pages differ only in the line under the lede, every title stays under the top bar while loading, and the agreement line on /contribute sits under the first choice with the section gap before "Or pick a card".
 
 ## Decisions
 
