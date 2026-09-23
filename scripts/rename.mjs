@@ -91,6 +91,7 @@ export const TIERS = {
     'platform/ops/test/ops.test.mjs',
     'platform/supabase/functions/_shared/handler_test.ts',
     'platform/supabase/functions/_shared/migration_test.ts',
+    'platform/supabase/functions/_shared/money_logic_test.ts',
     'platform/supabase/functions/_shared/money_safety_test.ts',
     'platform/supabase/functions/_shared/session_test.ts',
     'platform/supabase/functions/_shared/split_test.ts',
