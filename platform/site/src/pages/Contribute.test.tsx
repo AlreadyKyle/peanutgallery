@@ -1,8 +1,9 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
+import { books } from '../lib/books.test-fixture';
+import { canFund } from '../lib/payment';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { Contribute } from './Contribute';
@@ -33,7 +34,11 @@ function card(overrides: Partial<Card>): Card {
   };
 }
 
-function source(cards: Card[], paused = false): StudioSource {
+/**
+ * A studio whose funding order (public_money.funding_order) is `order`: by default every card a goal
+ * bar still has room on, in the given order, standing in for the waterfall. `over` replaces any part.
+ */
+function source(cards: Card[], paused = false, order: string[] = cards.filter(canFund).filter((c) => c.horizon === 'now' && c.stage !== 'building' && c.stage !== 'live').map((c) => c.id), over: Partial<Snapshot> = {}): StudioSource {
   const snapshot: Snapshot = {
     pool: null,
     cards,
@@ -45,7 +50,9 @@ function source(cards: Card[], paused = false): StudioSource {
     deploys: [],
     roles: [],
     cardTitles: {},
+    money: books(order),
     missing: [],
+    ...over,
   };
   return { load: () => Promise.resolve(snapshot), subscribe: () => () => {} };
 }
@@ -75,33 +82,55 @@ afterEach(() => {
 });
 
 describe('Contribute', () => {
-  it('puts Fund the next card in line first, then the fundable cards grouped by category, each linking to checkout', async () => {
+  it("puts Fund the next card in line first, naming the next card, then exactly the funding order's cards in that order, each linking to checkout", async () => {
     renderContribute(
-      source([
-        card({ id: 'g1', title: 'Rename the Gatherer', summary: 'A new name.', stage: 'voted' }),
-        card({ id: 's1', title: 'A clearer ledger', folder: 'platform', bucket: 'platform' }),
-        card({ id: 'full', title: 'Already full', funding_target_usd: 5, funded_usd: 5 }),
-        card({ id: 'b1', title: 'Being built', stage: 'building' }),
-        card({ id: 'l1', title: 'Already live', stage: 'live', funding_target_usd: 10, funded_usd: 4 }),
-      ]),
+      source(
+        [
+          card({ id: 'g1', title: 'Rename the Gatherer', summary: 'A new name.', stage: 'voted' }),
+          card({ id: 's1', title: 'A clearer ledger', folder: 'platform', bucket: 'platform' }),
+          card({ id: 'refunded', title: 'Refunded below its target', stage: 'funded', funding_target_usd: 5, funded_usd: 4 }),
+          card({ id: 'vetoed', title: 'Vetoed card', stage: 'proposed' }),
+          card({ id: 'b1', title: 'Being built', stage: 'building' }),
+        ],
+        false,
+        // The waterfall: a funded card a refund left below its target first; the vetoed card is not in it.
+        ['refunded', 's1', 'g1'],
+      ),
     );
     expect(screen.getByRole('heading', { level: 1, name: legal.contributeTitle })).toBeTruthy();
     const links = () => screen.getAllByRole('link');
-    expect(links()[0]?.textContent).toBe(`${legal.pickForMe}${legal.pickForMeBody}`);
     expect(links()[0]?.getAttribute('href')).toBe(STRIPE);
+    await waitFor(() => expect(links()[0]?.textContent).toBe(`${legal.pickForMe}${legal.nextInLine.replace('{title}', 'Refunded below its target')}`));
 
-    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
-    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([copy.categories.game, copy.categories.studio]);
-    const game = screen.getByRole('region', { name: copy.categories.game });
-    expect(within(game).getByRole('link').getAttribute('href')).toBe(`${STRIPE}?client_reference_id=g1`);
-    expect(within(game).getByText('A new name.')).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: copy.categories.studio })).getByRole('link').getAttribute('href')).toBe(
+    const choices = screen.getAllByRole('listitem').map((item) => within(item).getByRole('link'));
+    expect(choices.map((a) => a.getAttribute('href'))).toEqual([
+      `${STRIPE}?client_reference_id=refunded`,
       `${STRIPE}?client_reference_id=s1`,
-    );
-    expect(screen.queryByText('Already full')).toBeNull();
+      `${STRIPE}?client_reference_id=g1`,
+    ]);
+    expect(within(choices[2]!).getByText('A new name.')).toBeTruthy();
+    expect(screen.queryByText('Vetoed card')).toBeNull();
     expect(screen.queryByText('Being built')).toBeNull();
-    expect(screen.queryByText('Already live')).toBeNull();
-    expect(checkoutLinks()).toHaveLength(3);
+    // The waterfall line sits directly under the choices.
+    const list = choices[0]!.closest('ul')!;
+    expect(list.nextElementSibling?.textContent).toBe(legal.waterfallLine);
+    expect(checkoutLinks()).toHaveLength(4);
+  });
+
+  it('says the money waits in Not on a card yet when no card is in the funding order', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], false, []));
+    await waitFor(() => expect(screen.getByText(legal.noFundableCards)).toBeTruthy());
+    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).textContent).toBe(`${legal.pickForMe}${legal.nextInLineNone}`);
+    expect(checkoutLinks()).toHaveLength(1);
+    expect(screen.queryByText(legal.waterfallLine)).toBeNull();
+  });
+
+  it('offers only Fund the next card in line, naming no card, when public_money did not load', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], false, ['g1'], { money: null, missing: ['money'] }));
+    await waitFor(() => expect(screen.getByText(legal.partUnavailable)).toBeTruthy());
+    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).textContent).toBe(`${legal.pickForMe}${legal.pickForMeBody}`);
+    expect(checkoutLinks()).toHaveLength(1);
+    expect(screen.queryByText('Rename the Gatherer')).toBeNull();
   });
 
   it('states the agreement directly under the first choice, before any card, with the Terms, the Refunds page and the age condition', async () => {
@@ -141,6 +170,19 @@ describe('Contribute', () => {
     const notice = screen.getByText(legal.pausedNotice);
     const pick = screen.getByRole('link', { name: new RegExp(legal.pickForMe) });
     expect(notice.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  for (const reason of ['awaiting_credit', 'spend_limit', 'incident', 'board']) {
+    it(`says why the agents are paused in the notice: ${reason}`, async () => {
+      renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true, undefined, { pauseReason: reason }));
+      await waitFor(() => expect(document.querySelector('p.notice')?.textContent).toBe(legal.pauseReasons[reason]));
+    });
+  }
+
+  it('draws no paused notice when the studio row did not load', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true, undefined, { pauseReason: 'incident', missing: ['studio'] }));
+    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+    expect(document.querySelector('p.notice')).toBeNull();
   });
 
   it('keeps Fund the next card in line when no card needs funding, and says so', async () => {

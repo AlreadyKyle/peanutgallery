@@ -19,6 +19,7 @@ import {
   visibleFilters,
 } from './cards';
 import { copy } from './copy';
+import { books } from './books.test-fixture';
 import type { Card, Money, Snapshot } from './source';
 
 function card(overrides: Partial<Card> = {}): Card {
@@ -64,29 +65,6 @@ describe('groupCards', () => {
     expect(shipped.map((c) => c.id)).toEqual(['g', 'f']);
   });
 });
-
-function books(order: string[]): Money {
-  return {
-    payments: 0,
-    received_usd: 0,
-    stripe_fees_usd: 0,
-    refunded_usd: 0,
-    disputed_usd: 0,
-    corrections_usd: 0,
-    studio_pct_avg: null,
-    reserve_usd: 0,
-    studio_usd: 0,
-    incident_usd: 0,
-    held_usd: 0,
-    agent_credit_usd: 0,
-    not_on_card_usd: 0,
-    short_usd: 0,
-    board_test_usd: 0,
-    reconciled_at: null,
-    last_run_ok: null,
-    funding_order: order.map((card_id) => ({ card_id, room_usd: 1 })),
-  };
-}
 
 function snapshot(cards: Card[], money: Money | null, missing: Snapshot['missing'] = []): Snapshot {
   return {

@@ -5,6 +5,7 @@ import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import { DEFAULT_STUDIO_PCT, RESERVE_PCT } from '../lib/payment';
+import { books } from '../lib/books.test-fixture';
 import type { Role, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { HOME_ACTIONS, Landing } from './Landing';
@@ -200,6 +201,7 @@ const snapshot: Snapshot = {
     { ...role('r-d', 'Game Director', 'Holds the pillars.'), write_access: false },
   ],
   cardTitles: { live2: 'The unlock list' },
+  money: books(['next1', 'next2', 'studio1']),
   missing: [],
 };
 

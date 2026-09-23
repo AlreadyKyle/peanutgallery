@@ -9,9 +9,12 @@ import {
   DEPLOY_LIMIT,
   ENRICHMENTS,
   EVENT_LIMIT,
+  MONEY_COLUMNS,
   QUERY_TIMEOUT_MS,
   REALTIME_LISTENERS,
   ROLE_COLUMNS,
+  STOPPED_COLUMNS,
+  STOPPED_LIMIT,
   type Snapshot,
 } from './source';
 
@@ -71,7 +74,45 @@ function rowsFor(query: Query): unknown {
     case 'public_card_funding':
       return [{ card_id: 'c1', contributors: '3', credited_usd: '18.5000' }];
     case 'public_studio':
-      return { launched_at: '2026-09-20T00:00:00Z', paused: true };
+      return { launched_at: '2026-09-20T00:00:00Z', paused: true, pause_reason: 'awaiting_credit' };
+    case 'public_money':
+      return {
+        payments: 3,
+        received_usd: '30.0000',
+        stripe_fees_usd: '1.5000',
+        refunded_usd: '5.0000',
+        disputed_usd: '0.0000',
+        corrections_usd: '0.0000',
+        studio_pct_avg: '22.50',
+        reserve_usd: '2.3500',
+        studio_usd: '4.2300',
+        incident_usd: '0.8500',
+        held_usd: '0.0000',
+        agent_credit_usd: '16.0700',
+        not_on_card_usd: '1.2000',
+        short_usd: '0.0000',
+        board_test_usd: '1.0000',
+        reconciled_at: '2026-09-23T04:00:00+00:00',
+        last_run_ok: true,
+        funding_order: [{ position: 1, card_id: 'c1', room_usd: 75 }],
+      };
+    case 'public_stopped_cards':
+      return [
+        {
+          card_id: 'c9',
+          title: 'A card that stopped',
+          stage: 'rejected',
+          failing_check: 'gate',
+          spent_usd: '0.3000',
+          funded_usd: '0.0000',
+          credited_usd: '2.0000',
+          moved: [
+            { to_card_id: 'c1', to_title: 'Week 1: the loop', usd: 1.2 },
+            { to_card_id: null, to_title: null, usd: 0.5 },
+          ],
+          stopped_at: '2026-09-22T10:00:00Z',
+        },
+      ];
     case 'public_ledger_totals':
       return {
         usd_total: '1.2500',
@@ -259,6 +300,18 @@ describe('createSupabaseSource.load', () => {
 
     expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
 
+    // public_money: one row, every money-in figure, the reconcile, the funding order; no operations column.
+    const books = query(fake.queries, 'public_money');
+    expect(books.select).toBe(MONEY_COLUMNS);
+    expect(MONEY_COLUMNS).not.toMatch(/operations/);
+    expect(books.terminal).toBe('maybeSingle');
+
+    const stopped = query(fake.queries, 'public_stopped_cards');
+    expect(stopped.select).toBe(STOPPED_COLUMNS);
+    expect(stopped.orders).toEqual([{ column: 'stopped_at', ascending: false }]);
+    expect(stopped.limit).toBe(STOPPED_LIMIT);
+    expect(STOPPED_LIMIT).toBe(12);
+
     const events = query(fake.queries, 'public_agent_events');
     expect(events.select).toBe('id,card_id,role_id,type,created_at');
     expect(events.orders).toEqual([{ column: 'created_at', ascending: false }]);
@@ -311,6 +364,43 @@ describe('createSupabaseSource.load', () => {
     expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });
     expect(snapshot.launchedAt).toBe('2026-09-20T00:00:00Z');
     expect(snapshot.paused).toBe(true);
+    expect(snapshot.pauseReason).toBe('awaiting_credit');
+    expect(snapshot.money).toEqual({
+      payments: 3,
+      received_usd: 30,
+      stripe_fees_usd: 1.5,
+      refunded_usd: 5,
+      disputed_usd: 0,
+      corrections_usd: 0,
+      studio_pct_avg: 22.5,
+      reserve_usd: 2.35,
+      studio_usd: 4.23,
+      incident_usd: 0.85,
+      held_usd: 0,
+      agent_credit_usd: 16.07,
+      not_on_card_usd: 1.2,
+      short_usd: 0,
+      board_test_usd: 1,
+      reconciled_at: '2026-09-23T04:00:00+00:00',
+      last_run_ok: true,
+      funding_order: [{ card_id: 'c1', room_usd: 75 }],
+    });
+    expect(snapshot.stopped).toEqual([
+      {
+        card_id: 'c9',
+        title: 'A card that stopped',
+        stage: 'rejected',
+        failing_check: 'gate',
+        spent_usd: 0.3,
+        funded_usd: 0,
+        credited_usd: 2,
+        moved: [
+          { to_card_id: 'c1', to_title: 'Week 1: the loop', usd: 1.2 },
+          { to_card_id: null, to_title: null, usd: 0.5 },
+        ],
+        stopped_at: '2026-09-22T10:00:00Z',
+      },
+    ]);
     expect(snapshot.totals).toEqual({
       usd_total: 1.25,
       input_tokens: 12000,
@@ -405,7 +495,7 @@ describe('createSupabaseSource.load', () => {
   });
 
   it('names every enrichment the site reads', () => {
-    expect([...ENRICHMENTS]).toEqual(['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'cardTitles']);
+    expect([...ENRICHMENTS]).toEqual(['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'money', 'stopped', 'cardTitles']);
   });
 
   // Each enrichment, the table or view it reads, and the empty value the snapshot falls back to.
@@ -418,6 +508,7 @@ describe('createSupabaseSource.load', () => {
       (s) => {
         expect(s.launchedAt).toBeNull();
         expect(s.paused).toBe(false);
+        expect(s.pauseReason).toBeNull();
       },
     ],
     ['totals', 'public_ledger_totals', (s) => expect(s.totals.usd_total).toBe(0)],
@@ -431,6 +522,8 @@ describe('createSupabaseSource.load', () => {
     ],
     ['deploys', 'deploys', (s) => expect(s.deploys).toEqual([])],
     ['roles', 'public_roles', (s) => expect(s.roles).toEqual([])],
+    ['money', 'public_money', (s) => expect(s.money).toBeNull()],
+    ['stopped', 'public_stopped_cards', (s) => expect(s.stopped).toEqual([])],
   ];
 
   for (const [name, table, fallback] of enrichments) {
@@ -449,6 +542,31 @@ describe('createSupabaseSource.load', () => {
     const snapshot = await createSupabaseSource(fake.client).load();
     expect(snapshot.missing).toEqual(['funding']);
     expect(snapshot.funding).toEqual({});
+  });
+
+  it('names the money as missing when public_money returns no row or a malformed figure, and the stopped cards on a malformed row', async () => {
+    for (const rows of [
+      { public_money: null },
+      { public_money: { ...(rowsFor(emptyQuery('public_money')) as object), short_usd: 'x' } },
+      { public_money: { ...(rowsFor(emptyQuery('public_money')) as object), funding_order: [{ card_id: 'c1', room_usd: 'y' }] } },
+    ]) {
+      const snapshot = await createSupabaseSource(fakeClient({ rows }).client).load();
+      expect(snapshot.missing).toEqual(['money']);
+      expect(snapshot.money).toBeNull();
+    }
+    const stopped = await createSupabaseSource(
+      fakeClient({ rows: { public_stopped_cards: [{ ...(rowsFor(emptyQuery('public_stopped_cards')) as object[])[0], spent_usd: 'z' }] } }).client,
+    ).load();
+    expect(stopped.missing).toEqual(['stopped']);
+    expect(stopped.stopped).toEqual([]);
+  });
+
+  it('reads no pause reason while the studio is not paused', async () => {
+    const snapshot = await createSupabaseSource(
+      fakeClient({ rows: { public_studio: { launched_at: null, paused: false, pause_reason: 'board' } } }).client,
+    ).load();
+    expect(snapshot.paused).toBe(false);
+    expect(snapshot.pauseReason).toBeNull();
   });
 
   it('names the card titles as missing when the title query fails', async () => {
