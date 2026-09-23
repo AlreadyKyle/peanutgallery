@@ -30,10 +30,11 @@
 //    could not be held or a ledger that refused rows pauses the card (SessionPaused) once the session
 //    is settled.
 // 7. A session the dispatcher stopped reading before it went idle (its stream lost after five
-//    reconnects in a row that brought no new event, or the drain after an interrupt run out) is sent user.interrupt and
-//    read until it is no longer running before it is settled, so it cannot run on with nobody
-//    reading it (docs/specs/carry-over.md). The earlier sessions settled in step 1 wrote their spend
-//    to the card, so the card's spend is read again and the new session's budget lowered by it.
+//    reconnects in a row that brought no new event, or the drain after an interrupt run out) is
+//    sent user.interrupt and read until it is no longer running before it is settled, so it cannot
+//    run on with nobody reading it (docs/specs/carry-over.md). The earlier sessions settled in step 1
+//    wrote their spend to the card, so the card's spend is read again and the new session's budget
+//    lowered by it.
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
