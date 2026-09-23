@@ -105,7 +105,97 @@ The studio stays paused throughout.
 
 ## Evidence
 
-Added when the status moves to built.
+Built on `launch/legal-copy` from main at e629119. The production lines of Verification and the production steps are the ship stage's and are not run here; the studio stays paused.
+
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+
+```
+platform/board test:       Tests  67 passed (67)
+platform/supabase test:       Tests  273 passed (273)
+platform/site test:       Tests  379 passed (379)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+ℹ tests 117   ℹ pass 117   ℹ fail 0        (test:agents)
+ok | 82 passed (84 steps) | 0 failed (6s)  (test:functions)
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=547
+ℹ tests 15    ℹ pass 15    ℹ fail 0        (test:docs)
+ℹ tests 6     ℹ pass 6     ℹ fail 0        (test:rename)
+verify exit 0
+```
+
+The site e2e, on port 4437 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4437 pnpm --filter @backseat/site e2e`
+
+```
+  5 skipped
+  105 passed (2.3m)
+exit 0
+```
+
+It includes /terms with version 2 in force and version 1 listed, /terms/1 and /refunds/1 with their range and link, /terms/3 not found, /terms/1 and /refunds/1 in `design.spec.ts` (no horizontal scroll at every width, axe WCAG 2.2 AA at 375 and 1440) and `layout-balance.spec.ts`, and every Payment Link on /, /roadmap and /contribute carrying the agreement.
+
+`deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts platform/supabase/functions/_shared/session_test.ts platform/supabase/functions/_shared/split_test.ts`
+
+```
+  anon holds select on three public tables, the eight views and the public columns of cards, and nothing else ... ok (241ms)
+  function privileges: anon none, authenticated the nineteen board RPCs, service_role the rest, one file_card ... ok (9ms)
+  terms_versions posts version 1 at #47's merge and version 2 when applied, append-only, readable only through public_terms_versions ... ok (179ms)
+parseSession maps the split dropdown and stores no name, even when a displayname field is sent ... ok (0ms)
+ok | 27 passed (71 steps) | 0 failed (16s)
+```
+
+The handler test "handler credits a session that carries a displayname field exactly as before, with no name" runs in `test:functions` above.
+
+`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts`
+
+```
+ Test Files  8 passed (8)
+      Tests  130 passed (130)
+```
+
+`TZ=UTC` and `TZ=Pacific/Auckland pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx`
+
+```
+TZ=UTC
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+TZ=Pacific/Auckland
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+```
+
+`node --test scripts/rename.test.mjs`
+
+```
+✔ history is never a tier
+✔ never rewrites the posted Terms versions, whichever tier is applied
+ℹ pass 6
+ℹ fail 0
+```
+
+Version 1 against 7540073, once: `git show 7540073:platform/site/src/lib/legal.ts` saved beside a tsx script that compares `TERMS_VERSIONS[0].terms` and `.refunds` with `legal.terms` and `legal.refunds` by deep equality:
+
+```
+version 1 terms equal to 7540073 legal.terms: true
+version 1 refunds equal to 7540073 legal.refunds: true
+exit 0
+```
+
+The live check against a local `vite preview` of a build with `netlify.toml`'s production values, before any production step (`node platform/site/scripts/live-check.mjs http://127.0.0.1:4438`): every route passes, /terms/1 and /refunds/1 included, and
+
+```
+PASS home: 6 Payment Links, each with the agreement
+PASS /contribute: the agreement line under the first choice covers every Payment Link
+PASS 6 card choices carry card ids
+FAIL the Terms version in force: the site has no live data
+FAIL 375px no console errors: Failed to load resource: the server responded with a status of 404 () | ...
+```
+
+The two failures are `public_terms_versions`, which production does not have until production step 2 (`PGRST205 Could not find the table 'public.public_terms_versions' in the schema cache`, 404); step 2 runs before the merge, so the deployed site never makes that request against a database without the view.
+
+Screenshots of /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /privacy at 375 and 1440, with production data and the versions answered as after both migrations, were looked at; one fix came of it (the cannot-confirm notice's link became its own column at 375px, now one span).
 
 ## Decisions
 
