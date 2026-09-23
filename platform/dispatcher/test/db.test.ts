@@ -214,6 +214,15 @@ describe('createSupabaseDb queries', () => {
     expect((await studio({ paused: false, anthropic_tier_cap_usd: '500.0000' })).anthropic_tier_cap_usd).toBe(500);
   });
 
+  it('reads the platform code lane as open only when studio_state says true, and closed before the column exists', async () => {
+    const studio = (json: unknown) =>
+      createSupabaseDb('https://db.local', 'service-role', { fetchFn: mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json } : undefined)).fetchFn }).getStudioState();
+    expect((await studio({ paused: false })).platform_lane_open).toBe(false);
+    expect((await studio({ paused: false, platform_lane_open: false })).platform_lane_open).toBe(false);
+    expect((await studio({ paused: false, platform_lane_open: 'true' })).platform_lane_open).toBe(false);
+    expect((await studio({ paused: false, platform_lane_open: true })).platform_lane_open).toBe(true);
+  });
+
   it('clears commit_sha when it claims a card', async () => {
     const { fetchFn, seen } = rest([]);
     const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });

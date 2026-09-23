@@ -109,10 +109,25 @@ describe('pure helpers', () => {
     ]);
   });
 
-  it('protects the board client, the determinism harness, the game page and every build config', () => {
+  it('protects the board site, the money, ledger and legal surfaces, the determinism harness, the game page and every build config', () => {
     const kernel = [
-      'platform/site/src/lib/board.ts',
+      'platform/board/src/Board.tsx',
+      'platform/board/netlify.toml',
+      'platform/board/e2e/board.spec.ts',
       'platform/site/src/lib/env.ts',
+      'platform/site/src/lib/legal.ts',
+      'platform/site/src/lib/payment.ts',
+      'platform/site/src/lib/format.ts',
+      'platform/site/src/lib/source.ts',
+      'platform/site/src/lib/supabase.ts',
+      'platform/site/src/pages/Contribute.tsx',
+      'platform/site/src/pages/Ledger.tsx',
+      'platform/site/src/pages/Legal.tsx',
+      'platform/site/src/components/Funding.tsx',
+      'platform/site/src/components/Meter.tsx',
+      'platform/site/src/components/PoolStat.tsx',
+      'platform/site/src/components/LedgerSummary.tsx',
+      'platform/site/src/components/TextPage.tsx',
       'seed-1/index.html',
       'seed-1/sim/hash.ts',
       'seed-1/sim/rng.ts',
@@ -135,7 +150,19 @@ describe('pure helpers', () => {
       'seed-1/yarn.lock',
     ];
     for (const file of kernel) expect(isKernelPath(file), file).toBe(true);
-    for (const file of ['seed-1/render/headers.ts', 'seed-1/content/environment.json', 'seed-1/sim/hashing.ts', 'seed-1/render/postcss.ts']) {
+    for (const file of [
+      'seed-1/render/headers.ts',
+      'seed-1/content/environment.json',
+      'seed-1/sim/hashing.ts',
+      'seed-1/render/postcss.ts',
+      // The site's pages, copy, cards and styles stay in the platform code lane.
+      'platform/site/src/pages/Landing.tsx',
+      'platform/site/src/lib/copy.ts',
+      'platform/site/src/lib/roster.ts',
+      'platform/site/src/components/Cards.tsx',
+      'platform/site/src/styles.css',
+      'platform/boards/x.ts',
+    ]) {
       expect(isKernelPath(file), file).toBe(false);
     }
     expect(outsideLane(['seed-1/sim/hash.ts', 'seed-1/sim/sim.ts', 'seed-1/index.html', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual([
