@@ -8,9 +8,9 @@ Sixteen roles, one role spec each in `platform/agents/` (a JSON file and a promp
 
 | Role | Class | Status | Trigger | Job | Tools | May | May not |
 |---|---|---|---|---|---|---|---|
-| Studio Head | planner | running |  | ranks the backlog and drafts cards as structured output (not built yet: `specs/agent-workflows.md`) | Read, Glob, Grep | read the repository, the cards and board notes; propose | change the repository; approve its own drafts |
-| Game Designer | planner | running |  | drafts each game card with its numbers, check lines and estimate (not built yet: `specs/agent-workflows.md`) | none | propose card drafts | approve a card; change the repository |
-| Game Director | reviewer | running |  | grades game drafts against the pillars and the all-ages rating (not built yet: `specs/agent-workflows.md`) | Read, Glob, Grep | approve or refuse a draft it did not make; set its stance on a card | change the repository; grade a card it proposed, drafted or would build |
+| Studio Head | planner | running |  | ranks the open cards on now when the board presses Rank now (`studio_ranking`); drafting from the roadmap is backlog | Read, Glob, Grep | read the repository and typed card fields; order cards that hold no money | change the repository; rank a card holding money; read a community card's text |
+| Game Designer | planner | running |  | drafts a new seed-1 game card when the board presses Draft a game card (`draft_card`) | Read, Glob, Grep, Bash (seed-1's package scripts, in a scratch checkout of main) | propose card drafts as one typed object | approve a card; change the repository; read a community card's text |
+| Game Director | reviewer | running |  | grades each game draft against the pillars and the all-ages rating, in a session of its own (`draft_card`) | Read, Glob, Grep | approve, send back or flag a draft it did not make; set its stance on a card | change the repository; grade a card it proposed, drafted or would build |
 | Builder A | writer | running |  | builds funded game cards in `seed-1/` | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a kernel path; approve a card; read public text |
 | Builder B | writer | running |  | builds funded game cards in `seed-1/` | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a kernel path; approve a card; read public text |
 | QA | writer | running |  | reproduces and fixes bugs in Dust; verifies another role's build | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths; record a qa_verify approval of a card it did not build | verify its own build; touch a kernel path |
@@ -61,7 +61,7 @@ proposed on now ─► funded (bar full) ─► building ─► gated ─► liv
 vetoed by the board ─► never dealt or run; one on now with no money moves to next
 ```
 
-- **Approval.** A card an agent wrote any of (source agent, or a drafter set) needs an approval: a row of `card_approvals` whose content hash is the card's current one. The hash covers the bucket, lane, folder, executor, title, summary, intent, acceptance test, design spec URL and funding target, not the estimate. The dispatcher records an approval from the grader's own result through `record_card_approval`, which no agent session can reach. A card the board files needs none. The draft path that creates agent cards is not built yet (`specs/agent-workflows.md`).
+- **Approval.** A card an agent wrote any of (source agent, or a drafter set) needs an approval: a row of `card_approvals` whose content hash is the card's current one. The hash covers the bucket, lane, folder, executor, title, summary, intent, acceptance test, design spec URL and funding target, not the estimate. The dispatcher records an approval from the grader's own result through `record_card_approval`, which no agent session can reach. A card the board files needs none. The draft path creates agent cards: `approve_card_draft` inserts the card from the graded draft and records the draft approval with the Game Director's session as the grader ref.
 - **Dealing.** An approved agent card sits at proposed on next or later with `opens_at`, its approval time plus the cooling window. The first dispatcher tick at or after `opens_at` deals it to now (`deal_due_cards`) if it is still approved, vetoed by neither the board nor the Director, its executor is not paused, and it meets the definition of ready. Every funding path requires horizon now, so no money reaches it before then. The window ships at 0: an approved card is dealt on the next tick.
 - **What the public sees.** An agent-written card is readable outside the board only while its approval is current, everywhere the public reads cards (`card_is_public`). A card whose approval is voided by raw SQL is hidden, not runnable and takes no money; if it holds money, Needs you lists it.
 - **Resume by rule.** A card paused at its ceiling for the first time resumes with no one acting: its new estimate is its actual cost and its new ceiling the lower of 1.5 times that and the card maximum. If the money on its bar is short of the room the new ceiling adds, the rule tops the bar up from money not on a card yet, all or nothing (`money.top_up_card`), or waits. A card at the card maximum, or paused at its ceiling a second time, waits for the board in Needs you.
@@ -78,7 +78,16 @@ vetoed by the board ─► never dealt or run; one on now with no money moves to
 - an approver role that is paused, retired, or outside the reviewer and planner classes (a writer only for qa_verify);
 - a draft verdict other than approved.
 
-On a card that needs an approval, a hashed field changes only through a board control (`cards_agent_text_guard`), and a board edit through `set_card_horizon` records a board approval of the new content. Recording an approval changes nothing on the card.
+On a card that needs an approval, a hashed field changes only through a board control or the draft path (`cards_agent_text_guard`), and a board edit through `set_card_horizon` records a board approval of the new content. Recording an approval changes nothing on the card.
+
+## The two role jobs
+
+Both are board-queued at /board and run attended through `claude -p` on the founder's plan while a board member is signed in, in either studio mode and while the studio is paused, each model call on the ledger billed to the founder with its role (`docs/specs/agent-workflows.md`). Each session holds exactly its role spec's tools, never Write, Edit, a web tool, an MCP tool or a fallback model, works in a scratch checkout of main, and answers with one object valid against its schema in `platform/agents/schemas/`, or the run fails and writes nothing.
+
+- **Rank now (`studio_ranking`).** The Studio Head sees the cards on now as typed fields and answers with an order. `apply_card_ranking` writes rank only (position n gets rank n) on cards on now at proposed, designing or voted with no money on their bar or on hold, at most ten changes a run, and writes one public event of the moved card ids and their positions.
+- **Draft a game card (`draft_card`).** Up to three rounds. A fresh Game Designer session drafts one new seed-1 card, kept private in `card_drafts`; the dispatcher's checks refuse it, by name, for its schema, the definition of ready, a `check:` line that does not parse or already holds on main, a kernel path or a folder other than seed-1, a deny-list hit, an estimate above the per-card maximum or no active, unpaused writer to build it, and a refused draft goes back as the next round. A draft that passes goes to a separate Game Director session with `platform/agents/rubrics/draft-game.md`: approved inserts the card on next, target equal to the estimate, dealt after the cooling window; revise starts the next round; flagged, or a third round without approval, withdraws the draft and writes no card.
+- **Typed fields only.** A card a supporter or the community proposed reaches both roles as its id, stage, horizon, bucket and funded amount: both are planners with write access, and no role with write access reads public free text.
+- **The public-text filter.** Every agent-written string a stranger can read is scanned by the gate's own `platform/gate/banned-phrases.sh`, every list and trademarks included, before it is written; a hit, or a scan that cannot run, refuses the write. The site shows "Written by the <role>, an AI agent" beside agent-written card text.
 
 ## The job queue
 
@@ -86,7 +95,7 @@ A job is a name, a role, whether it calls a model, and whether it runs while the
 
 Each dispatcher tick, after the card path, starts the oldest queued run that can start, one job at a time. A run that cannot start is finished as skipped with its reason: `role_paused`, `studio_paused` (unless the job runs while paused) or `not_board_origin` (a model-calling run the board did not queue). A board-origin model-calling run waits, queued, until a board member is signed in at /board. A running job stops at the next watch when its role or the studio pauses. At startup, runs still marked running are finished as failed with `dispatcher_restart`.
 
-No job is registered yet: each later pull request adds its jobs with their handlers. Not built yet: `studio_ranking` and `draft_card` (`specs/agent-workflows.md`), the weekly report (`specs/studio-reports.md`) and the Janitor's drift checks (`specs/agent-upkeep.md`).
+Two jobs are registered: `studio_ranking` and `draft_card`, manual only, each with its handler (above). Each later pull request adds its jobs with their handlers. Not built yet: the weekly report (`specs/studio-reports.md`) and the Janitor's drift checks (`specs/agent-upkeep.md`).
 
 ## Who pays for what
 
@@ -108,6 +117,6 @@ No role job spends supporters' or studio money, and `record_usage` refuses a stu
 - Set the cooling window, from 0 to 10,080 minutes.
 - Edit a card and move it between horizons (`set_card_horizon`), which records a board approval of an agent card's new content.
 - Cancel a card, or resume a paused one with a new estimate.
-- Run a job now, with typed input.
+- Run a job now, with typed input; Rank now and Draft a game card queue the two role jobs.
 - Set the caps and record Console credit purchases.
 - Needs you lists what waits on the board: disputes, S1 cards, credit to buy, the ceiling pauses the rule will not resume, and cards holding money whose approval is not current.
