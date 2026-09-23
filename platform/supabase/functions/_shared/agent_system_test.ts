@@ -681,7 +681,9 @@ Deno.test("criterion 6: the board's veto, the cooling window and role pauses", O
 Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
   const s = await studio();
   try {
-    await s.db.exec(`insert into public.jobs (name, role_id, calls_model, runs_when_paused) values ('studio_ranking', '${s.roles.studioHead}', true, true), ('tidy_up', null, false, false)`);
+    // agent-workflows (20260924400000) seeds studio_ranking and draft_card before any role exists.
+    await s.db.exec(`insert into public.jobs (name, role_id, calls_model, runs_when_paused) values ('studio_ranking', '${s.roles.studioHead}', true, true), ('tidy_up', null, false, false)
+      on conflict (name) do update set role_id = excluded.role_id`);
     const enqueue = async (job: string, origin: string, key: string | null = null, parent: string | null = null) =>
       (await s.row<{ r: { id: string; created: boolean } }>(`select public.enqueue_job_run($1, $2, $3, null, '{}'::jsonb, $4) as r`, [job, origin, key, parent])).r;
 
@@ -747,7 +749,7 @@ Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
         select 'tidy_up', 'old-' || g, 'operator', 'skipped', 'old', now() - interval '1 day' from generate_series(1, 5) g`);
       await s.signInAs(BOARD_EMAIL, "aal1");
       const jobs = (await s.row<{ j: { name: string; runs: { id: string; status: string }[] }[] }>(`select public.board_jobs() as j`)).j;
-      assertEquals(jobs.map((j) => j.name), ["studio_ranking", "tidy_up"]);
+      assertEquals(jobs.map((j) => j.name), ["draft_card", "studio_ranking", "tidy_up"]);
       const tidy = jobs.find((j) => j.name === "tidy_up")!;
       assertEquals(tidy.runs.length, 10);
       // Nine runs from this test, then the newest of the five old ones.

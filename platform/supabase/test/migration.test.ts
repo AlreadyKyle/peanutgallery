@@ -2190,3 +2190,74 @@ describe("agent-system-core migration", () => {
     expect(script).toContain('relation: "cards(agent-written without an approval)"');
   });
 });
+
+// docs/specs/agent-workflows.md: the Game Designer's drafts, graded by the Game Director, and the
+// Studio Head's ranking.
+const AGENT_WORKFLOWS_FILE = "20260924400000_agent_workflows.sql";
+const agentWorkflowsSql = launchFile(AGENT_WORKFLOWS_FILE);
+const AGENT_WORKFLOWS_FUNCTIONS = ["card_from_draft", "record_card_draft", "approve_card_draft", "withdraw_card_draft", "apply_card_ranking"];
+
+describe("agent-workflows migration", () => {
+  it("comes straight after agent-system-core, sets a lock timeout first and reloads the schema last", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(AGENT_WORKFLOWS_FILE);
+    expect(names[at - 1]).toBe(AGENT_SYSTEM_CORE_FILE);
+    expect(withoutComments(agentWorkflowsSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(agentWorkflowsSql).split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("keeps card_drafts behind row level security with nothing for anon or authenticated", () => {
+    const body = withoutComments(agentWorkflowsSql);
+    expect(body).toContain("create table if not exists public.card_drafts (");
+    expect(body).toContain("alter table public.card_drafts enable row level security;");
+    expect(body).toContain("revoke all on public.card_drafts from anon, authenticated;\ngrant all on public.card_drafts to service_role;");
+    expect(body).not.toMatch(/create policy[^;]*card_drafts/);
+    expect(body).not.toMatch(/grant [^;]*public\.card_drafts to [^;]*(anon|authenticated)/);
+  });
+
+  it("recreates the card text guard with the draft path beside the board's and nothing else", () => {
+    const guard = functionBlockIn(agentWorkflowsSql, "cards_agent_text_guard");
+    expect(guard).toContain("if coalesce(current_setting('peanutgallery.card_writer', true), '') in ('board', 'draft') then");
+    const before = functionBlockIn(agentSystemCoreSql, "cards_agent_text_guard");
+    expect(guard.replace(" in ('board', 'draft') then", " = 'board' then").replace(" or the draft path';", "';")).toBe(before);
+  });
+
+  it("gives every new function to the service role only", () => {
+    const body = withoutComments(agentWorkflowsSql);
+    for (const name of AGENT_WORKFLOWS_FUNCTIONS) {
+      expect(body, name).toMatch(new RegExp(`revoke all on function public\\.${name}\\([^)]*\\) from public, anon, authenticated;\\ngrant execute on function public\\.${name}\\([^)]*\\) to service_role;`));
+    }
+    expect(body).not.toMatch(/grant execute[^;]*to [^;]*(anon|authenticated)/);
+  });
+
+  it("hashes and inserts the same card through card_from_draft, the target equal to the estimate, on next at proposed", () => {
+    const from = functionBlockIn(agentWorkflowsSql, "card_from_draft");
+    expect(from).toContain("v_card.funding_target_usd := v_estimate;");
+    expect(from).toContain("v_card.estimate_usd := v_estimate;");
+    expect(from).toContain("v_card.folder := 'seed-1';");
+    expect(from).toContain("v_card.source := 'agent';");
+    expect(functionBlockIn(agentWorkflowsSql, "record_card_draft")).toContain("v_hash := public.card_content_hash_of(v_card);");
+    const approve = functionBlockIn(agentWorkflowsSql, "approve_card_draft");
+    expect(approve).toContain("v_card := public.card_from_draft(v_draft.fields, v_draft.role_id);");
+    expect(approve).toContain("'proposed', 'next', 'neutral',\n    now() + make_interval(mins => coalesce(v_window, 0))");
+    expect(approve).toContain("if public.card_content_hash(v_id) is distinct from v_draft.content_sha256 then");
+    expect(approve).toContain("perform public.record_card_approval(");
+  });
+
+  it("seeds both jobs manual only, model-calling and running while the studio is paused, with no pg_cron schedule", () => {
+    const body = withoutComments(agentWorkflowsSql);
+    expect(body).toContain("('studio_ranking', (select id from public.roles where name = 'Studio Head'), true, true,");
+    expect(body).toContain("('draft_card', (select id from public.roles where name = 'Game Designer'), true, true,");
+    expect(body).not.toContain("cron.schedule");
+  });
+
+  it("is probed by anon-negative-test: card_drafts refused and every new function refused", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    expect(block("PRIVATE_TABLES")).toContain('"card_drafts"');
+    for (const name of AGENT_WORKFLOWS_FUNCTIONS) expect(block("RPC_PROBES")).toContain(`["${name}",`);
+  });
+});
