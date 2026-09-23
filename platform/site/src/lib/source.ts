@@ -75,6 +75,63 @@ export type Deploy = {
   created_at: string;
 };
 
+/** One place in the waterfall's order (public_money.funding_order): a card that takes money and its room. */
+export type FundingPlace = {
+  card_id: string;
+  room_usd: number;
+};
+
+/**
+ * The books in one row, from public_money (docs/specs/money-logic.md): the money-in figures, which
+ * leave out the board's own test payment and add up (received - fees - refunded - disputed +
+ * corrections = reserve + studio + emergency fund + held + agent credit); Not on a card yet and the
+ * shortfall; the board's test payment; the last reconcile with Stripe; and the order money fills
+ * cards in.
+ */
+export type Money = {
+  payments: number;
+  received_usd: number;
+  stripe_fees_usd: number;
+  refunded_usd: number;
+  disputed_usd: number;
+  corrections_usd: number;
+  /** The studio share supporters chose at checkout, averaged by amount; null before any payment. */
+  studio_pct_avg: number | null;
+  reserve_usd: number;
+  studio_usd: number;
+  incident_usd: number;
+  held_usd: number;
+  agent_credit_usd: number;
+  not_on_card_usd: number;
+  short_usd: number;
+  board_test_usd: number;
+  /** When the latest reconcile run finished, set only when it passed. */
+  reconciled_at: string | null;
+  /** The latest reconcile run's result; null when none has run. */
+  last_run_ok: boolean | null;
+  funding_order: FundingPlace[];
+};
+
+/** Where a rejected card's unspent money went: a card, or Not on a card yet when to_card_id is null. */
+export type StoppedMove = {
+  to_card_id: string | null;
+  to_title: string | null;
+  usd: number;
+};
+
+/** A rejected or paused card on horizon now, from public_stopped_cards: why it stopped and its money trail. */
+export type StoppedCard = {
+  card_id: string;
+  title: string;
+  stage: 'paused' | 'rejected';
+  failing_check: string | null;
+  spent_usd: number;
+  funded_usd: number;
+  credited_usd: number;
+  moved: StoppedMove[];
+  stopped_at: string;
+};
+
 /** A role from the public_roles view: the public columns of roles, never its prompt or budget. */
 export type Role = {
   id: string;
@@ -94,7 +151,7 @@ export type Role = {
  * fails, the whole load fails. When an enrichment fails, the snapshot carries its empty value and
  * names it in `missing`, so a page says that part is unavailable instead of showing zero.
  */
-export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'cardTitles'] as const;
+export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'money', 'stopped', 'cardTitles'] as const;
 export type Enrichment = (typeof ENRICHMENTS)[number];
 
 export type Snapshot = {
@@ -109,11 +166,23 @@ export type Snapshot = {
    * Absent or false while it is closed, or when the studio row did not load.
    */
   platformLaneOpen?: boolean;
+  /**
+   * Why the studio is paused (public_studio.pause_reason): awaiting_credit, spend_limit, incident or
+   * board; null while it is not paused, when the reason is missing or when the studio row did not load.
+   */
+  pauseReason?: string | null;
   totals: LedgerTotals;
   events: AgentEvent[];
   deploys: Deploy[];
   roles: Role[];
   cardTitles: Record<string, string>;
+  /**
+   * The books, from public_money; null when it did not load (then 'money' is in missing). A snapshot
+   * built without it (a sample or a test) leaves it out, which reads the same as not loaded.
+   */
+  money?: Money | null;
+  /** The newest rejected and paused cards, from public_stopped_cards; empty when it did not load. */
+  stopped?: StoppedCard[];
   /** The enrichments that failed to load, in ENRICHMENTS order. */
   missing: Enrichment[];
 };
@@ -167,6 +236,40 @@ type StudioRow = {
   launched_at: string | null;
   paused: boolean | null;
   platform_lane_open?: boolean | null;
+  pause_reason?: string | null;
+};
+
+type MoneyRow = {
+  payments: Numeric;
+  received_usd: Numeric;
+  stripe_fees_usd: Numeric;
+  refunded_usd: Numeric;
+  disputed_usd: Numeric;
+  corrections_usd: Numeric;
+  studio_pct_avg: Numeric | null;
+  reserve_usd: Numeric;
+  studio_usd: Numeric;
+  incident_usd: Numeric;
+  held_usd: Numeric;
+  agent_credit_usd: Numeric;
+  not_on_card_usd: Numeric;
+  short_usd: Numeric;
+  board_test_usd: Numeric;
+  reconciled_at: string | null;
+  last_run_ok: boolean | null;
+  funding_order: { card_id: string; room_usd: Numeric }[] | null;
+};
+
+type StoppedRow = {
+  card_id: string;
+  title: string;
+  stage: string;
+  failing_check: string | null;
+  spent_usd: Numeric;
+  funded_usd: Numeric;
+  credited_usd: Numeric;
+  moved: { to_card_id: string | null; to_title: string | null; usd: Numeric }[] | null;
+  stopped_at: string;
 };
 
 type RoleRow = {
@@ -201,6 +304,12 @@ export const EVENT_LIMIT = 20;
  */
 export const QUERY_TIMEOUT_MS = 10_000;
 export const DEPLOY_LIMIT = 10;
+/** The ledger lists the newest twelve stopped cards. */
+export const STOPPED_LIMIT = 12;
+/** The public_money and public_stopped_cards columns the site reads (docs/specs/money-surfaces.md). */
+export const MONEY_COLUMNS =
+  'payments,received_usd,stripe_fees_usd,refunded_usd,disputed_usd,corrections_usd,studio_pct_avg,reserve_usd,studio_usd,incident_usd,held_usd,agent_credit_usd,not_on_card_usd,short_usd,board_test_usd,reconciled_at,last_run_ok,funding_order';
+export const STOPPED_COLUMNS = 'card_id,title,stage,failing_check,spent_usd,funded_usd,credited_usd,moved,stopped_at';
 /** The stages the site lists: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
 export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
 /** The card columns the site reads. Each one must be in the anon column grant on cards. */
@@ -311,6 +420,47 @@ function fundingFrom(rows: FundingRow[]): Record<string, CardFunding> {
   return funding;
 }
 
+/** The books, or throws on a malformed figure (the enrichment is then missing). No row reads as not loaded. */
+function moneyFrom(row: MoneyRow | null): Money {
+  if (row === null) throw new Error('public_money returned no row');
+  const pct = row.studio_pct_avg === null ? null : money(row.studio_pct_avg);
+  return {
+    payments: money(row.payments),
+    received_usd: money(row.received_usd),
+    stripe_fees_usd: money(row.stripe_fees_usd),
+    refunded_usd: money(row.refunded_usd),
+    disputed_usd: money(row.disputed_usd),
+    corrections_usd: money(row.corrections_usd),
+    studio_pct_avg: pct,
+    reserve_usd: money(row.reserve_usd),
+    studio_usd: money(row.studio_usd),
+    incident_usd: money(row.incident_usd),
+    held_usd: money(row.held_usd),
+    agent_credit_usd: money(row.agent_credit_usd),
+    not_on_card_usd: money(row.not_on_card_usd),
+    short_usd: money(row.short_usd),
+    board_test_usd: money(row.board_test_usd),
+    reconciled_at: row.reconciled_at ?? null,
+    last_run_ok: row.last_run_ok ?? null,
+    funding_order: (row.funding_order ?? []).map((place) => ({ card_id: place.card_id, room_usd: money(place.room_usd) })),
+  };
+}
+
+function stoppedFrom(row: StoppedRow): StoppedCard {
+  if (row.stage !== 'paused' && row.stage !== 'rejected') throw new Error(`Unexpected stopped stage: ${row.stage}`);
+  return {
+    card_id: row.card_id,
+    title: row.title,
+    stage: row.stage,
+    failing_check: row.failing_check ?? null,
+    spent_usd: money(row.spent_usd),
+    funded_usd: money(row.funded_usd),
+    credited_usd: money(row.credited_usd),
+    moved: (row.moved ?? []).map((move) => ({ to_card_id: move.to_card_id ?? null, to_title: move.to_title ?? null, usd: money(move.usd) })),
+    stopped_at: row.stopped_at,
+  };
+}
+
 function totalsFrom(row: TotalsRow | null): LedgerTotals {
   if (row === null) return zeroTotals;
   return {
@@ -362,7 +512,7 @@ export function createSupabaseSource(
         }
       };
 
-      const [pool, cardRows, funding, spend, studio, totals, events, deploys, roles] = await Promise.all([
+      const [pool, cardRows, funding, spend, studio, totals, events, deploys, roles, books, stopped] = await Promise.all([
         client
           .from('pool')
           .select('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day')
@@ -410,9 +560,15 @@ export function createSupabaseSource(
             const row = unwrap(
               await client.from('public_studio').select('*').abortSignal(timeout()).maybeSingle<StudioRow>(),
             );
-            return { launchedAt: row?.launched_at ?? null, paused: row?.paused === true, platformLaneOpen: row?.platform_lane_open === true };
+            const paused = row?.paused === true;
+            return {
+              launchedAt: row?.launched_at ?? null,
+              paused,
+              platformLaneOpen: row?.platform_lane_open === true,
+              pauseReason: paused ? (row?.pause_reason ?? null) : null,
+            };
           },
-          { launchedAt: null, paused: false, platformLaneOpen: false },
+          { launchedAt: null, paused: false, platformLaneOpen: false, pauseReason: null as string | null },
         ),
         optional(
           'totals',
@@ -466,6 +622,28 @@ export function createSupabaseSource(
             ).map(roleFrom),
           [] as Role[],
         ),
+        optional(
+          'money',
+          async () =>
+            moneyFrom(unwrap(await client.from('public_money').select(MONEY_COLUMNS).abortSignal(timeout()).maybeSingle<MoneyRow>())),
+          null as Money | null,
+        ),
+        optional(
+          'stopped',
+          async () =>
+            (
+              unwrap(
+                await client
+                  .from('public_stopped_cards')
+                  .select(STOPPED_COLUMNS)
+                  .order('stopped_at', { ascending: false })
+                  .limit(STOPPED_LIMIT)
+                  .abortSignal(timeout())
+                  .returns<StoppedRow[]>(),
+              ) ?? []
+            ).map(stoppedFrom),
+          [] as StoppedCard[],
+        ),
       ]);
       const cardTitles = await optional('cardTitles', () => loadCardTitles(client, distinctCardIds(events), timeout()), {});
       return {
@@ -475,11 +653,14 @@ export function createSupabaseSource(
         launchedAt: studio.launchedAt,
         paused: studio.paused,
         platformLaneOpen: studio.platformLaneOpen,
+        pauseReason: studio.pauseReason,
         totals,
         events,
         deploys,
         roles,
         cardTitles,
+        money: books,
+        stopped,
         missing: ENRICHMENTS.filter((name) => failed.has(name)),
       };
     },

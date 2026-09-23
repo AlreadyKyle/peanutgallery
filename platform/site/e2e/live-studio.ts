@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_STUDIO, type StudioFixture } from './fixtures';
+import { DEFAULT_STUDIO, fundingOrder, moneyRow, type StudioFixture } from './fixtures';
 
 /**
  * The studio as production has it at launch, for the layout targets (docs/specs/home-and-design.md):
  * the launch cards from platform/supabase/seed/launch-cards.json with their real titles and summaries
- * (six open, six shipped), the agents paused, $0.50 in the pool, twenty agent actions and ten
- * deploys, and the real roles. Test data only: no public page ever draws a fixture.
+ * (six open, six shipped), the agents paused while the studio waits for its first payout, $0.50 in
+ * the pool, twenty agent actions and ten deploys, the real roles, a few contributions in public_money
+ * with the open cards in its funding order, and one paused and one rejected card
+ * (docs/specs/money-surfaces.md). Test data only: no public page ever draws a fixture.
  */
 type SeedCard = { title: string; summary: string; folder?: string; funding_target_usd?: number; rank?: number };
 type Seed = { live: SeedCard[]; open: SeedCard[]; new: SeedCard[] };
@@ -93,15 +95,64 @@ const deploys = Array.from({ length: 10 }, (_, i) => ({
   created_at: new Date(Date.parse('2026-09-15T22:25:00Z') - i * 3_600_000).toISOString(),
 }));
 
+// Two cards that stopped: one paused on its spending limit, one rejected by the play bot whose unspent
+// money moved to two open cards and to Not on a card yet.
+const stopped = [
+  {
+    card_id: id(),
+    title: 'Dust drifts toward the cursor',
+    stage: 'paused',
+    failing_check: 'ceiling',
+    spent_usd: '0.4200',
+    funded_usd: '0.5000',
+    credited_usd: '0.5000',
+    moved: [],
+    stopped_at: '2026-09-22T18:00:00Z',
+  },
+  {
+    card_id: id(),
+    title: 'A faster first unlock',
+    stage: 'rejected',
+    failing_check: 'smoke',
+    spent_usd: '0.1800',
+    funded_usd: '0.0000',
+    credited_usd: '0.5000',
+    moved: [
+      { to_card_id: open[0]!.id, to_title: open[0]!.title, usd: 0.15 },
+      { to_card_id: open[1]!.id, to_title: open[1]!.title, usd: 0.1 },
+      { to_card_id: null, to_title: null, usd: 0.07 },
+    ],
+    stopped_at: '2026-09-22T16:00:00Z',
+  },
+];
+
 export const LIVE_STUDIO: StudioFixture = {
   ...DEFAULT_STUDIO,
   paused: true,
+  pauseReason: 'awaiting_credit',
   launchedAt: null,
   pool: { ...DEFAULT_STUDIO.pool, balance_usd: '0.5000', reserve_usd: '0.0600', incident_reserve_usd: '0.0300' },
   cards: [...open, ...live, ...planned],
-  funding: [],
+  funding: stopped.map((card) => ({ card_id: card.card_id, contributors: '1', credited_usd: card.credited_usd })),
   spend: [],
   events,
   deploys,
   totals: { usd_total: '0.0000', input_tokens: '0', cached_tokens: '0', output_tokens: '0', row_count: '0' },
+  // Two contributions: 3.00 - 0.64 in fees = 2.36 = 0.24 reserve + 0.42 studio + 0.09 emergency fund + 1.61 agent credit;
+  // the board's own $1 test payment sits apart, in none of them: $0.5019 of it, its agent credit, is in
+  // the pool (board_test_usd, as production has it; docs/specs/money-logic.md).
+  money: moneyRow({
+    payments: 2,
+    received_usd: '3.0000',
+    stripe_fees_usd: '0.6400',
+    studio_pct_avg: '20.00',
+    reserve_usd: '0.2400',
+    studio_usd: '0.4200',
+    incident_usd: '0.0900',
+    agent_credit_usd: '1.6100',
+    not_on_card_usd: '0.0700',
+    board_test_usd: '0.5019',
+    funding_order: fundingOrder(open.map((card) => card.id)),
+  }),
+  stopped,
 };

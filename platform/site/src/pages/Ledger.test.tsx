@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import { formatDateTime } from '../lib/format';
-import type { Snapshot, StudioSource } from '../lib/source';
+import { books } from '../lib/books.test-fixture';
+import type { Snapshot, StoppedCard, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { Ledger } from './Ledger';
 
@@ -182,9 +183,65 @@ describe('Ledger', () => {
 
   it('shows the unavailable line in every section without a database', () => {
     renderLedger(null);
-    expect(screen.getAllByText(legal.meterUnavailable)).toHaveLength(3);
+    // Funding, Money in, Agent work and Deploys; the Stopped band is not drawn without a snapshot.
+    expect(screen.getAllByText(legal.meterUnavailable)).toHaveLength(4);
+    expect(screen.queryByRole('region', { name: legal.stoppedHeading })).toBeNull();
     expect(screen.queryByText(legal.ledgerEmpty)).toBeNull();
     expect(screen.queryByText(legal.deploysEmpty)).toBeNull();
     expect(screen.queryByText('$0.00')).toBeNull();
+  });
+
+  const stoppedCard: StoppedCard = {
+    card_id: 'st1',
+    title: 'A card that paused',
+    stage: 'paused',
+    failing_check: 'ceiling',
+    spent_usd: 0.4,
+    funded_usd: 2,
+    credited_usd: 2,
+    moved: [],
+    stopped_at: '2026-09-22T10:00:00Z',
+  };
+
+  it('stacks its bands: Funding, Money in, Stopped cards while there are any, Agent work and Deploys', async () => {
+    const { container } = renderLedger(sourceOf({ ...snapshot, money: books([], { payments: 1, received_usd: 5 }), stopped: [stoppedCard] }));
+    await waitFor(() => expect(screen.getByText('A card that paused')).toBeTruthy());
+    const headings = [...container.querySelectorAll('main > .band h2')].map((h) => h.textContent);
+    expect(headings).toEqual([legal.meter, legal.moneyIn, legal.stoppedHeading, legal.agentWork, legal.deploys]);
+  });
+
+  it('draws no Stopped band with no stopped cards, and says Not available right now. when they did not load', async () => {
+    renderLedger(sourceOf({ ...snapshot, money: books(), stopped: [] }));
+    await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());
+    expect(screen.queryByRole('region', { name: legal.stoppedHeading })).toBeNull();
+    cleanup();
+    renderLedger(sourceOf({ ...snapshot, money: books(), stopped: [], missing: ['stopped'] }));
+    const band = await screen.findByRole('region', { name: legal.stoppedHeading });
+    expect(within(band).getByText(legal.partUnavailable)).toBeTruthy();
+  });
+
+  it('shows Not on a card yet in the Funding band, the shortfall and the board test payment only while above zero', async () => {
+    renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 1.25, short_usd: 0, board_test_usd: 0 }) }));
+    const funding = await screen.findByRole('region', { name: legal.meter });
+    await waitFor(() => expect(within(funding).getByText(legal.notOnCard)).toBeTruthy());
+    const row = within(funding).getByText(legal.notOnCard).closest('.stat')!;
+    expect(row.querySelector('dd')?.textContent).toBe('$1.25');
+    expect(within(funding).queryByText(/short by/)).toBeNull();
+    expect(within(funding).queryByText(/test payment/)).toBeNull();
+    cleanup();
+    renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 0, short_usd: 0.75, board_test_usd: 0.5019 }) }));
+    const again = await screen.findByRole('region', { name: legal.meter });
+    await waitFor(() => expect(within(again).getByText(legal.shortBy.replace('{usd}', '$0.75'))).toBeTruthy());
+    expect(within(again).getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeTruthy();
+  });
+
+  it('says Not available right now. for Not on a card yet and Money in when public_money did not load', async () => {
+    renderLedger(sourceOf({ ...snapshot, money: null, missing: ['money'] }));
+    const funding = await screen.findByRole('region', { name: legal.meter });
+    await waitFor(() => expect(within(funding).getByText(legal.notOnCard)).toBeTruthy());
+    expect(within(funding).getByText(legal.notOnCard).closest('.stat')!.querySelector('dd')?.textContent).toBe(legal.partUnavailable);
+    const moneyIn = screen.getByRole('region', { name: legal.moneyIn });
+    expect(within(moneyIn).getByText(legal.partUnavailable)).toBeTruthy();
+    expect(within(moneyIn).queryByText(legal.notReconciled)).toBeNull();
   });
 });

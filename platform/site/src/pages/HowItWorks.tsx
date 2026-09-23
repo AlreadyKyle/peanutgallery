@@ -7,7 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { SplitStats } from '../components/Funding';
 import { LinkedText } from '../components/TextPage';
-import { groupCards } from '../lib/cards';
+import { groupCards, openForFunding } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import { canFund } from '../lib/payment';
@@ -85,7 +85,7 @@ function CardExample({ card, snapshot, real }: { card: Card; snapshot: Snapshot;
 }
 
 function PickVisual({ snapshot }: { snapshot: Snapshot | null }) {
-  const open = snapshot === null ? undefined : groupCards(snapshot.cards).fund.find(canFund);
+  const open = snapshot === null ? undefined : groupCards(snapshot.cards, openForFunding(snapshot)).fund.find(canFund);
   if (snapshot !== null && open !== undefined) return <CardExample card={open} snapshot={snapshot} real />;
   const card = exampleCard({});
   return <CardExample card={card} snapshot={madeUp([card], 2)} real={false} />;

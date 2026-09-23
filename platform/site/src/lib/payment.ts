@@ -1,7 +1,9 @@
-import type { Card } from './source';
+import type { Card, FundingPlace, Snapshot } from './source';
 
 // Which cards take money, in what order, what each spends it on, the one address money goes to, and
-// the split rule's worked example. The address is the Payment Link from netlify.toml (lib/env.ts),
+// the split rule's worked example. Which live cards take money, and in what order, is the database's
+// waterfall (public_money.funding_order, docs/specs/money-logic.md); the site keeps no second copy of
+// that rule (docs/specs/money-surfaces.md). The address is the Payment Link from netlify.toml (lib/env.ts),
 // with the card's id as client_reference_id, which the webhook credits to that card. Kernel
 // (platform/gate/kernel-paths.txt, docs/specs/board-site.md); the gate's payment-host scan also fails
 // a build that carries any other payment address. cards.ts re-exports what the card layout uses.
@@ -20,17 +22,18 @@ export function isFullyFunded(card: Card): boolean {
   return card.funding_target_usd > 0 && card.funded_usd >= card.funding_target_usd;
 }
 
-/** A card takes money while it is a goal card with a target its bar has not reached. */
+/**
+ * A goal card with a target its bar has not reached: the design guide's sample and /how-it-works'
+ * example cards only. A live card takes money when it is in the funding order (inFundingOrder).
+ */
 export function canFund(card: Card): boolean {
   return card.shape === 'goal' && card.funding_target_usd > 0 && !isFullyFunded(card);
 }
 
-// The stages a horizon now card leaves Fund what's next for: building, being checked, queued, shipped.
-const PAST_FUNDING = new Set(['building', 'gated', 'funded', 'live']);
 const FUND_RANK: Record<string, number> = { voted: 0, designing: 1, proposed: 2 };
 const UNRANKED = 3;
 
-/** Funding order: picked by the board first, then in design, then proposed; then the most funded; then the oldest. */
+/** Home's Fund what's next order: picked by the board first, then in design, then proposed; then the most funded; then the oldest. */
 export function fundOrder(a: Card, b: Card): number {
   const rank = (FUND_RANK[a.stage] ?? UNRANKED) - (FUND_RANK[b.stage] ?? UNRANKED);
   if (rank !== 0) return rank;
@@ -39,14 +42,49 @@ export function fundOrder(a: Card, b: Card): number {
   return a.created_at < b.created_at ? -1 : 1;
 }
 
-/** A horizon now card that is not yet building, queued or shipped: open for funding, or picked and still filling. */
-export function isOpenForFunding(card: Card): boolean {
-  return card.horizon === 'now' && !PAST_FUNDING.has(card.stage);
+/** The waterfall's order, or null when public_money did not load (or a sample snapshot carries none). */
+function fundingOrder(snapshot: Snapshot): FundingPlace[] | null {
+  if (snapshot.missing.includes('money') || snapshot.money === undefined || snapshot.money === null) return null;
+  return snapshot.money.funding_order;
 }
 
-/** The cards a contribution can go to, in funding order: the choices /contribute offers. */
-export function fundableCards(cards: readonly Card[]): Card[] {
-  return cards.filter((card) => isOpenForFunding(card) && canFund(card)).sort(fundOrder);
+/**
+ * The cards money fills next, in the waterfall's order: the choices /contribute offers. Empty when
+ * public_money did not load, so only Fund the next card in line is offered, which the waterfall
+ * places safely. A card in the order the snapshot does not list is skipped.
+ */
+export function fundableCards(snapshot: Snapshot): Card[] {
+  const order = fundingOrder(snapshot);
+  if (order === null) return [];
+  const cards = new Map(snapshot.cards.map((card) => [card.id, card]));
+  return order.flatMap((place) => {
+    const card = cards.get(place.card_id);
+    return card === undefined ? [] : [card];
+  });
+}
+
+/** The card Fund the next card in line funds first, or null when no card takes money or the order did not load. */
+export function nextInLine(snapshot: Snapshot): Card | null {
+  return fundableCards(snapshot)[0] ?? null;
+}
+
+/**
+ * Which open cards home counts and draws as open for funding: with the order loaded, only a card in it,
+ * so a card the waterfall leaves out (a vetoed card) is neither counted as open nor drawn without its
+ * Fund this card among cards that have one; with the order unread, every open card, each drawn with no
+ * Fund this card.
+ */
+export function openForFunding(snapshot: Snapshot): (card: Card) => boolean {
+  const order = fundingOrder(snapshot);
+  if (order === null) return () => true;
+  const ids = new Set(order.map((place) => place.card_id));
+  return (card) => ids.has(card.id);
+}
+
+/** Whether a card takes money now: it is in the funding order. False when the order did not load. */
+export function inFundingOrder(snapshot: Snapshot, id: string): boolean {
+  const order = fundingOrder(snapshot);
+  return order !== null && order.some((place) => place.card_id === id);
 }
 
 /** The Payment Link with client_reference_id set to the card id, which the webhook credits. */
