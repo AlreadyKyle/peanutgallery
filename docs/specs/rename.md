@@ -31,6 +31,7 @@ Out: history, which is never rewritten: specs under `docs/specs/` other than thi
    - The script replaces text only. Read each rewritten sentence in `copy.ts`, the legal pages, `seed-1/index.html` and the directives for grammar ("a {{NAME}}" / "an {{NAME}}") and for jokes or wording built on "peanut" or "gallery" (`git grep -niE "peanut|gallery" -- platform/site/src seed-1`).
    - `platform/site/netlify.toml`: a forced 301 from `https://peanutgallery.games/*` and `https://www.peanutgallery.games/*` to `https://{{DOMAIN}}/:splat`, beside the existing `.netlify.app` redirect.
    - `platform/site/scripts/live-check.mjs`: a check that the old domain answers 301 to the new one.
+   - The Terms and Refunds words live in `platform/site/src/lib/terms-versions.ts`, which the script never rewrites (history: each posted version is what applied to the money given under it). The rename adds a new Terms version with the new name, posted by the procedure in `specs/legal-copy.md`.
 4. The link preview: `node platform/site/scripts/og-image.mjs` (it reads the name from `copy.ts` and the address from `index.html`) and commit `public/og.png`.
 5. `pnpm verify`, the site e2e, pull request, merge on a green gate.
 6. The board's steps below, the same day as the deploy.
@@ -48,7 +49,7 @@ Out: history, which is never rewritten: specs under `docs/specs/` other than thi
 
 The files are `TIERS[1]` in `scripts/rename.mjs`. By surface:
 
-- The site: `index.html` (title, og tags, image alt), `src/lib/copy.ts` (the studio name), `src/lib/legal.ts` (the Terms' "operated by" and "not a charity" lines), `styles.css` and `DESIGN.md` headers, `netlify.toml`, `scripts/live-check.mjs`, and the unit and e2e tests that pin them.
+- The site: `index.html` (title, og tags, image alt), `src/lib/copy.ts` (the studio name), `src/lib/legal.ts`, `styles.css` and `DESIGN.md` headers, `netlify.toml`, `scripts/live-check.mjs`, and the unit and e2e tests that pin them.
 - The board's own site, `platform/board`: `index.html` (the title), `src/Board.tsx` (the authenticator line), and the tests that pin them (`src/Board.test.tsx`, `e2e/board.spec.ts`, and `platform/supabase/test/board-users.test.ts` for the board's sign-in addresses).
 - The game (protected, a board change): `seed-1/index.html` (title, meta, og tags, the studio line and link), `seed-1/content/strings.json` (`tabTitle`), `seed-1/CLAUDE.md`, directive D3 in `platform/supabase/lib/directives.ts`, its test, the launch-cards seed and the refresh-cards fixture.
 - The agents: `platform/agents/managed/agent.yaml` and `environment.yaml` (description and system text), the agents' git author `agents@peanutgallery.games` in `platform/dispatcher/src/worktree.ts` and `platform/ops/Dockerfile.dispatcher`, which shows on every public commit. The new address need not receive mail.

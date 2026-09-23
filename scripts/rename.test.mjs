@@ -62,6 +62,16 @@ test('apply rewrites only the files of the tier asked for', () => {
 test('history is never a tier', () => {
   assert.equal(tierOf('docs/specs/site-mark.md'), 'history');
   assert.equal(tierOf('platform/supabase/migrations/20260923000010_backup_role.sql'), 'history');
+  // The posted Terms versions (docs/specs/legal-copy.md): a rename adds a new version instead.
+  assert.equal(tierOf('platform/site/src/lib/terms-versions.ts'), 'history');
+});
+
+test('never rewrites the posted Terms versions, whichever tier is applied', () => {
+  // apply rewrites only the files of the tier it is given, and the versions file is in none.
+  const file = 'platform/site/src/lib/terms-versions.ts';
+  assert.ok(readFileSync(join(repoRoot, file), 'utf8').includes('Peanut Gallery is operated by'), 'the versions name the studio');
+  assert.ok(!Object.values(TIERS).some((files) => files.includes(file)));
+  assert.deepEqual(inventory(repoRoot, [file]).map((row) => [row.file, row.tier]), [[file, 'history']]);
 });
 
 test('every tracked file that carries the old name or domain is in a tier (add new ones to TIERS in scripts/rename.mjs)', () => {

@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vitest/config';
 import { gitHead, resolveBuildSha } from './build-sha';
@@ -21,13 +21,18 @@ function stampBuildSha(): Plugin {
   };
 }
 
-function writeVersionFile(): Plugin {
+/**
+ * Writes version.json (the build's sha and time) into the build's output folder. The folder resolves
+ * against the root, so an absolute --outDir (a build into a scratch folder) is used as given and the
+ * file never lands inside the source tree.
+ */
+export function writeVersionFile(): Plugin {
   let outDir = '';
   return {
     name: 'backseat-write-version',
     apply: 'build',
     configResolved(config) {
-      outDir = join(config.root, config.build.outDir);
+      outDir = resolve(config.root, config.build.outDir);
     },
     closeBundle() {
       mkdirSync(outDir, { recursive: true });

@@ -32,6 +32,7 @@ const PRIVATE_TABLES = [
   "dispatcher_lease",
   "card_patches",
   "controller_runs",
+  "terms_versions",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -45,6 +46,7 @@ const PUBLIC_RELATIONS = [
   "public_card_funding",
   "public_card_spend",
   "public_roles",
+  "public_terms_versions",
 ];
 
 // cards is granted column by column (docs/specs/card-columns-and-open-funding.md).
@@ -67,7 +69,8 @@ const PUBLIC_ROLE_COLUMNS = "id,name,title,description,species_note,avatar_url,m
 
 // Each call is refused by the function itself if the grant is wrong: a holder
 // that holds nothing, a ttl of 0, no reason, a card id that does not exist, a
-// dispute id that is not one. The three money-safety readers take no argument
+// dispute id that is not one. terms_version_at only reads, and a time before
+// every version answers null. The three money-safety readers take no argument
 // and write nothing (docs/specs/money-safety.md); a wrong grant would only let
 // the call run, which this reports without printing what it returned.
 const NO_CARD = "00000000-0000-4000-8000-000000000000";
@@ -86,6 +89,7 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["record_dispute_reinstated", { p_dispute_id: "anon-negative-test", p_stripe_session_id: "", p_amount_usd: 0 }],
   ["record_adjustment", { p_parent_id: NO_CARD, p_net_usd: 0, p_studio_usd: 0, p_agents_usd: 0, p_reserve_usd: 0, p_reason: null }],
   ["redact_contribution_name", { p_contribution_id: NO_CARD, p_reason: null }],
+  ["terms_version_at", { p_at: "2000-01-01T00:00:00Z" }],
 ];
 
 type Actual = "refused" | "readable" | "empty" | "error";
@@ -187,6 +191,29 @@ async function main(): Promise<void> {
     const { error } = await db.from("public_roles").update({ model: "anon-negative-test" }).eq("id", NO_CARD);
     outcomes.push({
       relation: "public_roles(update)",
+      expected: "refused",
+      actual: error ? (error.code === PERMISSION_DENIED ? "refused" : "error") : "readable",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : "the update ran",
+    });
+  }
+
+  // public_terms_versions is a simple view over terms_versions, whose rows are the posted Terms
+  // versions (docs/specs/legal-copy.md); a write through it must be refused. The insert names
+  // version 0 and the update matches no row, so even a wrong grant posts and changes nothing: the
+  // table's check refuses version 0, and that answer is not 42501, so it would show as a failure.
+  {
+    const { error } = await db.from("public_terms_versions").insert({ version: 0 });
+    outcomes.push({
+      relation: "public_terms_versions(insert)",
+      expected: "refused",
+      actual: error ? (error.code === PERMISSION_DENIED ? "refused" : "error") : "readable",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : "the insert ran",
+    });
+  }
+  {
+    const { error } = await db.from("public_terms_versions").update({ posted_at: "2000-01-01T00:00:00Z" }).eq("version", 0);
+    outcomes.push({
+      relation: "public_terms_versions(update)",
       expected: "refused",
       actual: error ? (error.code === PERMISSION_DENIED ? "refused" : "error") : "readable",
       detail: error ? `${error.code ?? "error"} ${error.message}` : "the update ran",

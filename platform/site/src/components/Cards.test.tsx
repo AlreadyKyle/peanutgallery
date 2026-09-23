@@ -92,23 +92,25 @@ describe('a card box', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const intent = 'Edit seed-1/config/unlocks.json. Run the bot; stop and report.';
     render(
-      <FundBoard
-        snapshot={snapshot(
-          [
-            card({
-              id: 'n1',
-              title: 'A fourteenth unlock',
-              summary: 'Add one more unlock.',
-              intent,
-              stage: 'voted',
-              funding_target_usd: 100,
-              funded_usd: 25,
-              source: 'community',
-            }),
-          ],
-          { n1: { contributors: 3, credited_usd: 18.5 } },
-        )}
-      />,
+      <MemoryRouter>
+        <FundBoard
+          snapshot={snapshot(
+            [
+              card({
+                id: 'n1',
+                title: 'A fourteenth unlock',
+                summary: 'Add one more unlock.',
+                intent,
+                stage: 'voted',
+                funding_target_usd: 100,
+                funded_usd: 25,
+                source: 'community',
+              }),
+            ],
+            { n1: { contributors: 3, credited_usd: 18.5 } },
+          )}
+        />
+      </MemoryRouter>,
     );
     const box = boxFor('A fourteenth unlock');
     expect(within(box).getByText(copy.categories.game)).toBeTruthy();

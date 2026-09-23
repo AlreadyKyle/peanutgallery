@@ -1,3 +1,5 @@
 # The e2e run's own build and the optional page screenshots (playwright.config.ts, e2e/pages.spec.ts).
 dist-e2e/
 e2e-screenshots/
+# Every build writes version.json into its output folder (vite.config.ts); it is never source.
+version.json

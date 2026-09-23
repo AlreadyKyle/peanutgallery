@@ -50,6 +50,11 @@ function source(cards: Card[], paused = false): StudioSource {
   return { load: () => Promise.resolve(snapshot), subscribe: () => () => {} };
 }
 
+/** Every link to checkout on the page: the first choice and each card. */
+function checkoutLinks(): HTMLElement[] {
+  return screen.getAllByRole('link').filter((link) => (link.getAttribute('href') ?? '').startsWith(STRIPE));
+}
+
 function renderContribute(src: StudioSource | null) {
   return render(
     <SourceProvider source={src}>
@@ -96,7 +101,23 @@ describe('Contribute', () => {
     expect(screen.queryByText('Already full')).toBeNull();
     expect(screen.queryByText('Being built')).toBeNull();
     expect(screen.queryByText('Already live')).toBeNull();
-    expect(screen.getAllByRole('link')).toHaveLength(3);
+    expect(checkoutLinks()).toHaveLength(3);
+  });
+
+  it('states the agreement directly under the first choice, before any card, with the Terms, the Refunds page and the age condition', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })]));
+    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+    const first = screen.getByRole('link', { name: new RegExp(legal.pickForMe) });
+    const agreement = first.nextElementSibling as HTMLElement;
+    expect(agreement.tagName).toBe('P');
+    expect(agreement.textContent).toBe(
+      legal.contributeAgreement.replace('{terms}', legal.footerLinks.terms).replace('{refunds}', legal.refundsPageLink),
+    );
+    expect(agreement.textContent).toMatch(/adult where you live, or have the permission of a parent or guardian/);
+    expect(within(agreement).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms');
+    expect(within(agreement).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
+    const cardLink = checkoutLinks()[1]!;
+    expect(agreement.compareDocumentPosition(cardLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('lists only cards on horizon now, never a roadmap card', async () => {
@@ -110,7 +131,7 @@ describe('Contribute', () => {
     await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
     expect(screen.queryByText('Planned next')).toBeNull();
     expect(screen.queryByText('Planned later')).toBeNull();
-    expect(screen.getAllByRole('link')).toHaveLength(2);
+    expect(checkoutLinks()).toHaveLength(2);
   });
 
   it('says the agents are paused above the choices while the board has paused them', async () => {

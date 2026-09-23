@@ -231,13 +231,20 @@ is not subscribed yet, so an unattended failure would not reach you.
 
 **Tell me:** "subscribed to ntfy", then "the test alert arrived."
 
-### 10. Business contact for the Terms
+### 10. Business contact for the Terms (no longer blocks)
 
-The Ontario internet-agreement disclosure needs a mailing address and a phone number published on
-the Terms page. Send me the ones to publish; they will be public, so chat is fine. Or tell me to
-leave the disclosure out, and I'll say what that risks.
+The legal-copy pull request shipped the Terms with your name, Kyle Smith, an individual in
+Ontario, and hello@clayhouse.studio, and no mailing address or phone, since none was given and none
+is invented (`docs/specs/legal-copy.md`). Ontario's rules for an internet agreement over $50 expect
+the supplier's address and phone as well. If a contribution over $50 counts as a consumer internet
+agreement, a supporter not given every required disclosure may cancel within 7 days, or within 30
+days when no copy of the agreement was delivered within 15 days. The full refund within 14 days
+covers most of that; the lawyer question in **D** settles whether the Act applies at all.
 
-**Unblocks:** the legal-copy pull request.
+Send me an address and phone to publish (they will be public, so chat is fine) and a later board
+pull request adds them as a new Terms version.
+
+**Unblocks:** nothing waits on it.
 
 **Tell me:** the address and phone to publish, or "leave it out".
 
@@ -273,7 +280,16 @@ No agent touches Stripe; these are yours.
 - **Public details: done 23 September 2026.** Support email hello@clayhouse.studio (`docs/PLAN.md`
   §10 decision 37), plus the terms and privacy URLs.
 - **Display name field: done 23 September 2026.** The Payment Link's "Public display name" custom
-  field is removed.
+  field is removed. The webhook no longer reads the field either (`docs/specs/legal-copy.md`).
+- **Terms checkbox.** Payment Link → Options: turn on "Require customers to accept your terms of
+  service"; it links the terms URL already in your public details. The site already states the agreement
+  before every checkout; this adds express acceptance. If Stripe will not add it to the existing
+  link, make a new link with the same settings and send me its address; a board pull request swaps
+  it into `netlify.toml`.
+- **Adaptive Pricing off.** Settings → Payments → Adaptive Pricing: confirm it is off. With it on, a
+  payer could check out in their own currency, and the webhook refuses any currency but US dollars,
+  so the payment would be charged and not credited. No agent may read Stripe to check this, so it
+  is yours.
 - **Your test payment.** Refund your own $1 test payment.
 - **After-payment redirect.** Payment Link → After payment: redirect customers to
   `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
@@ -292,8 +308,11 @@ changing webhook endpoints becomes a Dashboard step of yours.
 
 ### 14. Review the new Terms, Privacy and Refunds pages
 
-Once the legal-copy pull request is up, read them yourself, as you did on 20 September 2026 (see
-**Done**).
+The legal-copy pull request posted Terms version 2: the refund policy, who may contribute, US
+dollars, a card that is not built, winding down, no cryptocurrency and the change rule, plus a new
+Privacy sentence (the studio stores no name). Read /terms, /refunds and /privacy yourself, as you
+did on 20 September 2026 (see **Done**). A change is a new version, never an edit to a posted one.
+Nothing waits on this.
 
 **Tell me:** "legal pages are fine", or what to change.
 
@@ -467,7 +486,11 @@ yours.
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
   HST threshold and income tax on the pool, and Ontario business-name registration for "Peanut
-  Gallery" ($60). I book nothing.
+  Gallery" ($60). I book nothing. The lawyer's questions on the legal pages
+  (`docs/specs/legal-copy.md`): whether a contribution is a consumer internet agreement under the
+  Consumer Protection Act, 2002; whether the Consumer Protection Act, 2023 is in force yet; whether
+  a copy of the agreement must be delivered within 15 days, and how; and the wording of the age
+  condition, the refund fallback when Stripe cannot refund, and the wind-down rule.
 - **Kill-condition pivots.** "Keep the pivots", or the ones you want for a site-first studio (see
   **Open decisions**).
 - **A Google Cloud billing account,** whenever you choose, to move the dispatcher off your Mac (see

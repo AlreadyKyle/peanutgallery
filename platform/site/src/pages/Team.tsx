@@ -104,7 +104,11 @@ export function Team() {
         </PageHeader>
       </div>
       <div className="band">
-        {studio.state === 'loading' ? <p className="muted">{team.loading}</p> : null}
+        {studio.state === 'loading' ? (
+          <p className="muted" aria-busy="true">
+            {team.loading}
+          </p>
+        ) : null}
         {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
         {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
       </div>

@@ -8,7 +8,7 @@ import { DEFAULT_STUDIO, expect, overflowsHorizontally, test } from './fixtures'
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
 // reduced motion and accessibility. The guide is the design-system pull request's mockup.
 const GUIDE = '/design-kit-7q4m';
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/no-such-page', GUIDE];
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', GUIDE];
 const WIDTHS = [320, 360, 375, 390, 768, 1024, 1440];
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';

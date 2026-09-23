@@ -19,6 +19,8 @@
 //   card's inner edge, and the corner index stays on one line;
 // - buttons: a button's label stays on one line (at most 47px tall);
 // - orphan: no glyph or chip narrower than 32px is left alone on a wrapped line of a flex row;
+// - rhythm: a heading in main sits at least as far below the block before it as that block sits
+//   below its own predecessor, so no line reads as the caption of the section under it;
 // - top bar: at most 61px tall from 360px to 390px wide.
 
 /** The thresholds, in CSS pixels. */
@@ -264,6 +266,25 @@ export function auditLayout(limits) {
         if (bars.length > 1 && spread(bars.map((b) => box(b).top)) > 1) out.push(`card: funding bars misaligned by ${Math.round(spread(bars.map((b) => box(b).top)))}px in a row of ${name(grid)}`);
       }
     }
+  }
+
+  // Rhythm: space groups a line with what it belongs to. A heading opens what follows it, so it sits
+  // at least as far below the block before it as that block sits below its own predecessor; a line
+  // closer to the next heading than to the block it captions reads as part of the wrong section.
+  const shown = (el) => extent.get(el) && !['absolute', 'fixed'].includes(style(el).position);
+  const before = (el) => {
+    let prev = el.previousElementSibling;
+    while (prev !== null && !shown(prev)) prev = prev.previousElementSibling;
+    return prev;
+  };
+  for (const heading of document.querySelectorAll('main h2, main h3')) {
+    if (!shown(heading)) continue;
+    const prev = before(heading);
+    const prior = prev === null ? null : before(prev);
+    if (prior === null) continue;
+    const above = box(heading).top - box(prev).bottom;
+    const between = box(prev).top - box(prior).bottom;
+    if (above + 1 < between) out.push(`rhythm: ${name(heading)} sits ${Math.round(above)}px under ${name(prev)}, which sits ${Math.round(between)}px under the block before it`);
   }
 
   // Buttons keep their label on one line.

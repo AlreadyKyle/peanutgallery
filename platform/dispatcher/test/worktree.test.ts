@@ -128,6 +128,12 @@ describe('pure helpers', () => {
       'platform/site/src/components/PoolStat.tsx',
       'platform/site/src/components/LedgerSummary.tsx',
       'platform/site/src/components/TextPage.tsx',
+      // The Terms versions: every posted version's words, the read that picks the one in force, its
+      // tests, and the not found page a version that is not posted answers with.
+      'platform/site/src/lib/terms-versions.ts',
+      'platform/site/src/lib/terms.ts',
+      'platform/site/src/lib/terms.test.ts',
+      'platform/site/src/components/NotFound.tsx',
       // The entry, the frame and routes, the snapshot every figure comes through, and every
       // component a kernel page draws a figure, a ledger row or the snapshot guard with.
       'platform/site/index.html',

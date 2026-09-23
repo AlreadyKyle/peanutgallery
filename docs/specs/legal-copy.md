@@ -1,6 +1,6 @@
 # Legal copy: numbered terms versions, the refund policy and the wind-down rule
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Built on main after home-and-design (#64). The layout-balance pull request is dropped: home ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. The cross-PR contracts it relies on are in Decisions under "Reconciled with the series".
 
@@ -20,11 +20,12 @@ In:
 - **Terms versions (kernel).** Migration `20260924100000_terms_versions.sql`: the table `terms_versions (version integer primary key, posted_at timestamptz not null default now())` with row level security, no privilege for anon or authenticated and select only for service_role; the existing append-only guard `refuse_money_change` attached to it; `terms_version_at(timestamptz) returns integer`, executable by service_role only; the view `public_terms_versions (version, posted_at)`, select only for anon, authenticated and service_role; the row for version 1. Migration `20260924100100_terms_version_2.sql`: the row for version 2, applied only after the site carrying its words is live.
 - **The words (kernel).** `platform/site/src/lib/terms-versions.ts` (new) holds every version's Terms and Refunds words. Version 1 is main's `legal.terms` and `legal.refunds`, moved unchanged; version 2 is the Appendix. `legal.ts` loses `terms`, `refunds` and `legalUpdated`, and gains `privacyUpdated`, the version strings and the two agreement lines.
 - **The read (kernel).** `platform/site/src/lib/terms.ts` (new) reads `public_terms_versions` once per visit with a 5-second timeout, only on the Terms and Refunds pages, and works out which version to show. The snapshot (`source.ts`, `studio.tsx`) does not change.
-- **Pages (kernel).** /terms and /refunds show the version in force and list earlier ones; /terms/:version and /refunds/:version show one posted version. `TextPage.tsx` gains a `{terms}` link token and a status line; the not found page moves to `components/NotFound.tsx`; `App.tsx` routes the two version paths; `netlify.toml` serves `/terms/*` and `/refunds/*` with `force` like the other kernel paths. `format.ts` gains `formatPostedAt`.
+- **Pages (kernel).** /terms and /refunds show the version in force and list earlier ones; /terms/:version and /refunds/:version show one posted version. `TextPage.tsx` gains a `{terms}` link token, a status line under the lede and a title for a version page; the not found page moves to `components/NotFound.tsx`; `App.tsx` routes the two version paths; `netlify.toml` serves `/terms/*` and `/refunds/*` with `force` like the other kernel paths. `format.ts` gains `formatPostedAt`.
 - **Every path to checkout (kernel).** `Contribute.tsx`: the agreement line directly under the first choice (`legal.pickForMe`, "Fund the next card in line" on main). `Funding.tsx`: a short agreement line under every live Fund this card link.
+- **Loading and spacing (from the review).** Every loading line on the site carries `aria-busy="true"` and one `styles.css` rule keeps the signal plate from growing while one is on the page; `scripts/layout-audit.mjs` gains a rhythm check; `vite.config.ts` writes `version.json` only into the build's own folder.
 - **Privacy.** The display-name sentence is replaced; the page keeps its own date.
 - **The webhook.** `parseSession` stops reading the `displayname` custom field; `sanitizeDisplayName`, `DISPLAY_NAME_MAX` and their tests go.
-- **Kernel lists, rename, tests, live check.** `terms.ts`, `terms-versions.ts`, `terms.test.ts` and `NotFound.tsx` join `kernel-paths.txt` and `KERNEL_PATHS`; `scripts/rename.mjs` treats `terms-versions.ts` as history; `anon-negative-test.ts` and `live-check.mjs` cover the new relations and pages; /terms/1 and /refunds/1 join the routes of `design.spec.ts` and `layout-balance.spec.ts`.
+- **Kernel lists, rename, tests, live check.** `terms.ts`, `terms-versions.ts`, `terms.test.ts` and `NotFound.tsx` join `kernel-paths.txt` and `KERNEL_PATHS`; `scripts/rename.mjs` treats `terms-versions.ts` as history; `anon-negative-test.ts` and `live-check.mjs` cover the new relations and pages (the anon test's write probes through the view insert version 0 and update no row, so even a wrong grant posts nothing); /terms/1 and /refunds/1 join the routes of `design.spec.ts` and `layout-balance.spec.ts`.
 - **Docs.** `docs/PLAN.md` (§5 a subsection "Terms, refunds and winding down", §10 the next free decision number at build, Appendix A), `docs/ROADMAP.md` (criterion 4 and a specs row), `docs/BOARD-SETUP.md` (steps 10, 12, 14 and D), `docs/COPY.md` (a posted version is never edited), `platform/site/DESIGN.md` (the version line and the card's agreement line), this spec.
 
 Out, and what each waits on:
@@ -43,7 +44,7 @@ Out, and what each waits on:
 
 **Words.** `terms-versions.ts` holds each version's number and its Terms and Refunds words. A posted version's words are never edited: it is a kernel file, and a rename leaves it alone. The `{email}` token renders the current contact address in every version.
 
-**The pages.** /terms shows the version in force: the newest version that is both posted and in the site's bundle. Under the lede: "Version 2, in force since <time>." (the time from `posted_at`). After the sections, "Earlier versions" lists each earlier posted version as "Version 1, in force from <time> until <time>", linking /terms/1. /refunds does the same, linking /refunds/n. /terms/n and /refunds/n show version n, titled "Terms, version n" or "Refunds, version n", with "Version n, in force from <time> until <time>. It applies to contributions whose checkout started in that time." and a link to the version in force; the version in force shows its since line instead. A version that is not posted, not in the bundle, or not a whole number from 1 to 9999 is the not found page. While the read runs the page says "Loading the terms." When the read fails, does not answer within 5 seconds, returns no row, or lists a version newer than the bundle's newest, the page shows the newest bundled words (on /terms/n, version n when bundled) with the notice that it cannot confirm which version is in force and the contact address.
+**The pages.** /terms shows the version in force: the newest version that is both posted and in the site's bundle. Under the lede: "Version 2, in force since <time>." (the time from `posted_at`). After the sections, "Earlier versions" lists each earlier posted version, newest first, as "Version 1, in force from <time> until <time>", linking /terms/1. /refunds does the same, linking /refunds/n. /terms/n and /refunds/n show version n, titled "Terms, version n" or "Refunds, version n", with "Version n, in force from <time> until <time>. It applies to contributions whose checkout started in that time." and a link to the version in force; the version in force shows its since line instead. On /terms/n and /refunds/n the Terms and Refunds links in the words go to /terms/n and /refunds/n, the words that applied with version n; /terms and /refunds, and the agreement lines, link the pages in force. A version that is not posted, not in the bundle, or not a whole number from 1 to 9999 is the not found page. A successful read is kept for the rest of the visit, so moving between /terms, /refunds and a version page reads once; a failed one is tried again on the next page. While the read runs the page is drawn whole with the words it expects (the newest bundled version; on /terms/n, version n) and says "Loading the terms." under the lede where the version line goes, so only that line changes when the read answers. When the read fails, does not answer within 5 seconds, returns no row, or lists a version newer than the bundle's newest, the page shows the newest bundled words (on /terms/n, version n when bundled) with the notice that it cannot confirm which version is in force and the contact address.
 
 **Times.** Every posted time shows as a date and clock time in Toronto time, the same for every reader: "22 Sep 2026 at 21:32 Toronto time". One version's end is the next one's start.
 
@@ -62,14 +63,14 @@ Out, and what each waits on:
 
 ## Acceptance criteria
 
-- [ ] `terms_versions` has row level security; anon and authenticated hold no privilege on it or on `terms_version_at`; service_role can only select the table and execute `terms_version_at`; `public_terms_versions` lets anon and authenticated read only `version` and `posted_at`, and an insert or update through it is refused with 42501 (migration test and anon negative test).
-- [ ] The first migration leaves version 1 posted at 2026-09-23 01:32:51 UTC, the second inserts version 2 at the time it is applied, each runs twice without changing a row, an update, delete or truncate of `terms_versions` is refused naming the table, and `terms_version_at(t)` returns the newest version posted at or before t and null for null or a time before version 1.
-- [ ] Version 1's words equal `legal.terms` and `legal.refunds` at 7540073 (one-off comparison quoted in Evidence), version 2's are the Appendix's, and `copy.test.ts` finds in the newest version the operator's name, the age condition, "charged in US dollars", the full refund within 14 days and the Stripe fallback, the per-contribution wind-down ("its share of what is left on each card bar it reached", "120 days", "The studio's share is not refunded", "could not be returned"), the no-cryptocurrency line and "applies only to contributions made after it is posted"; the copy rules run on the newest version and every string outside `TERMS_VERSIONS`, not on older versions.
-- [ ] Posted words are protected: `terms.ts`, `terms-versions.ts`, `terms.test.ts` and `NotFound.tsx` are listed in `kernel-paths.txt` and `KERNEL_PATHS`, which stay equal, the kernel guard fails an agent change to each, and `scripts/rename.mjs` classes `terms-versions.ts` as history and never rewrites it.
-- [ ] /terms and /refunds show the newest posted and bundled version with its since line and each earlier posted version with its range and link; /terms/n and /refunds/n show posted version n with its range and a link to the version in force; a version not posted, not bundled or malformed is the not found page; posted times read the same with the process time zone set to UTC and to Pacific/Auckland; and `design.spec.ts` (no horizontal scroll, axe WCAG 2.2 AA) and `layout-balance.spec.ts` pass with /terms/1 and /refunds/1 in their routes.
-- [ ] When the versions read fails, times out, returns no row or lists a version newer than the bundle's newest, the Terms and Refunds pages show the bundled words with the cannot-confirm notice and the contact address.
-- [ ] Every Payment Link rendered on /, /roadmap and /contribute has links to /terms and /refunds and the age condition in the same card, or on /contribute the agreement line directly under the first choice.
-- [ ] No page says "display name", Privacy carries the new sentence and `privacyUpdated`, and the webhook credits a session carrying a `displayname` field with `display_name` null.
+- [x] `terms_versions` has row level security; anon and authenticated hold no privilege on it or on `terms_version_at`; service_role can only select the table and execute `terms_version_at`; `public_terms_versions` lets anon and authenticated read only `version` and `posted_at`, and an insert or update through it is refused with 42501 (migration test and anon negative test).
+- [x] The first migration leaves version 1 posted at 2026-09-23 01:32:51 UTC, the second inserts version 2 at the time it is applied, each runs twice without changing a row, an update, delete or truncate of `terms_versions` is refused naming the table, and `terms_version_at(t)` returns the newest version posted at or before t and null for null or a time before version 1.
+- [x] Version 1's words equal `legal.terms` and `legal.refunds` at 7540073 (one-off comparison quoted in Evidence), version 2's are the Appendix's, and `copy.test.ts` finds in the newest version the operator's name, the age condition, "charged in US dollars", the full refund within 14 days and the Stripe fallback, the per-contribution wind-down ("its share of what is left on each card bar it reached", "120 days", "The studio's share is not refunded", "could not be returned"), the no-cryptocurrency line and "applies only to contributions made after it is posted"; the copy rules run on the newest version and every string outside `TERMS_VERSIONS`, not on older versions.
+- [x] Posted words are protected: `terms.ts`, `terms-versions.ts`, `terms.test.ts` and `NotFound.tsx` are listed in `kernel-paths.txt` and `KERNEL_PATHS`, which stay equal, the kernel guard fails an agent change to each, and `scripts/rename.mjs` classes `terms-versions.ts` as history and never rewrites it.
+- [x] /terms and /refunds show the newest posted and bundled version with its since line and each earlier posted version with its range and link; /terms/n and /refunds/n show posted version n with its range and a link to the version in force; a version not posted, not bundled or malformed is the not found page; posted times read the same with the process time zone set to UTC and to Pacific/Auckland; and `design.spec.ts` (no horizontal scroll, axe WCAG 2.2 AA) and `layout-balance.spec.ts` pass with /terms/1 and /refunds/1 in their routes.
+- [x] When the versions read fails, times out, returns no row or lists a version newer than the bundle's newest, the Terms and Refunds pages show the bundled words with the cannot-confirm notice and the contact address.
+- [x] Every Payment Link rendered on /, /roadmap and /contribute has links to /terms and /refunds and the age condition in the same card, or on /contribute the agreement line directly under the first choice.
+- [x] No page says "display name", Privacy carries the new sentence and `privacyUpdated`, and the webhook credits a session carrying a `displayname` field with `display_name` null.
 - [ ] Production, in order with the board's allow: a dump that `pg_restore --list` reads, the first migration, the privilege read-back (both false), the anon negative test and ledger identity PASS, stripe-webhook deployed from main; after the site deploy of the merge sha, a second dump, the second migration, and the live check PASS showing "Version 2, in force since", /terms/1, /refunds/1, /terms/3 not found and the agreement lines on / and /contribute.
 
 ## Verification
@@ -77,7 +78,7 @@ Out, and what each waits on:
 - `pnpm verify` at the repository root, with `platform/site/dist-e2e` and `platform/board/dist-e2e` deleted first.
 - `E2E_PORT=4391 pnpm --filter @backseat/site e2e`
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts platform/supabase/functions/_shared/session_test.ts platform/supabase/functions/_shared/split_test.ts`
-- `pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts`
+- `pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts src/version-file.test.ts`
 - `TZ=UTC pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx` and the same with `TZ=Pacific/Auckland`.
 - `node --test scripts/rename.test.mjs`
 - Once, quoted in Evidence: version 1's entry equals `legal.terms` and `legal.refunds` from `git show 7540073:platform/site/src/lib/legal.ts` (a one-off tsx comparison).
@@ -87,7 +88,7 @@ Out, and what each waits on:
 
 The studio stays paused throughout.
 
-1. **Before the merge,** gate green at the head sha: read back `select paused, launched_at from public.studio_state` (paused true); `set -a; . ./.env; set +a; pg_dump "$BACKUP_DB_URL" -Fc -f ~/peanutgallery-dumps/pre-legal-copy-$(date -u +%Y%m%dT%H%M%SZ).dump`; `pg_restore --list` on it succeeds.
+1. **Before the merge,** if the merge falls on a later day than 23 September 2026, change `privacyUpdated` in `legal.ts` to that day in a commit on the branch. Then, gate green at the head sha: read back `select paused, launched_at from public.studio_state` (paused true); `set -a; . ./.env; set +a; pg_dump "$BACKUP_DB_URL" -Fc -f ~/peanutgallery-dumps/pre-legal-copy-$(date -u +%Y%m%dT%H%M%SZ).dump`; `pg_restore --list` on it succeeds.
 2. **Apply `20260924100000_terms_versions.sql`** at the head sha through the Management API query endpoint. Read back the row and the two privileges.
 3. **Run the anon negative test and the ledger identity;** both PASS. Quote the new lines.
 4. **Merge** with the head sha; delete the branch.
@@ -105,7 +106,113 @@ The studio stays paused throughout.
 
 ## Evidence
 
-Added when the status moves to built.
+Built on `launch/legal-copy` from main at e629119. The production lines of Verification and the production steps are the ship stage's and are not run here; the studio stays paused.
+
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0 (rerun after the review's fixes):
+
+```
+platform/board test:       Tests  67 passed (67)
+platform/supabase test:       Tests  273 passed (273)
+platform/site test:       Tests  383 passed (383)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+ℹ tests 117   ℹ pass 117   ℹ fail 0        (test:agents)
+ok | 82 passed (84 steps) | 0 failed (5s)  (test:functions)
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=547
+ℹ tests 15    ℹ pass 15    ℹ fail 0        (test:docs)
+ℹ tests 6     ℹ pass 6     ℹ fail 0        (test:rename)
+verify exit 0
+```
+
+The site e2e, on port 4463 (4391 in the line above sits outside the 4400 to 4499 range parallel agents share): `E2E_PORT=4463 pnpm --filter @backseat/site e2e`
+
+```
+  5 skipped
+  112 passed (2.9m)
+exit 0
+```
+
+It includes /terms with version 2 in force and version 1 listed, /terms/1 and /refunds/1 with their range and link, /terms/3 not found, /terms/1 and /refunds/1 in `design.spec.ts` (no horizontal scroll at every width, axe WCAG 2.2 AA at 375 and 1440) and `layout-balance.spec.ts`, and every Payment Link on /, /roadmap and /contribute carrying the agreement.
+
+`deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts platform/supabase/functions/_shared/session_test.ts platform/supabase/functions/_shared/split_test.ts`
+
+```
+  anon holds select on three public tables, the eight views and the public columns of cards, and nothing else ... ok (241ms)
+  function privileges: anon none, authenticated the nineteen board RPCs, service_role the rest, one file_card ... ok (9ms)
+  terms_versions posts version 1 at #47's merge and version 2 when applied, append-only, readable only through public_terms_versions ... ok (179ms)
+parseSession maps the split dropdown and stores no name, even when a displayname field is sent ... ok (0ms)
+ok | 27 passed (71 steps) | 0 failed (16s)
+```
+
+The handler test "handler credits a session that carries a displayname field exactly as before, with no name" runs in `test:functions` above.
+
+`pnpm --filter @backseat/site exec vitest run src/lib/terms.test.ts src/lib/format.test.ts src/lib/copy.test.ts src/pages/Legal.test.tsx src/pages/Contribute.test.tsx src/components/Card.test.tsx src/App.test.tsx src/netlify-headers.test.ts src/version-file.test.ts`
+
+```
+ Test Files  9 passed (9)
+      Tests  134 passed (134)
+```
+
+`TZ=UTC` and `TZ=Pacific/Auckland pnpm --filter @backseat/site exec vitest run src/lib/format.test.ts src/pages/Legal.test.tsx`
+
+```
+TZ=UTC
+ Test Files  2 passed (2)
+      Tests  26 passed (26)
+TZ=Pacific/Auckland
+ Test Files  2 passed (2)
+      Tests  26 passed (26)
+```
+
+`node --test scripts/rename.test.mjs`
+
+```
+✔ history is never a tier
+✔ never rewrites the posted Terms versions, whichever tier is applied
+ℹ pass 6
+ℹ fail 0
+```
+
+Version 1 against 7540073, once: `git show 7540073:platform/site/src/lib/legal.ts` saved beside a tsx script that compares `TERMS_VERSIONS[0].terms` and `.refunds` with `legal.terms` and `legal.refunds` by deep equality:
+
+```
+version 1 terms equal to 7540073 legal.terms: true
+version 1 refunds equal to 7540073 legal.refunds: true
+exit 0
+```
+
+The live check against a local `vite preview` of a build with `netlify.toml`'s production values, before any production step (`node platform/site/scripts/live-check.mjs http://127.0.0.1:4438`): every route passes, /terms/1 and /refunds/1 included, and
+
+```
+PASS home: 6 Payment Links, each with the agreement
+PASS /contribute: the agreement line under the first choice covers every Payment Link
+PASS 6 card choices carry card ids
+FAIL the Terms version in force: the site has no live data
+FAIL 375px no console errors: Failed to load resource: the server responded with a status of 404 () | ...
+```
+
+The two failures are `public_terms_versions`, which production does not have until production step 2 (`PGRST205 Could not find the table 'public.public_terms_versions' in the schema cache`, 404); step 2 runs before the merge, so the deployed site never makes that request against a database without the view.
+
+Screenshots of /, /contribute, /terms, /terms/1, /refunds, /refunds/1 and /privacy at 375 and 1440, with production data and the versions answered as after both migrations, were looked at; one fix came of it (the cannot-confirm notice's link became its own column at 375px, now one span).
+
+The review's fixes, each with a test that fails before it (run against the old code, then the new):
+
+```
+Legal.test.tsx, old pages:  × say they are loading under the lede ... newest bundled words already drawn
+                            × link {refunds} and {terms} to the same version's pages
+                            × say they are loading under the lede ... that version's words already drawn
+text-pages.spec.ts, old:    Expected: "/refunds/1"  Received: "/refunds"
+                            /terms: the title moved  Received: 410.53125 (375px), 468.921875 (768px), 499.3125 (1440px)
+layout-balance.spec.ts, old styles and loading lines:
+  "/contribute rhythm: h2.choices-heading \"Or pick a card\" sits 16px under p.muted.small ..., which sits 40px under the block before it" (375, 768, 1440)
+  "/team: the title moved 451px", "/roadmap: the title moved 451px", "/contribute: the title moved 92px", "/ledger: the title moved 61px" (1440)
+version-file.test.ts, old join:  × writes into an absolute outDir as given, not under the root
+```
+
+All pass after the fixes, in the verify and e2e runs above. Screenshots of /terms, /terms/1, /refunds/1, /team, /roadmap, /contribute and /ledger at 375 and 1440, loading (every data request held) and loaded, were looked at: the Terms pages differ only in the line under the lede, every title stays under the top bar while loading, and the agreement line on /contribute sits under the first choice with the section gap before "Or pick a card".
 
 ## Decisions
 
@@ -117,6 +224,24 @@ Added when the status moves to built.
   - `public_terms_versions` exposes `version` and `posted_at`; site-snapshot's `terms` rows carry those two fields.
   - The migrations are `20260924100000_terms_versions.sql` and `20260924100100_terms_version_2.sql`, before `20260924200000` (money-logic).
   - The PLAN §10 decision takes the next free number at build.
+- 2026-09-23, at build (defaults taken without the board, per its order to finish the series unasked):
+  - The anon negative test's write probes through `public_terms_versions` insert version 0 and update a row that does not exist, not version 9999: with a correct grant both answer 42501, and with a wrong one the table's check refuses version 0 (a 23514, which the test reports as a failure), so the probe can never post a version into an append-only table.
+  - `terms_version_at` runs with the caller's rights (not security definer): only the service role may execute it, and it can read the table; money-logic's `apply_contribution` is security definer and calls it as the owner.
+  - The version line sits inside the page header, after the lede (`PageHeader`'s children), as the notices on /contribute do. `TextPage` also takes a `title`, for "Terms, version n".
+  - A successful versions read is kept for the visit (one read per page load); a failed read is not kept, so the next page tries again. The pages also stop waiting after 5 seconds whatever the loader does, besides the request's own abort signal.
+  - "Earlier versions" lists newest first, as a bulleted list (`ul.rules`) of 44px links (`a.target`), existing classes only.
+  - The agreement line under Fund this card is `p.muted.small`; one rule in `styles.css` (`.card-bottom > .button + p`) gives it the small top gap, and no new class or token is added.
+  - The cannot-confirm notice uses the existing `p.notice`, with its text in one `span`, because `.notice` is a flex row beside the pause bars and a bare link would become its own column.
+  - `/terms/n` with a read that answers no row, or fails, shows version n unconfirmed; with a read that answers but does not list n, it is the not found page; with a read that lists a version newer than the bundle, version n unconfirmed.
+  - `privacyUpdated` reads "Last updated 23 September 2026.", the day the Privacy sentence changed; production step 1 moves it to the merge day if that is later.
+  - The live check reads `public_terms_versions` over REST with the publishable key from `netlify.toml`, as the site does, to know which version /terms must show.
+  - `legal.ts` no longer carries the studio name, but stays in the rename's tier 1 list (harmless, and the next string may bring it back).
+- 2026-09-23, from the review of the built branch (defaults taken without the board):
+  - A version page's `{terms}` and `{refunds}` links go to that version's pages (`TextPage`'s `version`, passed to `LinkedText`), in every state of the page, so a reader checking version 1 is not sent to version 2's refund rules. The pages in force and the agreement lines keep /terms and /refunds.
+  - While the versions read runs, /terms and /refunds draw the newest bundled words and /terms/n version n's, with "Loading the terms." under the lede in place of the version line. A short loading page let the signal plate fill the window with the title at its foot, then jump 411 to 499px when the words arrived. In the minutes between a deploy and its version's post, the loading state shows the newer words for as long as the read takes, marked as loading; the answered page shows the version in force.
+  - The same jump happened on every page whose loading state is short (/team and /roadmap by 300 to 450px, /contribute and /ledger by up to 92px, on main before this change). One rule in `styles.css` fixes the class: while anything in `main` carries `aria-busy="true"`, the last band takes the spare height instead of the signal plate. Every loading line now carries `aria-busy="true"` (Meter, Guarded, LedgerSummary, the ledger's deploys, /team, /roadmap and the guide's team). `layout-balance.spec.ts` holds every data request on every route and fails when a title moves by more than its header's own content changes.
+  - The agreement line on /contribute sits `--space-1` under the first choice and carries the choice's `--space-4` before "Or pick a card" (it had 40px above and 16px below, and read as the caption of the card list). `scripts/layout-audit.mjs` gains a rhythm check for the class: a heading sits at least as far below the block before it as that block sits below its own predecessor. It finds only this line on every route before the fix, and nothing after.
+  - A screenshot build with an absolute `--outDir` had written `version.json` under `platform/site/private/tmp/…`, because `vite.config.ts` joined the root with the output folder, and it was committed. It is removed, the plugin resolves the folder (`src/version-file.test.ts`), and `platform/site/.gitignore` ignores `version.json`.
 - 2026-09-23 (the board's default): the Ontario disclosure is published with the operator's name, Kyle Smith, an individual in Ontario, and hello@clayhouse.studio only. No mailing address or phone was supplied, and none is invented. BOARD-SETUP step 10 asks for them and says what their absence risks: if a contribution over $50 is a consumer internet agreement, a supporter not given every required disclosure may cancel within 7 days, or within 30 days when no copy of the agreement was delivered within 15 days. The lawyer question in BOARD-SETUP D settles whether the Act applies.
 - 2026-09-23: Versions are whole numbers, never dates: the time a version takes effect is known only when it is posted, and the page shows that time from `posted_at`.
 - 2026-09-23: A version is posted after the site carrying it is live, so no page shows words that are not in force and no contribution is stamped with words the site did not show. The minutes between the deploy and the post show the older version, which is the one in force.

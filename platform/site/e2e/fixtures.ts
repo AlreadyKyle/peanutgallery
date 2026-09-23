@@ -21,7 +21,15 @@ export type StudioFixture = {
   deploys: Record<string, unknown>[];
   roles: Record<string, unknown>[];
   totals: Record<string, string>;
+  /** public_terms_versions; versions 1 and 2 posted when left out (docs/specs/legal-copy.md). */
+  terms?: Record<string, unknown>[];
 };
+
+/** The posted Terms versions the e2e build reads: version 1 at #47's merge, version 2 a day later. */
+export const POSTED_TERMS = [
+  { version: 1, posted_at: '2026-09-23T01:32:51+00:00' },
+  { version: 2, posted_at: '2026-09-24T15:00:00+00:00' },
+];
 
 // The values the board set (docs/PLAN.md §10 decision 36): every role that runs is on claude-opus-5-5.
 const MODELS: Record<string, string> = {
@@ -143,6 +151,7 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
       public_agent_events: studio.events,
       deploys: studio.deploys,
       public_roles: studio.roles,
+      public_terms_versions: studio.terms ?? POSTED_TERMS,
     };
     if (table === undefined || !(table in rows) || route.request().method() !== 'GET') {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: `${url.pathname} is not in the e2e fixture` }) });

@@ -41,7 +41,8 @@
 
 # The Contribute, Ledger and legal pages are the app's, from kernel code (docs/specs/board-site.md).
 # force serves the app at these paths even when the build holds a file there, so a page a card adds to
-# public/ (ledger.html, contribute/index.html) can never stand in for one of them.
+# public/ (ledger.html, contribute/index.html) can never stand in for one of them. Each posted Terms
+# and Refunds version has its own page under /terms/ and /refunds/ (docs/specs/legal-copy.md).
 [[redirects]]
   from = "/contribute"
   to = "/index.html"
@@ -61,6 +62,12 @@
   force = true
 
 [[redirects]]
+  from = "/terms/*"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/privacy"
   to = "/index.html"
   status = 200
@@ -68,6 +75,12 @@
 
 [[redirects]]
   from = "/refunds"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/refunds/*"
   to = "/index.html"
   status = 200
   force = true

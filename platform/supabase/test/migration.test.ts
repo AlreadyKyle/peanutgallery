@@ -1753,14 +1753,17 @@ describe("rename-biz-dev migration", () => {
 // The board's own site (docs/specs/board-site.md): the platform code lane behind a studio flag, the
 // usage tier cap in set_caps, and the board's Needs you RPC.
 const BOARD_SITE_FILE = "20260924000000_board_site.sql";
+const TERMS_VERSIONS_FILE = "20260924100000_terms_versions.sql";
 const boardSiteSql = launchFile(BOARD_SITE_FILE);
 const LANE_OPEN = "coalesce((select s.platform_lane_open from public.studio_state s where s.id = 1), false)";
 const NEW_CAPS_TYPES = "numeric, numeric, numeric, text, numeric, numeric, numeric, boolean";
 
 describe("board-site migration", () => {
   it("comes after every earlier file and sets a lock timeout first", () => {
-    const earlier = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql") && name !== BOARD_SITE_FILE);
-    expect(earlier.every((name) => name < BOARD_SITE_FILE)).toBe(true);
+    const others = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql") && name !== BOARD_SITE_FILE);
+    // Only the files of later specs come after it (docs/specs/legal-copy.md onwards).
+    expect(others.filter((name) => name > BOARD_SITE_FILE).every((name) => name >= TERMS_VERSIONS_FILE)).toBe(true);
+    expect(others.filter((name) => name < BOARD_SITE_FILE).length).toBeGreaterThan(20);
     expect(BOARD_SITE_FILE > RENAME_BIZ_DEV_FILE).toBe(true);
     expect(withoutComments(boardSiteSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
   });
@@ -1889,5 +1892,81 @@ describe("board-site migration", () => {
     const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
     expect(script).toContain('["board_needs_you", {}]');
     expect(script).toContain('const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open";');
+  });
+});
+
+// docs/specs/legal-copy.md: numbered Terms versions, append-only, read by the public through one view.
+const TERMS_VERSION_2_FILE = "20260924100100_terms_version_2.sql";
+const termsVersionsSql = launchFile(TERMS_VERSIONS_FILE);
+const termsVersion2Sql = launchFile(TERMS_VERSION_2_FILE);
+
+describe("terms-versions migrations", () => {
+  it("come after the board-site file, in order, and the first sets a lock timeout first", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(TERMS_VERSIONS_FILE);
+    expect(names[at - 1]).toBe(BOARD_SITE_FILE);
+    expect(names[at + 1]).toBe(TERMS_VERSION_2_FILE);
+    expect(withoutComments(termsVersionsSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+  });
+
+  it("can run twice: every statement is guarded or replaces what it creates", () => {
+    const statements = withoutComments(termsVersionsSql)
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => /^(create|alter|drop|insert)\b/.test(statement) && !/^create or replace (function|view)/.test(statement));
+    expect(statements).toEqual([
+      "create table if not exists public.terms_versions (\n  version integer primary key check (version between 1 and 9999),\n  posted_at timestamptz not null default now()\n)",
+      "alter table public.terms_versions enable row level security",
+      "drop trigger if exists terms_versions_append_only on public.terms_versions",
+      "create trigger terms_versions_append_only before update or delete on public.terms_versions\n  for each row execute function public.refuse_money_change()",
+      "drop trigger if exists terms_versions_no_truncate on public.terms_versions",
+      "create trigger terms_versions_no_truncate before truncate on public.terms_versions\n  for each statement execute function public.refuse_money_change()",
+      "insert into public.terms_versions (version, posted_at) values (1, '2026-09-23 01:32:51+00')\n  on conflict (version) do nothing",
+    ]);
+    expect(withoutComments(termsVersion2Sql)).toBe("insert into public.terms_versions (version) values (2) on conflict (version) do nothing;");
+  });
+
+  it("keeps the table behind row level security, readable by the service role only, and revokes before it grants", () => {
+    const body = withoutComments(termsVersionsSql);
+    const revoke = body.indexOf("revoke all on public.terms_versions from anon, authenticated, service_role;");
+    const grant = body.indexOf("grant select on public.terms_versions to service_role;");
+    expect(body).toContain("alter table public.terms_versions enable row level security;");
+    expect(revoke).toBeGreaterThan(0);
+    expect(grant).toBeGreaterThan(revoke);
+    expect(body.match(/grant [^;]* on public\.terms_versions to [^;]*;/g)).toEqual(["grant select on public.terms_versions to service_role;"]);
+  });
+
+  it("gives terms_version_at to the service role only: the newest version posted at or before the time", () => {
+    expect(functionBlockIn(termsVersionsSql, "terms_version_at")).toBe(
+      "create or replace function public.terms_version_at(p_at timestamptz) returns integer\nlanguage sql\nstable\nset search_path = public\nas $$\n  select max(version) from public.terms_versions where posted_at <= p_at",
+    );
+    const body = withoutComments(termsVersionsSql);
+    const revoke = body.indexOf("revoke all on function public.terms_version_at(timestamptz) from public, anon, authenticated;");
+    expect(revoke).toBeGreaterThan(0);
+    expect(body.indexOf("grant execute on function public.terms_version_at(timestamptz) to service_role;")).toBeGreaterThan(revoke);
+  });
+
+  it("shows only version and posted_at through public_terms_versions, select only, as the owner", () => {
+    const body = withoutComments(termsVersionsSql);
+    expect(body).toContain(
+      "create or replace view public.public_terms_versions with (security_invoker = false) as\n  select version, posted_at from public.terms_versions;",
+    );
+    const revoke = body.indexOf("revoke all on public.public_terms_versions from anon, authenticated, service_role;");
+    expect(revoke).toBeGreaterThan(body.indexOf("create or replace view public.public_terms_versions"));
+    expect(body.indexOf("grant select on public.public_terms_versions to anon, authenticated, service_role;")).toBeGreaterThan(revoke);
+    expect(body.split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("is probed by anon-negative-test: the table refused, the view readable and closed to writes, the function refused", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    expect(block("PRIVATE_TABLES")).toContain('"terms_versions"');
+    expect(block("PUBLIC_RELATIONS")).toContain('"public_terms_versions"');
+    expect(block("RPC_PROBES")).toContain('["terms_version_at", { p_at: "2000-01-01T00:00:00Z" }]');
+    expect(script).toContain('relation: "public_terms_versions(insert)"');
+    expect(script).toContain('relation: "public_terms_versions(update)"');
   });
 });

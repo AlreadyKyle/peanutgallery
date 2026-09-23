@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, cardRoutes, KERNEL_SEGMENTS } from './App';
 import { copy } from './lib/copy';
 import { legal } from './lib/legal';
+import { NEWEST_TERMS } from './lib/terms-versions';
 
 // App.tsx is kernel and routes.tsx is the card lane's (docs/specs/board-site.md). A routes.tsx that
 // tries to take a kernel page's path, /board or every path, or to link the top bar to another host,
@@ -60,9 +61,11 @@ describe('the kernel frame and the card lane routes', () => {
     const pages: [string, string][] = [
       ['/ledger', legal.ledger],
       ['/contribute', legal.contributeTitle],
-      ['/terms', legal.terms.title],
+      ['/terms', NEWEST_TERMS.terms.title],
+      ['/terms/1', 'Terms, version 1'],
       ['/privacy', legal.privacy.title],
-      ['/refunds', legal.refunds.title],
+      ['/refunds', NEWEST_TERMS.refunds.title],
+      ['/refunds/1', 'Refunds, version 1'],
       ['/contact', legal.contact.title],
     ];
     for (const [path, title] of pages) {
@@ -73,7 +76,7 @@ describe('the kernel frame and the card lane routes', () => {
   });
 
   it('answers /board and an unknown path with the not found page, not a card catch-all', () => {
-    for (const path of ['/board', '/board/x', '/no-such-page/x']) {
+    for (const path of ['/board', '/board/x', '/no-such-page/x', '/terms/x', '/refunds/0']) {
       renderAt(path);
       expect(h1(), path).toEqual([copy.notFound]);
       cleanup();

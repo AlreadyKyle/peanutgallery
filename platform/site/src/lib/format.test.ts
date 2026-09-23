@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDateTime,
   formatInteger,
+  formatPostedAt,
   formatUsd,
   percent,
   shortSha,
@@ -82,5 +83,23 @@ describe('formatClock', () => {
     expect(formatClock(new Date('2026-03-05T14:07:00Z'))).toBe('14:07');
     expect(formatClock(new Date('2026-03-05T00:05:00Z'))).toBe('00:05');
     expect(formatClock(new Date('2026-03-05T23:59:00Z'))).toBe('23:59');
+  });
+});
+
+describe('formatPostedAt', () => {
+  // The same Toronto time for every reader: vitest runs this file with the process time zone as the
+  // machine has it, and the spec's Verification runs it again with TZ=UTC and TZ=Pacific/Auckland.
+  it('writes a posted time as a date and clock time in Toronto time', () => {
+    expect(formatPostedAt('2026-09-23T01:32:51Z')).toBe('22 Sep 2026 at 21:32 Toronto time');
+    expect(formatPostedAt('2026-09-23 01:32:51+00')).toBe('22 Sep 2026 at 21:32 Toronto time');
+    expect(formatPostedAt('2027-01-15T17:00:00Z')).toBe('15 Jan 2027 at 12:00 Toronto time');
+  });
+
+  it('writes midnight as 00, never 24', () => {
+    expect(formatPostedAt('2026-11-02T05:00:00Z')).toBe('2 Nov 2026 at 00:00 Toronto time');
+  });
+
+  it('returns what it was given when it is not a time', () => {
+    expect(formatPostedAt('not a time')).toBe('not a time');
   });
 });
