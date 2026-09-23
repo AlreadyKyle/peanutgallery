@@ -10,7 +10,7 @@
 
 import Stripe from "npm:stripe@19.3.1";
 import type { Amounts } from "../_shared/split.ts";
-import { feeFromSession, type Parsed } from "../_shared/session.ts";
+import { type ChargeFacts, chargeFromSession, type Parsed } from "../_shared/session.ts";
 import {
   type CheckoutSession,
   createHandler,
@@ -51,11 +51,13 @@ function constructEvent(
   );
 }
 
-async function lookupFee(sessionId: string): Promise<number | null> {
+// One retrieve gives both the fee (the charge's balance transaction) and the
+// card fingerprint (the same charge's payment_method_details.card).
+async function lookupCharge(sessionId: string): Promise<ChargeFacts | null> {
   const session = await stripe.checkout.sessions.retrieve(sessionId, {
     expand: ["payment_intent.latest_charge.balance_transaction"],
   });
-  return feeFromSession(session);
+  return chargeFromSession(session);
 }
 
 async function findSession(
@@ -113,6 +115,7 @@ async function notify(message: string): Promise<void> {
 function applyContribution(
   parsed: Parsed,
   amounts: Amounts,
+  payerKey: string,
 ): Promise<Record<string, unknown>> {
   return rpc("apply_contribution", {
     p_stripe_event_id: parsed.event_id,
@@ -123,12 +126,13 @@ function applyContribution(
     p_studio_pct: parsed.studio_pct,
     p_goal_card_id: parsed.goal_card_id,
     p_stripe_session_id: parsed.session_id,
+    p_payer_key: payerKey,
   });
 }
 
 Deno.serve(createHandler({
   constructEvent,
-  lookupFee,
+  lookupCharge,
   findSession,
   applyContribution,
   reverseContribution,

@@ -41,6 +41,7 @@ function checkValue(schema, value, where) {
   if (schema.type === 'string') {
     assert.equal(typeof value, 'string', `${where} is a string`);
     if (Object.hasOwn(schema, 'minLength')) assert.ok(value.length >= schema.minLength, `${where} has at least ${schema.minLength} characters`);
+    if (Object.hasOwn(schema, 'maxLength')) assert.ok(value.length <= schema.maxLength, `${where} has at most ${schema.maxLength} characters`);
     if (Object.hasOwn(schema, 'pattern')) assert.match(value, new RegExp(schema.pattern), `${where} matches ${schema.pattern}`);
     if (Object.hasOwn(schema, 'enum')) assert.ok(schema.enum.includes(value), `${where} is one of ${schema.enum.join(', ')}`);
   } else if (schema.type === 'number') {
@@ -64,10 +65,11 @@ function checkValue(schema, value, where) {
 const schema = readSchemaFromReadme();
 const specs = readSpecs();
 
-test('the README schema names exactly the ten keys and allows no others', () => {
+test('the README schema names exactly the eleven keys and allows no others', () => {
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual([...schema.required].sort(), Object.keys(schema.properties).sort());
-  assert.equal(schema.required.length, 10);
+  assert.equal(schema.required.length, 11);
+  assert.ok(schema.required.includes('description'), 'description is required');
 });
 
 test('the folder holds exactly the nine launch role files', () => {
@@ -78,7 +80,7 @@ for (const { file, spec } of specs) {
   const role = file.replace(/\.json$/, '');
 
   test(`${file} validates against the schema`, () => {
-    assert.deepEqual(Object.keys(spec).sort(), [...schema.required].sort(), `${file} carries exactly the ten keys`);
+    assert.deepEqual(Object.keys(spec).sort(), [...schema.required].sort(), `${file} carries exactly the eleven keys`);
     for (const key of schema.required) checkValue(schema.properties[key], spec[key], `${file}.${key}`);
   });
 
@@ -90,6 +92,13 @@ for (const { file, spec } of specs) {
   test(`${file} has write_access exactly when it has tools`, () => {
     assert.equal(spec.write_access, spec.tools.length > 0);
   });
+
+  // Host, Scout and Community have nothing to run on at launch; the site shows the description as is.
+  if (spec.tools.length === 0) {
+    test(`${file} description says the role is not running yet`, () => {
+      assert.ok(spec.description.includes('not running yet'), `${file} description says "not running yet"`);
+    });
+  }
 
   test(`${file} carries the launch values`, () => {
     const expected = LAUNCH_VALUES[role];

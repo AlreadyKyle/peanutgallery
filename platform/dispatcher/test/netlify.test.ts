@@ -74,9 +74,22 @@ describe('waitForDeploy', () => {
 
   it('times out with a reason naming the last state seen', async () => {
     const building = opts(deploysReply([{ id: 'd1', state: 'building', commit_ref: SHA, context: 'production' }]));
-    expect(await waitForDeploy(building, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: 'deploy d1 still building after 0 s' });
+    expect(await waitForDeploy(building, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: 'deploy d1 still building after 0 s', timedOut: true });
     const none = opts(deploysReply([]));
-    expect(await waitForDeploy(none, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: `no production deploy for ${SHA} after 0 s`, deploy: null });
+    expect(await waitForDeploy(none, SITE, SHA, { timeoutMs: 0, intervalMs: 1 })).toMatchObject({ ok: false, reason: `no production deploy for ${SHA} after 0 s`, deploy: null, timedOut: true });
+  });
+
+  it('marks only a wait that ran out of time as timed out, since only that deploy may still publish', async () => {
+    const failed = opts(deploysReply([{ id: 'd1', state: 'error', commit_ref: SHA, context: 'production' }]));
+    expect(await waitForDeploy(failed, SITE, SHA, { timeoutMs: 1000, intervalMs: 1 })).not.toHaveProperty('timedOut');
+    const skipped = opts(deploysReply([{ id: 'd1', state: 'ready', commit_ref: SHA, context: 'production', skipped: true }]));
+    expect(await waitForDeploy(skipped, SITE, SHA, { timeoutMs: 1000, intervalMs: 1 })).not.toHaveProperty('timedOut');
+    let reads = 0;
+    const seenThenDown = opts(() => {
+      reads += 1;
+      return reads === 1 ? deploysReply([{ id: 'd1', state: 'building', commit_ref: SHA, context: 'production' }]) : { status: 503, json: {} };
+    });
+    expect(await waitForDeploy(seenThenDown, SITE, SHA, { timeoutMs: 20, intervalMs: 5 })).toMatchObject({ ok: false, reason: 'deploy d1 still building after 0.02 s', timedOut: true });
   });
 
   it('rides out errors and non-200 answers until the deadline, and logs each', async () => {

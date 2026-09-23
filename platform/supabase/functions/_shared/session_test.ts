@@ -1,5 +1,8 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
+  cardFingerprintFromSession,
+  chargeFromSession,
+  type ChargeLike,
   customFieldValue,
   feeFromSession,
   parseSession,
@@ -201,4 +204,50 @@ Deno.test("feeFromSession is null while any link is a bare id or missing", () =>
     })),
     null,
   );
+});
+
+/** A session whose expanded latest charge carries a $0.45 usd fee and the given payment method details. */
+function paidWith(details: ChargeLike["payment_method_details"]): SessionLike {
+  return session({
+    payment_intent: {
+      latest_charge: {
+        balance_transaction: { fee: 45, currency: "usd", exchange_rate: null },
+        payment_method_details: details,
+      },
+    },
+  });
+}
+
+Deno.test("a card payment's fingerprint comes from the same expanded charge as the fee", () => {
+  const card = paidWith({ type: "card", card: { fingerprint: "Xt5EWLLDS7FJjR1c", wallet: null } });
+  assertEquals(cardFingerprintFromSession(card), "Xt5EWLLDS7FJjR1c");
+  assertEquals(chargeFromSession(card), { fee_usd: 0.45, card_fingerprint: "Xt5EWLLDS7FJjR1c" });
+});
+
+Deno.test("an Apple Pay or Google Pay payment is a card payment, read the same way", () => {
+  for (const wallet of ["apple_pay", "google_pay"]) {
+    const paid = paidWith({ type: "card", card: { fingerprint: `wallet-${wallet}`, wallet: { type: wallet } } });
+    assertEquals(chargeFromSession(paid), { fee_usd: 0.45, card_fingerprint: `wallet-${wallet}` });
+  }
+});
+
+Deno.test("a Link payment, or any method without a card, has no fingerprint and still has its fee", () => {
+  const link = paidWith({ type: "link", link: { country: "CA" } });
+  assertEquals(cardFingerprintFromSession(link), null);
+  assertEquals(chargeFromSession(link), { fee_usd: 0.45, card_fingerprint: null });
+  assertEquals(chargeFromSession(paidWith(null)), { fee_usd: 0.45, card_fingerprint: null });
+  assertEquals(chargeFromSession(paidWith({ type: "card", card: { fingerprint: "  " } })), { fee_usd: 0.45, card_fingerprint: null });
+});
+
+Deno.test("chargeFromSession is null while the fee is not available, whatever the card", () => {
+  assertEquals(chargeFromSession(session()), null);
+  assertEquals(
+    chargeFromSession(session({
+      payment_intent: {
+        latest_charge: { balance_transaction: "txn_1", payment_method_details: { type: "card", card: { fingerprint: "fp" } } },
+      },
+    })),
+    null,
+  );
+  assertEquals(cardFingerprintFromSession(session({ payment_intent: { latest_charge: "ch_1" } })), null);
 });

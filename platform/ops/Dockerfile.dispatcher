@@ -1,37 +1,38 @@
-# Dispatcher image for the VPS (docs/specs/vps.md, docs/specs/ops-separation.md): the toolchain only.
-# The repository is not copied in. dispatcher.service mounts three host folders:
+# Dispatcher image for the VPS (docs/specs/vps.md, docs/specs/ops-separation.md,
+# docs/specs/launch-managed.md): the toolchain only. The repository is not copied in.
+# dispatcher.service mounts three host folders:
 #   /srv/peanutgallery-code       at /opt/peanutgallery, read-only: the root-owned code clone the
 #                                 dispatcher and its node_modules run from
 #   /srv/peanutgallery            at the same path: the work clone uid 10001 fetches and pushes in
-#   /srv/peanutgallery-worktrees  at the same path: card, smoke and probe worktrees
+#   /srv/peanutgallery-worktrees  at the same path: card worktrees
 # Worktree metadata lives in the work clone's .git, so it survives restarts.
+#
+# No agent runs here. Unattended cards run as Claude Managed Agents sessions in containers Anthropic
+# hosts; the dispatcher keeps their event streams, applies each accepted patch with git and drives the
+# gate, merge and deploy. So the image carries no claude CLI, no sandbox tools and no Claude Code
+# settings, and no agent-written code runs beside the dispatcher's secrets.
 #
 # Built on the VPS from a commit, never from a working tree (provision.sh and deploy.sh):
 #   git archive <sha>:platform/ops | docker build -f Dockerfile.dispatcher \
 #     -t peanutgallery/dispatcher:<sha> -t peanutgallery/dispatcher:current -
-# Dockerfile.dispatcher.dockerignore admits only the entrypoint and the managed settings. Secrets
-# never enter the image: they reach the container through docker's --env-file at run time.
+# Dockerfile.dispatcher.dockerignore admits only the entrypoint. Secrets never enter the image: they
+# reach the container through docker's --env-file at run time.
 #
 # To pin the base image by digest, pass --build-arg NODE_IMAGE=node:22-bookworm-slim@sha256:<digest>
 # (NODE_IMAGE=... for provision.sh and deploy.sh; see README.md).
 ARG NODE_IMAGE=node:22-bookworm-slim
 FROM ${NODE_IMAGE}
 
-# The claude CLI version on the board's Mac and in platform/dispatcher/test/fixtures/probe.jsonl
-# (claude_code_version). The entrypoint refuses to start any other.
-ARG CLAUDE_CODE_VERSION=2.1.139
 # The root package.json's packageManager.
 ARG PNPM_VERSION=11.0.9
 
-# bookworm, not alpine: the claude CLI's bundled ripgrep is linked against glibc. bubblewrap and socat
-# are what Claude Code's Linux Bash sandbox needs; whether sessions turn the sandbox on is decided
-# separately.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git ca-certificates tini bubblewrap socat \
+  && apt-get install -y --no-install-recommends git ca-certificates tini \
   && rm -rf /var/lib/apt/lists/*
 
-# npm, not corepack: corepack caches pnpm under root's home, which uid 10001 cannot read.
-RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "pnpm@${PNPM_VERSION}" \
+# npm, not corepack: corepack caches pnpm under root's home, which uid 10001 cannot read. pnpm is for
+# deploy.sh's and provision.sh's throwaway install of the dispatcher's node_modules.
+RUN npm install -g "pnpm@${PNPM_VERSION}" \
   && npm cache clean --force
 
 RUN groupadd --gid 10001 agent \
@@ -44,25 +45,15 @@ RUN groupadd --gid 10002 build \
 
 COPY --chmod=0755 dispatcher-entrypoint.sh /usr/local/bin/dispatcher-entrypoint.sh
 
-# Claude Code on Linux reads managed settings from /etc/claude-code/managed-settings.json whatever
-# --setting-sources says. Copied as root, mode 0644: uid 10001 can read it and cannot change it.
-COPY --chmod=0644 managed-settings.json /etc/claude-code/managed-settings.json
-
 USER 10001:10001
 RUN git config --global user.name "Peanut Gallery agents" \
   && git config --global user.email agents@peanutgallery.games
 
-# CLAUDE_CODE_VERSION stays in the environment for the entrypoint's check. pnpm 11 reads its store
-# location from pnpm_config_store_dir (it ignores npm_config_store_dir). Only deploy.sh's throwaway
-# install container runs pnpm install, into the code clone, so the store sits there and hard-links
-# into node_modules on the same mount. No NODE_ENV=production: it would drop devDependencies such as
-# tsx. Agent sessions and the smoke bot get none of these: the dispatcher builds their environment
-# from an allowlist, and its CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC switch turns the updater off
-# inside sessions.
-ENV CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION} \
-    CLAUDE_BIN=/usr/local/bin/claude \
-    DISABLE_AUTOUPDATER=1 \
-    CI=true \
+# pnpm 11 reads its store location from pnpm_config_store_dir (it ignores npm_config_store_dir). Only
+# deploy.sh's throwaway install container runs pnpm install, into the code clone, so the store sits
+# there and hard-links into node_modules on the same mount. No NODE_ENV=production: it would drop
+# devDependencies such as tsx.
+ENV CI=true \
     pnpm_config_store_dir=/opt/peanutgallery/.pnpm-store
 
 WORKDIR /opt/peanutgallery

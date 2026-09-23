@@ -1,0 +1,69 @@
+# The one Claude Managed Agent every writing role runs as in unattended mode
+# (docs/specs/launch-managed.md). It holds the tools and nothing else. Each card session is created
+# with agent_with_overrides: the model is the role's model at session time, and the system prompt is
+# the role prompt, the root CLAUDE.md and the card folder's CLAUDE.md read from the card's base
+# commit, followed by the dispatcher's finishing section. So a prompt or model change on main takes
+# effect on the next card with no re-apply.
+#
+# `pnpm --filter @backseat/dispatcher managed:apply` creates or updates this agent by name with the
+# studio key and prints its id and version for MANAGED_AGENT_ID and MANAGED_AGENT_VERSION. The agent
+# model is required by the API; the apply step sets it from MODEL_BUILDER, and every card session
+# overrides it. At unattended startup the dispatcher reads the pinned version back and refuses to run
+# unless its tools, MCP servers, skills and model speed match this file.
+#
+# The tools: bash and the five file tools, each enabled by name with everything else off (web_fetch
+# and web_search stay off: a writing agent never reads the public web), no MCP server, no skill, no
+# sub-agent, and one custom tool the dispatcher answers.
+name: peanutgallery-writer
+description: Builds one funded Peanut Gallery card in a mounted, read-only checkout and hands the change back as a patch file.
+system: You are a writing agent at the Peanut Gallery studio. Every session supplies your role prompt, the repository's CLAUDE.md files and the card.
+tools:
+  - type: agent_toolset_20260401
+    default_config:
+      enabled: false
+      permission_policy:
+        type: always_allow
+    configs:
+      - name: bash
+        enabled: true
+      - name: read
+        enabled: true
+      - name: write
+        enabled: true
+      - name: edit
+        enabled: true
+      - name: glob
+        enabled: true
+      - name: grep
+        enabled: true
+      - name: web_fetch
+        enabled: false
+      - name: web_search
+        enabled: false
+  - type: custom
+    name: submit_patch
+    description: >-
+      Hand your finished change to the dispatcher. First run the export command the session gives
+      you: it stages every change and writes the diff against the card's base commit to
+      /mnt/session/outputs/card.patch, then prints the file's sha256 and its size in bytes. Then call
+      this tool once with a one-line summary, that sha256 and that byte count. Do not paste the diff.
+      The dispatcher fetches the file, checks it and applies it; if it refuses the patch, the result
+      says why and you may fix the change and submit once more.
+    input_schema:
+      type: object
+      properties:
+        summary:
+          type: string
+          description: One line saying what changed.
+        sha256:
+          type: string
+          description: The sha256 of /mnt/session/outputs/card.patch as the export command printed it, 64 lowercase hex characters.
+        bytes:
+          type: integer
+          description: The size of /mnt/session/outputs/card.patch in bytes as the export command printed it.
+      required:
+        - summary
+        - sha256
+        - bytes
+mcp_servers: []
+skills: []

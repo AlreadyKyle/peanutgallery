@@ -5,12 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { SessionPaused } from '../src/adapters/types.js';
 import type { DispatcherConfig } from '../src/config.js';
 import { haltReason, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
+import { SessionBudgets } from '../src/budgets.js';
+import { storedPatch, type PatchStore, type StoredPatch } from '../src/patch.js';
 import { runCardPipeline, type PipelineDeps, type PipelineTimings } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
-import type { BotExec } from '../src/smoke.js';
+import { tick } from '../src/tick.js';
 import { AGENT_EMAIL, defaultGitRunner, git, setGitRunner, type GitCall } from '../src/worktree.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
@@ -137,11 +140,20 @@ interface Remote {
   restore?: Reply;
   ref?: Reply;
   compareExtra?: CompareFile[];
+  // main's head at the merge; origin's main when unset.
+  main?: Answer;
+  close?: Reply;
 }
 
 function answer(value: Answer | undefined, head: string, fallback: Reply): Reply {
   if (value === undefined) return fallback;
   return typeof value === 'function' ? value(head) : value;
+}
+
+// main's head as origin has it, read inside the merge lock before the merge.
+function mainRoute(method: string, url: string): Reply | undefined {
+  if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main`) return { status: 200, json: { object: { sha: originSha('refs/heads/main') } } };
+  return undefined;
 }
 
 // Revert routes that answer for any merge sha.
@@ -168,10 +180,13 @@ function remote(over: Remote = {}) {
       return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
     }
     if (method === 'GET' && CHECK_RUNS.test(url)) {
-      return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
+      return over.gate ?? { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
     }
     const git = github(method, url);
     if (git) return git;
+    const main = over.main ? answer(over.main, state.head, { status: 500 }) : mainRoute(method, url);
+    if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main` && main) return main;
+    if (method === 'PATCH' && url === `${GITHUB}/pulls/5`) return over.close ?? { status: 200, json: { number: 5, state: 'closed' } };
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) return answer(over.merge, state.head, { status: 200, json: { sha: MERGE_SHA } });
     if (method === 'GET' && url === deploysUrl('site-platform')) return answer(over.deploys, state.head, { status: 200, json: [readyDeploy] });
     if (method === 'GET' && url === `${NETLIFY}/site-platform`) return answer(over.site, state.head, { status: 200, json: { ssl_url: `${SITE_URL}/` } });
@@ -232,7 +247,7 @@ describe('runCardPipeline', () => {
     const final = db.cards[0]!;
     expect(final).toMatchObject({ stage: 'live', failing_check: null, branch: 'card/4c2f5a1e-code', commit_sha: MERGE_SHA, actual_usd: 0.0045 });
     expect(db.ledger).toHaveLength(1);
-    expect(db.deploys).toEqual([expect.objectContaining({ folder: 'platform', sha: MERGE_SHA, netlify_deploy_id: 'dep-2', is_green: true, smoke_result: 'pass: build merge-sh served' })]);
+    expect(db.deploys).toEqual([expect.objectContaining({ folder: 'platform', sha: MERGE_SHA, netlify_deploy_id: 'dep-2', is_green: true, smoke_result: 'pass: build merge-sh served; gate green at the merge sha' })]);
     expect(db.events.map((e) => [e.type, e.payload.step])).toEqual([
       ['start', undefined],
       ['gate_pass', undefined],
@@ -244,6 +259,7 @@ describe('runCardPipeline', () => {
     expect(urls(calls)).toEqual([
       `POST ${GITHUB}/pulls`,
       `GET ${GITHUB}/commits/${state.head}/check-runs?check_name=gate&per_page=50`,
+      `GET ${GITHUB}/git/ref/heads/main`,
       `GET ${GITHUB}/compare/${initialSha}...${state.head}`,
       `GET ${GITHUB}/git/trees/${initialSha}?recursive=1`,
       `GET ${GITHUB}/git/trees/${state.head}?recursive=1`,
@@ -252,8 +268,9 @@ describe('runCardPipeline', () => {
       `GET ${NETLIFY}/site-platform`,
       `GET ${SITE_URL}/`,
       `GET ${SITE_URL}/version.json`,
+      `GET ${GITHUB}/commits/${MERGE_SHA}/check-runs?check_name=gate&per_page=50`,
     ]);
-    expect(calls[5]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
+    expect(calls[6]?.body).toMatchObject({ sha: state.head, merge_method: 'squash', commit_title: 'card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11' });
     expect(calls[0]?.body).toMatchObject({ head: 'card/4c2f5a1e-code', base: 'main' });
     expect(String(calls[0]?.body && (calls[0].body as { body: string }).body)).toContain(`Card-Id: ${c.id}`);
 
@@ -393,7 +410,7 @@ describe('runCardPipeline', () => {
     expect(failing.attempts).toBe(4);
     expect(failing.cards[0]).toMatchObject({ stage: 'gated', failing_check: null, commit_sha: MERGE_SHA });
     expect(failing.events.map((e) => e.type)).toEqual(['start', 'gate_pass', 'message']);
-    expect(failing.events.at(-1)?.payload).toEqual({ step: 'smoke_pass', sha: MERGE_SHA, deploy_id: 'dep-2', url: SITE_URL, smoke: 'pass: build merge-sh served' });
+    expect(failing.events.at(-1)?.payload).toEqual({ step: 'smoke_pass', sha: MERGE_SHA, deploy_id: 'dep-2', url: SITE_URL, smoke: 'pass: build merge-sh served; gate green at the merge sha' });
     expect(urls(calls).some((call) => call.includes('/git/commits') || call.includes('/restore'))).toBe(false);
     expect(alert.messages).toEqual([
       'Card 4c2f5a1e merged as merge-sh and passed smoke, but recording it failed: db deploys insert: connection reset. It is left gated and is checked again when the dispatcher starts.',
@@ -414,8 +431,10 @@ describe('runCardPipeline', () => {
       revert_error: 'main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward',
     });
     expect(alert.messages[0]).toBe(
-      'Card 4c2f5a1e failed after merge and the rollback is incomplete: no green platform deploy exists to restore; main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward. Check main and the live site.',
+      'Card 4c2f5a1e failed after merge and the rollback is incomplete: no green platform deploy exists to restore; main was not moved to the revert commit revert-sha: http 422 Update is not a fast forward. Check main and the live site. The studio is paused until the board unpauses it.',
     );
+    expect(db.studio.paused).toBe(true);
+    expect(db.pausedBy).toBe('dispatcher: the revert of card 4c2f5a1e failed');
   });
 
   it('still restores, reverts and alerts when the database fails during the rollback', async () => {
@@ -445,7 +464,7 @@ describe('runCardPipeline', () => {
   it('rejects on a failed gate without merging', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn, calls } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } } });
+    const { fetchFn, calls } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', commit_sha: null });
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_fail']);
@@ -523,7 +542,7 @@ describe('runCardPipeline', () => {
     db.cards = [{ ...c, stage: 'building' }];
     const stop = new AbortController();
     const { fetchFn, calls } = remote({
-      gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'in_progress', conclusion: null }] } },
+      gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'in_progress', conclusion: null }] } },
       created: (head) => {
         stop.abort('dispatcher stopping');
         return { status: 201, json: { number: 5, head: { sha: head } } };
@@ -622,8 +641,8 @@ describe('runCardPipeline', () => {
         heads.set(number, head);
         return { status: 201, json: { number, head: { sha: head } } };
       }
-      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
-      const git = github(method, url);
+      if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'success' }] } };
+      const git = github(method, url) ?? mainRoute(method, url);
       if (git) return git;
       const merge = /\/pulls\/(\d+)\/merge$/.exec(url);
       if (method === 'PUT' && merge) {
@@ -659,7 +678,7 @@ describe('runCardPipeline', () => {
     expect(timeline).toEqual([`merge ${merged[0]}`, `verify ${merged[0]}`, `merge ${merged[1]}`, `verify ${merged[1]}`]);
   });
 
-  it('runs the smoke bot in a detached worktree at the merge sha and removes it afterwards', async () => {
+  it('smokes a seed card without running card code: the served files match the merge commit and the gate is green there', async () => {
     const c = card({ id: 'dddddddd-0000-4000-8000-000000000004' });
     db.cards = [{ ...c, stage: 'building' }];
     const adapter = new FakeAdapter(async (spec, emit) => {
@@ -667,25 +686,49 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const { fetchFn, state } = seedRemote();
-    const bot: { cwd: string; args: string[]; head: string; baseCost: number | null } = { cwd: '', args: [], head: '', baseCost: null };
-    const botExec: BotExec = async (_file, args, options) => {
-      bot.cwd = options.cwd;
-      bot.args = args;
-      bot.head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: options.cwd, stdio: 'pipe' }).toString().trim();
-      bot.baseCost = (JSON.parse(readFileSync(path.join(options.cwd, 'seed-1', 'config', 'spawn-table.json'), 'utf8')) as typeof SPAWN_TABLE).rows[0]!.baseCost;
-      return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=3\n' };
-    };
-    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), botExec });
+    const { fetchFn, calls, state } = seedRemote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn));
 
     expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: state.merged });
     expect(state.merged).toMatch(/^[0-9a-f]{40}$/);
-    expect(bot.cwd).toBe(path.join(config.worktreeRoot, 'smoke-dddddddd'));
-    expect(bot.head).toBe(state.merged);
-    expect(bot.baseCost).toBe(11);
-    expect(bot.args.slice(-2)).toEqual(['--repo-root', bot.cwd]);
-    expect(existsSync(bot.cwd)).toBe(false);
-    expect(await git(['worktree', 'list', '--porcelain'], repo)).not.toContain('smoke-dddddddd');
+    const gets = calls.filter((call) => call.method === 'GET').map((call) => call.url);
+    expect(gets).toContain(`${SEED_URL}/config/spawn-table.json`);
+    expect(gets).toContain(`${SEED_URL}/content/strings.json`);
+    expect(gets).toContain(`${GITHUB}/commits/${state.merged}/check-runs?check_name=gate&per_page=50`);
+    expect(db.deploys.at(-1)).toMatchObject({ sha: state.merged, is_green: true, smoke_result: expect.stringContaining('2 served file(s) match the merge commit; gate green at the merge sha') });
+    expect(existsSync(path.join(config.worktreeRoot, 'smoke-dddddddd'))).toBe(false);
+    expect(await git(['worktree', 'list', '--porcelain'], repo)).not.toContain('smoke-');
+  });
+
+  it('rolls a seed card back when a served file differs from the merge commit by one byte', async () => {
+    const c = card({ id: 'dddddddd-0000-4000-8000-000000000005' });
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [{ ...OLDER_GREEN, folder: 'seed-1' }];
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 10));
+    });
+    const { fetchFn, state } = seedRemote({ tamper: '/content/strings.json' });
+    await runCardPipeline(c, deps(db, adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'smoke', commit_sha: state.merged });
+    expect(db.deploys.at(-1)).toMatchObject({ sha: state.merged, is_green: false, smoke_result: `fail: served /content/strings.json differs from seed-1/content/strings.json at the merge commit ${state.merged.slice(0, 8)}` });
+    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { failed_sha: state.merged, restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
+  });
+
+  it('rolls a seed card back when the gate fails at the merge sha', async () => {
+    const c = card({ id: 'dddddddd-0000-4000-8000-000000000006' });
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [{ ...OLDER_GREEN, folder: 'seed-1' }];
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent());
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 10));
+    });
+    const { fetchFn, state } = seedRemote({ mergeGate: 'failure' });
+    await runCardPipeline(c, deps(db, adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'smoke', commit_sha: state.merged });
+    expect(db.deploys.at(-1)).toMatchObject({ is_green: false, smoke_result: 'fail: the gate at the merge sha concluded failure' });
   });
 
   it('rejects an agent commit in the worktree as history and pushes nothing', async () => {
@@ -713,7 +756,7 @@ describe('runCardPipeline', () => {
     const adapter = new FakeAdapter(async (spec, emit) => {
       await emit(startEvent());
       await editSpawnTable(spec.worktree, 11);
-      await symlink('../../.github', path.join(spec.worktree, 'seed-1', 'content', 'gh'));
+      await symlink('../../.github', path.join(spec.worktree, 'seed-1', 'content', 'gh.json'));
       await emit(usageEvent(1, 10));
     });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
@@ -823,46 +866,6 @@ describe('runCardPipeline', () => {
     expect(existsSync(path.join(dir, 'filter-ran.txt'))).toBe(false);
   });
 
-  it('rolls the merge back, halts and runs no more git when the smoke bot plants git configuration', async () => {
-    const c = card({ id: 'f0f0f0f0-0000-4000-8000-000000000006' });
-    db.cards = [{ ...c, stage: 'building' }];
-    db.deploys = [{ ...OLDER_GREEN, folder: 'seed-1' }];
-    const configFile = path.join(repo, '.git', 'config');
-    const clean = await readFile(configFile, 'utf8');
-    const adapter = new FakeAdapter(async (spec, emit) => {
-      await emit(startEvent());
-      await editSpawnTable(spec.worktree, 11);
-      await emit(usageEvent(1, 10));
-    });
-    const { fetchFn, calls, state } = seedRemote();
-    const gitCalls = recordGit();
-    let atBot = -1;
-    let botRoot = '';
-    const botExec: BotExec = async (_file, _args, options) => {
-      botRoot = options.cwd;
-      await appendFile(configFile, '[include]\n\tpath = ../../evil.gitconfig\n', 'utf8');
-      atBot = gitCalls.length;
-      return { stdout: 'PASS: headless-bot simulatedSeconds=36000 unlocks=3\n' };
-    };
-    const alert = new RecordingAlerter();
-    try {
-      await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), botExec });
-    } finally {
-      setGitRunner(null);
-      await writeFile(configFile, clean, 'utf8');
-    }
-    const halted = haltReason();
-    resetHalt();
-    await git(['worktree', 'prune'], repo);
-    expect(gitCalls).toHaveLength(atBot);
-    expect(halted).toMatch(/^git_tamper: /);
-    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'git_tamper', commit_sha: state.merged });
-    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { failed_sha: state.merged, restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
-    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-seed/deploys/dep-1/restore`);
-    expect(existsSync(botRoot)).toBe(false);
-    expect(db.deploys.filter((row) => row.sha === state.merged && row.is_green)).toEqual([]);
-  });
-
   it('pauses on the ceiling and records what was spent', async () => {
     const c = card();
     db.cards = [{ ...c, stage: 'building' }];
@@ -942,6 +945,41 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'acceptance' });
   });
 
+  for (const [name, target] of [
+    ['a file outside the worktree', 'outside'],
+    ['/dev/zero', '/dev/zero'],
+  ] as const) {
+    it(`fails the acceptance check, never reading through it, when the session leaves a symlink to ${name} at the checked file`, async () => {
+      const c = card();
+      db.cards = [{ ...c, stage: 'building' }];
+      const outside = path.join(dir, 'outside-spawn-table.json');
+      await writeFile(outside, `${JSON.stringify({ rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) })}\n`, 'utf8');
+      const adapter = new FakeAdapter(async (spec, emit) => {
+        await emit(startEvent());
+        const file = path.join(spec.worktree, 'seed-1', 'config', 'spawn-table.json');
+        await rm(file);
+        await symlink(target === 'outside' ? outside : target, file);
+        await emit(usageEvent(1, 10));
+      });
+      await runCardPipeline(c, deps(db, adapter, remote().fetchFn));
+      expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'acceptance' });
+    });
+  }
+
+  it('pauses, not rejects, a card whose adapter started no session for a reason that is not the card', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const adapter = new FakeAdapter(async () => {
+      throw new SessionPaused('managed_api', 'the Managed Agents session could not be created: 529 overloaded_error');
+    });
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'managed_api' });
+    expect(calls).toEqual([]);
+    expect(alert.messages[0]).toMatch(/paused \(managed_api\).*529 overloaded_error/);
+  });
+
   it('rejects when the session changes nothing under the lane', async () => {
     const c = card({ acceptance_test: 'rename the cart row' });
     db.cards = [{ ...c, stage: 'building' }];
@@ -987,6 +1025,173 @@ describe('runCardPipeline', () => {
     expect(adapter.specs).toEqual([]);
   });
 
+  // Runs fn when the gate's check-runs are first read, as a board action would land during the wait.
+  function duringGate(fetchFn: typeof fetch, fn: () => void): typeof fetch {
+    let done = false;
+    return (async (input: string | URL | Request, init?: RequestInit) => {
+      if (!done && CHECK_RUNS.test(String(input))) {
+        done = true;
+        fn();
+      }
+      return fetchFn(input, init);
+    }) as typeof fetch;
+  }
+
+  it('pauses the card, unmerged, when the board pauses the studio during the gate wait', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => (db.studio.paused = true)), undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'paused_by_board', commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(db.deploys).toEqual([]);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged',
+    ]);
+  });
+
+  it.each([
+    ['moved off horizon now', { horizon: 'next' }, 'horizon', 'the board moved the card to horizon next while it was in the gate; it was not merged'],
+    ['vetoed', { director_stance: 'vetoed' }, 'vetoed', 'the card was vetoed while it was in the gate; it was not merged'],
+  ])('pauses a card %s during the gate wait without merging it', async (_name, change, check, detail) => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => Object.assign(db.cards[0]!, change))));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: check });
+    expect(db.events.at(-1)).toMatchObject({ type: 'gate_pass' });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(detail).toContain('it was not merged');
+  });
+
+  it('leaves a card the board moved during the gate wait as the board set it, unmerged, and closes its pull request', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), duringGate(fetchFn, () => (db.cards[0]!.stage = 'rejected')), undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: null, commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(calls.find((call) => call.method === 'PATCH' && call.url === `${GITHUB}/pulls/5`)?.body).toEqual({ state: 'closed' });
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e: the card moved to rejected while it was in the gate; it was not merged and its stage is left as the board set it. Pull request #5 was closed. spawn table row gatherer: baseCost changes from 10 to 11',
+    ]);
+  });
+
+  it('never overwrites a stage the board set during the session', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      await editSite(spec, emit, new AbortController().signal);
+      db.cards[0]!.stage = 'rejected';
+    });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: null });
+    expect(urls(calls).some((call) => CHECK_RUNS.test(call.slice(4)) || call.startsWith('PUT'))).toBe(false);
+    expect(alert.messages).toEqual([
+      'Card 4c2f5a1e: the card is rejected, not building, so it was not moved to gated; the dispatcher left it as it is. Pull request #5 was closed. spawn table row gatherer: baseCost changes from 10 to 11',
+    ]);
+  });
+
+  it('sends a card back to funded, unmerged, when main moved while it was in the gate', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({ main: { status: 200, json: { object: { sha: 'a-board-merge-0123456789' } } } });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'main_moved', commit_sha: null });
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'requeue', reason: 'main_moved' } });
+    expect(String(db.events.at(-1)?.payload.detail)).toMatch(/^main moved from [0-9a-f]{8} to a-board- while the card was in the gate/);
+    expect(alert.messages).toEqual([]);
+  });
+
+  it('restores the previous green deploy when the deploy does not finish in time, since it may still publish', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    const building = { id: 'dep-2', state: 'building', commit_ref: MERGE_SHA, context: 'production' };
+    const { fetchFn, calls } = remote({ deploys: { status: 200, json: [building] } });
+    await runCardPipeline(c, { ...deps(db, new FakeAdapter(editSite), fetchFn), timings: { ...FAST, deployTimeoutMs: 30 } });
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'deploy' });
+    expect(urls(calls)).toContain(`POST ${NETLIFY}/site-platform/deploys/dep-1/restore`);
+    expect(db.events.at(-1)).toMatchObject({ type: 'revert', payload: { reason: 'deploy did not finish: deploy dep-2 still building after 0.03 s', restored_sha: 'older-sha', revert_sha: 'revert-sha' } });
+  });
+
+  it('pauses the studio and the card, keeping its money, when the API says the Console credit ran out, and nothing more is claimed', async () => {
+    const c = card();
+    db.studio.agent_mode = 'unattended';
+    db.cards = [{ ...c, stage: 'building' }, card({ id: 'aaaaaaaa-0000-4000-8000-00000000000b', priority: 200 })];
+    const adapter = new FakeAdapter(
+      async (_spec, emit, signal) => {
+        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+        await emit({ type: 'message', text: 'Credit balance is too low' });
+        await emit({ type: 'turn_usage', turn: 1, model: '<synthetic>', usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 }, contentChars: 25, thinking: false });
+        await untilAborted(signal, 200);
+      },
+      { mode: 'unattended' },
+    );
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, deps(db, adapter, fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'console_credit', actual_usd: 0 });
+    expect(db.studio.paused).toBe(true);
+    expect(db.pausedBy).toBe('dispatcher: Console credit needed (card 4c2f5a1e)');
+    expect(db.ledger).toEqual([]);
+    expect(calls).toEqual([]);
+    expect(alert.messages).toEqual([
+      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.',
+      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low',
+    ]);
+    const outcome = await tick({
+      db,
+      mode: 'unattended',
+      boardSessionTtlMin: 3,
+      maxConcurrency: 1,
+      running: new Map(),
+      budgets: new SessionBudgets(),
+      leaseHolder: 'dispatcher-a',
+      leaseTtlSeconds: 300,
+      stuckAfterMs: 60 * 60_000,
+      now: () => NOW,
+      runCard: async () => undefined,
+      log: silent,
+      alert,
+    });
+    expect(outcome).toEqual({ action: 'sleep', reason: 'paused' });
+    expect(db.claims).toBe(0);
+  });
+
+  it('gives the session the budget the tick set, and sends the card back to funded when that budget is gone', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const budgets = new SessionBudgets();
+    budgets.start(c.id, 0);
+    const adapter = new FakeAdapter(async () => undefined, { mode: 'unattended' });
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), budgets });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'insufficient_balance' });
+    expect(adapter.specs).toEqual([]);
+    expect(alert.messages).toEqual([]);
+
+    db.cards = [{ ...c, stage: 'building' }];
+    budgets.start(c.id, 1.25);
+    const spent = new FakeAdapter(async (spec, emit) => {
+      await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
+      await editSpawnTable(spec.worktree, 11);
+      await emit(usageEvent(1, 100));
+    }, { mode: 'unattended', subtype: 'error_max_budget_usd', isError: true, exitCode: 1 });
+    await runCardPipeline(c, { ...deps(db, spent, remote().fetchFn, undefined, alert), budgets });
+    expect(spent.specs[0]?.maxBudgetUsd).toBe(1.25);
+    // The session told the budgets its running estimate, so what it may still spend fell.
+    expect(budgets.remaining().get(c.id)).toBeLessThan(1.25);
+    expect(budgets.remaining().get(c.id)).toBeGreaterThan(1.2);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'budget' });
+  });
+
   it('serves the checked value from the worktree the session edited', async () => {
     const c = card();
     db.cards = [{ ...c, stage: 'building' }];
@@ -997,7 +1202,7 @@ describe('runCardPipeline', () => {
       await editSpawnTable(spec.worktree, 11);
       await emit(usageEvent(1, 10));
     });
-    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'failure' }] } } });
+    const { fetchFn } = remote({ gate: { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status:'completed', conclusion: 'failure' }] } } });
     await runCardPipeline(c, deps(db, adapter, fetchFn));
     expect(JSON.parse(seen)).toEqual(SPAWN_TABLE);
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate', branch: 'card/4c2f5a1e-config' });
@@ -1008,17 +1213,22 @@ describe('runCardPipeline', () => {
 });
 
 // The seed site, where the merge lands the pushed commit on origin's main so the merge sha is a real
-// commit the smoke worktree can check out.
-function seedRemote() {
-  const served = { rows: SPAWN_TABLE.rows.map((row) => ({ ...row, baseCost: 11 })) };
+// commit whose served files the smoke test compares byte for byte. The served config and content are
+// the merge commit's own bytes, unless tamper names a route to serve one byte off; mergeGate is the
+// gate's conclusion at the merge sha (the card's own head always passes).
+function seedRemote(options: { tamper?: string; mergeGate?: string } = {}) {
   const state = { merged: '' };
   const github = githubGitRoute(origin);
   const mock = mockFetch((method, url, body) => {
     if (method === 'POST' && url === `${GITHUB}/pulls`) {
       return { status: 201, json: { number: 5, head: { sha: originSha(`refs/heads/${(body as { head: string }).head}`) } } };
     }
-    if (method === 'GET' && CHECK_RUNS.test(url)) return { status: 200, json: { check_runs: [{ name: 'gate', status: 'completed', conclusion: 'success' }] } };
-    const git = github(method, url);
+    const checks = CHECK_RUNS.exec(url);
+    if (method === 'GET' && checks) {
+      const conclusion = checks[1] === state.merged && options.mergeGate ? options.mergeGate : 'success';
+      return { status: 200, json: { check_runs: [{ name: 'gate', app: { slug: 'github-actions' }, status: 'completed', conclusion }] } };
+    }
+    const git = github(method, url) ?? mainRoute(method, url);
     if (git) return git;
     if (method === 'PUT' && url === `${GITHUB}/pulls/5/merge`) {
       state.merged = (body as { sha: string }).sha;
@@ -1030,9 +1240,83 @@ function seedRemote() {
     if (method === 'POST' && url === `${NETLIFY}/site-seed/deploys/dep-1/restore`) return { status: 200, json: { id: 'dep-1' } };
     if (method === 'GET' && url === `${SEED_URL}/`) return { status: 200, text: `<meta name="build-sha" content="${state.merged}">` };
     if (method === 'GET' && url === `${SEED_URL}/version.json`) return { status: 200, json: { sha: state.merged } };
-    if (method === 'GET' && url === `${SEED_URL}/config/spawn-table.json`) return { status: 200, json: served };
-    if (method === 'GET' && url === `${SEED_URL}/config/unlocks.json`) return { status: 200, json: { unlocks: [] } };
+    const served = /^https:\/\/seed\.local(\/(config|content)\/.+)$/.exec(url);
+    if (method === 'GET' && served) {
+      const route = served[1]!;
+      const text = execFileSync('git', ['show', `${state.merged}:seed-1${route}`], { cwd: origin, stdio: 'pipe' }).toString();
+      return { status: 200, text: route === options.tamper ? `${text} ` : text };
+    }
     return revertRoute(method, url);
   });
   return { ...mock, state };
 }
+
+// Accepted managed-session patches, kept per card (card_patches in production).
+class MemoryPatchStore implements PatchStore {
+  rows: StoredPatch[] = [];
+  async save(patch: StoredPatch) {
+    this.rows.push(patch);
+  }
+  async latest(cardId: string) {
+    return [...this.rows].reverse().find((row) => row.cardId === cardId) ?? null;
+  }
+  async discard(cardId: string) {
+    this.rows = this.rows.filter((row) => row.cardId !== cardId);
+  }
+}
+
+// The patch an earlier managed session had accepted for a platform card: made against the initial
+// commit, stored with it.
+function storedSitePatch(title: string): string {
+  const file = path.join(repo, 'platform', 'site', 'index.html');
+  const original = readFileSync(file, 'utf8');
+  execFileSync('git', ['checkout', '-q', initialSha, '--', 'platform/site/index.html'], { cwd: repo, stdio: 'pipe' });
+  const before = readFileSync(file, 'utf8');
+  execFileSync('bash', ['-c', `printf '%s\n' "$1" > "$2"`, 'x', title, file]);
+  const patch = execFileSync('git', ['diff', '--no-renames', '--full-index', initialSha, '--', 'platform/site/index.html'], { cwd: repo, stdio: 'pipe' }).toString();
+  execFileSync('bash', ['-c', 'printf "%s" "$1" > "$2"', 'x', before === original ? original : before, file]);
+  return patch;
+}
+
+describe('a card with a stored patch', () => {
+  it('is rebuilt from the patch at the new base and merged with no session and no new ledger row', async () => {
+    const db = new FakeDb();
+    const c = platformCard({ id: 'eeeeeeee-0000-4000-8000-000000000001' });
+    db.cards = [{ ...c, stage: 'building' }];
+    db.deploys = [OLDER_GREEN];
+    const patches = new MemoryPatchStore();
+    await patches.save(storedPatch(c.id, initialSha, Buffer.from(storedSitePatch('<title>Studio</title>')), 'Name the page Studio', 'sesn_earlier'));
+    let sessions = 0;
+    const adapter = new FakeAdapter(async () => {
+      sessions += 1;
+    });
+    const { fetchFn } = remote();
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), patches });
+    expect(sessions).toBe(0);
+    expect(adapter.specs).toEqual([]);
+    expect(db.ledger).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+    expect(db.events.find((event) => event.payload.step === 'patch_reused')).toMatchObject({ type: 'message', payload: { base_sha: initialSha, files: ['platform/site/index.html'] } });
+    const pushed = await git(['show', 'card/eeeeeeee-code:platform/site/index.html'], origin);
+    expect(pushed).toBe('<title>Studio</title>');
+  });
+
+  it('pauses as patch_conflict, discards the patch and starts no session when the patch no longer applies', async () => {
+    const db = new FakeDb();
+    const c = platformCard({ id: 'eeeeeeee-0000-4000-8000-000000000002' });
+    db.cards = [{ ...c, stage: 'building' }];
+    const patches = new MemoryPatchStore();
+    await patches.save(storedPatch(c.id, initialSha, Buffer.from(storedSitePatch('<title>Studio</title>').replace('-<title>Backseat</title>', '-<title>Something else</title>')), 'Name the page Studio', 'sesn_earlier'));
+    const adapter = new FakeAdapter(async () => undefined);
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(c, { ...deps(db, adapter, fetchFn, undefined, alert), patches });
+    expect(adapter.specs).toEqual([]);
+    expect(db.ledger).toEqual([]);
+    expect(patches.rows).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'patch_conflict' });
+    expect(calls).toEqual([]);
+    expect(alert.messages[0]).toMatch(/paused \(patch_conflict\).*no longer applies on main/);
+  });
+});
+

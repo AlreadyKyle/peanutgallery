@@ -1,12 +1,15 @@
 // One-turn probe shared by the probe command and the unattended dispatcher's startup. It runs
 // Claude Code in a detached worktree the way a card session would, asks it to list its tools
-// and quote any memory, and fails if a web, sub-agent or MCP tool appears anywhere in the
-// stream, the init line registers a memory path, or the session bills the wrong account for
-// the adapter's mode.
+// and quote any memory, and fails if the init line's tool list names a web, sub-agent or MCP tool,
+// the init line registers a memory path, or the session bills the wrong account for the adapter's
+// mode. Only the init line's tool list is read for tool names: the reply lists tools by name and may
+// mention one it does not have, and an API error's text is not a tool. An API error ends the probe
+// in error, which is transient; its "<synthetic>" turn costs nothing and is never metered.
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { refusedTools } from './adapters/attended.js';
 import type { AgentAdapter, AgentEvent, AgentMode, EndEvent, RawLineSink, SessionResult, SessionSpec } from './adapters/types.js';
 import { SessionMeter, type Settlement } from './metering.js';
 import type { PriceTable } from './pricing.js';
@@ -14,9 +17,6 @@ import { API_KEY_SOURCE } from './session.js';
 import { git, removeWorktree } from './worktree.js';
 
 export const PROBE_BUDGET_USD = 0.25;
-// Global so matchAll lists every hit on a line; mcp__\w* keeps the bare-prefix match main had
-// while reporting the full tool name when there is one.
-const FORBIDDEN = /\b(?:WebFetch|WebSearch|Agent)\b|mcp__\w*/g;
 
 export const PROMPT = [
   'Reply with two sections and run no tool.',
@@ -88,8 +88,8 @@ export function verdict(mode: AgentMode, raw: readonly string[], events: readonl
   const start = events.find((event) => event.type === 'start');
   if (!start || start.type !== 'start') return transient('no system init line in the stream');
   if (start.tools.length === 0) return fatal('init line lists no tools');
-  const forbidden = raw.flatMap((line) => [...line.matchAll(FORBIDDEN)].map((match) => match[0]));
-  if (forbidden.length > 0) return fatal(`forbidden tool names in the stream: ${[...new Set(forbidden)].join(', ')}`);
+  const forbidden = refusedTools(start.tools);
+  if (forbidden.length > 0) return fatal(`forbidden tools in the init line: ${[...new Set(forbidden)].join(', ')}`);
   const memory = memoryPaths(initRecord(raw));
   if (memory.length > 0) return fatal(`memory paths registered for the session: ${memory.join(', ')}`);
   const source = start.apiKeySource ?? 'unreported';

@@ -7,7 +7,10 @@
 # Every text file under each path (and every changed file that still exists) is scanned line by
 # line; every path name under each path is scanned; the commit message is scanned. Lines and terms
 # are normalized the same way (lib/banned-scan.awk): lowercase, whole tokens, leet map, spaced and
-# dotted spellings joined. Lists: denylist/{profanity,slurs,sexual,drugs,coded}.txt apply everywhere;
+# dotted spellings joined. A .json line has its string escapes decoded first (A, \n and the
+# rest), as the game's JSON.parse would before the text reaches a screen. A file with a NUL byte
+# or a UTF-16 byte order mark fails as list=unreadable instead of being skipped.
+# Lists: denylist/{profanity,slurs,sexual,drugs,coded}.txt apply everywhere;
 # denylist/trademarks.txt applies to seed-1 content, every path name and the commit message;
 # denylist/allow.txt phrases are removed before matching; denylist/hashed.txt holds sha256 hex
 # digests compared against every token.
@@ -97,10 +100,15 @@ is_list_file() {
   case "$(gate_rel_path "$1")" in platform/gate/denylist|platform/gate/denylist/*) return 0 ;; esac
   return 1
 }
+: > "$WORK/hits.tsv"
 sort -u "$WORK/files.txt" | while IFS= read -r f; do
   is_list_file "$f" && continue
   gate_is_generated "$f" && continue
-  gate_is_text "$f" || continue
+  gate_text_kind "$f"
+  case $? in
+    1) continue ;;
+    2) printf 'hit\t%s:1\tunreadable\tnul-or-utf16\n' "$(gate_rel_path "$f")" >> "$WORK/hits.tsv"; continue ;;
+  esac
   rel=$(gate_rel_path "$f")
   case "$rel" in
     seed-1/*) printf '%s\n' "$rel" >> "$WORK/seed.txt" ;;
@@ -112,9 +120,9 @@ sort -u "$WORK/names.txt" | while IFS= read -r n; do
   gate_rel_path "$n"
 done > "$WORK/relnames.txt"
 
-# 3. Scans. Relative paths resolve from the repo root so locations read as repo paths.
+# 3. Scans. Relative paths resolve from the repo root so locations read as repo paths. hits.tsv
+# already holds any unreadable file found above.
 cd "$REPO_ROOT" || exit 2
-: > "$WORK/hits.tsv"
 : > "$WORK/tokens.tsv"
 scan_files() {
   # $1 list of files, $2 tm flag

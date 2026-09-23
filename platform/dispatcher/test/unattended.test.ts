@@ -1,157 +1,67 @@
-import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
-import { PassThrough } from 'node:stream';
-import type { ChildProcess } from 'node:child_process';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { childEnv, claudeArgs } from '../src/adapters/claude-cli.js';
-import { STUDIO_KEY_ENV, UnattendedAdapter, unattendedEnv } from '../src/adapters/unattended.js';
-import type { AgentEvent, SessionSpec } from '../src/adapters/types.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { Writable } from 'node:stream';
+import { describe, expect, it } from 'vitest';
+import { ManagedAdapter } from '../src/adapters/managed.js';
+import { STUDIO_KEY_ENV, UnattendedAdapter, type UnattendedOptions } from '../src/adapters/unattended.js';
+import { createLogger } from '../src/log.js';
+import { parsePriceTable } from '../src/pricing.js';
+import { RecordingAlerter } from './helpers/fake-alert.js';
+import { FakeDb } from './helpers/fake-db.js';
+import { AGENT_ID, ENVIRONMENT_ID, FILES, FakeManagedClient } from './helpers/fake-managed.js';
 
-const fixture = readFileSync(new URL('./fixtures/sample-stream.jsonl', import.meta.url), 'utf8');
-const STUDIO_KEY = 'studio-org-key';
+const SRC = path.resolve(import.meta.dirname, '..', 'src', 'adapters');
 
-const spec: SessionSpec = {
-  cardId: '4c2f5a1e-7b3d-4e8a-9f01-2a3b4c5d6e7f',
-  worktree: '/repo/.worktrees/card-4c2f5a1e',
-  prompt: 'Card 4c2f5a1e: gatherer cost',
-  systemPromptFile: null,
-  model: 'claude-sonnet-5',
-  roleTools: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
-  folder: 'seed-1',
-  maxTurns: 60,
-  maxBudgetUsd: 3,
-};
-
-class FakeChild extends EventEmitter {
-  stdout = new PassThrough();
-  stderr = new PassThrough();
-  exitCode: number | null = null;
-  signalCode: NodeJS.Signals | null = null;
-  kill(signal?: NodeJS.Signals | number): boolean {
-    this.signalCode = typeof signal === 'string' ? signal : 'SIGTERM';
-    this.stdout.end();
-    this.emit('close', null, this.signalCode);
-    return true;
-  }
-  finish(code: number): void {
-    this.exitCode = code;
-    this.stdout.end();
-    this.emit('close', code, null);
-  }
+function options(overrides: Partial<UnattendedOptions> = {}): UnattendedOptions {
+  return {
+    client: new FakeManagedClient(),
+    files: FILES,
+    agentId: AGENT_ID,
+    agentVersion: 3,
+    environmentId: ENVIRONMENT_ID,
+    githubRepo: 'owner/repo',
+    readToken: 'github_pat_-fixture-read',
+    priceTable: parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } })),
+    probeModel: 'builder-class',
+    db: new FakeDb(),
+    patches: null,
+    alert: new RecordingAlerter(),
+    log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })),
+    ...overrides,
+  };
 }
 
-// The dispatcher's own environment as the founder's machine would have it: the founder's key,
-// every other secret, and the shell basics.
-const DISPATCHER_ENV: NodeJS.ProcessEnv = {
-  PATH: '/bin',
-  HOME: '/home/agent',
-  LANG: 'en_CA.UTF-8',
-  LC_ALL: 'C',
-  ANTHROPIC_BASE_URL: 'https://proxy.local',
-  ANTHROPIC_API_KEY: 'founder-key',
-  STUDIO_ANTHROPIC_API_KEY: STUDIO_KEY,
-  SUPABASE_SERVICE_ROLE_KEY: 'b',
-  SUPABASE_ANON_KEY: 'c',
-  GITHUB_TOKEN: 'd',
-  NETLIFY_AUTH_TOKEN: 'e',
-  STRIPE_SECRET_KEY: 'f',
-  STRIPE_WEBHOOK_SECRET: 'g',
-  OPENAI_API_KEY: 'h',
-  GOOGLE_AI_API_KEY: 'i',
-  CLAUDE_CODE_OAUTH_TOKEN: 'j',
-  CLAUDECODE: 'k',
-  CLAUDE_CONFIG_DIR: '/x',
-  PRICE_TABLE_JSON: '{}',
-  BOARD_EMAILS: 'board@peanutgallery.games',
-};
-const SECRET_NAMES = Object.keys(DISPATCHER_ENV).filter((name) => !['PATH', 'HOME', 'LANG', 'LC_ALL', 'ANTHROPIC_BASE_URL'].includes(name));
-
 describe('UnattendedAdapter', () => {
-  it('runs in unattended mode', () => {
-    expect(new UnattendedAdapter({ claudeBin: 'claude', studioApiKey: STUDIO_KEY }).mode).toBe('unattended');
-  });
-
-  it('refuses to exist without a studio key', () => {
+  it('is the managed adapter, in unattended mode, with the managed controls', () => {
+    const adapter = new UnattendedAdapter(options());
+    expect(adapter).toBeInstanceOf(ManagedAdapter);
+    expect(adapter.mode).toBe('unattended');
+    expect(adapter.managed).toBe(adapter);
     expect(STUDIO_KEY_ENV).toBe('STUDIO_ANTHROPIC_API_KEY');
-    for (const studioApiKey of ['', '   ', '\n']) {
-      expect(() => new UnattendedAdapter({ claudeBin: 'claude', studioApiKey })).toThrow('STUDIO_ANTHROPIC_API_KEY is required in unattended mode');
-    }
-  });
-});
-
-describe('unattendedEnv', () => {
-  it('is the attended allowlist plus the studio key as ANTHROPIC_API_KEY', () => {
-    const env = unattendedEnv(DISPATCHER_ENV, STUDIO_KEY);
-    expect(env).toEqual({ ...childEnv(DISPATCHER_ENV), ANTHROPIC_API_KEY: STUDIO_KEY });
-    expect(env).toEqual({
-      PATH: '/bin',
-      HOME: '/home/agent',
-      LANG: 'en_CA.UTF-8',
-      LC_ALL: 'C',
-      ANTHROPIC_BASE_URL: 'https://proxy.local',
-      CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      ANTHROPIC_API_KEY: STUDIO_KEY,
-    });
   });
 
-  it("never carries the dispatcher's own ANTHROPIC_API_KEY, the studio key under its own name, or any other secret", () => {
-    const env = unattendedEnv(DISPATCHER_ENV, STUDIO_KEY);
-    expect(env.ANTHROPIC_API_KEY).toBe(STUDIO_KEY);
-    expect(Object.values(env)).not.toContain('founder-key');
-    expect(env).not.toHaveProperty('STUDIO_ANTHROPIC_API_KEY');
-    for (const name of SECRET_NAMES.filter((n) => n !== 'ANTHROPIC_API_KEY')) {
-      expect(env, name).not.toHaveProperty(name);
-    }
-    for (const value of SECRET_NAMES.map((name) => DISPATCHER_ENV[name]).filter((v) => v !== STUDIO_KEY)) {
-      expect(Object.values(env)).not.toContain(value);
-    }
+  it('refuses to exist without the managed ids, a pinned version or the read-only token', () => {
+    expect(() => new UnattendedAdapter(options({ agentId: '' }))).toThrow('the managed agent id, its version and the environment id are required in unattended mode');
+    expect(() => new UnattendedAdapter(options({ environmentId: '' }))).toThrow('environment id');
+    expect(() => new UnattendedAdapter(options({ agentVersion: 0 }))).toThrow('its version');
+    expect(() => new UnattendedAdapter(options({ readToken: '' }))).toThrow('GITHUB_READ_TOKEN is required in unattended mode');
   });
-});
 
-describe('UnattendedAdapter.run', () => {
-  const saved: Record<string, string | undefined> = {};
-  beforeEach(() => {
-    for (const [name, value] of Object.entries(DISPATCHER_ENV)) {
-      saved[name] = process.env[name];
-      process.env[name] = value;
-    }
-  });
-  afterEach(() => {
-    for (const [name, value] of Object.entries(saved)) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
+  it('has no process-spawn path: no managed module imports child_process', () => {
+    const managed = readdirSync(SRC).filter((file) => file.startsWith('managed') || file === 'unattended.ts' || file === 'read-token.ts');
+    expect(managed.sort()).toEqual(['managed-client.ts', 'managed-config.ts', 'managed-meter.ts', 'managed-setup.ts', 'managed.ts', 'read-token.ts', 'unattended.ts']);
+    for (const file of managed) {
+      const source = readFileSync(path.join(SRC, file), 'utf8');
+      expect(source, file).not.toMatch(/child_process|claude-cli\.js'\s*;?\s*$|spawn\(/m);
     }
   });
 
-  it('spawns the attended command line with the studio key as the only credential', async () => {
-    const child = new FakeChild();
-    const capture: { bin?: string; args?: string[]; cwd?: string; env?: NodeJS.ProcessEnv } = {};
-    const adapter = new UnattendedAdapter({
-      claudeBin: 'claude',
-      studioApiKey: STUDIO_KEY,
-      spawnFn: (bin, args, options) => {
-        Object.assign(capture, { bin, args, cwd: options.cwd, env: options.env });
-        return child as unknown as ChildProcess;
-      },
-    });
-    const events: AgentEvent[] = [];
-    const run = adapter.run(spec, (event) => void events.push(event), new AbortController().signal);
-    child.stdout.write(fixture);
-    child.finish(0);
-    const result = await run;
-
-    expect(capture.bin).toBe('claude');
-    expect(capture.cwd).toBe(spec.worktree);
-    expect(capture.args).toEqual(claudeArgs(spec, null));
-    expect(capture.env?.ANTHROPIC_API_KEY).toBe(STUDIO_KEY);
-    expect(capture.env).toEqual(unattendedEnv(process.env, STUDIO_KEY));
-    expect(Object.values(capture.env ?? {})).not.toContain('founder-key');
-    for (const name of SECRET_NAMES.filter((n) => n !== 'ANTHROPIC_API_KEY')) {
-      expect(capture.env, name).not.toHaveProperty(name);
-    }
-    expect(result).toMatchObject({ exitCode: 0, killed: false, turns: 3, endSubtype: 'success', isError: false });
-    expect(events[0]).toMatchObject({ type: 'start', apiKeySource: 'none' });
-    expect(events.at(-1)?.type).toBe('end');
+  it('refuses web, sub-agent and MCP tools named in a role, in either naming', async () => {
+    const adapter = new UnattendedAdapter(options());
+    const spec = { cardId: 'c', worktree: '/w', prompt: 'p', systemPromptFile: null, model: 'builder-class', folder: 'seed-1' as const, maxTurns: 60, maxBudgetUsd: 3, allowedPaths: ['seed-1/config'] };
+    await expect(adapter.preflight({ ...spec, roleTools: ['Read', 'WebFetch'] })).rejects.toThrow('excluded tools: WebFetch');
+    await expect(adapter.preflight({ ...spec, roleTools: ['web_search'] })).rejects.toThrow('excluded tools: web_search');
+    await expect(adapter.preflight({ ...spec, roleTools: ['Read'], allowedPaths: [] })).rejects.toThrow('lane paths');
+    await expect(adapter.preflight({ ...spec, roleTools: ['Read', 'Edit', 'Bash'] })).resolves.toBeUndefined();
   });
 });

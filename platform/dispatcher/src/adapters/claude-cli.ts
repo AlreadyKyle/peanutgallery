@@ -1,16 +1,18 @@
-// Shared Claude Code adapter: one session per card through the claude command line with a
-// fixed tool allowlist, no MCP servers, no web or sub-agent tools, and an allowlisted
-// environment. Attended and unattended mode differ only in the credential the child sees,
-// which each subclass supplies through sessionEnv().
+// Claude Code adapter: one session per card through the claude command line with a fixed tool
+// allowlist, no MCP servers, no web or sub-agent tools, and an allowlisted environment. Only attended
+// mode runs it, on the founder's Mac and subscription (attended.ts); unattended mode runs Managed
+// Agents sessions instead (managed.ts).
 import { spawn, type ChildProcess } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { constants as fsConstants } from 'node:fs';
 import readline from 'node:readline';
 import { StreamParser } from './stream.js';
 import type { AgentAdapter, AgentEvent, AgentMode, CardFolder, EndEvent, EventSink, RawLineSink, SessionResult, SessionSpec } from './types.js';
 
-export const EXCLUDED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'] as const;
-export const MCP_PREFIX = 'mcp__';
+import { EXCLUDED_MANAGED_TOOLS, EXCLUDED_TOOLS, MCP_PREFIX, refusedTools } from './tool-names.js';
+
+export { EXCLUDED_MANAGED_TOOLS, EXCLUDED_TOOLS, MCP_PREFIX, refusedTools };
 
 export const DISALLOWED_TOOLS = [
   'WebFetch',
@@ -36,13 +38,15 @@ const STDERR_LIMIT = 4000;
 export const INTERRUPT_GRACE_MS = 15_000;
 const KILL_GRACE_MS = 5000;
 
-export function refusedTools(tools: readonly string[]): string[] {
-  return tools.filter((tool) => (EXCLUDED_TOOLS as readonly string[]).includes(tool) || tool.startsWith(MCP_PREFIX));
+// A permission rule path for an absolute path: Claude Code reads //path as absolute.
+export function absoluteRulePath(dir: string): string {
+  return `/${path.resolve(dir)}`;
 }
 
 // A bare Bash entry in tools_json becomes the package scripts for the card's folder; every
-// other tool name passes through unchanged.
-export function allowedToolRules(tools: readonly string[], folder: CardFolder): string[] {
+// other tool name passes through unchanged. With editRoot, Edit and Write are allowed only under it,
+// since the sandbox limits what Bash commands write and not what those tools write.
+export function allowedToolRules(tools: readonly string[], folder: CardFolder, editRoot: string | null = null): string[] {
   const rules: string[] = [];
   for (const tool of tools) {
     if (tool === 'Bash') {
@@ -51,6 +55,8 @@ export function allowedToolRules(tools: readonly string[], folder: CardFolder): 
           rules.push(`Bash(pnpm --filter ${pkg} ${script}:*)`);
         }
       }
+    } else if (editRoot && (tool === 'Edit' || tool === 'Write')) {
+      rules.push(`${tool}(${absoluteRulePath(editRoot)}/**)`);
     } else {
       rules.push(tool);
     }
@@ -88,8 +94,10 @@ export function baseToolNames(tools: readonly string[]): string[] {
 }
 
 // systemPrompt is the executor role's prompt file contents, appended to Claude Code's system
-// prompt so the session runs with the card, the CLAUDE.md files and the role prompt only.
-export function claudeArgs(spec: SessionSpec, systemPrompt: string | null): string[] {
+// prompt so the session runs with the card, the CLAUDE.md files and the role prompt only. settings is
+// a settings JSON string for --settings (the attended sandbox), which Claude Code loads alongside the
+// project settings --setting-sources names; editRoot scopes the Edit and Write rules.
+export function claudeArgs(spec: SessionSpec, systemPrompt: string | null, settings: string | null = null, editRoot: string | null = null): string[] {
   return [
     '-p',
     spec.prompt,
@@ -111,11 +119,12 @@ export function claudeArgs(spec: SessionSpec, systemPrompt: string | null): stri
     'acceptEdits',
     '--setting-sources',
     'project',
+    ...(settings ? ['--settings', settings] : []),
     '--strict-mcp-config',
     '--mcp-config',
     '{"mcpServers":{}}',
     '--allowedTools',
-    ...allowedToolRules(spec.roleTools, spec.folder),
+    ...allowedToolRules(spec.roleTools, spec.folder, editRoot),
     '--disallowedTools',
     ...DISALLOWED_TOOLS,
   ];
@@ -178,8 +187,17 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
     this.onRawLine = options.onRawLine;
   }
 
-  // The environment the child process starts with; the only thing the two modes disagree on.
+  // The environment the child process starts with.
   protected abstract sessionEnv(): NodeJS.ProcessEnv;
+
+  // The --settings JSON for a session, and the folder Edit and Write are limited to; none by default.
+  protected sessionSettings(_spec: SessionSpec): { settings: string | null; editRoot: string | null } {
+    return { settings: null, editRoot: null };
+  }
+
+  // Runs before the session starts, outside it (the attended adapter installs dependencies here, so
+  // the sandboxed session needs no network). Nothing to do returns nothing, so the spawn is not delayed.
+  protected prepare(_spec: SessionSpec): Promise<void> | void {}
 
   async preflight(spec: SessionSpec): Promise<void> {
     const refused = refusedTools(spec.roleTools);
@@ -200,7 +218,10 @@ export abstract class ClaudeCliAdapter implements AgentAdapter {
 
   async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal, onRawLine?: RawLineSink): Promise<SessionResult> {
     const systemPrompt = spec.systemPromptFile ? (await readFile(spec.systemPromptFile, 'utf8')).trim() : null;
-    const child = this.spawnFn(this.claudeBin, claudeArgs(spec, systemPrompt || null), { cwd: spec.worktree, env: this.sessionEnv() });
+    const preparing = this.prepare(spec);
+    if (preparing) await preparing;
+    const { settings, editRoot } = this.sessionSettings(spec);
+    const child = this.spawnFn(this.claudeBin, claudeArgs(spec, systemPrompt || null, settings, editRoot), { cwd: spec.worktree, env: this.sessionEnv() });
     const parser = new StreamParser();
     const state: RunState = { killReason: null, end: null, stderr: '', sinkError: null };
 

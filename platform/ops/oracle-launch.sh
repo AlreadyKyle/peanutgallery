@@ -4,7 +4,8 @@
 # VM.Standard.A1.Flex with 4 OCPUs and 24 GB, retries every availability domain while Oracle
 # answers "Out of host capacity", waits for RUNNING, and proves ssh as ubuntu and as root.
 # Idempotent: every step finds what exists before it creates, so a rerun reuses the network and an
-# instance already named peanutgallery-dispatcher, and prints the same address.
+# instance already named peanutgallery-dispatcher, starts it if Oracle stopped it, and prints the same
+# address.
 #
 # Before the first run, the board signs in once in a terminal (a browser login, no API key):
 #   oci session authenticate --region ca-toronto-1 --profile-name peanutgallery
@@ -84,6 +85,14 @@ log "security list: inbound TCP 22 only"
 INSTANCE=$(first compute instance list -c "$TENANCY" --display-name "$NAME" \
   --query "data[?\"lifecycle-state\"!='TERMINATED' && \"lifecycle-state\"!='TERMINATING'].id | [0]")
 if [ -n "$INSTANCE" ]; then
+  # Oracle stops an Always Free instance it finds idle, and the dispatcher is idle by design between
+  # funded cards (platform/ops/README.md, Oracle idle reclaim). A stopped instance is started again
+  # here, so recovering from a reclaim is: sign in, run this script.
+  STATE=$(oci_ compute instance get --instance-id "$INSTANCE" --raw-output --query 'data."lifecycle-state"')
+  if [ "$STATE" = STOPPED ]; then
+    log "$NAME is stopped; starting it"
+    oci_ compute instance action --instance-id "$INSTANCE" --action START --wait-for-state RUNNING > /dev/null
+  fi
   log "reusing $NAME"
   oci_ compute instance get --instance-id "$INSTANCE" --wait-for-state RUNNING > /dev/null
 else

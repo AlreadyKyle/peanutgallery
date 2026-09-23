@@ -1,4 +1,5 @@
-// The life of one claimed card: worktree, pre-check, agent session, git state check, post-check,
+// The life of one claimed card: worktree, pre-check, agent session (or the card's stored patch, when
+// an earlier managed session's patch was accepted), git state check, post-check,
 // commit, range check, push, pull request, gate, remote range check, merge, deploy, smoke; then live
 // with a ship event, or rejected with the failing check. A merged change that fails its deploy or
 // smoke, or whose verification throws before a verdict, is reverted on main, and the previous green
@@ -6,15 +7,27 @@
 // verifying or recording, or a merge whose outcome is unknown, is left gated, and recovery.ts resolves
 // it at startup. The board is alerted whenever a card stops short of live for a reason other than the
 // dispatcher stopping before the merge.
-import { readFile, rm } from 'node:fs/promises';
+//
+// Every stage write names the stage the card must still be in, so a stage the board set while the
+// dispatcher held the card is never overwritten; a write that finds the card elsewhere stops the
+// pipeline there (StageMoved). Inside the merge lock, before the merge, the studio and the card are
+// read again: a paused studio pauses the card, a card the board moved off horizon now or vetoed is
+// paused, and a card no longer gated is left as the board set it. The merge goes ahead only while
+// main's head is still the card's base sha, so what merges is exactly what the gate tested; otherwise
+// the card goes back to funded to be built on the new main. A revert that fails pauses the studio, since
+// main may then still carry the failed change. An API error that says the Console credit ran out pauses
+// the studio and the card.
+import { lstat, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { parseChecks, evaluateCheck, AcceptanceGrammarError, type ConfigCheck } from './acceptance.js';
 import type { AgentAdapter, CardFolder } from './adapters/types.js';
 import type { Alerter } from './alert.js';
+import type { SessionBudgets } from './budgets.js';
 import type { DispatcherConfig } from './config.js';
-import type { Card, Db, Role } from './db.js';
+import type { Card, CardPatch, Db, Role } from './db.js';
 import { gitConfigViolations } from './gitconfig.js';
 import {
+  closePullRequest,
   COMPARE_FILE_LIMIT,
   compareRange,
   findPullForBranch,
@@ -32,19 +45,20 @@ import {
   waitForPullHead,
   type GitHubOptions,
 } from './github.js';
+import { applyStoredPatch, type PatchStore } from './patch.js';
 import { haltDispatcher, haltReason } from './halt.js';
 import { mergeLock } from './lock.js';
 import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
+import { resolveRoleModel } from './role-model.js';
 import { runAgentSession, type SessionOutcome } from './session.js';
-import { runSmoke, type BotExec, type SmokeResult } from './smoke.js';
+import { mergedServedFiles, runSmoke, SMOKE_GATE_TIMEOUT_MS, type SmokeResult } from './smoke.js';
 import { retry } from './time.js';
 import {
   changedFiles,
   commitLane,
   commitTitle,
   commitTrailers,
-  createSmokeWorktree,
   createWorktree,
   GIT_TIMEOUT_MS,
   gitAuthEnv,
@@ -82,15 +96,17 @@ export interface PipelineDeps {
   stopSignal: AbortSignal;
   now: () => Date;
   fetchFn?: typeof fetch;
-  botExec?: BotExec;
+  // Where accepted managed-session patches are kept (card_patches); null in attended mode.
+  patches?: PatchStore | null;
   timings?: Partial<PipelineTimings>;
+  // The session budgets the tick set (budgets.ts); without it a session's budget is its ceiling.
+  budgets?: SessionBudgets;
 }
 
 export const GATE_TIMEOUT_MS = 20 * 60_000;
 export const GATE_INTERVAL_MS = 15_000;
 export const DEPLOY_TIMEOUT_MS = 10 * 60_000;
 export const DEPLOY_INTERVAL_MS = 10_000;
-export const SMOKE_BOT_SECONDS = 60;
 export const SHIP_WRITE_RETRIES = 3;
 // Tries for a GitHub or Netlify request that throws: the first and two more.
 export const REQUEST_TRIES = 3;
@@ -109,8 +125,8 @@ const DEFAULT_TIMINGS: PipelineTimings = {
 
 // The network git calls (the card fetch, the push, the smoke fetch), each up to its timeout.
 const NETWORK_GIT_CALLS = 3;
-// The smoke worktree, the headless bot with its exec timeout, and the page requests.
-const SMOKE_WINDOW_MS = 5 * 60_000;
+// The smoke test's page requests and its wait for the gate at the merge sha.
+const SMOKE_WINDOW_MS = SMOKE_GATE_TIMEOUT_MS + 3 * 60_000;
 // Every retry wait: requests, writes and the rollback.
 const RETRY_BUDGET_MS = 2 * 60_000;
 const STUCK_MARGIN_MS = 10 * 60_000;
@@ -147,6 +163,31 @@ class CardStop extends Error {
   }
 }
 
+// A card that goes back to funded, to be claimed again: main moved while it was in the gate, or the
+// throttle's budget was gone by the time its session started.
+class Requeue extends Error {
+  readonly from: readonly string[];
+  readonly failingCheck: string;
+  readonly alert: boolean;
+  constructor(from: readonly string[], failingCheck: string, detail: string, alert: boolean) {
+    super(detail);
+    this.name = 'Requeue';
+    this.from = from;
+    this.failingCheck = failingCheck;
+    this.alert = alert;
+  }
+}
+
+// A stage write found the card in a stage the dispatcher did not leave it in: the board moved it.
+// Nothing more is written; an open pull request for it is closed.
+class StageMoved extends Error {
+  pr: number | null = null;
+  constructor(message: string) {
+    super(message);
+    this.name = 'StageMoved';
+  }
+}
+
 // A card that stays gated for recovery or the board. The message is the alert.
 class LeftGated extends Error {
   constructor(message: string) {
@@ -161,6 +202,7 @@ function mergedPending(card: Card, mergeSha: string, clause: string): LeftGated 
 
 const PAUSING_OUTCOMES: Partial<Record<SessionOutcome, string>> = {
   ceiling: 'ceiling',
+  budget: 'budget',
   turn_cap: 'turn_cap',
   board_session_lapsed: 'board_session',
   paused_by_board: 'paused_by_board',
@@ -177,11 +219,19 @@ async function readJson(file: string): Promise<unknown> {
   return JSON.parse(await readFile(file, 'utf8'));
 }
 
+// The largest file a check reads.
+const CHECK_FILE_MAX_BYTES = 1_048_576;
+
+// A checked path that is not a regular file (a symlink a change planted, a device) fails the check
+// and is never read through.
 async function checksHold(worktree: string, checks: readonly ConfigCheck[]): Promise<boolean> {
   for (const check of checks) {
     let doc: unknown;
     try {
-      doc = await readJson(path.join(worktree, check.file));
+      const file = path.join(worktree, check.file);
+      const stat = await lstat(file);
+      if (!stat.isFile() || stat.size > CHECK_FILE_MAX_BYTES) return false;
+      doc = await readJson(file);
     } catch {
       return false;
     }
@@ -201,19 +251,26 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     worktree = await prepareWorktree(card, deps);
     await preCheck(worktree, checks);
     const before = await snapshotGitState(config.repoRoot, worktree.path);
-    const sessionError = await agentSession(card, role, worktree, deps).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    const reused = await reuseStoredPatch(card, worktree, allowed, deps);
+    const sessionError = reused
+      ? null
+      : await agentSession(card, role, worktree, deps).then(
+          () => null,
+          (error: unknown) => error,
+        );
     // Checked before any git runs again, whatever the session's outcome.
     await assertGitTrusted(card, worktree.path, before, deps, 'after the session');
     if (sessionError) throw sessionError;
     await postCheck(worktree, checks);
     const commit = await commitAndOpenPullRequest(card, role, worktree, before, allowed, checks, deps);
-    await finalize(card, deps, 'gated', null);
+    await finalize(card, deps, 'gated', null).catch((error: unknown) => {
+      if (error instanceof StageMoved) error.pr = commit.prNumber;
+      throw error;
+    });
     await waitForGatePass(card, role, commit, deps);
     const roleId = role.id;
     await mergeLock.run(async () => {
+      await confirmMergeable(card, commit, deps);
       await confirmRemoteRange(commit, allowed, deps);
       const merged = await merge(card, roleId, commit, deps);
       await verifyMerged(card, roleId, merged.sha, checks, deps, { shaRecorded: merged.recorded });
@@ -281,6 +338,21 @@ async function settleFailure(card: Card, roleId: string | null, error: unknown, 
   if (error instanceof LeftGated) {
     log.warn('pipeline', `card ${card.id} left gated`, { detail: error.message });
     await deps.alert.notify(error.message);
+    return;
+  }
+  if (error instanceof StageMoved) {
+    log.warn('pipeline', `card ${card.id} stage moved`, { detail: error.message, pr: error.pr });
+    const pr = error.pr;
+    const closed = pr === null ? null : await attempt(deps, `card ${card.id} pull request close`, () => requesting(deps, () => closePullRequest(githubOptions(deps), pr)));
+    const note = pr === null ? '' : closed === null ? ` Pull request #${pr} was closed.` : ` Pull request #${pr} could not be closed (${closed}).`;
+    await deps.alert.notify(`Card ${shortId(card.id)}: ${error.message}${note} ${singleLineTitle(card.title)}`);
+    return;
+  }
+  if (error instanceof Requeue) {
+    log.info('pipeline', `card ${card.id} back to funded`, { check: error.failingCheck, detail: error.message });
+    await attempt(deps, `card ${card.id} requeue event`, () => deps.db.insertEvent(card.id, roleId, 'message', { step: 'requeue', reason: error.failingCheck, detail: error.message }));
+    const unwritten = await attempt(deps, `card ${card.id} stage`, () => finalize(card, deps, 'funded', error.failingCheck, error.from));
+    if (error.alert || unwritten) await deps.alert.notify(`Card ${shortId(card.id)} is back in funded (${error.failingCheck}): ${singleLineTitle(card.title)}. ${error.message}${unwrittenNote(unwritten)}`);
     return;
   }
   if (error instanceof CardStop) {
@@ -400,8 +472,27 @@ async function preCheck(worktree: Worktree, checks: readonly ConfigCheck[]): Pro
   }
 }
 
+// A card whose earlier managed session had its patch accepted (then paused, or re-queued when main
+// moved) is rebuilt from that patch at the new base, with no session and no new ledger row. A patch
+// that no longer applies is discarded and the card pauses, so the board's resume runs a new session.
+async function reuseStoredPatch(card: Card, worktree: Worktree, allowed: readonly string[], deps: PipelineDeps): Promise<boolean> {
+  if (!deps.patches) return false;
+  const outcome = await applyStoredPatch(deps.patches, card.id, worktree.path, allowed);
+  if (outcome.kind === 'none') return false;
+  if (outcome.kind === 'conflict') {
+    await attempt(deps, `card ${card.id} patch_conflict event`, () =>
+      deps.db.insertEvent(card.id, card.executor_role_id, 'error', { step: 'patch_conflict', sha256: outcome.sha256, detail: outcome.detail }),
+    );
+    throw new CardStop('paused', 'patch_conflict', `the stored patch ${outcome.sha256.slice(0, 12)} no longer applies on main (${outcome.detail}); it was discarded, so resuming the card runs a new session`);
+  }
+  await deps.db.insertEvent(card.id, card.executor_role_id, 'message', { step: 'patch_reused', sha256: outcome.sha256, base_sha: outcome.baseSha, files: outcome.files });
+  deps.log.info('pipeline', `card ${card.id} rebuilt from its stored patch; no session`, { sha256: outcome.sha256, base: worktree.baseSha, stored_base: outcome.baseSha });
+  return true;
+}
+
 async function agentSession(card: Card, role: Role, worktree: Worktree, deps: PipelineDeps): Promise<void> {
   const studio = await deps.db.getStudioState();
+  const budgets = deps.budgets;
   const run = await runAgentSession(card, role, worktree.path, studio, {
     db: deps.db,
     adapter: deps.adapter,
@@ -415,9 +506,24 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     log: deps.log,
     stopSignal: deps.stopSignal,
     now: deps.now,
+    budgetUsd: budgets?.budgetFor(card.id),
+    onSpend: budgets ? (usd) => budgets.record(card.id, usd) : undefined,
+    resolveModel: (r) => resolveRoleModel(r, deps.config).model,
   });
   deps.log.info('pipeline', `session for card ${card.id} ended`, { outcome: run.outcome, turns: run.turns, detail: run.detail });
   if (run.outcome === 'completed') return;
+  if (run.outcome === 'adapter_paused') throw new CardStop('paused', run.failingCheck ?? 'adapter', run.detail);
+  if (run.outcome === 'insufficient_balance') throw new Requeue(['building'], 'insufficient_balance', run.detail, false);
+  if (run.outcome === 'credit_exhausted') {
+    // The next session would fail the same way, so the studio stops until the board buys credit.
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: Console credit needed (card ${shortId(card.id)})`, deps.now()));
+    await deps.alert.notify(
+      `Console credit needed: card ${shortId(card.id)} stopped because the API refused the studio key for credit or its spend limit. ${
+        unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
+      } Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.`,
+    );
+    throw new CardStop('paused', 'console_credit', run.detail);
+  }
   const pausing = PAUSING_OUTCOMES[run.outcome];
   if (pausing) throw new CardStop('paused', pausing, run.detail);
   if (run.outcome === 'refused') throw new CardStop('rejected', 'tool_allowlist', run.detail);
@@ -524,6 +630,27 @@ async function waitForGatePass(card: Card, role: Role, commit: CommitInfo, deps:
   await deps.db.insertEvent(card.id, role.id, 'gate_pass', { sha: commit.sha, pr: commit.prNumber });
 }
 
+// Read again inside the merge lock, right before the merge. A studio the board paused while the card
+// was in the gate pauses the card. A card the board moved off horizon now, or vetoed, is paused; one
+// that is no longer gated is left as the board set it. Then main's head must still be the card's base
+// sha: the gate tested the card on that base alone, so a card whose base is behind goes back to funded
+// and is built again on the new main.
+async function confirmMergeable(card: Card, commit: CommitInfo, deps: PipelineDeps): Promise<void> {
+  const [studio, current] = await Promise.all([deps.db.getStudioState(), deps.db.getCard(card.id)]);
+  if (studio.paused) throw new CardStop('paused', 'paused_by_board', 'the board paused the studio while the card was in the gate; it was not merged');
+  if (!current || current.stage !== 'gated') {
+    const moved = new StageMoved(`the card moved to ${current?.stage ?? 'nowhere'} while it was in the gate; it was not merged and its stage is left as the board set it.`);
+    moved.pr = commit.prNumber;
+    throw moved;
+  }
+  if (current.horizon !== 'now') throw new CardStop('paused', 'horizon', `the board moved the card to horizon ${current.horizon} while it was in the gate; it was not merged`);
+  if (current.director_stance === 'vetoed') throw new CardStop('paused', 'vetoed', 'the card was vetoed while it was in the gate; it was not merged');
+  const head = await requesting(deps, () => mainHead(githubOptions(deps)));
+  if (head !== commit.baseSha) {
+    throw new Requeue(['gated'], 'main_moved', `main moved from ${commit.baseSha.slice(0, 8)} to ${head.slice(0, 8)} while the card was in the gate, so the tested change is not what would merge; it goes back to funded to be built on the new main`, false);
+  }
+}
+
 const SYMLINK_MODE = '120000';
 const GITLINK_MODE = '160000';
 
@@ -569,7 +696,7 @@ async function merge(card: Card, roleId: string, commit: CommitInfo, deps: Pipel
       await attempt(deps, `card ${card.id} merge_unknown event`, () =>
         deps.db.insertEvent(card.id, roleId, 'error', { step: 'merge_unknown', pr: commit.prNumber, sha: commit.sha, reason: result.reason }),
       );
-      await attempt(deps, `card ${card.id} merge_unknown marker`, () => finalize(card, deps, 'gated', 'merge_unknown'));
+      await attempt(deps, `card ${card.id} merge_unknown marker`, () => finalize(card, deps, 'gated', 'merge_unknown', ['gated']));
       throw new LeftGated(
         `Card ${shortId(card.id)}: the merge request for pull request #${commit.prNumber} failed and GitHub did not show it merged (${result.reason}). It is left gated; the dispatcher checks it again when it starts, and nothing was closed.`,
       );
@@ -627,11 +754,13 @@ export async function verifyMerged(
       await attempt(deps, `card ${card.id} deploys row`, () =>
         deps.db.insertDeploy({ folder: card.folder, sha: mergeSha, netlify_deploy_id: deploy.deploy?.id ?? null, is_green: false, smoke_result: `fail: ${deploy.reason}` }),
       );
-      await rollBack(card, roleId, mergeSha, `deploy failed: ${deploy.reason}`, false, deps);
+      // A deploy that failed or was skipped never published. One that did not finish in time may still
+      // publish, so the previous green deploy is restored as after a failed smoke test.
+      await rollBack(card, roleId, mergeSha, `deploy ${deploy.timedOut ? 'did not finish' : 'failed'}: ${deploy.reason}`, deploy.timedOut === true, deps);
       throw new CardStop('rejected', 'deploy', deploy.reason);
     }
     const baseUrl = await requesting(deps, () => siteUrl(netlify, siteId));
-    const smoke = await smokeMerged(card, roleId, mergeSha, baseUrl, checks, deps);
+    const smoke = await smokeMerged(card, mergeSha, baseUrl, checks, deps);
     verdict = { deployId: deploy.deploy.id, baseUrl, smoke };
   } catch (error) {
     if (error instanceof CardStop || error instanceof LeftGated) throw error;
@@ -674,46 +803,32 @@ async function recordShip(card: Card, roleId: string | null, mergeSha: string, v
   deps.log.info('pipeline', `card ${card.id} is live`, { sha: mergeSha, url: verdict.baseUrl });
 }
 
-// The seed's headless bot runs from a detached checkout of the merge commit, so it tests the code
-// that shipped. That checkout runs agent-written code, so the git state is checked around it as around
-// a session; a problem halts the dispatcher, rolls the merge back and rejects git_tamper. pnpm installs
-// the checkout's dependencies on the bot's first filtered run, as it does in a card worktree, inside
-// the bot's exec timeout.
-async function smokeMerged(card: Card, roleId: string | null, mergeSha: string, baseUrl: string, checks: readonly ConfigCheck[], deps: PipelineDeps): Promise<SmokeResult> {
+// The smoke test runs no card code (smoke.ts): the served build and config, the served data byte for
+// byte against the merge commit, and the gate at the merge sha. A dispatcher that stops while the gate
+// is still running leaves the card gated for recovery rather than reverting a merge it did not judge.
+async function smokeMerged(card: Card, mergeSha: string, baseUrl: string, checks: readonly ConfigCheck[], deps: PipelineDeps): Promise<SmokeResult> {
   const { config } = deps;
-  const input = {
+  const t = timings(deps);
+  return runSmoke({
     baseUrl,
     sha: mergeSha,
     folder: card.folder,
     checks,
-    botSeconds: SMOKE_BOT_SECONDS,
+    mergedFiles: () => mergedServedFiles(config.repoRoot, mergeSha, gitAuthEnv(config.githubToken)),
+    gate: async () => {
+      const status = await waitForGate(githubOptions(deps), mergeSha, {
+        timeoutMs: Math.min(t.gateTimeoutMs, SMOKE_GATE_TIMEOUT_MS),
+        intervalMs: t.gateIntervalMs,
+        signal: deps.stopSignal,
+      });
+      if ((status.state === 'pending' || status.state === 'missing') && deps.stopSignal.aborted) {
+        throw mergedPending(card, mergeSha, 'but the dispatcher stopped while the gate at the merge sha was running');
+      }
+      return status;
+    },
     fetchFn: deps.fetchFn,
-    exec: deps.botExec,
-    retryDelayMs: timings(deps).retryDelayMs,
-  };
-  if (card.folder !== 'seed-1') return runSmoke({ ...input, botRoot: config.repoRoot });
-  const botRoot = await createSmokeWorktree(config.repoRoot, config.worktreeRoot, card.id, mergeSha, gitAuthEnv(config.githubToken));
-  let before: string;
-  try {
-    before = await snapshotGitState(config.repoRoot, botRoot);
-  } catch (error) {
-    await discardWorktree(botRoot, null, deps);
-    throw error;
-  }
-  const outcome = await runSmoke({ ...input, botRoot }).then(
-    (smoke) => ({ smoke, error: null }),
-    (error: unknown) => ({ smoke: null, error }),
-  );
-  const problem = await gitTrustProblem(config.repoRoot, botRoot, before);
-  if (problem) {
-    const stop = haltForTamper(card, deps, 'after the smoke test', problem);
-    await discardWorktree(botRoot, null, deps);
-    await rollBack(card, roleId, mergeSha, `the smoke test left refused git state: ${problem}`, true, deps);
-    throw stop;
-  }
-  await discardWorktree(botRoot, null, deps);
-  if (outcome.error !== null || outcome.smoke === null) throw outcome.error;
-  return outcome.smoke;
+    retryDelayMs: t.retryDelayMs,
+  });
 }
 
 export function revertMessage(card: Card, reason: string): string {
@@ -757,14 +872,36 @@ async function rollBack(card: Card, roleId: string | null, mergeSha: string, rea
   if (problems.length === 0) {
     deps.log.warn('pipeline', `card ${card.id} rolled back`, payload);
     await deps.alert.notify(`Card ${shortId(card.id)} was reverted on main (${revert.ok ? revert.sha.slice(0, 7) : ''}): ${reason}`);
-  } else {
-    deps.log.error('pipeline', `card ${card.id} rollback incomplete`, payload);
-    await deps.alert.notify(`Card ${shortId(card.id)} failed after merge and the rollback is incomplete: ${problems.join('; ')}. Check main and the live site.`);
+    return;
   }
+  deps.log.error('pipeline', `card ${card.id} rollback incomplete`, payload);
+  // Main may still carry the failed change, and the next merge would ship it again, so nothing more
+  // is claimed until the board has looked.
+  let paused = '';
+  if (!revert.ok) {
+    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: the revert of card ${shortId(card.id)} failed`, deps.now()));
+    paused = unpaused ? ` The studio could not be paused (${unpaused}); pause it from /board.` : ' The studio is paused until the board unpauses it.';
+  }
+  await deps.alert.notify(`Card ${shortId(card.id)} failed after merge and the rollback is incomplete: ${problems.join('; ')}. Check main and the live site.${paused}`);
 }
 
-// actual_usd is written from the ledger at every terminal stage and at gated.
-async function finalize(card: Card, deps: PipelineDeps, stage: 'gated' | 'live' | 'rejected' | 'paused', failingCheck: string | null): Promise<void> {
+type WrittenStage = 'gated' | 'live' | 'rejected' | 'paused' | 'funded';
+
+// The stages the dispatcher itself leaves a card in before each write.
+const EXPECTED: Record<WrittenStage, readonly string[]> = {
+  gated: ['building'],
+  live: ['gated'],
+  rejected: ['building', 'gated'],
+  paused: ['building', 'gated'],
+  funded: ['building', 'gated'],
+};
+
+// actual_usd is written from the ledger at every terminal stage and at gated. The write happens only
+// while the card is still in a stage the dispatcher left it in.
+async function finalize(card: Card, deps: PipelineDeps, stage: WrittenStage, failingCheck: string | null, from: readonly string[] = EXPECTED[stage]): Promise<void> {
   const actual = await deps.db.sumLedger(card.id);
-  await deps.db.updateCard(card.id, { stage, failing_check: failingCheck, actual_usd: actual });
+  const patch: CardPatch = { stage, failing_check: failingCheck, actual_usd: actual };
+  if (await deps.db.updateCardIf(card.id, from, patch)) return;
+  const current = await deps.db.getCard(card.id).catch(() => null);
+  throw new StageMoved(`the card is ${current?.stage ?? 'gone'}, not ${from.join(' or ')}, so it was not moved to ${stage}; the dispatcher left it as it is.`);
 }

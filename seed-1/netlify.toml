@@ -1,8 +1,11 @@
 [build]
   command = "pnpm --filter @backseat/seed-1 build"
   publish = "dist"
-  # Skip the build only when a previous successful build exists, differs, and touched nothing here.
-  ignore = 'test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../pnpm-lock.yaml ../package.json'
+  # A card/* branch never builds: its pull request is opened before the gate runs, so a deploy
+  # preview would publish ungated card code. Every other pull request still gets its preview.
+  # Otherwise skip the build only when a previous successful build exists, differs, and touched
+  # nothing here.
+  ignore = 'case "$HEAD" in card/*) exit 0 ;; esac; test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../pnpm-lock.yaml ../package.json'
 
 [build.environment]
   NODE_VERSION = "22"

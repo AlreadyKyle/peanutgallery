@@ -15,13 +15,13 @@
 # Exit 0 pass, 1 fail, 2 usage.
 set -u
 GATE_DIR=$(cd "$(dirname "$0")" && pwd)
-LIST="$GATE_DIR/kernel-paths.txt"
-NAMES="$GATE_DIR/kernel-names.txt"
+. "$GATE_DIR/lib/common.sh"
 export LC_ALL=C
 
 [ $# -eq 1 ] && [ -f "$1" ] || { echo "usage: kernel-guard.sh <changed-files-file>" >&2; exit 2; }
-[ -f "$LIST" ] || { echo "FAIL: kernel-guard missing $LIST"; exit 1; }
-[ -f "$NAMES" ] || { echo "FAIL: kernel-guard missing $NAMES"; exit 1; }
+[ -f "$GATE_DIR/kernel-paths.txt" ] || { echo "FAIL: kernel-guard missing $GATE_DIR/kernel-paths.txt"; exit 1; }
+[ -f "$GATE_DIR/kernel-names.txt" ] || { echo "FAIL: kernel-guard missing $GATE_DIR/kernel-names.txt"; exit 1; }
+gate_load_kernel_lists
 shopt -s nocasematch
 
 # True when the path cannot be read as a plain repository path.
@@ -32,39 +32,12 @@ is_unreadable() {
   return 1
 }
 
-# True when any segment of the path matches a kernel name. The name is unquoted in the case pattern
-# so its * is a glob.
-has_kernel_name() {
-  local rest=$1 segment name
-  while :; do
-    segment=${rest%%/*}
-    while IFS= read -r name || [ -n "$name" ]; do
-      case "$name" in ''|'#'*) continue ;; esac
-      case "$segment" in $name) return 0 ;; esac
-    done < "$NAMES"
-    [ "$segment" != "$rest" ] || return 1
-    rest=${rest#*/}
-  done
-}
-
-# True when the path equals a kernel path or lies under one.
-under_kernel_path() {
-  local kernel
-  while IFS= read -r kernel || [ -n "$kernel" ]; do
-    case "$kernel" in ''|'#'*) continue ;; esac
-    case "$1" in
-      "$kernel"|"$kernel"/*) return 0 ;;
-    esac
-  done < "$LIST"
-  return 1
-}
-
 count=0
 first=""
 while IFS= read -r file || [ -n "$file" ]; do
   [ -n "$file" ] || continue
   count=$((count + 1))
-  if is_unreadable "$file" || has_kernel_name "$file" || under_kernel_path "$file"; then
+  if is_unreadable "$file" || gate_has_kernel_name "$file" || gate_under_kernel_path "$file"; then
     [ -n "$first" ] || first=$file
     echo "kernel-guard: $file is a kernel path or cannot be read as a path" >&2
   fi
