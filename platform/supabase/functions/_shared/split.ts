@@ -19,7 +19,6 @@ export const SPLIT_MAP: Readonly<Record<string, number>> = {
 };
 
 export const DEFAULT_STUDIO_PCT = 20;
-export const DISPLAY_NAME_MAX = 24;
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -92,22 +91,6 @@ export function computeAmounts(
     fee_usd: fee,
     net_usd: roundUsd(amountUsd - fee),
   };
-}
-
-/** Trims, strips control characters, and caps the display name; empty → null. */
-export function sanitizeDisplayName(
-  value: string | null | undefined,
-): string | null {
-  if (value === null || value === undefined) return null;
-  let out = "";
-  for (const ch of value) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
-    out += ch;
-  }
-  out = out.trim();
-  if (out.length === 0) return null;
-  return Array.from(out).slice(0, DISPLAY_NAME_MAX).join("");
 }
 
 export interface ContributorSource {

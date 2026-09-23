@@ -240,6 +240,8 @@ Deno.test("migrations on PGlite", {
         "20260923000100_spend_totals.sql",
         "20260923000200_rename_biz_dev.sql",
         "20260924000000_board_site.sql",
+        "20260924100000_terms_versions.sql",
+        "20260924100100_terms_version_2.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -288,6 +290,7 @@ Deno.test("migrations on PGlite", {
         "standing_costs",
         "stream_state",
         "studio_state",
+        "terms_versions",
         "votes",
       ]);
       const views = await rows<{ table_name: string }>(
@@ -301,6 +304,7 @@ Deno.test("migrations on PGlite", {
         "public_ledger_totals",
         "public_roles",
         "public_studio",
+        "public_terms_versions",
       ]);
       const columns = await rows<{ column_name: string }>(
         `select column_name from information_schema.columns where table_schema = 'public' and table_name = 'studio_state' and column_name in ('launched_at', 'dispatcher_seen_at') order by 1`,
@@ -1945,7 +1949,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on three public tables, the seven views and the public columns of cards, and nothing else",
+      "anon holds select on three public tables, the eight views and the public columns of cards, and nothing else",
       async () => {
         const expected = [
           "deploys",
@@ -1958,6 +1962,7 @@ Deno.test("migrations on PGlite", {
           "public_ledger_totals",
           "public_roles",
           "public_studio",
+          "public_terms_versions",
         ].map((table_name) => ({ table_name, privilege_type: "SELECT" }));
         for (const grantee of ["anon", "authenticated"]) {
           const grants = await rows<
@@ -3858,6 +3863,7 @@ Deno.test("migrations on PGlite", {
           "release_dispatcher_lease",
           "reverse_contribution",
           "studio_spend_totals",
+          "terms_version_at",
         ];
         assertEquals(
           privileges.map((p) => p.proname),
@@ -3892,11 +3898,13 @@ Deno.test("migrations on PGlite", {
         }
         // Every function authenticated may run is security definer, so the board's
         // RPCs read cards with the owner's rights and the column grants do not
-        // limit them. The three trigger functions run with the caller's rights.
+        // limit them. The three trigger functions, and terms_version_at, which only
+        // the service role and security definer functions call, run with the
+        // caller's rights.
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "terms_version_at"]);
       },
     );
 
@@ -3983,6 +3991,99 @@ Deno.test("migrations on PGlite", {
           }
         }
         await db.query(`delete from public.card_patches where id = $1`, [stored.id]);
+      },
+    );
+
+    await t.step(
+      "terms_versions posts version 1 at #47's merge and version 2 when applied, append-only, readable only through public_terms_versions",
+      async () => {
+        const versions = async () =>
+          await rows<{ version: number; posted_at: Date }>(`select version, posted_at from public.terms_versions order by version`);
+        const posted = await versions();
+        assertEquals(posted.map((r) => r.version), [1, 2]);
+        assertEquals(posted[0]!.posted_at.toISOString(), "2026-09-23T01:32:51.000Z");
+        // Version 2 is posted at the time its migration is applied: at the start of this run.
+        assert(Math.abs(posted[1]!.posted_at.getTime() - Date.now()) < 10 * 60_000, "version 2 posted when applied");
+        // Each migration runs again without changing a row.
+        const migrations = await readMigrations();
+        for (const name of ["20260924100000_terms_versions.sql", "20260924100100_terms_version_2.sql"]) {
+          await db.exec(migrations.find((m) => m.name === name)!.sql);
+          const again = await versions();
+          assertEquals(again.map((r) => [r.version, r.posted_at.toISOString()]), posted.map((r) => [r.version, r.posted_at.toISOString()]), name);
+        }
+
+        // Append-only, through the money tables' guard; an update that changes nothing passes.
+        await refuses(`update public.terms_versions set posted_at = now() where version = 1`, "terms_versions is append-only: UPDATE of posted_at is refused");
+        await refuses(`update public.terms_versions set version = 3 where version = 2`, "terms_versions is append-only: UPDATE of version is refused");
+        await refuses(`delete from public.terms_versions where version = 2`, "terms_versions is append-only: DELETE is refused");
+        await refuses(`truncate public.terms_versions`, "terms_versions is append-only: TRUNCATE is refused");
+        await db.exec(`update public.terms_versions set posted_at = posted_at where version = 1`);
+        await refuses(`insert into public.terms_versions (version) values (0)`, "terms_versions_version_check");
+        await refuses(`insert into public.terms_versions (version) values (10000)`, "terms_versions_version_check");
+        assertEquals((await versions()).length, 2);
+        const triggers = await rows<{ tgname: string }>(
+          `select tgname from pg_trigger where tgrelid = 'public.terms_versions'::regclass and not tgisinternal order by 1`,
+        );
+        assertEquals(triggers.map((r) => r.tgname), ["terms_versions_append_only", "terms_versions_no_truncate"]);
+        assertEquals(await row(`select relrowsecurity from pg_class where oid = 'public.terms_versions'::regclass`), { relrowsecurity: true });
+
+        // terms_version_at: the newest version posted at or before a time, else null.
+        const at = async (time: string | null) =>
+          (await row<{ v: number | null }>(`select public.terms_version_at($1::timestamptz) as v`, [time])).v;
+        const v2At = posted[1]!.posted_at;
+        assertEquals(await at("2026-09-23T01:32:51Z"), 1);
+        assertEquals(await at("2026-09-23T01:32:50.999Z"), null);
+        assertEquals(await at("2000-01-01T00:00:00Z"), null);
+        assertEquals(await at(null), null);
+        assertEquals(await at(new Date(v2At.getTime() - 1).toISOString()), 1);
+        assertEquals(await at(v2At.toISOString()), 2);
+        assertEquals(await at("2099-01-01T00:00:00Z"), 2);
+
+        const privileges = await row(
+          `select has_table_privilege('service_role', 'public.terms_versions', 'insert') as service_insert,
+                  has_table_privilege('service_role', 'public.terms_versions', 'select') as service_select,
+                  has_function_privilege('anon', 'public.terms_version_at(timestamptz)', 'execute') as anon_execute,
+                  has_function_privilege('authenticated', 'public.terms_version_at(timestamptz)', 'execute') as authenticated_execute,
+                  has_function_privilege('service_role', 'public.terms_version_at(timestamptz)', 'execute') as service_execute`,
+        );
+        assertEquals(privileges, {
+          service_insert: false,
+          service_select: true,
+          anon_execute: false,
+          authenticated_execute: false,
+          service_execute: true,
+        });
+
+        const refusedWith42501 = async (sql: string) => {
+          const error = await assertRejects(() => db.query(sql), Error, "permission denied");
+          assertEquals((error as Error & { code?: string }).code, "42501", sql);
+        };
+        for (const role of ["anon", "authenticated"]) {
+          await db.exec(`set role ${role}`);
+          try {
+            await refusedWith42501(`select * from public.terms_versions`);
+            await refusedWith42501(`select public.terms_version_at(now())`);
+            const view = await rows(`select * from public.public_terms_versions order by version`);
+            assertEquals(view.map((r) => Object.keys(r)), [["version", "posted_at"], ["version", "posted_at"]], role);
+            await refusedWith42501(`insert into public.public_terms_versions (version) values (9999)`);
+            await refusedWith42501(`update public.public_terms_versions set posted_at = now() where version = 0`);
+            await refusedWith42501(`delete from public.public_terms_versions where version = 0`);
+          } finally {
+            await db.exec(`reset role`);
+          }
+        }
+        await db.exec(`set role service_role`);
+        try {
+          assertEquals((await rows(`select version from public.terms_versions`)).length, 2);
+          assertEquals(await row(`select public.terms_version_at('2026-09-23T01:32:51Z') as v`), { v: 1 });
+          await refusedWith42501(`insert into public.terms_versions (version) values (9999)`);
+          await refusedWith42501(`update public.terms_versions set posted_at = now() where version = 1`);
+          await refusedWith42501(`delete from public.terms_versions where version = 1`);
+          await refusedWith42501(`insert into public.public_terms_versions (version) values (9999)`);
+        } finally {
+          await db.exec(`reset role`);
+        }
+        assertEquals((await versions()).length, 2);
       },
     );
 

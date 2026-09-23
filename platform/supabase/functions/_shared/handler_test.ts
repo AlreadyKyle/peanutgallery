@@ -378,6 +378,25 @@ Deno.test("handler credits a paid session through apply_contribution", async () 
   assertEquals(applied[0]!.parsed.studio_pct, 20);
 });
 
+Deno.test("handler credits a session that carries a displayname field exactly as before, with no name", async () => {
+  const withName = completedEvent({
+    custom_fields: [
+      { key: "split", type: "dropdown", dropdown: { value: "8020" } },
+      { key: "displayname", type: "text", text: { value: "Board" } },
+    ],
+  });
+  const named = fake({}, withName);
+  const plain = fake();
+  const { status, body } = await call(named.deps, post());
+  await call(plain.deps, post());
+  assertEquals(status, 200);
+  assertEquals(body.inserted, true);
+  assertEquals(named.applied.length, 1);
+  assertEquals(named.applied[0]!.parsed.display_name, null);
+  // Everything else the RPC receives is what a session with no name field gives.
+  assertEquals(named.applied, plain.applied);
+});
+
 Deno.test("handler defers a completed session whose fee is not available yet", async () => {
   const { deps, applied } = fake({ lookupCharge: () => Promise.resolve(null) });
   const { status, body } = await call(deps, post());

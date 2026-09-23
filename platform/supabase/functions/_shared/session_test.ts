@@ -49,13 +49,13 @@ Deno.test("customFieldValue reads dropdown, text and numeric fields by key", () 
   assertEquals(customFieldValue(session({ custom_fields: [] }), "split"), null);
 });
 
-Deno.test("parseSession maps the split dropdown and the display name text", async () => {
+Deno.test("parseSession maps the split dropdown and stores no name, even when a displayname field is sent", async () => {
   const parsed = await parseSession(
     "evt_1",
     session({
       custom_fields: [
         { key: "split", type: "dropdown", dropdown: { value: "7030" } },
-        { key: "displayname", type: "text", text: { value: "  Board  " } },
+        { key: "displayname", type: "text", text: { value: "Board" } },
       ],
     }),
   );
@@ -64,7 +64,7 @@ Deno.test("parseSession maps the split dropdown and the display name text", asyn
   assertEquals(parsed.amount_total, 500);
   assertEquals(parsed.currency, "usd");
   assertEquals(parsed.studio_pct, 30);
-  assertEquals(parsed.display_name, "Board");
+  assertEquals(parsed.display_name, null);
 });
 
 Deno.test("parseSession defaults a missing split to 20 and an empty name to null", async () => {

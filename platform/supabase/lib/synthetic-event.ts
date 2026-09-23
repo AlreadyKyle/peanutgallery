@@ -34,6 +34,8 @@ export function syntheticEvent(nonce: string, amountCents: number, split: string
         payment_intent: null,
         custom_fields: [
           { key: "split", type: "dropdown", optional: false, dropdown: { value: split } },
+          // The webhook ignores this field and stores no name (docs/specs/legal-copy.md); it stays so a
+          // dry run shows a session that still carries one is credited as before.
           { key: "displayname", type: "text", optional: true, text: { value: "Board dry run" } },
         ],
       },

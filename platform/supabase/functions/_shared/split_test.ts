@@ -7,7 +7,6 @@ import {
   goalCardId,
   mapSplit,
   payerKey,
-  sanitizeDisplayName,
   sha256Hex,
   SPLIT_MAP,
 } from "./split.ts";
@@ -82,18 +81,6 @@ Deno.test("computeAmounts rejects bad inputs", () => {
   assertThrows(() => computeAmounts(100.5, 0), Error, "Invalid amount_total");
   assertThrows(() => computeAmounts(100, -0.01), Error, "Invalid fee");
   assertThrows(() => computeAmounts(100, 1.01), Error, "exceeds amount");
-});
-
-Deno.test("sanitizeDisplayName trims, strips control characters and caps at 24", () => {
-  assertEquals(sanitizeDisplayName("  Board\u0000 test\n"), "Board test");
-  assertEquals(sanitizeDisplayName("a\u001fb\u007f"), "ab");
-  assertEquals(
-    sanitizeDisplayName("abcdefghijklmnopqrstuvwxyz"),
-    "abcdefghijklmnopqrstuvwx",
-  );
-  assertEquals(sanitizeDisplayName("   "), null);
-  assertEquals(sanitizeDisplayName(null), null);
-  assertEquals(sanitizeDisplayName(undefined), null);
 });
 
 Deno.test("contributorSource prefers the lowercased email, then the customer, then the session", () => {
