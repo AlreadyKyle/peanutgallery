@@ -105,6 +105,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (client === null) {
       setMessage(noDatabase);
       return;
@@ -133,7 +134,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
           onChange={(event) => setEmail(event.target.value)}
         />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Send sign-in link
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -229,6 +230,7 @@ function TwoFactor({
   }, [client, onVerified]);
 
   async function startEnrolment() {
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
@@ -244,6 +246,7 @@ function TwoFactor({
 
   async function verify(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (factorId === null) return;
     const entered = code.trim();
     if (!TOTP_CODE.test(entered)) {
@@ -284,7 +287,7 @@ function TwoFactor({
             onChange={(event) => setCode(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={busy}>
+        <button type="submit" aria-disabled={busy}>
           Verify
         </button>
       </form>
@@ -306,7 +309,7 @@ function TwoFactor({
       {state !== null && state.verifiedFactorId === null && enrolment === null ? (
         <>
           <p>This account has no authenticator app yet.</p>
-          <button type="button" disabled={busy} onClick={() => void startEnrolment()}>
+          <button type="button" aria-disabled={busy} onClick={() => void startEnrolment()}>
             Set up an authenticator app
           </button>
         </>
@@ -460,6 +463,7 @@ function StudioStatus({
   }, []);
 
   async function goLive() {
+    if (busy) return;
     if (!window.confirm(GO_LIVE_CONFIRM)) return;
     setBusy(true);
     try {
@@ -474,6 +478,7 @@ function StudioStatus({
   }
 
   async function changeMode(mode: AgentMode) {
+    if (busy) return;
     setBusy(true);
     try {
       await setAgentMode(client, mode);
@@ -519,13 +524,13 @@ function StudioStatus({
           </p>
           <p>Studio code lane: {state.platform_lane_open ? 'open' : 'closed'}.</p>
           {canChange && state.launched_at === null ? (
-            <button type="button" disabled={busy} onClick={() => void goLive()}>
+            <button type="button" aria-disabled={busy} onClick={() => void goLive()}>
               Go live
             </button>
           ) : null}
           {canChange ? (
             <>
-              <fieldset disabled={busy}>
+              <fieldset aria-disabled={busy}>
                 <legend>Agent mode</legend>
                 <div className="row">
                   {agentModes.map((mode) => (
@@ -610,6 +615,7 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   const [reason, setReason] = useState<PauseReason>('board');
 
   async function apply(paused: boolean) {
+    if (busy) return;
     setBusy(true);
     try {
       await setPaused(client, paused, reason);
@@ -627,7 +633,7 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
       <h2>Agents</h2>
       <label>
         Pause reason
-        <select value={reason} disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
+        <select value={reason} aria-disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
           {PAUSE_REASONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -636,10 +642,10 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
         </select>
       </label>
       <div className="row">
-        <button type="button" disabled={busy} onClick={() => void apply(true)}>
+        <button type="button" aria-disabled={busy} onClick={() => void apply(true)}>
           Pause agents
         </button>
-        <button type="button" disabled={busy} onClick={() => void apply(false)}>
+        <button type="button" aria-disabled={busy} onClick={() => void apply(false)}>
           Resume agents
         </button>
       </div>
@@ -700,6 +706,7 @@ function CapsForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const caps = { anthropic_tier_cap_usd: null } as Caps;
     for (const field of CAP_FIELDS) {
       const value = dollars(form[field.key]);
@@ -771,7 +778,7 @@ function CapsForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Save caps
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -808,6 +815,7 @@ function CreditPurchaseForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const value = dollars(amount);
     if (value === null || value < 0.01) {
       setMessage('Amount must be at least $0.01.');
@@ -851,7 +859,7 @@ function CreditPurchaseForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Record purchase
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -898,6 +906,7 @@ function CardControl({
   }
 
   async function run(action: () => Promise<void>, done: string | (() => string)) {
+    if (busy) return;
     setBusy(true);
     try {
       await action();
@@ -913,6 +922,7 @@ function CardControl({
 
   async function saveHorizon(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (!movable) return;
     const why = needReason();
     if (why === null) return;
@@ -1039,26 +1049,26 @@ function CardControl({
         </label>
         <div className="row">
           {movable ? (
-            <button type="submit" disabled={busy}>
+            <button type="submit" aria-disabled={busy}>
               Save horizon and rank
             </button>
           ) : null}
           {card.stage === 'paused' ? (
-            <button type="button" disabled={busy} onClick={() => void resume()}>
+            <button type="button" aria-disabled={busy} onClick={() => void resume()}>
               Resume card
             </button>
           ) : null}
           {canVeto(card) ? (
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(true)}>
+            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(true)}>
               Veto card
             </button>
           ) : null}
           {canUnveto(card) ? (
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(false)}>
+            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(false)}>
               Lift veto
             </button>
           ) : null}
-          <button type="button" className="button-secondary" disabled={busy} onClick={() => void cancel()}>
+          <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void cancel()}>
             Cancel card
           </button>
         </div>
@@ -1150,6 +1160,7 @@ function CoolingWindowForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const n = Number(value);
     if (value.trim() === '' || !Number.isInteger(n) || n < 0 || n > COOLING_WINDOW_MAX) {
       setMessage('The cooling window must be a whole number of minutes from 0 to 10,080.');
@@ -1185,7 +1196,7 @@ function CoolingWindowForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Save cooling window
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1201,73 +1212,25 @@ const CLASS_WORDS: Record<string, string> = {
   web_only: 'web only',
 };
 
-function RolePause({
-  client,
-  role,
-  canPause,
-  canResume,
-  onChanged,
-}: {
-  client: SupabaseClient;
-  role: BoardRoleRow;
-  canPause: boolean;
-  canResume: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const [reason, setReason] = useState('');
-  const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
-  const can = role.paused ? canResume : canPause;
-
-  async function apply() {
-    if (reason.trim() === '') {
-      setMessage('A reason is required.');
-      return;
-    }
-    setBusy(true);
-    try {
-      await setRolePause(client, role.id, !role.paused, reason.trim());
-      setMessage(role.paused ? `${role.name} resumed.` : `${role.name} paused.`);
-      setReason('');
-      await onChanged();
-    } catch (error) {
-      setMessage(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li>
-      <p>
-        <strong>{role.name}</strong> · {role.agent_class === null ? 'no class yet' : (CLASS_WORDS[role.agent_class] ?? role.agent_class)}
-        {role.state === 'retired' ? ' · retired' : ''} ·{' '}
-        {role.paused ? `paused${role.paused_reason ? `: ${role.paused_reason}` : ''}` : 'not paused'}
-      </p>
-      {can ? (
-        <div className="row row-end">
-          <label>
-            Reason
-            <input aria-label={`Reason for ${role.name}`} value={reason} onChange={(event) => setReason(event.target.value)} />
-          </label>
-          <button type="button" className="button-secondary" disabled={busy} onClick={() => void apply()}>
-            {role.paused ? `Resume ${role.name}` : `Pause ${role.name}`}
-          </button>
-        </div>
-      ) : null}
-      {message === '' ? null : <p role="status">{message}</p>}
-    </li>
-  );
+function roleStatus(role: BoardRoleRow): string {
+  if (!role.paused) return 'not paused';
+  return role.paused_reason ? `paused: ${role.paused_reason}` : 'paused';
 }
 
 /**
- * Each role with its trust class and pause (board_roles). A paused role starts nothing and its running
- * session stops at the next watch; its card returns to funded. The board or the moderator pauses a
- * role; only the board resumes one, at the second factor.
+ * Each role with its trust class and pause (board_roles), one table row each, and one form under the
+ * table that pauses or resumes the role chosen. A paused role starts nothing and its running session
+ * stops at the next watch; its card returns to funded. The board or the moderator pauses a role; only
+ * the board resumes one, at the second factor. The form and its status line stay mounted when the
+ * list refreshes, so the confirmation is announced and keyboard focus stays on the button.
  */
 function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; canPause: boolean; canResume: boolean }) {
   const [roles, setRoles] = useState<BoardRoleRow[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [chosen, setChosen] = useState('');
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -1282,6 +1245,35 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
     void refresh();
   }, [refresh]);
 
+  // The board pauses and resumes; the moderator only pauses, so a paused role is listed but not
+  // offered to it.
+  const offered = (option: BoardRoleRow) => (option.paused ? canResume : canPause);
+  const role = (roles ?? []).find((option) => option.id === chosen && offered(option)) ?? null;
+
+  async function apply(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    if (role === null) {
+      setMessage('Choose a role.');
+      return;
+    }
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setRolePause(client, role.id, !role.paused, reason.trim());
+      setMessage(role.paused ? `${role.name} resumed.` : `${role.name} paused.`);
+      setReason('');
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section aria-label="Roles">
       <h2>Roles</h2>
@@ -1290,14 +1282,56 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
         funded. {canResume ? 'Resuming needs a reason too.' : 'Only the board resumes a role.'}
       </p>
       {roles === null ? <p role="status">{loadError === '' ? 'Loading the roles.' : loadError}</p> : null}
-      {roles !== null ? (
-        <ul className="board-cards">
-          {roles.map((role) => (
-            <RolePause key={`${role.id}-${role.paused}`} client={client} role={role} canPause={canPause} canResume={canResume} onChanged={refresh} />
-          ))}
-        </ul>
+      {roles !== null && roles.length === 0 ? <p>No roles yet.</p> : null}
+      {roles !== null && roles.length > 0 ? (
+        <table className="role-table">
+          <thead>
+            <tr>
+              <th scope="col">Role</th>
+              <th scope="col">Class</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((row) => (
+              <tr key={row.id}>
+                <th scope="row">
+                  {row.name}
+                  {row.state === 'retired' ? ' (retired)' : ''}
+                </th>
+                <td>{row.agent_class === null ? 'no class yet' : (CLASS_WORDS[row.agent_class] ?? row.agent_class)}</td>
+                <td>{roleStatus(row)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : null}
       {roles !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
+      {roles !== null && roles.length > 0 && (canPause || canResume) ? (
+        <form className="row row-end role-form" onSubmit={apply} aria-label="Pause or resume a role">
+          <label>
+            Role
+            <select value={role === null ? '' : role.id} onChange={(event) => setChosen(event.target.value)}>
+              <option value="">Choose a role</option>
+              {roles.map((option) => (
+                <option key={option.id} value={option.id} disabled={!offered(option)}>
+                  {`${option.name}${option.paused ? ' (paused)' : ''}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Reason
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <button type="submit" aria-disabled={busy}>
+            {role === null ? (canResume ? 'Pause or resume' : 'Pause') : role.paused ? `Resume ${role.name}` : `Pause ${role.name}`}
+          </button>
+        </form>
+      ) : null}
+      <p role="status" className="role-status">
+        {message}
+      </p>
     </section>
   );
 }
@@ -1318,6 +1352,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
 
   async function runNow(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (reason.trim() === '') {
       setMessage('A reason is required.');
       return;
@@ -1374,7 +1409,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
               Reason
               <input value={reason} onChange={(event) => setReason(event.target.value)} />
             </label>
-            <button type="submit" disabled={busy}>
+            <button type="submit" aria-disabled={busy}>
               Run now
             </button>
           </>
@@ -1460,6 +1495,7 @@ function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; r
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     // Refuse a blank summary here so the database is never called with one.
     if (form.summary.trim() === '') {
       setMessage('A public summary is required.');
@@ -1637,7 +1673,7 @@ function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; r
         </select>
       </label>
       {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
-      <button type="submit" disabled={busy || roles.length === 0}>
+      <button type="submit" disabled={roles.length === 0} aria-disabled={busy}>
         File card
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1670,6 +1706,7 @@ function DirectiveForm({ client, roles, rolesError }: { client: SupabaseClient; 
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const estimate = Number(form.estimate_usd);
     if (!Number.isFinite(estimate) || estimate < 0) {
       setMessage('Estimate must be a dollar amount of zero or more.');
@@ -1788,7 +1825,7 @@ function DirectiveForm({ client, roles, rolesError }: { client: SupabaseClient; 
         </select>
       </label>
       {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
-      <button type="submit" disabled={busy || roles.length === 0}>
+      <button type="submit" disabled={roles.length === 0} aria-disabled={busy}>
         File directive
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1803,6 +1840,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     try {
       await fileNote(client, text.trim());
@@ -1823,7 +1861,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
         Note
         <textarea required rows={4} value={text} onChange={(event) => setText(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         File note
       </button>
       {message === '' ? null : <p role="status">{message}</p>}

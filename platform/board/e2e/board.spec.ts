@@ -123,6 +123,7 @@ const JOBS = [
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
 async function answerSupabase(page: Page, seen: string[], bodies: Record<string, unknown>[] = []) {
+  let roles = ROLES.map((r) => ({ ...r }));
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
@@ -143,7 +144,13 @@ async function answerSupabase(page: Page, seen: string[], bodies: Record<string,
       case '/rest/v1/rpc/board_needs_you':
         return json(needsYou);
       case '/rest/v1/rpc/board_roles':
-        return json(ROLES);
+        return json(roles);
+      case '/rest/v1/rpc/set_role_pause': {
+        // The role changes as the database changes it, so board_roles reads it back changed.
+        const change = JSON.parse(body ?? '{}') as { p_role: string; p_paused: boolean; p_reason: string };
+        roles = roles.map((r) => (r.id === change.p_role ? { ...r, paused: change.p_paused, paused_reason: change.p_paused ? change.p_reason : null } : r));
+        return json(null);
+      }
       case '/rest/v1/rpc/board_jobs':
         return json(JOBS);
       case '/rest/v1/rpc/card_is_public':
@@ -229,7 +236,7 @@ test('a connection to any host but the Supabase project is refused', async ({ pa
   await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
 });
 
-test('at the second factor the board sees and vetoes an undealt agent card, and reads the roles, the jobs and the cooling window, under the enforced policy', async ({ page }) => {
+test('at the second factor the board sees and vetoes an undealt agent card, pauses a role from the keyboard, and reads the jobs and the cooling window, under the enforced policy', async ({ page }) => {
   const reports = await watchPolicy(page);
   const seen: string[] = [];
   const bodies: Record<string, unknown>[] = [];
@@ -247,8 +254,19 @@ test('at the second factor the board sees and vetoes an undealt agent card, and 
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: UNDEALT.id, p_vetoed: true, p_reason: 'Not this week' } });
 
   const roles = page.getByRole('region', { name: 'Roles' });
-  await expect(roles.getByText('reviewer · not paused', { exact: false })).toBeVisible();
-  await expect(roles.getByRole('button', { name: 'Resume QA' })).toBeVisible();
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeVisible();
+  await expect(roles.getByRole('row', { name: 'QA writer paused: Checking the gate' })).toBeVisible();
+  // A keyboard user pauses a role through the one form; the confirmation is announced and focus stays on the button.
+  await roles.getByRole('combobox').selectOption({ label: 'Game Director' });
+  await roles.getByRole('textbox', { name: 'Reason' }).focus();
+  await page.keyboard.type('Too many loops');
+  await page.keyboard.press('Tab');
+  await expect(roles.getByRole('button', { name: 'Pause Game Director' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(roles.getByRole('status')).toHaveText('Game Director paused.');
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeVisible();
+  await expect(roles.getByRole('button', { name: 'Resume Game Director' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_role_pause', body: { p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' } });
   const jobs = page.getByRole('region', { name: 'Jobs' });
   await expect(jobs.getByText('schedule · skipped: role_paused', { exact: false })).toBeVisible();
   await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();

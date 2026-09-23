@@ -72,7 +72,7 @@ function Item({
             Card {item.card.title} is paused at its ceiling
             {item.card.why === 'card_max'
               ? ` at the card maximum of ${formatUsd(item.card.card_max_usd)}.`
-              : ' a second time, after the rule resumed it once.'}
+              : ' a second time, after it was resumed once.'}
           </strong>{' '}
           It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
           <a href={`#card-${item.card.id}`}>resume it with a new estimate, or cancel it, under Cards</a>.

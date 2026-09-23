@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Board, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, GO_LIVE_CONFIRM, TIER_CAP_LABEL } from './Board';
@@ -78,6 +80,9 @@ const fake = vi.hoisted(() => ({
   jobs: [] as Record<string, unknown>[],
   boardRoles: [] as Record<string, unknown>[],
   publicCards: [] as string[],
+  // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
+  held: null as string | null,
+  release: () => {},
 }));
 
 vi.mock('./lib/supabase', async (importOriginal) => {
@@ -140,8 +145,13 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         },
       },
     },
-    rpc: (name: string, args?: Record<string, unknown>) => {
+    rpc: async (name: string, args?: Record<string, unknown>) => {
       fake.calls.push({ name, args });
+      if (name === fake.held) {
+        await new Promise<void>((resolve) => {
+          fake.release = resolve;
+        });
+      }
       if (name === 'board_heartbeat' && fake.heartbeatFails) {
         return Promise.resolve({ data: null, error: { message: 'heartbeat refused' } });
       }
@@ -149,6 +159,13 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         return Promise.resolve({ data: null, error: { message: 'launch refused' } });
       }
       if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
+      // set_role_pause changes the role, as the database does, so board_roles reads it back changed.
+      if (name === 'set_role_pause') {
+        fake.boardRoles = fake.boardRoles.map((r) =>
+          r.id === args?.p_role ? { ...r, paused: args?.p_paused, paused_reason: args?.p_paused ? args?.p_reason : null } : r,
+        );
+        return Promise.resolve({ data: null, error: null });
+      }
       const data: Record<string, unknown> = {
         board_jobs: fake.jobs,
         board_roles: fake.boardRoles,
@@ -317,6 +334,8 @@ beforeEach(() => {
   fake.jobs = [];
   fake.boardRoles = [];
   fake.publicCards = [];
+  fake.held = null;
+  fake.release = () => {};
   fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
@@ -1169,11 +1188,23 @@ describe('Board signed in as the moderator', () => {
     await flush();
     const roles = within(screen.getByRole('region', { name: 'Roles' }));
     expect(roles.getByText('Only the board resumes a role.', { exact: false })).toBeTruthy();
+    // The paused role is listed but never offered to the moderator.
+    const select = roles.getByLabelText('Role') as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Choose a role', false],
+      ['QA', false],
+      ['Studio Head (paused)', true],
+    ]);
+    fireEvent.change(select, { target: { value: 'r-studio-head' } });
     expect(roles.queryByRole('button', { name: 'Resume Studio Head' })).toBeNull();
-    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Looks wrong' } });
+    fireEvent.change(select, { target: { value: 'r-qa' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Looks wrong' } });
     fireEvent.click(roles.getByRole('button', { name: 'Pause QA' }));
     await flush();
     expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: true, p_reason: 'Looks wrong' }]);
+    expect(roles.getByRole('status').textContent).toBe('QA paused.');
+    expect(roles.getByRole('row', { name: 'QA writer paused: Looks wrong' })).toBeTruthy();
+    expect(roles.getByRole('button', { name: 'Pause' })).toBeTruthy();
   });
 
   it('shows only pause and resume, and the role pauses, and never heartbeats', async () => {
@@ -1241,20 +1272,31 @@ describe('Board agent system controls', () => {
     expect(callsNamed('set_cooling_window').map((call) => call.args)).toEqual([{ p_minutes: 60, p_reason: 'An hour to look' }]);
   });
 
-  it("lists each role's class and pause, pauses and resumes with a reason, and keeps the buttons for the second factor", async () => {
+  it("lists each role's class and pause in one row each, pauses and resumes the chosen role with a reason, and keeps the form for the second factor", async () => {
     fake.boardRoles = [
       { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
       { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
+      { id: 'r-scout', name: 'Old Scout', agent_class: null, state: 'retired', paused: false, paused_reason: null },
     ];
     await renderBoard();
     await flush();
     const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(roles.getByText('reviewer · not paused', { exact: false })).toBeTruthy();
-    expect(roles.getByText('writer · paused: Checking the gate', { exact: false })).toBeTruthy();
+    expect(roles.getAllByRole('row').map((row) => row.textContent)).toEqual([
+      'RoleClassStatus',
+      'Game Directorreviewernot paused',
+      'QAwriterpaused: Checking the gate',
+      'Old Scout (retired)no class yetnot paused',
+    ]);
+    // One form for every role, not a reason field on each row.
+    expect(roles.getAllByRole('textbox')).toHaveLength(1);
+    fireEvent.click(roles.getByRole('button', { name: 'Pause or resume' }));
+    await flush();
+    expect(roles.getByRole('status').textContent).toBe('Choose a role.');
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-qa' } });
     fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
     await flush();
-    expect(roles.getByText('A reason is required.')).toBeTruthy();
-    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Fixed' } });
+    expect(roles.getByRole('status').textContent).toBe('A reason is required.');
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Fixed' } });
     fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
     await flush();
     expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: false, p_reason: 'Fixed' }]);
@@ -1263,8 +1305,61 @@ describe('Board agent system controls', () => {
     await renderBoard();
     await flush();
     const readOnly = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(readOnly.getByText('Game Director', { exact: false })).toBeTruthy();
-    expect(readOnly.queryByRole('button', { name: 'Pause Game Director' })).toBeNull();
+    expect(readOnly.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeTruthy();
+    expect(readOnly.queryByRole('form', { name: 'Pause or resume a role' })).toBeNull();
+    expect(readOnly.queryByRole('button', { name: /^Pause/ })).toBeNull();
+  });
+
+  it('keeps the confirmation and keyboard focus on the button after a role is paused and the list refreshes', async () => {
+    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
+    const button = roles.getByRole('button', { name: 'Pause Game Director' });
+    button.focus();
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' }]);
+    expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeTruthy();
+    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
+    // The same button, still focused, now resumes the role.
+    expect(document.activeElement).toBe(button);
+    expect(button.isConnected).toBe(true);
+    expect(button.textContent).toBe('Resume Game Director');
+    expect((roles.getByLabelText('Reason') as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps a busy button focusable, marked aria-disabled rather than disabled, and ignores a second submit while the first runs', async () => {
+    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
+    fake.held = 'set_role_pause';
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
+    const button = roles.getByRole('button', { name: 'Pause Game Director' }) as HTMLButtonElement;
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    // A browser moves focus off a focused button when it becomes disabled, so busy never disables.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    expect(callsNamed('set_role_pause')).toHaveLength(1);
+    await act(async () => fake.release());
+    await flush();
+    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
+    expect(button.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('never disables a control only because its action is running', () => {
+    // Every busy control in the board site keeps its focus the same way (the test above shows one).
+    // vitest runs in the package root; jsdom gives import.meta.url an http scheme.
+    const source = readFileSync(resolve(process.cwd(), 'src/Board.tsx'), 'utf8');
+    expect(source).toMatch(/aria-disabled=\{busy\}/);
+    expect(source).not.toMatch(/(?<![-\w])disabled=\{[^}]*\bbusy\b/);
   });
 
   it('lists each job with its last runs, their origin and reason, and queues a board-origin run with typed input', async () => {
@@ -1325,13 +1420,18 @@ describe('Board agent system controls', () => {
   it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each pointing at Cards', async () => {
     fake.needs = {
       ...EMPTY_NEEDS,
-      rule_blocked: [{ id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 }],
+      rule_blocked: [
+        { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
+        { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
+      ],
       approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: 2 }],
     };
     await renderBoard();
     const needs = within(screen.getByRole('region', { name: 'Needs you' }));
     expect(needs.getByText('Card At the maximum is paused at its ceiling at the card maximum of $25.00.')).toBeTruthy();
-    expect(needs.getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).getAttribute('href')).toBe('#card-max');
+    // resumed_before covers a first resume by the rule or by the board.
+    expect(needs.getByText('Card Paused twice is paused at its ceiling a second time, after it was resumed once.')).toBeTruthy();
+    expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice']);
     expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
     expect(needs.getByRole('link', { name: 'Cancel it under Cards' }).getAttribute('href')).toBe('#card-void');
   });
