@@ -39,7 +39,6 @@ const config: DispatcherConfig = {
   tickMs: 60_000,
   worktreeRoot: '/repo/.worktrees',
   maxConcurrency: 1,
-  schedulerEnabled: true,
   claudeBin: 'claude',
   boardSessionTtlMin: 3,
   studioAnthropicApiKey: 'studio-key',

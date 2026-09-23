@@ -42,7 +42,6 @@ describe('loadConfig', () => {
       tickMs: 60_000,
       worktreeRoot: '/repo-worktrees',
       maxConcurrency: 1,
-      schedulerEnabled: true,
       claudeBin: 'claude',
       boardSessionTtlMin: 3,
       sessionMaxMinutes: 60,
@@ -69,7 +68,6 @@ describe('loadConfig', () => {
         DISPATCHER_TICK_MS: '5000',
         DISPATCHER_WORKTREE_ROOT: '/var/lib/backseat/worktrees',
         DISPATCHER_MAX_CONCURRENCY: '2',
-        DISPATCHER_SCHEDULER: 'off',
         CLAUDE_BIN: '/opt/claude',
         BOARD_SESSION_TTL_MIN: '5',
         SESSION_MAX_MINUTES: '90',
@@ -89,7 +87,6 @@ describe('loadConfig', () => {
       tickMs: 5000,
       worktreeRoot: '/var/lib/backseat/worktrees',
       maxConcurrency: 2,
-      schedulerEnabled: false,
       claudeBin: '/opt/claude',
       boardSessionTtlMin: 5,
       sessionMaxMinutes: 90,
@@ -108,7 +105,6 @@ describe('loadConfig', () => {
     }
     expect(() => loadConfig({ ...FULL, GITHUB_REPO: 'not-a-repo' }, REPO)).toThrow(new ConfigError('GITHUB_REPO must be owner/repo'));
     expect(() => loadConfig({ ...FULL, AGENT_MODE: 'manual' }, REPO)).toThrow('AGENT_MODE must be attended or unattended');
-    expect(() => loadConfig({ ...FULL, DISPATCHER_SCHEDULER: 'maybe' }, REPO)).toThrow('DISPATCHER_SCHEDULER must be on or off');
     expect(() => loadConfig({ ...FULL, CARD_MAX_USD: '-1' }, REPO)).toThrow('CARD_MAX_USD must be a non-negative number');
     expect(() => loadConfig({ ...FULL, CARD_MAX_USD: 'ten' }, REPO)).toThrow('CARD_MAX_USD must be a non-negative number');
     expect(() => loadConfig({ ...FULL, SESSION_MAX_TURNS: '0' }, REPO)).toThrow('SESSION_MAX_TURNS must be a positive integer');

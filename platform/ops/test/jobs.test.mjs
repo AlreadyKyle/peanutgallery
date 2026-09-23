@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { alertMessage, OPERATIONS_BUCKET_USD, readStripe, reconcile, runController, webhookEventTypes } from '../jobs/controller.mjs';
+import { alertMessage, readStripe, reconcile, runController, webhookEventTypes } from '../jobs/controller.mjs';
 import { envFileProblems } from '../jobs/check-env.mjs';
 import { JOB_KEYS, jobEnvProblems, stripeApiVersion, stripeReader, supabaseClient } from '../jobs/lib.mjs';
 import { main } from '../jobs/main.mjs';
@@ -241,13 +241,11 @@ describe('the Controller reconciliation', () => {
     const result = reconcile({ identity: ACCOUNT.identity, figures: ACCOUNT.figures, stripe: stripeData(), now: NOW });
     assert.deepEqual(failing(result), []);
     assert.equal(result.ok, true);
-    // need = ceilings 7.50 + operations 0 + overhead since the purchase 0.05 - credit left (5 - 3.30) = 5.85;
+    // need = ceilings 7.50 + overhead since the purchase 0.05 - credit left (5 - 3.30) = 5.85;
     // cap = paid-out agent money 8.1906 + overhead 0.20 - bought 5 = 3.3906; the purchase is the smaller.
-    assert.equal(OPERATIONS_BUCKET_USD, 0);
     assert.deepEqual(result.figures.credit_purchase, {
       remaining_ceilings_usd: 7.5,
       funded_cards: 2,
-      operations_bucket_usd: 0,
       overhead_since_last_purchase_usd: 0.05,
       credit_left_usd: 1.7,
       need_usd: 5.85,

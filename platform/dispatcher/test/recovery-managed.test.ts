@@ -53,7 +53,6 @@ beforeAll(async () => {
     tickMs: 60_000,
     worktreeRoot: path.join(dir, 'worktrees'),
     maxConcurrency: 1,
-    schedulerEnabled: false,
     claudeBin: 'claude',
     boardSessionTtlMin: 3,
     studioAnthropicApiKey: 'studio-key',

@@ -35,7 +35,6 @@ export interface DispatcherConfig {
   tickMs: number;
   worktreeRoot: string;
   maxConcurrency: number;
-  schedulerEnabled: boolean;
   claudeBin: string;
   boardSessionTtlMin: number;
   // The studio organisation's key for unattended sessions; null in attended mode, where the
@@ -238,8 +237,6 @@ export function rootsEnv(env: Env, codeRoot: string): Roots {
 export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
-  const scheduler = optionalEnv(env, 'DISPATCHER_SCHEDULER', 'on');
-  if (scheduler !== 'on' && scheduler !== 'off') throw new ConfigError('DISPATCHER_SCHEDULER must be on or off');
   const agentMode = agentModeEnv(env);
   const modelBuilder = requireEnv(env, 'MODEL_BUILDER');
   const priceTable = priceTableEnv(env);
@@ -267,7 +264,6 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     agentHourlyRateUsd: numberEnv(env, 'AGENT_HOURLY_RATE_USD', 5),
     tickMs: positiveIntegerEnv(env, 'DISPATCHER_TICK_MS', 60_000),
     maxConcurrency: positiveIntegerEnv(env, 'DISPATCHER_MAX_CONCURRENCY', 1),
-    schedulerEnabled: scheduler === 'on',
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
     boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
     studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),

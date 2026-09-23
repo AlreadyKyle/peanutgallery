@@ -56,7 +56,6 @@ function config(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
     tickMs: 60_000,
     worktreeRoot: `${dir}-worktrees`,
     maxConcurrency: 1,
-    schedulerEnabled: false,
     claudeBin: 'claude',
     boardSessionTtlMin: 3,
     studioAnthropicApiKey: null,
