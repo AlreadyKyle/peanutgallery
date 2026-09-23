@@ -10,7 +10,8 @@
 #    a command line. pg_dump must be at least the server's major version; a newer one is fine.
 # 2. The dump set, as close to backup.sh's as pg_dump allows: roles.sql (pg_dumpall --roles-only
 #    --no-role-passwords, with Supabase's own roles commented out as the Supabase CLI does), schema.sql
-#    and data.sql (the public schema), auth.sql (the auth schema's data, left out with
+#    and data.sql (the public and money schemas: every schema the migrations create, since pg_dump
+#    --schema leaves out what a named schema depends on), auth.sql (the auth schema's data, left out with
 #    BACKUP_SKIP_AUTH=1), history_schema.sql and history_data.sql (supabase_migrations), and
 #    identity.json, the live ledger identity at dump time for the restore drill to compare against.
 #    If the login may not run pg_dumpall, the run fails and says so.
@@ -193,9 +194,12 @@ dump_all() {
   "$PG_BIN/pg_dumpall" --no-password --roles-only --no-role-passwords --quote-all-identifiers --no-comments \
     | sed -E -e "s/^(CREATE|ALTER) ROLE \"($RESERVED_ROLES)\"/-- &/" -e 's/ (NOSUPERUSER|NOREPLICATION)//g' > "$dir/roles.sql" \
     || die "pg_dumpall --roles-only was refused to the backup login; see the error above (platform/ops/README.md, The Mac host)"
-  "$PG_BIN/pg_dump" --no-password --schema-only --quote-all-identifiers --schema=public \
+  # schema.sql and data.sql name public and every schema a migration creates: pg_dump --schema dumps
+  # nothing a named schema depends on, so a schema left out makes schema.sql fail to restore
+  # (platform/ops/test/mac.test.mjs checks both lines against the migrations).
+  "$PG_BIN/pg_dump" --no-password --schema-only --quote-all-identifiers --schema=public --schema=money \
     | sed -E 's/^CREATE SCHEMA "/CREATE SCHEMA IF NOT EXISTS "/' > "$dir/schema.sql"
-  "$PG_BIN/pg_dump" --no-password --data-only --quote-all-identifiers --schema=public --file="$dir/data.sql"
+  "$PG_BIN/pg_dump" --no-password --data-only --quote-all-identifiers --schema=public --schema=money --file="$dir/data.sql"
   if [ "$(env_value BACKUP_SKIP_AUTH)" = 1 ]; then
     files="roles schema data history_schema history_data identity"
     say "the auth schema is not dumped (BACKUP_SKIP_AUTH=1): a restore signs the board in afresh"

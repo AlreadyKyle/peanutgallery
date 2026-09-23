@@ -455,8 +455,8 @@ describe('backup-mac.sh', () => {
       [
         'psql -X -At --no-password -c show server_version_num',
         'pg_dumpall --no-password --roles-only --no-role-passwords --quote-all-identifiers --no-comments',
-        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public',
-        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
+        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public --schema=money',
+        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --schema=money --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=auth --file=${pgCalls(result.calls)[4].split('--file=')[1]}`,
         'pg_dump --no-password --schema-only --quote-all-identifiers --schema=supabase_migrations',
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=supabase_migrations --file=${pgCalls(result.calls)[6].split('--file=')[1]}`,
@@ -491,6 +491,43 @@ describe('backup-mac.sh', () => {
     for (const file of ['roles.sql', 'schema.sql', 'data.sql', 'auth.sql', 'history_schema.sql', 'history_data.sql', 'identity.json']) assert.match(listing, new RegExp(`/${file.replace('.', '\\.')}$`, 'm'), file);
     const schema = spawnSync('tar', ['-xOf', archive, `${stored.replace('.tar.age', '')}/schema.sql`], { encoding: 'utf8' }).stdout;
     assert.match(schema, /^CREATE SCHEMA IF NOT EXISTS "public";$/m);
+  });
+
+  // pg_dump --schema dumps nothing a named schema depends on. The public views and money functions
+  // call the money schema's helpers, so a schema.sql without it fails at its first such view and the
+  // documented --single-transaction restore rolls back whole.
+  test('schema.sql and data.sql name public and every schema a migration creates', () => {
+    const migrations = path.join(REPO_ROOT, 'platform', 'supabase', 'migrations');
+    const created = new Set(['public']);
+    for (const name of readdirSync(migrations).filter((file) => file.endsWith('.sql'))) {
+      for (const match of readFileSync(path.join(migrations, name), 'utf8').matchAll(/^\s*create\s+schema\s+(?:if\s+not\s+exists\s+)?"?(\w+)"?/gim)) {
+        created.add(match[1].toLowerCase());
+      }
+    }
+    assert.ok(created.has('money'), 'the money-logic migration creates the money schema');
+    const script = read('platform/ops/mac/backup-mac.sh');
+    const schemaLine = /^\s*"\$PG_BIN\/pg_dump" --no-password --schema-only [^\n]*\\\n[^\n]*> "\$dir\/schema\.sql"$/m.exec(script)?.[0];
+    const dataLine = /^\s*"\$PG_BIN\/pg_dump" --no-password --data-only [^\n]*--file="\$dir\/data\.sql"$/m.exec(script)?.[0];
+    for (const [file, line] of [['schema.sql', schemaLine], ['data.sql', dataLine]]) {
+      assert.ok(line, `backup-mac.sh writes ${file} with one pg_dump`);
+      const named = [...line.matchAll(/--schema=(\w+)/g)].map((match) => match[1]).sort();
+      assert.deepEqual(named, [...created].sort(), `${file} dumps exactly public and the schemas the migrations create`);
+    }
+  });
+
+  // No dump carries pg_cron's jobs, so the restore runbook schedules each one the migrations schedule.
+  test('the restore runbook schedules every pg_cron job a migration schedules, and checks cron.job', () => {
+    const migrations = path.join(REPO_ROOT, 'platform', 'supabase', 'migrations');
+    const jobs = readdirSync(migrations)
+      .filter((file) => file.endsWith('.sql'))
+      .flatMap((name) => [...readFileSync(path.join(migrations, name), 'utf8').matchAll(/cron\.schedule\(('[^']+', '[^']+', '[^']+')\)/g)].map((match) => match[1]));
+    for (const name of ['credit-held-contributions', 'waterfall-sweep']) assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
+    const readme = read('platform/ops/README.md');
+    const macRestore = /^### Restore a Mac backup\n[\s\S]*?(?=^### )/m.exec(readme)?.[0] ?? '';
+    for (const job of jobs) assert.ok(macRestore.includes(`--command "select cron.schedule(${job})"`), `Restore a Mac backup schedules ${job}`);
+    assert.match(macRestore, /`select jobname, schedule from cron\.job order by jobname` must list every job step 4 scheduled/);
+    const serverRestore = /^## Restore the database\n[\s\S]*?(?=^## )/m.exec(readme)?.[0] ?? '';
+    assert.match(serverRestore, /The pg_cron jobs are not in the dumps: schedule them as \[Restore a Mac backup\]\(#restore-a-mac-backup\), step 4, does\./);
   });
 
   test("never holds the owner's login, under any name, and leaves the auth dump out with BACKUP_SKIP_AUTH=1", () => {
