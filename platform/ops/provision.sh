@@ -118,6 +118,13 @@ check_env_lines() {
       problems=1
       ;;
     esac
+    # A Stripe secret key can move money; nothing on the VPS holds one, under any name
+    # (docs/specs/money-safety.md).
+    case "$value" in sk_live_* | sk_test_*)
+      echo "$key holds a Stripe secret key; nothing on the VPS may hold one, under any name"
+      problems=1
+      ;;
+    esac
   done < "$file"
   if [ "$(env_value AGENT_MODE "$file")" != unattended ]; then
     echo "AGENT_MODE must be unattended"

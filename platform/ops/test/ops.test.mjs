@@ -1030,6 +1030,14 @@ describe('the jobs on the VPS', () => {
     const check = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'check_env_lines "$ENV_TO_CHECK"', { ENV_TO_CHECK: file });
     assert.equal(check.status, 1);
     assert.match(check.stdout, /STRIPE_READ_KEY must not be in the dispatcher's env file/);
+    for (const secret of ['sk_live_fixture', 'sk_test_fixture']) {
+      const renamed = path.join(scratch, `with-secret-${runs++}.env`);
+      writeFileSync(renamed, `${readFileSync(made.out, 'utf8')}SOME_OTHER_NAME=${secret}\n`);
+      const refused = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'check_env_lines "$ENV_TO_CHECK"', { ENV_TO_CHECK: renamed });
+      assert.equal(refused.status, 1, secret);
+      assert.match(refused.stdout, /SOME_OTHER_NAME holds a Stripe secret key; nothing on the VPS may hold one, under any name/);
+      assert.ok(!refused.stdout.includes(secret));
+    }
   });
 });
 
