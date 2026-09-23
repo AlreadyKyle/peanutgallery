@@ -108,6 +108,25 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
 | `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
+### The launch series
+
+The rest of the launch plan, agreed and built in this order: each pull request starts from main after the one before it has merged on a green gate and its production steps have run. The specs were trimmed to plain, standard tools; the operations bucket is not built, so every model role job is board-started, runs while a board member is signed in and is billed to the founder. Board-only steps are listed in each spec and block none of them.
+
+| Order | Spec | Status | What it delivers |
+|---|---|---|---|
+| 1 | `specs/legal-copy.md` | agreed | numbered Terms versions, the refund policy, age, currency and wind-down terms, the agreement line before every checkout |
+| 2 | `specs/money-logic.md` | agreed | one waterfall with allocations, refunds unwound from every card reached, the fee Stripe keeps, supporter numbers, the terms stamp, the pause reason |
+| 3 | `specs/money-surfaces.md` | agreed | the next card in line on /contribute; money in, reconciliation, Not on a card yet and stopped cards on /ledger; the pause reason |
+| 4 | `specs/agent-system-core.md` | agreed | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
+| 5 | `specs/agent-workflows.md` | agreed | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
+| 6 | `specs/site-snapshot.md` | agreed | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
+| 7 | `specs/supporter-pages.md` | agreed | /thanks, /card/:id with the replay, supporter credits, /team statuses |
+| 8 | `specs/studio-reports.md` | agreed | the weekly report, Discord ship and weekly posts, the card supply floor |
+| 9 | `specs/design-review.md` | agreed | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
+| 10 | `specs/agent-upkeep.md` | agreed | drift checks, Dependabot with a safe patch merge, the Claude Code pin, the replay eval set |
+| 11 | `specs/copy-pass.md` | agreed | every public string after the supporter loop; the board-work marker on /roadmap |
+| 12 | `specs/launch-card-floor.md` | agreed | the first open cards, drafted and graded in one attended production session |
+
 ### Draft
 
 | Spec | Status | What is left |
