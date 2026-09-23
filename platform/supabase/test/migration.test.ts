@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -1747,5 +1747,147 @@ describe("rename-biz-dev migration", () => {
     expect(body.indexOf("revoke all on table public.public_roles from anon, authenticated;")).toBeGreaterThan(body.indexOf("create or replace view public.public_roles"));
     expect(body.indexOf("grant select on public.public_roles to anon, authenticated;")).toBeGreaterThan(body.indexOf("revoke all on table public.public_roles"));
     expect(body).not.toMatch(/(revoke|grant)[^;]* on (table )?public\.roles[ ;]/);
+  });
+});
+
+// The board's own site (docs/specs/board-site.md): the platform code lane behind a studio flag, the
+// usage tier cap in set_caps, and the board's Needs you RPC.
+const BOARD_SITE_FILE = "20260924000000_board_site.sql";
+const boardSiteSql = launchFile(BOARD_SITE_FILE);
+const LANE_OPEN = "coalesce((select s.platform_lane_open from public.studio_state s where s.id = 1), false)";
+const NEW_CAPS_TYPES = "numeric, numeric, numeric, text, numeric, numeric, numeric, boolean";
+
+describe("board-site migration", () => {
+  it("comes after every earlier file and sets a lock timeout first", () => {
+    const earlier = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql") && name !== BOARD_SITE_FILE);
+    expect(earlier.every((name) => name < BOARD_SITE_FILE)).toBe(true);
+    expect(BOARD_SITE_FILE > RENAME_BIZ_DEV_FILE).toBe(true);
+    expect(withoutComments(boardSiteSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+  });
+
+  it("can run twice: every statement is guarded or replaces what it creates", () => {
+    const statements = withoutComments(boardSiteSql)
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => /^(create|alter|drop)\b/.test(statement) && !/^create or replace (function|view)/.test(statement));
+    expect(statements).toEqual([
+      "alter table public.studio_state add column if not exists platform_lane_open boolean not null default false",
+      "drop function if exists public.set_caps(numeric, numeric, numeric, text, numeric, numeric)",
+    ]);
+  });
+
+  it("opens the platform code lane in file_card, set_card_horizon and resume_card only while studio_state says so", () => {
+    for (const [name, before, after] of [
+      [
+        "file_card",
+        `  if p_horizon = 'now' and p_folder = 'platform' and p_lane = 'code' then\n`,
+        `  if p_horizon = 'now' and p_folder = 'platform' and p_lane = 'code' and not ${LANE_OPEN} then\n`,
+      ],
+      [
+        "set_card_horizon",
+        `    if v_after.folder = 'platform' and v_after.lane = 'code' then\n`,
+        `    if v_after.folder = 'platform' and v_after.lane = 'code' and not ${LANE_OPEN} then\n`,
+      ],
+      [
+        "resume_card",
+        `  if v_card.folder = 'platform' and v_card.lane = 'code' then\n`,
+        `  if v_card.folder = 'platform' and v_card.lane = 'code' and not ${LANE_OPEN} then\n`,
+      ],
+    ] as const) {
+      const block = functionBlockIn(boardSiteSql, name);
+      expect(block, name).toContain(CLOSED_LANE);
+      expect(undo(block, [[after, before]]), name).toBe(functionBlockIn(backlogSql, name));
+    }
+    expect(boardSiteSql).toContain(`revoke all on function public.file_card(${FILE_CARD_V12_TYPES}) from public, anon;`);
+    expect(boardSiteSql).toContain(`grant execute on function public.file_card(${FILE_CARD_V12_TYPES}) to authenticated, service_role;`);
+  });
+
+  it("adds the lane flag at the end of public_studio, closed by default, and revokes before it grants select", () => {
+    expect(boardSiteSql).toContain(
+      "create or replace view public.public_studio with (security_invoker = false) as\n  select launched_at, paused, platform_lane_open from public.studio_state where id = 1;",
+    );
+    const body = withoutComments(boardSiteSql);
+    expect(body.indexOf("revoke all on table public.public_studio from anon, authenticated;")).toBeGreaterThan(body.indexOf("create or replace view public.public_studio"));
+    expect(body.indexOf("grant select on public.public_studio to anon, authenticated;")).toBeGreaterThan(body.indexOf("revoke all on table public.public_studio"));
+    const view = body.slice(body.indexOf("create or replace view public.public_studio"), body.indexOf(";", body.indexOf("create or replace view public.public_studio")));
+    expect(view).not.toMatch(/paused_by|paused_at|\*/);
+  });
+
+  it("gives set_caps the usage tier cap, changed only when asked, and nothing else", () => {
+    const drop = boardSiteSql.indexOf("drop function if exists public.set_caps(numeric, numeric, numeric, text, numeric, numeric);");
+    expect(drop).toBeGreaterThan(0);
+    expect(boardSiteSql.indexOf("create or replace function public.set_caps(")).toBeGreaterThan(drop);
+    expect(
+      undo(functionBlockIn(boardSiteSql, "set_caps"), [
+        [
+          "  p_credit_studio_daily_cap_usd numeric default null,\n  p_anthropic_tier_cap_usd numeric default null,\n  p_set_anthropic_tier_cap boolean default false\n) returns jsonb",
+          "  p_credit_studio_daily_cap_usd numeric default null\n) returns jsonb",
+        ],
+        [
+          "  if p_anthropic_tier_cap_usd is not null and not coalesce(p_set_anthropic_tier_cap, false) then\n    raise exception 'Pass p_set_anthropic_tier_cap to change the usage tier cap';\n  end if;\n",
+          "",
+        ],
+        [
+          "    and p_monthly_cap_usd is null and p_credit_studio_daily_cap_usd is null\n    and not coalesce(p_set_anthropic_tier_cap, false) then\n",
+          "    and p_monthly_cap_usd is null and p_credit_studio_daily_cap_usd is null then\n",
+        ],
+        [
+          "  if p_anthropic_tier_cap_usd <= 0 or p_anthropic_tier_cap_usd > 1000000 then\n    raise exception 'The usage tier cap must be above zero and at most $1,000,000, or null for none';\n  end if;\n",
+          "",
+        ],
+        [
+          "      credit_studio_daily_cap_usd = coalesce(round(p_credit_studio_daily_cap_usd, 4), credit_studio_daily_cap_usd),\n      anthropic_tier_cap_usd = case when coalesce(p_set_anthropic_tier_cap, false) then round(p_anthropic_tier_cap_usd, 4) else anthropic_tier_cap_usd end\n",
+          "      credit_studio_daily_cap_usd = coalesce(round(p_credit_studio_daily_cap_usd, 4), credit_studio_daily_cap_usd)\n",
+        ],
+        [
+          "      'credit_studio_daily_cap_usd', v_before.credit_studio_daily_cap_usd,\n      'anthropic_tier_cap_usd', v_before.anthropic_tier_cap_usd\n",
+          "      'credit_studio_daily_cap_usd', v_before.credit_studio_daily_cap_usd\n",
+        ],
+        [
+          "      'credit_studio_daily_cap_usd', v_after.credit_studio_daily_cap_usd,\n      'anthropic_tier_cap_usd', v_after.anthropic_tier_cap_usd\n    )\n",
+          "      'credit_studio_daily_cap_usd', v_after.credit_studio_daily_cap_usd\n    )\n",
+        ],
+        [
+          "    'credit_studio_daily_cap_usd', v_after.credit_studio_daily_cap_usd,\n    'anthropic_tier_cap_usd', v_after.anthropic_tier_cap_usd\n  );",
+          "    'credit_studio_daily_cap_usd', v_after.credit_studio_daily_cap_usd\n  );",
+        ],
+      ]),
+    ).toBe(functionBlockIn(moneySql, "set_caps"));
+    expect(boardSiteSql).toContain(`revoke all on function public.set_caps(${NEW_CAPS_TYPES}) from public, anon;`);
+    expect(boardSiteSql).toContain(`grant execute on function public.set_caps(${NEW_CAPS_TYPES}) to authenticated, service_role;`);
+  });
+
+  it("returns the tier cap and the lane flag from board_studio_state, and nothing else new", () => {
+    expect(
+      undo(functionBlockIn(boardSiteSql, "board_studio_state"), [
+        ["    'anthropic_tier_cap_usd', anthropic_tier_cap_usd,\n    'platform_lane_open', platform_lane_open,\n", ""],
+      ]),
+    ).toBe(functionBlockIn(moneySql, "board_studio_state"));
+  });
+
+  it("lets board members only read the Needs you figures, and writes nothing", () => {
+    const block = functionBlockIn(boardSiteSql, "board_needs_you");
+    expect(block).toContain("\nstable\nsecurity definer\nset search_path = public\n");
+    expect(block).toContain("  if public.board_role() is distinct from 'board'::public.board_role then\n    raise exception 'Board membership is required';\n  end if;\n");
+    expect(block).not.toMatch(/\b(insert|update|delete)\b/);
+    expect(block).toContain("where job = 'reconcile'\n  order by created_at desc, id desc\n  limit 1;");
+    expect(block).toContain("where c.severity = 's1' and c.stage in ('funded', 'building', 'gated', 'paused');");
+    // The Controller's figures are passed through by name; nothing else of the run is.
+    expect([...block.matchAll(/v_run\.figures (?:->|#>) '([^']+)'/g)].map((m) => m[1])).toEqual([
+      "credit_purchase_usd",
+      "minimum_balance_usd",
+      "{minimum_balance,settlement_amount}",
+      "{minimum_balance,settlement_currency}",
+      "disputes_to_answer",
+      "latest_payout",
+    ]);
+    expect(boardSiteSql).toContain("revoke all on function public.board_needs_you() from public, anon;");
+    expect(boardSiteSql).toContain("grant execute on function public.board_needs_you() to authenticated, service_role;");
+  });
+
+  it("is probed by anon-negative-test: the new RPC refused to anon, the flag readable on public_studio", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    expect(script).toContain('["board_needs_you", {}]');
+    expect(script).toContain('const STUDIO_COLUMNS_READABLE = "launched_at,paused,platform_lane_open";');
   });
 });
