@@ -336,8 +336,8 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
       ].sort(),
     );
     // The signal plate's only amber is the hover it gives Contribute there.
-    const signal = rules(styles).find((rule) => rule.selector.startsWith('main > .band:first-child'));
-    expect(signal?.body.match(/var\(--coin[a-z-]*\)/g)).toEqual(['var(--coin-up)']);
+    const signal = rules(styles).filter((rule) => rule.selector.startsWith('main > .band:first-child'));
+    expect(signal.flatMap((rule) => rule.body.match(/var\(--coin[a-z-]*\)/g) ?? [])).toEqual(['var(--coin-up)']);
     expect(tokens).toMatch(/--coin-hover:\s*var\(--coin-down\)/);
   });
 

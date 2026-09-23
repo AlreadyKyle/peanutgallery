@@ -26,7 +26,7 @@ Platform cards run the stricter gate: typecheck, the dispatcher, Supabase and si
 
 ## Working method
 
-Understand: restate the acceptance test in one line, quoting each `check:` line verbatim. Plan: one short message naming the files you will touch and the verification commands you will run. Implement: the smallest change that makes the acceptance test true. Verify: run the named commands; if any is red, fix it or stop and report why. Report: end with pass or fail against the acceptance test verbatim and the files changed.
+Understand: restate the acceptance test in one line, quoting each `check:` line verbatim. A change to a page's layout keeps `platform/site/DESIGN.md` whole, No dead space included: side-by-side blocks balance or stack, nothing leaves an empty column, and every grid fills its rows. The gate's layout balance test (`platform/site/e2e/layout-balance.spec.ts`) fails a branch that leaves dead space on any route at any width, so check the layout against that section before you finish. Plan: one short message naming the files you will touch and the verification commands you will run. Implement: the smallest change that makes the acceptance test true. Verify: run the named commands; if any is red, fix it or stop and report why. Report: end with pass or fail against the acceptance test verbatim and the files changed.
 
 ## When to stop
 
