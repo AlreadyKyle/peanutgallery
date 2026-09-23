@@ -20,10 +20,13 @@
 //
 // A stop the card did not cause is never a rejection (docs/specs/money-safety.md): a gate that never
 // started or never finished, one GitHub cancelled or could not start, a failure main already had at the
-// card's base, or GitHub or Netlify not answering. Before the merge the card goes back to funded on its
-// stored patch, which the next claim re-gates with no session and no Actions re-run; without a stored
-// patch, or after INFRA_REQUEUE_LIMIT such stops in a row, it pauses for the board. After the merge the
-// change is still rolled back (the kernel), and the card pauses rather than being rejected.
+// card's base, a pull request that never showed the pushed sha, GitHub, git or Netlify not answering,
+// or any error before the merge request that no check above classified (a database blip, a failed
+// fetch of main, a fault in the dispatcher). Before the merge the card goes back to funded on its stored
+// patch, which the next claim re-gates with no session and no Actions re-run, or, when it stopped before
+// any session ran, to be claimed again from the start; otherwise, or after INFRA_REQUEUE_LIMIT such
+// stops in a row, it pauses for the board. After the merge the change is still rolled back (the
+// kernel), and the card pauses rather than being rejected.
 import { lstat, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { parseChecks, evaluateCheck, AcceptanceGrammarError, type ConfigCheck } from './acceptance.js';
@@ -194,15 +197,18 @@ class Requeue extends Error {
 }
 
 // A stop the card did not cause (see the head of this file). afterMerge: the change had merged and was
-// rolled back, so the card pauses rather than re-queueing.
+// rolled back, so the card pauses rather than re-queueing. beforeSession: nothing was built yet, so
+// claiming the card again starts no session a stored patch would have saved.
 class InfraStop extends Error {
   readonly failingCheck: string;
   readonly afterMerge: boolean;
-  constructor(failingCheck: string, detail: string, afterMerge: boolean) {
+  readonly beforeSession: boolean;
+  constructor(failingCheck: string, detail: string, afterMerge: boolean, beforeSession = false) {
     super(detail);
     this.name = 'InfraStop';
     this.failingCheck = failingCheck;
     this.afterMerge = afterMerge;
+    this.beforeSession = beforeSession;
   }
 }
 
@@ -210,6 +216,23 @@ const processInfraStops = new Map<string, number>();
 
 function infraStops(deps: PipelineDeps): Map<string, number> {
   return deps.infraStops ?? processInfraStops;
+}
+
+// Where runCardPipeline is: preparing (before any session or stored patch), building (the session
+// through the gate and the checks inside the merge lock), or merging (the merge request and after).
+type Phase = 'preparing' | 'building' | 'merging';
+
+// What an error means for the card, by where it was thrown. From the merge request on, merge and
+// verifyMerged have already decided. Before it, a stop a check classified stands, and anything else (a
+// database or GitHub error, a failed fetch of main, a dispatcher fault) is not the card's change
+// failing, so it is an infrastructure stop, never a rejection.
+function classifyFailure(error: unknown, phase: Phase): unknown {
+  if (phase === 'merging') return error;
+  if (error instanceof CardStop || error instanceof Requeue || error instanceof StageMoved || error instanceof LeftGated) return error;
+  if (error instanceof InfraStop) {
+    return phase === 'preparing' && !error.beforeSession ? new InfraStop(error.failingCheck, error.message, error.afterMerge, true) : error;
+  }
+  return new InfraStop('dispatcher_error', errorMessage(error), false, phase === 'preparing');
 }
 
 // A stage write found the card in a stage the dispatcher did not leave it in: the board moved it.
@@ -289,6 +312,7 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
   const { db, config } = deps;
   let role: Role | null = null;
   let worktree: Worktree | null = null;
+  let phase: Phase = 'preparing';
   try {
     role = await db.getRole(card.executor_role_id ?? '');
     const checks = parseAcceptance(card);
@@ -296,6 +320,7 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     worktree = await prepareWorktree(card, deps);
     await preCheck(worktree, checks);
     const before = await snapshotGitState(config.repoRoot, worktree.path);
+    phase = 'building';
     const reused = await reuseStoredPatch(card, worktree, allowed, deps);
     const sessionError = reused
       ? null
@@ -317,11 +342,12 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     await mergeLock.run(async () => {
       await confirmMergeable(card, commit, deps);
       await confirmRemoteRange(commit, allowed, deps);
+      phase = 'merging';
       const merged = await merge(card, roleId, commit, deps);
       await verifyMerged(card, roleId, merged.sha, checks, deps, { shaRecorded: merged.recorded });
     });
   } catch (error) {
-    await settleFailure(card, role?.id ?? null, error, deps);
+    await settleFailure(card, role?.id ?? null, classifyFailure(error, phase), deps);
   } finally {
     if (worktree) await discardWorktree(worktree.path, worktree.branch, deps);
   }
@@ -419,8 +445,9 @@ async function settleFailure(card: Card, roleId: string | null, error: unknown, 
   await deps.alert.notify(`Card ${shortId(card.id)} rejected (dispatcher_error): ${singleLineTitle(card.title)}. ${detail}${unwrittenNote(unwritten)}`);
 }
 
-// An infrastructure stop: back to funded on the stored patch while there is one and the stops in a row
-// stay under the limit, else paused. Never rejected.
+// An infrastructure stop: back to funded while the stops in a row stay under the limit and claiming it
+// again costs no new session (it has a stored patch, or it stopped before any session ran), else
+// paused. Never rejected.
 async function settleInfraStop(card: Card, roleId: string | null, error: InfraStop, deps: PipelineDeps): Promise<void> {
   const stops = infraStops(deps);
   const count = (stops.get(card.id) ?? 0) + 1;
@@ -430,20 +457,22 @@ async function settleInfraStop(card: Card, roleId: string | null, error: InfraSt
     const patches = deps.patches;
     stored = (await patches.latest(card.id).catch(() => null)) !== null;
   }
-  const requeue = stored && count < INFRA_REQUEUE_LIMIT;
+  const requeue = !error.afterMerge && (stored || error.beforeSession) && count < INFRA_REQUEUE_LIMIT;
   const stage: WrittenStage = requeue ? 'funded' : 'paused';
-  deps.log.warn('pipeline', `card ${card.id} stopped by infrastructure`, { check: error.failingCheck, detail: error.message, stops: count, stage, afterMerge: error.afterMerge });
+  deps.log.warn('pipeline', `card ${card.id} stopped by infrastructure`, { check: error.failingCheck, detail: error.message, stops: count, stage, afterMerge: error.afterMerge, beforeSession: error.beforeSession });
   await attempt(deps, `card ${card.id} infrastructure event`, () =>
     deps.db.insertEvent(card.id, roleId, 'message', { step: 'infrastructure', check: error.failingCheck, detail: error.message, stops: count, stage }),
   );
   const unwritten = await attempt(deps, `card ${card.id} stage`, () => finalize(card, deps, stage, error.failingCheck));
   let why: string;
-  if (requeue) {
+  if (requeue && stored) {
     why = `It is back in funded and is re-gated from its stored patch with no new session (stop ${count}; it pauses at ${INFRA_REQUEUE_LIMIT} in a row).`;
+  } else if (requeue) {
+    why = `It stopped before any session ran, so it is back in funded to be claimed again (stop ${count}; it pauses at ${INFRA_REQUEUE_LIMIT} in a row).`;
   } else if (error.afterMerge) {
     why = 'The change was rolled back as unverified; the card is paused with its money and is not rejected. Resume it from /board once the outage is over.';
-  } else if (stored) {
-    why = `It stopped this way ${count} times in a row, so it is paused with its money and its stored patch; resume it from /board once the cause is fixed.`;
+  } else if (stored || error.beforeSession) {
+    why = `It stopped this way ${count} times in a row, so it is paused with its money${stored ? ' and its stored patch' : ''}; resume it from /board once the cause is fixed.`;
   } else {
     why = 'It has no stored patch to re-gate, so it is paused with its money rather than starting a new session; resume it from /board once the cause is fixed.';
   }
@@ -681,7 +710,9 @@ async function commitAndOpenPullRequest(
     );
     if (!moved) {
       stopCheck(deps, 'while the pull request head was updating');
-      throw new CardStop('rejected', 'pr_head', `pull request #${pr.number} did not show the pushed sha ${commit.sha} within ${t.prHeadTimeoutMs / 1000} s`);
+      // GitHub lagging behind a push is not the card's failure; nothing is gated or merged on the stale
+      // head, and confirmRemoteRange still checks what would merge on the next attempt.
+      throw new InfraStop('pr_head', `pull request #${pr.number} did not show the pushed sha ${commit.sha} within ${t.prHeadTimeoutMs / 1000} s`, false);
     }
   }
   deps.log.info('pipeline', `pull request #${pr.number} open for card ${card.id}`, { sha: commit.sha });
