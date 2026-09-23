@@ -23,7 +23,7 @@ describe('scheduler', () => {
       'Monday allocation and report',
       'macro-vote open',
       'macro-vote close',
-      'weekly Scout run',
+      'weekly Biz Dev run',
       'weekly Community run',
       'monthly blue-sky session',
     ]);

@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
+import { RUNNING_MODEL, runningModelsCheck } from '../scripts/team-models.mjs';
 import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
@@ -62,20 +63,32 @@ for (const viewport of WIDTHS) {
       const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
       await expect(waiting.getByRole('heading', { level: 3 })).toHaveText([
+        'Biz Dev',
         'Community',
+        'Game Designer',
         'Game Director',
+        'Head of Finance',
+        'Head of Product',
         'Host',
+        'HR',
+        'Janitor',
         'Platform Builder',
-        'Scout',
+        'Platform Director',
         'Studio Head',
+        'Tech Artist',
       ]);
       const avatars = page.getByRole('main').getByRole('img');
       await expect(avatars).toHaveCount(DEFAULT_STUDIO.roles.length);
       for (const role of DEFAULT_STUDIO.roles) {
         await expect(page.getByRole('img', { name: String(role.species_note) })).toBeVisible();
       }
-      await expect(running.getByText('claude-sonnet-5', { exact: false }).first()).toBeVisible();
-      await expect(page.getByText('claude-opus-5-5', { exact: false })).toHaveCount(0);
+      // A running role shows its model; a role that does not run shows none.
+      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(3);
+      await expect(waiting.getByText('claude-', { exact: false })).toHaveCount(0);
+      // The check scripts/live-check.mjs runs on production, on the same locators.
+      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      expect(models).toEqual({ ok: true, message: `/team 3 running roles, each on ${RUNNING_MODEL}: ${Array(3).fill(RUNNING_MODEL).join(', ')}` });
+      await expect(waiting.getByText(/\bclaude-/)).toHaveCount(0);
       await expect(running.getByText('2 cards shipped', { exact: false })).toBeVisible();
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'team', viewport.width);
@@ -104,3 +117,37 @@ for (const viewport of WIDTHS) {
     });
   });
 }
+
+// The /team check live-check.mjs runs on production (scripts/team-models.mjs), on rosters it must fail.
+const CARD_ROLES = new Set(['Builder A', 'Builder B', 'QA', 'Platform Builder']);
+
+test.describe('the production /team model check', () => {
+  test.describe('after a re-seed that left the builders on an older model', () => {
+    test.use({
+      studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (CARD_ROLES.has(String(role.title)) ? { ...role, model: 'claude-sonnet-5' } : role)) },
+    });
+
+    test('fails, naming the model it found', async ({ page }) => {
+      await page.goto('/team');
+      const running = page.getByRole('region', { name: 'Running', exact: true });
+      await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
+      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      expect(models).toEqual({ ok: false, message: `/team 3 running roles, each on ${RUNNING_MODEL}: claude-sonnet-5, claude-sonnet-5, claude-sonnet-5` });
+    });
+  });
+
+  test.describe('with no role running', () => {
+    test.use({
+      studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (CARD_ROLES.has(String(role.title)) ? { ...role, state: 'retired' } : role)) },
+    });
+
+    test('fails, since the Running section is missing', async ({ page }) => {
+      await page.goto('/team');
+      await expect(page.getByRole('region', { name: 'Not running yet', exact: true })).toBeVisible();
+      const running = page.getByRole('region', { name: 'Running', exact: true });
+      await expect(running).toHaveCount(0);
+      const models = runningModelsCheck(await running.locator('li.role .card-meta').allTextContents());
+      expect(models).toEqual({ ok: false, message: `/team 0 running roles, each on ${RUNNING_MODEL}: none` });
+    });
+  });
+});

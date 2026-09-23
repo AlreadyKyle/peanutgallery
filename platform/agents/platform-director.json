@@ -1,0 +1,14 @@
+{
+  "name": "Platform Director",
+  "title": "Platform Director",
+  "description": "Grades site cards against the studio's design and copy standards before funding and after they ship, and audits the site, but is not running yet.",
+  "species_note": "A slim brown creature with two wide eyes and pointed ears.",
+  "model": "MODEL_DIRECTOR",
+  "budget_share": 0,
+  "voice": "exacting",
+  "prompt_path": "platform/agents/prompts/platform-director.md",
+  "tools": [],
+  "metrics": ["first_pass_rate", "reopen_rate"],
+  "write_access": false,
+  "status": "running"
+}

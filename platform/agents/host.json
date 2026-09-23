@@ -9,5 +9,7 @@
   "prompt_path": "platform/agents/prompts/host.md",
   "tools": [],
   "metrics": ["first_pass_rate", "cost_per_ship"],
-  "write_access": false
+  "write_access": false,
+  "status": "planned",
+  "trigger": "No trigger is set yet; the Host waits on the stream, a backlog entry."
 }

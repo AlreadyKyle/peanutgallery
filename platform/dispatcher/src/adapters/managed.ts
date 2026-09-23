@@ -29,6 +29,12 @@
 //    whose rows could not all be written is left unarchived for recovery to settle. A stream that
 //    could not be held or a ledger that refused rows pauses the card (SessionPaused) once the session
 //    is settled.
+// 7. A session the dispatcher stopped reading before it went idle (its stream lost after five
+//    reconnects in a row that brought no new event, or the drain after an interrupt run out) is
+//    sent user.interrupt and read until it is no longer running before it is settled, so it cannot
+//    run on with nobody reading it (docs/specs/carry-over.md). The earlier sessions settled in step 1
+//    wrote their spend to the card, so the card's spend is read again and the new session's budget
+//    lowered by it.
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
@@ -64,6 +70,7 @@ export const MARGIN_OUTPUT_TOKENS = 8_192;
 export const PROBE_BUDGET_CENTS = 25;
 export const TOOLCHAIN_BUDGET_CENTS = 100;
 export const PROBE_PROMPT = 'Reply with the single word ready. Run no tool.';
+const SPENT_REQUIRED = "a managed card session needs the card's spend its budget was worked out from (spentUsd)";
 
 export type SessionPurpose = 'card' | 'probe' | 'toolchain' | 'check';
 const PURPOSES: readonly string[] = ['card', 'probe', 'toolchain', 'check'];
@@ -74,6 +81,9 @@ export interface ManagedTimings {
   // How long, and how often, the session is read until it is no longer running.
   statusWaitMs: number;
   statusPollMs: number;
+  // How long a session the dispatcher stopped reading (its stream lost, or its drain run out) is read
+  // after the interrupt, until it is no longer running.
+  stopWaitMs: number;
   // Session outputs take a moment to be indexed after the session goes idle.
   outputTries: number;
   outputDelayMs: number;
@@ -89,6 +99,7 @@ export const DEFAULT_TIMINGS: ManagedTimings = {
   interruptGraceMs: 15_000,
   statusWaitMs: 10_000,
   statusPollMs: 250,
+  stopWaitMs: 60_000,
   outputTries: 6,
   outputDelayMs: 1000,
   reconnectTries: 5,
@@ -110,7 +121,9 @@ export interface ManagedAdapterOptions {
   priceTable: PriceTable;
   // The model the startup probe runs on (MODEL_BUILDER).
   probeModel: string;
-  db: Pick<Db, 'recordUsage'>;
+  // recordUsage meters every request; getCard re-reads a card's spend after its earlier sessions are
+  // settled, before the new session's budget is set.
+  db: Pick<Db, 'recordUsage' | 'getCard'>;
   patches: PatchStore | null;
   alert: Alerter;
   log: Logger;
@@ -155,6 +168,11 @@ export interface DriveResult {
   toolUses: number;
   killReason: string | null;
   lastUsage: UsageSnapshot | null;
+  // The card prompt was sent, so the session may have run.
+  prompted: boolean;
+  // The stop came from the session itself going idle or terminated, so it is not running. False when
+  // the dispatcher stopped reading first: the stream was lost, or the drain after an interrupt ran out.
+  ended: boolean;
 }
 
 function textOf(content: ReadonlyArray<{ type: string; text?: string }> | null | undefined): string {
@@ -235,6 +253,9 @@ class SessionDriver {
   private toolUses = 0;
   private ledgerFailed = false;
   private violated = false;
+  // Events not seen before, counted over every connect.
+  private delivered = 0;
+  private ended = false;
 
   constructor(
     private readonly adapter: ManagedAdapter,
@@ -253,9 +274,12 @@ class SessionDriver {
     const onAbort = () => void this.interrupt(String(this.opts.signal.reason ?? 'aborted'));
     this.opts.signal.addEventListener('abort', onAbort, { once: true });
     if (this.opts.signal.aborted) onAbort();
+    // Drops in a row: a connect that delivered a new event starts the count again, so a long session
+    // whose stream drops now and then is not given up on, and a stream that delivers nothing is.
     let reconnects = 0;
     try {
       while (!this.done()) {
+        const before = this.delivered;
         try {
           await this.connect();
         } catch (error) {
@@ -263,6 +287,7 @@ class SessionDriver {
           this.adapter.log.warn('managed', 'session stream dropped', { session: this.opts.sessionId, error: errorMessage(error) });
         }
         if (this.done()) break;
+        if (this.delivered > before) reconnects = 0;
         reconnects += 1;
         if (reconnects > this.adapter.timings.reconnectTries) {
           this.stop = 'stream_lost';
@@ -284,7 +309,14 @@ class SessionDriver {
       toolUses: this.toolUses,
       killReason: this.killReason,
       lastUsage: this.lastUsage,
+      prompted: this.messageSent,
+      ended: this.ended,
     };
+  }
+
+  // Whether the card prompt went out; read when drive() throws instead of returning.
+  get prompted(): boolean {
+    return this.messageSent;
   }
 
   // Stream first, then the history, deduped by event id, then the live tail. The card prompt is sent
@@ -325,6 +357,7 @@ class SessionDriver {
       if (this.seen.has(id)) return;
       this.seen.add(id);
     }
+    this.delivered += 1;
     // Before the card prompt the session was idle and had done nothing of ours.
     if (!this.messageSent) return;
     await this.handle(event);
@@ -420,9 +453,11 @@ class SessionDriver {
         return;
       case 'session.status_idle':
         await this.onIdle(event.stop_reason);
+        if (this.stop !== null) this.ended = true;
         return;
       case 'session.status_terminated':
         this.stop ??= 'terminated';
+        this.ended = true;
         return;
       default:
         return;
@@ -525,6 +560,25 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     if (refused.length > 0) throw new Error(`role tools include excluded tools: ${refused.join(', ')}`);
     if (spec.maxBudgetUsd <= 0) throw new Error('session budget must be positive');
     if (!spec.allowedPaths || spec.allowedPaths.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
+    if (spec.spentUsd === undefined) throw new Error(SPENT_REQUIRED);
+  }
+
+  // The session's budget, lowered by whatever the card's spend grew by since the budget was worked out
+  // (spec.spentUsd): the earlier sessions closeOrphans just settled wrote their spend to the card. A
+  // card whose spend cannot be read gets no session.
+  private async budgetAfterOrphans(spec: SessionSpec, spentUsd: number): Promise<number> {
+    let actualUsd: number;
+    try {
+      const card = await this.opts.db.getCard(spec.cardId);
+      if (!card) throw new Error('no such card');
+      actualUsd = card.actual_usd;
+    } catch (error) {
+      throw new SessionPaused('card_spend', `card ${shortId(spec.cardId)}'s spend could not be read after its earlier sessions were settled, so no session was started: ${errorMessage(error)}`);
+    }
+    const added = round4(actualUsd - spentUsd);
+    if (added <= 0) return spec.maxBudgetUsd;
+    this.log.warn('managed', `card ${spec.cardId} spent ${added} USD in earlier sessions since its budget was set; the budget is lowered by that`, { max_budget_usd: spec.maxBudgetUsd, spent_usd: spentUsd, actual_usd: actualUsd });
+    return round4(spec.maxBudgetUsd - added);
   }
 
   // --- containment -------------------------------------------------------------------------------
@@ -568,8 +622,8 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
 
   // --- sessions ----------------------------------------------------------------------------------
 
-  private async waitNotRunning(sessionId: string): Promise<ManagedSession | null> {
-    const deadline = Date.now() + this.timings.statusWaitMs;
+  private async waitNotRunning(sessionId: string, waitMs: number = this.timings.statusWaitMs): Promise<ManagedSession | null> {
+    const deadline = Date.now() + waitMs;
     let last: ManagedSession | null = null;
     for (;;) {
       try {
@@ -693,8 +747,8 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
 
   // Reads the session once it is no longer running, writes the runtime and settle rows, and archives
   // it when every row is on the ledger.
-  private async settle(sessionId: string, meter: ManagedMeter, last: UsageSnapshot | null, label: string): Promise<SettleOutcome> {
-    const final = await this.waitNotRunning(sessionId);
+  private async settle(sessionId: string, meter: ManagedMeter, last: UsageSnapshot | null, label: string, waitMs?: number): Promise<SettleOutcome> {
+    const final = await this.waitNotRunning(sessionId, waitMs);
     if (!final || final.status === 'running' || final.status === 'rescheduling') {
       const reason = `session ${sessionId} was still ${final?.status ?? 'unreadable'}; it is left for recovery to settle`;
       this.log.warn('managed', reason, { label });
@@ -717,6 +771,20 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     await this.deleteOutputs(sessionId);
     const archived = await this.archive(sessionId);
     return { settled: true, reason: archived ? null : 'settled but not archived', patchStored: false, report };
+  }
+
+  // Settles a session once its driver has stopped. A session that was sent the card prompt and did not
+  // itself end (its stream was lost, the drain after an interrupt ran out, or the driver threw) may
+  // still be running and spending with nobody reading it: it is sent user.interrupt and read for up to
+  // stopWaitMs until it is no longer running, then settled and archived like any other.
+  private async finish(sessionId: string, meter: ManagedMeter, last: UsageSnapshot | null, label: string, stopped: { prompted: boolean; ended: boolean }): Promise<SettleOutcome> {
+    if (!stopped.prompted || stopped.ended) return this.settle(sessionId, meter, last, label);
+    try {
+      await this.client.sessions.events.send(sessionId, { events: [{ type: 'user.interrupt' }] });
+    } catch (error) {
+      this.log.warn('managed', 'stop interrupt not sent', { session: sessionId, label, error: errorMessage(error) });
+    }
+    return this.settle(sessionId, meter, last, label, this.timings.stopWaitMs);
   }
 
   // --- a card ------------------------------------------------------------------------------------
@@ -749,6 +817,8 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
     const allowed = spec.allowedPaths ?? [];
     if (allowed.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
+    const spentUsd = spec.spentUsd;
+    if (spentUsd === undefined) throw new Error(SPENT_REQUIRED);
     const baseSha = await headSha(spec.worktree);
     let leftovers: Map<string, ClosedSessions>;
     try {
@@ -782,9 +852,10 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     } catch (error) {
       throw new SessionPaused('system_prompt', `the session's system prompt could not be built: ${errorMessage(error)}`);
     }
-    const cents = budgetCents(spec.maxBudgetUsd, this.marginUsd(spec.model));
+    const maxBudgetUsd = await this.budgetAfterOrphans(spec, spentUsd);
+    const cents = budgetCents(maxBudgetUsd, this.marginUsd(spec.model));
     if (cents < 1) {
-      this.log.warn('managed', `card ${spec.cardId} has less than a cent of budget after the margin; no session`, { max_budget_usd: spec.maxBudgetUsd });
+      this.log.warn('managed', `card ${spec.cardId} has less than a cent of budget after the margin; no session`, { max_budget_usd: maxBudgetUsd });
       return { exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'error_max_budget_usd', totalCostUsd: 0, numTurns: 0, isError: false };
     }
     if (signal.aborted) {
@@ -802,6 +873,8 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     }
     const sessionId = session.id;
     const meter = this.meter(sessionId, spec.model, this.billing('card', { card_id: spec.cardId, role_id: spec.roleId ?? '' }));
+    const label = `card ${shortId(spec.cardId)}`;
+    let driver: SessionDriver | null = null;
     let drive: DriveResult;
     try {
       const problems = agentProblems(session.agent, this.opts.files.agent);
@@ -831,7 +904,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
         await onEvent({ type: 'message', text: `patch accepted: sha256 ${fetched.sha256}, ${check.files.length} file(s): ${check.files.join(', ')}${summary ? `. ${summary}` : ''}` });
         return { accepted: true };
       };
-      drive = await new SessionDriver(this, {
+      driver = new SessionDriver(this, {
         sessionId,
         model: spec.model,
         meter,
@@ -840,18 +913,19 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
         firstMessage: `${spec.prompt}\n${finishingSection(baseSha)}`,
         onSubmit,
         remind: true,
-      }).drive();
+      });
+      drive = await driver.drive();
     } catch (error) {
-      const settled = await this.settle(sessionId, meter, null, `card ${shortId(spec.cardId)}`);
+      const settled = await this.finish(sessionId, meter, null, label, { prompted: driver?.prompted ?? false, ended: false });
       if (!settled.settled) this.log.warn('managed', 'session left unarchived after an error', { session: sessionId });
       throw error;
     }
 
-    const settled = await this.settle(sessionId, meter, drive.lastUsage, `card ${shortId(spec.cardId)}`);
+    const settled = await this.finish(sessionId, meter, drive.lastUsage, label, drive);
     const listUsd = settled.report?.listCostUsd ?? listCostUsd(drive.lastUsage?.list_cost);
-    if (listUsd !== null && listUsd > spec.maxBudgetUsd + 0.005) {
+    if (listUsd !== null && listUsd > maxBudgetUsd + 0.005) {
       await this.opts.alert.notify(
-        `Card ${shortId(spec.cardId)}: session ${sessionId} spent ${listUsd} USD against a budget of ${spec.maxBudgetUsd} USD, ${round4(listUsd - spec.maxBudgetUsd)} USD over. The ledger records the true amount.`,
+        `Card ${shortId(spec.cardId)}: session ${sessionId} spent ${listUsd} USD against a budget of ${maxBudgetUsd} USD, ${round4(listUsd - maxBudgetUsd)} USD over. The ledger records the true amount.`,
       );
     }
     const end = this.endEvent(drive, meter, spec.model, listUsd);
@@ -1017,7 +1091,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   async probe(): Promise<void> {
     await this.closeOrphans((session) => session.metadata?.purpose !== 'card');
     const { session, meter, drive } = await this.overheadSession('probe', PROBE_PROMPT, PROBE_BUDGET_CENTS, undefined);
-    const settled = await this.settle(session.id, meter, drive.lastUsage, 'startup probe');
+    const settled = await this.finish(session.id, meter, drive.lastUsage, 'startup probe', drive);
     if (settled.report && settled.report.unwritten.length > 0) {
       throw new StartupError(`the ledger refused probe rows: ${settled.report.unwritten.map((row) => `${row.request_id} ${row.usd} USD`).join(', ')}`, true);
     }
@@ -1070,7 +1144,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
       );
       reason = toolchainProblem(lines);
     }
-    await this.settle(session.id, meter, drive.lastUsage, 'toolchain check');
+    await this.finish(session.id, meter, drive.lastUsage, 'toolchain check', drive);
     return { ok: reason === null, lines, reason };
   }
 }

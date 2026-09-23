@@ -12,17 +12,29 @@ const repoRoot = resolve(agentsDir, '..', '..');
 
 const WRITE_SET = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'];
 
+// The roster: the nine launch roles and the seven added on 23 September 2026 with no tools and a
+// budget_share of 0, each with its place in the launch roster (README.md).
 const LAUNCH_VALUES = {
-  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'] },
-  'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'] },
-  'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'] },
-  'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'] },
-  'platform-builder': { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'cautious', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship'] },
-  qa: { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'exact', tools: WRITE_SET, metrics: ['first_pass_rate', 'reopen_rate'] },
-  host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'] },
-  scout: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'] },
-  community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'] },
+  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'running' },
+  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: [], metrics: ['estimate_accuracy', 'first_pass_rate'], status: 'running' },
+  'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'running' },
+  'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], status: 'running' },
+  'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], status: 'running' },
+  qa: { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'exact', tools: WRITE_SET, metrics: ['first_pass_rate', 'reopen_rate'], status: 'running' },
+  'platform-builder': { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'cautious', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship'], status: 'running' },
+  'platform-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'exacting', tools: [], metrics: ['first_pass_rate', 'reopen_rate'], status: 'running' },
+  'head-of-finance': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'careful', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'starts' },
+  janitor: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'tidy', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
+  'tech-artist': { model: 'MODEL_BUILDER', budget_share: 0, voice: 'vivid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
+  hr: { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'fair', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'starts' },
+  'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
+  'biz-dev': { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
+  community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
+  host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'planned' },
 };
+
+// The roles that run at launch, from the launch plan's roster.
+const RUNNING = ['Studio Head', 'Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director'];
 
 function readSchemaFromReadme() {
   const readme = readFileSync(join(agentsDir, 'README.md'), 'utf8');
@@ -48,6 +60,7 @@ function checkValue(schema, value, where) {
     assert.equal(typeof value, 'number', `${where} is a number`);
     assert.ok(Number.isFinite(value), `${where} is finite`);
     if (Object.hasOwn(schema, 'exclusiveMinimum')) assert.ok(value > schema.exclusiveMinimum, `${where} is above ${schema.exclusiveMinimum}`);
+    if (Object.hasOwn(schema, 'minimum')) assert.ok(value >= schema.minimum, `${where} is at least ${schema.minimum}`);
     if (Object.hasOwn(schema, 'maximum')) assert.ok(value <= schema.maximum, `${where} is at most ${schema.maximum}`);
   } else if (schema.type === 'boolean') {
     assert.equal(typeof value, 'boolean', `${where} is a boolean`);
@@ -65,23 +78,31 @@ function checkValue(schema, value, where) {
 const schema = readSchemaFromReadme();
 const specs = readSpecs();
 
-test('the README schema names exactly the eleven keys and allows no others', () => {
+test('the README schema requires twelve keys, allows trigger besides them, and allows no others', () => {
   assert.equal(schema.additionalProperties, false);
-  assert.deepEqual([...schema.required].sort(), Object.keys(schema.properties).sort());
-  assert.equal(schema.required.length, 11);
+  assert.deepEqual([...schema.required, 'trigger'].sort(), Object.keys(schema.properties).sort());
+  assert.equal(schema.required.length, 12);
   assert.ok(schema.required.includes('description'), 'description is required');
+  assert.ok(schema.required.includes('status'), 'status is required');
+  assert.deepEqual(schema.properties.status.enum, ['running', 'starts', 'planned']);
 });
 
-test('the folder holds exactly the nine launch role files', () => {
+test('the folder holds exactly the sixteen roster files', () => {
   assert.deepEqual(specs.map(({ file }) => file.replace(/\.json$/, '')), Object.keys(LAUNCH_VALUES).sort());
+});
+
+test('the roles running at launch are the roster the launch plan names', () => {
+  const running = specs.filter(({ spec }) => spec.status === 'running').map(({ spec }) => spec.name);
+  assert.deepEqual(running.sort(), [...RUNNING].sort());
 });
 
 for (const { file, spec } of specs) {
   const role = file.replace(/\.json$/, '');
 
   test(`${file} validates against the schema`, () => {
-    assert.deepEqual(Object.keys(spec).sort(), [...schema.required].sort(), `${file} carries exactly the eleven keys`);
-    for (const key of schema.required) checkValue(schema.properties[key], spec[key], `${file}.${key}`);
+    const expected = spec.status === 'running' ? [...schema.required] : [...schema.required, 'trigger'];
+    assert.deepEqual(Object.keys(spec).sort(), expected.sort(), `${file} carries the twelve keys, and trigger exactly when it is not running`);
+    for (const key of Object.keys(spec)) checkValue(schema.properties[key], spec[key], `${file}.${key}`);
   });
 
   test(`${file} points at an existing prompt for this role`, () => {
@@ -93,7 +114,7 @@ for (const { file, spec } of specs) {
     assert.equal(spec.write_access, spec.tools.length > 0);
   });
 
-  // Host, Scout and Community have nothing to run on at launch; the site shows the description as is.
+  // A role without tools has no job that runs yet; the site shows the description as is.
   if (spec.tools.length === 0) {
     test(`${file} description says the role is not running yet`, () => {
       assert.ok(spec.description.includes('not running yet'), `${file} description says "not running yet"`);
@@ -108,6 +129,7 @@ for (const { file, spec } of specs) {
     assert.equal(spec.voice, expected.voice);
     assert.deepEqual(spec.tools, expected.tools);
     assert.deepEqual(spec.metrics, expected.metrics);
+    assert.equal(spec.status, expected.status);
   });
 }
 
@@ -116,8 +138,11 @@ test('role names are unique across files', () => {
   assert.equal(new Set(names).size, names.length);
 });
 
-test('budget shares across the nine files sum to 1', () => {
-  const sum = specs.reduce((total, { spec }) => total + spec.budget_share, 0);
+// The roles added on 23 September 2026 carry 0 until the operations budget sets every share (README.md).
+test('the budget shares of the roles with a share that is not 0 sum to 1', () => {
+  const shared = specs.filter(({ spec }) => spec.budget_share !== 0);
+  assert.equal(shared.length, 9, 'the nine launch roles keep their shares');
+  const sum = shared.reduce((total, { spec }) => total + spec.budget_share, 0);
   assert.ok(Math.abs(sum - 1) < 1e-9, `budget_share sum is ${sum}`);
 });
 

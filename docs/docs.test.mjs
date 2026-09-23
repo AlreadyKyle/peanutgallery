@@ -177,9 +177,10 @@ const KERNEL_ITEMS = [
   { item: 'the read/write separation', text: /read\/write separation/i, copy: /reads text from the public/i },
 ];
 
-// The kernel paragraph, carried over verbatim from the kick-off plan (22 September 2026).
+// The kernel paragraph, carried over verbatim from the kick-off plan (22 September 2026), with the Scout
+// renamed Biz Dev (23 September 2026).
 const KERNEL_PARAGRAPH =
-  'Not editable by any card, vote, regime or org change, at any tier, and the site says so: the ledger; spend caps; the default 80/20 split and the 10% reserve (each supporter sets their own split at checkout; the default is not votable); the incident reserve rule; the gate; rollback; the content filter, the all-ages rating and the art policy; the broadcast delay and kill switch; and the read/write separation: no agent with write access to a build, a card or the org chart reads free text from the public. The Host, the Community agent and the Scout read outside text and have no write tools. The single exception is board notes: free text from the board\'s authenticated accounts, read by the Studio Head.';
+  'Not editable by any card, vote, regime or org change, at any tier, and the site says so: the ledger; spend caps; the default 80/20 split and the 10% reserve (each supporter sets their own split at checkout; the default is not votable); the incident reserve rule; the gate; rollback; the content filter, the all-ages rating and the art policy; the broadcast delay and kill switch; and the read/write separation: no agent with write access to a build, a card or the org chart reads free text from the public. The Host, the Community agent and Biz Dev read outside text and have no write tools. The single exception is board notes: free text from the board\'s authenticated accounts, read by the Studio Head.';
 
 const planText = read('docs', 'PLAN.md');
 const planLines = planText.split('\n');
@@ -464,7 +465,7 @@ test('the plan, the checklist, the backlog, the board\'s steps, the root docs an
 });
 
 test('the prompts mark mechanics that are not built as not running yet', () => {
-  for (const role of ['host', 'scout', 'community', 'studio-head', 'game-director', 'qa']) {
+  for (const role of ['host', 'biz-dev', 'community', 'studio-head', 'game-director', 'qa', 'game-designer', 'platform-director', 'head-of-finance', 'janitor', 'tech-artist', 'hr', 'head-of-product']) {
     assert.match(read('platform', 'agents', 'prompts', `${role}.md`), /not running yet/i, `${role}.md says what is not running yet`);
   }
   for (const file of PROMPT_FILES) {

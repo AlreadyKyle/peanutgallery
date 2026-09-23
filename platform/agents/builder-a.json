@@ -9,5 +9,6 @@
   "prompt_path": "platform/agents/prompts/builder-a.md",
   "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
   "metrics": ["first_pass_rate", "cost_per_ship", "estimate_accuracy"],
-  "write_access": true
+  "write_access": true,
+  "status": "running"
 }

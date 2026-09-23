@@ -1,6 +1,6 @@
 # Money safety: backups, the Controller, append-only money tables, infrastructure stops, the Oracle shape
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 ## Problem
 

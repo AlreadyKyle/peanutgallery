@@ -11,14 +11,19 @@
 // 2. The Read tool is asked for a decoy .env file in a scratch repository root; the permission rule
 //    must deny it. The decoy holds no secret.
 // 3. With --positive: a clone of this checkout and a card worktree of it, in the layout the dispatcher
-//    makes, its dependencies installed before the session, runs the seed-1 test, typecheck and bot
-//    commands under the same sandbox, and each must pass.
+//    makes (the worktree in <clone>-worktrees beside the clone), its dependencies installed before the
+//    session, runs the seed-1 test, typecheck and bot commands under the same sandbox, and each must
+//    pass.
+// The scratch folder is made in the temp folder, or in SANDBOX_CHECK_SCRATCH when it is set: with
+// SANDBOX_CHECK_SCRATCH=$HOME the clone and the worktree sit under the home folder the sandbox denies,
+// as the founder's clone and its card worktrees do.
 // The first line of the output is PASS: or FAIL:.
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { defaultWorktreeRoot } from '../config.js';
 import { AttendedAdapter } from './attended.js';
 import type { AgentEvent, SessionSpec } from './types.js';
 
@@ -28,6 +33,7 @@ const CODE_ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 const REPO_ROOT = path.resolve(process.env.SANDBOX_CHECK_REPO_ROOT ?? CODE_ROOT);
 const CLAUDE_BIN = process.env.CLAUDE_BIN ?? path.join(os.homedir(), '.local', 'bin', 'claude');
 const MODEL = process.env.SANDBOX_CHECK_MODEL ?? 'claude-haiku-4-5';
+const SCRATCH_PARENT = path.resolve(process.env.SANDBOX_CHECK_SCRATCH ?? os.tmpdir());
 
 // Card test code: each attempt prints one line, attempt=<name> outcome=<blocked|NOT-BLOCKED|absent>
 // detail=<code>. Nothing read is printed.
@@ -84,9 +90,10 @@ async function scratchPackage(root: string, script: string): Promise<string> {
 async function main(): Promise<number> {
   const lines: string[] = [];
   const failures: string[] = [];
-  const scratch = await mkdtemp(path.join(os.tmpdir(), 'sandbox-check-'));
+  // Resolved, so every path the check prints and passes is the one the sandbox profile names.
+  const scratch = realpathSync.native(await mkdtemp(path.join(SCRATCH_PARENT, 'sandbox-check-')));
   try {
-    lines.push(`claude: ${CLAUDE_BIN}; model ${MODEL}; repository ${REPO_ROOT}`);
+    lines.push(`claude: ${CLAUDE_BIN}; model ${MODEL}; repository ${REPO_ROOT}; scratch ${scratch}`);
     const targets = [path.join(os.homedir(), '.ssh', 'id_ed25519'), path.join(REPO_ROOT, '.env'), path.join(REPO_ROOT, '.env.vps')];
     lines.push(`targets present outside the sandbox: ${targets.map((file) => `${path.basename(file)}=${existsSync(file)}`).join(', ')}`);
 
@@ -132,11 +139,14 @@ async function main(): Promise<number> {
     // 3. The positive check.
     if (process.argv.includes('--positive')) {
       // The layout a card session has: a clone the dispatcher runs git in, and the card's worktree of
-      // it in a separate folder, whose git data lives in the clone.
-      const clone = path.join(scratch, 'clone');
-      const copy = path.join(scratch, 'worktree');
+      // it in <clone>-worktrees beside it (config.ts defaultWorktreeRoot), whose git data lives in the
+      // clone.
+      const clone = path.join(scratch, 'peanutgallery');
+      const copy = path.join(defaultWorktreeRoot(clone), 'card-sandbox');
+      await mkdir(path.dirname(copy), { recursive: true });
       execFileSync('git', ['clone', '-q', '--no-hardlinks', CODE_ROOT, clone], { stdio: 'ignore' });
       execFileSync('git', ['-C', clone, 'worktree', 'add', '-q', '--detach', copy, 'HEAD'], { stdio: 'ignore' });
+      lines.push(`positive: clone ${clone}; worktree ${copy}`);
       const positive = new AttendedAdapter({ claudeBin: CLAUDE_BIN, repoRoot: clone });
       const commands = ['pnpm --filter @backseat/seed-1 test', 'pnpm --filter @backseat/seed-1 typecheck', 'pnpm --filter @backseat/seed-1 bot --config-dir seed-1/config --hours 10 --seed 20260914'];
       const testEvents = await session(

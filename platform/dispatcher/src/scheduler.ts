@@ -16,7 +16,7 @@ export const JOBS: readonly ScheduledJob[] = [
   { name: 'Monday allocation and report', expression: '0 9 * * 1' },
   { name: 'macro-vote open', expression: '0 12 * * 1' },
   { name: 'macro-vote close', expression: '0 18 * * 0' },
-  { name: 'weekly Scout run', expression: '0 10 * * 2' },
+  { name: 'weekly Biz Dev run', expression: '0 10 * * 2' },
   { name: 'weekly Community run', expression: '0 10 * * 4' },
   { name: 'monthly blue-sky session', expression: '0 10 1 * *' },
 ];

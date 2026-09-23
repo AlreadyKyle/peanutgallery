@@ -17,12 +17,12 @@ function role(title: string, overrides: Partial<Role> = {}): Role {
   };
 }
 
-const NINE = ['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'Platform Builder', 'QA', 'Host', 'Scout', 'Community'];
+const NINE = ['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'Platform Builder', 'QA', 'Host', 'Biz Dev', 'Community'];
 
 describe('which roles build cards and which run', () => {
   it('offers the builders, QA and the Platform Builder as executors, and runs only the ones whose folder is open', () => {
     const roles = NINE.map((title) =>
-      role(title, { write_access: !['Host', 'Scout', 'Community'].includes(title) }),
+      role(title, { write_access: !['Host', 'Biz Dev', 'Community'].includes(title) }),
     );
     expect(roles.filter(isCardRole).map((r) => r.title)).toEqual(['Builder A', 'Builder B', 'Platform Builder', 'QA']);
     // The platform code lane is closed at launch, so the Platform Builder does not run yet.

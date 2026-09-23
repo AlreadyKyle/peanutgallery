@@ -1,12 +1,14 @@
 # Role specs
 
-Roles are data. Each of the nine launch roles is one JSON file in this folder plus one prompt file under `prompts/`. The Supabase seed script reads the JSON files into the `roles` table; the dispatcher reads the row when it starts a session and appends the prompt file named by `prompt_path`. Names equal titles until the Studio Head names the roster at launch.
+Roles are data. Each of the sixteen roles in the roster is one JSON file in this folder plus one prompt file under `prompts/`. The Supabase seed script reads the JSON files into the `roles` table; the dispatcher reads the row when it starts a session and appends the prompt file named by `prompt_path`. Names equal titles until the Studio Head names the roster at launch.
 
-Files: `studio-head.json`, `game-director.json`, `builder-a.json`, `builder-b.json`, `platform-builder.json`, `qa.json`, `host.json`, `scout.json`, `community.json`, and `prompts/<same name>.md`.
+Files: `studio-head.json`, `game-designer.json`, `game-director.json`, `builder-a.json`, `builder-b.json`, `qa.json`, `platform-builder.json`, `platform-director.json`, `head-of-finance.json`, `janitor.json`, `tech-artist.json`, `hr.json`, `head-of-product.json`, `biz-dev.json`, `community.json`, `host.json`, and `prompts/<same name>.md`.
+
+Each role's `status` is its place in the launch roster: `running` for the roles that run at launch (Studio Head, Game Designer, Game Director, Builder A, Builder B, QA, Platform Builder and Platform Director), `starts` for a role that starts on a named trigger, and `planned` for one with no trigger yet. A role that is not `running` carries its `trigger`, one sentence saying when it starts. `running` names the roster, not what runs today: while the studio is paused, or until a role's workflow is built, its description says it is not running yet. The Scout was renamed Biz Dev on 23 September 2026, with the same job and guardrails; migration `20260923000200_rename_biz_dev.sql` renamed its row in place.
 
 ## Schema
 
-Every file carries all eleven keys. The schema allows no extra keys.
+Every file carries the twelve required keys, and `trigger` exactly when `status` is not `running`. The schema allows no other keys.
 
 ```json
 {
@@ -14,40 +16,49 @@ Every file carries all eleven keys. The schema allows no extra keys.
   "title": "Role spec",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "title", "description", "species_note", "model", "budget_share", "voice", "prompt_path", "tools", "metrics", "write_access"],
+  "required": ["name", "title", "description", "species_note", "model", "budget_share", "voice", "prompt_path", "tools", "metrics", "write_access", "status"],
   "properties": {
     "name": { "type": "string", "minLength": 1, "description": "Unique across roles; the roles.name column. Equals title until the roster is named at launch." },
     "title": { "type": "string", "minLength": 1, "description": "The role as it appears on the site and the stream." },
     "description": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\s][^\\n\u2014]*[.]$", "description": "One plain sentence saying what the role does, shown on the Meet the Team page: at most 200 characters, no em dash, ending in a full stop. A role that is not running says so." },
     "species_note": { "type": "string", "minLength": 1, "pattern": "^[^\\n]+$", "description": "One plain line describing the alien: a small, strange, friendly creature. No backstory, no claimed experience." },
     "model": { "type": "string", "enum": ["MODEL_DIRECTOR", "MODEL_BUILDER", "MODEL_HOST"], "description": "The environment variable whose value is the model id. Resolved at seed time." },
-    "budget_share": { "type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Share of the week's pool. The nine shares sum to 1." },
+    "budget_share": { "type": "number", "minimum": 0, "maximum": 1, "description": "Share of the agents' budget. The shares that are not 0 sum to 1. The roles added on 23 September 2026 carry 0." },
     "voice": { "type": "string", "pattern": "^[a-z]+$", "description": "One word." },
     "prompt_path": { "type": "string", "pattern": "^platform/agents/prompts/[a-z-]+\\.md$", "description": "Path from the repo root to the role prompt." },
     "tools": { "type": "array", "items": { "type": "string", "enum": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"] }, "uniqueItems": true, "description": "Tool allowlist passed to the session. Empty for roles without write access." },
     "metrics": { "type": "array", "minItems": 2, "maxItems": 3, "uniqueItems": true, "items": { "type": "string", "enum": ["first_pass_rate", "cost_per_ship", "estimate_accuracy", "reopen_rate"] }, "description": "The two or three scored metrics from PLAN.md §4." },
-    "write_access": { "type": "boolean", "description": "False for host, scout and community. A role with write access never reads free text from the public." }
+    "write_access": { "type": "boolean", "description": "False for every role without tools, Biz Dev and the other roles that read outside text among them. A role with write access never reads free text from the public." },
+    "status": { "type": "string", "enum": ["running", "starts", "planned"], "description": "The role's place in the launch roster: running at launch, starting on a named trigger, or planned with no trigger yet." },
+    "trigger": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[^\\s][^\\n\u2014]*[.]$", "description": "One plain sentence saying when the role starts. Present exactly when status is not running." }
   }
 }
 ```
 
-Two rules hold across files and are not expressible in the schema: `write_access` is false exactly when `tools` is empty, and the `budget_share` values across all nine files sum to 1.
+Three rules hold across files and are not expressible in the schema: `write_access` is false exactly when `tools` is empty; `trigger` is present exactly when `status` is not `running`; and the `budget_share` values of the roles with a share that is not 0 sum to 1. The operations budget in the launch plan (the agent-system change) redefines `budget_share` as each role's share of the operations bucket and sets every role's value then; until it does, the seven roles added on 23 September 2026 carry 0 and the nine earlier shares stand.
 
 ## Launch values
 
-| File | model | budget_share | voice | tools | metrics | write_access |
-|---|---|---|---|---|---|---|
-| studio-head | MODEL_DIRECTOR | 0.10 | terse | write set | estimate_accuracy, cost_per_ship | true |
-| game-director | MODEL_DIRECTOR | 0.10 | firm | write set | estimate_accuracy, cost_per_ship | true |
-| builder-a | MODEL_BUILDER | 0.20 | plain | write set | first_pass_rate, cost_per_ship, estimate_accuracy | true |
-| builder-b | MODEL_BUILDER | 0.20 | brisk | write set | first_pass_rate, cost_per_ship, estimate_accuracy | true |
-| platform-builder | MODEL_BUILDER | 0.15 | cautious | write set | first_pass_rate, cost_per_ship | true |
-| qa | MODEL_BUILDER | 0.15 | exact | write set | first_pass_rate, reopen_rate | true |
-| host | MODEL_HOST | 0.05 | cheerful | none | first_pass_rate, cost_per_ship | false |
-| scout | MODEL_BUILDER | 0.025 | curious | none | first_pass_rate, cost_per_ship | false |
-| community | MODEL_BUILDER | 0.025 | warm | none | first_pass_rate, cost_per_ship | false |
+| File | model | budget_share | voice | tools | metrics | write_access | status |
+|---|---|---|---|---|---|---|---|
+| studio-head | MODEL_DIRECTOR | 0.10 | terse | write set | estimate_accuracy, cost_per_ship | true | running |
+| game-designer | MODEL_DIRECTOR | 0 | precise | none | estimate_accuracy, first_pass_rate | false | running |
+| game-director | MODEL_DIRECTOR | 0.10 | firm | write set | estimate_accuracy, cost_per_ship | true | running |
+| builder-a | MODEL_BUILDER | 0.20 | plain | write set | first_pass_rate, cost_per_ship, estimate_accuracy | true | running |
+| builder-b | MODEL_BUILDER | 0.20 | brisk | write set | first_pass_rate, cost_per_ship, estimate_accuracy | true | running |
+| qa | MODEL_BUILDER | 0.15 | exact | write set | first_pass_rate, reopen_rate | true | running |
+| platform-builder | MODEL_BUILDER | 0.15 | cautious | write set | first_pass_rate, cost_per_ship | true | running |
+| platform-director | MODEL_DIRECTOR | 0 | exacting | none | first_pass_rate, reopen_rate | false | running |
+| head-of-finance | MODEL_DIRECTOR | 0 | careful | none | estimate_accuracy, cost_per_ship | false | starts |
+| janitor | MODEL_BUILDER | 0 | tidy | none | first_pass_rate, cost_per_ship | false | starts |
+| tech-artist | MODEL_BUILDER | 0 | vivid | none | first_pass_rate, cost_per_ship | false | starts |
+| hr | MODEL_DIRECTOR | 0 | fair | none | estimate_accuracy, cost_per_ship | false | starts |
+| head-of-product | MODEL_DIRECTOR | 0 | candid | none | first_pass_rate, cost_per_ship | false | starts |
+| biz-dev | MODEL_BUILDER | 0.025 | curious | none | first_pass_rate, cost_per_ship | false | starts |
+| community | MODEL_BUILDER | 0.025 | warm | none | first_pass_rate, cost_per_ship | false | starts |
+| host | MODEL_HOST | 0.05 | cheerful | none | first_pass_rate, cost_per_ship | false | planned |
 
-The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]`.
+The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]`. The roles added on 23 September 2026 start with no tools and no write access; only the board grants tools. `MODEL_DIRECTOR` and `MODEL_BUILDER` both hold `claude-opus-5-5` and `MODEL_HOST` holds `claude-haiku-4-5` (`docs/PLAN.md` §10 decision 36).
 
 ## How the seed script consumes a spec
 
@@ -66,6 +77,8 @@ The write set is `["Read", "Edit", "Write", "Glob", "Grep", "Bash"]`.
 | tools | tools_json | the array, stored as jsonb |
 | metrics | metrics_json | the array, stored as jsonb |
 | write_access | write_access | as is |
+| status | status | as is |
+| trigger | trigger | as is; null when the file has none |
 
 Columns the spec does not carry: `avatar_url` stays null until the image adapter lands (after launch), `state` is `active`, `hired_at` takes the column default on insert, `retired_at` is null.
 
@@ -73,11 +86,11 @@ The dispatcher reads the row: `tools_json` becomes the `--allowedTools` list, an
 
 ## Prompts
 
-Each prompt states the role's purpose from PLAN.md §3, the kernel, the read/write rule, what the role may edit, and how the gate works. Builder prompts add the two lanes, the `check:` line convention, the rule to stop when the acceptance check holds and all invariants pass, and the kernel paths no agent may edit (`platform/gate/kernel-paths.txt`). The Platform Builder's lane is `platform/site/` only. The Builder A, Builder B, QA and Platform Builder prompts carry a `## Working method` section with five steps, each named at the start of its sentence: Understand (restate the acceptance test, quoting each `check:` line), Plan (one short message naming files and verification commands), Implement (the smallest change), Verify (run the named commands; red means fix or stop and report) and Report (pass or fail against the acceptance test verbatim, files changed). The block lives in each file rather than a shared one because the adapter appends exactly one file per role. The Game Director prompt carries the seven Seed 1 pillars verbatim. The Host, Scout and Community prompts state that the role has no write tools. Prompts contain no backstories, no claimed experience and no jokes.
+Each prompt states the role's purpose from PLAN.md §3, the kernel, the read/write rule, what the role may edit, and how the gate works. Builder prompts add the two lanes, the `check:` line convention, the rule to stop when the acceptance check holds and all invariants pass, and the kernel paths no agent may edit (`platform/gate/kernel-paths.txt`). The Platform Builder's lane is `platform/site/` only. The Builder A, Builder B, QA and Platform Builder prompts carry a `## Working method` section with five steps, each named at the start of its sentence: Understand (restate the acceptance test, quoting each `check:` line), Plan (one short message naming files and verification commands), Implement (the smallest change), Verify (run the named commands; red means fix or stop and report) and Report (pass or fail against the acceptance test verbatim, files changed). The block lives in each file rather than a shared one because the adapter appends exactly one file per role. The Game Director prompt carries the seven Seed 1 pillars verbatim. The prompt of every role without tools states that the role has no write tools. Prompts contain no backstories, no claimed experience and no jokes.
 
 ## Validation
 
-`specs.test.mjs` in this folder checks every spec. It reads the schema out of the fenced block above, so the documented schema is the enforced one, and asserts: each file carries exactly the eleven keys with the schema's types, lengths, enums and patterns; `prompt_path` is `platform/agents/prompts/<file name>.md` and the file exists; `name` equals `title`; `name` is unique across files; `write_access` is true exactly when `tools` is non-empty; the description of every role with an empty `tools` list says it is `not running yet`; the folder holds exactly the nine launch files; each file carries the launch values in the table above; and the nine `budget_share` values sum to 1. It then reads each prompt file and asserts: every prompt contains the kernel line `No agent with write access`, a `## How the gate works` heading and the sentence that a failed deploy or smoke puts a revert commit on `main`; the prompt of every role with an empty `tools` list contains `You have no write tools`; the Builder A, Builder B and QA prompts contain the literal `check: config <file> <path> == <json>` and `Stop when the acceptance check holds`; the Builder A, Builder B, QA and Platform Builder prompts contain `## Working method`, each of `Understand:`, `Plan:`, `Implement:`, `Verify:` and `Report:`, and `platform/gate/kernel-paths.txt`; and `game-director.md` contains the pillars sentence from the `Seed 1 pillars` line of `docs/PLAN.md` verbatim.
+`specs.test.mjs` in this folder checks every spec. It reads the schema out of the fenced block above, so the documented schema is the enforced one, and asserts: each file carries the twelve required keys, `trigger` exactly when `status` is not `running`, and no other key, each with the schema's types, lengths, enums and patterns; `prompt_path` is `platform/agents/prompts/<file name>.md` and the file exists; `name` equals `title`; `name` is unique across files; `write_access` is true exactly when `tools` is non-empty; the description of every role with an empty `tools` list says it is `not running yet`; the folder holds exactly the sixteen roster files; each file carries the values in the table above; and the `budget_share` values that are not 0 sum to 1. It then reads each prompt file and asserts: every prompt contains the kernel line `No agent with write access`, a `## How the gate works` heading and the sentence that a failed deploy or smoke puts a revert commit on `main`; the prompt of every role with an empty `tools` list contains `You have no write tools`; the Builder A, Builder B and QA prompts contain the literal `check: config <file> <path> == <json>` and `Stop when the acceptance check holds`; the Builder A, Builder B, QA and Platform Builder prompts contain `## Working method`, each of `Understand:`, `Plan:`, `Implement:`, `Verify:` and `Report:`, and `platform/gate/kernel-paths.txt`; and `game-director.md` contains the pillars sentence from the `Seed 1 pillars` line of `docs/PLAN.md` verbatim.
 
 It uses only the Node test runner and has no dependencies. From the repo root:
 
@@ -85,4 +98,4 @@ It uses only the Node test runner and has no dependencies. From the repo root:
 node --test platform/agents/specs.test.mjs
 ```
 
-Expected: 67 tests pass, 0 fail.
+Expected: 117 tests pass, 0 fail.
