@@ -4,21 +4,24 @@
 --
 -- The money record is kernel (PLAN.md §4 Kernel): no row of ledger,
 -- contributions, credit_purchases, board_actions or controller_runs is ever
--- deleted or truncated, and no column of one is ever changed, with three
+-- deleted or truncated, and no column of one is ever changed, with two
 -- exceptions that change no money:
 --   contributions.decision_id  set once, from null, as apply_contribution
 --                              links a payment to an open decision;
 --   contributions.display_name nulled, never set, and only inside
 --                              redact_contribution_name, the board's
---                              second-factor privacy RPC;
---   board_actions.card_id      nulled by its own foreign key when the card it
---                              names is deleted.
+--                              second-factor privacy RPC.
+-- board_actions.card_id's foreign key becomes on delete restrict, so a card
+-- a board action names cannot be deleted and the action never loses it.
 -- An UPDATE that changes nothing passes. Corrections are new rows:
 --   reinstated  record_dispute_reinstated, which the Controller calls when
 --               Stripe closes a dispute as won, puts back exactly what the
---               payment's disputes took. The money returns to the pool
---               without a card, the 10% reserve and the incident fund take
---               their shares back, and nothing is held again.
+--               payment's disputes took. The money returns to the pool and to
+--               the bar of the card the payment named, as a release does, so
+--               a bar stays a plain sum over its payments' rows and a later
+--               refund takes off only what the card holds. The 10% reserve
+--               and the incident fund take their shares back, and nothing is
+--               held again.
 --   adjustment  record_adjustment, the board's second-factor RPC with a
 --               reason, books a correction against one payment: net_usd is
 --               split into reserve_usd, agents_usd and studio_usd. A fee
@@ -38,6 +41,12 @@ set lock_timeout = '5s';
 alter table public.board_actions drop constraint if exists board_actions_action_check;
 alter table public.board_actions add constraint board_actions_action_check
   check (action in ('set_caps', 'record_credit_purchase', 'file_card', 'set_card_horizon', 'cancel_card', 'resume_card', 'record_adjustment', 'redact_display_name'));
+
+-- A board action keeps the card it names: the foreign key was on delete set
+-- null, which would rewrite the action's row when its card is deleted.
+alter table public.board_actions drop constraint if exists board_actions_card_id_fkey;
+alter table public.board_actions add constraint board_actions_card_id_fkey
+  foreign key (card_id) references public.cards (id) on delete restrict;
 
 -- The append-only guard -----------------------------------------------------
 
@@ -70,12 +79,6 @@ begin
     if old.display_name is not null and new.display_name is null
       and v_new - 'display_name' = v_old - 'display_name'
       and current_setting('peanutgallery.redact_name', true) = 'on' then
-      return new;
-    end if;
-  elsif tg_table_name = 'board_actions' then
-    if old.card_id is not null and new.card_id is null
-      and v_new - 'card_id' = v_old - 'card_id'
-      and not exists (select 1 from public.cards where id = old.card_id) then
       return new;
     end if;
   end if;
@@ -300,7 +303,11 @@ $$;
 -- payment's disputes still hold (net of earlier reinstatements), keyed
 -- "<dispute id>:reinstated" so a second call changes nothing. p_amount_usd is
 -- what Stripe says it reinstated: it must cover what is booked as disputed,
--- or the call is refused for the board to look at.
+-- or the call is refused for the board to look at. The row names the
+-- payment's card, and the card's bar rises by what reaches the pool balance,
+-- exactly what the disputes took off it plus any held money they cancelled,
+-- so the bar again equals the sum over the payment's rows. A card that reaches
+-- its target moves to funded as on a release.
 
 create or replace function public.record_dispute_reinstated(
   p_dispute_id text,
@@ -324,6 +331,8 @@ declare
   v_balance numeric(12,4);
   v_reserve_after numeric(12,4);
   v_incident_after numeric(12,4);
+  v_goal_stage public.card_stage;
+  v_goal_funded numeric(12,4);
 begin
   if p_dispute_id is null or p_dispute_id !~ '^(dp|du)_[A-Za-z0-9]+$' then
     raise exception 'p_dispute_id must be a Stripe dispute id';
@@ -342,6 +351,10 @@ begin
     return jsonb_build_object('found', false, 'inserted', false);
   end if;
 
+  -- The card first, then the pool, in the order reverse_contribution takes them.
+  if v_payment.goal_card_id is not null then
+    perform 1 from public.cards where id = v_payment.goal_card_id for update;
+  end if;
   perform 1 from public.pool where id = 1 for update;
   if not found then
     raise exception 'pool row 1 is missing';
@@ -372,7 +385,7 @@ begin
   ) values (
     'reinstated', v_payment.id, v_payment.rail, v_payment.contributor_id, -v_amount, -v_net,
     -v_reserve, -v_agents, -v_studio, -v_incident, v_payment.studio_pct_chosen, v_payment.kind,
-    v_payment.public, null, v_ref, 0, now()
+    v_payment.public, v_payment.goal_card_id, v_ref, 0, now()
   )
   on conflict do nothing
   returning id into v_id;
@@ -388,6 +401,21 @@ begin
   where id = 1
   returning balance_usd, reserve_usd, incident_reserve_usd into v_balance, v_reserve_after, v_incident_after;
 
+  if v_payment.goal_card_id is not null then
+    update public.cards
+    set funded_usd = funded_usd - (v_agents - v_incident)
+    where id = v_payment.goal_card_id;
+    update public.cards
+    set stage = 'funded'
+    where id = v_payment.goal_card_id
+      and shape = 'goal'
+      and stage in ('proposed', 'voted')
+      and horizon = 'now'
+      and funding_target_usd > 0
+      and funded_usd >= funding_target_usd;
+    select stage, funded_usd into v_goal_stage, v_goal_funded from public.cards where id = v_payment.goal_card_id;
+  end if;
+
   return jsonb_build_object(
     'found', true,
     'inserted', true,
@@ -400,7 +428,10 @@ begin
     'incident_usd', -v_incident,
     'pool_balance_usd', v_balance,
     'pool_reserve_usd', v_reserve_after,
-    'pool_incident_reserve_usd', v_incident_after
+    'pool_incident_reserve_usd', v_incident_after,
+    'goal_card_id', v_payment.goal_card_id,
+    'goal_stage', v_goal_stage,
+    'goal_funded_usd', v_goal_funded
   );
 end;
 $$;

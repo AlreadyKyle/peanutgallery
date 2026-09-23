@@ -1292,6 +1292,9 @@ Deno.test("migrations on PGlite", {
           await row(`select funding_target_usd, estimate_usd, horizon::text as horizon from public.cards where id = $1`, [above.id]),
           { funding_target_usd: "26.0000", estimate_usd: "26.0000", horizon: "later" },
         );
+        // A card a board action names cannot be deleted (20260923000020_append_only.sql); the
+        // fixture's own action goes first, with the append-only triggers off in this test.
+        await db.query(`delete from public.board_actions where card_id = $1`, [above.id]);
         await db.query(`delete from public.cards where id = $1`, [above.id]);
 
         const CHECK =
@@ -1411,6 +1414,7 @@ Deno.test("migrations on PGlite", {
           await row(`select horizon::text as horizon from public.cards where id = $1`, [named.id]),
           { horizon: "now" },
         );
+        await db.query(`delete from public.board_actions where card_id = $1`, [named.id]);
         await db.query(`delete from public.cards where id = $1`, [named.id]);
         await refuses(
           `select public.file_card('game', 'config', 'seed-1', 'Title', 'Intent', ${CHECK}, 3, 'proposed', $1, null)`,
@@ -1587,7 +1591,8 @@ Deno.test("migrations on PGlite", {
           },
         );
         await db.exec(
-          `delete from public.cards where id in ('${directive.id}', '${card.id}'); delete from public.board_notes where id = '${note.id}';`,
+          `delete from public.board_actions where card_id in ('${directive.id}', '${card.id}');
+           delete from public.cards where id in ('${directive.id}', '${card.id}'); delete from public.board_notes where id = '${note.id}';`,
         );
       },
     );

@@ -79,6 +79,8 @@ function helpers(db: PGlite) {
 
 /** The deployed webhook's call: nine named arguments. */
 const APPLY = `select public.apply_contribution(p_stripe_event_id => $1, p_contributor_id => $2, p_display_name => $3, p_amount_usd => $4, p_net_usd => $5, p_studio_pct => $6, p_goal_card_id => null, p_stripe_session_id => $7, p_payer_key => null) as r`;
+/** The same call naming a goal card, as $8. */
+const APPLY_GOAL = `select public.apply_contribution(p_stripe_event_id => $1, p_contributor_id => $2, p_display_name => $3, p_amount_usd => $4, p_net_usd => $5, p_studio_pct => $6, p_goal_card_id => $8::uuid, p_stripe_session_id => $7, p_payer_key => null) as r`;
 const REVERSE = `select public.reverse_contribution(p_stripe_event_id => $1, p_stripe_session_id => $2, p_kind => $3::public.contribution_entry, p_kind_total_usd => $4) as r`;
 
 Deno.test("the money tables are append-only, and corrections are new rows", {
@@ -174,14 +176,23 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       assertEquals((await identity()).holds, true);
     });
 
-    await t.step("a board action keeps its row when the card it names is deleted", async () => {
+    await t.step("a card a board action names cannot be deleted, so the action never loses its card", async () => {
       const card = (await row<{ id: string }>(
         `insert into public.cards (bucket, source, shape, lane, folder, title, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card to delete', 'proposed') returning id`,
       )).id;
       await db.query(`insert into public.board_actions (action, card_id, actor_email, reason) values ('file_card', $1, 'board@peanutgallery.games', 'filed')`, [card]);
-      await refuses(`update public.board_actions set card_id = null where card_id = $1`, "board_actions is append-only", [card]);
-      await db.query(`delete from public.cards where id = $1`, [card]);
-      assertEquals(await rows(`select card_id, reason from public.board_actions where action = 'file_card'`), [{ card_id: null, reason: "filed" }]);
+      await refuses(`update public.board_actions set card_id = null where card_id = $1`, "board_actions is append-only: UPDATE of card_id is refused", [card]);
+      await refuses(`delete from public.cards where id = $1`, "violates foreign key constraint \"board_actions_card_id_fkey\"", [card]);
+      assertEquals(await rows(`select card_id, reason from public.board_actions where action = 'file_card'`), [{ card_id: card, reason: "filed" }]);
+      assertEquals(
+        (await row(`select confdeltype from pg_constraint where conname = 'board_actions_card_id_fkey'`)).confdeltype,
+        "r",
+      );
+      // A card no board action names can still be deleted.
+      const unnamed = (await row<{ id: string }>(
+        `insert into public.cards (bucket, source, shape, lane, folder, title, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card nobody acted on', 'proposed') returning id`,
+      )).id;
+      await db.query(`delete from public.cards where id = $1`, [unnamed]);
     });
 
     await t.step("redact_contribution_name nulls one name with the second factor and records the action without it", async () => {
@@ -264,6 +275,53 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       for (const role of ["anon", "authenticated"]) {
         await asRole(role, () => refuses(`select public.record_dispute_reinstated('dp_3', 'cs_d', 10)`, "permission denied"));
       }
+    });
+
+    // A goal card's bar and public_card_funding stay the sum over the payment's rows through a held
+    // payment's release, a dispute, the win and a refund after it: the refund takes off only what the
+    // card holds, and the bar never goes below zero.
+    await t.step("a won dispute puts a goal payment back on its card, so a later refund leaves the bar at zero, not below", async () => {
+      const card = (await row<{ id: string }>(
+        `insert into public.cards (bucket, source, shape, lane, folder, title, stage, estimate_usd, funding_target_usd) values ('game', 'board', 'goal', 'config', 'seed-1', 'A goal card', 'voted', 100, 100) returning id`,
+      )).id;
+      const bar = async () => {
+        const funded = Number((await row<{ f: string }>(`select funded_usd as f from public.cards where id = $1`, [card])).f);
+        const view = (await rows<{ credited_usd: string; contributors: number }>(`select credited_usd, contributors from public.public_card_funding where card_id = $1`, [card]))[0];
+        return { funded, credited: Number(view?.credited_usd ?? 0), contributors: view?.contributors ?? 0 };
+      };
+      // Hold all but $5 of it, releasable at once.
+      await db.exec(`update public.studio_state set credit_daily_cap_usd = 5, credit_hold_days = 0 where id = 1`);
+      const paid = (await row<{ r: Row }>(APPLY_GOAL, ["evt_g", "contrib_g", null, 10, 9.41, 0, "cs_g", card])).r;
+      await db.exec(`update public.studio_state set credit_daily_cap_usd = 50, credit_hold_days = 14 where id = 1`);
+      assertEquals([paid.inserted, paid.goal_card_id, Number(paid.pool_credit_usd)], [true, card, 5]);
+      const held = Number(paid.held_usd);
+      assert(held > 0, "part of the payment is held");
+      assertEquals(Number((await row<{ r: Row }>(`select public.credit_held_contributions() as r`)).r.released_usd), held);
+      const credit = (await bar()).funded;
+      assertEquals(credit.toFixed(4), (5 + held).toFixed(4));
+      assertEquals(await bar(), { funded: credit, credited: credit, contributors: 1 });
+
+      const dispute = (await row<{ r: Row }>(REVERSE, ["evt_g_dispute", "cs_g", "dispute", 10])).r;
+      assertEquals(dispute.inserted, true);
+      const disputed = await bar();
+      assertEquals(disputed.credited, disputed.funded);
+      assert(disputed.funded >= 0 && disputed.funded < credit, `the dispute took the card's money: ${JSON.stringify(disputed)}`);
+      assertEquals((await identity()).holds, true);
+
+      const back = (await row<{ r: Row }>(`select public.record_dispute_reinstated('dp_g', 'cs_g', 10) as r`)).r;
+      assertEquals([back.inserted, back.goal_card_id, Number(back.goal_funded_usd)], [true, card, credit]);
+      assertEquals(await bar(), { funded: credit, credited: credit, contributors: 1 });
+      assertEquals((await row(`select goal_card_id from public.contributions where stripe_event_id = 'dp_g:reinstated'`)).goal_card_id, card);
+      assertEquals((await identity()).holds, true);
+
+      const refund = (await row<{ r: Row }>(REVERSE, ["evt_g_refund", "cs_g", "refund", 10])).r;
+      assertEquals([refund.inserted, refund.reversed_usd, refund.fully_reversed, Number(refund.goal_funded_usd)], [true, 10, true, 0]);
+      assertEquals(await bar(), { funded: 0, credited: 0, contributors: 0 });
+      assertEquals((await identity()).holds, true);
+      // A second refund event changes nothing.
+      const again = (await row<{ r: Row }>(REVERSE, ["evt_g_refund_again", "cs_g", "refund", 10])).r;
+      assertEquals([again.inserted, again.reversed_usd], [false, 0]);
+      assertEquals((await bar()).funded, 0);
     });
 
     await t.step("record_adjustment books a correction with the second factor and the ledger identity still holds", async () => {

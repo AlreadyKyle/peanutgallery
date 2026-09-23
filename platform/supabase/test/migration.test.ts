@@ -1539,15 +1539,19 @@ describe("append-only migration", () => {
     expect(appendOnlySql).toContain("contribution_allocations and card_approvals do not exist yet");
   });
 
-  it("lets through only decision_id set once, display_name nulled inside the privacy RPC, and a card_id its foreign key nulls", () => {
+  it("lets through only the plan's two exceptions: decision_id set once and display_name nulled inside the privacy RPC", () => {
     const guard = functionBlockIn(appendOnlySql, "refuse_money_change");
     expect(guard).not.toContain("security definer");
-    expect(guard.match(/return new;/g)).toHaveLength(4);
+    expect(guard.match(/return new;/g)).toHaveLength(3);
     expect(guard).toContain("if old.decision_id is null and new.decision_id is not null\n      and v_new - 'decision_id' = v_old - 'decision_id' then");
     expect(guard).toContain(
       "if old.display_name is not null and new.display_name is null\n      and v_new - 'display_name' = v_old - 'display_name'\n      and current_setting('peanutgallery.redact_name', true) = 'on' then",
     );
-    expect(guard).toContain("and not exists (select 1 from public.cards where id = old.card_id) then");
+    expect(guard).not.toContain("card_id");
+    // A card a board action names cannot be deleted, so no foreign key ever rewrites an action.
+    expect(appendOnlySql).toContain(
+      "alter table public.board_actions drop constraint if exists board_actions_card_id_fkey;\nalter table public.board_actions add constraint board_actions_card_id_fkey\n  foreign key (card_id) references public.cards (id) on delete restrict;",
+    );
     const redact = functionBlockIn(appendOnlySql, "redact_contribution_name");
     expect(redact).toContain(
       "perform set_config('peanutgallery.redact_name', 'on', true);\n  update public.contributions set display_name = null\n  where id = p_contribution_id and display_name is not null;\n  v_nulled := found;\n  perform set_config('peanutgallery.redact_name', 'off', true);",
@@ -1583,10 +1587,52 @@ describe("append-only migration", () => {
     const block = functionBlockIn(appendOnlySql, "record_dispute_reinstated");
     expect(block).toContain("v_ref := p_dispute_id || ':reinstated';");
     expect(block).toContain("where parent_id = v_payment.id and entry in ('dispute', 'reinstated');");
-    expect(block).toContain("'reinstated', v_payment.id, v_payment.rail, v_payment.contributor_id, -v_amount, -v_net,\n    -v_reserve, -v_agents, -v_studio, -v_incident,");
+    expect(block).toContain(
+      "'reinstated', v_payment.id, v_payment.rail, v_payment.contributor_id, -v_amount, -v_net,\n    -v_reserve, -v_agents, -v_studio, -v_incident, v_payment.studio_pct_chosen, v_payment.kind,\n    v_payment.public, v_payment.goal_card_id, v_ref, 0, now()",
+    );
     expect(block).toContain("balance_usd = balance_usd - (v_agents - v_incident)");
+    // The card's bar gets back what the pool balance does, so a later refund never takes it below zero.
+    expect(block).toContain("set funded_usd = funded_usd - (v_agents - v_incident)\n    where id = v_payment.goal_card_id;");
+    expect(block.indexOf("from public.cards where id = v_payment.goal_card_id for update")).toBeLessThan(block.indexOf("from public.pool where id = 1 for update"));
     expect(appendOnlySql).toContain(
       "revoke all on function public.record_dispute_reinstated(text, text, numeric) from public, anon, authenticated;\ngrant execute on function public.record_dispute_reinstated(text, text, numeric) to service_role;",
     );
+  });
+});
+
+// The production proof after the money-safety files are applied is anon-negative-test.ts, so it must
+// probe every private object they add: each new table as a private table, and each new function as an
+// RPC anon is refused with 42501.
+describe("anon-negative-test covers the money-safety objects", () => {
+  const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+  const block = (name: string) => {
+    const start = script.indexOf(`const ${name}`);
+    return script.slice(start, script.indexOf("];", start));
+  };
+  const moneySafety = [backupSql, appendOnlySql].map(withoutComments).join("\n");
+
+  it("lists every table the files create as private", () => {
+    const tables = [...moneySafety.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]!);
+    expect(tables).toEqual(["controller_runs"]);
+    for (const table of tables) expect(block("PRIVATE_TABLES")).toContain(`"${table}"`);
+  });
+
+  it("probes every function the files revoke from anon", () => {
+    const functions = [...new Set([...moneySafety.matchAll(/revoke all on function public\.(\w+)\([^)]*\) from public, anon/g)].map((m) => m[1]!))].sort();
+    expect(functions).toEqual([
+      "controller_figures",
+      "ledger_identity",
+      "ops_database_size",
+      "record_adjustment",
+      "record_dispute_reinstated",
+      "redact_contribution_name",
+      "refuse_money_change",
+      "reverse_contribution",
+    ]);
+    // The trigger function is not an RPC PostgREST serves, and reverse_contribution's grant predates
+    // these files and is unchanged by them.
+    for (const name of functions.filter((f) => f !== "refuse_money_change" && f !== "reverse_contribution")) {
+      expect(block("RPC_PROBES")).toContain(`["${name}", {`);
+    }
   });
 });

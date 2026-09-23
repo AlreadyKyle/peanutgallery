@@ -75,7 +75,7 @@ begin
   grant select on all tables in schema auth to peanutgallery_backup;
 exception
   when insufficient_privilege or invalid_schema_name then
-    raise notice 'peanutgallery_backup: the auth schema grant was refused (%); the auth dump needs the database password instead', sqlerrm;
+    raise notice 'peanutgallery_backup: the auth schema grant was refused (%); the backups set BACKUP_SKIP_AUTH=1 and leave auth out', sqlerrm;
 end
 $$;
 

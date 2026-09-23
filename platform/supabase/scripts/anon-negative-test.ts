@@ -31,6 +31,7 @@ const PRIVATE_TABLES = [
   "credit_purchases",
   "dispatcher_lease",
   "card_patches",
+  "controller_runs",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -64,7 +65,10 @@ const UNDEFINED_COLUMN = "42703";
 const PUBLIC_ROLE_COLUMNS = "id,name,title,description,species_note,avatar_url,model,write_access,state,hired_at";
 
 // Each call is refused by the function itself if the grant is wrong: a holder
-// that holds nothing, a ttl of 0, no reason, a card id that does not exist.
+// that holds nothing, a ttl of 0, no reason, a card id that does not exist, a
+// dispute id that is not one. The three money-safety readers take no argument
+// and write nothing (docs/specs/money-safety.md); a wrong grant would only let
+// the call run, which this reports without printing what it returned.
 const NO_CARD = "00000000-0000-4000-8000-000000000000";
 const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["claim_dispatcher_lease", { p_holder: "anon-negative-test", p_ttl_seconds: 0 }],
@@ -74,6 +78,12 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["set_card_horizon", { p_card: NO_CARD, p_horizon: "later", p_rank: null, p_reason: null }],
   ["cancel_card", { p_card: NO_CARD, p_reason: null }],
   ["resume_card", { p_card: NO_CARD, p_estimate_usd: 0, p_reason: null }],
+  ["ledger_identity", {}],
+  ["controller_figures", {}],
+  ["ops_database_size", {}],
+  ["record_dispute_reinstated", { p_dispute_id: "anon-negative-test", p_stripe_session_id: "", p_amount_usd: 0 }],
+  ["record_adjustment", { p_parent_id: NO_CARD, p_net_usd: 0, p_studio_usd: 0, p_agents_usd: 0, p_reserve_usd: 0, p_reason: null }],
+  ["redact_contribution_name", { p_contribution_id: NO_CARD, p_reason: null }],
 ];
 
 type Actual = "refused" | "readable" | "empty" | "error";
