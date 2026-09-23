@@ -66,16 +66,16 @@ Out:
 
 ## Acceptance criteria
 
-- [ ] /contribute, with `public_money` loaded (e2e): Pick for me is first and says "Next in line: <title of the first `funding_order` card>", or the waits line when the order is empty; the card choices are exactly the `funding_order` cards in order (fixture: a funded card below its target first in line is first; a vetoed card absent from the order is absent), each linking the Payment Link with its `client_reference_id`; the waterfall line shows under them; a card's live Fund this button renders only when the card is in `funding_order`.
-- [ ] With `public_money` failing (e2e): /contribute shows Pick for me naming no card and no card choices or Fund this buttons, and each /ledger part fed by a failed read (`money` or `stopped`) says "Not available right now." instead of a figure.
-- [ ] The Money in band shows the eight figures from `public_money`, each with a description, and held money and corrections only when not zero; a unit test renders a fixture with every figure non-zero and asserts the shown figures satisfy received − fees − refunded − disputed + corrections = reserve + studio + emergency fund + held + agent credit.
-- [ ] /ledger (e2e fixture variants): Not on a card yet always shows from `not_on_card_usd`; the shortfall line shows if and only if `short_usd` > 0; the board test line if and only if `board_test_usd` > 0; "No contributions yet." replaces the Money in figures if and only if `payments` is 0; the average-split sentence shows if and only if `studio_pct_avg` is not null.
-- [ ] Exactly one reconciliation line shows: "Reconciled with Stripe on <date>" when `last_run_ok` is true, "Not yet reconciled with Stripe" when it is null (no run) or false (e2e, all three).
-- [ ] A rejected card (e2e fixture with moves to two cards and to Not on a card yet) shows under Didn't ship with its reason in plain words, what it spent, "funded by $X from N supporters", and each destination with its amount.
-- [ ] A paused card shows under Paused with its state tag, its reason in plain words, what it spent and that its money stays on it; with no stopped rows the Stopped band is not drawn, each list is drawn only with rows, and a `failing_check` with no entry in `legal.failingCheckWords` shows its stage's fallback, never the code (unit test).
-- [ ] Home's status line and the paused notice on /contribute show the identical `pausedSentence` for each of `awaiting_credit`, `spend_limit`, `incident` and `board`, the general line when `pause_reason` is null, and nothing when not paused or the studio row did not load (unit tests and `paused.spec.ts`).
-- [ ] `MoneyIn.tsx` and `Stopped.tsx` are in `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` and the parity test passes; `legal.fixedRules[0]` is the new sentence and `docs.test.mjs` still finds the ledger in it; `BACKLOG.md` and PLAN §4 Not built yet no longer list "Split aggregate on the meter" or "Handling a dispute the studio wins"; PLAN §4 The Board's public list names money in, the reconciliation status, Not on a card yet and the shortfall, and stopped cards with their money trail.
-- [ ] With `live-studio.ts` carrying `public_money` and `public_stopped_cards` rows (a paused and a rejected card), `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on /contribute and /ledger at 375, 768 and 1440.
+- [x] /contribute, with `public_money` loaded (e2e): Pick for me is first and says "Next in line: <title of the first `funding_order` card>", or the waits line when the order is empty; the card choices are exactly the `funding_order` cards in order (fixture: a funded card below its target first in line is first; a vetoed card absent from the order is absent), each linking the Payment Link with its `client_reference_id`; the waterfall line shows under them; a card's live Fund this button renders only when the card is in `funding_order`.
+- [x] With `public_money` failing (e2e): /contribute shows Pick for me naming no card and no card choices or Fund this buttons, and each /ledger part fed by a failed read (`money` or `stopped`) says "Not available right now." instead of a figure.
+- [x] The Money in band shows the eight figures from `public_money`, each with a description, and held money and corrections only when not zero; a unit test renders a fixture with every figure non-zero and asserts the shown figures satisfy received − fees − refunded − disputed + corrections = reserve + studio + emergency fund + held + agent credit.
+- [x] /ledger (e2e fixture variants): Not on a card yet always shows from `not_on_card_usd`; the shortfall line shows if and only if `short_usd` > 0; the board test line if and only if `board_test_usd` > 0; "No contributions yet." replaces the Money in figures if and only if `payments` is 0; the average-split sentence shows if and only if `studio_pct_avg` is not null.
+- [x] Exactly one reconciliation line shows: "Reconciled with Stripe on <date>" when `last_run_ok` is true, "Not yet reconciled with Stripe" when it is null (no run) or false (e2e, all three).
+- [x] A rejected card (e2e fixture with moves to two cards and to Not on a card yet) shows under Didn't ship with its reason in plain words, what it spent, "funded by $X from N supporters", and each destination with its amount.
+- [x] A paused card shows under Paused with its state tag, its reason in plain words, what it spent and that its money stays on it; with no stopped rows the Stopped band is not drawn, each list is drawn only with rows, and a `failing_check` with no entry in `legal.failingCheckWords` shows its stage's fallback, never the code (unit test).
+- [x] Home's status line and the paused notice on /contribute show the identical `pausedSentence` for each of `awaiting_credit`, `spend_limit`, `incident` and `board`, the general line when `pause_reason` is null, and nothing when not paused or the studio row did not load (unit tests and `paused.spec.ts`).
+- [x] `MoneyIn.tsx` and `Stopped.tsx` are in `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` and the parity test passes; `legal.fixedRules[0]` is the new sentence and `docs.test.mjs` still finds the ledger in it; `BACKLOG.md` and PLAN §4 Not built yet no longer list "Split aggregate on the meter" or "Handling a dispute the studio wins"; PLAN §4 The Board's public list names money in, the reconciliation status, Not on a card yet and the shortfall, and stopped cards with their money trail.
+- [x] With `live-studio.ts` carrying `public_money` and `public_stopped_cards` rows (a paused and a rejected card), `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on /contribute and /ledger at 375, 768 and 1440.
 - [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games.
 
 ## Verification
@@ -99,7 +99,54 @@ Board items (listed, none blocks this pull request):
 
 ## Evidence
 
-Added when the status moves to built or done.
+Built on `launch/money-surfaces` from `launch/money-logic` at 33274fd (stacked on money-logic, which had not merged). No SQL. The production lines of Verification and the production steps are the ship stage's and are not run here; the last criterion's production half waits on the deploy, after money-logic's migration puts `public_money` and `public_stopped_cards` in production (today both answer `PGRST205 Could not find the table ... in the schema cache` to the anon key).
+
+`pnpm verify` at the repository root, with both `dist-e2e` folders deleted first, exits 0:
+
+```
+platform/board test:       Tests  71 passed (71)
+platform/supabase test:       Tests  286 passed (286)
+platform/site test:       Tests  415 passed (415)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  619 passed (619)
+platform/gate test: PASS: gate tests passed=508
+PASS: payment-host-scan files=7 allowed=0
+PASS: banned-phrases files=499 paths=575 message=yes
+docs.test.mjs: pass 15, fail 0
+rename.test.mjs: pass 6, fail 0
+exit 0
+```
+
+`pnpm --filter @backseat/site test`: `Tests  415 passed (415)`, among them `MoneyIn.test.tsx` (every figure non-zero, the shown figures read back from the page satisfy received - fees - refunded - disputed + corrections = reserve + studio + emergency fund + held + agent credit, 101.50 = 101.50; held and corrections left out at zero; "No contributions yet."; exactly one reconciliation line for a pass, no run and a failed run), `Stopped.test.tsx` (the Paused and Didn't ship rows; an unknown code shows its stage's fallback, never the code; nothing drawn with no rows), `PausedNotice.test.tsx` (each reason, the general line for a null or unknown reason, nothing when not paused or the studio row did not load), `cards.test.ts` (`fundableCards`, `nextInLine`, `inFundingOrder`: a funded card below its target first, a vetoed card absent, nothing when `public_money` did not load), `Contribute.test.tsx`, `Landing.test.tsx` (the status line for each reason), `Ledger.test.tsx`, `Cards.test.tsx` (a live Fund this card only for a card in the order) and `source.test.ts` (the two reads, their columns, order and limit, and each named missing when it fails or carries a malformed figure).
+
+The kernel lists: `platform/dispatcher/test/worktree.test.ts` (the `KERNEL_PATHS` = `kernel-paths.txt` parity) and `site-kernel.test.ts` (`MoneyIn.tsx`, `Stopped.tsx` and `PausedNotice.tsx` are kernel and import only kernel files): `Tests  36 passed (36)`; `bash platform/gate/test/run-tests.sh`: `PASS: gate tests passed=508`.
+
+`E2E_PORT=4457 pnpm --filter @backseat/site e2e` (the full suite, `design.spec.ts` axe WCAG 2.2 AA and `layout-balance.spec.ts` at 320 to 1440 on the launch-shaped fixture, now carrying `public_money` and a paused and a rejected card):
+
+```
+Running 129 tests using 4 workers
+  5 skipped
+  124 passed (2.2m)
+```
+
+It includes the new `e2e/money.spec.ts` (/contribute follows the funding order; the empty order; `public_money` and `public_stopped_cards` failing on /contribute, home and /ledger; Money in's eight figures, the three reconciliation variants, "No contributions yet.", held money and corrections with no average split; Not on a card yet, the shortfall and the board's test payment; the Paused and Didn't ship rows with the money trail) and `paused.spec.ts` (the general line at 375 and 1440, each of the four reasons on / and /contribute, and a stale reason while not paused). The run before the fixes found two layout findings, both fixed: the status line's pause glyph beside a long reason at 320px (the pair is now marked as a marker, not two columns) and a card missing from the funding order in the seven-card fixture.
+
+`E2E_ROUTE_SHOTS=<folder> E2E_PORT=4457 pnpm --filter @backseat/site e2e`: /contribute and /ledger at 375, 768 and 1440 were looked at (the Funding band with Not on a card yet and the test payment line, Money in on ink, Stopped cards with a paused and a rejected row, /contribute's next-in-line line and ordered choices). One fix came of it: the waterfall line sat flush under the last choice, and the list now has `--space-3` under it; the second pass at 1440 showed the gap.
+
+The live check against a local `vite preview` of a build with `netlify.toml`'s production values (`node platform/site/scripts/live-check.mjs http://localhost:4458 --allow-no-data`):
+
+```
+FAIL live-check http://localhost:4458 passed=211 failed=2 skipped=11
+FAIL 375px no console errors: Failed to load resource: the server responded with a status of 404 () | ...
+FAIL 1440px no console errors: Failed to load resource: the server responded with a status of 404 () | ...
+PASS status line: 6 cards are open for funding. The agents are paused. Funded cards keep their money and wait in the queue until the board resumes them.
+PASS Fund the next card in line first -> https://buy.stripe.com/dRm28s4ie0zp6BU0qEafS01
+SKIP Fund the next card in line names the next card in line (public_money): the site has no live data
+SKIP /ledger reconciliation line and money in: the site has no live data
+```
+
+The two failures are the reads of `public_money` and `public_stopped_cards`, which production does not have until money-logic's migration is applied (404, `PGRST205`); every route passed its status, h1, bands, overflow and no-dead-space checks at both widths. The money checks run against production after the deploy (production step 2).
+
 
 ## Decisions
 
