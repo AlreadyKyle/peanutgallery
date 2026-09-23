@@ -13,6 +13,7 @@ import {
   commitMessage,
   commitTitle,
   commitTrailers,
+  createScratchWorktree,
   createWorktree,
   defaultGitRunner,
   git,
@@ -29,7 +30,9 @@ import {
   outsideLane,
   parseStatus,
   protectedPaths,
+  readFileAtSha,
   removeWorktree,
+  scratchPath,
   setGitRunner,
   shortId,
   singleLineTitle,
@@ -458,6 +461,22 @@ describe('the committed range and the git state', () => {
     expect(await git(['rev-parse', 'HEAD'], worktree.path)).toBe(base);
     expect(readFileSync(path.join(repo, '.git', 'config'), 'utf8')).not.toContain('[branch');
     await removeWorktree(repo, worktree.path, worktree.branch);
+  });
+
+  it('makes a detached scratch checkout of main for a job run, reads files at its sha, and removes it', async () => {
+    const runId = 'cccccccc-0000-4000-8000-000000000000';
+    const scratch = await createScratchWorktree(repo, path.join(dir, 'worktrees'), runId, {});
+    expect(scratch).toEqual({ path: scratchPath(path.join(dir, 'worktrees'), runId), baseSha: base });
+    expect(path.basename(scratch.path)).toBe('job-cccccccc');
+    expect(await git(['rev-parse', '--abbrev-ref', 'HEAD'], scratch.path)).toBe('HEAD');
+    // An edit in the checkout never changes what main reads.
+    await writeFile(path.join(scratch.path, 'seed-1', 'config', 'spawn-table.json'), '{"rows":[]}\n', 'utf8');
+    expect(await readFileAtSha(repo, base, 'seed-1/config/spawn-table.json')).toBe('{"rows":[{"id":"gatherer","baseCost":10}]}\n');
+    expect(await readFileAtSha(repo, base, 'seed-1/config/missing.json')).toBeNull();
+    await expect(readFileAtSha(repo, base, '../etc/passwd')).rejects.toThrow('not a repository path');
+    await expect(readFileAtSha(repo, 'main', 'seed-1/config/spawn-table.json')).rejects.toThrow('not a commit sha');
+    await removeWorktree(repo, scratch.path, null);
+    expect(existsSync(scratch.path)).toBe(false);
   });
 
   it('passes one clean lane commit on the base', async () => {
