@@ -1,6 +1,9 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 import {
+  CARD_COLUMNS,
   CARD_STAGES,
   createSupabaseSource,
   DEPLOY_LIMIT,
@@ -8,6 +11,7 @@ import {
   EVENT_LIMIT,
   QUERY_TIMEOUT_MS,
   REALTIME_LISTENERS,
+  ROLE_COLUMNS,
   type Snapshot,
 } from './source';
 
@@ -52,6 +56,9 @@ function rowsFor(query: Query): unknown {
           shape: 'goal',
           bucket: 'game',
           folder: 'seed-1',
+          horizon: 'now',
+          rank: 2,
+          executor_role_id: 'r1',
           funding_target_usd: '100.0000',
           funded_usd: '25.0000',
           created_at: '2026-09-14T00:00:00Z',
@@ -64,7 +71,7 @@ function rowsFor(query: Query): unknown {
     case 'public_card_funding':
       return [{ card_id: 'c1', contributors: '3', credited_usd: '18.5000' }];
     case 'public_studio':
-      return { launched_at: '2026-09-20T00:00:00Z' };
+      return { launched_at: '2026-09-20T00:00:00Z', paused: true };
     case 'public_ledger_totals':
       return {
         usd_total: '1.2500',
@@ -81,8 +88,20 @@ function rowsFor(query: Query): unknown {
       ];
     case 'deploys':
       return [];
-    case 'roles':
-      return [{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }];
+    case 'public_roles':
+      return [
+        {
+          id: 'r1',
+          name: 'Builder A',
+          title: 'Builder A',
+          description: 'Builds game cards.',
+          species_note: 'A small blue creature with two round antennae and stubby legs.',
+          model: 'claude-sonnet-5',
+          write_access: true,
+          state: 'active',
+          hired_at: '2026-09-14T00:00:00Z',
+        },
+      ];
     default:
       throw new Error(`Unexpected table ${query.table}`);
   }
@@ -216,9 +235,11 @@ describe('createSupabaseSource.load', () => {
     expect(pool.terminal).toBe('maybeSingle');
 
     const cards = query(fake.queries, 'cards');
-    expect(cards.select).toBe(
-      'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,created_at,updated_at,live_at',
+    // horizon and rank must stay in the anon column grant on cards (20260922000300_backlog.sql).
+    expect(CARD_COLUMNS).toBe(
+      'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at',
     );
+    expect(cards.select).toBe(CARD_COLUMNS);
     expect([...CARD_STAGES]).toEqual(['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live']);
     expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
     expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
@@ -232,7 +253,7 @@ describe('createSupabaseSource.load', () => {
     expect(spend.terminal).toBe('returns');
 
     const studio = query(fake.queries, 'public_studio');
-    expect(studio.select).toBe('launched_at');
+    expect(studio.select).toBe('launched_at,paused');
     expect(studio.terminal).toBe('maybeSingle');
 
     expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
@@ -243,12 +264,14 @@ describe('createSupabaseSource.load', () => {
     expect(events.limit).toBe(EVENT_LIMIT);
 
     const deploys = query(fake.queries, 'deploys');
-    expect(deploys.select).toBe('id,folder,sha,is_green,smoke_result,created_at');
+    // The smoke bot's raw output is not read at all; the site shows only passed or failed.
+    expect(deploys.select).toBe('id,folder,sha,is_green,created_at');
     expect(deploys.orders).toEqual([{ column: 'created_at', ascending: false }]);
     expect(deploys.limit).toBe(DEPLOY_LIMIT);
 
-    const roles = query(fake.queries, 'roles');
-    expect(roles.select).toBe('id,title,write_access,state');
+    const roles = query(fake.queries, 'public_roles');
+    expect(ROLE_COLUMNS).toBe('id,name,title,description,species_note,model,write_access,state,hired_at');
+    expect(roles.select).toBe(ROLE_COLUMNS);
     expect(roles.orders).toEqual([
       { column: 'hired_at', ascending: true },
       { column: 'title', ascending: true },
@@ -273,6 +296,9 @@ describe('createSupabaseSource.load', () => {
         shape: 'goal',
         bucket: 'game',
         folder: 'seed-1',
+        horizon: 'now',
+        rank: 2,
+        executor_role_id: 'r1',
         funding_target_usd: 100,
         funded_usd: 25,
         spent_usd: 0.42,
@@ -283,6 +309,7 @@ describe('createSupabaseSource.load', () => {
     ]);
     expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });
     expect(snapshot.launchedAt).toBe('2026-09-20T00:00:00Z');
+    expect(snapshot.paused).toBe(true);
     expect(snapshot.totals).toEqual({
       usd_total: 1.25,
       input_tokens: 12000,
@@ -291,7 +318,20 @@ describe('createSupabaseSource.load', () => {
       row_count: 3,
     });
     expect(snapshot.events).toHaveLength(3);
-    expect(snapshot.roles).toEqual([{ id: 'r1', title: 'Builder A', write_access: true, state: 'active' }]);
+    expect(snapshot.roles).toEqual([
+      {
+        id: 'r1',
+        name: 'Builder A',
+        title: 'Builder A',
+        description: 'Builds game cards.',
+        species_note: 'A small blue creature with two round antennae and stubby legs.',
+        model: 'claude-sonnet-5',
+        write_access: true,
+        state: 'active',
+        hired_at: '2026-09-14T00:00:00Z',
+      },
+    ]);
+    expect(fake.queries.some((q) => q.table === 'roles')).toBe(false);
     expect(snapshot.missing).toEqual([]);
     // Every query, the title lookup included, carries a timeout signal.
     expect(fake.queries.map((q) => [q.table, q.signal instanceof AbortSignal])).toEqual(
@@ -371,7 +411,14 @@ describe('createSupabaseSource.load', () => {
   const enrichments: [string, string, (snapshot: Snapshot) => void][] = [
     ['funding', 'public_card_funding', (s) => expect(s.funding).toEqual({})],
     ['spend', 'public_card_spend', (s) => expect(s.cards[0]?.spent_usd).toBe(0)],
-    ['studio', 'public_studio', (s) => expect(s.launchedAt).toBeNull()],
+    [
+      'studio',
+      'public_studio',
+      (s) => {
+        expect(s.launchedAt).toBeNull();
+        expect(s.paused).toBe(false);
+      },
+    ],
     ['totals', 'public_ledger_totals', (s) => expect(s.totals.usd_total).toBe(0)],
     [
       'events',
@@ -382,7 +429,7 @@ describe('createSupabaseSource.load', () => {
       },
     ],
     ['deploys', 'deploys', (s) => expect(s.deploys).toEqual([])],
-    ['roles', 'roles', (s) => expect(s.roles).toEqual([])],
+    ['roles', 'public_roles', (s) => expect(s.roles).toEqual([])],
   ];
 
   for (const [name, table, fallback] of enrichments) {
@@ -420,6 +467,51 @@ describe('createSupabaseSource.load', () => {
     });
     const snapshot = await createSupabaseSource(fake.client).load();
     expect(snapshot.missing).toEqual(['funding', 'totals']);
+  });
+});
+
+describe('horizon, rank and pause', () => {
+  it('reads a card with no horizon as horizon now and keeps next and later', async () => {
+    const base = (rowsFor(emptyQuery('cards')) as Record<string, unknown>[])[0]!;
+    const fake = fakeClient({
+      rows: {
+        cards: [
+          { ...base, id: 'old', horizon: null, rank: null },
+          { ...base, id: 'n', horizon: 'next', rank: '3' },
+          { ...base, id: 'l', horizon: 'later', rank: null },
+        ],
+      },
+    });
+    const snapshot = await createSupabaseSource(fake.client).load();
+    expect(snapshot.cards.map((card) => [card.id, card.horizon, card.rank])).toEqual([
+      ['old', 'now', null],
+      ['n', 'next', 3],
+      ['l', 'later', null],
+    ]);
+  });
+
+  it('reads paused as false unless the studio row says true', async () => {
+    const fake = fakeClient({ rows: { public_studio: { launched_at: null, paused: null } } });
+    expect((await createSupabaseSource(fake.client).load()).paused).toBe(false);
+  });
+});
+
+describe('the roles table', () => {
+  /** Every non-test source file under src, read as text. */
+  function sources(dir: string): [string, string][] {
+    return readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) return sources(path);
+      if (!/\.(ts|tsx)$/.test(name) || /\.test\./.test(name)) return [];
+      return [[path, readFileSync(path, 'utf8')] as [string, string]];
+    });
+  }
+
+  it('is never queried by the site, which reads public_roles instead', () => {
+    const offenders = sources(resolve(process.cwd(), 'src'))
+      .filter(([, text]) => /\.from\(\s*['"]roles['"]\s*\)/.test(text))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
   });
 });
 

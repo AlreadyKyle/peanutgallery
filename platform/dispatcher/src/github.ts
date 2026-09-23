@@ -94,16 +94,31 @@ function toPullRequest(json: Record<string, unknown>): PullRequest {
 
 export type GateStatus = { state: 'pass' } | { state: 'fail'; conclusion: string } | { state: 'pending' } | { state: 'missing' };
 
+// The GitHub Actions app. Any app with checks:write can post a check run named gate, so only the
+// ones Actions created count. Among workflows only gate.yml defines a job named gate: the gate
+// tests read every file in .github/workflows (a kernel path) and fail on a second one, so an
+// Actions run named gate comes from gate.yml.
+export const ACTIONS_APP_SLUG = 'github-actions';
+
+function isActionsGateRun(run: Record<string, unknown>): boolean {
+  return run.name === GATE_CHECK_NAME && isRecord(run.app) && run.app.slug === ACTIONS_APP_SLUG;
+}
+
+// Every Actions gate run on the sha must pass. The API's default filter keeps each run's latest
+// attempt, so a re-run replaces the attempt it repeats. Missing: no Actions gate run yet. Fail: any
+// completed run concluded other than success, cancelled included. Pending: none failed and one is
+// still running. Pass: all completed with success.
 export async function gateStatus(opts: GitHubOptions, sha: string): Promise<GateStatus> {
   const result = await request(opts, 'GET', `/repos/${opts.repo}/commits/${sha}/check-runs?check_name=${GATE_CHECK_NAME}&per_page=50`);
   if (result.status !== 200 || !isRecord(result.json)) {
     throw new Error(`github check-runs: http ${result.status} ${apiMessage(result.json)}`.trim());
   }
-  const runs = Array.isArray(result.json.check_runs) ? result.json.check_runs.filter(isRecord) : [];
-  const gate = runs.find((run) => run.name === GATE_CHECK_NAME);
-  if (!gate) return { state: 'missing' };
-  if (gate.status !== 'completed') return { state: 'pending' };
-  return gate.conclusion === 'success' ? { state: 'pass' } : { state: 'fail', conclusion: String(gate.conclusion ?? 'unknown') };
+  const runs = (Array.isArray(result.json.check_runs) ? result.json.check_runs.filter(isRecord) : []).filter(isActionsGateRun);
+  if (runs.length === 0) return { state: 'missing' };
+  const failed = runs.find((run) => run.status === 'completed' && run.conclusion !== 'success');
+  if (failed) return { state: 'fail', conclusion: String(failed.conclusion ?? 'unknown') };
+  if (runs.some((run) => run.status !== 'completed')) return { state: 'pending' };
+  return { state: 'pass' };
 }
 
 export interface PollOptions {
@@ -123,6 +138,13 @@ export async function waitForGate(opts: GitHubOptions, sha: string, poll: PollOp
     status = await gateStatus(opts, sha);
   }
   return status;
+}
+
+// Closes a pull request the dispatcher will not merge. A pull request already closed or merged is
+// left as it is.
+export async function closePullRequest(opts: GitHubOptions, number: number): Promise<void> {
+  const result = await request(opts, 'PATCH', `/repos/${opts.repo}/pulls/${number}`, { state: 'closed' });
+  if (result.status !== 200) throw new Error(`github close pull request ${number}: http ${result.status} ${apiMessage(result.json)}`.trim());
 }
 
 export interface PullState {

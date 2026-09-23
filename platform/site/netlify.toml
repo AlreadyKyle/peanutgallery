@@ -1,8 +1,11 @@
 [build]
   command = "pnpm --filter @backseat/site build"
   publish = "dist"
-  # Skip the build only when a previous successful build exists, differs, and touched nothing here.
-  ignore = 'test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml ../../tsconfig.base.json'
+  # A card/* branch never builds: its pull request is opened before the gate runs, so a deploy
+  # preview would publish ungated card code. Every other pull request still gets its preview.
+  # Otherwise skip the build only when a previous successful build exists, differs, and touched
+  # nothing here.
+  ignore = 'case "$HEAD" in card/*) exit 0 ;; esac; test -n "$CACHED_COMMIT_REF" && test "$CACHED_COMMIT_REF" != "$COMMIT_REF" && git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml ../../tsconfig.base.json'
 
 [build.environment]
   NODE_VERSION = "22"
@@ -25,10 +28,12 @@
   to = "/index.html"
   status = 200
 
-# Security headers on every path, the SPA rewrite included (docs/specs/site-truth-pass.md). Only
-# frame-ancestors is enforced. The full policy is report-only: the script, the stylesheet and every
-# image are same-origin, the /board QR code is a data: URL, and the one other origin the page
-# reaches is the Supabase project above, over https (REST and auth) and wss (realtime).
+# Security headers on every path, the SPA rewrite included (docs/specs/site-truth-pass.md).
+# frame-ancestors and connect-src are enforced: the page may connect only to itself and to the
+# Supabase project above, over https (REST and auth) and wss (realtime), so script on this origin
+# cannot send data anywhere else (docs/specs/launch-site.md). It does not stop a same-origin call to
+# Supabase. The full policy stays report-only: the script, the stylesheet and every image are
+# same-origin, and the /board QR code is a data: URL.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -36,5 +41,5 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    Content-Security-Policy = "frame-ancestors 'none'"
+    Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co"
     Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"

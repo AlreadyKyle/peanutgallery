@@ -14,6 +14,20 @@
   --ink-hover: #333333; /* primary button on hover */
   --field: #8a8a8a; /* form field borders, 3.5:1 on --paper as a non-text control */
 
+  /* Agent avatars (/team). Fills only: every shape has an --ink outline, so none carries meaning by
+     colour and each reads on --paper whatever its fill. Named for the colour words in species notes. */
+  --creature-blue: #8db9e8;
+  --creature-lavender: #cbbdee;
+  --creature-green: #9bd3a6;
+  --creature-pink: #f3b0c6;
+  --creature-orange: #f5b97a;
+  --creature-yellow: #f5dc7a;
+  --creature-purple: #b39ae0;
+  --creature-grey: #c3c7cc;
+  --creature-teal: #7fcbc5;
+  --creature-red: #eb9a9a;
+  --creature-brown: #cfa77c;
+
   /* Type */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -126,6 +140,15 @@ h2 {
 h3 {
   font-size: var(--size-body);
   font-weight: var(--weight-strong);
+}
+
+/* Roadmap card titles, under a category h3. */
+h4 {
+  margin: 0;
+  text-wrap: balance;
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-heading);
 }
 
 p {
@@ -649,28 +672,44 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--line);
 }
 
-/* Shipped: rows at the reading measure, hairlines between them, newest first. */
-.shipped {
+/* Shipped and the roadmap: rows at the reading measure, hairlines between them. */
+.shipped,
+.planned {
   max-width: var(--measure);
   margin: 0 0 var(--space-2);
 }
 
-.shipped li {
+.shipped li,
+.planned li {
   padding-block: var(--space-2);
   border-top: 1px solid var(--line);
 }
 
-.shipped li:last-child {
+.shipped li:last-child,
+.planned li:last-child {
   border-bottom: 1px solid var(--line);
 }
 
 .shipped h3,
-.shipped p {
+.shipped p,
+.planned h4,
+.planned p {
   margin-bottom: var(--space-1);
 }
 
-.shipped p:last-child {
+.shipped p:last-child,
+.planned p:last-child {
   margin-bottom: 0;
+}
+
+.planned-group {
+  margin-bottom: var(--space-3);
+}
+
+.planned-group h3 {
+  margin-bottom: var(--space-1);
+  color: var(--muted);
+  font-size: var(--size-small);
 }
 
 .shipped-category {
@@ -701,6 +740,144 @@ button.link:hover:not(:disabled) {
 
 .failed {
   font-weight: var(--weight-bold);
+}
+
+/* Paused notice: one line in a box, so it is seen before the figures it qualifies. */
+.notice {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius-box);
+  font-weight: var(--weight-strong);
+}
+
+.panel .notice {
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* How it works: six steps, each a short text beside the real component that shows it. The visual
+   sits in a dashed frame with its Example label, so it never reads as something to act on. */
+.how-steps {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0 0 var(--space-5);
+  counter-reset: how-step;
+}
+
+.how-step {
+  display: grid;
+  gap: var(--space-3);
+  counter-increment: how-step;
+}
+
+.how-text h2::before {
+  content: counter(how-step) '. ';
+}
+
+.how-text p {
+  max-width: var(--measure);
+}
+
+.example {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--field);
+  border-radius: var(--radius-box);
+}
+
+.example-label {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+}
+
+.example-caption {
+  font-weight: var(--weight-body);
+}
+
+.example .card-grid,
+.example .shipped,
+.example .stats {
+  margin: 0;
+}
+
+.example .card-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The team: one box per agent, with its code-drawn avatar on top. */
+.team-grid {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.role .avatar {
+  display: block;
+  width: 6rem;
+  height: auto;
+  margin-bottom: var(--space-2);
+}
+
+.role h3 {
+  margin-bottom: 0;
+}
+
+.role .card-category {
+  margin-bottom: var(--space-1);
+  font-size: var(--size-small);
+}
+
+.avatar-body {
+  fill: var(--avatar-fill);
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.avatar-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.avatar-thick {
+  stroke-width: 4;
+}
+
+.avatar-thin {
+  stroke-width: 2;
+}
+
+.avatar-eye {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.avatar-pupil {
+  fill: var(--ink);
+}
+
+.avatar-ground {
+  fill: var(--track);
+}
+
+/* /board card controls: one form per card, hairlines between them. */
+.board-cards li {
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.board-cards li:last-child {
+  border-bottom: 1px solid var(--line);
 }
 
 /* Footer ----------------------------------------------------------------- */
@@ -756,6 +933,7 @@ button.link:hover:not(:disabled) {
 /* Board page only: its sections and forms carry no class. */
 section:not(.section) + section,
 section + form,
+form + section,
 form + form {
   margin-top: var(--space-4);
 }
@@ -832,12 +1010,24 @@ input[type='radio'] {
 /* Wider screens ------------------------------------------------------------ */
 
 @media (min-width: 48rem) {
-  .card-grid {
+  .card-grid,
+  .team-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .how-step {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  /* Text and visual alternate sides from one step to the next. */
+  .how-step:nth-child(even) .how-text {
+    order: 2;
   }
 }
 
@@ -847,12 +1037,9 @@ input[type='radio'] {
     align-items: start;
   }
 
-  .card-grid {
+  .card-grid,
+  .team-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .steps {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .columns {

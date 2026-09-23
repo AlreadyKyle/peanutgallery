@@ -1,15 +1,16 @@
 #!/bin/sh
 # dispatcher-entrypoint.sh: the container's command under tini (Dockerfile.dispatcher).
-# Checks the pinned claude CLI, the code clone and the work clone's https origin, then execs the
-# dispatcher from the code clone so it receives tini's signals directly.
+# Checks the code clone and the work clone's https origin, then execs the dispatcher from the code
+# clone so it receives tini's signals directly. No agent runs in this container: unattended cards
+# run as Claude Managed Agents sessions (docs/specs/launch-managed.md).
 #
 # The dispatcher's code and node_modules come from the root-owned code clone, mounted read-only at
 # /opt/peanutgallery; deploy.sh installs node_modules there in a throwaway container with no secret.
 # Nothing is installed here, and nothing runs from the work clone at /srv/peanutgallery, which uid
 # 10001 and agent-written code can write to (docs/specs/ops-separation.md).
 #
-# Exit 78 when a check fails that no restart can fix (the wrong CLI, a missing clone, a non-https
-# origin): dispatcher.service does not restart exit 78. The dispatcher itself exits 78 or 1
+# Exit 78 when a check fails that no restart can fix (a missing clone, a non-https origin):
+# dispatcher.service does not restart exit 78. The dispatcher itself exits 78 or 1
 # (src/exit-code.ts), 78 among others when its code root is writable.
 set -eu
 
@@ -26,22 +27,14 @@ fatal() {
 [ -d "$CODE/node_modules" ] || fatal "$CODE has no node_modules; deploy.sh installs them"
 [ -d "$REPO/.git" ] || fatal "$REPO has no .git; provision.sh clones the work clone there"
 
-wanted=${CLAUDE_CODE_VERSION:?CLAUDE_CODE_VERSION is set by the image}
-reported=$(claude --version 2> /dev/null) || fatal "claude --version failed"
-version=$(printf '%s\n' "$reported" | head -n 1)
-case "$version" in
-  "$wanted" | "$wanted "*) ;;
-  *) fatal "claude --version reports '$version'; this image pins $wanted" ;;
-esac
-
 origin=$(git -C "$REPO" -c core.fsmonitor=false -c core.hooksPath=/dev/null remote get-url origin 2> /dev/null) || fatal "the work clone has no origin remote"
 case "$origin" in
   https://github.com/*) ;;
   *) fatal "origin is not an https github.com URL; the dispatcher fetches and pushes with an https token header" ;;
 esac
 
-# tsx keeps a transform cache in the temp folder, which agent-written code in this container can write
-# to. With the cache off every module is compiled from the read-only code clone.
+# tsx keeps a transform cache in the temp folder, which the code clone's read-only mount does not
+# cover. With the cache off every module is compiled from the read-only code clone.
 TSX_DISABLE_CACHE=1
 export TSX_DISABLE_CACHE
 

@@ -8,7 +8,8 @@
 # The result is " tok tok ", so a phrase matches only on whole tokens.
 #
 # mode=normalize   print the normalized form of every input line (used to load the lists)
-# mode=scan        read termfile (list<TAB>phrase) and allowfile, scan the files named in listfile
+# mode=scan        read termfile (list<TAB>phrase) and allowfile, scan the files named in listfile;
+#                  a line of a .json file has its string escapes decoded before it is normalized
 # mode=paths       like scan, but every input line is a path and the location is the path itself
 # name             location label for the input instead of FILENAME (commit-message)
 # tm               1 when the trademarks list applies to this input
@@ -54,6 +55,41 @@ function trimmed(s) {
   return s
 }
 
+# The value of four hex digits, or -1.
+function hex4(h,    i, c, v) {
+  if (length(h) != 4) return -1
+  v = 0
+  for (i = 1; i <= 4; i++) {
+    c = index("0123456789abcdef", tolower(substr(h, i, 1)))
+    if (c == 0) return -1
+    v = v * 16 + c - 1
+  }
+  return v
+}
+
+# A JSON line with its string escapes decoded the way JSON.parse reads them: \uXXXX becomes the
+# character when it is printable ASCII and a space otherwise, \n \r \t \b \f become a space, and
+# \" \\ \/ become the character. Read left to right, so an escaped backslash never starts another
+# escape.
+function jsondecode(s,    out, i, n, c, d, v) {
+  out = ""; n = length(s); i = 1
+  while (i <= n) {
+    c = substr(s, i, 1)
+    if (c != "\\") { out = out c; i++; continue }
+    d = substr(s, i + 1, 1)
+    if (d == "u") {
+      v = hex4(substr(s, i + 2, 4))
+      if (v >= 0) { out = out ((v >= 32 && v < 127) ? sprintf("%c", v) : " "); i += 6; continue }
+    } else if (d == "n" || d == "r" || d == "t" || d == "b" || d == "f") {
+      out = out " "; i += 2; continue
+    } else if (d == "\"" || d == "\\" || d == "/") {
+      out = out d; i += 2; continue
+    }
+    out = out c; i++
+  }
+  return out
+}
+
 BEGIN {
   if (mode == "scan" || mode == "paths") {
     nt = 0
@@ -78,7 +114,9 @@ BEGIN {
 mode == "normalize" { print trimmed(normalize($0)); next }
 
 {
-  norm = normalize($0)
+  text = $0
+  if (mode == "scan" && name == "" && tolower(FILENAME) ~ /\.json$/ && index(text, "\\") > 0) text = jsondecode(text)
+  norm = normalize(text)
   for (a = 1; a <= na; a++) {
     key = " " allow[a] " "
     while ((p = index(norm, key)) > 0) norm = substr(norm, 1, p) substr(norm, p + length(key))

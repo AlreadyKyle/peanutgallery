@@ -5,6 +5,7 @@ import { assertSharesSumToOne, parseRoleSpec, resolveModel, type RoleSpec } from
 const builderA: RoleSpec = {
   name: "Builder A",
   title: "Builder A",
+  description: "Builds funded game cards as small, tested changes to Dust, taking turns with Builder B.",
   species_note: "A small blue creature with two round antennae and stubby legs.",
   model: "MODEL_BUILDER",
   budget_share: 0.2,
@@ -19,6 +20,7 @@ const builderA: RoleSpec = {
 const host: RoleSpec = {
   name: "Host",
   title: "Host",
+  description: "Narrates the studio's work on a live stream and speaks up for chat, but is not running yet.",
   species_note: "A round pink creature with large ears and a wide mouth.",
   model: "MODEL_HOST",
   budget_share: 0.05,
@@ -38,6 +40,17 @@ describe("parseRoleSpec", () => {
   it("rejects a missing key", () => {
     const { voice: _voice, ...withoutVoice } = builderA;
     expect(() => parseRoleSpec(withoutVoice, "builder-a.json")).toThrow("missing key voice");
+  });
+
+  it("rejects a missing description, and one that is not a single plain line of at most 200 characters", () => {
+    const { description: _description, ...withoutDescription } = builderA;
+    expect(() => parseRoleSpec(withoutDescription, "builder-a.json")).toThrow("missing key description");
+    expect(() => parseRoleSpec({ ...builderA, description: " " }, "x.json")).toThrow("description must be a non-empty string");
+    expect(() => parseRoleSpec({ ...builderA, description: "One.\nTwo." }, "x.json")).toThrow("description must be one line");
+    expect(() => parseRoleSpec({ ...builderA, description: `${"a".repeat(200)}.` }, "x.json")).toThrow("200 characters or fewer");
+    expect(() => parseRoleSpec({ ...builderA, description: " Builds cards." }, "x.json")).toThrow("start or end with a space");
+    expect(() => parseRoleSpec({ ...builderA, description: "Builds cards \u2014 small ones." }, "x.json")).toThrow("em dash");
+    expect(parseRoleSpec({ ...builderA, description: `${"a".repeat(199)}.` }, "x.json").description).toHaveLength(200);
   });
 
   it("rejects an unknown key", () => {

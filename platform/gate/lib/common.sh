@@ -36,6 +36,20 @@ gate_is_text() {
   grep -Iq . "$1" 2>/dev/null
 }
 
+# How a scanner reads a file: 0 text it scans; 1 nothing to read (empty, or blank lines only);
+# 2 unreadable, which fails the scan instead of being skipped. Unreadable is a UTF-16 byte order
+# mark at the start (a browser still decodes and shows the file) or a NUL byte anywhere: the line
+# scanners read neither. Binary media and lock files are sorted out before this is asked.
+gate_text_kind() {
+  local head=""
+  IFS= read -r -n 2 -d '' head < "$1" 2>/dev/null
+  case "$head" in $'\xff\xfe'|$'\xfe\xff') return 2 ;; esac
+  gate_is_text "$1" && return 0
+  [ -s "$1" ] || return 1
+  [ "$(LC_ALL=C tr -d '\000' < "$1" | wc -c)" -eq "$(wc -c < "$1")" ] && return 1
+  return 2
+}
+
 # True for dependency lock files.
 gate_is_lock_file() {
   case "$(basename "$1")" in
@@ -63,14 +77,64 @@ gate_is_generated() {
   return 1
 }
 
-# Regular files under a folder, with dependency, build and scratch folders pruned; sorted bytewise.
+# Regular files under a folder, with dependency, build and scratch folders pruned, and the Finder's
+# .DS_Store files (git ignores them, and they hold NUL bytes); sorted bytewise.
 gate_find_files() {
   find "$1" \( -name node_modules -o -name .git -o -name dist -o -name .worktrees -o -name coverage \
-    -o -name test-results -o -name playwright-report \) -prune -o -type f -print | LC_ALL=C sort
+    -o -name test-results -o -name playwright-report -o -name .DS_Store \) -prune -o -type f -print | LC_ALL=C sort
 }
 
 # Every path (files and folders) under a folder, same pruning, sorted bytewise.
 gate_find_paths() {
   find "$1" \( -name node_modules -o -name .git -o -name dist -o -name .worktrees -o -name coverage \
-    -o -name test-results -o -name playwright-report \) -prune -o -print | LC_ALL=C sort
+    -o -name test-results -o -name playwright-report -o -name .DS_Store \) -prune -o -print | LC_ALL=C sort
+}
+
+# A random hex string for a per-run file name.
+gate_nonce() {
+  od -An -tx1 -N16 /dev/urandom | tr -d ' \n'
+}
+
+# The kernel lists, read once into GATE_KERNEL_PATHS and GATE_KERNEL_NAMES with comments and blank
+# lines skipped: kernel-paths.txt and kernel-names.txt in $1, else beside the gate scripts.
+gate_load_kernel_lists() {
+  local dir=${1:-$GATE_DIR} line
+  GATE_KERNEL_PATHS=()
+  GATE_KERNEL_NAMES=()
+  [ -f "$dir/kernel-paths.txt" ] && [ -f "$dir/kernel-names.txt" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    GATE_KERNEL_PATHS+=("$line")
+  done < "$dir/kernel-paths.txt"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    GATE_KERNEL_NAMES+=("$line")
+  done < "$dir/kernel-names.txt"
+}
+
+# The two matchers below ignore case only when the caller has run `shopt -s nocasematch`, as
+# kernel-guard.sh and restore-kernel.sh do: a case-insensitive checkout (macOS) loads claude.md as
+# CLAUDE.md and Platform/Gate as platform/gate. Both need gate_load_kernel_lists first.
+
+# True when the path equals a kernel path or lies under one.
+gate_under_kernel_path() {
+  local kernel
+  for kernel in ${GATE_KERNEL_PATHS[@]+"${GATE_KERNEL_PATHS[@]}"}; do
+    case "$1" in "$kernel"|"$kernel"/*) return 0 ;; esac
+  done
+  return 1
+}
+
+# True when any segment of the path matches a kernel name, where * matches within the segment.
+gate_has_kernel_name() {
+  local rest=$1 segment name
+  while :; do
+    segment=${rest%%/*}
+    for name in ${GATE_KERNEL_NAMES[@]+"${GATE_KERNEL_NAMES[@]}"}; do
+      # Unquoted so its * is a glob.
+      case "$segment" in $name) return 0 ;; esac
+    done
+    [ "$segment" != "$rest" ] || return 1
+    rest=${rest#*/}
+  done
 }

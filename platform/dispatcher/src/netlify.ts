@@ -78,7 +78,8 @@ export async function findDeploy(opts: NetlifyOptions, siteId: string, sha: stri
   return null;
 }
 
-export type DeployWait = { ok: true; deploy: NetlifyDeploy } | { ok: false; reason: string; deploy: NetlifyDeploy | null };
+// timedOut marks a wait that ended at its deadline with no verdict: the deploy may still publish.
+export type DeployWait = { ok: true; deploy: NetlifyDeploy } | { ok: false; reason: string; deploy: NetlifyDeploy | null; timedOut?: true };
 
 export interface WaitOptions {
   timeoutMs?: number;
@@ -104,7 +105,7 @@ export async function waitForDeploy(opts: NetlifyOptions, siteId: string, sha: s
       wait.onError?.(error);
       if (wait.signal?.aborted) return { ok: false, reason: 'dispatcher stopping', deploy: seen };
       if (Date.now() >= deadline) {
-        if (seen) return { ok: false, reason: `deploy ${seen.id} still ${seen.state} after ${timeoutMs / 1000} s`, deploy: seen };
+        if (seen) return { ok: false, reason: `deploy ${seen.id} still ${seen.state} after ${timeoutMs / 1000} s`, deploy: seen, timedOut: true };
         throw error;
       }
       await sleep(intervalMs, wait.signal);
@@ -123,7 +124,7 @@ export async function waitForDeploy(opts: NetlifyOptions, siteId: string, sha: s
       const reason = deploy
         ? `deploy ${deploy.id} still ${deploy.state} after ${timeoutMs / 1000} s`
         : `no production deploy for ${sha} after ${timeoutMs / 1000} s`;
-      return { ok: false, reason, deploy };
+      return { ok: false, reason, deploy, timedOut: true };
     }
     await sleep(intervalMs, wait.signal);
   }

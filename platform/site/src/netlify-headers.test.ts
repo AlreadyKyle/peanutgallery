@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { netlifyHeaders } from '../vite.config';
 
-// Security headers: netlify.toml sends them on every path. Only frame-ancestors is enforced; the
-// full policy is report-only until production shows it breaks nothing. Paths resolve from the
-// package root vitest runs in (see styles.test.ts).
+// Security headers: netlify.toml sends them on every path. frame-ancestors and connect-src are
+// enforced (docs/specs/launch-site.md); the full policy is report-only until production shows it
+// breaks nothing. vite preview sends the same headers, so the e2e run loads every page under them.
+// Paths resolve from the package root vitest runs in (see styles.test.ts).
 const toml = readFileSync(resolve(process.cwd(), 'netlify.toml'), 'utf8');
 
 /** The [headers.values] of the [[headers]] block for this path, as a map. */
@@ -42,8 +44,15 @@ describe('netlify.toml security headers', () => {
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
 
-  it('enforces only frame-ancestors', () => {
-    expect(headers['Content-Security-Policy']).toBe("frame-ancestors 'none'");
+  it('enforces frame-ancestors, and connect-src to the site and its Supabase project only', () => {
+    const host = new URL(supabaseUrl).host;
+    expect(headers['Content-Security-Policy']).toBe(`frame-ancestors 'none'; connect-src 'self' https://${host} wss://${host}`);
+    const enforced = directives(headers['Content-Security-Policy'] ?? '');
+    expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src']);
+  });
+
+  it('is what vite preview sends, so the e2e run tests the production policy', () => {
+    expect(netlifyHeaders(toml)).toEqual(headers);
   });
 
   it('reports the full policy without enforcing it', () => {
@@ -60,10 +69,13 @@ describe('netlify.toml security headers', () => {
 
   it('matches the values live-check.mjs expects from production', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/live-check.mjs'), 'utf8');
-    const pieces = script.match(/const REPORT_ONLY_POLICY =\s*((?:"[^"]*"\s*\+?\s*)+);/)?.[1] ?? '';
-    const expected = [...pieces.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join('');
-    expect(expected).toBe(headers['Content-Security-Policy-Report-Only']);
-    for (const name of ['X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy', 'Content-Security-Policy']) {
+    const joined = (name: string) => {
+      const pieces = script.match(new RegExp(`const ${name} =\\s*((?:"[^"]*"\\s*\\+?\\s*)+);`))?.[1] ?? '';
+      return [...pieces.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join('');
+    };
+    expect(joined('REPORT_ONLY_POLICY')).toBe(headers['Content-Security-Policy-Report-Only']);
+    expect(joined('ENFORCED_POLICY')).toBe(headers['Content-Security-Policy']);
+    for (const name of ['X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy']) {
       expect(script).toContain(`'${name.toLowerCase()}'`);
       expect(script).toContain(headers[name]);
     }

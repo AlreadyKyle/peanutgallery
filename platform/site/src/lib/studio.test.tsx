@@ -16,6 +16,7 @@ function snapshotWithBalance(balance: number): Snapshot {
     cards: [],
     funding: {},
     launchedAt: null,
+    paused: false,
     totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
     events: [],
     deploys: [],

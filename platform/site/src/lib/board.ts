@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { toNumber } from './format';
+import type { Horizon, Role } from './source';
 
 // Mirrors the dispatcher default for BOARD_SESSION_TTL_MIN (platform/dispatcher/src/config.ts).
 // The dispatcher judges the session from board_members.last_seen_at with this window; change both together.
@@ -37,6 +38,7 @@ export type NextCard = {
   stage: NextCardStage;
   executor_role_id: string;
   board_reason: string;
+  horizon: Horizon;
 };
 
 export type BoardStudioState = {
@@ -48,7 +50,85 @@ export type BoardStudioState = {
   dispatcher_seen_at: string | null;
   daily_cap_usd: number;
   card_max_usd: number;
+  /** The caps set_caps also sets; null when board_studio_state does not return them. */
+  agent_hourly_rate_usd: number | null;
+  monthly_cap_usd: number | null;
+  credit_studio_daily_cap_usd: number | null;
 };
+
+/** Every value set_caps takes, in US dollars. The database checks the bounds. */
+export type Caps = {
+  daily_cap_usd: number;
+  card_max_usd: number;
+  agent_hourly_rate_usd: number;
+  monthly_cap_usd: number;
+  credit_studio_daily_cap_usd: number;
+};
+
+/** A card as /board lists it for the horizon, rank, target, cancel and resume controls. */
+export type BoardCard = {
+  id: string;
+  title: string;
+  stage: string;
+  horizon: Horizon;
+  rank: number | null;
+  folder: string;
+  lane: string;
+  funding_target_usd: number;
+  funded_usd: number;
+  estimate_usd: number;
+  created_at: string;
+};
+
+/** The stages /board lists: every card the board can still move, cancel or resume. */
+export const BOARD_CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'paused'] as const;
+/** The stages set_card_horizon accepts: a card still open for funding. A funded or paused card can only be cancelled or resumed. */
+export const HORIZON_STAGES: readonly string[] = ['proposed', 'designing', 'voted'];
+
+/**
+ * Whether saving this horizon moves the card to now. Only that move takes a funding target:
+ * set_card_horizon refuses card fields on any other save, a card already on now included.
+ */
+export function movesToNow(card: { horizon: Horizon }, horizon: Horizon): boolean {
+  return horizon === 'now' && card.horizon !== 'now';
+}
+export const BOARD_CARD_COLUMNS =
+  'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at';
+
+/**
+ * The roles that build cards, and the folder each builds in. Only these are offered as a card's
+ * executor. The directors, the Host, the Scout and the Community agent have no job that runs yet:
+ * note triage, card drafting, the report, the stream and scouting are backlog cards.
+ */
+export const CARD_ROLE_FOLDERS: Readonly<Record<string, string>> = {
+  'Builder A': 'seed-1',
+  'Builder B': 'seed-1',
+  QA: 'seed-1',
+  'Platform Builder': 'platform',
+};
+
+/**
+ * The folders whose cards run at launch. The platform code lane (all of platform/site) stays closed
+ * until the board has its own site, because the board signs in on this origin: the dispatcher
+ * refuses those cards, and set_card_horizon and file_card refuse horizon now for them.
+ */
+export const OPEN_FOLDERS: readonly string[] = ['seed-1'];
+
+/** An active role that builds cards, whether or not its folder is open: the /board executor list. */
+export function isCardRole(role: Role): boolean {
+  return role.state === 'active' && role.write_access && Object.hasOwn(CARD_ROLE_FOLDERS, role.title);
+}
+
+/** The folder a card role changes, or null for a role that builds no cards. */
+export function cardRoleFolder(role: Role): string | null {
+  return isCardRole(role) ? (CARD_ROLE_FOLDERS[role.title] ?? null) : null;
+}
+
+/** A card role whose folder is open: the only roles /team shows as running. */
+export function runsCards(role: Role): boolean {
+  const folder = cardRoleFolder(role);
+  return folder !== null && OPEN_FOLDERS.includes(folder);
+}
 
 export const buckets = ['game', 'platform', 'qa', 'studio', 'budget', 'agents'] as const;
 export const lanes = ['config', 'code'] as const;
@@ -57,6 +137,11 @@ export const cardStages = [
   { value: 'proposed', label: 'Open for funding' },
   { value: 'voted', label: 'Picked by the board' },
 ] as const satisfies readonly { value: NextCardStage; label: string }[];
+export const horizons = [
+  { value: 'now', label: 'Now: open to funding and the agents' },
+  { value: 'next', label: 'Next: on the roadmap' },
+  { value: 'later', label: 'Later: on the roadmap' },
+] as const satisfies readonly { value: Horizon; label: string }[];
 export const agentModes = ['attended', 'unattended'] as const;
 export type AgentMode = (typeof agentModes)[number];
 
@@ -174,10 +259,113 @@ export async function fileCard(client: SupabaseClient, card: NextCard): Promise<
       p_stage: card.stage,
       p_executor_role_id: card.executor_role_id,
       p_board_reason: card.board_reason,
+      p_horizon: card.horizon,
     }),
   );
   if (id === null) throw new Error('file_card returned no card id');
   return id;
+}
+
+/**
+ * Moves a card between horizons and sets its rank. Moving to now needs a funding target, and only
+ * that move sends one (see movesToNow). The database refuses a card that does not meet the
+ * definition of ready, a card that is no longer open for funding, or a card with money that would
+ * leave now.
+ */
+export async function setCardHorizon(
+  client: SupabaseClient,
+  card: { id: string; horizon: Horizon; rank: number | null; target_usd: number | null; reason: string },
+): Promise<void> {
+  const args: Record<string, unknown> = {
+    p_card: card.id,
+    p_horizon: card.horizon,
+    p_rank: card.rank,
+    p_reason: card.reason,
+  };
+  if (card.target_usd !== null) args.p_target_usd = card.target_usd;
+  unwrap(await client.rpc('set_card_horizon', args));
+}
+
+/** Rejects a card with the board's reason. Only an open, funded or paused card can be cancelled. */
+export async function cancelCard(client: SupabaseClient, id: string, reason: string): Promise<void> {
+  unwrap(await client.rpc('cancel_card', { p_card: id, p_reason: reason }));
+}
+
+/** Moves a paused card back to funded with a new estimate of at least what it has already cost. */
+export async function resumeCard(client: SupabaseClient, id: string, estimateUsd: number, reason: string): Promise<void> {
+  unwrap(await client.rpc('resume_card', { p_card: id, p_estimate_usd: estimateUsd, p_reason: reason }));
+}
+
+export async function setCaps(client: SupabaseClient, caps: Caps, reason: string): Promise<void> {
+  unwrap(
+    await client.rpc('set_caps', {
+      p_daily_cap_usd: caps.daily_cap_usd,
+      p_card_max_usd: caps.card_max_usd,
+      p_agent_hourly_rate_usd: caps.agent_hourly_rate_usd,
+      p_monthly_cap_usd: caps.monthly_cap_usd,
+      p_credit_studio_daily_cap_usd: caps.credit_studio_daily_cap_usd,
+      p_reason: reason,
+    }),
+  );
+}
+
+/** Records Console credit bought for the agents, with the Stripe payout that paid for it. */
+export async function recordCreditPurchase(
+  client: SupabaseClient,
+  purchase: { amount_usd: number; stripe_payout_id: string; reason: string },
+): Promise<void> {
+  unwrap(
+    await client.rpc('record_credit_purchase', {
+      p_amount_usd: purchase.amount_usd,
+      p_stripe_payout_id: purchase.stripe_payout_id,
+      p_reason: purchase.reason,
+    }),
+  );
+}
+
+const HORIZON_ORDER: Record<Horizon, number> = { now: 0, next: 1, later: 2 };
+
+function boardCardFrom(row: Record<string, unknown>): BoardCard {
+  const horizon: Horizon = row.horizon === 'next' || row.horizon === 'later' ? row.horizon : 'now';
+  return {
+    id: String(row.id),
+    title: String(row.title),
+    stage: String(row.stage),
+    horizon,
+    rank: optionalAmount(row, 'rank'),
+    folder: String(row.folder),
+    lane: String(row.lane),
+    funding_target_usd: amount(row, 'funding_target_usd', 'cards'),
+    funded_usd: amount(row, 'funded_usd', 'cards'),
+    estimate_usd: amount(row, 'estimate_usd', 'cards'),
+    created_at: String(row.created_at),
+  };
+}
+
+/** Board order: horizon now, next, later; then rank, unranked last; then the oldest. */
+export function boardCardOrder(a: BoardCard, b: BoardCard): number {
+  const horizon = HORIZON_ORDER[a.horizon] - HORIZON_ORDER[b.horizon];
+  if (horizon !== 0) return horizon;
+  if (a.rank !== b.rank) {
+    if (a.rank === null) return 1;
+    if (b.rank === null) return -1;
+    return a.rank - b.rank;
+  }
+  if (a.created_at === b.created_at) return 0;
+  return a.created_at < b.created_at ? -1 : 1;
+}
+
+/** Every card the board can still move, cancel or resume, in board order. */
+export async function fetchBoardCards(client: SupabaseClient): Promise<BoardCard[]> {
+  const rows = unwrap(
+    await client
+      .from('cards')
+      .select(BOARD_CARD_COLUMNS)
+      .in('stage', [...BOARD_CARD_STAGES])
+      .order('created_at', { ascending: true })
+      .returns<Record<string, unknown>[]>(),
+  );
+  return (rows ?? []).map(boardCardFrom).sort(boardCardOrder);
 }
 
 export async function fileNote(client: SupabaseClient, text: string): Promise<string> {
@@ -191,11 +379,16 @@ function textOrNull(row: Record<string, unknown>, key: string): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function amount(row: Record<string, unknown>, key: string): number {
+function amount(row: Record<string, unknown>, key: string, source = 'board_studio_state'): number {
   const value = row[key];
   const n = typeof value === 'number' || typeof value === 'string' ? toNumber(value) : null;
-  if (n === null) throw new Error(`board_studio_state returned no ${key}`);
+  if (n === null) throw new Error(`${source} returned no ${key}`);
   return n;
+}
+
+function optionalAmount(row: Record<string, unknown>, key: string): number | null {
+  const value = row[key];
+  return typeof value === 'number' || typeof value === 'string' ? toNumber(value) : null;
 }
 
 export function studioStateFrom(raw: unknown): BoardStudioState {
@@ -212,6 +405,9 @@ export function studioStateFrom(raw: unknown): BoardStudioState {
     dispatcher_seen_at: textOrNull(row, 'dispatcher_seen_at'),
     daily_cap_usd: amount(row, 'daily_cap_usd'),
     card_max_usd: amount(row, 'card_max_usd'),
+    agent_hourly_rate_usd: optionalAmount(row, 'agent_hourly_rate_usd'),
+    monthly_cap_usd: optionalAmount(row, 'monthly_cap_usd'),
+    credit_studio_daily_cap_usd: optionalAmount(row, 'credit_studio_daily_cap_usd'),
   };
 }
 

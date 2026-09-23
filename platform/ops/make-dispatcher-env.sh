@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # make-dispatcher-env.sh: writes the VPS dispatcher's docker env file on the Mac (docs/specs/vps.md).
-# It reads the repository .env and three variables the operator exports, and writes exactly the keys
+# It reads the repository .env and four variables the operator exports, and writes exactly the keys
 # the dispatcher needs, with AGENT_MODE=unattended, at mode 0600. It prints key names, never values.
 #
 # usage, at the repository root:
 #   export VPS_GITHUB_TOKEN=...   # the VPS's own fine-grained token, not the Mac's GITHUB_TOKEN
+#   export GITHUB_READ_TOKEN=...  # the fine-grained token with Contents read only, for Managed Agents
 #   export HEALTHCHECK_URL=...    # the healthchecks.io ping URL for the VPS
 #   export NTFY_TOPIC_URL=...     # the ntfy topic URL
 #   platform/ops/make-dispatcher-env.sh [output-file]
@@ -18,7 +19,7 @@ REPO_ROOT=$(cd "$OPS_DIR/../.." && pwd)
 DOTENV=${DOTENV:-$REPO_ROOT/.env}
 
 usage() {
-  echo "usage: VPS_GITHUB_TOKEN=... HEALTHCHECK_URL=... NTFY_TOPIC_URL=... platform/ops/make-dispatcher-env.sh [output-file]" >&2
+  echo "usage: VPS_GITHUB_TOKEN=... GITHUB_READ_TOKEN=... HEALTHCHECK_URL=... NTFY_TOPIC_URL=... platform/ops/make-dispatcher-env.sh [output-file]" >&2
   exit 2
 }
 

@@ -1,7 +1,8 @@
-# Names no agent may create or change at any depth, in any lane (docs/specs/gate-hardening.md).
-# One name per line; * matches any run of characters within the name. A path is kernel when any of
-# its segments matches: Claude Code loads a nested CLAUDE.md or .claude folder into later sessions,
-# and a nested test, package or deploy config can override the one the gate relies on.
+# Names no agent may create or change at any depth, in any lane (docs/specs/gate-hardening.md,
+# docs/specs/launch-gate.md). One name per line; * matches any run of characters within the name. A
+# path is kernel when any of its segments matches: Claude Code loads a nested CLAUDE.md or .claude
+# folder into later sessions, a nested test, package or deploy config can override the one the gate
+# relies on, and a build tool loads its config file from the folder it builds, running the code in it.
 .claude
 CLAUDE.md
 CLAUDE.local.md
@@ -11,7 +12,21 @@ CLAUDE.local.md
 .npmrc
 .pnpmfile.*
 package.json
+pnpm-workspace.yaml
+pnpm-lock.yaml
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
 vite.config.*
 vitest.config.*
 vitest.workspace.*
+tsconfig*.json
+postcss.config.*
+.postcssrc*
+tailwind.config.*
+babel.config.*
+.babelrc*
+.env*
 netlify.toml
+_headers
+_redirects

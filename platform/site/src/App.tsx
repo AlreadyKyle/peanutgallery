@@ -5,9 +5,12 @@ import { siteEnv } from './lib/env';
 import { StudioProvider } from './lib/studio';
 import { Board } from './pages/Board';
 import { Contribute } from './pages/Contribute';
+import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, Terms } from './pages/Legal';
+import { Roadmap } from './pages/Roadmap';
+import { Team } from './pages/Team';
 
 export function App() {
   return (
@@ -18,6 +21,9 @@ export function App() {
           <Route element={<PublicLayout />}>
             <Route path="/" element={<Landing />} />
             <Route path="/ledger" element={<Ledger />} />
+            <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/team" element={<Team />} />
+            <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/contribute" element={<Contribute />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
@@ -45,6 +51,9 @@ function TopBar() {
           </Link>
         </div>
         <nav aria-label="Site">
+          <NavLink to="/how-it-works">{copy.howItWorksNav}</NavLink>
+          <NavLink to="/team">{copy.teamNav}</NavLink>
+          <NavLink to="/roadmap">{copy.roadmapNav}</NavLink>
           <NavLink to="/ledger">{copy.ledger}</NavLink>
           {env.playUrl === '' ? null : <a href={env.playUrl}>{copy.play}</a>}
           {env.discordInvite === '' ? null : <a href={env.discordInvite}>{copy.discord}</a>}

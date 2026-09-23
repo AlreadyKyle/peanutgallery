@@ -18,7 +18,17 @@
 //   flight;
 // - modelUsage keys that do not match the turns' models are reconciled on their total, under the
 //   turns' model, rather than written a second time under a new name;
-// - a model missing from the table is priced at the table's highest rates.
+// - a model missing from the table is priced at the table's highest rates;
+// - a turn that ran at a premium tier (usage.speed other than standard, or usage.service_tier other
+//   than standard) is priced at the table's highest rates, and so is the rest of its model's
+//   session, because the table holds standard rates only; the caller alerts.
+//
+// A turn an adapter names with its own request id (a Managed Agents span.model_request_end event id)
+// is written under that id, so the same request replayed from the event history is recorded once.
+//
+// Claude Code writes an API error as an assistant turn on the model "<synthetic>" with no usage. It
+// made no request and costs nothing, so the meter ignores it: it is never priced, never estimated and
+// never counted as a model missing from the table.
 import type { AgentEvent, EndEvent, ModelUsage } from './adapters/types.js';
 import { fallbackPrice, modelPrice, priceWith, round4, round6, type LedgerUsage, type ModelPrice, type PriceTable, type TurnUsage } from './pricing.js';
 
@@ -31,6 +41,21 @@ export const CHARS_PER_TOKEN = 3;
 export const THINKING_FLOOR_TOKENS = 1024;
 // The output charged for the request in flight when a session ends without a result line.
 export const IN_FLIGHT_OUTPUT_TOKENS = 1024;
+// The model Claude Code names on a turn it wrote itself for an API error.
+export const SYNTHETIC_MODEL = '<synthetic>';
+
+export function isSyntheticModel(model: string): boolean {
+  return model === SYNTHETIC_MODEL;
+}
+
+// The premium tier a turn ran at, as "speed fast" or "service_tier priority", or null for standard.
+export function premiumTier(usage: Pick<TurnUsage, 'speed' | 'service_tier'>): string | null {
+  const tiers = [
+    ['speed', usage.speed],
+    ['service_tier', usage.service_tier],
+  ].filter(([, value]) => typeof value === 'string' && value.length > 0 && value !== 'standard');
+  return tiers.length > 0 ? tiers.map(([name, value]) => `${name} ${value}`).join(', ') : null;
+}
 
 export type MeterBasis = 'result' | 'estimate';
 
@@ -43,6 +68,8 @@ export interface TurnMetering {
   row: MeterRow;
   // True when the model has no row in the price table and the turn was priced at the fallback rates.
   fallback: boolean;
+  // The premium tier the turn ran at, priced at the fallback rates, or null.
+  premium: string | null;
 }
 
 export interface Settlement {
@@ -63,9 +90,12 @@ export interface Settlement {
   // "<model> <class>" for each token class modelUsage reports as zero where the turns reported some:
   // a field that may have been renamed. Alerted; the larger count already covers the amount.
   zeroedFields: string[];
+  // "<model>: <tier>" for each model with a turn at a premium tier; its rows are at the fallback rates.
+  // The meter always sets it; a settlement built elsewhere may leave it out.
+  premiumTiers?: string[];
 }
 
-type TurnInput = Pick<Extract<AgentEvent, { type: 'turn_usage' }>, 'model' | 'usage' | 'contentChars' | 'thinking'>;
+type TurnInput = Pick<Extract<AgentEvent, { type: 'turn_usage' }>, 'model' | 'usage' | 'contentChars' | 'thinking'> & { requestId?: string | null };
 type ContentInput = Pick<Extract<AgentEvent, { type: 'turn_content' }>, 'model' | 'contentChars' | 'thinking' | 'outputTokens'>;
 type CompactionInput = Pick<Extract<AgentEvent, { type: 'compaction' }>, 'model' | 'preTokens'>;
 
@@ -108,6 +138,8 @@ export class SessionMeter {
   private readonly committed = new Map<string, LedgerUsage>();
   private readonly pending: MeterRow[] = [];
   private readonly fallbacks = new Set<string>();
+  // Model to the premium tiers its turns ran at.
+  private readonly premium = new Map<string, Set<string>>();
   private lastTurn: { model: string; usage: TurnUsage } | null = null;
   private turnRows = 0;
   // Compactions before any turn, charged to the first turn's model when one arrives.
@@ -128,10 +160,20 @@ export class SessionMeter {
 
   // Prices a turn. The row is pending until commit() says its write succeeded.
   addTurn(turn: TurnInput): TurnMetering {
+    this.turnRows += 1;
+    const requestId = turn.requestId ? turn.requestId : `${this.idPrefix}/turn/${this.turnRows}`;
+    if (isSyntheticModel(turn.model)) {
+      return { row: { model: turn.model, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 0, request_id: requestId }, fallback: false, premium: null };
+    }
+    const tier = premiumTier(turn.usage);
+    if (tier) {
+      const tiers = this.premium.get(turn.model) ?? new Set<string>();
+      tiers.add(tier);
+      this.premium.set(turn.model, tiers);
+    }
     const { price, fallback } = this.price([turn.model]);
     const priced = priceWith(price, turn.model, turn.usage);
-    this.turnRows += 1;
-    const row: MeterRow = { ...priced, usd: round4(priced.usd), request_id: `${this.idPrefix}/turn/${this.turnRows}` };
+    const row: MeterRow = { ...priced, usd: round4(priced.usd), request_id: requestId };
     const seen = this.tally(turn.model);
     seen.input += turn.usage.input_tokens;
     seen.creation += turn.usage.cache_creation_input_tokens;
@@ -142,11 +184,12 @@ export class SessionMeter {
     this.lastTurn = { model: turn.model, usage: turn.usage };
     for (const compaction of this.earlyCompactions.splice(0)) this.chargeCompaction(turn.model, compaction.preTokens);
     if (nonZero(row)) this.pending.push(row);
-    return { row, fallback };
+    return { row, fallback, premium: tier };
   }
 
   // Characters and output reported on a line for a turn already priced.
   addContent(content: ContentInput): void {
+    if (isSyntheticModel(content.model)) return;
     this.tally(content.model).estimatedOutput += estimatedOutput(content.contentChars, content.outputTokens, content.thinking);
   }
 
@@ -155,6 +198,7 @@ export class SessionMeter {
   // A compaction before any turn waits for the first turn's model, since the init line's model may
   // not be the name the turns report.
   addCompaction(compaction: CompactionInput): void {
+    if (isSyntheticModel(compaction.model)) return;
     if (this.lastTurn === null) {
       this.earlyCompactions.push(compaction);
       return;
@@ -209,7 +253,7 @@ export class SessionMeter {
   settle(end: EndEvent | null): Settlement {
     // No turn arrived to claim these, so they are charged now.
     for (const compaction of this.earlyCompactions.splice(0)) this.chargeCompaction(this.earlyModel(compaction), compaction.preTokens);
-    const reported = end?.modelUsage ?? [];
+    const reported = (end?.modelUsage ?? []).filter((entry) => !isSyntheticModel(entry.model));
     const turnModels = [...this.seen.keys()];
     const rows: MeterRow[] = [...this.pending];
     let settleRows = 0;
@@ -252,7 +296,8 @@ export class SessionMeter {
         rows.push({ ...row, request_id: `${this.idPrefix}/settle/${settleRows}` });
       }
     }
-    return { rows, basis: estimated ? 'estimate' : 'result', fallbackModels: [...this.fallbacks], turnModels, overcountUsd: overcount, mismatch, anomaly, zeroedFields };
+    const premiumTiers = [...this.premium].map(([model, tiers]) => `${model}: ${[...tiers].join(', ')}`);
+    return { rows, basis: estimated ? 'estimate' : 'result', fallbackModels: [...this.fallbacks], turnModels, overcountUsd: overcount, mismatch, anomaly, zeroedFields, premiumTiers };
   }
 
   // Each model both the turns and modelUsage name is its own group. The rest are grouped so no
@@ -389,6 +434,8 @@ export class SessionMeter {
       for (const model of models) this.fallbacks.add(model);
       return { price: this.fallbackRates, fallback: true };
     }
+    // A priced model with a premium turn is charged the highest rates; it is not missing from the table.
+    if (models.some((model) => this.premium.has(model))) return { price: this.fallbackRates, fallback: false };
     if (known.length === 1) return { price: known[0]!, fallback: false };
     return { price: fallbackPrice(Object.fromEntries(known.map((price, index) => [String(index), price]))), fallback: false };
   }

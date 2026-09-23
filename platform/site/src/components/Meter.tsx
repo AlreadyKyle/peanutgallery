@@ -1,6 +1,7 @@
 import { copy } from '../lib/copy';
 import { formatUsd } from '../lib/format';
 import { unavailableLine, type StudioState } from '../lib/studio';
+import { PoolStat } from './PoolStat';
 import { StaleLine } from './StaleNotice';
 import { Stat } from './Stat';
 
@@ -18,7 +19,7 @@ export function Meter({ studio }: { studio: StudioState }) {
     <>
       <StaleLine studio={studio} />
       <dl className="stats">
-        <Stat label={copy.poolBalance} description={copy.describeAvailable} value={formatUsd(pool.balance_usd)} />
+        <PoolStat balance={pool.balance_usd} />
         <Stat label={copy.reserve} description={copy.describeReserve} value={formatUsd(pool.reserve_usd)} />
         <Stat
           label={copy.incidentReserve}

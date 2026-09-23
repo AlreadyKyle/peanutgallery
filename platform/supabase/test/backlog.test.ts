@@ -1,0 +1,180 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { BacklogError, backlogCounts, type ExistingCard, parseBacklog, planBacklog } from "../lib/backlog.js";
+
+const FIXTURE = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "fixtures", "backlog.md"), "utf8");
+
+/** A one-card file with the given bullet lines under the heading. */
+function card(title: string, bullets: string[]): string {
+  return [`### ${title}`, ...bullets].join("\n");
+}
+
+const GOOD = [
+  "- bucket: game",
+  "- folder: seed-1",
+  "- horizon: later",
+  "- rank: 3",
+  "- summary: A plain summary.",
+  "- intent: What it is and why. It is not built yet.",
+];
+
+/** The problems a file raises, or [] when it parses. */
+function problems(text: string): string[] {
+  try {
+    parseBacklog(text);
+    return [];
+  } catch (error) {
+    if (error instanceof BacklogError) return error.problems;
+    throw error;
+  }
+}
+
+describe("parseBacklog on the fixture", () => {
+  it("reads every card, in order, and ignores prose, level-2 headings and fenced blocks", () => {
+    const entries = parseBacklog(FIXTURE);
+    expect(entries.map((e) => [e.title, e.bucket, e.folder, e.horizon, e.rank])).toEqual([
+      ["Free voting on open cards", "platform", "platform", "next", 1],
+      ["Studio Head drafts cards from the roadmap", "agents", "platform", "next", 2],
+      ["A second unlock track in Dust", "game", "seed-1", "later", 1],
+    ]);
+    expect(entries[0]!.summary).toBe("Let players pick the next card without paying, alongside funding.");
+    expect(entries[0]!.intent.endsWith("It is not built yet.")).toBe(true);
+    expect(backlogCounts(entries)).toEqual({ horizon: { next: 2, later: 1 }, folder: { "seed-1": 1, platform: 2 } });
+  });
+});
+
+describe("parseBacklog refusals", () => {
+  it("accepts a well-formed card", () => {
+    expect(problems(card("A card", GOOD))).toEqual([]);
+  });
+
+  it("refuses a missing key, keys out of order and a key after intent", () => {
+    expect(problems(card("A card", GOOD.filter((l) => !l.startsWith("- rank"))))[0]).toContain('needs "- rank: <value>"');
+    expect(problems(card("A card", [GOOD[1]!, GOOD[0]!, ...GOOD.slice(2)]))[0]).toContain('needs "- bucket: <value>"');
+    expect(problems(card("A card", [...GOOD, "- lane: code"]))[0]).toContain("has a key after intent");
+    expect(problems(card("A card", GOOD.slice(0, 5)))[0]).toContain("the end of the file");
+  });
+
+  it("refuses values outside the allowed sets", () => {
+    const swap = (index: number, line: string) => card("A card", GOOD.map((l, i) => (i === index ? line : l)));
+    expect(problems(swap(0, "- bucket: marketing"))[0]).toContain('bucket "marketing"');
+    expect(problems(swap(1, "- folder: seed-2"))[0]).toContain('folder "seed-2"');
+    expect(problems(swap(2, "- horizon: now"))[0]).toContain('horizon "now" is not next or later');
+    expect(problems(swap(3, "- rank: first"))[0]).toContain('rank "first"');
+    expect(problems(swap(3, "- rank: -1"))[0]).toContain('rank "-1"');
+  });
+
+  it("refuses a long, lower-case or em-dashed summary, an empty intent and a long title", () => {
+    const swap = (index: number, line: string) => card("A card", GOOD.map((l, i) => (i === index ? line : l)));
+    expect(problems(swap(4, `- summary: A${"a".repeat(200)}`))[0]).toContain("longer than 200");
+    expect(problems(swap(4, "- summary: a lower-case start."))[0]).toContain("lower-case");
+    expect(problems(swap(4, "- summary: One thing — another."))[0]).toContain("em dash");
+    expect(problems(swap(5, "- intent: "))[0]).toContain("intent is empty");
+    expect(problems(card("T".repeat(81), GOOD))[0]).toContain("longer than 80");
+    expect(problems(card("T".repeat(80), GOOD))).toEqual([]);
+  });
+
+  it("refuses a repeated title, a repeated rank on one horizon and a file with no cards", () => {
+    expect(problems([card("Same", GOOD), card("Same", GOOD.map((l) => (l.startsWith("- rank") ? "- rank: 4" : l)))].join("\n\n"))[0])
+      .toContain('the title "Same" is also on line 1');
+    expect(problems([card("One", GOOD), card("Two", GOOD)].join("\n\n"))[0]).toContain("rank 3 on later is also on line 1");
+    // The same rank on the other horizon is fine.
+    expect(problems([card("One", GOOD), card("Two", GOOD.map((l) => (l.startsWith("- horizon") ? "- horizon: next" : l)))].join("\n\n"))).toEqual([]);
+    expect(problems("# Backlog\n\nNothing planned.\n")).toEqual(["no card headings found"]);
+    expect(problems("```\n### Inside a fence\n")).toEqual(["a fenced code block is never closed"]);
+  });
+
+  it("lists every problem at once", () => {
+    const text = [
+      card("One", GOOD.map((l) => (l.startsWith("- bucket") ? "- bucket: x" : l))),
+      card("Two", GOOD.map((l) => (l.startsWith("- folder") ? "- folder: y" : l))),
+    ].join("\n\n");
+    // A bad bucket, a bad folder, and rank 3 on later twice.
+    expect(problems(text)).toHaveLength(3);
+  });
+});
+
+describe("planBacklog", () => {
+  const entries = parseBacklog(FIXTURE);
+  const existing = (over: Partial<ExistingCard> & Pick<ExistingCard, "title">): ExistingCard => ({
+    id: `id-${over.title}`,
+    stage: "proposed",
+    horizon: "next",
+    rank: 1,
+    bucket: "platform",
+    folder: "platform",
+    summary: "Let players pick the next card without paying, alongside funding.",
+    intent: "A free vote for each signed-in player, counted beside the money on each card, so the audience steers without paying. It is not built yet.",
+    ...over,
+  });
+
+  it("inserts every entry into an empty table as a planned card with no target", () => {
+    const plan = planBacklog(entries, []);
+    expect(plan.update).toEqual([]);
+    expect(plan.insert).toHaveLength(3);
+    expect(plan.insert[2]).toEqual({
+      bucket: "game",
+      source: "board",
+      shape: "goal",
+      lane: "code",
+      folder: "seed-1",
+      title: "A second unlock track in Dust",
+      summary: "A second set of unlocks that opens after the first track is complete.",
+      intent: "Players who finish every unlock get a new track with its own goals, so the game keeps a next goal on screen. It is not built yet.",
+      stage: "proposed",
+      horizon: "later",
+      rank: 1,
+      funding_target_usd: 0,
+      estimate_usd: 0,
+      priority: 100,
+      confidence: "low",
+    });
+  });
+
+  it("leaves a filed card alone when the file has not changed, and updates only what did", () => {
+    const same = existing({ title: "Free voting on open cards" });
+    const moved = existing({
+      title: "Studio Head drafts cards from the roadmap",
+      bucket: "agents",
+      rank: 5,
+      horizon: "later",
+      summary: "The Studio Head turns roadmap items into draft cards for the board to review.",
+      intent: "An older intent.",
+    });
+    const plan = planBacklog(entries, [same, moved]);
+    expect(plan.unchanged).toEqual(["Free voting on open cards"]);
+    expect(plan.update).toEqual([
+      {
+        id: moved.id,
+        title: moved.title,
+        patch: {
+          horizon: "next",
+          rank: 2,
+          intent: "A scheduled Studio Head session reads the roadmap and files draft cards the board can edit and move to now. It is not built yet.",
+        },
+      },
+    ]);
+    expect(plan.insert.map((r) => r.title)).toEqual(["A second unlock track in Dust"]);
+  });
+
+  it("never pulls back a card the board moved to now, funded or cancelled", () => {
+    const plan = planBacklog(entries, [
+      existing({ title: "Free voting on open cards", horizon: "now" }),
+      existing({ title: "Studio Head drafts cards from the roadmap", stage: "rejected", horizon: "next" }),
+    ]);
+    expect(plan.skipped.map((s) => s.title)).toEqual(["Free voting on open cards", "Studio Head drafts cards from the roadmap"]);
+    expect(plan.skipped[0]!.reason).toBe("card id-Free voting on open cards is at stage proposed on now");
+    expect(plan.update).toEqual([]);
+    expect(plan.insert.map((r) => r.title)).toEqual(["A second unlock track in Dust"]);
+  });
+
+  it("updates the backlog copy when a title is also held by a card on now", () => {
+    const plan = planBacklog(entries.slice(0, 1), [
+      existing({ id: "on-now", title: "Free voting on open cards", horizon: "now", stage: "funded" }),
+      existing({ id: "planned", title: "Free voting on open cards", rank: 9 }),
+    ]);
+    expect(plan.update).toEqual([{ id: "planned", title: "Free voting on open cards", patch: { rank: 1 } }]);
+  });
+});

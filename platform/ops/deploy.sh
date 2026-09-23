@@ -324,8 +324,9 @@ exclude_store() {
 }
 
 # check_ref <sha>: returns 0 when a roll back may go to sha, else prints why and returns 1. The sha
-# must be on origin/main, at or after ROLLBACK_FLOOR, and carry platform/ops/managed-settings.json,
-# so a roll back never returns to a layout where the dispatcher runs from a clone it can write.
+# must be on origin/main, at or after ROLLBACK_FLOOR, and its dispatcher.service must mount the code
+# clone read-only, so a roll back never returns to a layout where the dispatcher runs from a clone it
+# can write.
 check_ref() {
   local ref=$1
   if ! [[ "$ROLLBACK_FLOOR" =~ ^[0-9a-f]{40}$ ]]; then
@@ -344,8 +345,10 @@ check_ref() {
     echo "$ref is older than the rollback floor $ROLLBACK_FLOOR"
     return 1
   fi
-  if ! code_git cat-file -e "$ref:platform/ops/managed-settings.json" 2> /dev/null; then
-    echo "$ref has no platform/ops/managed-settings.json"
+  local unit
+  unit=$(code_git show "$ref:platform/ops/dispatcher.service" 2> /dev/null) || unit=""
+  if ! grep -qF -- '--volume /srv/peanutgallery-code:/opt/peanutgallery:ro' <<< "$unit"; then
+    echo "$ref's platform/ops/dispatcher.service does not mount the code clone read-only"
     return 1
   fi
 }

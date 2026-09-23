@@ -19,6 +19,9 @@ function card(overrides: Partial<Card>): Card {
     shape: 'goal',
     bucket: 'game',
     folder: 'seed-1',
+    horizon: 'now',
+    rank: null,
+    executor_role_id: null,
     funding_target_usd: 10,
     funded_usd: 0,
     spent_usd: 0,
@@ -29,12 +32,13 @@ function card(overrides: Partial<Card>): Card {
   };
 }
 
-function source(cards: Card[]): StudioSource {
+function source(cards: Card[], paused = false): StudioSource {
   const snapshot: Snapshot = {
     pool: null,
     cards,
     funding: {},
     launchedAt: null,
+    paused,
     totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
     events: [],
     deploys: [],
@@ -92,6 +96,29 @@ describe('Contribute', () => {
     expect(screen.queryByText('Being built')).toBeNull();
     expect(screen.queryByText('Already live')).toBeNull();
     expect(screen.getAllByRole('link')).toHaveLength(3);
+  });
+
+  it('lists only cards on horizon now, never a roadmap card', async () => {
+    renderContribute(
+      source([
+        card({ id: 'g1', title: 'Rename the Gatherer' }),
+        card({ id: 'n1', title: 'Planned next', horizon: 'next' }),
+        card({ id: 'l1', title: 'Planned later', horizon: 'later' }),
+      ]),
+    );
+    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+    expect(screen.queryByText('Planned next')).toBeNull();
+    expect(screen.queryByText('Planned later')).toBeNull();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+  });
+
+  it('says the agents are paused above the choices while the board has paused them', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true));
+    await waitFor(() => expect(screen.getByText(copy.pausedNotice)).toBeTruthy());
+    // The notice comes before Pick for me, so it is read before any payment.
+    const notice = screen.getByText(copy.pausedNotice);
+    const pick = screen.getByRole('link', { name: new RegExp(copy.pickForMe) });
+    expect(notice.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('keeps Pick for me when no card needs funding, and says so', async () => {

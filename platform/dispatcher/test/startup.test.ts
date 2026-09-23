@@ -3,23 +3,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { AgentAdapter, ClosedSessions, ManagedControl } from '../src/adapters/types.js';
 import type { DispatcherConfig } from '../src/config.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
-import type { MeterRow } from '../src/metering.js';
-import { parsePriceTable, priceUsage, type TurnUsage } from '../src/pricing.js';
-import type { ProbeOptions, ProbeResult } from '../src/probe-core.js';
-import { CODE_PATHS, FallbackPricedError, UnwrittenRowsError, checkCodeReadonly, checkMode, checkRoleModels, meterProbe, startupChecks, startupProbe, type StartupDeps } from '../src/startup.js';
+import { parsePriceTable } from '../src/pricing.js';
+import { CODE_PATHS, checkCodeReadonly, checkMode, checkRoleModels, startupChecks, unattendedStartup, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }));
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
-const USAGE: TurnUsage = { input_tokens: 1000, cache_creation_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 200 };
-const ROW: MeterRow = { ...priceUsage(PRICE_TABLE, 'builder-class', USAGE), request_id: 'probe/test/turn/1' };
-const NO_ROWS = { rows: [], basis: 'estimate' as const, fallbackModels: [], turnModels: [], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] };
-// The settle row for output the turn did not report.
-const SETTLE_ROW: MeterRow = { model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 40, usd: 0.0006, request_id: 'probe/test/settle/1' };
 
 const config: DispatcherConfig = {
   codeRoot: '/repo',
@@ -53,29 +47,23 @@ const config: DispatcherConfig = {
   ntfyTopicUrl: null,
 };
 
-function probeResult(overrides: Partial<ProbeResult> = {}): ProbeResult {
-  return {
-    ok: true,
-    reason: null,
-    fatal: false,
-    tools: ['Glob', 'Grep', 'Read'],
-    apiKeySource: 'ANTHROPIC_API_KEY',
-    costUsd: 0.009,
-    metering: { rows: [ROW, SETTLE_ROW], basis: 'result', fallbackModels: [], turnModels: ['builder-class'], overcountUsd: 0, mismatch: false, anomaly: false, zeroedFields: [] },
-    turns: 1,
-    exitCode: 0,
-    ...overrides,
-  };
-}
-
-// A probe runner that never touches git or claude: it records its calls and returns the result.
-function fakeRunner(result: ProbeResult) {
-  const calls: ProbeOptions[] = [];
-  const runProbe = async (_adapter: unknown, options: ProbeOptions) => {
-    calls.push(options);
-    return result;
-  };
-  return { calls, runProbe };
+// The managed controls, recording the order they run in; each step may be made to throw.
+class ManagedStub implements ManagedControl {
+  calls: string[] = [];
+  containmentError: Error | null = null;
+  probeError: Error | null = null;
+  async checkContainment() {
+    this.calls.push('containment');
+    if (this.containmentError) throw this.containmentError;
+  }
+  async probe() {
+    this.calls.push('probe');
+    if (this.probeError) throw this.probeError;
+  }
+  async closeOrphans() {
+    this.calls.push('closeOrphans');
+    return new Map<string, ClosedSessions>();
+  }
 }
 
 function unattendedDb(): FakeDb {
@@ -84,11 +72,11 @@ function unattendedDb(): FakeDb {
   return db;
 }
 
-function deps(db: FakeDb, result: ProbeResult, overrides: Partial<StartupDeps> = {}) {
-  const runner = fakeRunner(result);
-  const adapter = new FakeAdapter(async () => {}, { mode: config.agentMode });
-  const built: StartupDeps = { db, adapter, config, log: silent, runProbe: runner.runProbe, ...overrides };
-  return { deps: built, calls: runner.calls };
+function deps(db: FakeDb, overrides: Partial<StartupDeps> = {}) {
+  const managed = new ManagedStub();
+  const adapter: AgentAdapter = Object.assign(new FakeAdapter(async () => {}, { mode: config.agentMode }), { managed });
+  const built: StartupDeps = { db, adapter, config, log: silent, ...overrides };
+  return { deps: built, managed };
 }
 
 describe('checkMode', () => {
@@ -162,11 +150,11 @@ describe('startupChecks', () => {
   it('checks the code root first when DISPATCHER_CODE_READONLY is required, before the database or a probe', async () => {
     const root = await codeTree();
     trees.push(root);
-    const { deps: startup, calls } = deps(unattendedDb(), probeResult(), { config: { ...config, codeRoot: root, codeReadonly: true } });
+    const { deps: startup, managed } = deps(unattendedDb(), { config: { ...config, codeRoot: root, codeReadonly: true } });
     const error = await startupChecks(startup).catch((caught: unknown) => caught);
     expect((error as Error).message).toContain('is writable by this process');
     expect(exitCodeFor(error)).toBe(78);
-    expect(calls).toHaveLength(0);
+    expect(managed.calls).toEqual([]);
   });
 
   it('runs every check on a read-only code root', async () => {
@@ -174,24 +162,31 @@ describe('startupChecks', () => {
     const root = await codeTree();
     trees.push(root);
     for (const relative of [...CODE_PATHS].reverse()) await chmod(path.join(root, relative), 0o555);
-    const { deps: startup, calls } = deps(unattendedDb(), probeResult(), { config: { ...config, codeRoot: root, codeReadonly: true } });
+    const { deps: startup, managed } = deps(unattendedDb(), { config: { ...config, codeRoot: root, codeReadonly: true } });
     await startupChecks(startup);
-    expect(calls).toHaveLength(1);
+    expect(managed.calls).toEqual(['containment', 'probe']);
   });
 
-  it('checks the mode before any probe call, so a mismatched process runs no probe', async () => {
+  it('checks the mode before containment or a probe, so a mismatched process spends nothing', async () => {
     const db = new FakeDb();
-    const { deps: startup, calls } = deps(db, probeResult());
+    const { deps: startup, managed } = deps(db);
     await expect(startupChecks(startup)).rejects.toThrow('studio_state.agent_mode is attended but AGENT_MODE is unattended');
-    expect(calls).toHaveLength(0);
+    expect(managed.calls).toEqual([]);
     expect(db.ledger).toHaveLength(0);
   });
 
-  it('runs the probe in unattended mode with the configured repo, worktree root and model', async () => {
-    const db = unattendedDb();
-    const { deps: startup, calls } = deps(db, probeResult());
+  it('in unattended mode checks containment, then runs the managed probe', async () => {
+    const { deps: startup, managed } = deps(unattendedDb());
     await startupChecks(startup);
-    expect(calls).toEqual([{ repoRoot: '/repo', worktreeRoot: '/repo/.worktrees', model: 'builder-class', priceTable: PRICE_TABLE }]);
+    expect(managed.calls).toEqual(['containment', 'probe']);
+  });
+
+  it('runs no probe when containment fails, and keeps its exit code', async () => {
+    const { deps: startup, managed } = deps(unattendedDb());
+    managed.containmentError = new StartupError('GITHUB_READ_TOKEN can write to owner/repo', true);
+    const error = await startupChecks(startup).catch((caught: unknown) => caught);
+    expect(exitCodeFor(error)).toBe(78);
+    expect(managed.calls).toEqual(['containment']);
   });
 
   it('checks the role models before the probe, in either mode', async () => {
@@ -199,128 +194,35 @@ describe('startupChecks', () => {
       const db = new FakeDb();
       db.studio.agent_mode = agentMode;
       db.roles = [role({ model: 'mystery-model' })];
-      const { deps: startup, calls } = deps(db, probeResult(), { config: { ...config, agentMode } });
+      const { deps: startup, managed } = deps(db, { config: { ...config, agentMode } });
       await expect(startupChecks(startup)).rejects.toThrow('no price in PRICE_TABLE_JSON for Builder A (mystery-model)');
-      expect(calls).toHaveLength(0);
+      expect(managed.calls).toHaveLength(0);
     }
   });
 
-  it('runs no probe in attended mode', async () => {
+  it('runs no containment check and no probe in attended mode', async () => {
     const db = new FakeDb();
-    const { deps: startup, calls } = deps(db, probeResult(), { config: { ...config, agentMode: 'attended', studioAnthropicApiKey: null } });
+    const { deps: startup, managed } = deps(db, { config: { ...config, agentMode: 'attended', studioAnthropicApiKey: null } });
     await startupChecks(startup);
-    expect(calls).toHaveLength(0);
+    expect(managed.calls).toHaveLength(0);
     expect(db.ledger).toHaveLength(0);
   });
 });
 
-describe('startupProbe metering', () => {
-  it('writes the turn row and the settle row with no card and no role, priced at list price', async () => {
-    const db = unattendedDb();
-    await startupProbe(deps(db, probeResult()).deps);
-    expect(db.ledger).toEqual([
-      { id: 'ledger-1', billed_to: 'studio', card_id: null, role_id: null, ...ROW },
-      { id: 'ledger-2', billed_to: 'studio', card_id: null, role_id: null, ...SETTLE_ROW },
-    ]);
-    expect(db.ledger[0]!.usd).toBe(0.006);
-    expect(db.pool.balance_usd).toBe(49.9934);
+describe('unattendedStartup', () => {
+  it('refuses, exit 78, an adapter that is not the managed one: unattended mode never runs a local agent', async () => {
+    const adapter = new FakeAdapter(async () => {}, { mode: 'unattended' });
+    const error = await unattendedStartup({ db: unattendedDb(), adapter, config, log: silent }).catch((caught: unknown) => caught);
+    expect(error).toEqual(new StartupError('unattended mode runs only on the managed adapter, which this process did not build', true));
+    expect(exitCodeFor(error)).toBe(78);
   });
 
-  it('writes the ledger row for a failing probe and then rejects', async () => {
-    const db = unattendedDb();
-    const failing = probeResult({ ok: false, fatal: true, reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', apiKeySource: 'none' });
-    await expect(startupProbe(deps(db, failing).deps)).rejects.toThrow(
-      'startup probe failed: apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else',
-    );
-    // The probe ran on another account, so its spend is the founder's and the pool keeps its money.
-    expect(db.ledger).toHaveLength(2);
-    expect(db.ledger[0]).toMatchObject({ billed_to: 'founder', card_id: null, role_id: null, usd: ROW.usd });
-    expect(db.pool.balance_usd).toBe(50);
-  });
-
-  it('exits 78 for a probe failure that cannot change on retry and 1 for one that can', async () => {
-    const wrongAccount = probeResult({ ok: false, fatal: true, reason: 'apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', apiKeySource: 'none' });
-    const fatalError = await startupProbe(deps(unattendedDb(), wrongAccount).deps).catch((caught: unknown) => caught);
-    expect(fatalError).toEqual(new StartupError('startup probe failed: apiKeySource is none; unattended mode bills ANTHROPIC_API_KEY and nothing else', true));
-    expect(exitCodeFor(fatalError)).toBe(78);
-
-    const noStream = probeResult({ ok: false, fatal: false, reason: 'claude produced no stream output', metering: { ...NO_ROWS } });
-    const transientError = await startupProbe(deps(unattendedDb(), noStream).deps).catch((caught: unknown) => caught);
-    expect(transientError).toEqual(new StartupError('startup probe failed: claude produced no stream output', false));
-    expect(exitCodeFor(transientError)).toBe(1);
-  });
-
-  it('exits 1 when claude cannot be spawned', async () => {
-    const db = unattendedDb();
-    const failingRunner = async () => {
-      throw new Error('claude could not start: spawn claude ENOENT');
-    };
-    const error = await startupChecks(deps(db, probeResult(), { runProbe: failingRunner }).deps).catch((caught: unknown) => caught);
-    expect(error).toEqual(new Error('claude could not start: spawn claude ENOENT'));
+  it('passes a probe failure through with its own exit code', async () => {
+    const { deps: startup, managed } = deps(unattendedDb());
+    managed.probeError = new StartupError('the probe session could not be created: overloaded', false);
+    const error = await unattendedStartup(startup).catch((caught: unknown) => caught);
     expect(exitCodeFor(error)).toBe(1);
-    expect(db.ledger).toHaveLength(0);
-  });
-
-  it('writes no ledger row when the probe reported no usage', async () => {
-    const db = unattendedDb();
-    await startupProbe(deps(db, probeResult({ metering: { ...NO_ROWS } })).deps);
-    expect(db.ledger).toHaveLength(0);
-  });
-
-  it('records an unknown model at the fallback rates the way a card turn does, and then stops', async () => {
-    const db = unattendedDb();
-    const fallbackRow = { ...ROW, model: 'mystery-model' };
-    const metering = { ...NO_ROWS, rows: [fallbackRow], basis: 'result' as const, fallbackModels: ['mystery-model'], turnModels: ['mystery-model'] };
-    const error = await startupProbe(deps(db, probeResult({ metering })).deps).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(FallbackPricedError);
-    expect(error).toMatchObject({ message: 'no price for model mystery-model', fatal: true, models: ['mystery-model'] });
-    // The model is missing from the price table on every start, and every start spends on a probe.
-    expect(exitCodeFor(error)).toBe(78);
-    expect(db.ledger).toEqual([{ id: 'ledger-1', billed_to: 'studio', card_id: null, role_id: null, ...fallbackRow }]);
-  });
-
-  it('meters a side model priced at fallback rates without stopping', async () => {
-    const db = unattendedDb();
-    const sideRow = { model: 'side-model', input_tokens: 100, cached_tokens: 0, output_tokens: 10, usd: 0.0008, request_id: 'probe/test/settle/2' };
-    const metering = { ...NO_ROWS, rows: [ROW, sideRow], basis: 'result' as const, fallbackModels: ['side-model'], turnModels: ['builder-class'] };
-    await expect(startupProbe(deps(db, probeResult({ metering })).deps)).resolves.toBeUndefined();
-    expect(db.ledger.map((row) => row.model)).toEqual(['builder-class', 'side-model']);
-  });
-
-  it('tries a ledger write three times before it gives up', async () => {
-    let failures = 2;
-    class FlakyDb extends FakeDb {
-      override async recordUsage(...args: Parameters<FakeDb['recordUsage']>) {
-        if (failures > 0) {
-          failures -= 1;
-          throw new Error('db record_usage: connection reset');
-        }
-        return super.recordUsage(...args);
-      }
-    }
-    const db = Object.assign(new FlakyDb(), { studio: { ...new FakeDb().studio, agent_mode: 'unattended' } });
-    await meterProbe(db, config, probeResult(), silent, 1);
-    expect(db.ledger).toHaveLength(2);
-    failures = 3;
-    await expect(meterProbe(new FlakyDb(), config, probeResult(), silent, 1)).rejects.toThrow('connection reset');
-  });
-
-  it('writes every row it can, then stops for good, naming the rows the ledger refused', async () => {
-    class RefusingDb extends FakeDb {
-      override async recordUsage(...args: Parameters<FakeDb['recordUsage']>) {
-        if (args[0].request_id === SETTLE_ROW.request_id) throw new Error('db record_usage: connection reset');
-        return super.recordUsage(...args);
-      }
-    }
-    const db = new RefusingDb();
-    const last: MeterRow = { ...SETTLE_ROW, output_tokens: 10, usd: 0.0002, request_id: 'probe/test/settle/2' };
-    const error = await meterProbe(db, config, probeResult({ metering: { ...NO_ROWS, basis: 'result', turnModels: ['builder-class'], rows: [ROW, SETTLE_ROW, last] } }), silent, 1).catch(
-      (caught: unknown) => caught,
-    );
-    expect(error).toBeInstanceOf(UnwrittenRowsError);
-    expect(exitCodeFor(error)).toBe(78);
-    expect((error as Error).message).toBe('the ledger refused probe rows: probe/test/settle/1 builder-class 0.0006 USD (db record_usage: connection reset)');
-    expect(db.ledger.map((row) => row.request_id)).toEqual(['probe/test/turn/1', 'probe/test/settle/2']);
+    expect(managed.calls).toEqual(['containment', 'probe']);
   });
 });
 

@@ -41,9 +41,20 @@ export interface DispatcherConfig {
   // The studio organisation's key for unattended sessions; null in attended mode, where the
   // value is ignored. Never the founder's ANTHROPIC_API_KEY, which the dispatcher does not read.
   studioAnthropicApiKey: string | null;
+  // Unattended mode only (null or absent in attended mode): the Managed Agents agent, its pinned
+  // version and the environment every card session runs in, and the read-only GitHub token sessions
+  // clone the repository with (docs/specs/launch-managed.md).
+  managed?: ManagedConfig | null;
   // Optional board alerts: pinged every tick, and posted to when a card needs a human.
   healthcheckUrl: string | null;
   ntfyTopicUrl: string | null;
+}
+
+export interface ManagedConfig {
+  agentId: string;
+  agentVersion: number;
+  environmentId: string;
+  readToken: string;
 }
 
 // A missing or malformed value cannot fix itself on a restart, so it is fatal: the process exits
@@ -104,6 +115,24 @@ export function agentModeEnv(env: Env): AgentMode {
 }
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+// A fine-grained personal access token: one repository, and only the permissions docs/BOARD-SETUP.md
+// names. A gh sign-in token (gho_) or a classic token (ghp_) reaches every repository the account can.
+export const FINE_GRAINED_TOKEN_PREFIX = 'github_pat_';
+
+// Why GITHUB_TOKEN is not a fine-grained token, or null when it is.
+export function githubTokenProblem(token: string): string | null {
+  if (token.startsWith(FINE_GRAINED_TOKEN_PREFIX)) return null;
+  return `GITHUB_TOKEN is not a fine-grained token (${FINE_GRAINED_TOKEN_PREFIX}...); create one for this repository alone as docs/BOARD-SETUP.md describes`;
+}
+
+// Unattended mode runs with no one watching, so it refuses a token that can reach more than this
+// repository; attended mode warns at startup (startup.ts).
+export function githubTokenEnv(env: Env, mode: AgentMode): string {
+  const token = requireEnv(env, 'GITHUB_TOKEN');
+  const problem = githubTokenProblem(token);
+  if (problem && mode === 'unattended') throw new ConfigError(problem);
+  return token;
+}
 const STUDIO_KEY = 'STUDIO_ANTHROPIC_API_KEY';
 const FOUNDER_KEY = 'ANTHROPIC_API_KEY';
 
@@ -115,6 +144,31 @@ export function studioApiKeyEnv(env: Env, mode: AgentMode): string | null {
   if (studio && founder && studio === founder) throw new ConfigError(`${STUDIO_KEY} must differ from ${FOUNDER_KEY}`);
   if (mode !== 'unattended') return null;
   return requireEnv(env, STUDIO_KEY);
+}
+
+// Fine-grained personal access tokens start with this. Unattended mode runs on no other kind, since a
+// classic or OAuth token cannot be limited to this repository and its permissions.
+export const FINE_GRAINED_PREFIX = 'github_pat_';
+
+// Required in unattended mode, null in attended mode. The read token must differ from the write
+// token in either mode, and in unattended mode both must be fine-grained tokens. Startup then proves
+// the read token cannot write (adapters/read-token.ts).
+export function managedEnv(env: Env, mode: AgentMode, githubToken: string): ManagedConfig | null {
+  const read = env.GITHUB_READ_TOKEN?.trim();
+  if (read && read === githubToken) throw new ConfigError('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN: sessions clone with a token that cannot write');
+  if (mode !== 'unattended') return null;
+  const readToken = requireEnv(env, 'GITHUB_READ_TOKEN');
+  const agentId = requireEnv(env, 'MANAGED_AGENT_ID');
+  const version = Number(requireEnv(env, 'MANAGED_AGENT_VERSION'));
+  if (!Number.isInteger(version) || version < 1) throw new ConfigError('MANAGED_AGENT_VERSION must be a positive integer');
+  const environmentId = requireEnv(env, 'MANAGED_ENVIRONMENT_ID');
+  for (const [name, token] of [
+    ['GITHUB_TOKEN', githubToken],
+    ['GITHUB_READ_TOKEN', readToken],
+  ] as const) {
+    if (!token.startsWith(FINE_GRAINED_PREFIX)) throw new ConfigError(`${name} must be a fine-grained personal access token (${FINE_GRAINED_PREFIX}...) in unattended mode`);
+  }
+  return { agentId, agentVersion: version, environmentId, readToken };
 }
 
 // parsePriceTable is shared with code that is not configuration, so its plain errors are
@@ -144,9 +198,17 @@ function inside(target: string, root: string): boolean {
 
 export type Roots = Pick<DispatcherConfig, 'codeRoot' | 'codeReadonly' | 'repoRoot' | 'worktreeRoot'>;
 
+// The default worktree root: a folder beside the clone, named after it (<clone>-worktrees), as the
+// VPS's /srv/peanutgallery-worktrees sits beside its clone.
+export function defaultWorktreeRoot(repoRoot: string): string {
+  return path.join(path.dirname(repoRoot), `${path.basename(repoRoot)}-worktrees`);
+}
+
 // DISPATCHER_CODE_ROOT, when set, must name the checkout the process really runs from, or the
 // read-only check would look at a folder the code is not loaded from. A read-only code root cannot
-// hold the git state and the worktrees the dispatcher writes.
+// hold the git state and the worktrees the dispatcher writes. Card worktrees live outside the clone,
+// in every mode: a session started inside the clone would read the clone's own CLAUDE.md files and
+// sit next to its .env, and the attended sandbox allows writes to the worktree alone.
 export function rootsEnv(env: Env, codeRoot: string): Roots {
   const declared = optionalEnv(env, 'DISPATCHER_CODE_ROOT', '');
   if (declared && path.resolve(declared) !== path.resolve(codeRoot)) {
@@ -155,7 +217,11 @@ export function rootsEnv(env: Env, codeRoot: string): Roots {
   const readonly = optionalEnv(env, 'DISPATCHER_CODE_READONLY', 'off');
   if (readonly !== 'required' && readonly !== 'off') throw new ConfigError('DISPATCHER_CODE_READONLY must be required or off');
   const repoRoot = path.resolve(codeRoot, optionalEnv(env, 'DISPATCHER_REPO_ROOT', '.'));
-  const worktreeRoot = path.resolve(repoRoot, optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '.worktrees'));
+  const declaredWorktrees = optionalEnv(env, 'DISPATCHER_WORKTREE_ROOT', '');
+  const worktreeRoot = declaredWorktrees ? path.resolve(repoRoot, declaredWorktrees) : defaultWorktreeRoot(repoRoot);
+  if (inside(worktreeRoot, repoRoot)) {
+    throw new ConfigError(`DISPATCHER_WORKTREE_ROOT must be outside the repository clone ${repoRoot}; leave it unset for ${defaultWorktreeRoot(repoRoot)}`);
+  }
   if (readonly === 'required') {
     const writable: Array<[string, string]> = [
       ['DISPATCHER_REPO_ROOT', repoRoot],
@@ -179,12 +245,13 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
   const priceTable = priceTableEnv(env);
   pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
   const roots = rootsEnv(env, codeRoot);
+  const githubToken = githubTokenEnv(env, agentMode);
   return {
     ...roots,
     agentMode,
     supabaseUrl: requireEnv(env, 'SUPABASE_URL'),
     supabaseServiceRoleKey: requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY'),
-    githubToken: requireEnv(env, 'GITHUB_TOKEN'),
+    githubToken,
     githubRepo,
     netlifyAuthToken: requireEnv(env, 'NETLIFY_AUTH_TOKEN'),
     netlifySiteIdSeed: requireEnv(env, 'NETLIFY_SITE_ID_SEED'),
@@ -204,6 +271,7 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
     boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
     studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),
+    managed: managedEnv(env, agentMode, githubToken),
     healthcheckUrl: optionalHttpsUrlEnv(env, 'HEALTHCHECK_URL'),
     ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
   };

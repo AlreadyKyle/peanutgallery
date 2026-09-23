@@ -2,6 +2,8 @@ import { copy } from '../lib/copy';
 import { formatDateTime, shortSha } from '../lib/format';
 import type { Snapshot } from '../lib/source';
 
+// A deploy reads "Game 2775bcb passed checks". The smoke bot's raw output stays in the database: it
+// is inside text ("bot: 812 simulated seconds, 13 unlocks"), not something a reader can use.
 export function DeployList({ snapshot }: { snapshot: Snapshot }) {
   if (snapshot.missing.includes('deploys')) {
     return <p className="muted">{copy.partUnavailable}</p>;
@@ -20,7 +22,6 @@ export function DeployList({ snapshot }: { snapshot: Snapshot }) {
             <span className={deploy.is_green ? undefined : 'failed'}>
               {deploy.is_green ? copy.deployGreen : copy.deployNotGreen}
             </span>
-            {deploy.smoke_result === null ? null : <span className="muted"> · {deploy.smoke_result}</span>}
           </span>
         </li>
       ))}

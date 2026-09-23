@@ -33,6 +33,7 @@ async function seedRoles(db: SupabaseClient, env: Env): Promise<void> {
   const rows = specs.map((s) => ({
     name: s.name,
     title: s.title,
+    description: s.description,
     species_note: s.species_note,
     model: resolveModel(s, env),
     budget_share: s.budget_share,

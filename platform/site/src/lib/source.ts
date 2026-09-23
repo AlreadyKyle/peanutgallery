@@ -10,6 +10,10 @@ export type Pool = {
   day: string;
 };
 
+/** When a card is meant to be built: now (open to funding and the agents), next or later (the roadmap). */
+export type Horizon = 'now' | 'next' | 'later';
+export const HORIZONS: readonly Horizon[] = ['now', 'next', 'later'];
+
 export type Card = {
   id: string;
   title: string;
@@ -20,6 +24,12 @@ export type Card = {
   shape: string;
   bucket: string;
   folder: string;
+  /** Only a card on horizon now takes money or runs; next and later cards are planned, not built. */
+  horizon: Horizon;
+  /** Order within a horizon, lowest first; null when the board has not ranked it. */
+  rank: number | null;
+  /** The role that builds the card, or null. */
+  executor_role_id: string | null;
   funding_target_usd: number;
   funded_usd: number;
   /**
@@ -56,20 +66,27 @@ export type AgentEvent = {
   created_at: string;
 };
 
+/** A deploy row. The smoke bot's raw output stays in the database; the site shows only passed or failed. */
 export type Deploy = {
   id: string;
   folder: string;
   sha: string;
   is_green: boolean;
-  smoke_result: string | null;
   created_at: string;
 };
 
+/** A role from the public_roles view: the public columns of roles, never its prompt or budget. */
 export type Role = {
   id: string;
+  name: string;
   title: string;
+  /** What the role does, in one plain paragraph; null until the roles are seeded with it. */
+  description: string | null;
+  species_note: string;
+  model: string;
   write_access: boolean;
   state: string;
+  hired_at: string;
 };
 
 /**
@@ -85,6 +102,8 @@ export type Snapshot = {
   cards: Card[];
   funding: Record<string, CardFunding>;
   launchedAt: string | null;
+  /** True while the board has paused the agents. False when the studio row did not load. */
+  paused: boolean;
   totals: LedgerTotals;
   events: AgentEvent[];
   deploys: Deploy[];
@@ -118,6 +137,9 @@ type CardRow = {
   shape: string;
   bucket: string;
   folder: string;
+  horizon: string | null;
+  rank: Numeric | null;
+  executor_role_id: string | null;
   funding_target_usd: Numeric;
   funded_usd: Numeric;
   created_at: string;
@@ -138,6 +160,19 @@ type FundingRow = {
 
 type StudioRow = {
   launched_at: string | null;
+  paused: boolean | null;
+};
+
+type RoleRow = {
+  id: string;
+  name: string;
+  title: string;
+  description: string | null;
+  species_note: string | null;
+  model: string | null;
+  write_access: boolean;
+  state: string;
+  hired_at: string;
 };
 
 type TitleRow = {
@@ -162,6 +197,11 @@ export const QUERY_TIMEOUT_MS = 10_000;
 export const DEPLOY_LIMIT = 10;
 /** The stages the site lists: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
 export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
+/** The card columns the site reads. Each one must be in the anon column grant on cards. */
+export const CARD_COLUMNS =
+  'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at';
+/** The public_roles columns the site reads. The site never reads the roles table itself. */
+export const ROLE_COLUMNS = 'id,name,title,description,species_note,model,write_access,state,hired_at';
 export const REALTIME_LISTENERS = [
   { table: 'pool' },
   { table: 'cards' },
@@ -201,6 +241,16 @@ function poolFrom(row: PoolRow | null): Pool | null {
   };
 }
 
+/** A card with no horizon read (a row from before the column existed) is on horizon now. */
+function horizonFrom(value: string | null | undefined): Horizon {
+  return value === 'next' || value === 'later' ? value : 'now';
+}
+
+function rankFrom(value: Numeric | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  return money(value);
+}
+
 function cardFrom(row: CardRow, spend: Record<string, number>): Card {
   return {
     id: row.id,
@@ -212,12 +262,29 @@ function cardFrom(row: CardRow, spend: Record<string, number>): Card {
     shape: row.shape,
     bucket: row.bucket,
     folder: row.folder,
+    horizon: horizonFrom(row.horizon),
+    rank: rankFrom(row.rank),
+    executor_role_id: row.executor_role_id ?? null,
     funding_target_usd: money(row.funding_target_usd),
     funded_usd: money(row.funded_usd),
     spent_usd: spend[row.id] ?? 0,
     created_at: row.created_at,
     updated_at: row.updated_at,
     live_at: row.live_at ?? null,
+  };
+}
+
+function roleFrom(row: RoleRow): Role {
+  return {
+    id: row.id,
+    name: row.name,
+    title: row.title,
+    description: row.description ?? null,
+    species_note: row.species_note ?? '',
+    model: row.model ?? '',
+    write_access: row.write_access,
+    state: row.state,
+    hired_at: row.hired_at,
   };
 }
 
@@ -299,9 +366,7 @@ export function createSupabaseSource(
           .then((result) => poolFrom(unwrap(result))),
         client
           .from('cards')
-          .select(
-            'id,title,summary,intent,source,stage,shape,bucket,folder,funding_target_usd,funded_usd,created_at,updated_at,live_at',
-          )
+          .select(CARD_COLUMNS)
           .in('stage', [...CARD_STAGES])
           .order('created_at', { ascending: true })
           .abortSignal(timeout())
@@ -333,11 +398,13 @@ export function createSupabaseSource(
         ),
         optional(
           'studio',
-          async () =>
-            unwrap(
-              await client.from('public_studio').select('launched_at').abortSignal(timeout()).maybeSingle<StudioRow>(),
-            )?.launched_at ?? null,
-          null,
+          async () => {
+            const row = unwrap(
+              await client.from('public_studio').select('launched_at,paused').abortSignal(timeout()).maybeSingle<StudioRow>(),
+            );
+            return { launchedAt: row?.launched_at ?? null, paused: row?.paused === true };
+          },
+          { launchedAt: null, paused: false },
         ),
         optional(
           'totals',
@@ -367,7 +434,7 @@ export function createSupabaseSource(
             unwrap(
               await client
                 .from('deploys')
-                .select('id,folder,sha,is_green,smoke_result,created_at')
+                .select('id,folder,sha,is_green,created_at')
                 .order('created_at', { ascending: false })
                 .limit(DEPLOY_LIMIT)
                 .abortSignal(timeout())
@@ -378,15 +445,17 @@ export function createSupabaseSource(
         optional(
           'roles',
           async () =>
-            unwrap(
-              await client
-                .from('roles')
-                .select('id,title,write_access,state')
-                .order('hired_at', { ascending: true })
-                .order('title', { ascending: true })
-                .abortSignal(timeout())
-                .returns<Role[]>(),
-            ) ?? [],
+            (
+              unwrap(
+                await client
+                  .from('public_roles')
+                  .select(ROLE_COLUMNS)
+                  .order('hired_at', { ascending: true })
+                  .order('title', { ascending: true })
+                  .abortSignal(timeout())
+                  .returns<RoleRow[]>(),
+              ) ?? []
+            ).map(roleFrom),
           [] as Role[],
         ),
       ]);
@@ -395,7 +464,8 @@ export function createSupabaseSource(
         pool,
         cards: cardRows.map((row) => cardFrom(row, spend)),
         funding,
-        launchedAt: studio,
+        launchedAt: studio.launchedAt,
+        paused: studio.paused,
         totals,
         events,
         deploys,
