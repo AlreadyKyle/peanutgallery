@@ -68,6 +68,19 @@ export function nextInLine(snapshot: Snapshot): Card | null {
   return fundableCards(snapshot)[0] ?? null;
 }
 
+/**
+ * Which open cards home counts and draws as open for funding: with the order loaded, only a card in it,
+ * so a card the waterfall leaves out (a vetoed card) is neither counted as open nor drawn without its
+ * Fund this card among cards that have one; with the order unread, every open card, each drawn with no
+ * Fund this card.
+ */
+export function openForFunding(snapshot: Snapshot): (card: Card) => boolean {
+  const order = fundingOrder(snapshot);
+  if (order === null) return () => true;
+  const ids = new Set(order.map((place) => place.card_id));
+  return (card) => ids.has(card.id);
+}
+
 /** Whether a card takes money now: it is in the funding order. False when the order did not load. */
 export function inFundingOrder(snapshot: Snapshot, id: string): boolean {
   const order = fundingOrder(snapshot);

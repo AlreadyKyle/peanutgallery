@@ -51,8 +51,11 @@ export type S1Card = { id: string; title: string; stage: string };
  */
 export type RuleBlockedCard = { id: string; title: string; why: 'card_max' | 'resumed_before'; actual_usd: number; card_max_usd: number };
 
-/** A card holding money whose approval is not current: hidden, not runnable, taking no money. */
-export type VoidCard = { id: string; title: string; stage: string; funded_usd: number };
+/**
+ * A card whose approval is not current, hidden, not runnable and taking no money, at a stage the board
+ * can cancel, with money that cancelling it moves: the unspent money on its bar plus any on hold.
+ */
+export type VoidCard = { id: string; title: string; stage: string; money_usd: number };
 
 export type NeedsYouData = {
   controller: ControllerRun | null;
@@ -153,7 +156,7 @@ export function needsYouFrom(raw: unknown): NeedsYouData {
       id: String(card.id),
       title: text(card.title) ?? String(card.id),
       stage: text(card.stage) ?? '',
-      funded_usd: num(card.funded_usd) ?? 0,
+      money_usd: num(card.money_usd) ?? 0,
     })),
   };
 }

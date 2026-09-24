@@ -4019,6 +4019,7 @@ Deno.test("migrations on PGlite", {
           "apply_contribution",
           "approve_card_draft",
           "card_approved",
+          "card_ceiling_resumed",
           "card_content_hash",
           "card_content_hash_of",
           "card_from_draft",

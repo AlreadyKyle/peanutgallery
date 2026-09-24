@@ -239,7 +239,8 @@ export interface Db {
   dispatcherHeartbeat(now: Date): Promise<void>;
   getPool(): Promise<Pool>;
   boardSessionActive(ttlMinutes: number, now: Date): Promise<boolean>;
-  listFundedCards(): Promise<Card[]>;
+  // The cards at the stages asked for, from dispatcher_cards, which holds every stage: a tick asks for
+  // the hold stages and building, startup recovery for building and gated.
   listCardsInStages(stages: string[]): Promise<Card[]>;
   getCard(id: string): Promise<Card | null>;
   claimCard(id: string): Promise<Card | null>;
@@ -497,14 +498,8 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return rows(data).length > 0;
     },
 
-    async listFundedCards() {
-      const { data, error } = await client.from('cards').select('*').eq('stage', 'funded');
-      if (error) fail('cards funded', error);
-      return rows(data).map(toCard);
-    },
-
-    // dispatcher_cards: the hold stages and building, with the approval, the vetoes and the
-    // executor's pause that runnable() reads.
+    // dispatcher_cards: every card, with the approval, the vetoes and the executor's pause that
+    // runnable() reads. The view keeps no stage list, so the stages asked for are the stages read.
     async listCardsInStages(stages) {
       const { data, error } = await client.from('dispatcher_cards').select('*').in('stage', stages);
       if (error) fail('dispatcher_cards by stage', error);

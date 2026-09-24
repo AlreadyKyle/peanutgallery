@@ -300,8 +300,10 @@ No agent touches Stripe; these are yours.
   (`docs/specs/money-logic.md`): it funds no card and sits in no "Not on a card yet" money, gets no
   supporter number, is in no money-in figure on the site, and is left out of the agent money a
   Console credit purchase may use. Until it is refunded, /ledger's Funding band says in one line
-  "Includes the board's own test payment of $1.00; it funds no card."; the line goes after the
-  refund (`docs/specs/money-surfaces.md`). The fee Stripe keeps on the refund ($0.2662) is booked to the
+  "The pool includes $0.50 of the board's own test payment; it funds no card." ($0.50 is the part of
+  your $1.00 that is agent credit in the pool; the rest is Stripe's fee and the reserve's, the
+  studio's and the emergency fund's shares); the line goes after the refund
+  (`docs/specs/money-surfaces.md`). The fee Stripe keeps on the refund ($0.2662) is booked to the
   studio share automatically; there is nothing to record by hand.
 - **After-payment redirect.** Payment Link → After payment: redirect customers to
   `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
@@ -381,9 +383,10 @@ supporter-loop pull requests are live, and the launch cards are open to fund.
 
 ### 19. Restore drill (once, about 10 minutes)
 
-Bring the offline backup key (step 3). I decrypt one stored backup on your Mac with it, restore it
-and quote the ledger identity on it. Then the key goes back offline and the decrypted copy is
-deleted.
+Bring the offline backup key (step 3). I decrypt one stored backup taken after the money-logic
+migration is live on your Mac with it, restore it by the runbook (`platform/ops/README.md`, Restore a
+Mac backup, `after-restore.sql` included) and quote the ledger identity and the pg_cron jobs on it.
+Then the key goes back offline and the decrypted copy is deleted.
 
 **Tell me:** "ready for the restore drill."
 
@@ -543,7 +546,9 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - **A card the resume rule will not resume:** one paused at its ceiling at the card maximum, or a
   second time. Resume it with a new estimate or cancel it. The inbox lists each one.
 - **A card holding money whose approval is not current:** its text was changed outside a board
-  control, so it is hidden and takes no money. Cancel it. The inbox lists each one.
+  control, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
+  money on; the inbox lists each one until then. Money it already spent stays on its bar, and a card
+  that has shipped is left to the sweep.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
   The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
   only those, so every other one waits for you.

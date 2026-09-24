@@ -119,6 +119,7 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["card_approved", { p_card: NO_CARD }],
   ["card_money_held", { p_card: NO_CARD }],
   ["card_ready_problem", { c: {} }],
+  ["card_ceiling_resumed", { p_card: NO_CARD }],
   ["deal_due_cards", {}],
   ["resume_card_by_rule", { p_card: NO_CARD }],
   ["resume_due_by_rule", {}],

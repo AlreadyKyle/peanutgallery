@@ -166,7 +166,7 @@ describe('a card box', () => {
     expect(specRow(box, 'contributors')).toBeNull();
   });
 
-  it("draws a live Fund this card only for a card in the waterfall's order, and none when public_money did not load", () => {
+  it("draws only the cards in the waterfall's order, each with its live Fund this card, and every open card with none when public_money did not load", () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const cards = [
       card({ id: 'in', title: 'In the order', funding_target_usd: 10, funded_usd: 1 }),
@@ -178,6 +178,16 @@ describe('a card box', () => {
       </MemoryRouter>,
     );
     expect(within(boxFor('In the order')).getByRole('link', { name: legal.fundThis }).getAttribute('href')).toBe(`${STRIPE}?client_reference_id=in`);
+    // A card the order leaves out is not open for funding: it is not drawn in a row of cards that
+    // carry Fund this card, where its missing button would misalign the row's bars.
+    expect(screen.queryByRole('heading', { level: 3, name: 'Vetoed, so not in the order' })).toBeNull();
+    cleanup();
+    // Handed to the grid anyway (a frozen layout from an older snapshot), it still draws no button.
+    render(
+      <MemoryRouter>
+        <FundBoard snapshot={snapshot(cards, {}, ['in'])} cards={cards} />
+      </MemoryRouter>,
+    );
     expect(within(boxFor('Vetoed, so not in the order')).queryByRole('link', { name: legal.fundThis })).toBeNull();
     cleanup();
     render(
@@ -185,20 +195,19 @@ describe('a card box', () => {
         <FundBoard snapshot={{ ...snapshot(cards, {}, ['in', 'out']), money: null, missing: ['money'] }} />
       </MemoryRouter>,
     );
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['In the order', 'Vetoed, so not in the order']);
     expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
   });
 
   it('omits the fund button for a full bar, a non-goal card and a missing payment link, and the bar at a zero target', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
-    render(
-      <FundBoard
-        snapshot={snapshot([
-          card({ id: 'full', title: 'Full', stage: 'voted', funding_target_usd: 100, funded_usd: 100 }),
-          card({ id: 'one', title: 'Oneoff', shape: 'oneoff', funding_target_usd: 100, funded_usd: 10 }),
-          card({ id: 'zero', title: 'Zero', funding_target_usd: 0 }),
-        ])}
-      />,
-    );
+    const kinds = [
+      card({ id: 'full', title: 'Full', stage: 'voted', funding_target_usd: 100, funded_usd: 100 }),
+      card({ id: 'one', title: 'Oneoff', shape: 'oneoff', funding_target_usd: 100, funded_usd: 10 }),
+      card({ id: 'zero', title: 'Zero', funding_target_usd: 0 }),
+    ];
+    // None of them is in the order, so the grid would leave them out; hand them to it to draw each.
+    render(<FundBoard snapshot={snapshot(kinds)} cards={kinds} />);
     expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
     expect(within(boxFor('Zero')).queryByRole('progressbar')).toBeNull();
     cleanup();

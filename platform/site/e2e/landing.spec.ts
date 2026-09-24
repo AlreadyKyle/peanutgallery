@@ -41,7 +41,8 @@ for (const viewport of WIDTHS) {
       // The team strip: the first three running roles, each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
       await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'QA']);
-      for (const href of await team.getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
+      for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
+      await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
       await expect(page.getByRole('region', { name: 'Shipped' }).getByRole('heading', { level: 3 })).toHaveText([
         'The unlock list fits any number of unlocks',

@@ -226,13 +226,15 @@ describe('Ledger', () => {
     await waitFor(() => expect(within(funding).getByText(legal.notOnCard)).toBeTruthy());
     const row = within(funding).getByText(legal.notOnCard).closest('.stat')!;
     expect(row.querySelector('dd')?.textContent).toBe('$1.25');
+    // The band names the one case where its money goes to a card that is not the next to open.
+    expect(within(funding).getByText(legal.notOnCardTopUp)).toBeTruthy();
     expect(within(funding).queryByText(/short by/)).toBeNull();
     expect(within(funding).queryByText(/test payment/)).toBeNull();
     cleanup();
-    renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 0, short_usd: 0.75, board_test_usd: 1 }) }));
+    renderLedger(sourceOf({ ...snapshot, money: books([], { not_on_card_usd: 0, short_usd: 0.75, board_test_usd: 0.5019 }) }));
     const again = await screen.findByRole('region', { name: legal.meter });
     await waitFor(() => expect(within(again).getByText(legal.shortBy.replace('{usd}', '$0.75'))).toBeTruthy());
-    expect(within(again).getByText(legal.boardTestLine.replace('{usd}', '$1.00'))).toBeTruthy();
+    expect(within(again).getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeTruthy();
   });
 
   it('says Not available right now. for Not on a card yet and Money in when public_money did not load', async () => {

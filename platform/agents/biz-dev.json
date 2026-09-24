@@ -1,7 +1,7 @@
 {
   "name": "Biz Dev",
   "title": "Biz Dev",
-  "description": "Watches for new tools, models and prices outside the studio and proposes trials, but is not running yet.",
+  "description": "Watches for new tools, models and prices outside the studio and proposes trials.",
   "species_note": "A slim teal creature with long legs and two tall, narrow eyes.",
   "model": "MODEL_BUILDER",
   "budget_share": 0.025,

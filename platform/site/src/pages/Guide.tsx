@@ -735,7 +735,9 @@ function InkBand({ studio }: { studio: ReturnType<typeof useStudio> }) {
           {guide.teamIntro} {guide.castNote}
         </p>
         {roles.length === 0 ? (
-          <p className="muted">{studio.state === 'loading' ? copy.team.loading : guide.teamEmpty}</p>
+          <p className="muted" aria-busy={studio.state === 'loading' ? 'true' : undefined}>
+            {studio.state === 'loading' ? copy.team.loading : guide.teamEmpty}
+          </p>
         ) : (
           <>
             <h3>{guide.asleep}</h3>

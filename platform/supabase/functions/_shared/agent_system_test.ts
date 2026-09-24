@@ -308,6 +308,22 @@ Deno.test("criterion 2: a hashed field changes only through a board RPC, which r
       assertEquals(await s.isPublic(id), true);
       // The rule's half is criterion 8, which checks the approval after a top-up.
     });
+
+    await t.step("dispatcher_cards reads a card at every stage, so a tick sees the hold stages and startup recovery sees building and gated cards", async () => {
+      await s.signInAs(null);
+      const staged = await s.card("Every stage", { source: "board" });
+      const stages = (await s.rows<{ stage: string }>(`select unnest(enum_range(null::public.card_stage))::text as stage`)).map((r) => r.stage);
+      assert(stages.includes("gated") && stages.includes("building"), JSON.stringify(stages));
+      for (const stage of stages) {
+        await s.db.query(`update public.cards set stage = $2::public.card_stage where id = $1`, [staged, stage]);
+        const seen = await s.rows<{ stage: string }>(`select stage::text as stage from public.dispatcher_cards where id = $1`, [staged]);
+        assertEquals(seen, [{ stage }], `dispatcher_cards at ${stage}`);
+      }
+      // Recovery's own read: building and gated, each with the approval columns.
+      await s.db.query(`update public.cards set stage = 'gated' where id = $1`, [staged]);
+      const recovery = await s.rows(`select stage::text as stage, needs_approval, approved from public.dispatcher_cards where id = $1 and stage in ('building', 'gated')`, [staged]);
+      assertEquals(recovery, [{ stage: "gated", needs_approval: false, approved: false }]);
+    });
   } finally {
     await s.close();
   }
@@ -496,6 +512,8 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
     await s.spend(voided, 1);
     await s.db.query(`insert into public.agent_events (card_id, role_id, type) values ($1, $2, 'start'), (null, $2, 'message')`, [voided, s.roles.builder]);
     await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [voided]);
+    // The card that takes the voided card's released money, in the step that cancels it.
+    let taker = "";
 
     const readAll = async () => ({
       cards: (await s.rows<{ id: string }>(`select id from public.cards order by created_at`)).map((r) => r.id),
@@ -543,13 +561,14 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       ]);
       // Needs you lists a card holding money whose approval is not current.
       await s.signInAs(BOARD_EMAIL, "aal1");
-      const needs = (await s.row<{ n: { approval_void: { id: string }[] } }>(`select public.board_needs_you() as n`)).n;
-      assertEquals(needs.approval_void.map((c) => c.id), [voided]);
+      const needs = (await s.row<{ n: { approval_void: { id: string; money_usd: number }[] } }>(`select public.board_needs_you() as n`)).n;
+      // $4 paid, $1 spent: the $3 left on its bar is what cancelling it moves.
+      assertEquals(needs.approval_void.map((c) => [c.id, Number(c.money_usd)]), [[voided, 3]]);
     });
 
     await t.step("a stopped card's money moved to a card whose approval is not current shows no title for it", async () => {
       // The voided card's money moves on when the board cancels it; then the card that took it is voided too.
-      const taker = await s.card("Agent, takes the release", { horizon: "now", target: 10 });
+      taker = await s.card("Agent, takes the release", { horizon: "now", target: 10 });
       await s.approve(taker);
       await s.signInAs(BOARD_EMAIL, "aal2");
       await s.db.query(`update public.cards set stage = 'paused' where id = $1`, [voided]);
@@ -565,6 +584,28 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       await s.rawEdit(taker, "title = 'Rewritten outside a board RPC'");
       const after = (await s.asRole("anon", () => s.row<{ moved: { to_card_id: string; to_title: string | null }[] }>(`select moved from public.public_stopped_cards where card_id = $1`, [board]))).moved;
       assertEquals(after.map((m) => [m.to_card_id, m.to_title]), [[taker, null]]);
+    });
+
+    await t.step("a void card leaves Needs you once the board cancels it, though its spent money stays on its bar, and a live one is left to the sweep", async () => {
+      const voidCards = async () =>
+        (await s.row<{ n: { approval_void: { id: string; stage: string }[] } }>(`select public.board_needs_you() as n`)).n.approval_void.map((c) => [c.id, c.stage]);
+      await s.signInAs(BOARD_EMAIL, "aal2");
+      // The cancelled void card is rejected with its $1 of spend still on its bar, and is not listed.
+      const cancelled = await s.cardRow(voided);
+      assertEquals([cancelled.stage, Number(cancelled.funded_usd)], ["rejected", 1]);
+      // The taker, voided while it holds the released money, is listed until the board cancels it too.
+      assertEquals(await voidCards(), [[taker, "proposed"]]);
+      await s.db.query(`select public.cancel_card($1, 'Voided')`, [taker]);
+      assertEquals(await voidCards(), []);
+      await s.refuses(`select public.cancel_card($1, 'Again')`, "cannot be cancelled", [taker]);
+      // A shipped card whose approval is voided is not the board's to cancel: the sweep moves its unspent money.
+      const shipped = await s.card("Agent, shipped", { horizon: "now", target: 10 });
+      await s.approve(shipped);
+      await s.pay("v3", 2, shipped);
+      await s.db.query(`update public.cards set stage = 'live' where id = $1`, [shipped]);
+      await s.rawEdit(shipped, "title = 'Rewritten after it shipped'");
+      assertEquals(await voidCards(), []);
+      await s.identity();
     });
   } finally {
     await s.close();
@@ -851,6 +892,40 @@ Deno.test("criterion 8: resume by rule, once per card, topping the bar up from m
       await s.signInAs(BOARD_EMAIL, "aal1");
       const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
       assertEquals(needs.rule_blocked.map((c) => [c.id, c.why]), [[id, "resumed_before"], [maxed, "card_max"]]);
+      await s.identity();
+    });
+
+    await t.step("a card the board resumed from its ceiling pause, paused at its ceiling again, is never resumed by the rule and is listed in Needs you", async () => {
+      await s.signInAs(null);
+      const card = await s.card("Board resumed it", { source: "board", horizon: "now", target: 1 });
+      await s.pay("board-resumed", 1, card);
+      await s.db.query(`update public.cards set stage = 'building' where id = $1`, [card]);
+      await s.spend(card, 1.5);
+      await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [card]);
+      // The board resumes the first ceiling pause itself, before the rule does.
+      await s.signInAs(BOARD_EMAIL, "aal2");
+      await s.db.query(`select public.resume_card($1, 2, 'More room')`, [card]);
+      await s.signInAs(null);
+      const action = await s.row<{ d: Row }>(`select details as d from public.board_actions where action = 'resume_card' and card_id = $1`, [card]);
+      assertEquals(action.d.failing_check, "ceiling");
+      await s.db.query(`update public.cards set stage = 'building' where id = $1`, [card]);
+      await s.spend(card, 1.5);
+      await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [card]);
+      const before = await s.cardRow(card);
+      const allocations = (await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n;
+      // There is money not on a card yet, and $4.50 is under the $5 maximum, so only the earlier resume blocks it.
+      const due = (await s.row<{ r: { resumed: number; results: Row[] } }>(`select public.resume_due_by_rule() as r`)).r;
+      assertEquals(due.resumed, 0);
+      assertEquals(due.results.filter((r) => r.card_id === card), []);
+      assertEquals((await s.row<{ r: Row }>(`select public.resume_card_by_rule($1) as r`, [card])).r.blocked, "resumed_before");
+      assertEquals(await s.cardRow(card), before);
+      assertEquals((await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n, allocations);
+      assertEquals((await s.rows(`select 1 from public.agent_events where card_id = $1 and payload_json ->> 'step' in ('resume_rule', 'ceiling_top_up')`, [card])).length, 0);
+
+      await s.signInAs(BOARD_EMAIL, "aal1");
+      const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
+      assertEquals(needs.rule_blocked.filter((c) => c.id === card).map((c) => c.why), ["resumed_before"]);
+      await s.signInAs(null);
       await s.identity();
     });
 

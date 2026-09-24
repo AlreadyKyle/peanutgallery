@@ -19,12 +19,13 @@ export function shippedBy(role: Role, cards: readonly Card[]): number {
 /**
  * The facts line under a role. A running role shows its model, when it was hired, what it has
  * shipped and what it changes. A role that does not run yet shows none of that, because none of it
- * is true of the studio today; it says it is not running, and why when a closed lane is the reason.
+ * is true of the studio today; under its Not running yet heading it says why only when a closed lane
+ * is the reason.
  */
 export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen = false): string {
   if (!runsCards(role, platformLaneOpen)) {
-    const folder = cardRoleFolder(role);
-    return folder === null ? `${team.notRunning}.` : `${team.notRunning}. ${team.siteClosed}`;
+    // The section heading already says the role is not running; only a closed lane adds a reason.
+    return cardRoleFolder(role) === null ? '' : team.siteClosed;
   }
   const shipped = shippedBy(role, cards);
   const shippedLine = shipped === 1 ? team.shippedOne : team.shippedMany.replace('{n}', formatInteger(shipped));
@@ -37,13 +38,30 @@ export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen =
 function RoleRow({ role, cards, platformLaneOpen, asleep }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean; asleep: boolean }) {
   const titleId = `role-${role.id}`;
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
+  const facts = roleFacts(role, cards, platformLaneOpen);
   return (
     <li className="agent" id={`agent-${role.id}`}>
       <Avatar note={role.species_note} asleep={asleep} />
       <h3 id={titleId}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      <p className="card-meta">{roleFacts(role, cards, platformLaneOpen)}</p>
+      {facts === '' ? null : <p className="card-meta">{facts}</p>}
+    </li>
+  );
+}
+
+/**
+ * A role that does not run yet, as a compact tile: its avatar asleep, its name and its job. The
+ * section heading says it is not running; a tile adds a reason only when a closed lane is it.
+ */
+function ComingTile({ role, cards, platformLaneOpen }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean }) {
+  const facts = roleFacts(role, cards, platformLaneOpen);
+  return (
+    <li className="agent agent-coming" id={`agent-${role.id}`}>
+      <Avatar note={role.species_note} asleep size={56} />
+      <h3 id={`role-${role.id}`}>{role.name}</h3>
+      {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
+      {facts === '' ? null : <p className="card-meta">{facts}</p>}
     </li>
   );
 }
@@ -53,8 +71,6 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
   const laneOpen = snapshot.platformLaneOpen === true;
-  // Asleep only once the studio row has loaded and says the agents are paused.
-  const asleep = snapshot.paused && !snapshot.missing.includes('studio');
   const running = roles.filter((role) => runsCards(role, laneOpen));
   const waiting = roles.filter((role) => !runsCards(role, laneOpen));
   return (
@@ -65,7 +81,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           <p className="muted">{team.runningIntro}</p>
           <ul className="team-grid">
             {running.map((role) => (
-              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
+              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={false} />
             ))}
           </ul>
         </section>
@@ -76,9 +92,9 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
           <p className="muted">
             {team.notRunningIntro} <Link to="/roadmap">{team.roadmapLink}</Link>
           </p>
-          <ul className="team-grid">
+          <ul className="team-coming">
             {waiting.map((role) => (
-              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
+              <ComingTile key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} />
             ))}
           </ul>
         </section>
@@ -89,7 +105,8 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
 
 /**
  * Meet the team: every active role from public_roles, running roles first. Running is a fact the
- * site derives, not a label: only a role that builds cards in an open folder runs. No scorecards.
+ * site derives, not a label: only a role that builds cards in an open folder runs. Running agents
+ * are drawn awake and the roles still to come asleep (the board, 23 Sep 2026). No scorecards.
  * Two bands: the heading on the signal plate, and every agent row on paper (DESIGN.md, Bands).
  */
 export function Team() {
@@ -102,7 +119,11 @@ export function Team() {
         </PageHeader>
       </div>
       <div className="band">
-        {studio.state === 'loading' ? <p className="muted">{team.loading}</p> : null}
+        {studio.state === 'loading' ? (
+          <p className="muted" aria-busy="true">
+            {team.loading}
+          </p>
+        ) : null}
         {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
         {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
       </div>

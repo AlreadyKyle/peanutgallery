@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Board, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, GO_LIVE_CONFIRM, TIER_CAP_LABEL } from './Board';
@@ -78,6 +80,9 @@ const fake = vi.hoisted(() => ({
   jobs: [] as Record<string, unknown>[],
   boardRoles: [] as Record<string, unknown>[],
   publicCards: [] as string[],
+  // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
+  held: null as string | null,
+  release: () => {},
 }));
 
 vi.mock('./lib/supabase', async (importOriginal) => {
@@ -140,8 +145,13 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         },
       },
     },
-    rpc: (name: string, args?: Record<string, unknown>) => {
+    rpc: async (name: string, args?: Record<string, unknown>) => {
       fake.calls.push({ name, args });
+      if (name === fake.held) {
+        await new Promise<void>((resolve) => {
+          fake.release = resolve;
+        });
+      }
       if (name === 'board_heartbeat' && fake.heartbeatFails) {
         return Promise.resolve({ data: null, error: { message: 'heartbeat refused' } });
       }
@@ -149,6 +159,25 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         return Promise.resolve({ data: null, error: { message: 'launch refused' } });
       }
       if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
+      // The card RPCs change the card as the database does, so the cards read gives it back changed: a
+      // veto moves a card on now with no money to next, a cancelled card is rejected and leaves the list.
+      if (name === 'set_card_veto' || name === 'cancel_card' || name === 'set_card_horizon') {
+        const id = args?.p_card;
+        fake.cards = fake.cards.map((c) => {
+          if (c.id !== id) return c;
+          if (name === 'cancel_card') return { ...c, stage: 'rejected' };
+          if (name === 'set_card_horizon') return { ...c, horizon: String(args?.p_horizon), rank: (args?.p_rank as number | null) ?? null };
+          const vetoed = args?.p_vetoed === true;
+          return { ...c, board_vetoed: vetoed, board_veto_reason: vetoed ? String(args?.p_reason) : null, horizon: vetoed && c.horizon === 'now' ? 'next' : c.horizon };
+        });
+      }
+      // set_role_pause changes the role, as the database does, so board_roles reads it back changed.
+      if (name === 'set_role_pause') {
+        fake.boardRoles = fake.boardRoles.map((r) =>
+          r.id === args?.p_role ? { ...r, paused: args?.p_paused, paused_reason: args?.p_paused ? args?.p_reason : null } : r,
+        );
+        return Promise.resolve({ data: null, error: null });
+      }
       const data: Record<string, unknown> = {
         board_jobs: fake.jobs,
         board_roles: fake.boardRoles,
@@ -169,6 +198,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
     },
     from: (table: string) => {
       const record = { table, columns: '', filters: [] as string[] };
+      let only: { column: string; values: string[] } | null = null;
       fake.selects.push(record);
       const builder = {
         select(columns: string) {
@@ -177,6 +207,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         },
         in(column: string, values: string[]) {
           record.filters.push(`in ${column} ${values.join(',')}`);
+          only = { column, values };
           return builder;
         },
         order(column: string) {
@@ -184,7 +215,8 @@ vi.mock('./lib/supabase', async (importOriginal) => {
           return builder;
         },
         returns() {
-          const data = table === 'cards' ? [...fake.cards] : table === 'public_roles' ? [...fake.roleRows] : [];
+          const cards = fake.cards.filter((c) => only === null || only.values.includes(String(c[only.column as keyof FakeCard])));
+          const data = table === 'cards' ? cards : table === 'public_roles' ? [...fake.roleRows] : [];
           return Promise.resolve({ data, error: null });
         },
       };
@@ -207,6 +239,16 @@ const ROLE_ROWS = [
 ];
 
 const EMPTY_NEEDS = { controller: null, last_credit_purchase: null, incident_reserve_usd: 0, s1_cards: [] };
+
+// docs/specs/agent-system-core.md: two ceiling pauses the rule will not resume and a void card with money.
+const NEEDS_CARDS = {
+  ...EMPTY_NEEDS,
+  rule_blocked: [
+    { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
+    { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
+  ],
+  approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }],
+};
 
 const startedAt = new Date('2026-09-14T12:00:00Z');
 const notActive = 'Board session: not active. Keep this page open to run attended agent sessions.';
@@ -317,6 +359,8 @@ beforeEach(() => {
   fake.jobs = [];
   fake.boardRoles = [];
   fake.publicCards = [];
+  fake.held = null;
+  fake.release = () => {};
   fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
@@ -781,17 +825,44 @@ describe('Board card controls', () => {
     );
   });
 
-  it('says how much unspent money a cancellation moved on', async () => {
-    fake.cards = [card({ id: 'x2', title: 'Holds money' })];
+  it('says above the list how much unspent money a cancellation moved on, since the cancelled card leaves the list, and focuses it', async () => {
+    fake.cards = [card({ id: 'x2', title: 'Holds money' }), card({ id: 'x3', title: 'Stays' })];
     fake.cancelResult = { card_id: 'x2', stage: 'rejected', from_stage: 'voted', moved_usd: 1.8, moved_to: [] };
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderBoard();
     await flush();
     const form = cardForm('Holds money');
     fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Out of scope.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    const button = form.getByRole('button', { name: 'Cancel card' });
+    button.focus();
+    fireEvent.click(button);
     await flush();
-    expect(form.getByText('Card cancelled. $1.80 of unspent money moved to the next cards in line.')).toBeTruthy();
+    expect(screen.queryByRole('form', { name: 'Card Holds money' })).toBeNull();
+    const cards = within(screen.getByRole('region', { name: 'Cards' }));
+    const notice = cards.getByText('Card Holds money cancelled. $1.80 of unspent money moved to the next cards in line.');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(notice);
+    expect(cardForm('Stays').queryByRole('status')).toBeNull();
+  });
+
+  it('keeps the row, its confirmation and focus when a save moves the card', async () => {
+    fake.cards = [card({ id: 'm1', title: 'Moves', horizon: 'now' }), card({ id: 'm2', title: 'Another', horizon: 'next', rank: 1 })];
+    await renderBoard();
+    await flush();
+    const form = cardForm('Moves');
+    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'later' } });
+    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '4' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Not yet.' } });
+    const save = form.getByRole('button', { name: 'Save horizon and rank' });
+    save.focus();
+    fireEvent.submit(screen.getByRole('form', { name: 'Card Moves' }));
+    await flush();
+    const after = cardForm('Moves');
+    expect(after.getByRole('status').textContent).toBe('Card saved.');
+    expect(after.getByText(/horizon later · rank 4/)).toBeTruthy();
+    expect((after.getByLabelText('Horizon') as HTMLSelectElement).value).toBe('later');
+    expect(after.getByRole('button', { name: 'Save horizon and rank' })).toBe(save);
+    expect(document.activeElement).toBe(save);
   });
 
   it('resumes a paused card with a new estimate, and offers resume on paused cards only', async () => {
@@ -1169,11 +1240,23 @@ describe('Board signed in as the moderator', () => {
     await flush();
     const roles = within(screen.getByRole('region', { name: 'Roles' }));
     expect(roles.getByText('Only the board resumes a role.', { exact: false })).toBeTruthy();
+    // The paused role is listed but never offered to the moderator.
+    const select = roles.getByLabelText('Role') as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Choose a role', false],
+      ['QA', false],
+      ['Studio Head (paused)', true],
+    ]);
+    fireEvent.change(select, { target: { value: 'r-studio-head' } });
     expect(roles.queryByRole('button', { name: 'Resume Studio Head' })).toBeNull();
-    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Looks wrong' } });
+    fireEvent.change(select, { target: { value: 'r-qa' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Looks wrong' } });
     fireEvent.click(roles.getByRole('button', { name: 'Pause QA' }));
     await flush();
     expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: true, p_reason: 'Looks wrong' }]);
+    expect(roles.getByRole('status').textContent).toBe('QA paused.');
+    expect(roles.getByRole('row', { name: 'QA writer paused: Looks wrong' })).toBeTruthy();
+    expect(roles.getByRole('button', { name: 'Pause' })).toBeTruthy();
   });
 
   it('shows only pause and resume, and the role pauses, and never heartbeats', async () => {
@@ -1241,20 +1324,31 @@ describe('Board agent system controls', () => {
     expect(callsNamed('set_cooling_window').map((call) => call.args)).toEqual([{ p_minutes: 60, p_reason: 'An hour to look' }]);
   });
 
-  it("lists each role's class and pause, pauses and resumes with a reason, and keeps the buttons for the second factor", async () => {
+  it("lists each role's class and pause in one row each, pauses and resumes the chosen role with a reason, and keeps the form for the second factor", async () => {
     fake.boardRoles = [
       { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
       { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
+      { id: 'r-scout', name: 'Old Scout', agent_class: null, state: 'retired', paused: false, paused_reason: null },
     ];
     await renderBoard();
     await flush();
     const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(roles.getByText('reviewer · not paused', { exact: false })).toBeTruthy();
-    expect(roles.getByText('writer · paused: Checking the gate', { exact: false })).toBeTruthy();
+    expect(roles.getAllByRole('row').map((row) => row.textContent)).toEqual([
+      'RoleClassStatus',
+      'Game Directorreviewernot paused',
+      'QAwriterpaused: Checking the gate',
+      'Old Scout (retired)no class yetnot paused',
+    ]);
+    // One form for every role, not a reason field on each row.
+    expect(roles.getAllByRole('textbox')).toHaveLength(1);
+    fireEvent.click(roles.getByRole('button', { name: 'Pause or resume' }));
+    await flush();
+    expect(roles.getByRole('status').textContent).toBe('Choose a role.');
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-qa' } });
     fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
     await flush();
-    expect(roles.getByText('A reason is required.')).toBeTruthy();
-    fireEvent.change(roles.getByLabelText('Reason for QA'), { target: { value: 'Fixed' } });
+    expect(roles.getByRole('status').textContent).toBe('A reason is required.');
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Fixed' } });
     fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
     await flush();
     expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: false, p_reason: 'Fixed' }]);
@@ -1263,8 +1357,61 @@ describe('Board agent system controls', () => {
     await renderBoard();
     await flush();
     const readOnly = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(readOnly.getByText('Game Director', { exact: false })).toBeTruthy();
-    expect(readOnly.queryByRole('button', { name: 'Pause Game Director' })).toBeNull();
+    expect(readOnly.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeTruthy();
+    expect(readOnly.queryByRole('form', { name: 'Pause or resume a role' })).toBeNull();
+    expect(readOnly.queryByRole('button', { name: /^Pause/ })).toBeNull();
+  });
+
+  it('keeps the confirmation and keyboard focus on the button after a role is paused and the list refreshes', async () => {
+    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
+    const button = roles.getByRole('button', { name: 'Pause Game Director' });
+    button.focus();
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' }]);
+    expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeTruthy();
+    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
+    // The same button, still focused, now resumes the role.
+    expect(document.activeElement).toBe(button);
+    expect(button.isConnected).toBe(true);
+    expect(button.textContent).toBe('Resume Game Director');
+    expect((roles.getByLabelText('Reason') as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps a busy button focusable, marked aria-disabled rather than disabled, and ignores a second submit while the first runs', async () => {
+    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
+    fake.held = 'set_role_pause';
+    await renderBoard();
+    await flush();
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
+    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
+    const button = roles.getByRole('button', { name: 'Pause Game Director' }) as HTMLButtonElement;
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    // A browser moves focus off a focused button when it becomes disabled, so busy never disables.
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    await flush();
+    expect(callsNamed('set_role_pause')).toHaveLength(1);
+    await act(async () => fake.release());
+    await flush();
+    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
+    expect(button.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('never disables a control only because its action is running', () => {
+    // Every busy control in the board site keeps its focus the same way (the test above shows one).
+    // vitest runs in the package root; jsdom gives import.meta.url an http scheme.
+    const source = readFileSync(resolve(process.cwd(), 'src/Board.tsx'), 'utf8');
+    expect(source).toMatch(/aria-disabled=\{busy\}/);
+    expect(source).not.toMatch(/(?<![-\w])disabled=\{[^}]*\bbusy\b/);
   });
 
   it('lists each job with its last runs, their origin and reason, and queues a board-origin run with typed input', async () => {
@@ -1408,17 +1555,71 @@ describe('Board agent system controls', () => {
     expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt']));
   });
 
-  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each pointing at Cards', async () => {
-    fake.needs = {
-      ...EMPTY_NEEDS,
-      rule_blocked: [{ id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 }],
-      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: 2 }],
-    };
+  it('vetoes a card on now with one button that keeps focus and says so, though the veto moves the card to next', async () => {
+    fake.cards = [card({ id: 'on-now', title: 'On now', horizon: 'now' }), card({ id: 'on-next', title: 'On next', horizon: 'next', rank: 1 })];
     await renderBoard();
+    await flush();
+    const form = cardForm('On now');
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Off pillar' } });
+    const toggle = form.getByRole('button', { name: 'Veto card' });
+    toggle.focus();
+    fireEvent.click(toggle);
+    await flush();
+    const after = cardForm('On now');
+    expect(after.getByRole('status').textContent).toBe('Card vetoed.');
+    expect(after.getByText(/horizon next/)).toBeTruthy();
+    // The same element, now reading Lift veto, still has focus.
+    expect(after.getByRole('button', { name: 'Lift veto' })).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.change(after.getByLabelText('Reason'), { target: { value: 'Back in' } });
+    fireEvent.click(toggle);
+    await flush();
+    expect(cardForm('On now').getByRole('status').textContent).toBe('Veto lifted.');
+    expect(toggle.textContent).toBe('Veto card');
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each linking to its row under Cards', async () => {
+    fake.needs = { ...NEEDS_CARDS };
+    fake.cards = [
+      card({ id: 'max', title: 'At the maximum', stage: 'paused' }),
+      card({ id: 'twice', title: 'Paused twice', stage: 'paused' }),
+      card({ id: 'void', title: 'Rewritten', source: 'agent', drafter_role_id: 'r-designer' }),
+    ];
+    await renderBoard();
+    await flush();
     const needs = within(screen.getByRole('region', { name: 'Needs you' }));
     expect(needs.getByText('Card At the maximum is paused at its ceiling at the card maximum of $25.00.')).toBeTruthy();
-    expect(needs.getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).getAttribute('href')).toBe('#card-max');
+    // resumed_before covers a first resume by the rule or by the board.
+    expect(needs.getByText('Card Paused twice is paused at its ceiling a second time, after it was resumed once.')).toBeTruthy();
+    expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice']);
     expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
     expect(needs.getByRole('link', { name: 'Cancel it under Cards' }).getAttribute('href')).toBe('#card-void');
+    // Every link has its row on the page.
+    for (const link of needs.getAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('#'))) {
+      expect(document.getElementById(link.getAttribute('href')!.slice(1)), link.getAttribute('href')!).not.toBeNull();
+    }
+  });
+
+  it('names the second factor and links to no card at the first factor, where Cards is not shown', async () => {
+    fake.aal = 'aal1';
+    fake.needs = { ...NEEDS_CARDS };
+    await renderBoard();
+    const region = screen.getByRole('region', { name: 'Needs you' });
+    const needs = within(region);
+    expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
+    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
+    expect(needs.getByText(/Verify your second factor, then cancel it under Cards, which moves its unspent money/)).toBeTruthy();
+    expect(needs.getAllByText(/The rule will not resume it: verify your second factor, then resume it with a new estimate, or cancel it, under Cards\./)).toHaveLength(2);
+  });
+
+  it('links to no card while the cards read has not listed it', async () => {
+    fake.needs = { ...NEEDS_CARDS };
+    fake.cards = [];
+    await renderBoard();
+    await flush();
+    const region = screen.getByRole('region', { name: 'Needs you' });
+    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
+    expect(within(region).getByText(/Cancel it under Cards, which moves its unspent money/)).toBeTruthy();
   });
 });

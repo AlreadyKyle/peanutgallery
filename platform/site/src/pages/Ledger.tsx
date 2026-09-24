@@ -65,7 +65,9 @@ export function Ledger() {
           {studio.state === 'ready' ? (
             <DeployList snapshot={studio.snapshot} />
           ) : (
-            <p className="muted">{studio.state === 'loading' ? legal.loadingDeploys : unavailableLine(studio)}</p>
+            <p className="muted" aria-busy={studio.state === 'loading' ? 'true' : undefined}>
+              {studio.state === 'loading' ? legal.loadingDeploys : unavailableLine(studio)}
+            </p>
           )}
         </section>
       </div>

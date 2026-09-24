@@ -2107,6 +2107,7 @@ const AGENT_SYSTEM_CORE_FUNCTIONS = [
   "card_approved",
   "card_money_held",
   "card_ready_problem",
+  "card_ceiling_resumed",
   "deal_due_cards",
   "resume_card_by_rule",
   "resume_due_by_rule",

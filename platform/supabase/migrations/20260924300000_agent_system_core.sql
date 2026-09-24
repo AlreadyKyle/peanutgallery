@@ -719,8 +719,11 @@ grant select on public.public_card_funding, public.public_stopped_cards to anon,
 revoke all on table public.public_card_spend, public.public_agent_events, public.public_roles from anon, authenticated;
 grant select on public.public_card_spend, public.public_agent_events, public.public_roles to anon, authenticated;
 
--- What the dispatcher reads to choose a card: the hold stages and building,
--- with the approval, the vetoes and the executor's pause.
+-- What the dispatcher reads about its cards: every card, with the approval,
+-- the vetoes and the executor's pause. The view keeps no stage list of its
+-- own; each caller asks for its stages (a tick the hold stages and building,
+-- startup recovery building and gated), so no stage a caller asks for is
+-- ever dropped here.
 create or replace view public.dispatcher_cards with (security_invoker = false) as
   select
     c.*,
@@ -728,8 +731,7 @@ create or replace view public.dispatcher_cards with (security_invoker = false) a
     public.card_approved(c.id) as approved,
     coalesce(r.paused, false) as executor_paused
   from public.cards c
-  left join public.roles r on r.id = c.executor_role_id
-  where c.stage in ('proposed', 'designing', 'voted', 'funded', 'paused', 'building');
+  left join public.roles r on r.id = c.executor_role_id;
 
 revoke all on table public.dispatcher_cards from anon, authenticated, service_role;
 grant select on public.dispatcher_cards to service_role;
@@ -772,6 +774,20 @@ begin
 end;
 $$;
 
+-- Whether a card has been resumed from a ceiling pause before, by the rule (a
+-- resume_rule event) or by the board (a resume_card action taken while the
+-- card was paused at its ceiling). The rule resumes a card once; a card paused
+-- at its ceiling again waits for the board, however the first pause ended.
+create or replace function public.card_ceiling_resumed(p_card uuid) returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.agent_events e where e.card_id = p_card and e.payload_json ->> 'step' = 'resume_rule')
+    or exists (select 1 from public.board_actions b where b.card_id = p_card and b.action = 'resume_card' and b.details ->> 'failing_check' = 'ceiling')
+$$;
+
 -- A card paused at its ceiling for the first time: the new estimate is its
 -- actual cost, the new ceiling the lower of 1.5 times that and the card
 -- maximum. The money on its bar (funded less its studio spend) must cover the
@@ -804,7 +820,7 @@ begin
   if not public.card_is_public(p_card) then
     return jsonb_build_object('card_id', p_card, 'skipped', 'approval_not_current');
   end if;
-  if exists (select 1 from public.agent_events e where e.card_id = p_card and e.payload_json ->> 'step' = 'resume_rule') then
+  if public.card_ceiling_resumed(p_card) then
     return jsonb_build_object('card_id', p_card, 'blocked', 'resumed_before');
   end if;
   select card_max_usd into v_max from public.studio_state where id = 1;
@@ -860,7 +876,7 @@ begin
     where c.stage = 'paused'
       and c.failing_check = 'ceiling'
       and c.horizon = 'now'
-      and not exists (select 1 from public.agent_events e where e.card_id = c.id and e.payload_json ->> 'step' = 'resume_rule')
+      and not public.card_ceiling_resumed(c.id)
     order by c.id
   loop
     v_result := public.resume_card_by_rule(v_id);
@@ -1367,17 +1383,31 @@ begin
   into v_rule
   from (
     select c.id, c.title, c.actual_usd, c.created_at,
-      exists (select 1 from public.agent_events e where e.card_id = c.id and e.payload_json ->> 'step' = 'resume_rule') as resumed_before
+      public.card_ceiling_resumed(c.id) as resumed_before
     from public.cards c
     where c.stage = 'paused' and c.failing_check = 'ceiling' and c.horizon = 'now'
   ) x
   where x.resumed_before or least(round(1.5 * round(x.actual_usd, 4), 4), coalesce(v_max, 0)) <= x.actual_usd;
-  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'title', c.title, 'stage', c.stage, 'funded_usd', c.funded_usd) order by c.created_at, c.id), '[]'::jsonb)
+  -- A void card whose money the board can still move by cancelling it: a stage
+  -- cancel_card takes, with unspent money on its bar or a payment on hold naming
+  -- it. Spent money stays on a bar after a cancel, and the sweep moves a live or
+  -- rejected card's unspent money on by itself, so neither is listed.
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'title', x.title, 'stage', x.stage, 'money_usd', x.unspent_usd + x.held_usd) order by x.created_at, x.id), '[]'::jsonb)
   into v_void
-  from public.cards c
-  where public.card_needs_approval(c.source, c.drafter_role_id)
-    and not public.card_approved(c.id)
-    and public.card_money_held(c.id);
+  from (
+    select c.id, c.title, c.stage, c.created_at,
+      greatest(c.funded_usd - money.card_studio_spend(c.id), 0) as unspent_usd,
+      coalesce((
+        select sum(greatest(p.held_usd + coalesce((select sum(h.held_usd) from public.contributions h where h.parent_id = p.id), 0), 0))
+        from public.contributions p
+        where p.goal_card_id = c.id and p.entry = 'payment'
+      ), 0) as held_usd
+    from public.cards c
+    where public.card_needs_approval(c.source, c.drafter_role_id)
+      and not public.card_approved(c.id)
+      and c.stage in ('proposed', 'designing', 'voted', 'funded', 'paused')
+  ) x
+  where x.unspent_usd + x.held_usd > 0;
   return jsonb_build_object(
     'controller', v_controller,
     'last_credit_purchase', v_purchase,
@@ -1539,6 +1569,8 @@ revoke all on function public.card_money_held(uuid) from public, anon, authentic
 grant execute on function public.card_money_held(uuid) to service_role;
 revoke all on function public.card_ready_problem(public.cards) from public, anon, authenticated;
 grant execute on function public.card_ready_problem(public.cards) to service_role;
+revoke all on function public.card_ceiling_resumed(uuid) from public, anon, authenticated;
+grant execute on function public.card_ceiling_resumed(uuid) to service_role;
 
 revoke all on function public.record_card_approval(uuid, text, jsonb, uuid, uuid, text, text, text, uuid) from public, anon, authenticated;
 grant execute on function public.record_card_approval(uuid, text, jsonb, uuid, uuid, text, text, text, uuid) to service_role;

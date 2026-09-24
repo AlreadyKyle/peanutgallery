@@ -11,6 +11,7 @@ import {
   isFullyFunded,
   isRunnable,
   nextInLine,
+  openForFunding,
   plannedCards,
   shippedOrder,
   sourceLabel,
@@ -112,6 +113,17 @@ describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', ()
       expect(fundableCards(s)).toEqual([]);
       expect(nextInLine(s)).toBeNull();
       expect(inFundingOrder(s, 'open')).toBe(false);
+    }
+  });
+
+  it("keeps in home's fund group only the open cards in the order, and every open card when the order did not load", () => {
+    const loaded = snapshot(cards, books(['refunded', 'picked', 'open']));
+    // The vetoed card takes no money, so home neither counts it as open nor draws it; the refunded
+    // card is funded, so it stays queued.
+    expect(groupCards(cards, openForFunding(loaded)).fund.map((c) => c.id)).toEqual(['picked', 'open']);
+    expect(groupCards(cards, openForFunding(snapshot(cards, books([])))).fund).toEqual([]);
+    for (const s of [snapshot(cards, null, ['money']), { ...snapshot(cards, null), money: undefined }]) {
+      expect(groupCards(cards, openForFunding(s)).fund.map((c) => c.id)).toEqual(['picked', 'vetoed', 'open']);
     }
   });
 });
