@@ -1,7 +1,9 @@
 // studio_ranking, the board's Rank now (docs/specs/agent-workflows.md): one attended Studio Head
-// session orders the cards on now that are open for funding and hold no money, and
-// apply_card_ranking writes rank only, at most ten changes, with one public event of ids and
-// positions. The Studio Head sees typed card fields only; a card a supporter or the community
+// session orders the cards on now that are open for funding and hold no money on their bar or on
+// hold, and apply_card_ranking has the named cards trade the ranks they hold, at most ten changes,
+// with one public event of ids and ranks. Which cards are rankable comes from rankable_cards, the
+// same test the ranking refuses on, so a card whose only money is a payment on hold is never
+// offered. The Studio Head sees typed card fields only; a card a supporter or the community
 // proposed carries no text. A failed session, or an answer that names a card it may not rank, fails
 // the run and writes nothing.
 import type { JobHandler } from '../jobs.js';
@@ -13,8 +15,6 @@ export interface Ranking {
   order: Array<{ card_id: string; reason_code: string }>;
 }
 
-const OPEN_STAGES = ['proposed', 'designing', 'voted'];
-
 export function rankingPrompt(runId: string, cards: readonly TypedCard[], rankable: readonly string[], typed: TypedOutput): string {
   return [
     `Rank now (job run ${runId}).`,
@@ -22,9 +22,9 @@ export function rankingPrompt(runId: string, cards: readonly TypedCard[], rankab
     'The cards on now, as typed fields. A card whose source is community carries no text: rank it by its fields alone.',
     JSON.stringify(cards, null, 2),
     '',
-    `Rankable: the cards on now at proposed, designing or voted with no money on their bar: ${rankable.join(', ')}.`,
+    `Rankable: the cards on now at proposed, designing or voted with no money on their bar or on hold: ${rankable.join(', ')}.`,
     'Answer with the rankable cards in the order they should be funded, first first, each with one reason code. Name only rankable cards, each at most once; a card you leave out keeps its rank.',
-    'The card at position n gets rank n. At most ten changes are applied, in your order. A card with money on its bar or on hold keeps its place, and the board can set any rank afterwards.',
+    'The cards you name trade the ranks they already hold, in your order, so every other card keeps its place in line, a card with money on its bar or on hold included. A card keeps its rank when another card shares it, or when it has none and an older card without one is left out. At most ten ranks change a run: if your order needs more, the longest start of it that fits is applied. The board can set any rank afterwards.',
     '',
     `Answer with one JSON object valid against ${schemaRepoPath('ranking')} and nothing else:`,
     typed.schemaText('ranking'),
@@ -34,9 +34,10 @@ export function rankingPrompt(runId: string, cards: readonly TypedCard[], rankab
 export const studioRanking: JobHandler = async (context) => {
   const workflow = requireWorkflow(context);
   const role = context.role!;
-  const [studio, open] = await Promise.all([context.db.getStudioState(), context.db.openCards()]);
+  const [studio, open, rankableIds] = await Promise.all([context.db.getStudioState(), context.db.openCards(), context.db.rankableCards()]);
   const onNow = open.filter((card) => card.horizon === 'now');
-  const rankable = onNow.filter((card) => OPEN_STAGES.includes(card.stage) && card.funded_usd === 0).map((card) => card.id);
+  // In the order the prompt shows the cards, and only cards it shows.
+  const rankable = onNow.filter((card) => rankableIds.includes(card.id)).map((card) => card.id);
   if (rankable.length === 0) {
     const applied = await context.db.applyCardRanking(context.run.id, []);
     return { rankable: 0, moves: applied.moves, unapplied: applied.unapplied };

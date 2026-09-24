@@ -12,8 +12,9 @@
 -- path has set peanutgallery.card_writer.
 --
 -- apply_card_ranking writes rank only, on cards on now that are open for
--- funding and hold no money, at most ten changes a run, with one event that
--- names the moved cards and their positions. Both jobs are queued by the
+-- funding and hold no money, which trade the places they already hold, so
+-- every other card keeps its place in line; at most ten changes a run, with
+-- one event that names the moved cards and their ranks. Both jobs are queued by the
 -- board at /board and run while the studio is paused, since they spend no
 -- studio money.
 
@@ -302,12 +303,123 @@ begin
 end;
 $$;
 
--- g. apply_card_ranking ----------------------------------------------------------------------
+-- g. The ranking ----------------------------------------------------------------------------------
+-- Why the ranking may not name a card, or null when it may: the card is off
+-- now, not open for funding, or holds money on its bar or on hold. It is the
+-- one test apply_card_ranking refuses on and rankable_cards lists by, so the
+-- Studio Head is offered exactly the cards the ranking accepts.
+
+create or replace function public.card_rank_problem(c public.cards) returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when c.horizon is distinct from 'now' then 'is not on now'
+    when c.stage not in ('proposed', 'designing', 'voted') then 'is not open for funding'
+    when public.card_money_held(c.id) then 'holds money'
+  end
+$$;
+
+-- The cards a ranking may name, in the order step 2 funds them.
+create or replace function public.rankable_cards() returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(c.id order by c.rank asc nulls last, c.created_at, c.id), '{}'::uuid[])
+  from public.cards c
+  where c.horizon = 'now' and public.card_rank_problem(c) is null
+$$;
+
+-- The ranks the named cards take when they trade the places they hold, in the
+-- order given (p_order, each card already rankable). Step 2 funds by rank,
+-- unranked last and then oldest first, so a card's place is its rank; an
+-- unranked card's place is after every rank on now, where it takes the next
+-- free number. The ranks trade among the named cards only, so every card the
+-- order does not name keeps its rank and its place in line: a card holding
+-- money, a card left out, any card. A named card holds no place to trade, and
+-- keeps its rank, when trading it could move another card's place in line
+-- (on now at a stage step 2 funds: proposed, designing, voted or funded):
+-- another such card shares its rank (a tie is the board's to break), or both
+-- are unranked and an older one is left out. Unranked cards that end last,
+-- oldest first, stay unranked, since that is their place already. One row per
+-- named card: its position in the order, whether it took a place, and its rank
+-- before and after.
+
+create or replace function public.card_ranking_places(p_order uuid[])
+returns table (order_position integer, card_id uuid, placed boolean, from_rank integer, to_rank integer)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_max integer;
+  v_ids uuid[];
+  v_from integer[];
+  v_to integer[];
+  v_made timestamptz[];
+  v_i integer;
+  v_last integer;
+begin
+  select coalesce(max(c.rank), 0) into v_max from public.cards c where c.horizon = 'now';
+
+  with named as (
+    select x.id, x.n, c.rank, c.created_at
+    from unnest(p_order) with ordinality x(id, n)
+    join public.cards c on c.id = x.id
+  ),
+  in_line as (
+    select c.id, c.rank, c.created_at, c.id = any(p_order) as is_named
+    from public.cards c
+    where c.horizon = 'now' and c.stage in ('proposed', 'designing', 'voted', 'funded')
+  ),
+  movable as (
+    select m.*,
+      coalesce(m.rank, v_max + (row_number() over (partition by (m.rank is null) order by m.created_at, m.id))::integer) as slot
+    from named m
+    where not exists (
+      select 1 from in_line o
+      where o.id <> m.id
+        and ((m.rank is not null and o.rank = m.rank)
+          or (m.rank is null and o.rank is null and not o.is_named and (o.created_at, o.id) < (m.created_at, m.id)))
+    )
+  ),
+  by_order as (select m.*, row_number() over (order by m.n) as i from movable m),
+  by_slot as (select m.slot, row_number() over (order by m.slot) as i from movable m)
+  select array_agg(o.id order by o.i), array_agg(o.rank order by o.i), array_agg(s.slot order by o.i), array_agg(o.created_at order by o.i)
+  into v_ids, v_from, v_to, v_made
+  from by_order o join by_slot s on s.i = o.i;
+
+  -- The unranked cards that end last in their own age order keep no number.
+  v_i := coalesce(cardinality(v_ids), 0);
+  v_last := null;
+  while v_i >= 1 loop
+    exit when v_to[v_i] <= v_max or v_from[v_i] is not null;
+    exit when v_last is not null and (v_made[v_i], v_ids[v_i]) >= (v_made[v_last], v_ids[v_last]);
+    v_to[v_i] := null;
+    v_last := v_i;
+    v_i := v_i - 1;
+  end loop;
+
+  return query
+  select x.n::integer, x.id, coalesce(x.id = any(v_ids), false), c.rank,
+    case when x.id = any(v_ids) then v_to[array_position(v_ids, x.id)] else c.rank end
+  from unnest(p_order) with ordinality x(id, n)
+  join public.cards c on c.id = x.id
+  order by x.n;
+end;
+$$;
+
 -- The Studio Head's order, from a running studio_ranking run. Every id must be
--- a card on now at proposed, designing or voted with no money on its bar or on
--- hold; any other refuses the whole ranking. The card at position n (from 1)
--- gets rank n; the first ten whose rank changes are written, in the order
--- given, and one event names them with their old and new positions.
+-- rankable (card_rank_problem); any other refuses the whole ranking. The named
+-- cards trade the places they hold, in the order given (card_ranking_places).
+-- At most ten ranks change a run: the longest start of the order whose changes
+-- fit in ten is applied, and the rest of the named cards keep their ranks. One
+-- event names the moved cards with their old and new ranks.
 
 create or replace function public.apply_card_ranking(p_run uuid, p_order uuid[]) returns jsonb
 language plpgsql
@@ -318,10 +430,12 @@ declare
   v_run public.job_runs%rowtype;
   v_role uuid;
   v_card public.cards%rowtype;
-  v_position integer := 0;
+  v_problem text;
   v_id uuid;
+  v_take integer;
+  v_place record;
   v_moves jsonb := '[]'::jsonb;
-  v_unapplied integer := 0;
+  v_placed integer := 0;
 begin
   select * into v_run from public.job_runs where id = p_run;
   if not found then
@@ -348,32 +462,29 @@ begin
     if not found then
       raise exception 'Card % does not exist', v_id;
     end if;
-    if v_card.horizon <> 'now' then
-      raise exception 'Card % is not on now', v_id;
-    end if;
-    if v_card.stage not in ('proposed', 'designing', 'voted') then
-      raise exception 'Card % is not open for funding', v_id;
-    end if;
-    if public.card_money_held(v_id) then
-      raise exception 'Card % holds money', v_id;
+    v_problem := public.card_rank_problem(v_card);
+    if v_problem is not null then
+      raise exception 'Card % %', v_id, v_problem;
     end if;
   end loop;
 
-  foreach v_id in array p_order loop
-    v_position := v_position + 1;
-    select * into v_card from public.cards where id = v_id;
-    continue when v_card.rank is not distinct from v_position;
-    if jsonb_array_length(v_moves) >= 10 then
-      v_unapplied := v_unapplied + 1;
-      continue;
+  v_take := cardinality(p_order);
+  while (select count(*) from public.card_ranking_places(p_order[1:v_take]) p where p.to_rank is distinct from p.from_rank) > 10 loop
+    v_take := v_take - 1;
+  end loop;
+
+  for v_place in select * from public.card_ranking_places(p_order[1:v_take]) p order by p.order_position loop
+    if v_place.placed then
+      v_placed := v_placed + 1;
     end if;
-    update public.cards set rank = v_position where id = v_id;
-    v_moves := v_moves || jsonb_build_object('card_id', v_id, 'from', v_card.rank, 'to', v_position);
+    continue when v_place.to_rank is not distinct from v_place.from_rank;
+    update public.cards set rank = v_place.to_rank where id = v_place.card_id;
+    v_moves := v_moves || jsonb_build_object('card_id', v_place.card_id, 'from', v_place.from_rank, 'to', v_place.to_rank);
   end loop;
 
   insert into public.agent_events (card_id, role_id, type, payload_json)
   values (null, v_role, 'message', jsonb_build_object('step', 'ranked', 'moves', v_moves));
-  return jsonb_build_object('moves', v_moves, 'unapplied', v_unapplied);
+  return jsonb_build_object('moves', v_moves, 'unapplied', cardinality(p_order) - v_placed);
 end;
 $$;
 
@@ -405,6 +516,12 @@ revoke all on function public.approve_card_draft(uuid, uuid, text, jsonb) from p
 grant execute on function public.approve_card_draft(uuid, uuid, text, jsonb) to service_role;
 revoke all on function public.withdraw_card_draft(uuid, text[]) from public, anon, authenticated;
 grant execute on function public.withdraw_card_draft(uuid, text[]) to service_role;
+revoke all on function public.card_rank_problem(public.cards) from public, anon, authenticated;
+grant execute on function public.card_rank_problem(public.cards) to service_role;
+revoke all on function public.rankable_cards() from public, anon, authenticated;
+grant execute on function public.rankable_cards() to service_role;
+revoke all on function public.card_ranking_places(uuid[]) from public, anon, authenticated;
+grant execute on function public.card_ranking_places(uuid[]) to service_role;
 revoke all on function public.apply_card_ranking(uuid, uuid[]) from public, anon, authenticated;
 grant execute on function public.apply_card_ranking(uuid, uuid[]) to service_role;
 

@@ -150,6 +150,8 @@ export class FakeDb implements Db {
   // The role jobs (docs/specs/agent-workflows.md): the open cards the handlers read, the drafts, the
   // cards approval inserted, the rankings applied, and the failure an RPC is set to raise.
   openCardRows: OpenCardRow[] = [];
+  // Cards a payment on hold names: card_money_held is true for them though their bar may be empty.
+  heldCardIds = new Set<string>();
   drafts: FakeDraft[] = [];
   draftCards: FakeDraftCard[] = [];
   rankings: Array<{ runId: string; order: string[]; moves: RankingMove[] }> = [];
@@ -361,6 +363,13 @@ export class FakeDb implements Db {
   async openCards() {
     return this.openCardRows.map((row) => ({ ...row }));
   }
+  // rankable_cards: on now, open for funding, and no money on the bar or on hold, in funding order.
+  async rankableCards() {
+    return this.openCardRows
+      .filter((row) => row.horizon === 'now' && ['proposed', 'designing', 'voted'].includes(row.stage) && row.funded_usd === 0 && !this.heldCardIds.has(row.id))
+      .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
+      .map((row) => row.id);
+  }
   async recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string) {
     if (this.rpcError.recordCardDraft) throw this.rpcError.recordCardDraft;
     const id = `draft-${this.drafts.length + 1}`;
@@ -389,23 +398,27 @@ export class FakeDb implements Db {
     draft.status = 'withdrawn';
     draft.reason_codes = [...reasonCodes];
   }
+  // apply_card_ranking, for ranked cards: the named cards trade the ranks they hold, in the order
+  // given, and a card holding money is refused. The PGlite test covers unranked cards, ties and the
+  // ten-change cut (agent_workflows_test.ts).
   async applyCardRanking(runId: string, order: readonly string[]) {
     if (this.rpcError.applyCardRanking) throw this.rpcError.applyCardRanking;
-    const moves: RankingMove[] = [];
-    let unapplied = 0;
-    order.forEach((id, index) => {
+    const cards = order.map((id) => {
       const card = this.openCardRows.find((row) => row.id === id);
       if (!card) throw new Error(`db apply_card_ranking: Card ${id} does not exist`);
-      if (card.rank === index + 1) return;
-      if (moves.length >= 10) {
-        unapplied += 1;
-        return;
-      }
-      moves.push({ card_id: id, from: card.rank, to: index + 1 });
-      card.rank = index + 1;
+      if (card.funded_usd !== 0 || this.heldCardIds.has(id)) throw new Error(`db apply_card_ranking: Card ${id} holds money`);
+      if (card.rank === null) throw new Error('FakeDb: rank unranked cards on PGlite, not here');
+      return card;
+    });
+    const places = cards.map((card) => card.rank!).sort((a, b) => a - b);
+    const moves: RankingMove[] = [];
+    cards.forEach((card, index) => {
+      if (card.rank === places[index]) return;
+      moves.push({ card_id: card.id, from: card.rank, to: places[index]! });
+      card.rank = places[index]!;
     });
     this.rankings.push({ runId, order: [...order], moves });
-    return { moves, unapplied };
+    return { moves, unapplied: 0 };
   }
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);

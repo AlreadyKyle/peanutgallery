@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "ranking.schema.json",
   "title": "Ranking",
-  "description": "The Studio Head's answer to a Rank now run: the rankable cards in the order they should be funded, first first, each with one reason code. Only cards the prompt marks rankable may appear; the card at position n gets rank n, and at most ten changes are applied.",
+  "description": "The Studio Head's answer to a Rank now run: the rankable cards in the order they should be funded, first first, each with one reason code. Only cards the prompt marks rankable may appear; the cards named trade the ranks they already hold, in this order, and at most ten ranks change.",
   "type": "object",
   "additionalProperties": false,
   "required": ["order"],

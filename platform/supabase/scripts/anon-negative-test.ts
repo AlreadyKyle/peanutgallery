@@ -138,6 +138,9 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["record_card_draft", { p_run: null, p_role: null, p_fields: {}, p_maker_ref: "" }],
   ["approve_card_draft", { p_draft: NO_CARD, p_approver_role: NO_CARD, p_grader_ref: "", p_verdict: {} }],
   ["withdraw_card_draft", { p_draft: NO_CARD, p_reason_codes: [] }],
+  ["card_rank_problem", { c: {} }],
+  ["rankable_cards", {}],
+  ["card_ranking_places", { p_order: [] }],
   ["apply_card_ranking", { p_run: NO_CARD, p_order: [] }],
 ];
 

@@ -2195,7 +2195,7 @@ describe("agent-system-core migration", () => {
 // Studio Head's ranking.
 const AGENT_WORKFLOWS_FILE = "20260924400000_agent_workflows.sql";
 const agentWorkflowsSql = launchFile(AGENT_WORKFLOWS_FILE);
-const AGENT_WORKFLOWS_FUNCTIONS = ["card_from_draft", "record_card_draft", "approve_card_draft", "withdraw_card_draft", "apply_card_ranking"];
+const AGENT_WORKFLOWS_FUNCTIONS = ["card_from_draft", "record_card_draft", "approve_card_draft", "withdraw_card_draft", "card_rank_problem", "rankable_cards", "card_ranking_places", "apply_card_ranking"];
 
 describe("agent-workflows migration", () => {
   it("comes straight after agent-system-core, sets a lock timeout first and reloads the schema last", () => {

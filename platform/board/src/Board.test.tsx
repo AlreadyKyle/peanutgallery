@@ -1355,7 +1355,7 @@ describe('Board agent system controls', () => {
     await flush();
     const rank = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
     expect(rank.queryByLabelText('Input (JSON, optional)')).toBeNull();
-    expect(rank.getByText('Moved 11111111 from 3 to 1. 2 more not applied: ten changes a run.')).toBeTruthy();
+    expect(rank.getByText('Moved 11111111 from 3 to 1. 2 more kept their ranks.')).toBeTruthy();
     const draft = within(screen.getByRole('form', { name: 'Job draft_card' }));
     expect(draft.getByText('Approved: card 22222222 waits out the cooling window, then is dealt to now.')).toBeTruthy();
     expect(draft.getByText('Gatherers cost 10 (config, Builder A, $0.50): No change. Refused by the already_holds check: already true on main')).toBeTruthy();

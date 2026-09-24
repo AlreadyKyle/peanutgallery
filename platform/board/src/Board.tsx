@@ -1323,7 +1323,7 @@ function RunOutputLines({ output }: { output: RunOutput }) {
         {output.moves.length === 0
           ? 'Moved no card.'
           : `Moved ${output.moves.map((move) => `${shortCard(move.card_id)} from ${move.from ?? 'no rank'} to ${move.to}`).join('; ')}.`}
-        {output.unapplied > 0 ? ` ${output.unapplied} more not applied: ten changes a run.` : ''}
+        {output.unapplied > 0 ? ` ${output.unapplied} more kept their ranks.` : ''}
       </p>
     );
   }

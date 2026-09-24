@@ -157,6 +157,9 @@ Deno.test("a draft is private and every draft and ranking function is the servic
         `select public.approve_card_draft('${d.id}', '${s.roles.director}', 'g')`,
         `select public.withdraw_card_draft('${d.id}', array['off_pillar'])`,
         `select public.apply_card_ranking(gen_random_uuid(), array[]::uuid[])`,
+        `select public.rankable_cards()`,
+        `select public.card_ranking_places(array[]::uuid[])`,
+        `select public.card_rank_problem(null::public.cards)`,
         `select public.card_from_draft('{}'::jsonb, null)`,
       ];
       for (const role of ["anon", "authenticated"]) {
@@ -299,33 +302,47 @@ Deno.test("the card text guard accepts agent text from the board and draft paths
   }
 });
 
+type Moves = { moves: { card_id: string; from: number | null; to: number }[]; unapplied: number };
+
+// A studio_ranking run marked running, the ranking applied from it, and the cards step 2 funds, in
+// its order, as "title@rank" ("-" for no rank).
+function ranking(s: Awaited<ReturnType<typeof studio>>) {
+  const running = async (job = "studio_ranking") =>
+    (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin, status) values ($1, gen_random_uuid()::text, 'board', 'running') returning id`, [job])).id;
+  const rank = async (order: string[]) => (await s.row<{ r: Moves }>(`select public.apply_card_ranking($1, $2::uuid[]) as r`, [await running(), order])).r;
+  const line = async () =>
+    (await s.rows<{ t: string }>(`select c.title || '@' || coalesce(c.rank::text, '-') as t from money.funding_order() f join public.cards c on c.id = f.card_id order by f.position`)).map((r) => r.t);
+  const sharedRanks = async () => await s.rows(`select rank from public.cards where horizon = 'now' and rank is not null group by rank having count(*) > 1`);
+  return { running, rank, line, sharedRanks };
+}
+
 Deno.test("apply_card_ranking writes rank only, on open cards on now with no money, at most ten a run", OPTS, async (t) => {
   const s = await studio();
   try {
-    const running = async (job = "studio_ranking") =>
-      (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin, status) values ($1, gen_random_uuid()::text, 'board', 'running') returning id`, [job])).id;
-    const rank = (run: string, order: string[]) => s.row<{ r: { moves: { card_id: string; from: number | null; to: number }[]; unapplied: number } }>(`select public.apply_card_ranking($1, $2::uuid[]) as r`, [run, order]);
+    const { running, rank, line, sharedRanks } = ranking(s);
     const open: string[] = [];
     for (let i = 0; i < 12; i += 1) open.push(await s.boardCard(`Open ${i}`, { rank: i + 1 }));
 
-    await t.step("each refusal names the card, and a refused ranking writes nothing", async () => {
+    await t.step("each refusal names the card, and a refused ranking writes nothing; rankable_cards lists the cards it accepts", async () => {
       const run = await running();
       const next = await s.boardCard("On next", { horizon: "next" });
       const funded = await s.boardCard("Funded", { stage: "funded" });
       const withMoney = await s.boardCard("Money on its bar", { target: 100 });
       await s.pay("bar", 2, withMoney);
-      await s.db.exec(`update public.studio_state set credit_daily_cap_usd = 1 where id = 1`);
+      // No credit left today: the whole payment is held, naming the card, and its bar stays empty.
+      await s.db.exec(`update public.studio_state set credit_daily_cap_usd = 0 where id = 1`);
       const withHold = await s.boardCard("Money on hold", { target: 100 });
       const held = await s.pay("hold", 5, withHold);
-      assertEquals(held.held_usd, 4);
+      assertEquals(held.held_usd, 5);
+      assertEquals(Number((await s.cardRow(withHold)).funded_usd), 0, "nothing on its bar, only a hold");
       await s.db.exec(`update public.studio_state set credit_daily_cap_usd = 10000 where id = 1`);
-      await s.db.query(`update public.cards set funded_usd = 0 where id = $1`, [withHold]).catch(() => undefined);
+      assertEquals((await s.row<{ ids: string[] }>(`select public.rankable_cards() as ids`)).ids, open, "the open cards on now with no money, in funding order");
       const before = await s.rows(`select id, rank from public.cards order by id`);
       await s.refuses(`select public.apply_card_ranking($1, array['00000000-0000-4000-8000-000000000000']::uuid[])`, "does not exist", [run]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "is not on now", [run, [open[1], next]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "is not open for funding", [run, [funded]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "holds money", [run, [withMoney]]);
-      await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "holds money", [run, [withHold]]);
+      await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, `Card ${withHold} holds money`, [run, [open[0], withHold]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "names a card twice", [run, [open[0], open[0]]]);
       const other = await running("draft_card");
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "only from a running studio_ranking run", [other, [open[0]]]);
@@ -335,14 +352,20 @@ Deno.test("apply_card_ranking writes rank only, on open cards on now with no mon
       assertEquals((await s.rows(`select 1 from public.agent_events where payload_json ->> 'step' = 'ranked'`)).length, 0);
     });
 
-    await t.step("the reverse of twelve cards changes ten, in the order given, and writes one event of ids and positions", async () => {
-      const run = await running();
+    await t.step("the reverse of twelve applies the longest start of the order that fits in ten changes, and leaves no two cards on now one rank", async () => {
       const before = await s.rows<Row>(`select * from public.cards where id = any($1::uuid[]) order by id`, [open]);
       const reversed = [...open].reverse();
-      const result = (await rank(run, reversed)).r;
+      const result = await rank(reversed);
+      // All twelve would change twelve ranks. The first eleven trade ranks 2 to 12 among
+      // themselves, which changes ten (Open 6 keeps 7); Open 0, past the cut, keeps rank 1.
       assertEquals(result.moves.length, 10);
-      assertEquals(result.unapplied, 2);
-      assertEquals(result.moves[0], { card_id: reversed[0], from: 12, to: 1 });
+      assertEquals(result.unapplied, 1);
+      assertEquals(result.moves[0], { card_id: reversed[0], from: 12, to: 2 });
+      assertEquals(await line(), [
+        "Open 0@1", "Open 11@2", "Open 10@3", "Open 9@4", "Open 8@5", "Open 7@6", "Open 6@7", "Open 5@8", "Open 4@9", "Open 3@10", "Open 2@11", "Open 1@12",
+        "Funded@-", "Money on its bar@-", "Money on hold@-",
+      ]);
+      assertEquals(await sharedRanks(), []);
       const after = await s.rows<Row>(`select * from public.cards where id = any($1::uuid[]) order by id`, [open]);
       for (const [i, card] of after.entries()) {
         const { rank: _a, updated_at: _b, ...rest } = card;
@@ -353,19 +376,110 @@ Deno.test("apply_card_ranking writes rank only, on open cards on now with no mon
       assertEquals(events.length, 1);
       assertEquals([events[0]!.card_id, events[0]!.role_id], [null, s.roles.studioHead]);
       assertEquals(Object.keys(events[0]!.payload_json).sort(), ["moves", "step"]);
+      assertEquals(events[0]!.payload_json.moves, result.moves);
       for (const move of events[0]!.payload_json.moves as Row[]) assertEquals(Object.keys(move).sort(), ["card_id", "from", "to"]);
     });
 
-    await t.step("a card already at its position is not a change", async () => {
-      const run = await running();
-      // The last run put the reverse's first three at 1, 2 and 3.
-      const result = (await rank(run, [...open].reverse().slice(0, 3))).r;
-      assertEquals(result.moves.length, 0);
+    await t.step("an order the cards already stand in is not a change", async () => {
+      const result = await rank([...open].reverse().slice(0, 3));
+      assertEquals([result.moves.length, result.unapplied], [0, 0]);
       assertEquals((await s.rows(`select 1 from public.agent_events where payload_json ->> 'step' = 'ranked'`)).length, 2, "one event per run");
     });
   } finally {
     await s.close();
   }
+});
+
+Deno.test("a ranking trades only the places the named cards hold, so a card holding money keeps its place in line", OPTS, async (t) => {
+  await t.step("ranked cards: the unchanged order moves nothing, and a card holding money stays first", async () => {
+    const s = await studio();
+    try {
+      const { rank, line } = ranking(s);
+      const m = await s.boardCard("M", { rank: 1, target: 100 });
+      await s.pay("m", 2, m);
+      const a = await s.boardCard("A", { rank: 2 });
+      const b = await s.boardCard("B", { rank: 3 });
+      assertEquals(await rank([a, b]), { moves: [], unapplied: 0 });
+      assertEquals(await rank([b, a]), { moves: [{ card_id: b, from: 3, to: 2 }, { card_id: a, from: 2, to: 3 }], unapplied: 0 });
+      assertEquals(await line(), ["M@1", "B@2", "A@3"]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("sparse ranks: the named cards keep the ranks they hold, and the card holding money between them keeps its own", async () => {
+    const s = await studio();
+    try {
+      const { rank, line } = ranking(s);
+      const x = await s.boardCard("X", { rank: 2, target: 1.5 });
+      await s.pay("x", 0.5, x);
+      const a = await s.boardCard("A", { rank: 5 });
+      const b = await s.boardCard("B", { rank: 6 });
+      const c = await s.boardCard("C", { rank: 7 });
+      assertEquals((await rank([a, b, c])).moves, []);
+      await rank([c, a, b]);
+      assertEquals(await line(), ["X@2", "C@5", "A@6", "B@7"]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("unranked cards: they go after every rank on now, only where they already are, and the next payment still reaches the card holding money", async () => {
+    const s = await studio();
+    try {
+      const { rank, line } = ranking(s);
+      const a = await s.boardCard("A");
+      const b = await s.boardCard("B");
+      const m = await s.boardCard("M", { rank: 1, target: 100 });
+      await s.pay("m", 2, m);
+      assertEquals(await line(), ["M@1", "A@-", "B@-"]);
+      assertEquals(await rank([a, b]), { moves: [], unapplied: 0 }, "already their place: no number needed");
+      assertEquals(await rank([b, a]), { moves: [{ card_id: b, from: null, to: 2 }], unapplied: 0 });
+      assertEquals(await line(), ["M@1", "B@2", "A@-"]);
+      const next = await s.pay("next", 1);
+      assertEquals(next.allocations, [{ destination: "card", card_id: m, amount_usd: 1, step: 2 }]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("an unranked card holding money: no card behind it passes it, and a card ahead of it can still move", async () => {
+    const s = await studio();
+    try {
+      const { rank, line } = ranking(s);
+      const r = await s.boardCard("R", { rank: 1 });
+      const o = await s.boardCard("O");
+      const u = await s.boardCard("U", { target: 100 });
+      await s.pay("u", 2, u);
+      const a = await s.boardCard("A");
+      const b = await s.boardCard("B");
+      assertEquals(await line(), ["R@1", "O@-", "U@-", "A@-", "B@-"]);
+      assertEquals(await rank([b, a]), { moves: [], unapplied: 2 });
+      assertEquals(await rank([b, o]), { moves: [], unapplied: 1 });
+      assertEquals(await rank([o, r]), { moves: [{ card_id: o, from: null, to: 1 }, { card_id: r, from: 1, to: 2 }], unapplied: 0 });
+      assertEquals(await line(), ["O@1", "R@2", "U@-", "A@-", "B@-"]);
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("a rank another card in line shares is not traded, a funded card with room included", async () => {
+    const s = await studio();
+    try {
+      const { rank, line } = ranking(s);
+      const l = await s.boardCard("L", { rank: 3 });
+      const a = await s.boardCard("A", { rank: 3 });
+      const b = await s.boardCard("B", { rank: 4 });
+      await s.boardCard("F", { rank: 5, stage: "funded" });
+      const c = await s.boardCard("C", { rank: 5 });
+      assertEquals(await rank([b, a]), { moves: [], unapplied: 1 });
+      assertEquals(await rank([b, a, l]), { moves: [], unapplied: 2 }, "named or not, a shared rank stays");
+      assertEquals(await rank([c, b]), { moves: [], unapplied: 1 }, "F is not rankable but step 2 still funds it");
+      assertEquals(await line(), ["L@3", "A@3", "B@4", "F@5", "C@5"]);
+    } finally {
+      await s.close();
+    }
+  });
 });
 
 Deno.test("the two jobs are seeded manual, model-calling and running while the studio is paused, linked to their roles", OPTS, async () => {

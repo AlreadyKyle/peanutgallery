@@ -282,6 +282,9 @@ export interface Db {
   // The role jobs (docs/specs/agent-workflows.md): cards on now and next at the open stages and
   // funded, for the ranking and the Designer's context.
   openCards(): Promise<OpenCardRow[]>;
+  // The cards a ranking may name (rankable_cards): on now, open for funding, and holding no money on
+  // their bar or on hold, by the one test apply_card_ranking refuses on; in funding order.
+  rankableCards(): Promise<string[]>;
   recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string): Promise<{ id: string; content_sha256: string }>;
   // The card id; the approval's verdict carries the grader's reason codes.
   approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>): Promise<string>;
@@ -724,6 +727,12 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         funding_target_usd: num(row, 'funding_target_usd'),
         funded_usd: num(row, 'funded_usd'),
       }));
+    },
+
+    async rankableCards() {
+      const { data, error } = await client.rpc('rankable_cards');
+      if (error || !Array.isArray(data)) fail('rankable_cards', error);
+      return (data as unknown[]).map((id) => String(id));
     },
 
     async recordCardDraft(runId, roleId, fields, makerRef) {

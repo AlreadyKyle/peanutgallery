@@ -188,6 +188,14 @@ describe('createSupabaseDb queries', () => {
     ]);
   });
 
+  it('reads the rankable cards from rankable_cards, the test apply_card_ranking refuses on, and refuses an answer that is not a list', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: ['card-1', 'card-2'] } : undefined));
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).rankableCards()).toEqual(['card-1', 'card-2']);
+    expect(calls.map((call) => call.body)).toEqual([{}]);
+    const wrong = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: null } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: wrong.fetchFn }).rankableCards()).rejects.toThrow('db rankable_cards');
+  });
+
   it('reads the oldest queued runs first, the jobs and a role\'s pause', async () => {
     const queued = rest([{ id: 'run-1', job_name: 'tidy_up', origin: 'board', status: 'queued', card_id: null, input: { floor: 3 }, parent_run_id: null, created_at: NOW.toISOString() }]);
     const runs = await createSupabaseDb('https://db.local', 'service-role', { fetchFn: queued.fetchFn }).queuedRuns(50);
