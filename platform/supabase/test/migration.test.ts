@@ -1898,8 +1898,11 @@ describe("board-site migration", () => {
 
 // docs/specs/legal-copy.md: numbered Terms versions, append-only, read by the public through one view.
 const TERMS_VERSION_2_FILE = "20260924100100_terms_version_2.sql";
+// Version 3: version 2's words with the studio's new name (docs/specs/rename.md).
+const TERMS_VERSION_3_FILE = "20260925000000_terms_version_3.sql";
 const termsVersionsSql = launchFile(TERMS_VERSIONS_FILE);
 const termsVersion2Sql = launchFile(TERMS_VERSION_2_FILE);
+const termsVersion3Sql = launchFile(TERMS_VERSION_3_FILE);
 
 describe("terms-versions migrations", () => {
   it("come after the board-site file, in order, and the first sets a lock timeout first", () => {
@@ -1925,6 +1928,9 @@ describe("terms-versions migrations", () => {
       "insert into public.terms_versions (version, posted_at) values (1, '2026-09-23 01:32:51+00')\n  on conflict (version) do nothing",
     ]);
     expect(withoutComments(termsVersion2Sql)).toBe("insert into public.terms_versions (version) values (2) on conflict (version) do nothing;");
+    expect(withoutComments(termsVersion3Sql)).toBe("insert into public.terms_versions (version) values (3) on conflict (version) do nothing;");
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    expect(names.indexOf(TERMS_VERSION_3_FILE)).toBeGreaterThan(names.indexOf(MONEY_LOGIC_FILE));
   });
 
   it("keeps the table behind row level security, readable by the service role only, and revokes before it grants", () => {
@@ -2098,7 +2104,7 @@ describe("money-logic migration", () => {
 const AGENT_SYSTEM_CORE_FILE = "20260924300000_agent_system_core.sql";
 const agentSystemCoreSql = launchFile(AGENT_SYSTEM_CORE_FILE);
 // Every table, view and function the migration adds that anon must not reach.
-const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards"];
+const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards", "dispatcher_card_spend"];
 const AGENT_SYSTEM_CORE_FUNCTIONS = [
   "record_card_approval",
   "card_content_hash",
@@ -2107,6 +2113,7 @@ const AGENT_SYSTEM_CORE_FUNCTIONS = [
   "card_approved",
   "card_money_held",
   "card_ready_problem",
+  "card_ceiling_resumed",
   "deal_due_cards",
   "resume_card_by_rule",
   "resume_due_by_rule",
@@ -2195,7 +2202,7 @@ describe("agent-system-core migration", () => {
 // Studio Head's ranking.
 const AGENT_WORKFLOWS_FILE = "20260924400000_agent_workflows.sql";
 const agentWorkflowsSql = launchFile(AGENT_WORKFLOWS_FILE);
-const AGENT_WORKFLOWS_FUNCTIONS = ["card_from_draft", "record_card_draft", "approve_card_draft", "withdraw_card_draft", "apply_card_ranking"];
+const AGENT_WORKFLOWS_FUNCTIONS = ["card_from_draft", "record_card_draft", "approve_card_draft", "withdraw_card_draft", "card_rank_problem", "rankable_cards", "card_ranking_places", "apply_card_ranking"];
 
 describe("agent-workflows migration", () => {
   it("comes straight after agent-system-core, sets a lock timeout first and reloads the schema last", () => {
@@ -2242,6 +2249,10 @@ describe("agent-workflows migration", () => {
     expect(approve).toContain("'proposed', 'next', 'neutral',\n    now() + make_interval(mins => coalesce(v_window, 0))");
     expect(approve).toContain("if public.card_content_hash(v_id) is distinct from v_draft.content_sha256 then");
     expect(approve).toContain("perform public.record_card_approval(");
+    // Only the grader's own approved verdict approves; the function never supplies one.
+    expect(approve).toContain("if coalesce(p_verdict ->> 'result', '') <> 'approved' then");
+    expect(approve).toContain("p_verdict || jsonb_build_object('verdict', p_verdict ->> 'result', 'draft_id', p_draft)");
+    expect(approve).not.toContain("default '{}'");
   });
 
   it("seeds both jobs manual only, model-calling and running while the studio is paused, with no pg_cron schedule", () => {

@@ -5,9 +5,10 @@
 //
 // The image is typographic and uses the site's own stylesheet: the colours, the font, weights, type
 // scale and spacing all come from src/tokens.css and src/styles.css, and the wordmark is the site's
-// .wordmark with the peanut mark. It is drawn on the signal plate, as band 1 of every page is, with
-// the site's own font file (public/fonts, inlined as a data URL, since a page set from a string has
-// no origin to load /fonts from); the run fails if the font did not load. The words come from
+// .wordmark with the mark from brand/mark.svg, drawn in the text colour as the top bar draws it. It is
+// drawn on the signal plate, as band 1 of every page is, with the site's own font file (public/fonts,
+// inlined as a data URL, since a page set from a string has no origin to load /fonts from); the run
+// fails if the font did not load. The words come from
 // src/lib/copy.ts (studio name and pitch line) and the address from index.html's og:url. Only the
 // frame is laid out here. Chromium comes from @playwright/test, a site devDependency, so run
 // `playwright install chromium` first if needed. Commit the PNG it writes; the site serves it from
@@ -60,10 +61,13 @@ const font = `data:font/woff2;base64,${readFileSync(resolve(SITE, 'public', FONT
 const tokens = read('src/tokens.css');
 if (!tokens.includes(`url('/${FONT}')`)) throw new Error(`src/tokens.css does not load /${FONT}`);
 const stylesheet = `${tokens.replace(`url('/${FONT}')`, `url('${font}')`)}\n${read('src/styles.css').replace(/^@import [^;]+;\n/m, '')}`;
-const mark = readFileSync(resolve(SITE, 'public/peanut.png')).toString('base64');
+// The mark as the top bar draws it: inline, in the text colour, sized by the site's .mark rule.
+const mark = read('brand/mark.svg').trim().replace('<svg ', '<svg class="mark" aria-hidden="true" ');
+if (!mark.includes('fill="currentColor"')) throw new Error('brand/mark.svg is not drawn in currentColor');
 
-// The site's type scale is in rem, so a larger root size scales every token together: at 175% the
-// page heading is 52.5px and the lede 35px, which read at link-preview size.
+// A larger root size scales the rem tokens together. The page heading grows with the viewport on the
+// site, so the card sets it at a fixed 1.875rem: at 175% the heading is 52.5px and the lede 35px,
+// which read at link-preview size.
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -81,17 +85,16 @@ html { font-size: 175%; }
   overflow: hidden;
   background: var(--signal);
   color: var(--paper);
-  --mark-filter: invert(1);
 }
 .og .wordmark { font-size: var(--size-lead); }
-.og h1 { margin-bottom: var(--space-2); }
+.og h1 { margin-bottom: var(--space-2); font-size: 1.875rem; line-height: 1.25; }
 .og .lede { max-width: none; }
 .og .address { margin: 0; color: var(--muted-on-signal); font-size: var(--size-small); }
 </style>
 </head>
 <body>
 <div class="og">
-  <span class="wordmark"><img class="mark" src="data:image/png;base64,${mark}" alt="">${escapeHtml(studioName)}</span>
+  <span class="wordmark">${mark}${escapeHtml(studioName)}</span>
   <div>
     <h1>${escapeHtml(pitchTitle)}</h1>
     <p class="lede">${escapeHtml(pitchBody)}</p>

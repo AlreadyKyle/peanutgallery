@@ -52,7 +52,7 @@ describe("DIRECTIVES", () => {
     expect(lines).toEqual([
       [["seed-1/content/strings.json", "labels.unlocksEarned", "{count} unlocks earned"]],
       [],
-      [["seed-1/content/strings.json", "tabTitle", "Dust · Peanut Gallery"]],
+      [["seed-1/content/strings.json", "tabTitle", "Dust · Mob Machine"]],
     ]);
     for (const d of DIRECTIVES) {
       for (const c of parseChecks(d.acceptance_test)) {

@@ -37,12 +37,12 @@
   --ink-hover: #333333; /* outline hover and press on ink */
   --muted-on-ink: #a3a3a3; /* secondary text in ink bands */
   --line-on-ink: #333333; /* hairlines in ink bands (decorative) */
-  --signal: #1a2fc8; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit */
-  --signal-deep: #1526a0; /* hover of every signal fill */
-  --signal-press: #12218c; /* press of every signal fill */
-  --muted-on-signal: #c8d0fa; /* secondary text on signal; the quiet label and edge there */
-  --line-on-signal: #4859d3; /* hairlines on signal (decorative) */
-  --work: #dfe2f7; /* the Building and Being checked card face: the signal at 14% on paper */
+  --signal: #111111; /* the studio: band 1, the primary fill and focus ring on paper, the Picked ribbon, the studio suit. Ink since the board's call of 23 Sep 2026 (the blue read as MS-DOS) */
+  --signal-deep: #333333; /* hover of every signal fill */
+  --signal-press: #333333; /* press of every signal fill */
+  --muted-on-signal: #a3a3a3; /* secondary text on signal; the quiet label and edge there */
+  --line-on-signal: #333333; /* hairlines on signal (decorative) */
+  --work: #d4e1ee; /* the Building and Being checked card face: a pale blue, Dust's bar blue lightened */
   --suit-game: #b0226a; /* the Dust suit tile, on paper and the work face only */
   --suit-studio: var(--signal); /* the studio suit tile: the studio is the site */
   --live: #16701f; /* Live only: its glyph and the stamp's edge, on paper */
@@ -79,7 +79,6 @@
   --coin-hover: var(--coin-down);
   --quiet-fg: var(--muted);
   --quiet-edge: var(--field);
-  --mark-filter: none;
   --suit-tile-game: var(--suit-game);
   --suit-tile-studio: var(--suit-studio);
   --live-mark: var(--live);
@@ -92,14 +91,16 @@
   --weight-strong: 600;
   --weight-bold: 700;
   --leading-body: 1.6;
-  --leading-heading: 1.25;
+  --leading-heading: 1.2;
+  --leading-display: 1.1; /* the page heading */
 
-  /* Type scale: five sizes, a 1.2 ratio from the 17px body. Every text role uses exactly one. */
-  --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, footer */
-  --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons */
-  --size-lead: 1.25rem; /* 20px: the lede, figures, card titles */
-  --size-large: 1.5rem; /* 24px: section headings */
-  --size-display: 1.875rem; /* 30px: the page heading */
+  /* Type scale (the board, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
+     1440px screen; text holds still. Every font-size is one of these. */
+  --size-small: 0.875rem; /* 14px: meta lines, the card's index row and spec rows, a row's date and meta, footer */
+  --size-body: 1.0625rem; /* 17px: paragraphs, nav, buttons, row titles */
+  --size-lead: 1.25rem; /* 20px: the lede, figures, h3 and card titles */
+  --size-h2: clamp(1.5rem, 1.25rem + 1vw, 2rem); /* 24px to 32px: section headings */
+  --size-h1: clamp(2rem, 1.5rem + 2.25vw, 3.5rem); /* 33px to 56px: the page heading */
 
   /* Space */
   --space-1: 0.5rem;
@@ -107,7 +108,9 @@
   --space-3: 1.5rem;
   --space-4: 2.5rem;
   --space-5: 4rem;
-  --band-pad: var(--space-3); /* block padding inside a band; --space-4 from 48rem */
+  /* A band's block padding and the space between sections in one band: 48px on a phone, about 69px
+     at 768px, 96px from about 1070px (the board, 23 Sep 2026: more vertical room). */
+  --band-pad: clamp(3rem, 9vw, 6rem);
 
   /* Layout */
   --wrap: 72rem;
@@ -126,10 +129,4 @@
   --stagger: 50ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
-}
-
-@media (min-width: 48rem) {
-  :root {
-    --band-pad: var(--space-4);
-  }
 }

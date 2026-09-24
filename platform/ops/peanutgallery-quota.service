@@ -4,7 +4,7 @@
 # capability; its secrets come only from /etc/peanutgallery/quota.env. Started by
 # peanutgallery-quota.timer.
 [Unit]
-Description=Peanut Gallery quota check
+Description=Mob Machine quota check
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target

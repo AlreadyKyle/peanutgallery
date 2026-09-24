@@ -128,6 +128,8 @@ export class FakeDb implements Db {
   events: EventRow[] = [];
   deploys: Deploy[] = [];
   claims = 0;
+  // The stages each listCardsInStages call asked for.
+  stagesRead: string[][] = [];
   heartbeats: Date[] = [];
   heartbeatError: Error | null = null;
   // Console credit the board has recorded buying; ample by default so money tests set it.
@@ -150,6 +152,8 @@ export class FakeDb implements Db {
   // The role jobs (docs/specs/agent-workflows.md): the open cards the handlers read, the drafts, the
   // cards approval inserted, the rankings applied, and the failure an RPC is set to raise.
   openCardRows: OpenCardRow[] = [];
+  // Cards a payment on hold names: card_money_held is true for them though their bar may be empty.
+  heldCardIds = new Set<string>();
   drafts: FakeDraft[] = [];
   draftCards: FakeDraftCard[] = [];
   rankings: Array<{ runId: string; order: string[]; moves: RankingMove[] }> = [];
@@ -216,11 +220,11 @@ export class FakeDb implements Db {
   async boardSessionActive() {
     return this.boardActive;
   }
-  async listFundedCards() {
-    return this.cards.filter((c) => c.stage === 'funded').map((c) => ({ ...c }));
-  }
-  // dispatcher_cards: the executor's pause is read from its role, as the view joins it.
+  // dispatcher_cards holds every stage (agent_system_test.ts reads a card at each one), so the fake
+  // filters by the stages asked for alone; the executor's pause is read from its role, as the view
+  // joins it.
   async listCardsInStages(stages: string[]) {
+    this.stagesRead.push([...stages]);
     return this.cards
       .filter((c) => stages.includes(c.stage))
       .map((c) => ({ ...c, executor_paused: c.executor_paused || this.roles.some((r) => r.id === c.executor_role_id && r.paused) }));
@@ -337,6 +341,7 @@ export class FakeDb implements Db {
   async finishJobRun(runId: string, status: 'succeeded' | 'failed' | 'skipped', reason: string | null, output: Record<string, unknown> | null) {
     const run = this.jobRuns.find((r) => r.id === runId);
     if (!run || !(run.status === 'running' || (run.status === 'queued' && status === 'skipped'))) throw new Error(`db finish_job_run: job run ${runId} is not running`);
+    if (status !== 'succeeded' && (reason === null || reason.trim() === '')) throw new Error('db finish_job_run: A failed or skipped run needs a reason');
     run.status = status;
     run.reason = reason;
     run.output = output;
@@ -361,8 +366,20 @@ export class FakeDb implements Db {
   async openCards() {
     return this.openCardRows.map((row) => ({ ...row }));
   }
+  // rankable_cards: on now, open for funding, and no money on the bar or on hold, in funding order.
+  async rankableCards() {
+    return this.openCardRows
+      .filter((row) => row.horizon === 'now' && ['proposed', 'designing', 'voted'].includes(row.stage) && row.funded_usd === 0 && !this.heldCardIds.has(row.id))
+      .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
+      .map((row) => row.id);
+  }
   async recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string) {
     if (this.rpcError.recordCardDraft) throw this.rpcError.recordCardDraft;
+    // As card_from_draft refuses: blank text after trimming, or an estimate that rounds to 0 at 4 places.
+    for (const key of ['title', 'summary', 'intent', 'acceptance_test'] as const) {
+      if (fields[key].trim() === '') throw new Error(`db record_card_draft: A draft needs its ${key}`);
+    }
+    if (!(Math.round(fields.estimate_usd * 10_000) / 10_000 > 0)) throw new Error('db record_card_draft: The estimate must be above zero');
     const id = `draft-${this.drafts.length + 1}`;
     const content_sha256 = `sha-${JSON.stringify(fields)}`;
     this.drafts.push({ id, job_run_id: runId, role_id: roleId, fields: { ...fields }, content_sha256, status: 'drafted', reason_codes: [], maker_ref: makerRef, grader_ref: null, card_id: null });
@@ -372,6 +389,7 @@ export class FakeDb implements Db {
     if (this.rpcError.approveCardDraft) throw this.rpcError.approveCardDraft;
     const draft = this.drafts.find((d) => d.id === draftId);
     if (!draft || draft.status !== 'drafted') throw new Error(`db approve_card_draft: Draft ${draftId} is not drafted`);
+    if (verdict.result !== 'approved') throw new Error('db approve_card_draft: Only an approved verdict approves a draft');
     if (graderRef === draft.maker_ref) throw new Error('db approve_card_draft: The grader ref must differ from the maker ref');
     if (approverRoleId === draft.role_id || approverRoleId === draft.fields.executor_role_id) throw new Error("db approve_card_draft: The approver cannot be the card's proposer, drafter or executor");
     const cardId = `card-from-${draftId}`;
@@ -389,23 +407,27 @@ export class FakeDb implements Db {
     draft.status = 'withdrawn';
     draft.reason_codes = [...reasonCodes];
   }
+  // apply_card_ranking, for ranked cards: the named cards trade the ranks they hold, in the order
+  // given, and a card holding money is refused. The PGlite test covers unranked cards, ties and the
+  // ten-change cut (agent_workflows_test.ts).
   async applyCardRanking(runId: string, order: readonly string[]) {
     if (this.rpcError.applyCardRanking) throw this.rpcError.applyCardRanking;
-    const moves: RankingMove[] = [];
-    let unapplied = 0;
-    order.forEach((id, index) => {
+    const cards = order.map((id) => {
       const card = this.openCardRows.find((row) => row.id === id);
       if (!card) throw new Error(`db apply_card_ranking: Card ${id} does not exist`);
-      if (card.rank === index + 1) return;
-      if (moves.length >= 10) {
-        unapplied += 1;
-        return;
-      }
-      moves.push({ card_id: id, from: card.rank, to: index + 1 });
-      card.rank = index + 1;
+      if (card.funded_usd !== 0 || this.heldCardIds.has(id)) throw new Error(`db apply_card_ranking: Card ${id} holds money`);
+      if (card.rank === null) throw new Error('FakeDb: rank unranked cards on PGlite, not here');
+      return card;
+    });
+    const places = cards.map((card) => card.rank!).sort((a, b) => a - b);
+    const moves: RankingMove[] = [];
+    cards.forEach((card, index) => {
+      if (card.rank === places[index]) return;
+      moves.push({ card_id: card.id, from: card.rank, to: places[index]! });
+      card.rank = places[index]!;
     });
     this.rankings.push({ runId, order: [...order], moves });
-    return { moves, unapplied };
+    return { moves, unapplied: 0 };
   }
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);

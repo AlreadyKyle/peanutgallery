@@ -39,7 +39,7 @@
       "id": "23b1883a-7844-407a-bd83-f42056d47602",
       "was": "Game shell: tab title, icon, studio link and all-ages label",
       "title": "The game's tab shows its name and icon, and the page links to the studio",
-      "summary": "The game tab reads Dust · Peanut Gallery with its own icon, and the page links back to the studio with an all-ages label.",
+      "summary": "The game tab reads Dust · Mob Machine with its own icon, and the page links back to the studio with an all-ages label.",
       "reason": "Plain title without the inside term game shell. What shipped is unchanged."
     }
   ],

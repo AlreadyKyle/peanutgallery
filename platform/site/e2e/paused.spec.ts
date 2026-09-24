@@ -29,8 +29,8 @@ test.describe('paused with no reason', () => {
         await expect(status.locator('svg[data-glyph="pause"]')).toHaveCount(1);
         // Home says the pause once: in the status line, and nowhere else.
         await expect(page.locator('main p.notice')).toHaveCount(0);
-        // The team strip draws the agents asleep.
-        await expect(page.locator('.team-strip svg.avatar[data-pose="asleep"]')).toHaveCount(3);
+        // The team strip shows running agents, drawn awake even while the studio is paused (the board, 23 Sep 2026).
+        await expect(page.locator('.team-strip svg.avatar[data-pose="awake"]')).toHaveCount(3);
         expect(await overflowsHorizontally(page)).toBe(false);
         if (SHOTS !== '') {
           mkdirSync(SHOTS, { recursive: true });

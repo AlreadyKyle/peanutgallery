@@ -105,13 +105,23 @@ afterEach(() => {
 });
 
 describe('Team', () => {
-  it('splits the roles into running and not running yet from facts, not labels', async () => {
+  it('splits the roles into running and building no cards from facts, not labels', async () => {
     renderTeam(sourceOf(snapshot()));
     const running = await screen.findByRole('region', { name: team.running });
     expect(names(running)).toEqual(['Builder A', 'Builder B', 'QA']);
     const waiting = screen.getByRole('region', { name: team.notRunning });
     expect(names(waiting)).toEqual(['Studio Head', 'Game Director', 'Platform Builder', 'Host', 'Biz Dev', 'Community']);
     expect(within(waiting).getByRole('link', { name: team.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+  });
+
+  // The Studio Head ranks, the Game Designer drafts and the Game Director grades when the board asks
+  // (docs/specs/agent-workflows.md), so the section they sit in never says its roles have no job.
+  it('says the roles that build no cards include ones that rank, draft or grade when the board asks', async () => {
+    renderTeam(sourceOf(snapshot()));
+    const waiting = await screen.findByRole('region', { name: team.notRunning });
+    expect(team.notRunning).toBe('Not building cards');
+    expect(waiting.textContent).toContain('Some rank, draft or grade cards when the board asks');
+    expect(waiting.textContent).not.toMatch(/these roles have no job|not running/i);
   });
 
   it('gives a running role its model, hired date, live cards shipped and what it changes', async () => {
@@ -129,10 +139,12 @@ describe('Team', () => {
   it('shows no model or hired date for a role that does not run, so the director model claims nothing', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.notRunning });
+    // The Not building cards heading says it once; a row adds a reason only when a closed lane is it.
     for (const name of ['Studio Head', 'Game Director', 'Host', 'Biz Dev', 'Community']) {
-      expect(within(box(name)).getByText(`${team.notRunning}.`)).toBeTruthy();
+      expect(within(box(name)).queryByText(team.notRunning, { exact: false })).toBeNull();
+      expect(box(name).querySelector('.card-meta')).toBeNull();
     }
-    expect(within(box('Platform Builder')).getByText(`${team.notRunning}. ${team.siteClosed}`)).toBeTruthy();
+    expect(within(box('Platform Builder')).getByText(team.siteClosed)).toBeTruthy();
     expect(screen.queryByText(/claude-opus-5-5/)).toBeNull();
     expect(screen.queryByText(/claude-haiku/)).toBeNull();
   });
@@ -177,19 +189,16 @@ describe('Team', () => {
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 
-  it('draws every agent asleep while the agents are paused, and awake otherwise or when the studio row did not load', async () => {
-    const poses = () => [...document.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
-    renderTeam(sourceOf(snapshot({ paused: true })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['asleep']));
-    cleanup();
-    renderTeam(sourceOf(snapshot({ paused: false })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['awake']));
-    cleanup();
-    renderTeam(sourceOf(snapshot({ paused: true, missing: ['studio'] })));
-    await screen.findByRole('region', { name: team.running });
-    expect(new Set(poses())).toEqual(new Set(['awake']));
+  it('draws running agents awake and the roles still to come asleep, whether or not the studio is paused', async () => {
+    const poses = (region: HTMLElement) => [...region.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    for (const paused of [true, false]) {
+      renderTeam(sourceOf(snapshot({ paused })));
+      const running = await screen.findByRole('region', { name: team.running });
+      const waiting = screen.getByRole('region', { name: team.notRunning });
+      expect(new Set(poses(running))).toEqual(new Set(['awake']));
+      expect(new Set(poses(waiting))).toEqual(new Set(['asleep']));
+      cleanup();
+    }
   });
 
   it('lists each agent as a plain row, never a card', async () => {

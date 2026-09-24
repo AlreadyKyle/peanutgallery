@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SpecRow } from '../components/Funding';
 import { announcementText, changesHeight, diffSnapshots, MAX_MOTIONS_PER_POLL } from './changes';
-import { faceOf, groupCards, plannedCards, type CardGroups } from './cards';
+import { faceOf, groupCards, fundingPlace, plannedCards, type CardGroups } from './cards';
 import { formatInteger, formatUsd, percent } from './format';
 import { deal, flip, fundTick } from './motion';
 import { runsCards } from './roster';
@@ -24,7 +24,7 @@ export type InPlace = { id: string; card: Card; funding: CardFunding | undefined
 /** The groups of `base` (the layout), each card replaced by its data in `display`. */
 export function viewOf(base: Snapshot, display: Snapshot): HomeView {
   const byId = new Map(display.cards.map((card) => [card.id, card]));
-  const groups = groupCards(base.cards);
+  const groups = groupCards(base.cards, fundingPlace(base));
   const pick = (cards: Card[]) => cards.map((card) => byId.get(card.id) ?? card);
   return {
     snapshot: display,
@@ -61,7 +61,7 @@ export function inPlaceChanges(base: Snapshot, display: Snapshot, latest: Snapsh
   const shownById = new Map(display.cards.map((card) => [card.id, card]));
   const nextById = new Map(latest.cards.map((card) => [card.id, card]));
   const out: InPlace[] = [];
-  for (const { id } of groupCards(base.cards).fund) {
+  for (const { id } of groupCards(base.cards, fundingPlace(base)).fund) {
     const shown = shownById.get(id);
     const next = nextById.get(id);
     if (shown === undefined || next === undefined) continue;

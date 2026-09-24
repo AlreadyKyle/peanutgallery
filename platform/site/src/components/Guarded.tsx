@@ -15,7 +15,11 @@ export function Guarded({
   children: (snapshot: Snapshot) => ReactNode;
 }) {
   if (studio.state === 'loading') {
-    return <p className="muted">{copy.loadingCards}</p>;
+    return (
+      <p className="muted" aria-busy="true">
+        {copy.loadingCards}
+      </p>
+    );
   }
   if (studio.state !== 'ready') {
     return <p className="muted">{unavailableLine(studio)}</p>;

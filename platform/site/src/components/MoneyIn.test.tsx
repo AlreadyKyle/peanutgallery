@@ -2,8 +2,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { books } from '../lib/books.test-fixture';
 import { legal } from '../lib/legal';
-import type { Money } from '../lib/source';
-import { MoneyInFigures } from './MoneyIn';
+import type { Money, Snapshot } from '../lib/source';
+import { FundingLines, MoneyInFigures, NotOnCardStat } from './MoneyIn';
 
 afterEach(() => {
   cleanup();
@@ -97,5 +97,54 @@ describe('Money in', () => {
     expect(lines(EVERY)).toEqual(['Reconciled with Stripe on 23 Sep 2026.']);
     expect(lines({ ...EVERY, last_run_ok: null, reconciled_at: null })).toEqual([legal.notReconciled]);
     expect(lines({ ...EVERY, last_run_ok: false, reconciled_at: null })).toEqual([legal.notReconciled]);
+  });
+});
+
+function snapshotWith(money: Money | null): Snapshot {
+  return {
+    pool: null,
+    cards: [],
+    funding: {},
+    launchedAt: null,
+    paused: false,
+    totals: { usd_total: 0, input_tokens: 0, cached_tokens: 0, output_tokens: 0, row_count: 0 },
+    events: [],
+    deploys: [],
+    roles: [],
+    cardTitles: {},
+    money,
+    missing: money === null ? ['money'] : [],
+  };
+}
+
+describe('the Funding band', () => {
+  it("names the board's test payment by the part of it in the pool, as public_money has it", () => {
+    // Production: a $1.00 payment whose agent credit, $0.5019, is board_test_usd (docs/specs/money-logic.md).
+    render(<FundingLines snapshot={snapshotWith(books([], { board_test_usd: 0.5019 }))} />);
+    expect(screen.getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain('$1.00');
+    cleanup();
+    render(<FundingLines snapshot={snapshotWith(books([], { board_test_usd: 0 }))} />);
+    expect(screen.queryByText(/test payment/)).toBeNull();
+  });
+
+  it('puts Not available right now. under the Not on a card yet label, never in the figure\'s place', () => {
+    render(
+      <dl>
+        <NotOnCardStat snapshot={snapshotWith(null)} />
+      </dl>,
+    );
+    const row = screen.getByText(legal.notOnCard).closest('.stat')!;
+    expect(row.classList.contains('stat-unavailable')).toBe(true);
+    expect(row.querySelector('dd')?.textContent).toBe(legal.partUnavailable);
+    cleanup();
+    render(
+      <dl>
+        <NotOnCardStat snapshot={snapshotWith(books([], { not_on_card_usd: 1.25 }))} />
+      </dl>,
+    );
+    const loaded = screen.getByText(legal.notOnCard).closest('.stat')!;
+    expect(loaded.classList.contains('stat-unavailable')).toBe(false);
+    expect(loaded.querySelector('dd')?.textContent).toBe('$1.25');
   });
 });

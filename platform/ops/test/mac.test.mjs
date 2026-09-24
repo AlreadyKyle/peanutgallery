@@ -139,7 +139,7 @@ describe('run-dispatcher.sh', () => {
     host.setExit(78);
     const result = host.run();
     assert.equal(result.status, 0, result.log);
-    assert.deepEqual(posts(result.calls), [`data-binary = "Peanut Gallery dispatcher stopped on ${HOSTNAME}: fatal startup error"`]);
+    assert.deepEqual(posts(result.calls), [`data-binary = "Mob Machine dispatcher stopped on ${HOSTNAME}: fatal startup error"`]);
     assert.ok(result.calls.includes('url = "https://ntfy.sh/fixture-topic"'), 'the topic reaches curl in its config file');
     assert.deepEqual(delays(result.calls), []);
     assert.match(result.log, /^run-dispatcher: stopped: fatal startup error: the dispatcher exited 78/m);
@@ -177,7 +177,7 @@ describe('run-dispatcher.sh', () => {
     const refused = host.run();
     assert.equal(refused.status, 0);
     assert.ok(!refused.calls.some((line) => line.startsWith('node ')), 'the dispatcher is not started');
-    assert.deepEqual(posts(refused.calls), [`data-binary = "Peanut Gallery dispatcher stopped on ${HOSTNAME}: 8 starts in 6 hours"`]);
+    assert.deepEqual(posts(refused.calls), [`data-binary = "Mob Machine dispatcher stopped on ${HOSTNAME}: 8 starts in 6 hours"`]);
     writeFileSync(path.join(host.state, 'dispatcher-starts'), `${Array.from({ length: 8 }, (_, index) => now - 21601 - index).join('\n')}\n`);
     host.reset();
     const allowed = host.run();
@@ -283,11 +283,11 @@ describe('run-job.sh', () => {
     assert.ok(!existsSync(path.join(job.host, 'state', 'job-controller.lock')), 'the lock is released');
   });
 
-  test('a job that cannot run posts "Peanut Gallery job <job> failed on <host>" to ntfy', () => {
+  test('a job that cannot run posts "Mob Machine job <job> failed on <host>" to ntfy', () => {
     const job = jobHost();
     const missing = job.run('quota', '--now');
     assert.equal(missing.status, 1);
-    assert.deepEqual(posts(missing.calls), [`data-binary = "Peanut Gallery job quota failed on ${HOSTNAME}; see ${path.join(job.host, 'logs', 'quota.log')}"`]);
+    assert.deepEqual(posts(missing.calls), [`data-binary = "Mob Machine job quota failed on ${HOSTNAME}; see ${path.join(job.host, 'logs', 'quota.log')}"`]);
     assert.ok(!missing.calls.some((line) => line.startsWith('node ')));
     const file = path.join(job.host, 'env', 'quota.env');
     writeFileSync(file, 'SUPABASE_URL=https://fixture.supabase.local\n');
@@ -455,8 +455,8 @@ describe('backup-mac.sh', () => {
       [
         'psql -X -At --no-password -c show server_version_num',
         'pg_dumpall --no-password --roles-only --no-role-passwords --quote-all-identifiers --no-comments',
-        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public',
-        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
+        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public --schema=money',
+        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --schema=money --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=auth --file=${pgCalls(result.calls)[4].split('--file=')[1]}`,
         'pg_dump --no-password --schema-only --quote-all-identifiers --schema=supabase_migrations',
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=supabase_migrations --file=${pgCalls(result.calls)[6].split('--file=')[1]}`,
@@ -491,6 +491,66 @@ describe('backup-mac.sh', () => {
     for (const file of ['roles.sql', 'schema.sql', 'data.sql', 'auth.sql', 'history_schema.sql', 'history_data.sql', 'identity.json']) assert.match(listing, new RegExp(`/${file.replace('.', '\\.')}$`, 'm'), file);
     const schema = spawnSync('tar', ['-xOf', archive, `${stored.replace('.tar.age', '')}/schema.sql`], { encoding: 'utf8' }).stdout;
     assert.match(schema, /^CREATE SCHEMA IF NOT EXISTS "public";$/m);
+  });
+
+  // pg_dump --schema dumps nothing a named schema depends on. The public views and money functions
+  // call the money schema's helpers, so a schema.sql without it fails at its first such view and the
+  // documented --single-transaction restore rolls back whole.
+  test('schema.sql and data.sql name public and every schema a migration creates', () => {
+    const migrations = path.join(REPO_ROOT, 'platform', 'supabase', 'migrations');
+    const created = new Set(['public']);
+    for (const name of readdirSync(migrations).filter((file) => file.endsWith('.sql'))) {
+      for (const match of readFileSync(path.join(migrations, name), 'utf8').matchAll(/^\s*create\s+schema\s+(?:if\s+not\s+exists\s+)?"?(\w+)"?/gim)) {
+        created.add(match[1].toLowerCase());
+      }
+    }
+    assert.ok(created.has('money'), 'the money-logic migration creates the money schema');
+    const script = read('platform/ops/mac/backup-mac.sh');
+    const schemaLine = /^\s*"\$PG_BIN\/pg_dump" --no-password --schema-only [^\n]*\\\n[^\n]*> "\$dir\/schema\.sql"$/m.exec(script)?.[0];
+    const dataLine = /^\s*"\$PG_BIN\/pg_dump" --no-password --data-only [^\n]*--file="\$dir\/data\.sql"$/m.exec(script)?.[0];
+    for (const [file, line] of [['schema.sql', schemaLine], ['data.sql', dataLine]]) {
+      assert.ok(line, `backup-mac.sh writes ${file} with one pg_dump`);
+      const named = [...line.matchAll(/--schema=(\w+)/g)].map((match) => match[1]).sort();
+      assert.deepEqual(named, [...created].sort(), `${file} dumps exactly public and the schemas the migrations create`);
+    }
+  });
+
+  // The dumps carry public and money only. What the migrations make outside them (a trigger on
+  // auth.users, Realtime's tables, the backup login's grants, pg_cron's jobs) a restore makes with
+  // after-restore.sql, so every such statement in the migrations must be there.
+  test('after-restore.sql makes everything the migrations make outside the dumped schemas, and both restore runbooks run it', () => {
+    const migrations = path.join(REPO_ROOT, 'platform', 'supabase', 'migrations');
+    const sql = readdirSync(migrations)
+      .filter((file) => file.endsWith('.sql'))
+      .sort()
+      .map((name) => readFileSync(path.join(migrations, name), 'utf8'))
+      .join('\n');
+    const after = read('platform/ops/after-restore.sql');
+    const flat = (text) => text.replace(/\s+/g, ' ').trim();
+    const dumped = new Set(['public', 'money']);
+
+    const jobs = [...sql.matchAll(/cron\.schedule\(('[^']+', '[^']+', '[^']+')\)/g)].map((match) => match[1]);
+    for (const name of ['credit-held-contributions', 'waterfall-sweep']) assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
+    for (const job of jobs) assert.ok(after.includes(`select cron.schedule(${job});`), `after-restore.sql schedules ${job}`);
+
+    const triggers = [...sql.matchAll(/create (?:or replace )?trigger (\w+)\s+([^;]*?\son (\w+)\.\w+[^;]*);/gi)].filter((match) => !dumped.has(match[3].toLowerCase()));
+    assert.ok(triggers.some((match) => match[1] === 'restrict_auth_users_to_board'), 'the sign-in trigger is found');
+    for (const [, name, body] of triggers) assert.ok(flat(after).includes(flat(`create or replace trigger ${name} ${body};`)), `after-restore.sql makes trigger ${name}`);
+
+    const published = [...sql.matchAll(/alter publication supabase_realtime add table ([^;]+);/gi)].flatMap((match) => match[1].split(',').map((table) => table.trim()));
+    const set = /alter publication supabase_realtime set table ([^;]+);/i.exec(after)?.[1].split(',').map((table) => table.trim()) ?? [];
+    assert.deepEqual([...set].sort(), [...new Set(published)].sort(), "after-restore.sql sets Realtime's tables to every table the migrations add");
+
+    const grants = [...sql.matchAll(/grant (usage on schema|select on all tables in schema) (\w+) to (\w+);/gi)].filter((match) => !dumped.has(match[2].toLowerCase()));
+    assert.ok(grants.length >= 4, 'the backup login grants on auth and supabase_migrations are found');
+    for (const [statement] of grants) assert.ok(after.includes(statement), `after-restore.sql has: ${statement}`);
+
+    const readme = read('platform/ops/README.md');
+    const macRestore = /^### Restore a Mac backup\n[\s\S]*?(?=^### )/m.exec(readme)?.[0] ?? '';
+    assert.ok(macRestore.includes('$PSQL --single-transaction --variable ON_ERROR_STOP=1 --file platform/ops/after-restore.sql --dbname "<target>"'), 'Restore a Mac backup runs it');
+    assert.match(macRestore, /`select jobname, schedule from cron\.job order by jobname` must list every job `after-restore\.sql` schedules/);
+    const serverRestore = /^## Restore the database\n[\s\S]*?(?=^## )/m.exec(readme)?.[0] ?? '';
+    assert.match(serverRestore, /Then run `platform\/ops\/after-restore\.sql` on the target, as \[Restore a Mac backup\]\(#restore-a-mac-backup\), step 4, does/);
   });
 
   test("never holds the owner's login, under any name, and leaves the auth dump out with BACKUP_SKIP_AUTH=1", () => {

@@ -1,5 +1,5 @@
 import { copy } from './copy';
-import { CATEGORY_FILTERS, categoryOf, fundOrder, type CategoryFilter } from './payment';
+import { CATEGORY_FILTERS, categoryOf, type CategoryFilter } from './payment';
 import type { Card, Horizon } from './source';
 
 // Which cards take money, their order, what each spends it on and the Payment Link address live in
@@ -9,8 +9,8 @@ export {
   CATEGORY_FILTERS,
   categoryOf,
   fundableCards,
+  fundingPlace,
   fundLink,
-  fundOrder,
   inFundingOrder,
   isFullyFunded,
   nextInLine,
@@ -50,7 +50,7 @@ export function isRunnable(card: Card): boolean {
 export type CardGroups = {
   /** Building or in the gate, in server order. */
   now: Card[];
-  /** Open for funding or picked by the board and still filling, in fundOrder. */
+  /** Open for funding or picked by the board and still filling, in the waterfall's order (`place`). */
   fund: Card[];
   /** Funded and waiting for the agents, oldest first. */
   queued: Card[];
@@ -58,14 +58,21 @@ export type CardGroups = {
   shipped: Card[];
 };
 
-/** Building, funding and queued hold horizon now cards only; a live card is shipped whatever its horizon. */
-export function groupCards(cards: readonly Card[]): CardGroups {
+/**
+ * Building, funding and queued hold horizon now cards only; a live card is shipped whatever its
+ * horizon. `place` is fundingPlace(snapshot): with the waterfall's order loaded, fund holds only the
+ * cards in it, in its order (docs/specs/money-surfaces.md); left out, every open card in the
+ * roadmap's order.
+ */
+export function groupCards(cards: readonly Card[], place: (card: Card) => number | null = () => 0): CardGroups {
   const runnable = cards.filter(isRunnable);
   const elsewhere = (card: Card) =>
     NOW_STAGES.has(card.stage) || card.stage === QUEUED_STAGE || card.stage === SHIPPED_STAGE;
   return {
     now: runnable.filter((card) => NOW_STAGES.has(card.stage)),
-    fund: runnable.filter((card) => !elsewhere(card)).sort(fundOrder),
+    fund: runnable
+      .filter((card) => !elsewhere(card) && place(card) !== null)
+      .sort((a, b) => (place(a) ?? 0) - (place(b) ?? 0) || plannedOrder(a, b)),
     queued: runnable.filter((card) => card.stage === QUEUED_STAGE),
     shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
   };

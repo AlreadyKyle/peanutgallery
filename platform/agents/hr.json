@@ -1,7 +1,7 @@
 {
   "name": "HR",
   "title": "HR",
-  "description": "Keeps each role's spec true to the role's measured work and proposes role changes for the board to merge, but is not running yet.",
+  "description": "Keeps each role's spec true to the role's measured work and proposes role changes for the board to merge.",
   "species_note": "A round blue creature with two small antennae and a wide mouth.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,

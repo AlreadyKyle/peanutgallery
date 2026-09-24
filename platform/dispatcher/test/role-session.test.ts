@@ -34,6 +34,7 @@ function setup(script: FakeScript, options: FakeOptions = {}) {
   const deps: RoleSessionDeps = {
     db,
     adapter,
+    scripts: true,
     typed,
     priceTable: PRICE_TABLE,
     maxTurns: 20,
@@ -56,7 +57,7 @@ const oneTurn: FakeScript = async (_spec, emit) => {
 describe('the role session spec', () => {
   it('holds exactly the role spec tools, with Bash as seed-1 package scripts, and no argument names Write, Edit, a web tool, an MCP tool or a fallback model', () => {
     for (const r of [director, designer]) {
-      const spec = roleSessionSpec(request({ role: r }), 20);
+      const spec = roleSessionSpec(request({ role: r }), 20, true);
       expect(spec.roleTools).toEqual(r.tools_json);
       const args = claudeArgs(spec, 'role prompt');
       expect(args).not.toContain('--fallback-model');
@@ -76,6 +77,35 @@ describe('the role session spec', () => {
       }
       expect(args[args.indexOf('--mcp-config') + 1]).toBe('{"mcpServers":{}}');
     }
+  });
+
+  // PLAN §6 and decision 25: no agent-written code runs on the unattended dispatcher's host, and the
+  // seed's package scripts are agent-written code.
+  it('in an unattended process holds no Bash, so the seed scripts never run on the host and nothing is installed', async () => {
+    const spec = roleSessionSpec(request({ role: designer }), 20, false);
+    expect(spec.roleTools).toEqual(READ_SET);
+    const args = claudeArgs(spec, 'role prompt');
+    expect(args[args.indexOf('--tools') + 1]!.split(',')).toEqual(READ_SET);
+    const allowed = args.slice(args.indexOf('--allowedTools') + 1, args.indexOf('--disallowedTools'));
+    expect(allowed.filter((rule) => rule.startsWith('Bash'))).toEqual([]);
+    for (const tools of [['Read', 'Bash'], ['Read', 'Bash(pnpm --filter @backseat/seed-1 test:*)']]) {
+      expect(roleSessionSpec(request({ role: { ...designer, tools_json: tools } }), 20, false).roleTools).toEqual(['Read']);
+    }
+    // The Designer's session in an unattended process starts with Read, Glob and Grep only.
+    const t = setup(async (s, emit) => {
+      await emit({ type: 'start', sessionId: 'designer-session', model: 'director-class', tools: s.roleTools, apiKeySource: 'none' });
+      await emit(usageEvent(1, 400, 'director-class'));
+    });
+    const result = await runRoleSession(request({ role: designer }), { ...t.deps, scripts: false });
+    expect(result.ok).toBe(true);
+    expect(t.adapter.specs.map((s) => s.roleTools)).toEqual([READ_SET]);
+    // An init line that still shows Bash stops the session.
+    const shown = setup(async (_s, emit, signal) => {
+      await emit({ type: 'start', sessionId: 'designer-session', model: 'director-class', tools: DESIGNER_TOOLS, apiKeySource: 'none' });
+      await untilAborted(signal, 2000);
+    });
+    const stopped = await runRoleSession(request({ role: designer }), { ...shown.deps, scripts: false });
+    expect(stopped).toMatchObject({ ok: false, reason: 'session exposes tools a role job may not hold: Bash' });
   });
 
   it('refuses a role that holds Write, Edit, a web tool or an MCP tool, before any session starts', async () => {
@@ -106,6 +136,18 @@ describe('runRoleSession', () => {
     await t.db.recordUsage({ billed_to: first.billed_to, card_id: first.card_id, role_id: first.role_id, model: first.model, input_tokens: first.input_tokens, cached_tokens: first.cached_tokens, output_tokens: first.output_tokens, usd: first.usd, request_id: first.request_id });
     expect(t.db.ledger).toHaveLength(before);
     expect(t.db.pool.balance_usd).toBe(50);
+  });
+
+  it('runs on the model its role resolves to when the session starts, as card sessions do, not a stale roles.model', async () => {
+    // MODEL_DIRECTOR changed and the dispatcher restarted, with the roles not re-seeded.
+    const stale = { ...director, model: 'stale-director' };
+    const t = setup(oneTurn);
+    const resolved = await runRoleSession(request({ role: stale }), { ...t.deps, resolveModel: () => 'director-class' });
+    expect(resolved).toMatchObject({ ok: true });
+    expect(t.adapter.specs.map((spec) => spec.model)).toEqual(['director-class']);
+    const unresolved = setup(oneTurn);
+    expect(await runRoleSession(request({ role: stale }), unresolved.deps)).toMatchObject({ ok: false, reason: 'no price for model stale-director' });
+    expect(unresolved.adapter.specs).toEqual([]);
   });
 
   it('fails, marked as invalid output, when the final message is not exactly one schema-valid object', async () => {

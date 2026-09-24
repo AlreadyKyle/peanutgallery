@@ -12,7 +12,9 @@
 //   write only the worktree and the temp folder; they reach no host, and the only socket they may use
 //   is tsx's IPC folder; git in them reads no global or system configuration;
 // - the Read, Glob and Grep tools, which the sandbox does not cover, are denied the credential paths,
-//   the repository's .env files and the dispatcher's own code; Edit and Write are allowed only in the
+//   every .env file under the home folder, the Mac host's env folder and the database dumps, and the
+//   .env files and the dispatcher's own code in both the work clone and the code clone the
+//   dispatcher runs from (on the Mac host they differ); Edit and Write are allowed only in the
 //   worktree.
 // Dependencies are installed before the session, outside it, so the session never needs the network.
 //
@@ -39,6 +41,8 @@ export type Installer = (worktree: string) => Promise<void>;
 export interface AttendedOptions extends ClaudeCliOptions {
   // The checkout the dispatcher runs git in; the sandbox hides it apart from the card's worktree.
   repoRoot?: string;
+  // The checkout the dispatcher runs from, holding its .env: the repository itself unless named.
+  codeRoot?: string;
   home?: string;
   tmpdir?: string;
   uid?: number | string;
@@ -61,6 +65,8 @@ export const SESSION_GIT_ENV: Readonly<Record<string, string>> = { GIT_CONFIG_GL
 export interface SandboxPaths {
   worktree: string;
   repoRoot: string;
+  // The code clone the dispatcher runs from; the repository when absent.
+  codeRoot?: string;
   home: string;
   tmpdir: string;
   // What tsx names its IPC folder after: the effective uid, or the user name where there is none.
@@ -85,6 +91,15 @@ export const HOME_DENY: readonly string[] = [
   '.claude.json',
   '.netrc',
   '.npmrc',
+  // Every .env file under the home folder, wherever a checkout sits: the board's own, the code clone's,
+  // and the Mac host's dispatcher.env and job env files.
+  '**/.env',
+  '**/.env.*',
+  '**/*.env',
+  // The Mac host's env folder (platform/ops/mac/lib.sh) and the database dumps taken before
+  // production steps.
+  'peanutgallery-host/env/**',
+  'peanutgallery-dumps/**',
 ];
 
 // A path with every symlink in it resolved, the way Claude Code resolves sandbox paths. A path that
@@ -139,7 +154,10 @@ export function attendedSettings(paths: SandboxPaths, resolve: PathResolver = re
   // with it the git data re-allowed inside. Leaving it out only ever allows less. It is the temp folder
   // when the repository sits in it, as the sandbox check's scratch clone does.
   const allowRead = unique(reopen.filter((allow) => !denyRead.some((deny) => within(deny, allow))));
-  // The repository's rules name it as given and as resolved, since a tool may be handed either.
+  // The repository's rules name it as given and as resolved, since a tool may be handed either, and
+  // the same for the code clone the dispatcher runs from, whose .env holds the dispatcher's keys.
+  const codeRoot = paths.codeRoot ?? paths.repoRoot;
+  const rootRules = unique([absoluteRulePath(paths.repoRoot), absoluteRulePath(repoRoot), absoluteRulePath(codeRoot), absoluteRulePath(real(codeRoot))]);
   const repoRules = unique([absoluteRulePath(paths.repoRoot), absoluteRulePath(repoRoot)]);
   return {
     sandbox: {
@@ -169,8 +187,8 @@ export function attendedSettings(paths: SandboxPaths, resolve: PathResolver = re
     permissions: {
       deny: [
         ...HOME_DENY.map((relative) => `Read(~/${relative})`),
-        ...repoRules.map((root) => `Read(${root}/.env*)`),
-        ...repoRules.map((root) => `Read(${root}/platform/dispatcher/**)`),
+        ...rootRules.map((root) => `Read(${root}/.env*)`),
+        ...rootRules.map((root) => `Read(${root}/platform/dispatcher/**)`),
         ...repoRules.map((root) => `Edit(${root}/.git/**)`),
       ],
     },
@@ -186,6 +204,7 @@ export class AttendedAdapter extends ClaudeCliAdapter {
     super(options);
     this.paths = {
       repoRoot: options.repoRoot ?? process.cwd(),
+      ...(options.codeRoot === undefined ? {} : { codeRoot: options.codeRoot }),
       home: options.home ?? os.homedir(),
       tmpdir: options.tmpdir ?? process.env.TMPDIR ?? os.tmpdir(),
       uid: options.uid ?? currentUid(),

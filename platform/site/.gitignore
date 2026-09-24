@@ -8,3 +8,6 @@ e2e-screenshots/
 # A build given an absolute --outDir once wrote version.json under a copy of that path here
 # (vite.config.ts now resolves outDir as Vite does); nothing under private/ is ever source.
 /private/
+
+# Every build writes version.json into its output folder (vite.config.ts); it is never source.
+version.json

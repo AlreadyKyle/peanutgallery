@@ -69,6 +69,10 @@ export type AgentEvent = {
   role_id: string | null;
   type: string;
   created_at: string;
+  // What the database did to a card on a line no role wrote (dealt, ceiling_top_up, resume_rule), and
+  // the top-up's amount; absent or null on every other line.
+  step?: string | null;
+  usd?: number | string | null;
 };
 
 /** A deploy row. The smoke bot's raw output stays in the database; the site shows only passed or failed. */
@@ -433,7 +437,19 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const cardTitles: Record<string, string> = {};
   for (const row of rows(live.events, 'events')) {
     const cardId = textOrNull(row, 'card_id');
-    events.push({ id: text(row, 'id'), card_id: cardId, role_id: textOrNull(row, 'role_id'), type: text(row, 'type'), created_at: text(row, 'created_at') });
+    // step and usd name what the database did to a card (dealt, topped up, resumed by rule); a line
+    // without them carries neither key, as the pages read it (EventList.tsx).
+    const step = textOrNull(row, 'step');
+    const usd = row.usd === null || row.usd === undefined ? null : money(row.usd);
+    events.push({
+      id: text(row, 'id'),
+      card_id: cardId,
+      role_id: textOrNull(row, 'role_id'),
+      type: text(row, 'type'),
+      created_at: text(row, 'created_at'),
+      ...(step === null ? {} : { step }),
+      ...(usd === null ? {} : { usd }),
+    });
     const title = textOrNull(row, 'card_title');
     if (cardId !== null && title !== null) cardTitles[cardId] = title;
   }

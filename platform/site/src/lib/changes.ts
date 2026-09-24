@@ -1,5 +1,5 @@
 import { copy } from './copy';
-import { faceOf, groupCards, type CardGroups, type Face } from './cards';
+import { faceOf, groupCards, fundingPlace, type CardGroups, type Face } from './cards';
 import type { Card, Snapshot } from './source';
 
 // Live changes between two snapshots (DESIGN.md, Motion and Live updates). Motion comes only from a
@@ -36,7 +36,7 @@ const GROUPS: readonly (keyof CardGroups)[] = ['now', 'fund', 'queued', 'shipped
 
 /** Where each card sits: its group and its index there. */
 function places(snapshot: Snapshot): Map<string, { group: keyof CardGroups; index: number; card: Card }> {
-  const groups = groupCards(snapshot.cards);
+  const groups = groupCards(snapshot.cards, fundingPlace(snapshot));
   const out = new Map<string, { group: keyof CardGroups; index: number; card: Card }>();
   for (const group of GROUPS) groups[group].forEach((card, index) => out.set(card.id, { group, index, card }));
   return out;

@@ -7,6 +7,7 @@ import { LiveUpdates } from '../components/LiveUpdates';
 import { pausedSentence } from '../components/PausedNotice';
 import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
+import { MoreLink } from '../components/MoreLink';
 import { TeamStrip } from '../components/TeamStrip';
 import { plannedCards } from '../lib/cards';
 import { copy } from '../lib/copy';
@@ -91,7 +92,10 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
       </p>
       <StatusLine studio={studio} view={live.view} />
       <StaleNotice studio={studio} />
-      <LiveUpdates count={live.count} paused={live.paused} onTogglePause={live.togglePause} onShow={live.show} message={live.message} />
+      {/* With no snapshot to update (the read failed), the row would claim "Up to date" about nothing. */}
+      {live.view === null && studio.state !== 'loading' ? null : (
+        <LiveUpdates count={live.count} paused={live.paused} onTogglePause={live.togglePause} onShow={live.show} message={live.message} />
+      )}
     </div>
   );
 }
@@ -124,7 +128,10 @@ function TeamSection({ view }: { view: HomeView }) {
     <div className="band">
       <section className="section" aria-labelledby="team">
         <h2 id="team">{copy.team.title}</h2>
-        <TeamStrip roles={roles} asleep={pausedSentence(snapshot) !== null} />
+        <TeamStrip roles={roles} asleep={false} />
+        <p className="more">
+          <MoreLink to="/team">{copy.team.meetAll}</MoreLink>
+        </p>
       </section>
     </div>
   );
@@ -174,7 +181,7 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
         </>
       )}
       <p className="more">
-        <Link to="/ledger">{copy.fullLedger}</Link>
+        <MoreLink to="/ledger">{copy.fullLedger}</MoreLink>
       </p>
     </section>
   );

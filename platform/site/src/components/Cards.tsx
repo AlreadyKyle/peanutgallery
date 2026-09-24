@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { categoryOf, groupCards, inCategory, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
+import { MoreLink } from './MoreLink';
+import { categoryOf, groupCards, inCategory, fundingPlace, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
 import type { Card, Snapshot } from '../lib/source';
@@ -71,7 +72,7 @@ export function FilterChip({
  */
 export function FundBoard({
   snapshot,
-  cards = groupCards(snapshot.cards).fund,
+  cards = groupCards(snapshot.cards, fundingPlace(snapshot)).fund,
   changed = {},
 }: {
   snapshot: Snapshot;
@@ -191,7 +192,7 @@ export function ShippedList({ cards, snapshot }: { cards: Card[]; snapshot: Snap
         ))}
       </ul>
       <p className="more">
-        <Link to="/roadmap">{copy.roadmapLink}</Link>
+        <MoreLink to="/roadmap">{copy.roadmapLink}</MoreLink>
       </p>
     </section>
   );
@@ -226,7 +227,7 @@ export function PlannedNext({ cards }: { cards: Card[] }) {
         ))}
       </ul>
       <p className="more">
-        <Link to="/roadmap">{copy.roadmapLink}</Link>
+        <MoreLink to="/roadmap">{copy.roadmapLink}</MoreLink>
       </p>
     </section>
   );

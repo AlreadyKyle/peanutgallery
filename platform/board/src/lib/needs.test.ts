@@ -83,13 +83,13 @@ describe('rule_blocked and approval_void', () => {
         { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: '3.3750', card_max_usd: '25.0000' },
         { title: 'no id' },
       ],
-      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: '2.0000' }],
+      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: '2.0000' }],
     });
     expect(data.rule_blocked).toEqual([
       { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
       { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 3.375, card_max_usd: 25 },
     ]);
-    expect(data.approval_void).toEqual([{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: 2 }]);
+    expect(data.approval_void).toEqual([{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }]);
     expect(dueItems(data).map((item) => (item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}:${item.card.id}`))).toEqual([
       'du_a',
       'du_b',

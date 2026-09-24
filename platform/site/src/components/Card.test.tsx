@@ -279,4 +279,18 @@ describe('the AI-agent byline (docs/specs/agent-workflows.md)', () => {
     expect(board.querySelector('.card-byline')).toBeNull();
     expect(board.textContent).not.toContain('AI agent');
   });
+
+  // The card subgrid has four tracks (styles.css): a fifth track for the byline added a grid gap
+  // above every bar, bylines or not. The byline shares the summary's block instead, and a card no
+  // agent wrote keeps its four parts exactly as before.
+  it('puts the summary and the byline in one block, and leaves a card no agent wrote with its four parts', () => {
+    const li = face(card({ source: 'agent', summary: 'The gatherer costs one more.', drafter_role_id: 'r-designer' }), [designer]);
+    const block = li.querySelector(':scope > .card-text');
+    expect([...(block?.children ?? [])].map((child) => child.className)).toEqual(['card-summary', 'card-meta card-byline']);
+    expect([...li.children].map((child) => child.className)).toEqual(['card-index', '', 'card-text', 'card-bottom']);
+    cleanup();
+    const board = face(card({ source: 'board', summary: 'Filed by the board.', drafter_role_id: null }), [designer]);
+    expect(board.querySelector('.card-text')).toBeNull();
+    expect([...board.children].map((child) => child.className)).toEqual(['card-index', '', 'card-summary', 'card-bottom']);
+  });
 });

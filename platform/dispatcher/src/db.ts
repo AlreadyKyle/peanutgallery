@@ -239,7 +239,8 @@ export interface Db {
   dispatcherHeartbeat(now: Date): Promise<void>;
   getPool(): Promise<Pool>;
   boardSessionActive(ttlMinutes: number, now: Date): Promise<boolean>;
-  listFundedCards(): Promise<Card[]>;
+  // The cards at the stages asked for, from dispatcher_cards, which holds every stage: a tick asks for
+  // the hold stages and building, startup recovery for building and gated.
   listCardsInStages(stages: string[]): Promise<Card[]>;
   getCard(id: string): Promise<Card | null>;
   claimCard(id: string): Promise<Card | null>;
@@ -247,7 +248,8 @@ export interface Db {
   // Writes the patch only while the card is in one of the expected stages; false when it was not,
   // so a stage the board set in the meantime is never overwritten.
   updateCardIf(id: string, expectedStages: readonly string[], patch: CardPatch): Promise<boolean>;
-  // Each card's studio-billed spend (public_card_spend), for the cards named; a card with none is absent.
+  // Each card's studio-billed spend (dispatcher_card_spend, every card, hidden ones included), for the cards
+  // named; a card with none is absent.
   cardSpend(cardIds: readonly string[]): Promise<Map<string, number>>;
   spendTotals(monthStart: Date, tierStart: Date): Promise<SpendTotals>;
   getRole(id: string): Promise<Role>;
@@ -282,6 +284,9 @@ export interface Db {
   // The role jobs (docs/specs/agent-workflows.md): cards on now and next at the open stages and
   // funded, for the ranking and the Designer's context.
   openCards(): Promise<OpenCardRow[]>;
+  // The cards a ranking may name (rankable_cards): on now, open for funding, and holding no money on
+  // their bar or on hold, by the one test apply_card_ranking refuses on; in funding order.
+  rankableCards(): Promise<string[]>;
   recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string): Promise<{ id: string; content_sha256: string }>;
   // The card id; the approval's verdict carries the grader's reason codes.
   approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>): Promise<string>;
@@ -494,14 +499,8 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return rows(data).length > 0;
     },
 
-    async listFundedCards() {
-      const { data, error } = await client.from('cards').select('*').eq('stage', 'funded');
-      if (error) fail('cards funded', error);
-      return rows(data).map(toCard);
-    },
-
-    // dispatcher_cards: the hold stages and building, with the approval, the vetoes and the
-    // executor's pause that runnable() reads.
+    // dispatcher_cards: every card, with the approval, the vetoes and the executor's pause that
+    // runnable() reads. The view keeps no stage list, so the stages asked for are the stages read.
     async listCardsInStages(stages) {
       const { data, error } = await client.from('dispatcher_cards').select('*').in('stage', stages);
       if (error) fail('dispatcher_cards by stage', error);
@@ -538,8 +537,8 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async cardSpend(cardIds) {
       const spend = new Map<string, number>();
       if (cardIds.length === 0) return spend;
-      const { data, error } = await client.from('public_card_spend').select('card_id, spent_usd').in('card_id', [...cardIds]);
-      if (error) fail('public_card_spend', error);
+      const { data, error } = await client.from('dispatcher_card_spend').select('card_id, spent_usd').in('card_id', [...cardIds]);
+      if (error) fail('dispatcher_card_spend', error);
       for (const row of rows(data)) spend.set(text(row, 'card_id'), num(row, 'spent_usd'));
       return spend;
     },
@@ -724,6 +723,12 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         funding_target_usd: num(row, 'funding_target_usd'),
         funded_usd: num(row, 'funded_usd'),
       }));
+    },
+
+    async rankableCards() {
+      const { data, error } = await client.rpc('rankable_cards');
+      if (error || !Array.isArray(data)) fail('rankable_cards', error);
+      return (data as unknown[]).map((id) => String(id));
     },
 
     async recordCardDraft(runId, roleId, fields, makerRef) {

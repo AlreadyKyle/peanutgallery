@@ -48,5 +48,5 @@ export function createAdapter(config: DispatcherConfig, deps?: AdapterDeps): Age
       fetchFn: deps.fetchFn,
     });
   }
-  return new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot });
+  return new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot });
 }

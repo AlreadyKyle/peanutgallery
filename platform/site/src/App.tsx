@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { CoinMark } from './components/Funding';
+import { MachineMark } from './components/Mark';
 import { NotFound } from './components/NotFound';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
@@ -57,6 +58,7 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
   return (
     <StudioProvider>
       <div className="page">
+        <ScrollOnNavigate />
         <TopBar />
         <Routes>
           <Route path="/contribute" element={<Contribute />} />
@@ -79,6 +81,25 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
 }
 
 /**
+ * A link to another page opens it at the top, or at the element its #hash names, not at the last
+ * page's scroll position. Back and forward keep the browser's own scroll restoration.
+ */
+function ScrollOnNavigate() {
+  const location = useLocation();
+  const type = useNavigationType();
+  const last = useRef(location.key);
+  useEffect(() => {
+    if (location.key === last.current) return;
+    last.current = location.key;
+    if (type === 'POP') return;
+    const target = location.hash === '' ? null : document.getElementById(location.hash.slice(1));
+    if (target === null) window.scrollTo(0, 0);
+    else target.scrollIntoView();
+  }, [location, type]);
+  return null;
+}
+
+/**
  * The Play link's cartridge: the same drawing as the game suit in Glyph.tsx (App.test.tsx compares
  * them). App.tsx is kernel and may import only kernel files, so it draws its own copy.
  */
@@ -93,8 +114,8 @@ export function CartridgeMark() {
 }
 
 /**
- * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the peanut mark (with
- * the name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
+ * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the mark (with the
+ * name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
  * list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves into
  * the list. Escape closes the list and returns focus to the button, and moving to another page
  * closes it.
@@ -121,7 +142,7 @@ function TopBar() {
         }}
       >
         <Link className="wordmark" to="/">
-          <img className="mark" src="/peanut.png" alt="" width={256} height={256} />
+          <MachineMark />
           <span className="wordmark-text">{copy.studioName}</span>
         </Link>
         {play === null ? null : (

@@ -10,7 +10,7 @@ import { Refunds, RefundsVersion, Terms, TermsVersion } from './Legal';
 // Times are asserted in Toronto time, so the file passes whatever the process time zone is; the
 // Verification runs it with TZ=UTC and TZ=Pacific/Auckland too.
 
-const [V1, V2] = TERMS_VERSIONS;
+const [V1, V2, V3] = TERMS_VERSIONS;
 const V1_AT = '2026-09-23T01:32:51+00:00';
 const V2_AT = '2026-09-24T15:00:00+00:00';
 const V1_TIME = '22 Sep 2026 at 21:32 Toronto time';
@@ -93,18 +93,27 @@ describe('/terms and /refunds', () => {
     expect(within(after).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms');
   });
 
-  it('say they are loading while the read runs', () => {
-    renderAt('/terms', never());
-    const loading = screen.getByText(legal.termsLoading);
-    expect(loading.getAttribute('aria-busy')).toBe('true');
-    expect(h1()).toEqual(['Terms']);
+  it('say they are loading under the lede while the read runs, with the newest bundled words already drawn', () => {
+    for (const kind of ['terms', 'refunds'] as const) {
+      renderAt(`/${kind}`, never());
+      const loading = screen.getByText(legal.termsLoading);
+      expect(loading.getAttribute('aria-busy')).toBe('true');
+      // In the header, where the version line goes, so the page keeps its full height and only this
+      // line changes when the read answers.
+      expect(loading.closest('.hero')?.querySelector('h1')?.textContent, kind).toBe(V3![kind].title);
+      expect(h1(), kind).toEqual([V3![kind].title]);
+      expect(h2(screen.getByRole('main')), kind).toEqual(V3![kind].sections.map((section) => section.heading));
+      cleanup();
+    }
   });
 
   it('show the newest bundled words with the cannot-confirm notice when the read fails, returns no row or runs ahead of the build', async () => {
-    for (const load of [fails(), answers([]), answers([...BOTH, { version: 3, posted_at: '2027-01-01T00:00:00Z' }])]) {
+    const three = { version: 3, posted_at: '2026-09-25T15:00:00+00:00' };
+    for (const load of [fails(), answers([]), answers([...BOTH, three, { version: 4, posted_at: '2027-01-01T00:00:00Z' }])]) {
       renderAt('/terms', load);
       const main = await settled();
-      expect(h2(main)).toEqual(V2!.terms.sections.map((section) => section.heading));
+      expect(h2(main)).toEqual(V3!.terms.sections.map((section) => section.heading));
+      expect(main.textContent).toContain('Mob Machine is operated by');
       const notice = main.querySelector('p.notice');
       expect(notice?.textContent).toBe(legal.termsUnconfirmed.replace('{email}', legal.contactEmail));
       expect(within(notice as HTMLElement).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
@@ -126,7 +135,7 @@ describe('/terms and /refunds', () => {
     });
     expect(screen.queryByText(legal.termsLoading)).toBeNull();
     expect(screen.getByRole('main').querySelector('p.notice')).not.toBeNull();
-    expect(h1()).toEqual([V2!.refunds.title]);
+    expect(h1()).toEqual([V3!.refunds.title]);
   });
 });
 
@@ -149,6 +158,36 @@ describe('/terms/:version and /refunds/:version', () => {
     }
   });
 
+  it("link {refunds} and {terms} to the same version's pages, the words that applied with it", async () => {
+    renderAt('/terms/1', answers(BOTH));
+    const refunds = within(await settled()).getByRole('region', { name: 'Refunds' });
+    expect(within(refunds).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds/1');
+    cleanup();
+    renderAt('/terms/2', answers(BOTH));
+    const who = within(await settled()).getByRole('region', { name: 'Who can contribute' });
+    expect(within(who).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds/2');
+    cleanup();
+    renderAt('/refunds/2', answers(BOTH));
+    const after = within(await settled()).getByRole('region', { name: 'After 14 days' });
+    expect(within(after).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms/2');
+    cleanup();
+    // Unconfirmed and still loading, the version page still links its own version.
+    renderAt('/terms/1', fails());
+    const unconfirmed = within(await settled()).getByRole('region', { name: 'Refunds' });
+    expect(within(unconfirmed).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds/1');
+    cleanup();
+    renderAt('/terms/1', never());
+    const loading = within(screen.getByRole('main')).getByRole('region', { name: 'Refunds' });
+    expect(within(loading).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds/1');
+  });
+
+  it("say they are loading under the lede while the read runs, with that version's words already drawn", () => {
+    renderAt('/refunds/1', never());
+    const loading = screen.getByText(legal.termsLoading);
+    expect(loading.closest('.hero')?.querySelector('h1')?.textContent).toBe('Refunds, version 1');
+    expect(h2(screen.getByRole('main'))).toEqual(V1!.refunds.sections.map((section) => section.heading));
+  });
+
   it('show the version in force with its since line and no link to itself', async () => {
     renderAt('/terms/2', answers(BOTH));
     const main = await settled();
@@ -162,6 +201,7 @@ describe('/terms/:version and /refunds/:version', () => {
       ['/terms/2', [{ version: 1, posted_at: V1_AT }]],
       ['/terms/3', BOTH],
       ['/refunds/3', BOTH],
+      ['/terms/4', [...BOTH, { version: 3, posted_at: '2026-09-25T15:00:00+00:00' }]],
       ['/terms/0', BOTH],
       ['/terms/01', BOTH],
       ['/terms/1.5', BOTH],
