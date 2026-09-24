@@ -49,6 +49,9 @@ export function auditLayout(limits) {
     return `${el.tagName.toLowerCase()}${id}${cls} "${text}"`;
   };
   const hidden = (el) => {
+    // A closed details element shows only its summary: the rest is laid out but never drawn.
+    const parent = el.parentElement;
+    if (parent !== null && parent.tagName === 'DETAILS' && !parent.open && el.tagName !== 'SUMMARY') return true;
     const cs = style(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return true;
     if (cs.position === 'absolute' && cs.clip !== 'auto' && cs.clip !== '') return true;

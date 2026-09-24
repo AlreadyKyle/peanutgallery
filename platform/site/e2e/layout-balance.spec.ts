@@ -149,3 +149,19 @@ test('finds each planted gap', async ({ page }) => {
     expect(findings.some((line) => line.startsWith(kind)), `${kind} in ${JSON.stringify(findings)}`).toBe(true);
   }
 });
+
+// What a closed details element holds is laid out below it but not drawn, so it is not counted: cards
+// whose closed "What the agents are told" differ in length are level (the audit counted the hidden text
+// and flagged home's first row once the waterfall's order put the longest brief first).
+test('leaves out what a closed details element holds', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const told = (lines: number) => `<details><summary>What the agents are told</summary>${'<p>A line of what the agents are told.</p>'.repeat(lines)}</details>`;
+  await page.setContent(`<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
+    <ul style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;list-style:none;padding:24px;margin:0">
+      <li style="border:2px solid #111;padding:8px"><p>One</p>${told(40)}</li>
+      <li style="border:2px solid #111;padding:8px"><p>Two</p>${told(2)}</li>
+      <li style="border:2px solid #111;padding:8px"><p>Three</p>${told(1)}</li>
+    </ul>
+  </body></html>`);
+  expect((await page.evaluate(auditLayout, LIMITS)).filter((line) => line.startsWith('balance:'))).toEqual([]);
+});

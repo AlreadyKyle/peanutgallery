@@ -324,6 +324,9 @@ try {
   const pool = main.locator('.pool-line .figure');
   const hasData = (await pool.count()) > 0;
 
+  // Home's Fund what's next, in order: /contribute's card choices must be the same cards in the same
+  // order, the waterfall's (docs/specs/money-surfaces.md).
+  const homeFund = (await main.locator('ul.fund-grid h3').allTextContents()).map((title) => title.trim());
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
   check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
@@ -430,10 +433,16 @@ try {
     const next = NEXT_IN_LINE.exec(body);
     if (!hasData || (await publicRow('public_money', 'payments')) === null) {
       noData('Fund the next card in line names the next card in line (public_money)');
-    } else if (next !== null) {
-      check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
     } else {
-      check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
+      if (next !== null) {
+        check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
+      } else {
+        check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
+      }
+      check(
+        JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())),
+        `home's Fund what's next shows /contribute's ${titles.length} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
+      );
     }
     try {
       const stripe = await fetch(first[1], { redirect: 'manual' });
