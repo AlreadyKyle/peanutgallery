@@ -11,7 +11,7 @@ for (const viewport of WIDTHS) {
       const main = page.getByRole('main');
       const footer = page.getByRole('contentinfo');
 
-      await expect(page.getByRole('banner').getByRole('link', { name: 'Peanut Gallery' })).toBeVisible();
+      await expect(page.getByRole('banner').getByRole('link', { name: 'Mob Machine' })).toBeVisible();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
       await expect(main.getByText('Fund the card you want built next.')).toBeVisible();
       await expect(main.getByRole('link', { name: 'Play Dust' })).toHaveAttribute('href', PLAY_URL);

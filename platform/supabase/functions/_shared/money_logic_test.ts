@@ -793,15 +793,15 @@ Deno.test("the terms stamp", OPTS, async () => {
   const s = await studio();
   try {
     const versions = await s.rows<{ version: number; posted_at: Date }>(`select version, posted_at from public.terms_versions order by version`);
-    assertEquals(versions.map((v) => v.version), [1, 2]);
+    assertEquals(versions.map((v) => v.version), [1, 2, 3]);
     const between = new Date(versions[0]!.posted_at.getTime() + 1000).toISOString();
     const stamp = async (key: string, created: string | null) => (await s.pay(key, 1, null, { created })).terms_version;
     assertEquals(await stamp("t1", between), 1);
-    assertEquals(await stamp("t2", new Date(Date.now() + 86_400_000).toISOString()), 2, "a future time counts as now");
+    assertEquals(await stamp("t2", new Date(Date.now() + 86_400_000).toISOString()), 3, "a future time counts as now");
     assertEquals(await stamp("t3", null), null, "no time stamps nothing");
     assertEquals(await stamp("t4", "2026-09-01T00:00:00Z"), null, "no version was posted yet");
     assertEquals(await s.rows(`select terms_version from public.contributions where stripe_event_id in ('evt_t1', 'evt_t2', 'evt_t3', 'evt_t4') order by stripe_event_id`), [
-      { terms_version: 1 }, { terms_version: 2 }, { terms_version: null }, { terms_version: null },
+      { terms_version: 1 }, { terms_version: 3 }, { terms_version: null }, { terms_version: null },
     ]);
     // No argument lets a caller choose a version.
     const args = (await s.row<{ a: string }>(`select pg_get_function_identity_arguments('public.apply_contribution'::regproc) as a`)).a;

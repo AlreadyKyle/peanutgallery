@@ -139,7 +139,7 @@ describe('run-dispatcher.sh', () => {
     host.setExit(78);
     const result = host.run();
     assert.equal(result.status, 0, result.log);
-    assert.deepEqual(posts(result.calls), [`data-binary = "Peanut Gallery dispatcher stopped on ${HOSTNAME}: fatal startup error"`]);
+    assert.deepEqual(posts(result.calls), [`data-binary = "Mob Machine dispatcher stopped on ${HOSTNAME}: fatal startup error"`]);
     assert.ok(result.calls.includes('url = "https://ntfy.sh/fixture-topic"'), 'the topic reaches curl in its config file');
     assert.deepEqual(delays(result.calls), []);
     assert.match(result.log, /^run-dispatcher: stopped: fatal startup error: the dispatcher exited 78/m);
@@ -177,7 +177,7 @@ describe('run-dispatcher.sh', () => {
     const refused = host.run();
     assert.equal(refused.status, 0);
     assert.ok(!refused.calls.some((line) => line.startsWith('node ')), 'the dispatcher is not started');
-    assert.deepEqual(posts(refused.calls), [`data-binary = "Peanut Gallery dispatcher stopped on ${HOSTNAME}: 8 starts in 6 hours"`]);
+    assert.deepEqual(posts(refused.calls), [`data-binary = "Mob Machine dispatcher stopped on ${HOSTNAME}: 8 starts in 6 hours"`]);
     writeFileSync(path.join(host.state, 'dispatcher-starts'), `${Array.from({ length: 8 }, (_, index) => now - 21601 - index).join('\n')}\n`);
     host.reset();
     const allowed = host.run();
@@ -283,11 +283,11 @@ describe('run-job.sh', () => {
     assert.ok(!existsSync(path.join(job.host, 'state', 'job-controller.lock')), 'the lock is released');
   });
 
-  test('a job that cannot run posts "Peanut Gallery job <job> failed on <host>" to ntfy', () => {
+  test('a job that cannot run posts "Mob Machine job <job> failed on <host>" to ntfy', () => {
     const job = jobHost();
     const missing = job.run('quota', '--now');
     assert.equal(missing.status, 1);
-    assert.deepEqual(posts(missing.calls), [`data-binary = "Peanut Gallery job quota failed on ${HOSTNAME}; see ${path.join(job.host, 'logs', 'quota.log')}"`]);
+    assert.deepEqual(posts(missing.calls), [`data-binary = "Mob Machine job quota failed on ${HOSTNAME}; see ${path.join(job.host, 'logs', 'quota.log')}"`]);
     assert.ok(!missing.calls.some((line) => line.startsWith('node ')));
     const file = path.join(job.host, 'env', 'quota.env');
     writeFileSync(file, 'SUPABASE_URL=https://fixture.supabase.local\n');

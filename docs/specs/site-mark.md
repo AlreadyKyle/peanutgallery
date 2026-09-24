@@ -2,6 +2,8 @@
 
 Status: done. Card: none. Owner: board.
 
+Superseded by `specs/machine-mark.md` on 23 September 2026 (PLAN.md §10 decision 43): the peanut and its files are gone. The rest of this spec is the record of what shipped.
+
 ## Problem
 
 The site has no favicon and no mark; browser tabs and bookmarks show a blank page icon, and the top bar is type only.

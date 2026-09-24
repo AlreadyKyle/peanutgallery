@@ -105,7 +105,9 @@ for (const width of [375, 768, 1440]) {
   });
 }
 
-test('/terms/3, a version not posted or carried, is the not found page', async ({ page }) => {
-  await page.goto('/terms/3');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(['Not found']);
+test('/terms/3, carried but not posted, and /terms/4, neither, are the not found page', async ({ page }) => {
+  for (const path of ['/terms/3', '/terms/4']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 }), path).toHaveText(['Not found']);
+  }
 });

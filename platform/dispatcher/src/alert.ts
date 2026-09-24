@@ -21,7 +21,7 @@ export interface AlertOptions {
   timeoutMs?: number;
 }
 
-export const ALERT_TITLE = 'Peanut Gallery dispatcher';
+export const ALERT_TITLE = 'Mob Machine dispatcher';
 const TIMEOUT_MS = 10_000;
 
 export function createAlerter(opts: AlertOptions): Alerter {

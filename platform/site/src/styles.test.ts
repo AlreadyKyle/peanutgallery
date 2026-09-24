@@ -261,6 +261,13 @@ describe('plain and readable', () => {
       expect(rule?.body, selector).toContain('min-height: var(--target)');
     }
   });
+
+  it('draws the mark at one pixel a unit, so its straight edges land on whole pixels at 1x', () => {
+    const box = read('brand/mark.svg').match(/viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"/);
+    const body = rules(styles).find((r) => r.selector === '.mark')?.body ?? '';
+    const px = (side: string) => 16 * Number(body.match(new RegExp(`${side}:\\s*([0-9.]+)rem`))?.[1]);
+    expect([px('width'), px('height')]).toEqual([Number(box?.[1]), Number(box?.[2])]);
+  });
 });
 
 describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
@@ -391,7 +398,6 @@ describe('bands', () => {
       expect(body).toMatch(/--suit-tile-studio:\s*transparent/);
       expect(body).toMatch(/--live-mark:\s*currentColor/);
       expect(body).toMatch(/--primary-bg:\s*var\(--paper\)/);
-      expect(body).toMatch(/--mark-filter:\s*invert\(1\)/);
     }
     expect(signal).toMatch(/--text-muted:\s*var\(--muted-on-signal\)/);
     expect(signal).toMatch(/--hairline:\s*var\(--line-on-signal\)/);
@@ -427,10 +433,9 @@ describe('bands', () => {
     expect(repaint).toEqual([]);
   });
 
-  it('marks each band edge with a CanvasText rule, keeps the peanut unfiltered, and keeps the money glyph and suit tiles legible under forced colours', () => {
+  it('marks each band edge with a CanvasText rule, and keeps the money glyph and suit tiles legible under forced colours', () => {
     const forced = ALL_RULES.filter((rule) => rule.media.includes('forced-colors: active'));
     expect(forced.find((rule) => rule.selector.includes('main > .band + .band'))?.body).toMatch(/border-top:\s*1px solid CanvasText/);
-    expect(forced.find((rule) => rule.selector === '.mark')?.body).toMatch(/filter:\s*none/);
     expect(forced.find((rule) => rule.selector === '.funding-bar-fill')?.body).toMatch(/forced-color-adjust:\s*none[\s\S]*background:\s*Highlight/);
     expect(forced.find((rule) => rule.selector === '.glyph-money')?.body).toMatch(/fill:\s*CanvasText/);
     expect(forced.find((rule) => rule.selector === '.suit-tile')?.body).toMatch(/border:\s*1px solid CanvasText/);
