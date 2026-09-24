@@ -50,7 +50,7 @@ The mark is a small machine drawn in code on a 32-unit grid: a rounded cabinet, 
 - `magick identify` on the files: `favicon.ico[0] PNG 16x16`, `favicon.ico[1] PNG 32x32`, `favicon-32.png PNG 32x32`, `apple-touch-icon.png PNG 180x180`, `icon-512.png PNG 512x512`, `og.png PNG 1200x630`.
 - `icons.mjs` then `og-image.mjs`, run a second time: `shasum -c` of the five files printed OK for each.
 - Looked at: `og.png` (MOB MACHINE with the white machine on black, the pitch, peanutgallery.games); the favicon at 16px magnified on #dee1e6 and #202124 strips and at 32px on #202124 (a tile on both); `apple-touch-icon.png` and `icon-512.png` (the white machine centred on black); the top bar at 390 and 1440 and the Guide's specimen on its ink band.
-- `E2E_PORT=4491 pnpm --filter @backseat/site e2e` on the rebased branch: "147 passed (3.2m)"; the 5 skipped are the screenshot specs, which run only when asked. Passed among the 147: "at 375 px › the top bar carries the mark, Play, Contribute and the page links" and the same at 1440 px, and axe WCAG 2.2 AA "finds no violation on the guide and every page" at 375px and 1440px.
+- `E2E_PORT=4491 pnpm --filter @backseat/site e2e` at 3a845bb: "148 passed (3.3m)"; the 5 skipped are the screenshot specs, which run only when asked. Passed among the 148: "at 375 px › the top bar carries the mark, Play, Contribute and the page links" and the same at 1440 px, and axe WCAG 2.2 AA "finds no violation on the guide and every page" at 375px and 1440px.
 
 ## Decisions
 
