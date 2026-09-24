@@ -15,6 +15,6 @@
     "test:agents": "node --test platform/agents/specs.test.mjs",
     "test:ops": "node --test platform/ops/test/ops.test.mjs",
     "test:docs": "node --test docs/docs.test.mjs",
-    "test:rename": "node --test scripts/rename.test.mjs"
+    "test:rename": "node --test scripts/rename.test.mjs && node scripts/rename.mjs --check"
   }
 }

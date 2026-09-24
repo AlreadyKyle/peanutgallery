@@ -19,7 +19,7 @@ const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director
 
 async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
-  await expect(page).toHaveTitle(`${title} · Peanut Gallery`);
+  await expect(page).toHaveTitle(`${title} · Mob Machine`);
 }
 
 for (const viewport of WIDTHS) {

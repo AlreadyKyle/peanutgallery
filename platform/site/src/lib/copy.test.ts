@@ -86,6 +86,7 @@ describe('copy rules', () => {
       ...Object.values(legal.pauseReasons),
       copy.pauseLiveUpdates,
       copy.upToDate,
+      copy.noNewUpdates,
       copy.showUpdates,
       copy.liveUpdatesPaused,
       copy.now,
@@ -272,8 +273,17 @@ describe('the Terms and the Refunds page in force (docs/specs/legal-copy.md)', (
     expect(NEWEST_TERMS).toBe(TERMS_VERSIONS[TERMS_VERSIONS.length - 1]);
   });
 
+  it('makes version 3 version 2 with the studio renamed Mob Machine and nothing else (docs/specs/rename.md)', () => {
+    const [, two, three] = TERMS_VERSIONS;
+    const oldName = section(two!.terms, 'Who runs the studio').split(' is operated by')[0]!;
+    expect(oldName).not.toBe(copy.studioName);
+    const renamed = JSON.parse(JSON.stringify({ terms: two!.terms, refunds: two!.refunds }).replaceAll(oldName, copy.studioName));
+    expect({ terms: three!.terms, refunds: three!.refunds }).toEqual(renamed);
+    expect(JSON.stringify(three)).not.toContain(oldName);
+  });
+
   it("names the operator and how to reach them", () => {
-    expect(section(NEWEST_TERMS.terms, 'Who runs the studio')).toMatch(/operated by Kyle Smith, an individual in Ontario, Canada\. Write to \{email\}/);
+    expect(section(NEWEST_TERMS.terms, 'Who runs the studio')).toMatch(/^Mob Machine is operated by Kyle Smith, an individual in Ontario, Canada\. Write to \{email\}/);
   });
 
   it('states who may contribute: an adult, or with a parent or guardian', () => {

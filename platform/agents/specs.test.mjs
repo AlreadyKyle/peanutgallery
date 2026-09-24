@@ -125,8 +125,8 @@ for (const { file, spec } of specs) {
 
   // A role without tools has no job that runs yet; the site shows the description as is.
   if (spec.tools.length === 0) {
-    test(`${file} description says the role is not running yet`, () => {
-      assert.ok(spec.description.includes('not running yet'), `${file} description says "not running yet"`);
+    test(`${file} description states the job, not whether the role runs (the site says that once)`, () => {
+      assert.ok(!/not running/i.test(spec.description), `${file} description leaves "not running" to the site`);
     });
   }
 

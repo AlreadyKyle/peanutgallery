@@ -13,16 +13,15 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
+import { parseGapAuditArgs } from './gap-audit-args.mjs';
 import { auditLayout, LIMITS } from './layout-audit.mjs';
 
-const args = process.argv.slice(2);
-const widthsAt = args.indexOf('--widths');
-const WIDTHS = widthsAt === -1 ? [1440, 1024, 768, 375, 320] : args[widthsAt + 1].split(',').map(Number);
-const targets = args.filter((arg, i) => !arg.startsWith('--') && i !== widthsAt + 1);
-if (targets.length === 0 || WIDTHS.some((w) => !Number.isFinite(w) || w <= 0)) {
+const parsed = parseGapAuditArgs(process.argv.slice(2));
+if (parsed === null) {
   console.error('usage: gap-audit.mjs <url-or-html-file> [more...] [--widths 1440,1024,768,375,320]');
   process.exit(2);
 }
+const { targets, widths: WIDTHS } = parsed;
 
 const url = (target) => (/^https?:\/\//.test(target) ? target : pathToFileURL(resolve(target)).href);
 for (const target of targets) {
@@ -38,10 +37,19 @@ try {
   for (const target of targets) {
     for (const width of WIDTHS) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: 'reduce' });
-      await page.goto(url(target), { waitUntil: 'load' });
-      await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
-      await page.evaluate(() => document.fonts.ready);
-      await page.waitForTimeout(500);
+      // A web font that fails to load lets the fallback font set the text, which wraps differently,
+      // so the audit would measure a page no visitor normally sees. Load once more; if the font
+      // still fails, that is itself a finding.
+      let failedFonts = [];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await page.goto(url(target), { waitUntil: 'load' });
+        await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(500);
+        failedFonts = await page.evaluate(() => [...document.fonts].filter((font) => font.status === 'error').map((font) => font.family));
+        if (failedFonts.length === 0) break;
+      }
+      for (const family of failedFonts) findings.push(`${target} at ${width}px: font: ${family} failed to load`);
       for (const line of await page.evaluate(auditLayout, LIMITS)) findings.push(`${target} at ${width}px: ${line}`);
       await page.close();
     }

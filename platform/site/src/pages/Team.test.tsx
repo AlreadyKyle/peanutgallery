@@ -159,7 +159,7 @@ describe('Team', () => {
     expect(screen.queryByText(team.laneClosed)).toBeNull();
   });
 
-  it("while the studio is paused keeps the running roles in Running as paused, says the reason once, and draws them asleep", async () => {
+  it("while the studio is paused keeps the running roles in Running as paused, says the reason once, and draws them awake", async () => {
     renderTeam(sourceOf(snapshot({ paused: true, pauseReason: 'awaiting_credit' })));
     const running = await screen.findByRole('region', { name: team.running });
     expect(names(running)).toEqual(['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'QA']);
@@ -169,8 +169,8 @@ describe('Team', () => {
       expect(within(box(name)).getByText(team.statusPaused)).toBeTruthy();
     }
     expect(within(box('Builder A')).getByText(facts('claude-opus-5-5', '$1.50', '$0.25', 'Worked on 2 shipped cards'))).toBeTruthy();
-    const poses = [...document.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
-    expect(new Set(poses)).toEqual(new Set(['asleep']));
+    const poses = [...running.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    expect(new Set(poses)).toEqual(new Set(['awake']));
   });
 
   it("shows a paused role with its own reason while the rest run, awake", async () => {
@@ -214,6 +214,19 @@ describe('Team', () => {
     cleanup();
     renderTeam(null);
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
+  });
+
+  it('draws the Running section awake and the roles still to come asleep, whether or not the studio is paused', async () => {
+    const poses = (region: HTMLElement) => [...region.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    for (const paused of [true, false]) {
+      renderTeam(sourceOf(snapshot({ paused })));
+      const running = await screen.findByRole('region', { name: team.running });
+      expect(new Set(poses(running))).toEqual(new Set(['awake']));
+      for (const name of [team.startsLater, team.planned]) {
+        expect(new Set(poses(screen.getByRole('region', { name })))).toEqual(new Set(['asleep']));
+      }
+      cleanup();
+    }
   });
 
   it('lists each agent as a plain row, never a card', async () => {

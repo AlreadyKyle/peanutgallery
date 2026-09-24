@@ -11,7 +11,7 @@ const AWAITING_CREDIT =
 test.describe('while the studio is paused', () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
-  test('keeps the running roles in Running as paused, says the reason once, draws them asleep, and still shows model, cost and ships', async ({ page }) => {
+  test('keeps the running roles in Running as paused, says the reason once, draws them awake (the board, 23 Sep 2026), and still shows model, cost and ships', async ({ page }) => {
     await page.goto('/team');
     const running = page.getByRole('region', { name: 'Running', exact: true });
     await expect(running.locator(':scope > p.muted').first()).toContainText(AWAITING_CREDIT);
@@ -19,7 +19,7 @@ test.describe('while the studio is paused', () => {
     await expect(rows).not.toHaveCount(0);
     await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(await rows.count());
     await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(await rows.count());
-    await expect(running.locator('svg.avatar[data-pose="asleep"]')).toHaveCount(await rows.count());
+    await expect(running.locator('svg.avatar[data-pose="awake"]')).toHaveCount(await rows.count());
     // The studio's reason is said once, above the list, not on every row.
     await expect(running.getByText(AWAITING_CREDIT)).toHaveCount(1);
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
@@ -28,9 +28,9 @@ test.describe('while the studio is paused', () => {
     await expect(page.locator(`#agent-${QA} .card-meta`)).toHaveText('claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 1 shipped card');
     const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
     expect(models.ok, models.message).toBe(true);
-    // Home's team strip draws the same roles asleep.
+    // Home's team strip draws the same roles, awake.
     await page.goto('/');
-    await expect(page.locator('.team-strip svg.avatar[data-pose="asleep"]')).toHaveCount(3);
+    await expect(page.locator('.team-strip svg.avatar[data-pose="awake"]')).toHaveCount(3);
   });
 });
 

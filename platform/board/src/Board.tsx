@@ -1,5 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
   agentModes,
   boardStudioState,
@@ -108,6 +108,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (client === null) {
       setMessage(noDatabase);
       return;
@@ -136,7 +137,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
           onChange={(event) => setEmail(event.target.value)}
         />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Send sign-in link
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -232,6 +233,7 @@ function TwoFactor({
   }, [client, onVerified]);
 
   async function startEnrolment() {
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
@@ -247,6 +249,7 @@ function TwoFactor({
 
   async function verify(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (factorId === null) return;
     const entered = code.trim();
     if (!TOTP_CODE.test(entered)) {
@@ -287,7 +290,7 @@ function TwoFactor({
             onChange={(event) => setCode(event.target.value)}
           />
         </label>
-        <button type="submit" disabled={busy}>
+        <button type="submit" aria-disabled={busy}>
           Verify
         </button>
       </form>
@@ -297,19 +300,20 @@ function TwoFactor({
     <section aria-label="Two-factor sign-in">
       <h2>Two-factor sign-in</h2>
       <p>
-        A second factor is needed before you can pause agents, go live, change the agent mode or the caps, record
-        credit, move, cancel or resume cards, or file cards, directives and notes.
+        A second factor is needed before you can pause agents or roles, go live, change the agent mode, the caps or
+        the cooling window, record credit, move, veto, cancel or resume cards, run a job now, or file cards,
+        directives and notes.
       </p>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
       ) : null}
       {state !== null && state.verifiedFactorId !== null ? (
-        <p>Enter the code your authenticator app shows for Peanut Gallery.</p>
+        <p>Enter the code your authenticator app shows for Mob Machine.</p>
       ) : null}
       {state !== null && state.verifiedFactorId === null && enrolment === null ? (
         <>
           <p>This account has no authenticator app yet.</p>
-          <button type="button" disabled={busy} onClick={() => void startEnrolment()}>
+          <button type="button" aria-disabled={busy} onClick={() => void startEnrolment()}>
             Set up an authenticator app
           </button>
         </>
@@ -365,9 +369,10 @@ function useBoardStudioState(client: SupabaseClient): StudioLoad {
   return { state, loadError, refresh };
 }
 
-// The roles that build cards, loaded once for the card and directive forms. Every other role, the
-// directors, the Host, Biz Dev and the Community agent among them, has no job that runs yet, so none
-// is offered (lib/board.ts CARD_ROLE_FOLDERS).
+// The roles that build cards, loaded once for the card and directive forms. No other role builds a
+// card, so none is offered (lib/board.ts CARD_ROLE_FOLDERS): the Studio Head, the Game Designer and
+// the Game Director run Rank now and Draft a game card, and the Host, Biz Dev and the Community agent
+// have no job that runs yet.
 function useCardRoles(client: SupabaseClient): { roles: Role[]; loadError: string } {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loadError, setLoadError] = useState('');
@@ -402,6 +407,9 @@ function BoardControls({
 }) {
   const studio = useBoardStudioState(client);
   const [draft, setDraft] = useState<CreditDraft | null>(null);
+  // The cards listed under Cards, id to title, which only the second factor shows; Needs you and the
+  // role jobs' output link to these only.
+  const [listedCards, setListedCards] = useState<ReadonlyMap<string, string>>(() => new Map());
   const creditForm = useRef<HTMLFormElement | null>(null);
 
   function fillCredit(next: CreditDraft) {
@@ -411,20 +419,20 @@ function BoardControls({
 
   return (
     <>
-      <NeedsYou client={client} canRecord={secondFactor} onFillCredit={fillCredit} />
+      <NeedsYou client={client} canRecord={secondFactor} listedCards={listedCards} onFillCredit={fillCredit} />
       {secondFactor ? null : <TwoFactor client={client} onVerified={onVerified} />}
       {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
       <StudioStatus client={client} studio={studio} canChange={secondFactor} />
       <SessionStatus client={client} />
       <RolePauses client={client} canPause={secondFactor} canResume={secondFactor} />
-      <JobsPanel client={client} canRun={secondFactor} />
+      <JobsPanel client={client} canRun={secondFactor} cardTitles={listedCards} />
       {secondFactor ? (
         <>
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CoolingWindowForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CreditPurchaseForm client={client} draft={draft} formRef={creditForm} />
-          <CardControls client={client} />
+          <CardControls client={client} onListed={setListedCards} />
           <SecondFactorForms client={client} />
         </>
       ) : null}
@@ -463,6 +471,7 @@ function StudioStatus({
   }, []);
 
   async function goLive() {
+    if (busy) return;
     if (!window.confirm(GO_LIVE_CONFIRM)) return;
     setBusy(true);
     try {
@@ -477,6 +486,7 @@ function StudioStatus({
   }
 
   async function changeMode(mode: AgentMode) {
+    if (busy) return;
     setBusy(true);
     try {
       await setAgentMode(client, mode);
@@ -522,13 +532,13 @@ function StudioStatus({
           </p>
           <p>Studio code lane: {state.platform_lane_open ? 'open' : 'closed'}.</p>
           {canChange && state.launched_at === null ? (
-            <button type="button" disabled={busy} onClick={() => void goLive()}>
+            <button type="button" aria-disabled={busy} onClick={() => void goLive()}>
               Go live
             </button>
           ) : null}
           {canChange ? (
             <>
-              <fieldset disabled={busy}>
+              <fieldset aria-disabled={busy}>
                 <legend>Agent mode</legend>
                 <div className="row">
                   {agentModes.map((mode) => (
@@ -613,6 +623,7 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   const [reason, setReason] = useState<PauseReason>('board');
 
   async function apply(paused: boolean) {
+    if (busy) return;
     setBusy(true);
     try {
       await setPaused(client, paused, reason);
@@ -630,7 +641,7 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
       <h2>Agents</h2>
       <label>
         Pause reason
-        <select value={reason} disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
+        <select value={reason} aria-disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
           {PAUSE_REASONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -639,10 +650,10 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
         </select>
       </label>
       <div className="row">
-        <button type="button" disabled={busy} onClick={() => void apply(true)}>
+        <button type="button" aria-disabled={busy} onClick={() => void apply(true)}>
           Pause agents
         </button>
-        <button type="button" disabled={busy} onClick={() => void apply(false)}>
+        <button type="button" aria-disabled={busy} onClick={() => void apply(false)}>
           Resume agents
         </button>
       </div>
@@ -703,6 +714,7 @@ function CapsForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const caps = { anthropic_tier_cap_usd: null } as Caps;
     for (const field of CAP_FIELDS) {
       const value = dollars(form[field.key]);
@@ -774,7 +786,7 @@ function CapsForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Save caps
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -811,6 +823,7 @@ function CreditPurchaseForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const value = dollars(amount);
     if (value === null || value < 0.01) {
       setMessage('Amount must be at least $0.01.');
@@ -854,7 +867,7 @@ function CreditPurchaseForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Record purchase
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -870,15 +883,23 @@ const STAGE_WORDS: Record<string, string> = {
   paused: 'paused',
 };
 
-/** The horizon, rank, target, cancel and resume controls for one card. */
+/**
+ * The horizon, rank, target, veto, cancel and resume controls for one card. The row is keyed by the
+ * card alone, so it stays mounted when an action changes the card's stage, horizon or rank: its
+ * confirmation stays shown and announced, and the fields follow the card as the database has it.
+ */
 function CardControl({
   client,
   card,
   onChanged,
+  onCancelled,
 }: {
   client: SupabaseClient;
   card: BoardCard;
-  onChanged: () => Promise<void>;
+  /** Reloads the list; `focused` is the control to focus again if the reload moved this row. */
+  onChanged: (focused: HTMLElement | null) => Promise<void>;
+  /** A cancelled card leaves the list, so its confirmation is said above the list. */
+  onCancelled: (notice: string) => void;
 }) {
   const [horizon, setHorizon] = useState<Horizon>(card.horizon);
   const [rank, setRank] = useState(card.rank === null ? '' : String(card.rank));
@@ -888,6 +909,16 @@ function CardControl({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const idBase = useId();
+  const row = useRef<HTMLLIElement | null>(null);
+  const stored = `${card.stage} ${card.horizon} ${card.rank} ${card.funding_target_usd} ${card.estimate_usd}`;
+  const [shown, setShown] = useState(stored);
+  if (shown !== stored) {
+    setShown(stored);
+    setHorizon(card.horizon);
+    setRank(card.rank === null ? '' : String(card.rank));
+    setTarget(card.funding_target_usd > 0 ? String(card.funding_target_usd) : '');
+    setEstimate(card.estimate_usd > 0 ? String(card.estimate_usd) : '');
+  }
   // Horizon and rank change only while the card is open for funding; the target only on a move to now.
   const movable = HORIZON_STAGES.includes(card.stage);
   const settableTarget = movable && card.horizon !== 'now';
@@ -900,13 +931,16 @@ function CardControl({
     return reason.trim();
   }
 
-  async function run(action: () => Promise<void>, done: string | (() => string)) {
+  async function run(action: () => Promise<void>, done: string) {
+    if (busy) return;
+    const active = document.activeElement;
+    const focused = active instanceof HTMLElement && row.current?.contains(active) ? active : null;
     setBusy(true);
     try {
       await action();
-      setMessage(typeof done === 'string' ? done : done());
+      setMessage(done);
       setReason('');
-      await onChanged();
+      await onChanged(focused);
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
@@ -916,6 +950,7 @@ function CardControl({
 
   async function saveHorizon(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (!movable) return;
     const why = needReason();
     if (why === null) return;
@@ -945,19 +980,18 @@ function CardControl({
   }
 
   async function cancel() {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     if (!window.confirm(CANCEL_CONFIRM)) return;
-    let moved = 0;
-    await run(
-      async () => {
-        moved = await cancelCard(client, card.id, why);
-      },
-      () => (moved > 0 ? `Card cancelled. $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : 'Card cancelled.'),
-    );
+    await run(async () => {
+      const moved = await cancelCard(client, card.id, why);
+      onCancelled(`Card ${card.title} cancelled.${moved > 0 ? ` $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : ''}`);
+    }, '');
   }
 
   async function resume() {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     const value = dollars(estimate);
@@ -969,17 +1003,18 @@ function CardControl({
   }
 
   async function veto(vetoed: boolean) {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     await run(() => setCardVeto(client, card.id, vetoed, why), vetoed ? 'Card vetoed.' : 'Veto lifted.');
   }
 
   return (
-    <li id={`card-${card.id}`}>
+    <li id={`card-${card.id}`} ref={row}>
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
         <p>
-          {STAGE_WORDS[card.stage] ?? card.stage} · horizon {card.horizon}
+          {stageWord(card)} · horizon {card.horizon}
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
           {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
         </p>
@@ -1042,26 +1077,22 @@ function CardControl({
         </label>
         <div className="row">
           {movable ? (
-            <button type="submit" disabled={busy}>
+            <button type="submit" aria-disabled={busy}>
               Save horizon and rank
             </button>
           ) : null}
           {card.stage === 'paused' ? (
-            <button type="button" disabled={busy} onClick={() => void resume()}>
+            <button type="button" aria-disabled={busy} onClick={() => void resume()}>
               Resume card
             </button>
           ) : null}
-          {canVeto(card) ? (
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(true)}>
-              Veto card
+          {/* One button that changes its words, so the keyboard user's focus stays on it after a veto. */}
+          {canVeto(card) || canUnveto(card) ? (
+            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(!card.board_vetoed)}>
+              {card.board_vetoed ? 'Lift veto' : 'Veto card'}
             </button>
           ) : null}
-          {canUnveto(card) ? (
-            <button type="button" className="button-secondary" disabled={busy} onClick={() => void veto(false)}>
-              Lift veto
-            </button>
-          ) : null}
-          <button type="button" className="button-secondary" disabled={busy} onClick={() => void cancel()}>
+          <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void cancel()}>
             Cancel card
           </button>
         </div>
@@ -1069,6 +1100,19 @@ function CardControl({
       </form>
     </li>
   );
+}
+
+/** The board's veto reason after a colon, without its own closing stop, so the mark ends with one. */
+function vetoReason(reason: string | null): string {
+  const trimmed = (reason ?? '').trim().replace(/[.!?]+$/, '');
+  return trimmed === '' ? '' : `: ${trimmed}`;
+}
+
+/** The card row's stage word; a vetoed card or one waiting to be dealt is not open for funding. */
+function stageWord(card: BoardCard): string {
+  if (card.board_vetoed && HORIZON_STAGES.includes(card.stage)) return 'vetoed';
+  if (undealt(card)) return 'waiting to be dealt';
+  return STAGE_WORDS[card.stage] ?? card.stage;
 }
 
 /**
@@ -1080,7 +1124,7 @@ function CardMarks({ card }: { card: BoardCard }) {
   if (card.approval === 'current') marks.push('Written by an agent; its approval is current.');
   if (undealt(card)) marks.push(`Waiting to be dealt: moves to now at ${formatDateTime(card.opens_at!)}.`);
   if (card.approval === 'missing') marks.push('Hidden: written by an agent with no current approval. The public does not see it, no session runs it and it takes no money.');
-  if (card.board_vetoed) marks.push(`Vetoed by the board${card.board_veto_reason ? `: ${card.board_veto_reason}` : ''}. It is never dealt or run.`);
+  if (card.board_vetoed) marks.push(`Vetoed by the board${vetoReason(card.board_veto_reason)}. It is never dealt or run.`);
   if (marks.length === 0) return null;
   return (
     <ul className="marks">
@@ -1091,16 +1135,23 @@ function CardMarks({ card }: { card: BoardCard }) {
   );
 }
 
-/** Every card the board can still move, cancel or resume, now first, then the roadmap. */
-function CardControls({ client }: { client: SupabaseClient }) {
+/**
+ * Every card the board can still move, cancel or resume, now first, then the roadmap. It tells Needs
+ * you which cards are listed (onListed), so an inbox item links only to a row that is on the page.
+ */
+function CardControls({ client, onListed }: { client: SupabaseClient; onListed: (cards: ReadonlyMap<string, string>) => void }) {
   const [cards, setCards] = useState<BoardCard[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [notice, setNotice] = useState('');
+  const noticeLine = useRef<HTMLParagraphElement | null>(null);
+  const refocus = useRef<HTMLElement | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       setCards(await fetchBoardCards(client));
       setLoadError('');
     } catch (error) {
+      refocus.current = null;
       setLoadError(errorMessage(error));
     }
   }, [client]);
@@ -1108,6 +1159,30 @@ function CardControls({ client }: { client: SupabaseClient }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    onListed(new Map((cards ?? []).map((card) => [card.id, card.title])));
+  }, [cards, onListed]);
+
+  // An action that changes a card's horizon or rank moves its row, and a browser drops focus from an
+  // element it moves; a cancelled card leaves the list. Once the list is redrawn, the control that was
+  // focused gets focus back, or the notice does when its card is gone, unless focus went elsewhere.
+  useLayoutEffect(() => {
+    const control = refocus.current;
+    refocus.current = null;
+    if (control === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    (control.isConnected ? control : noticeLine.current)?.focus();
+  }, [cards]);
+
+  const changed = useCallback(
+    async (focused: HTMLElement | null) => {
+      refocus.current = focused;
+      await refresh();
+    },
+    [refresh],
+  );
 
   return (
     <section aria-label="Cards">
@@ -1117,12 +1192,17 @@ function CardControls({ client }: { client: SupabaseClient }) {
         with a new estimate. Each change needs a reason and is recorded. Undealt and hidden agent cards are listed
         here, and nowhere public.
       </p>
+      {notice === '' ? null : (
+        <p role="status" tabIndex={-1} ref={noticeLine}>
+          {notice}
+        </p>
+      )}
       {cards === null ? <p role="status">{loadError === '' ? 'Loading the cards.' : loadError}</p> : null}
       {cards !== null && cards.length === 0 ? <p>No cards to manage.</p> : null}
       {cards !== null && cards.length > 0 ? (
         <ul className="board-cards">
           {cards.map((card) => (
-            <CardControl key={`${card.id}-${card.horizon}-${card.rank}-${card.stage}`} client={client} card={card} onChanged={refresh} />
+            <CardControl key={card.id} client={client} card={card} onChanged={changed} onCancelled={setNotice} />
           ))}
         </ul>
       ) : null}
@@ -1153,6 +1233,7 @@ function CoolingWindowForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const n = Number(value);
     if (value.trim() === '' || !Number.isInteger(n) || n < 0 || n > COOLING_WINDOW_MAX) {
       setMessage('The cooling window must be a whole number of minutes from 0 to 10,080.');
@@ -1188,7 +1269,7 @@ function CoolingWindowForm({
         Reason
         <input required value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         Save cooling window
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1204,73 +1285,25 @@ const CLASS_WORDS: Record<string, string> = {
   web_only: 'web only',
 };
 
-function RolePause({
-  client,
-  role,
-  canPause,
-  canResume,
-  onChanged,
-}: {
-  client: SupabaseClient;
-  role: BoardRoleRow;
-  canPause: boolean;
-  canResume: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const [reason, setReason] = useState('');
-  const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
-  const can = role.paused ? canResume : canPause;
-
-  async function apply() {
-    if (reason.trim() === '') {
-      setMessage('A reason is required.');
-      return;
-    }
-    setBusy(true);
-    try {
-      await setRolePause(client, role.id, !role.paused, reason.trim());
-      setMessage(role.paused ? `${role.name} resumed.` : `${role.name} paused.`);
-      setReason('');
-      await onChanged();
-    } catch (error) {
-      setMessage(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li>
-      <p>
-        <strong>{role.name}</strong> · {role.agent_class === null ? 'no class yet' : (CLASS_WORDS[role.agent_class] ?? role.agent_class)}
-        {role.state === 'retired' ? ' · retired' : ''} ·{' '}
-        {role.paused ? `paused${role.paused_reason ? `: ${role.paused_reason}` : ''}` : 'not paused'}
-      </p>
-      {can ? (
-        <div className="row row-end">
-          <label>
-            Reason
-            <input aria-label={`Reason for ${role.name}`} value={reason} onChange={(event) => setReason(event.target.value)} />
-          </label>
-          <button type="button" className="button-secondary" disabled={busy} onClick={() => void apply()}>
-            {role.paused ? `Resume ${role.name}` : `Pause ${role.name}`}
-          </button>
-        </div>
-      ) : null}
-      {message === '' ? null : <p role="status">{message}</p>}
-    </li>
-  );
+function roleStatus(role: BoardRoleRow): string {
+  if (!role.paused) return 'not paused';
+  return role.paused_reason ? `paused: ${role.paused_reason}` : 'paused';
 }
 
 /**
- * Each role with its trust class and pause (board_roles). A paused role starts nothing and its running
- * session stops at the next watch; its card returns to funded. The board or the moderator pauses a
- * role; only the board resumes one, at the second factor.
+ * Each role with its trust class and pause (board_roles), one table row each, and one form under the
+ * table that pauses or resumes the role chosen. A paused role starts nothing and its running session
+ * stops at the next watch; its card returns to funded. The board or the moderator pauses a role; only
+ * the board resumes one, at the second factor. The form and its status line stay mounted when the
+ * list refreshes, so the confirmation is announced and keyboard focus stays on the button.
  */
 function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; canPause: boolean; canResume: boolean }) {
   const [roles, setRoles] = useState<BoardRoleRow[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [chosen, setChosen] = useState('');
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -1285,22 +1318,98 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
     void refresh();
   }, [refresh]);
 
+  // The board pauses and resumes; the moderator only pauses, so a paused role is listed but not
+  // offered to it.
+  const offered = (option: BoardRoleRow) => (option.paused ? canResume : canPause);
+  const role = (roles ?? []).find((option) => option.id === chosen && offered(option)) ?? null;
+
+  async function apply(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    if (role === null) {
+      setMessage('Choose a role.');
+      return;
+    }
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await setRolePause(client, role.id, !role.paused, reason.trim());
+      setMessage(role.paused ? `${role.name} resumed.` : `${role.name} paused.`);
+      setReason('');
+      await refresh();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section aria-label="Roles">
       <h2>Roles</h2>
       <p>
         Pause a role to stop its work: it starts nothing, and a session it is running stops and its card goes back to
-        funded. {canResume ? 'Resuming needs a reason too.' : 'Only the board resumes a role.'}
+        funded.{' '}
+        {canResume
+          ? 'Resuming needs a reason too.'
+          : canPause
+            ? 'Only the board resumes a role.'
+            : 'Verify your second factor to pause or resume a role.'}
       </p>
       {roles === null ? <p role="status">{loadError === '' ? 'Loading the roles.' : loadError}</p> : null}
-      {roles !== null ? (
-        <ul className="board-cards">
-          {roles.map((role) => (
-            <RolePause key={`${role.id}-${role.paused}`} client={client} role={role} canPause={canPause} canResume={canResume} onChanged={refresh} />
-          ))}
-        </ul>
+      {roles !== null && roles.length === 0 ? <p>No roles yet.</p> : null}
+      {roles !== null && roles.length > 0 ? (
+        <table className="role-table">
+          <thead>
+            <tr>
+              <th scope="col">Role</th>
+              <th scope="col">Class</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((row) => (
+              <tr key={row.id}>
+                <th scope="row">
+                  {row.name}
+                  {row.state === 'retired' ? ' (retired)' : ''}
+                </th>
+                <td>{row.agent_class === null ? 'no class yet' : (CLASS_WORDS[row.agent_class] ?? row.agent_class)}</td>
+                <td>{roleStatus(row)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : null}
       {roles !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
+      {roles !== null && roles.length > 0 && (canPause || canResume) ? (
+        <form className="stack" onSubmit={apply} aria-label="Pause or resume a role">
+          <label>
+            Role
+            <select value={role === null ? '' : role.id} onChange={(event) => setChosen(event.target.value)}>
+              <option value="">Choose a role</option>
+              {roles.map((option) => (
+                <option key={option.id} value={option.id} disabled={!offered(option)}>
+                  {`${option.name}${option.paused ? ' (paused)' : ''}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Reason
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <button type="submit" aria-disabled={busy}>
+            {role === null ? (canResume ? 'Pause or resume' : 'Pause') : role.paused ? `Resume ${role.name}` : `Pause ${role.name}`}
+          </button>
+        </form>
+      ) : null}
+      <p role="status" className="role-status">
+        {message}
+      </p>
     </section>
   );
 }
@@ -1315,25 +1424,58 @@ const RUN_WORDS: Record<string, string> = {
 
 const shortCard = (id: string) => id.replace(/-/g, '').slice(0, 8);
 
+/** A code in running text: already_holds reads "already holds". */
+const codeWords = (code: string) => code.replace(/_/g, ' ');
+
+/** The Game Director's verdict on a round, in words. */
+const VERDICT_WORDS: Record<string, string> = {
+  approved: 'Approved',
+  revise: 'Sent back to revise',
+  flagged: 'Flagged',
+};
+
+/**
+ * A card a run names: its title, linked to its row under Cards while that row is listed (as Needs you
+ * links), else the fallback title, else its short id.
+ */
+function CardName({ id, titles, fallback = null }: { id: string; titles: ReadonlyMap<string, string>; fallback?: string | null }) {
+  const title = titles.get(id);
+  if (title !== undefined) return <a href={`#card-${id}`}>{title}</a>;
+  return <>{fallback ?? `card ${shortCard(id)}`}</>;
+}
+
 /** A role job's typed output under its run: the ranking's moves, or the draft's result and rounds. */
-function RunOutputLines({ output }: { output: RunOutput }) {
+function RunOutputLines({ output, cardTitles }: { output: RunOutput; cardTitles: ReadonlyMap<string, string> }) {
   if (output.kind === 'ranking') {
     return (
-      <p className="muted">
-        {output.moves.length === 0
-          ? 'Moved no card.'
-          : `Moved ${output.moves.map((move) => `${shortCard(move.card_id)} from ${move.from ?? 'no rank'} to ${move.to}`).join('; ')}.`}
-        {output.unapplied > 0 ? ` ${output.unapplied} more not applied: ten changes a run.` : ''}
-      </p>
+      <>
+        {output.moves.length === 0 ? (
+          <p className="muted">Moved no card.</p>
+        ) : (
+          <ol className="job-runs">
+            {output.moves.map((move) => (
+              <li key={move.card_id}>
+                <CardName id={move.card_id} titles={cardTitles} />: from {move.from === null ? 'no rank' : `rank ${move.from}`} to rank {move.to}
+              </li>
+            ))}
+          </ol>
+        )}
+        {output.unapplied > 0 ? <p className="muted">{output.unapplied === 1 ? '1 more kept its rank.' : `${output.unapplied} more kept their ranks.`}</p> : null}
+      </>
     );
   }
-  const head =
-    output.result === 'approved' && output.card_id
-      ? `Approved: card ${shortCard(output.card_id)} waits out the cooling window, then is dealt to now.`
-      : `Withdrawn${output.reason ? `: ${output.reason.replace(/_/g, ' ')}` : ''}. No card was written.`;
+  const approvedTitle = output.rounds.find((round) => round.verdict?.result === 'approved')?.title ?? null;
   return (
     <>
-      <p className="muted">{head}</p>
+      <p className="muted">
+        {output.result === 'approved' && output.card_id ? (
+          <>
+            Approved: <CardName id={output.card_id} titles={cardTitles} fallback={approvedTitle} /> waits out the cooling window, then is dealt to now.
+          </>
+        ) : (
+          `Withdrawn${output.reason ? `: ${codeWords(output.reason)}` : ''}. No card was written.`
+        )}
+      </p>
       {output.rounds.length === 0 ? null : (
         <ol className="job-runs">
           {output.rounds.map((round) => (
@@ -1341,8 +1483,10 @@ function RunOutputLines({ output }: { output: RunOutput }) {
               {round.title === null
                 ? 'No valid draft.'
                 : `${round.title} (${round.lane ?? 'no lane'}, ${round.executor ?? 'no executor'}, ${round.estimate_usd === null ? 'no estimate' : formatUsd(round.estimate_usd)}): ${round.summary ?? ''}`}
-              {round.check ? ` Refused by the ${round.check.name} check: ${round.check.detail}` : ''}
-              {round.verdict ? ` Graded ${round.verdict.result}: ${round.verdict.reason_codes.join(', ')}.${round.verdict.note ? ` ${round.verdict.note}` : ''}` : ''}
+              {round.check ? ` Refused by the ${codeWords(round.check.name)} check: ${round.check.detail}` : ''}
+              {round.verdict
+                ? ` ${VERDICT_WORDS[round.verdict.result] ?? codeWords(round.verdict.result)}: ${round.verdict.reason_codes.map(codeWords).join(', ')}.${round.verdict.note ? ` ${round.verdict.note}` : ''}`
+                : ''}
             </li>
           ))}
         </ol>
@@ -1351,7 +1495,45 @@ function RunOutputLines({ output }: { output: RunOutput }) {
   );
 }
 
-function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; job: BoardJob; canRun: boolean; onChanged: () => Promise<void> }) {
+/** A job's name as a heading: studio_ranking reads "Studio ranking". */
+function jobTitle(name: string): string {
+  const words = name.replace(/_/g, ' ').trim();
+  return words === '' ? name : words[0]!.toUpperCase() + words.slice(1);
+}
+
+/** Who queued a run. */
+const ORIGIN_WORDS: Record<string, string> = {
+  board: 'Run now',
+  schedule: 'scheduled',
+  event: 'after an event',
+  operator: 'by the operator',
+};
+
+/** Why a run was skipped or stopped, for the reasons the dispatcher writes; any other is shown as written. */
+const REASON_WORDS: Record<string, string> = {
+  role_paused: 'its role is paused',
+  studio_paused: 'the studio is paused',
+  not_board_origin: 'only the board starts a model run',
+  board_session_lapsed: 'no board member was signed in',
+  dispatcher_stopping: 'the dispatcher stopped',
+  dispatcher_restart: 'the dispatcher restarted',
+  no_handler: 'no code runs this job yet',
+  handler_error: 'it hit an error',
+};
+
+function JobRow({
+  client,
+  job,
+  canRun,
+  cardTitles,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  job: BoardJob;
+  canRun: boolean;
+  cardTitles: ReadonlyMap<string, string>;
+  onChanged: () => Promise<void>;
+}) {
   // The role jobs have a button of their own and send {}; every other job takes typed input.
   const named = JOB_BUTTONS[job.name];
   const [reason, setReason] = useState('');
@@ -1361,6 +1543,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
 
   async function runNow(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     if (reason.trim() === '') {
       setMessage('A reason is required.');
       return;
@@ -1389,7 +1572,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
   return (
     <li>
       <form className="stack" onSubmit={runNow} aria-label={`Job ${job.name}`}>
-        <h3>{job.name}</h3>
+        <h3>{jobTitle(job.name)}</h3>
         <p>
           {job.role_name ?? 'No role'} · {job.calls_model ? 'calls a model, on the board plan while you are signed in' : 'code only'}
           {job.runs_when_paused ? ' · runs while the studio is paused' : ''}
@@ -1403,9 +1586,9 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
               const output = runOutputFrom(job.name, run.output);
               return (
                 <li key={run.id}>
-                  {formatDateTime(run.created_at)} · {run.origin} · {RUN_WORDS[run.status] ?? run.status}
-                  {run.reason ? `: ${run.reason}` : ''}
-                  {output ? <RunOutputLines output={output} /> : null}
+                  {formatDateTime(run.created_at)} · {ORIGIN_WORDS[run.origin] ?? run.origin} · {RUN_WORDS[run.status] ?? run.status}
+                  {run.reason ? `: ${REASON_WORDS[run.reason] ?? run.reason}` : ''}
+                  {output ? <RunOutputLines output={output} cardTitles={cardTitles} /> : null}
                 </li>
               );
             })}
@@ -1423,7 +1606,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
               Reason
               <input value={reason} onChange={(event) => setReason(event.target.value)} />
             </label>
-            <button type="submit" disabled={busy}>
+            <button type="submit" aria-disabled={busy}>
               {named ?? 'Run now'}
             </button>
           </>
@@ -1439,7 +1622,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
  * failed. Run now queues a board-origin run; a model-calling one runs only while a board member is
  * signed in here, billed to the board's plan.
  */
-function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean }) {
+function JobsPanel({ client, canRun, cardTitles }: { client: SupabaseClient; canRun: boolean; cardTitles: ReadonlyMap<string, string> }) {
   const [jobs, setJobs] = useState<BoardJob[] | null>(null);
   const [loadError, setLoadError] = useState('');
 
@@ -1461,10 +1644,11 @@ function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean
       <h2>Jobs</h2>
       {jobs === null ? <p role="status">{loadError === '' ? 'Loading the jobs.' : loadError}</p> : null}
       {jobs !== null && jobs.length === 0 ? <p>No jobs yet. Each is added with the work it runs.</p> : null}
+      {jobs !== null && jobs.length > 0 && !canRun ? <p>Verify your second factor to run a job now.</p> : null}
       {jobs !== null && jobs.length > 0 ? (
         <ul className="board-cards">
           {jobs.map((job) => (
-            <JobRow key={job.name} client={client} job={job} canRun={canRun} onChanged={refresh} />
+            <JobRow key={job.name} client={client} job={job} canRun={canRun} cardTitles={cardTitles} onChanged={refresh} />
           ))}
         </ul>
       ) : null}
@@ -1509,6 +1693,7 @@ function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; r
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     // Refuse a blank summary here so the database is never called with one.
     if (form.summary.trim() === '') {
       setMessage('A public summary is required.');
@@ -1686,7 +1871,7 @@ function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; r
         </select>
       </label>
       {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
-      <button type="submit" disabled={busy || roles.length === 0}>
+      <button type="submit" disabled={roles.length === 0} aria-disabled={busy}>
         File card
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1719,6 +1904,7 @@ function DirectiveForm({ client, roles, rolesError }: { client: SupabaseClient; 
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     const estimate = Number(form.estimate_usd);
     if (!Number.isFinite(estimate) || estimate < 0) {
       setMessage('Estimate must be a dollar amount of zero or more.');
@@ -1837,7 +2023,7 @@ function DirectiveForm({ client, roles, rolesError }: { client: SupabaseClient; 
         </select>
       </label>
       {roles.length === 0 ? <p>{rolesError === '' ? 'No active card roles are loaded.' : rolesError}</p> : null}
-      <button type="submit" disabled={busy || roles.length === 0}>
+      <button type="submit" disabled={roles.length === 0} aria-disabled={busy}>
         File directive
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
@@ -1852,6 +2038,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     try {
       await fileNote(client, text.trim());
@@ -1872,7 +2059,7 @@ function NoteForm({ client }: { client: SupabaseClient }) {
         Note
         <textarea required rows={4} value={text} onChange={(event) => setText(event.target.value)} />
       </label>
-      <button type="submit" disabled={busy}>
+      <button type="submit" aria-disabled={busy}>
         File note
       </button>
       {message === '' ? null : <p role="status">{message}</p>}

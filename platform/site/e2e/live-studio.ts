@@ -139,7 +139,8 @@ export const LIVE_STUDIO: StudioFixture = {
   deploys,
   totals: { usd_total: '0.0000', input_tokens: '0', cached_tokens: '0', output_tokens: '0', row_count: '0' },
   // Two contributions: 3.00 - 0.64 in fees = 2.36 = 0.24 reserve + 0.42 studio + 0.09 emergency fund + 1.61 agent credit;
-  // the board's own $1 test payment sits apart, in none of them.
+  // the board's own $1 test payment sits apart, in none of them: $0.5019 of it, its agent credit, is in
+  // the pool (board_test_usd, as production has it; docs/specs/money-logic.md).
   money: moneyRow({
     payments: 2,
     received_usd: '3.0000',
@@ -150,7 +151,7 @@ export const LIVE_STUDIO: StudioFixture = {
     incident_usd: '0.0900',
     agent_credit_usd: '1.6100',
     not_on_card_usd: '0.0700',
-    board_test_usd: '1.0000',
+    board_test_usd: '0.5019',
     funding_order: fundingOrder(open.map((card) => card.id)),
   }),
   stopped,

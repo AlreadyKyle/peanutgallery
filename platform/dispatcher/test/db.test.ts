@@ -160,6 +160,14 @@ describe('createSupabaseDb queries', () => {
     expect(plain).toMatchObject({ needs_approval: false, approved: false, board_vetoed: false, executor_paused: false });
   });
 
+  it("reads startup recovery's building and gated cards from dispatcher_cards, which holds every stage", async () => {
+    const { fetchFn, seen } = rest([{ id: 'g', stage: 'gated', commit_sha: null, failing_check: 'merge_unknown' }]);
+    const cards = await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).listCardsInStages(['building', 'gated']);
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/dispatcher_cards');
+    expect(seen[0]?.url.searchParams.get('stage')).toBe('in.(building,gated)');
+    expect(cards.map((c) => [c.id, c.stage])).toEqual([['g', 'gated']]);
+  });
+
   it('calls the job queue and card functions with their arguments', async () => {
     const { fetchFn, calls } = mockFetch((method, url) => {
       if (method !== 'POST') return undefined;
@@ -188,6 +196,14 @@ describe('createSupabaseDb queries', () => {
     ]);
   });
 
+  it('reads the rankable cards from rankable_cards, the test apply_card_ranking refuses on, and refuses an answer that is not a list', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: ['card-1', 'card-2'] } : undefined));
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).rankableCards()).toEqual(['card-1', 'card-2']);
+    expect(calls.map((call) => call.body)).toEqual([{}]);
+    const wrong = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: null } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: wrong.fetchFn }).rankableCards()).rejects.toThrow('db rankable_cards');
+  });
+
   it('reads the oldest queued runs first, the jobs and a role\'s pause', async () => {
     const queued = rest([{ id: 'run-1', job_name: 'tidy_up', origin: 'board', status: 'queued', card_id: null, input: { floor: 3 }, parent_run_id: null, created_at: NOW.toISOString() }]);
     const runs = await createSupabaseDb('https://db.local', 'service-role', { fetchFn: queued.fetchFn }).queuedRuns(50);
@@ -203,11 +219,11 @@ describe('createSupabaseDb queries', () => {
     expect(state.calls[0]?.url).toContain('id=eq.role-1');
   });
 
-  it("reads each card's studio-billed spend from public_card_spend, and asks nothing for no cards", async () => {
+  it("reads each card's studio-billed spend from dispatcher_card_spend, hidden cards included, and asks nothing for no cards", async () => {
     const { fetchFn, seen } = rest([{ card_id: 'a', spent_usd: '1.2500' }]);
     const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
     expect(await db.cardSpend(['a', 'b'])).toEqual(new Map([['a', 1.25]]));
-    expect(seen[0]?.url.pathname).toBe('/rest/v1/public_card_spend');
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/dispatcher_card_spend');
     expect(seen[0]?.url.searchParams.get('card_id')).toBe('in.(a,b)');
     expect(await db.cardSpend([])).toEqual(new Map());
     expect(seen).toHaveLength(1);

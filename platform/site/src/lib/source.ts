@@ -77,6 +77,10 @@ export type AgentEvent = {
   role_id: string | null;
   type: string;
   created_at: string;
+  // What the database did to a card on a line no role wrote (dealt, ceiling_top_up, resume_rule), and
+  // the top-up's amount; absent or null on every other line.
+  step?: string | null;
+  usd?: number | string | null;
   /**
    * The event's fixed public line (public.event_line_key, docs/specs/supporter-pages.md): started,
    * read, edited, ran, submitted, used_tool, a message step's key, gate_passed and so on. Absent in a
@@ -486,6 +490,10 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const cardTitles: Record<string, string> = {};
   for (const row of rows(live.events, 'events')) {
     const cardId = textOrNull(row, 'card_id');
+    // step and usd name what the database did to a card (dealt, topped up, resumed by rule); a line
+    // without them carries neither key, as the pages read it (EventList.tsx).
+    const step = textOrNull(row, 'step');
+    const usd = row.usd === null || row.usd === undefined ? null : money(row.usd);
     const lineKey = textOrNull(row, 'line_key');
     events.push({
       id: text(row, 'id'),
@@ -493,6 +501,8 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
       role_id: textOrNull(row, 'role_id'),
       type: text(row, 'type'),
       created_at: text(row, 'created_at'),
+      ...(step === null ? {} : { step }),
+      ...(usd === null ? {} : { usd }),
       ...(lineKey === null ? {} : { line_key: lineKey }),
     });
     const title = textOrNull(row, 'card_title');

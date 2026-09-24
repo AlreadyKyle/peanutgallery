@@ -3,7 +3,7 @@
 // statement of money are in legal.ts (kernel), which pages read directly; copy.ts does not repeat or
 // spread them (docs/specs/board-site.md).
 export const copy = {
-  studioName: 'Peanut Gallery',
+  studioName: 'Mob Machine',
   // The pitch line (PLAN.md §2), split so the first sentence can be the page heading.
   pitchTitle: 'Watch AI agents build a game studio and free games.',
   pitchBody: 'Fund the card you want built next.',
@@ -74,12 +74,15 @@ export const copy = {
   // or the plain line when the roles did not load.
   writtenBy: 'Written by the {role}, an AI agent',
   writtenByAgent: 'Written by an AI agent',
-  // The live-updates row and the one polite announcer.
-  pauseLiveUpdates: 'Pause live updates',
+  // The updates row and the one polite announcer. The figures run up to about three minutes behind
+  // (DESIGN.md, How fresh the figures are), so nothing here says live; and while a refresh has failed
+  // the quiet button says there is nothing new rather than that the page is up to date.
+  pauseLiveUpdates: 'Pause updates',
   upToDate: 'Up to date',
+  noNewUpdates: 'No new updates',
   showUpdates: 'Show {n} updates',
   showOneUpdate: 'Show 1 update',
-  liveUpdatesPaused: 'Live updates are paused.',
+  liveUpdatesPaused: 'Updates are paused.',
   updatesWaiting: 'New updates are waiting below the status line.',
   announceFunded: '{title} is fully funded.',
   announceShipped: '{title} is live.',
@@ -113,6 +116,8 @@ export const copy = {
     laneClosed: 'Starts when the board opens the studio code lane.',
     rolePaused: 'The board has paused this agent.',
     statusPaused: 'Paused',
+    // Home's team strip shows three agents; this link goes to the rest on /team.
+    meetAll: 'Meet the whole team',
     hired: 'hired',
     workedOnOne: 'Worked on 1 shipped card',
     workedOnMany: 'Worked on {n} shipped cards',
@@ -189,7 +194,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. They are not open for funding until the board moves them to Fund what\'s next.',
+    lede: 'Cards the studio plans to build and has not built yet. They open for funding when they move to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
     horizonIntros: {
@@ -258,7 +263,7 @@ export const copy = {
       'Leave dead space: side-by-side blocks balance or stack, and nothing leaves an empty column.',
     ],
     markHeading: 'The mark',
-    markNote: 'The peanut mark is one colour and inverts to paper on signal and ink.',
+    markNote: 'The mark is a small machine drawn in the text colour: ink on paper, paper on signal and ink.',
     castHeading: 'The cast on ink',
     castNote: 'An avatar sits on a paper disc on ink and draws unchanged. No avatar sits on the signal plate.',
     cardsHeading: 'The card in every state',

@@ -33,7 +33,9 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   const why = status.kind === 'paused' ? (status.by === 'role' ? status.sentence : null) : status.sentence;
   return (
     <li className="agent" id={`agent-${role.id}`} data-status={status.kind}>
-      <Avatar note={role.species_note} asleep={status.kind !== 'running'} />
+      {/* Awake while the studio is paused (the board, 23 Sep 2026: running agents have their eyes
+          open); asleep only when the board has paused this one agent. */}
+      <Avatar note={role.species_note} asleep={status.kind === 'paused' && status.by === 'role'} />
       <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
@@ -64,6 +66,21 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   );
 }
 
+/**
+ * A role that does not run yet, as a compact tile: its avatar asleep, its name, its job and when it
+ * starts (the board, 23 Sep 2026: the roles still to come asleep, in compact balanced columns).
+ */
+function ComingTile({ role, status }: { role: Role; status: TeamStatus }) {
+  return (
+    <li className="agent agent-coming" id={`agent-${role.id}`} data-status={status.kind}>
+      <Avatar note={role.species_note} asleep size={56} />
+      <h3 id={`role-${role.id}`}>{role.name}</h3>
+      {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
+      {status.sentence === null ? null : <p className="agent-status">{status.sentence}</p>}
+    </li>
+  );
+}
+
 function Section({ id, heading, intro, rows, snapshot, link = false }: {
   id: string;
   heading: string;
@@ -73,6 +90,7 @@ function Section({ id, heading, intro, rows, snapshot, link = false }: {
   link?: boolean;
 }) {
   if (rows.length === 0) return null;
+  const running = rows.every(({ status }) => onTheTeam(status));
   return (
     <section className="section" aria-labelledby={id}>
       <h2 id={id}>{heading}</h2>
@@ -85,11 +103,19 @@ function Section({ id, heading, intro, rows, snapshot, link = false }: {
           </>
         ) : null}
       </p>
-      <ul className="team-grid">
-        {rows.map(({ role, status }) => (
-          <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
-        ))}
-      </ul>
+      {running ? (
+        <ul className="team-grid">
+          {rows.map(({ role, status }) => (
+            <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
+          ))}
+        </ul>
+      ) : (
+        <ul className="team-coming">
+          {rows.map(({ role, status }) => (
+            <ComingTile key={role.id} role={role} status={status} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -133,7 +159,11 @@ export function Team() {
         </PageHeader>
       </div>
       <div className="band">
-        {studio.state === 'loading' ? <p className="muted">{team.loading}</p> : null}
+        {studio.state === 'loading' ? (
+          <p className="muted" aria-busy="true">
+            {team.loading}
+          </p>
+        ) : null}
         {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
         {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
       </div>

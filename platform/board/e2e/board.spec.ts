@@ -29,20 +29,24 @@ function base64url(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
+/** A verified authenticator app, for a session at aal2. */
+const TOTP_FACTOR = { id: 'f-verified', factor_type: 'totp', status: 'verified', friendly_name: '', created_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z' };
+
 /**
- * A stored session for a board member, the way supabase-js keeps one after the magic link: aal1, or
- * aal2 once a code from the authenticator app has been verified.
+ * A stored session for a board member, the way supabase-js keeps one after the magic link (aal1), or
+ * after its second factor too (aal2).
  */
 async function signIn(page: Page, aal: 'aal1' | 'aal2' = 'aal1') {
   const now = Math.floor(Date.now() / 1000);
-  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal, amr: [{ method: 'otp', timestamp: now }], exp: now + 3600, session_id: 's-1' };
+  const amr = aal === 'aal2' ? [{ method: 'totp', timestamp: now }, { method: 'otp', timestamp: now }] : [{ method: 'otp', timestamp: now }];
+  const payload = { sub: 'u-board', email: EMAIL, role: 'authenticated', aal, amr, exp: now + 3600, session_id: 's-1' };
   const session = {
     access_token: `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url(payload)}.c2lnbmF0dXJl`,
     refresh_token: 'e2e-refresh',
     token_type: 'bearer',
     expires_in: 3600,
     expires_at: now + 3600,
-    user: { id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] },
+    user: { id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: aal === 'aal2' ? [TOTP_FACTOR] : [] },
   };
   await page.addInitScript(([key, value]) => window.localStorage.setItem(key!, value!), [storageKey, JSON.stringify(session)]);
 }
@@ -62,6 +66,10 @@ const needsYou = {
   last_credit_purchase: null,
   incident_reserve_usd: 0.4,
   s1_cards: [],
+  // A ceiling pause the resume rule will not resume: the card is PAUSED below.
+  rule_blocked: [{ id: 'c0000000-0000-4000-8000-000000000005', title: 'Paused at the maximum', why: 'card_max', actual_usd: '25.0000', card_max_usd: '25.0000' }],
+  // A card holding money whose approval is not current: the card is HIDDEN below.
+  approval_void: [{ id: 'c0000000-0000-4000-8000-000000000006', title: 'Rewritten outside a board control', stage: 'proposed', money_usd: '2.0000' }],
 };
 
 const studio = {
@@ -101,6 +109,38 @@ const UNDEALT = {
   opens_at: '2026-09-25T12:00:00Z',
   board_vetoed: false,
   board_veto_reason: null,
+};
+
+// A board card on now with no money, which a veto moves to next, and one paused at its ceiling at the
+// card maximum, which Needs you lists.
+const ON_NOW = {
+  ...UNDEALT,
+  id: 'c0000000-0000-4000-8000-000000000004',
+  title: 'Bigger pockets for the gatherers',
+  horizon: 'now',
+  rank: null,
+  source: 'board',
+  drafter_role_id: null,
+  opens_at: null,
+};
+const PAUSED = {
+  ...ON_NOW,
+  id: 'c0000000-0000-4000-8000-000000000005',
+  title: 'Paused at the maximum',
+  stage: 'paused',
+  funded_usd: '3.0000',
+};
+
+// An agent card with no current approval that holds money: card_is_public answers false for it, so
+// only the board's session reads it, marked Hidden, and Needs you lists it.
+const HIDDEN = {
+  ...UNDEALT,
+  id: 'c0000000-0000-4000-8000-000000000006',
+  title: 'Rewritten outside a board control',
+  horizon: 'now',
+  rank: null,
+  funded_usd: '2.0000',
+  opens_at: null,
 };
 
 const ROLES = [
@@ -154,7 +194,14 @@ const JOBS = [
         reason: null,
         created_at: '2026-09-23T12:00:00Z',
         finished_at: '2026-09-23T12:02:00Z',
-        output: { moves: [{ card_id: '11111111-1111-4111-8111-111111111111', from: 2, to: 1 }], unapplied: 0 },
+        // The first move names a card listed under Cards, the second one that is not.
+        output: {
+          moves: [
+            { card_id: 'c0000000-0000-4000-8000-000000000004', from: null, to: 1 },
+            { card_id: '11111111-1111-4111-8111-111111111111', from: 4, to: 2 },
+          ],
+          unapplied: 0,
+        },
       },
     ],
   },
@@ -163,7 +210,19 @@ const JOBS = [
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
-async function answerSupabase(page: Page, seen: string[], bodies: Record<string, unknown>[] = []) {
+// The roles public_roles offers as a card's executor.
+const PUBLIC_ROLES = [{ id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' }];
+const cards = [
+  { id: 'c-e2e', title: 'An e2e card', stage: 'proposed', horizon: 'now', rank: 1, folder: 'seed-1', lane: 'config', funding_target_usd: 5, funded_usd: 2, estimate_usd: 3, created_at: '2026-09-20T00:00:00Z' },
+];
+
+async function answerSupabase(
+  page: Page,
+  seen: string[],
+  { role = 'board', aal2 = false, bodies = [] }: { role?: 'board' | 'moderator'; aal2?: boolean; bodies?: Record<string, unknown>[] } = {},
+) {
+  let roles = ROLES.map((r) => ({ ...r }));
+  let boardCards: (Record<string, unknown> & { id: string; horizon: string })[] = [...cards, ON_NOW, PAUSED, UNDEALT, HIDDEN].map((c) => ({ ...c }));
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
@@ -172,11 +231,13 @@ async function answerSupabase(page: Page, seen: string[], bodies: Record<string,
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     switch (url.pathname) {
       case '/auth/v1/user':
-        return json({ id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: [] });
+        return json({ id: 'u-board', aud: 'authenticated', email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: '2026-09-14T00:00:00Z', factors: aal2 ? [TOTP_FACTOR] : [] });
       case '/auth/v1/factors':
         return json({ id: 'f-e2e', type: 'totp', friendly_name: '', totp: { qr_code: QR_SVG, secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/e2e' } });
       case '/rest/v1/rpc/board_role':
-        return json('board');
+        return json(role);
+      case '/rest/v1/rpc/set_paused':
+        return route.fulfill({ status: 204, body: '' });
       case '/rest/v1/rpc/board_heartbeat':
         return json(new Date().toISOString());
       case '/rest/v1/rpc/board_studio_state':
@@ -184,21 +245,36 @@ async function answerSupabase(page: Page, seen: string[], bodies: Record<string,
       case '/rest/v1/rpc/board_needs_you':
         return json(needsYou);
       case '/rest/v1/rpc/board_roles':
-        return json(ROLES);
+        return json(roles);
+      case '/rest/v1/rpc/set_role_pause': {
+        // The role changes as the database changes it, so board_roles reads it back changed.
+        const change = JSON.parse(body ?? '{}') as { p_role: string; p_paused: boolean; p_reason: string };
+        roles = roles.map((r) => (r.id === change.p_role ? { ...r, paused: change.p_paused, paused_reason: change.p_paused ? change.p_reason : null } : r));
+        return json(null);
+      }
       case '/rest/v1/rpc/board_jobs':
         return json(JOBS);
       case '/rest/v1/rpc/card_is_public':
-        return json(true);
+        return json((JSON.parse(body ?? '{}') as { p_card?: string }).p_card !== HIDDEN.id);
       case '/rest/v1/rpc/enqueue_manual_job':
         return json('run-queued-e2e');
-      case '/rest/v1/rpc/set_card_veto':
-        return json({ card_id: UNDEALT.id, board_vetoed: true, horizon: 'next', opens_at: UNDEALT.opens_at });
+      case '/rest/v1/rpc/set_card_veto': {
+        // The card changes as the database changes it: a veto moves a card on now with no money to next.
+        const change = JSON.parse(body ?? '{}') as { p_card: string; p_vetoed: boolean; p_reason: string };
+        boardCards = boardCards.map((c) =>
+          c.id === change.p_card
+            ? { ...c, board_vetoed: change.p_vetoed, board_veto_reason: change.p_vetoed ? change.p_reason : null, horizon: change.p_vetoed && c.horizon === 'now' ? 'next' : c.horizon }
+            : c,
+        );
+        const changed = boardCards.find((c) => c.id === change.p_card)!;
+        return json({ card_id: changed.id, board_vetoed: changed.board_vetoed, horizon: changed.horizon, opens_at: changed.opens_at ?? null });
+      }
       case '/rest/v1/public_roles':
-        return json([]);
+        return json(PUBLIC_ROLES);
       case '/rest/v1/cards': {
         // Only the board member's own token reads the undealt card, as cards_board_read allows.
         const bearer = route.request().headers()['authorization'] ?? '';
-        return json(bearer.includes('.') && bearer.split('.').length === 3 ? [UNDEALT] : []);
+        return json(bearer.includes('.') && bearer.split('.').length === 3 ? boardCards : []);
       }
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
@@ -244,6 +320,9 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   await expect(inbox.getByText('Answer dispute du_e2e for $5.00 by 1 Oct 2026.')).toBeVisible();
   await expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeVisible();
   await expect(inbox.getByText('Verify your second factor, then fill in the record form from here.', { exact: false })).toBeVisible();
+  // Cards is shown only at the second factor, so the ceiling pause names the second factor and links nowhere.
+  await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or cancel it, under Cards.', { exact: false })).toBeVisible();
+  await expect(inbox.locator('a[href^="#"]')).toHaveCount(0);
   // Needs you is the first section on the page, above the two-factor step.
   const sections = await page.locator('main section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
   expect(sections[0]).toBe('Needs you');
@@ -272,13 +351,40 @@ test('a connection to any host but the Supabase project is refused', async ({ pa
   await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
 });
 
-test('at the second factor the board sees and vetoes an undealt agent card, and reads the roles, the jobs and the cooling window, under the enforced policy', async ({ page }) => {
+test('at the second factor the board sees and vetoes an undealt agent card, pauses a role from the keyboard, and reads the jobs and the cooling window, under the enforced policy', async ({ page }) => {
   const reports = await watchPolicy(page);
   const seen: string[] = [];
   const bodies: Record<string, unknown>[] = [];
-  await answerSupabase(page, seen, bodies);
+  await answerSupabase(page, seen, { aal2: true, bodies });
   await signIn(page, 'aal2');
   await page.goto('/');
+
+  // Needs you's ceiling pause links to the card's row under Cards, which is on the page.
+  const toCard = page.getByRole('region', { name: 'Needs you' }).getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' });
+  await expect(toCard).toHaveAttribute('href', `#card-${PAUSED.id}`);
+  await toCard.click();
+  await expect(page.locator(`#card-${PAUSED.id}`)).toBeInViewport();
+  // The void card holding money links to its row, where it is marked hidden and can be vetoed or cancelled.
+  const needs = page.getByRole('region', { name: 'Needs you' });
+  await expect(needs.getByText(`Card ${HIDDEN.title} holds $2.00 but its approval is not current.`)).toBeVisible();
+  await expect(needs.getByRole('link', { name: 'Cancel it under Cards' })).toHaveAttribute('href', `#card-${HIDDEN.id}`);
+  const hidden = page.getByRole('form', { name: `Card ${HIDDEN.title}` });
+  await expect(hidden.getByText(/^Hidden: written by an agent with no current approval/)).toBeVisible();
+  await expect(hidden.getByRole('button', { name: 'Cancel card' })).toBeVisible();
+
+  // A keyboard user vetoes a card on now: the veto moves it to next, and the confirmation is shown and
+  // focus stays on the one veto button, which now reads Lift veto.
+  const onNow = page.getByRole('form', { name: `Card ${ON_NOW.title}` });
+  await onNow.getByLabel('Reason').focus();
+  await page.keyboard.type('Off pillar');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(onNow.getByRole('button', { name: 'Veto card' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(onNow.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(onNow.getByText(/ · horizon next · /)).toBeVisible();
+  await expect(onNow.getByRole('button', { name: 'Lift veto' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: ON_NOW.id, p_vetoed: true, p_reason: 'Off pillar' } });
 
   const card = page.getByRole('form', { name: `Card ${UNDEALT.title}` });
   await expect(card).toBeVisible();
@@ -286,24 +392,38 @@ test('at the second factor the board sees and vetoes an undealt agent card, and 
   await expect(card.getByText(/^Waiting to be dealt: moves to now at /)).toBeVisible();
   await card.getByLabel('Reason').fill('Not this week');
   await card.getByRole('button', { name: 'Veto card' }).click();
-  await expect(card.getByText('Card vetoed.')).toBeVisible();
+  await expect(card.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(card.getByRole('button', { name: 'Lift veto' })).toBeFocused();
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: UNDEALT.id, p_vetoed: true, p_reason: 'Not this week' } });
 
   const roles = page.getByRole('region', { name: 'Roles' });
-  await expect(roles.getByText('reviewer · not paused', { exact: false })).toBeVisible();
-  await expect(roles.getByRole('button', { name: 'Resume QA' })).toBeVisible();
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeVisible();
+  await expect(roles.getByRole('row', { name: 'QA writer paused: Checking the gate' })).toBeVisible();
+  // A keyboard user pauses a role through the one form; the confirmation is announced and focus stays on the button.
+  await roles.getByRole('combobox').selectOption({ label: 'Game Director' });
+  await roles.getByRole('textbox', { name: 'Reason' }).focus();
+  await page.keyboard.type('Too many loops');
+  await page.keyboard.press('Tab');
+  await expect(roles.getByRole('button', { name: 'Pause Game Director' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(roles.getByRole('status')).toHaveText('Game Director paused.');
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeVisible();
+  await expect(roles.getByRole('button', { name: 'Resume Game Director' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_role_pause', body: { p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' } });
   const jobs = page.getByRole('region', { name: 'Jobs' });
-  await expect(jobs.getByText('schedule · skipped: role_paused', { exact: false })).toBeVisible();
+  await expect(jobs.getByText('scheduled · skipped: its role is paused', { exact: false })).toBeVisible();
   await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();
   // Rank now and Draft a game card queue board-origin runs with {}, and each run shows its typed output.
   const rank = page.getByRole('form', { name: 'Job studio_ranking' });
-  await expect(rank.getByText('Moved 11111111 from 2 to 1.')).toBeVisible();
+  // Each moved card on its own line: by title, linked to its row under Cards, or by short id when not listed.
+  await expect(rank.locator('ol.job-runs > li')).toHaveText(['Bigger pockets for the gatherers: from no rank to rank 1', 'card 11111111: from rank 4 to rank 2']);
+  await expect(rank.getByRole('link', { name: 'Bigger pockets for the gatherers' })).toHaveAttribute('href', '#card-c0000000-0000-4000-8000-000000000004');
   await rank.getByLabel('Reason').fill('New cards on now');
   await rank.getByRole('button', { name: 'Rank now' }).click();
   await expect(rank.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();
   const draft = page.getByRole('form', { name: 'Job draft_card' });
-  await expect(draft.getByText('Approved: card 22222222 waits out the cooling window, then is dealt to now.')).toBeVisible();
-  await expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more to build. Graded approved: fits_pillars.')).toBeVisible();
+  await expect(draft.getByText('Approved: Gatherers cost 11 waits out the cooling window, then is dealt to now.')).toBeVisible();
+  await expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more to build. Approved: fits pillars.')).toBeVisible();
   await draft.getByLabel('Reason').fill('Short of cards');
   await draft.getByRole('button', { name: 'Draft a game card' }).click();
   await expect(draft.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();
@@ -316,3 +436,63 @@ test('at the second factor the board sees and vetoes an undealt agent card, and 
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
   expect(reports).toEqual([]);
 });
+
+/**
+ * Each pair of stacked controls placed straight in a section, and what follows them, with the space
+ * between them: the forms' rhythm is 16 px. A subheading sits 8 px over its list by design.
+ */
+async function sectionGaps(page: Page): Promise<{ where: string; gap: number }[]> {
+  return page.locator('main section').evaluateAll((sections) =>
+    sections.flatMap((section) => {
+      const shown = [...section.children].filter((el) => el.getBoundingClientRect().height > 0);
+      return shown.slice(1).flatMap((next, i) => {
+        const before = shown[i]!;
+        const gap = next.getBoundingClientRect().top - before.getBoundingClientRect().bottom;
+        if (gap < -1 || before.tagName === 'H3') return [];
+        const name = (el: Element) => `${el.tagName.toLowerCase()}${el.className ? `.${el.className}` : ''}`;
+        return [{ where: `${section.getAttribute('aria-label')}: ${name(before)} then ${name(next)}`, gap: Math.round(gap * 100) / 100 }];
+      });
+    }),
+  );
+}
+
+for (const [who, role, aal] of [
+  ['a moderator', 'moderator', 'aal1'],
+  ['a board member at aal2', 'board', 'aal2'],
+] as const) {
+  test(`the page keeps 16 px between stacked controls for ${who}, and the focused pause reason clears the buttons, at 375, 768 and 1440 px`, async ({ page }) => {
+    const reports = await watchPolicy(page);
+    const seen: string[] = [];
+    await answerSupabase(page, seen, { role, aal2: aal === 'aal2' });
+    await signIn(page, aal);
+    for (const width of [375, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      if (role === 'board') await expect(page.getByText('An e2e card').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Pause agents' }).click();
+      await expect(page.getByRole('region', { name: 'Pause and resume' }).getByRole('status')).toHaveText('Agents paused.');
+      const tight = (await sectionGaps(page)).filter(({ gap }) => gap < 15.5);
+      expect(tight, `${width} px`).toEqual([]);
+      // BOARD_E2E_SHOTS=<folder> keeps a full-page screenshot of each width to look at.
+      if (process.env.BOARD_E2E_SHOTS) await page.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-${width}.png`, fullPage: true });
+
+      // Reached from the keyboard, the select shows its focus ring, which must end above the buttons.
+      await page.getByLabel('Pause reason').focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      const ring = await page.getByLabel('Pause reason').evaluate((select) => {
+        const style = getComputedStyle(select);
+        const row = select.closest('label')!.nextElementSibling!;
+        return {
+          visible: select.matches(':focus-visible'),
+          clearance: row.getBoundingClientRect().top - (select.getBoundingClientRect().bottom + parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)),
+        };
+      });
+      expect(ring.visible, `${width} px`).toBe(true);
+      expect(ring.clearance, `${width} px`).toBeGreaterThanOrEqual(8);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${width} px`).toBe(false);
+    }
+    expect(seen).toContain('POST /rest/v1/rpc/set_paused');
+    expect(reports).toEqual([]);
+  });
+}

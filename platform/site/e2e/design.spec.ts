@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-env';
-import { DEFAULT_STUDIO, expect, overflowsHorizontally, test } from './fixtures';
+import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
+import { LIVE_STUDIO } from './live-studio';
 import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
@@ -13,7 +14,7 @@ const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadm
 const WIDTHS = [320, 360, 375, 390, 768, 1024, 1440];
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
-const SIGNAL = 'rgb(26, 47, 200)';
+const SIGNAL = 'rgb(17, 17, 17)'; // --signal, ink since the board's call of 23 Sep 2026
 const COIN = 'rgb(217, 164, 65)';
 const COIN_DOWN = 'rgb(184, 134, 47)';
 const COIN_UP = 'rgb(236, 195, 110)';
@@ -117,7 +118,7 @@ test.describe('the design guide', () => {
 
   test('marks the pressed Pause with a 3px paper border and the check glyph on signal and on ink', async ({ page }) => {
     await settle(page, GUIDE);
-    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause live updates' });
+    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause updates' });
     await pause.click();
     await expect(pause).toHaveAttribute('aria-pressed', 'true');
     await expect(pause).toHaveCSS('border-top-width', '3px');
@@ -149,7 +150,7 @@ test.describe('the design guide', () => {
     await settle(page, GUIDE);
     const band = page.locator('main > .band:nth-child(1)');
     const updates = band.locator('.updates-button');
-    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause live updates' });
+    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause updates' });
     const before = [await place(updates), await place(pause)];
     await band.getByRole('button', { name: 'Add sample updates' }).click();
     await expect(updates).toHaveText(/Show 3 updates/);
@@ -353,6 +354,66 @@ test.describe('the supporter pages', () => {
     }
   });
 });
+// The money bands (docs/specs/money-surfaces.md): /contribute and /ledger at 375, 768 and 1440 on the
+// launch-shaped studio, whose public_money carries the board's test payment and whose stopped cards
+// are a paused and a rejected card; then with a shortfall; then with both money reads failing. Each
+// variant first shows the parts it audits are drawn, so the checks cannot pass on a page without them.
+const MONEY_VARIANTS: [string, StudioFixture][] = [
+  ['the launch-shaped studio', LIVE_STUDIO],
+  ['a shortfall', { ...LIVE_STUDIO, money: { ...LIVE_STUDIO.money, short_usd: '0.4500' } }],
+  ['the money reads failing', { ...LIVE_STUDIO, money: null, stopped: null }],
+];
+
+async function moneyBandsDrawn(page: Page, label: string, path: string): Promise<void> {
+  const main = page.getByRole('main');
+  if (path === '/contribute') {
+    const first = main.locator('a.choice-primary .choice-body');
+    if (label === 'the money reads failing') {
+      await expect(first).toHaveText('Your contribution funds whatever the agents build next.');
+      await expect(main.getByText('Not available right now.')).toBeVisible();
+    } else {
+      await expect(first).toHaveText(/^Next in line: /);
+      await expect(main.locator('ul.choices a.choice').first()).toBeVisible();
+    }
+    return;
+  }
+  const funding = page.getByRole('region', { name: 'Funding' });
+  const stopped = page.getByRole('region', { name: 'Stopped cards' });
+  if (label === 'the money reads failing') {
+    await expect(funding.locator('.stat.stat-unavailable dd')).toHaveText('Not available right now.');
+    await expect(page.getByRole('region', { name: 'Money in' }).getByText('Not available right now.')).toBeVisible();
+    await expect(stopped.getByText('Not available right now.')).toBeVisible();
+    return;
+  }
+  await expect(funding.getByText("The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeVisible();
+  if (label === 'a shortfall') await expect(funding.getByText('Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Money in' }).locator('.stat')).not.toHaveCount(0);
+  await expect(stopped.getByRole('region', { name: 'Paused' }).locator('.tag[data-state="paused"]')).toBeVisible();
+  await expect(stopped.getByRole('region', { name: "Didn't ship" }).getByRole('heading', { level: 4 })).toHaveCount(1);
+}
+
+for (const [label, studio] of MONEY_VARIANTS) {
+  test.describe(`the money bands, ${label}`, () => {
+    test.use({ studio });
+    for (const width of [375, 768, 1440]) {
+      test(`find no axe violation, no sideways scroll and no motion under reduced motion at ${width}px`, async ({ page }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.setViewportSize({ width, height: 900 });
+        for (const path of ['/contribute', '/ledger']) {
+          await settle(page, path);
+          await moneyBandsDrawn(page, label, path);
+          const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+          expect(
+            results.violations.map((v) => `${path} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
+            path,
+          ).toEqual([]);
+          expect(await overflowsHorizontally(page), path).toBe(false);
+          expect(await page.evaluate(() => document.getAnimations().length), path).toBe(0);
+        }
+      });
+    }
+  });
+}
 
 test.describe('screenshots', () => {
   test.skip(SHOTS === '', 'set E2E_SCREENSHOTS to save them');

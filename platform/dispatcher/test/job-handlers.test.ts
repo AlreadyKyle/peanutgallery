@@ -46,6 +46,8 @@ const IDS = {
   community: '33333333-3333-4333-8333-333333333333',
   funded: '44444444-4444-4444-8444-444444444444',
   next: '55555555-5555-4555-8555-555555555555',
+  // On now with an empty bar, named by a payment on hold (the daily credit cap was used up).
+  held: '66666666-6666-4666-8666-666666666666',
 };
 
 const DRAFT = {
@@ -84,7 +86,9 @@ function setup(answers: Answers, job: 'studio_ranking' | 'draft_card', input: Re
     cardRow(IDS.community, { source: 'community', title: COMMUNITY_TEXT[0]!, summary: COMMUNITY_TEXT[1]! }),
     cardRow(IDS.funded, { stage: 'proposed', funded_usd: 0.25 }),
     cardRow(IDS.next, { horizon: 'next' }),
+    cardRow(IDS.held, { rank: 3 }),
   ];
+  db.heldCardIds.add(IDS.held);
   const queues: Record<Kind, string[]> = { head: [...(answers.head ?? [])], designer: [...(answers.designer ?? [])], director: [...(answers.director ?? [])] };
   const sessions: Array<{ kind: Kind; prompt: string; tools: string[] }> = [];
   let count = 0;
@@ -162,7 +166,7 @@ describe('studio_ranking', () => {
     const prompt = t.sessions[0]!.prompt;
     expectNoCommunityText([prompt]);
     expect(prompt).toContain(`{\n    "id": "${IDS.community}",\n    "source": "community",\n    "stage": "proposed",\n    "horizon": "now",\n    "bucket": "game",\n    "funded_usd": 0\n  }`);
-    expect(prompt).toContain(`Rankable: the cards on now at proposed, designing or voted with no money on their bar: ${IDS.a}, ${IDS.b}, ${IDS.community}.`);
+    expect(prompt).toContain(`Rankable: the cards on now at proposed, designing or voted with no money on their bar or on hold: ${IDS.a}, ${IDS.b}, ${IDS.community}.`);
     expect(prompt).not.toContain(IDS.next);
     expect(t.db.rankings).toEqual([{ runId: 'run-1', order: [IDS.a, IDS.b], moves: [{ card_id: IDS.a, from: 2, to: 1 }, { card_id: IDS.b, from: 1, to: 2 }] }]);
     expect(output).toMatchObject({ session: 'claude:session-1', moves: [{ card_id: IDS.a, from: 2, to: 1 }, { card_id: IDS.b, from: 1, to: 2 }], unapplied: 0 });
@@ -170,8 +174,19 @@ describe('studio_ranking', () => {
     for (const row of t.db.ledger) expect([row.billed_to, row.card_id, row.role_id]).toEqual(['founder', null, 'role-head']);
   });
 
+  it('never offers a card whose only money is a payment on hold, and the ranking of the others applies', async () => {
+    const t = setup({ head: [JSON.stringify({ order: [{ card_id: IDS.a, reason_code: 'player_visible' }, { card_id: IDS.b, reason_code: 'keeps_its_place' }] })] }, 'studio_ranking');
+    expect(t.db.openCardRows.find((row) => row.id === IDS.held)).toMatchObject({ horizon: 'now', stage: 'proposed', funded_usd: 0 });
+    const output = await studioRanking(t.context);
+    const rankableLine = t.sessions[0]!.prompt.split('\n').find((line) => line.startsWith('Rankable:'))!;
+    expect(rankableLine).not.toContain(IDS.held);
+    expect(t.sessions[0]!.prompt).toContain(`"id": "${IDS.held}"`);
+    expect(output).toMatchObject({ moves: [{ card_id: IDS.a, from: 2, to: 1 }, { card_id: IDS.b, from: 1, to: 2 }], unapplied: 0 });
+    expect(t.db.openCardRows.find((row) => row.id === IDS.held)!.rank).toBe(3);
+  });
+
   it('fails, writing no rank, when the answer names a card that holds money or is off now, or the session fails', async () => {
-    for (const card of [IDS.funded, IDS.next]) {
+    for (const card of [IDS.funded, IDS.held, IDS.next]) {
       const t = setup({ head: [JSON.stringify({ order: [{ card_id: card, reason_code: 'keeps_its_place' }] })] }, 'studio_ranking');
       await expect(studioRanking(t.context)).rejects.toThrow('not rankable');
       expect(t.db.rankings).toEqual([]);
@@ -206,6 +221,16 @@ describe('draft_card', () => {
     const roles = new Set(t.db.ledger.map((row) => row.role_id));
     expect(roles).toEqual(new Set(['role-designer', 'role-director']));
     for (const row of t.db.ledger) expect([row.billed_to, row.card_id]).toEqual(['founder', null]);
+  });
+
+  it('gives the Game Designer no Bash in an unattended process, so no seed-1 code runs on the host, and still approves', async () => {
+    const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] }, 'draft_card');
+    const output = await draftCard({ ...t.context, mode: 'unattended' });
+    expect(t.sessions.map((s) => [s.kind, s.tools])).toEqual([
+      ['designer', ['Read', 'Glob', 'Grep']],
+      ['director', ['Read', 'Glob', 'Grep']],
+    ]);
+    expect(output).toMatchObject({ result: 'approved', card_id: 'card-from-draft-1' });
   });
 
   it('starts a new round on revise, giving the Designer the codes, the note and its last draft, then approves', async () => {
@@ -258,6 +283,16 @@ describe('draft_card', () => {
     const never = setup({ designer: ['No.', '{"title": "x"}', `${JSON.stringify(DRAFT)} and more`] }, 'draft_card');
     await expect(draftCard(never.context)).rejects.toThrow('no valid draft in 3 rounds');
     expect([never.db.drafts, never.db.draftCards]).toEqual([[], []]);
+  });
+
+  it('sends back a draft whose text is blank or whose estimate rounds to nothing as the schema check, before record_card_draft could refuse it', async () => {
+    // record_card_draft refuses these (card_from_draft trims text and rounds the estimate to 4
+    // places), so the schema refuses them first and the round goes back to the Designer.
+    for (const blank of [{ ...DRAFT, title: '   ' }, { ...DRAFT, intent: '\n\t' }, { ...DRAFT, estimate_usd: 0.00004 }]) {
+      const t = setup({ designer: [JSON.stringify(blank), JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] }, 'draft_card');
+      expect(await draftCard(t.context), JSON.stringify(blank)).toMatchObject({ result: 'approved', rounds: [{ round: 1, draft_id: null, check: { name: 'schema' } }, { round: 2 }] });
+      expect(t.db.drafts.map((d) => d.status)).toEqual(['approved']);
+    }
   });
 
   it('fails the run, writing no card, when a model call fails or the Director does not answer with one verdict', async () => {
@@ -333,7 +368,7 @@ describe('the two jobs on the queue', () => {
 
   for (const mode of ['attended', 'unattended'] as const) {
     it(`runs a board-origin Rank now in ${mode} mode while the studio is paused and a board member is signed in, and waits otherwise`, async () => {
-      const t = setup({ head: [JSON.stringify({ order: [{ card_id: IDS.a, reason_code: 'player_visible' }] })] }, 'studio_ranking');
+      const t = setup({ head: [JSON.stringify({ order: [{ card_id: IDS.a, reason_code: 'player_visible' }, { card_id: IDS.b, reason_code: 'keeps_its_place' }] })] }, 'studio_ranking');
       t.db.studio.paused = true;
       const q = tick(t, mode);
       const enqueue = (origin: JobOrigin) => t.db.enqueueJobRun({ job: 'studio_ranking', origin });
@@ -346,7 +381,7 @@ describe('the two jobs on the queue', () => {
       await q.state.running?.done;
       const done = t.db.jobRuns.find((r) => r.id === board.id)!;
       expect([done.status, done.reason]).toEqual(['succeeded', null]);
-      expect(done.output).toMatchObject({ moves: [{ card_id: IDS.a, from: 2, to: 1 }] });
+      expect(done.output).toMatchObject({ moves: [{ card_id: IDS.a, from: 2, to: 1 }, { card_id: IDS.b, from: 1, to: 2 }] });
       await q.run();
       const skipped = t.db.jobRuns.find((r) => r.id === scheduled.id)!;
       expect([skipped.status, skipped.reason]).toEqual(['skipped', 'not_board_origin']);

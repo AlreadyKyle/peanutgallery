@@ -1,4 +1,4 @@
-# The weekly fallback backup of Peanut Gallery's database (docs/specs/money-safety.md in the studio
+# The weekly fallback backup of Mob Machine's database (docs/specs/money-safety.md in the studio
 # repository). A template: copy it to .github/workflows/backup.yml in the separate private backups
 # repository (README.md beside this file), never into the studio repository, whose gate runs card
 # code. It runs the same dumps as the VPS's nightly backup, encrypts them to the board's age public

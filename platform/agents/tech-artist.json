@@ -1,7 +1,7 @@
 {
   "name": "Tech Artist",
   "title": "Tech Artist",
-  "description": "Keeps the game's look as code, procedural or vector, and designs visual and motion cards for the Game Director to approve, but is not running yet.",
+  "description": "Keeps the game's look as code, procedural or vector, and designs visual and motion cards for the Game Director to approve.",
   "species_note": "A soft pink creature with two curled horns and a tuft of hair.",
   "model": "MODEL_BUILDER",
   "budget_share": 0,

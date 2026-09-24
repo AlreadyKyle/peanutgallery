@@ -333,9 +333,14 @@ describe('Landing', () => {
     const loading = document.querySelector('p.status-line')!;
     expect(loading.textContent).toBe(legal.loadingFigures);
     expect(loading.getAttribute('aria-busy')).toBe('true');
+    // The live-updates row is laid out while the snapshot loads.
+    expect(document.querySelector('.updates-button')).not.toBeNull();
     cleanup();
     renderLanding(null);
     expect(document.querySelector('p.status-line')?.textContent).toBe(legal.meterUnavailable);
+    // With no snapshot, nothing claims to be up to date or offers to pause updates.
+    expect(document.querySelector('.updates-button')).toBeNull();
+    expect(screen.queryByText(/Up to date/)).toBeNull();
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
@@ -393,13 +398,27 @@ describe('Landing', () => {
 
   it('shows three cards on a phone, and Show all n cards reveals the rest and focuses the fourth title', async () => {
     const open = Array.from({ length: 5 }, (_, i) => ({ ...snapshot.cards[2]!, id: `o${i}`, title: `Open card ${i + 1}` }));
-    renderLanding(fakeSource({ cards: open }));
+    renderLanding(fakeSource({ cards: open, money: books(open.map((card) => card.id)) }));
     const show = await screen.findByRole('button', { name: copy.showAllCards.replace('{n}', '5') });
     expect(document.querySelector('.fund-grid')?.hasAttribute('data-all')).toBe(false);
     fireEvent.click(show);
     await waitFor(() => expect(document.activeElement?.textContent).toBe('Open card 4'));
     expect(document.querySelector('.fund-grid')?.getAttribute('data-all')).toBe('true');
     expect(screen.queryByRole('button', { name: copy.showAllCards.replace('{n}', '5') })).toBeNull();
+  });
+
+  it("counts and draws as open for funding only the cards in the waterfall's order, and every open card when it did not load", async () => {
+    // The fixture's order holds next1, next2 and studio1; leave studio1 out, as a veto would.
+    renderLanding(fakeSource({ money: books(['next1', 'next2']) }));
+    expect((await statusLine()).textContent).toBe('2 cards are open for funding. 1 card is being built.');
+    const fund = screen.getByRole('region', { name: copy.fund });
+    const titles = within(fund).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(titles).toHaveLength(2);
+    expect(titles).not.toContain(snapshot.cards.find((card) => card.id === 'studio1')!.title);
+    cleanup();
+    renderLanding(fakeSource({ money: null, missing: ['money'] }));
+    expect((await statusLine()).textContent).toBe('3 cards are open for funding. 1 card is being built.');
+    expect(within(screen.getByRole('region', { name: copy.fund })).queryByRole('link', { name: legal.fundThis })).toBeNull();
   });
 
   it('never lists a next or later card as open for funding', async () => {
@@ -423,12 +442,14 @@ describe('Landing', () => {
     expect(
       within(team)
         .getAllByRole('link')
+        .filter((a) => a.classList.contains('member'))
         .map((a) => [a.querySelector('.member-name')?.textContent, a.querySelector('.member-job')?.textContent, a.getAttribute('href')]),
     ).toEqual([
       ['Builder A', 'Builds funded game cards.', '/team#agent-r-a'],
       ['Builder B', 'Builds funded game cards, too.', '/team#agent-r-b'],
       ['QA', 'Finds problems in Dust.', '/team#agent-r-q'],
     ]);
+    expect(within(team).getByRole('link', { name: copy.team.meetAll }).getAttribute('href')).toBe('/team');
     cleanup();
     const { container } = renderLanding(fakeSource({ roles: [] }));
     await screen.findByRole('heading', { level: 2, name: copy.shipped });

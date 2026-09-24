@@ -1,7 +1,7 @@
 # Runs peanutgallery-backup.service once a day (docs/specs/money-safety.md). Persistent= runs a missed
 # backup at the next boot, so a day the instance was stopped is made up.
 [Unit]
-Description=Peanut Gallery nightly database backup
+Description=Mob Machine nightly database backup
 
 [Timer]
 OnCalendar=*-*-* 06:17:00 UTC

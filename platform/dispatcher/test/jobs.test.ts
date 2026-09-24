@@ -82,26 +82,50 @@ describe('jobTick', () => {
     expect([t.status(code.id).status, t.status(code.id).output]).toEqual(['succeeded', {}]);
   });
 
-  it('leaves a board-origin model run queued while no board member is signed in, in either studio mode, and moves on', async () => {
-    for (const paused of [false, true]) {
-      const t = setup([job({ name: 'studio_ranking', calls_model: true, runs_when_paused: true }), job({ name: 'code_job', runs_when_paused: true })]);
-      t.db.studio.paused = paused;
-      t.db.boardActive = false;
-      const model = await t.enqueue('studio_ranking', 'board');
-      const code = await t.enqueue('code_job', 'operator');
-      expect(await jobTick(t.make({ code_job: async () => ({ ok: true }) }))).toEqual({ action: 'started', runId: code.id, job: 'code_job' });
-      await t.settle();
-      expect(t.status(model.id).status).toBe('queued');
-      expect(await jobTick(t.make({}))).toEqual({ action: 'idle', skipped: 0, waiting: 1 });
-      expect(t.status(model.id).status).toBe('queued');
-      // A board member signs in at /board: the run starts, in either studio mode.
-      t.db.boardActive = true;
-      const ran: string[] = [];
-      expect(await jobTick(t.make({ studio_ranking: async ({ run, mode }) => void ran.push(`${run.id}:${mode}`) }))).toEqual({ action: 'started', runId: model.id, job: 'studio_ranking' });
-      await t.settle();
-      expect(ran).toEqual([`${model.id}:attended`]);
-      expect(t.status(model.id).status).toBe('succeeded');
+  it('leaves a board-origin model run queued while no board member is signed in, in either studio mode and paused or not, and moves on', async () => {
+    for (const mode of ['attended', 'unattended'] as const) {
+      for (const paused of [false, true]) {
+        const t = setup([job({ name: 'studio_ranking', calls_model: true, runs_when_paused: true }), job({ name: 'code_job', runs_when_paused: true })]);
+        t.db.studio.agent_mode = mode;
+        t.db.studio.paused = paused;
+        t.db.boardActive = false;
+        const model = await t.enqueue('studio_ranking', 'board');
+        const code = await t.enqueue('code_job', 'operator');
+        expect(await jobTick(t.make({ code_job: async () => ({ ok: true }) }, { mode }))).toEqual({ action: 'started', runId: code.id, job: 'code_job' });
+        await t.settle();
+        expect(t.status(model.id).status).toBe('queued');
+        expect(await jobTick(t.make({}, { mode }))).toEqual({ action: 'idle', skipped: 0, waiting: 1 });
+        expect(t.status(model.id).status).toBe('queued');
+        // A board member signs in at /board: the run starts, in either studio mode.
+        t.db.boardActive = true;
+        const ran: string[] = [];
+        expect(await jobTick(t.make({ studio_ranking: async ({ run, mode: seen }) => void ran.push(`${run.id}:${seen}`) }, { mode }))).toEqual({
+          action: 'started',
+          runId: model.id,
+          job: 'studio_ranking',
+        });
+        await t.settle();
+        expect(ran).toEqual([`${model.id}:${mode}`]);
+        expect(t.status(model.id).status).toBe('succeeded');
+      }
     }
+  });
+
+  it('stops a running model job at the next watch once no board member is signed in', async () => {
+    const t = setup([job({ name: 'studio_ranking', calls_model: true, runs_when_paused: true })]);
+    t.db.boardActive = true;
+    const run = await t.enqueue('studio_ranking', 'board');
+    await jobTick(
+      t.make({
+        studio_ranking: async ({ stopSignal }) => {
+          t.db.boardActive = false;
+          await new Promise<void>((resolve) => stopSignal.addEventListener('abort', () => resolve(), { once: true }));
+          return { stopped: String(stopSignal.reason) };
+        },
+      }),
+    );
+    await t.settle();
+    expect([t.status(run.id).status, t.status(run.id).reason]).toEqual(['failed', 'board_session_lapsed']);
   });
 
   it('starts a code run in both modes', async () => {
@@ -139,6 +163,11 @@ describe('jobTick', () => {
     await jobTick(t.make({ broken: async () => { throw new Error('the handler broke'); } }));
     await t.settle();
     expect([t.status(broken.id).status, t.status(broken.id).reason]).toEqual(['failed', 'the handler broke']);
+    // An error with no message still finishes the run, with a fixed reason, never leaving it running.
+    const blank = await t.enqueue('broken', 'operator');
+    await jobTick(t.make({ broken: async () => { throw new Error(); } }));
+    await t.settle();
+    expect([t.status(blank.id).status, t.status(blank.id).reason]).toEqual(['failed', 'handler_error']);
     const unknown = await t.enqueue('unknown', 'operator');
     await jobTick(t.make({}));
     await t.settle();

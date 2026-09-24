@@ -66,8 +66,10 @@ type FunctionConfig = {
 
 // The paths only, with no method key, so a POST reaches the function and answers 405 instead of
 // falling through to the page rewrite. The rate limit is the first of the two code-based rules
-// legacy Free allows; supporter-pages takes the second.
+// legacy Free allows; supporter-pages takes the second. Every full page load reads both documents
+// (the Terms pages a third time), so 300 a minute is about 150 page loads from one address: a school
+// or an office behind one address, or the live check, stays under it, and a runaway loop does not.
 export const config: FunctionConfig = {
   path: ['/api/live', '/api/cards'],
-  rateLimit: { windowLimit: 60, windowSize: 60, aggregateBy: ['ip', 'domain'] },
+  rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

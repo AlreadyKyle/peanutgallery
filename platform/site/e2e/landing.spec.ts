@@ -11,14 +11,14 @@ for (const viewport of WIDTHS) {
       const main = page.getByRole('main');
       const footer = page.getByRole('contentinfo');
 
-      await expect(page.getByRole('banner').getByRole('link', { name: 'Peanut Gallery' })).toBeVisible();
+      await expect(page.getByRole('banner').getByRole('link', { name: 'Mob Machine' })).toBeVisible();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
       await expect(main.getByText('Fund the card you want built next.')).toBeVisible();
       await expect(main.getByRole('link', { name: 'Play Dust' })).toHaveAttribute('href', PLAY_URL);
       await expect(main.getByRole('link', { name: 'How it works', exact: true })).toHaveAttribute('href', '/how-it-works');
       // The status line, from the fixture: two cards open, nothing building, the agents running.
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
-      await expect(main.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
+      await expect(main.getByRole('button', { name: 'Pause updates' })).toBeVisible();
       await expect(main.locator('.updates-button')).toHaveText(/Up to date/);
 
       await expect(main.getByRole('heading', { level: 2 })).toHaveText([
@@ -41,7 +41,8 @@ for (const viewport of WIDTHS) {
       // The team strip: the first three roles on the team (lib/roster.ts teamStatus), each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
       await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'Game Designer']);
-      for (const href of await team.getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
+      for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
+      await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
       await expect(page.getByRole('region', { name: 'Shipped' }).getByRole('heading', { level: 3 })).toHaveText([
         'The unlock list fits any number of unlocks',

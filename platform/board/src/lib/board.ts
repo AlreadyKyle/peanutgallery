@@ -140,8 +140,9 @@ export function agentWritten(card: Pick<BoardCard, 'source' | 'drafter_role_id'>
 }
 
 /** An approved agent card on the roadmap that the tick deals to now at opens_at. */
-export function undealt(card: Pick<BoardCard, 'approval' | 'horizon' | 'opens_at' | 'stage'>): boolean {
-  return card.approval === 'current' && card.horizon !== 'now' && card.opens_at !== null && card.stage === 'proposed';
+export function undealt(card: Pick<BoardCard, 'approval' | 'horizon' | 'opens_at' | 'stage' | 'board_vetoed'>): boolean {
+  // A vetoed card is never dealt, whatever its opens_at says.
+  return card.approval === 'current' && card.horizon !== 'now' && card.opens_at !== null && card.stage === 'proposed' && !card.board_vetoed;
 }
 
 /** set_card_veto takes a proposed, designing or voted card; a card holding money is cancelled instead. */

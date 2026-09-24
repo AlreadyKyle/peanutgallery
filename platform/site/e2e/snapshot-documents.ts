@@ -150,6 +150,8 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
         role_id: event.role_id,
         type: event.type,
         created_at: event.created_at,
+        step: event.step ?? null,
+        usd: event.usd === undefined || event.usd === null ? null : Number(event.usd),
         card_title: event.card_id === null ? null : (titles.get(event.card_id) ?? null),
         line_key: eventLineKey(event),
       })),

@@ -167,7 +167,7 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       }
     });
 
-    await t.step("the live map carries each card's state; events carry their card's title", async () => {
+    await t.step("the live map carries each card's state; events carry their card's title, step and amount", async () => {
       const [card] = (await s.cards()).cards as Doc[];
       await s.db.query(`insert into public.agent_events (card_id, role_id, type) values ($1, $2, 'start')`, [card!.id, s.roleId]);
       const doc = await s.live();
@@ -177,7 +177,15 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       ]);
       assertEquals([entry.stage, entry.funded_usd, entry.spent_usd, entry.contributors, entry.credited_usd], ["voted", 0, 0, null, null]);
       const [event] = doc.events as Doc[];
-      assertEquals([event!.card_id, event!.card_title, event!.type], [card!.id, card!.title, "start"]);
+      assertEquals([event!.card_id, event!.card_title, event!.type, event!.step, event!.usd], [card!.id, card!.title, "start", null, null]);
+      // A line the database wrote about a card carries its step and amount, as public_agent_events has
+      // them, so the pages say what happened (EventList.tsx).
+      await s.db.query(
+        `insert into public.agent_events (card_id, role_id, type, payload_json) values ($1, null, 'message', '{"step":"ceiling_top_up","usd":"2.5"}')`,
+        [card!.id],
+      );
+      const [topUp] = (await s.live()).events as Doc[];
+      assertEquals([topUp!.card_id, topUp!.type, topUp!.step, topUp!.usd], [card!.id, "message", "ceiling_top_up", 2.5]);
       assertEquals(Object.keys(doc.pool as Doc).sort(), ["balance_usd", "daily_spent_usd", "day", "held_usd", "incident_reserve_usd", "reserve_usd"]);
       assertEquals(Object.keys(doc.studio as Doc).sort(), ["launched_at", "pause_reason", "paused", "platform_lane_open"]);
       assert(Array.isArray((doc.money as Doc).funding_order), "money carries funding_order");

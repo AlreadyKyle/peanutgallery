@@ -1,13 +1,18 @@
 #!/usr/bin/env node
-// The studio rename (docs/specs/rename.md). The display name "Peanut Gallery" and the domain
-// peanutgallery.games are going away; the new name and domain are not chosen yet. This script
-// keeps the list of every file that carries either one, in tiers, and rewrites a tier on request.
+// The studio rename (docs/specs/rename.md). The display name "Peanut Gallery" became "Mob Machine"
+// (PLAN.md §10 decision 43); the domain peanutgallery.games stays until the board registers a new one.
+// This script keeps the list of every file that carries the old name or the domain, in tiers, and
+// rewrites a tier on request.
 //
 // usage (from the repository root):
 //   node scripts/rename.mjs                                       inventory, read-only
-//   node scripts/rename.mjs --apply --tier 1 --name "New Name" --domain new.tld
+//   node scripts/rename.mjs --apply --tier 1 --name "New Name" [--domain new.tld]
+//                                                                 the domain is rewritten only when
+//                                                                 --domain names a different one
 //   node scripts/rename.mjs --check                               exit 1 if a tier-1 file still
-//                                                                 carries the old name or domain
+//                                                                 carries the old name (pnpm verify)
+//   node scripts/rename.mjs --check-domain                        the same, and the old domain too:
+//                                                                 pnpm verify's line once the domain moves
 //
 // Only the display name (any case, with a space or a "+" between the words) and the domain are
 // rewritten. Internal identifiers such as peanutgallery_backup, studio.peanutgallery.*, the
@@ -21,6 +26,7 @@ import { join } from 'node:path';
 
 export const OLD_NAME = /peanut([ +])gallery/gi;
 export const OLD_DOMAIN = /peanutgallery\.games/gi;
+const OLD_DOMAIN_TEXT = 'peanutgallery.games';
 const IDENT = /peanutgallery|backseat/gi;
 
 // Tier 1: what a player, a contributor, a search engine or an agent sees, and the tests that pin
@@ -111,6 +117,8 @@ const HISTORY_PREFIXES = ['docs/specs/', 'platform/supabase/migrations/', 'scrip
 export const KEEP_LINES = [
   'in place of hello@peanutgallery.games', // PLAN §10 decision 37
   'from Peanut Gallery, Backseat Driver, Armchair, Helicopter', // PLAN §10 decision 2
+  'renamed from Peanut Gallery to Mob Machine', // PLAN §10 decision 43
+  '"Who runs the studio": "Peanut Gallery is operated by', // BOARD-SETUP Done 3 quotes the Terms of 20 September 2026
 ];
 
 const isHistory = (file) => HISTORY_PREFIXES.some((prefix) => file.startsWith(prefix));
@@ -149,10 +157,14 @@ export function inventory(root, files) {
   return rows;
 }
 
+// The domain is rewritten only when a different one is given: an unchanged domain is left exactly as
+// written, so the tests' mixed-case addresses keep testing case-insensitive matching.
 export function rewrite(text, { name, domain }) {
+  const moved = Boolean(domain) && domain.toLowerCase() !== OLD_DOMAIN_TEXT;
+  const change = (line) => (moved ? line.replace(OLD_DOMAIN, domain) : line).replace(OLD_NAME, (_, sep) => name.replaceAll(' ', sep));
   return text
     .split('\n')
-    .map((line) => (kept(line) ? line : line.replace(OLD_DOMAIN, domain).replace(OLD_NAME, (_, sep) => name.replaceAll(' ', sep))))
+    .map((line) => (kept(line) ? line : change(line)))
     .join('\n');
 }
 
@@ -188,8 +200,8 @@ function main(argv) {
     const tier = arg(argv, '--tier');
     const name = arg(argv, '--name');
     const domain = arg(argv, '--domain');
-    if (!TIERS[tier] || !name || !domain) {
-      console.error('usage: node scripts/rename.mjs --apply --tier 1|2 --name "New Name" --domain new.tld');
+    if (!TIERS[tier] || !name) {
+      console.error('usage: node scripts/rename.mjs --apply --tier 1|2 --name "New Name" [--domain new.tld]');
       return 2;
     }
     if (unclassified.length > 0) {
@@ -202,10 +214,12 @@ function main(argv) {
     return 0;
   }
 
-  if (argv.includes('--check')) {
-    const left = rows.filter((row) => row.tier === '1' && row.name + row.domain > 0);
-    for (const row of left) console.log(`${row.file}: name ${row.name}, domain ${row.domain}`);
-    console.log(left.length === 0 ? 'tier 1 is clean' : `tier 1 still carries the old name or domain in ${left.length} files`);
+  if (argv.includes('--check') || argv.includes('--check-domain')) {
+    const domainToo = argv.includes('--check-domain');
+    const what = domainToo ? 'the old name or domain' : 'the old name';
+    const left = rows.filter((row) => row.tier === '1' && row.name + (domainToo ? row.domain : 0) > 0);
+    for (const row of left) console.log(`${row.file}: name ${row.name}${domainToo ? `, domain ${row.domain}` : ''}`);
+    console.log(left.length === 0 ? `tier 1 carries ${what} nowhere` : `tier 1 still carries ${what} in ${left.length} files`);
     return left.length === 0 ? 0 : 1;
   }
 

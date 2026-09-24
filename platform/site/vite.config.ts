@@ -22,9 +22,9 @@ function stampBuildSha(): Plugin {
 }
 
 /**
- * Writes version.json (the served build's sha, which lib/freshness.ts reads) into the build's output
- * folder. The folder resolves as Vite resolves it: an absolute --outDir stays absolute, so the file
- * lands beside the build and never inside the repository.
+ * Writes version.json (the build's sha and time) into the build's output folder. The folder resolves
+ * against the root, so an absolute --outDir (a build into a scratch folder) is used as given and the
+ * file never lands inside the source tree.
  */
 export function writeVersionFile(): Plugin {
   let outDir = '';

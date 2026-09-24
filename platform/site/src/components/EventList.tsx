@@ -1,7 +1,7 @@
 import { copy } from '../lib/copy';
 import { collapseLines, eventLine } from '../lib/lines';
 import { legal } from '../lib/legal';
-import { formatDateTime } from '../lib/format';
+import { formatDateTime, formatUsd, toNumber } from '../lib/format';
 import type { AgentEvent, Snapshot } from '../lib/source';
 
 // Kernel (docs/specs/board-site.md). The agent actions as rail rows: the time in the row's rail from
@@ -11,15 +11,24 @@ import type { AgentEvent, Snapshot } from '../lib/source';
 // with `collapse` (home's feed), consecutive lines by the same agent on the same card with the same
 // key show as one with a count ("Builder A read 12 files").
 
+// A document from before the line keys: a line the database wrote names its step (dealt, a top-up
+// with its amount, a resume by rule); every other line is its role's verb for the event type.
+export function eventVerb(event: Pick<AgentEvent, 'type' | 'step' | 'usd'>): string {
+  const step = event.step ? legal.eventSteps[event.step] : undefined;
+  if (step !== undefined) return step.replace('{usd}', formatUsd(toNumber(event.usd ?? null) ?? 0));
+  return legal.eventVerbs[event.type] ?? event.type;
+}
+
 /** "Builder A read 12 files": the agent's title (or the studio's, when no agent wrote it) and the line. */
 export function eventText(event: AgentEvent & { count?: number }, roleTitles: ReadonlyMap<string, string>): string {
   const role = event.role_id === null ? null : (roleTitles.get(event.role_id) ?? event.role_id.slice(0, 8));
   if (event.line_key === undefined) {
-    // A document from before the line keys: the type's verb, as before.
-    const verb = legal.eventVerbs[event.type] ?? event.type;
+    const verb = eventVerb(event);
     return role === null ? verb : `${role} ${verb}`;
   }
-  return `${role ?? copy.eventStudio} ${eventLine(event.line_key, event.count ?? 1)}`;
+  // A top-up's line carries its amount ({usd}).
+  const line = eventLine(event.line_key, event.count ?? 1).replace('{usd}', formatUsd(toNumber(event.usd ?? null) ?? 0));
+  return `${role ?? copy.eventStudio} ${line}`;
 }
 
 export function EventList({ snapshot, limit, focusAt, collapse = false }: { snapshot: Snapshot; limit?: number; focusAt?: number; collapse?: boolean }) {

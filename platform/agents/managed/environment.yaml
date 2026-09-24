@@ -15,7 +15,7 @@
 # updates this environment by name and prints its id for MANAGED_ENVIRONMENT_ID; unattended startup
 # refuses to run unless the environment the API returns matches this file.
 name: peanutgallery-cards
-description: Containers for Peanut Gallery card sessions; package registries only.
+description: Containers for Mob Machine card sessions; package registries only.
 config:
   type: cloud
   networking:

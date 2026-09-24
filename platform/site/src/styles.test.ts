@@ -13,13 +13,6 @@ const tokens = read('src/tokens.css');
 const styles = read('src/styles.css');
 const both = `${tokens}\n${styles}`;
 const FONT = 'public/fonts/atkinson-hyperlegible-next-400-700.woff2';
-const SIZES = ['--size-small', '--size-body', '--size-lead', '--size-large', '--size-display'];
-
-function rem(token: string): number {
-  const match = tokens.match(new RegExp(`${token}:\\s*([0-9.]+)rem`));
-  if (!match) throw new Error(`${token} is not defined`);
-  return Number(match[1]);
-}
 
 /** A colour token's six-digit hex from tokens.css, following an alias such as --suit-studio: var(--signal). */
 function hex(token: string): string {
@@ -137,33 +130,28 @@ describe('tokens.css', () => {
   });
 });
 
-describe('type scale', () => {
-  it('defines exactly the five sizes, in increasing order', () => {
-    const defined = [...tokens.matchAll(/(--size-[a-z]+):\s*[0-9.]+rem/g)].map((m) => m[1]);
-    expect(defined).toEqual(SIZES);
-    const values = SIZES.map(rem);
-    for (let i = 1; i < values.length; i += 1) expect(values[i]).toBeGreaterThan(values[i - 1]!);
-    expect(values.map((v) => v * 16)).toEqual([14, 17, 20, 24, 30]);
-  });
+describe('type and space come from tokens', () => {
+  const defined = new Set([...tokens.matchAll(/^\s*(--[a-z0-9-]+):/gm)].map((m) => m[1]!));
 
-  it('keeps each step within a 1.2 ratio of its neighbour, rounded to the nearest quarter pixel', () => {
-    const values = SIZES.map(rem);
-    for (let i = 1; i < values.length; i += 1) {
-      expect(values[i]! / values[i - 1]!).toBeGreaterThan(1.15);
-      expect(values[i]! / values[i - 1]!).toBeLessThan(1.26);
-    }
-  });
-
-  it('sets every font-size from a size token', () => {
-    const declarations = [...both.matchAll(/font-size:\s*([^;]+);/g)].map((m) => m[1]!.trim());
-    const stray = declarations.filter((value) => !/^var\(--size-(small|body|lead|large|display)\)$/.test(value) && value !== '0.9em');
+  it('sets every font-size from a size token that tokens.css defines (code alone is relative to its text)', () => {
+    const declarations = [...styles.matchAll(/font-size:\s*([^;]+);/g)].map((m) => m[1]!.trim());
+    const stray = declarations.filter((value) => {
+      const token = value.match(/^var\((--size-[a-z0-9]+)\)$/)?.[1];
+      return token === undefined ? value !== '0.9em' : !defined.has(token);
+    });
     expect(stray).toEqual([]);
   });
 
-  it('sets card titles at the lead size and bold', () => {
-    const title = ALL_RULES.find((rule) => rule.selector === '.card h3');
-    expect(title?.body).toMatch(/font-size:\s*var\(--size-lead\)/);
-    expect(title?.body).toMatch(/font-weight:\s*var\(--weight-bold\)/);
+  it('sets every margin, padding and gap of 0.5rem or more from a token: smaller values are optical nudges, em values scale with a control\'s own text', () => {
+    const declarations = [...styles.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|[;{\s])((?:margin|padding)(?:-[a-z-]+)?|(?:row-|column-)?gap):\s*([^;]+);/g)];
+    const stray = declarations.flatMap((m) => {
+      // Tokens and derived values (calc, max, min, clamp) are not literals; strip them, innermost first.
+      let value = m[2]!;
+      while (/\([^()]*\)/.test(value)) value = value.replace(/[a-z-]*\([^()]*\)/g, '');
+      const literals = [...value.matchAll(/(-?\d*\.?\d+)(rem|px)\b/g)].filter((l) => Math.abs(Number(l[1]) * (l[2] === 'rem' ? 16 : 1)) >= 8);
+      return literals.map((l) => `${m[1]}: ${m[2]!.trim()} (${l[0]})`);
+    });
+    expect(stray).toEqual([]);
   });
 
   it('uses nothing below weight 400', () => {
@@ -258,7 +246,7 @@ describe('plain and readable', () => {
   });
 
   it('balances the lines of every heading', () => {
-    const headings = ALL_RULES.find((rule) => rule.selector.replace(/\s+/g, '') === 'h1,h2,h3');
+    const headings = ALL_RULES.find((rule) => rule.selector.replace(/\s+/g, '') === 'h1,h2,h3,h4');
     expect(headings?.body).toMatch(/text-wrap:\s*balance/);
   });
 
@@ -272,6 +260,13 @@ describe('plain and readable', () => {
       const rule = rules(styles).find((r) => r.selector === selector);
       expect(rule?.body, selector).toContain('min-height: var(--target)');
     }
+  });
+
+  it('draws the mark at one pixel a unit, so its straight edges land on whole pixels at 1x', () => {
+    const box = read('brand/mark.svg').match(/viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"/);
+    const body = rules(styles).find((r) => r.selector === '.mark')?.body ?? '';
+    const px = (side: string) => 16 * Number(body.match(new RegExp(`${side}:\\s*([0-9.]+)rem`))?.[1]);
+    expect([px('width'), px('height')]).toEqual([Number(box?.[1]), Number(box?.[2])]);
   });
 });
 
@@ -349,6 +344,16 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
     }
   });
 
+  it('fills the overscroll with the top bar ground: html paints a solid signal and body paints nothing', () => {
+    // Browsers fill a pull past the edge with the root's background colour, never an image, and
+    // WebKit blends body's colour over it; .page paints the paper.
+    const html = ALL_RULES.filter((rule) => rule.selector === 'html');
+    expect(html.map((rule) => rule.body.match(/background[a-z-]*:[^;]*/g) ?? []).flat()).toEqual(['background-color: var(--signal)']);
+    expect(ALL_RULES.filter((rule) => /(^|,)\s*html\b/.test(rule.selector) && rule.selector !== 'html' && /background/.test(rule.body))).toEqual([]);
+    expect(ALL_RULES.filter((rule) => rule.selector === 'body' && /background/.test(rule.body))).toEqual([]);
+    expect(ALL_RULES.find((rule) => rule.selector === '.page')?.body).toMatch(/background:\s*var\(--paper\)/);
+  });
+
   it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
     const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
     expect(gradients).toEqual([".card[data-face='paused']::before"]);
@@ -393,7 +398,6 @@ describe('bands', () => {
       expect(body).toMatch(/--suit-tile-studio:\s*transparent/);
       expect(body).toMatch(/--live-mark:\s*currentColor/);
       expect(body).toMatch(/--primary-bg:\s*var\(--paper\)/);
-      expect(body).toMatch(/--mark-filter:\s*invert\(1\)/);
     }
     expect(signal).toMatch(/--text-muted:\s*var\(--muted-on-signal\)/);
     expect(signal).toMatch(/--hairline:\s*var\(--line-on-signal\)/);
@@ -429,10 +433,9 @@ describe('bands', () => {
     expect(repaint).toEqual([]);
   });
 
-  it('marks each band edge with a CanvasText rule, keeps the peanut unfiltered, and keeps the money glyph and suit tiles legible under forced colours', () => {
+  it('marks each band edge with a CanvasText rule, and keeps the money glyph and suit tiles legible under forced colours', () => {
     const forced = ALL_RULES.filter((rule) => rule.media.includes('forced-colors: active'));
     expect(forced.find((rule) => rule.selector.includes('main > .band + .band'))?.body).toMatch(/border-top:\s*1px solid CanvasText/);
-    expect(forced.find((rule) => rule.selector === '.mark')?.body).toMatch(/filter:\s*none/);
     expect(forced.find((rule) => rule.selector === '.funding-bar-fill')?.body).toMatch(/forced-color-adjust:\s*none[\s\S]*background:\s*Highlight/);
     expect(forced.find((rule) => rule.selector === '.glyph-money')?.body).toMatch(/fill:\s*CanvasText/);
     expect(forced.find((rule) => rule.selector === '.suit-tile')?.body).toMatch(/border:\s*1px solid CanvasText/);

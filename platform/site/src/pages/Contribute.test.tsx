@@ -125,6 +125,13 @@ describe('Contribute', () => {
     expect(screen.queryByText(legal.waterfallLine)).toBeNull();
   });
 
+  it('names no card, never a later one, while the first card in the order has not reached the page', async () => {
+    // A new card entered the waterfall's order first; /api/cards has not carried its words yet.
+    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], false, ['new-card', 'g1']));
+    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).textContent).toBe(`${legal.pickForMe}${legal.pickForMeBody}`);
+  });
+
   it('offers only Fund the next card in line, naming no card, when public_money did not load', async () => {
     renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], false, ['g1'], { money: null, missing: ['money'] }));
     await waitFor(() => expect(screen.getByText(legal.partUnavailable)).toBeTruthy());

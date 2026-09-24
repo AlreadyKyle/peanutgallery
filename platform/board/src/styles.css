@@ -151,7 +151,7 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--ink-hover);
   border-color: var(--ink-hover);
 }
@@ -161,12 +161,15 @@ button:hover:not(:disabled) {
   color: var(--ink);
 }
 
-.button-secondary:hover:not(:disabled) {
+.button-secondary:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--track);
   border-color: var(--ink);
 }
 
-button:disabled {
+/* A button whose action is running keeps its focus (aria-disabled, not disabled: a browser moves
+   focus to the page when the focused button is disabled) and looks like a disabled one. */
+button:disabled,
+button[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }
@@ -181,7 +184,7 @@ button.link {
   text-decoration: underline;
 }
 
-button.link:hover:not(:disabled) {
+button.link:hover:not(:disabled, [aria-disabled='true']) {
   background: none;
 }
 
@@ -237,13 +240,56 @@ section > h3 {
   border-bottom: 1px solid var(--line);
 }
 
-.board-cards > li > p {
-  margin: 0;
+/* Roles: one hairline row each in small text, the columns aligned, and one form under them. The
+   name and the class keep to one line (the page's overflow-wrap would otherwise split their words to
+   narrow the column) and the status takes the rest of the row, where a long reason wraps. */
+.role-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-small);
 }
 
-.board-cards > li > p + .row,
-.board-cards > li > .row + p {
-  margin-top: var(--space-1);
+.role-table th:not(:last-child),
+.role-table td:not(:last-child) {
+  white-space: nowrap;
+}
+
+.role-table th,
+.role-table td {
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.role-table th:last-child,
+.role-table td:last-child {
+  width: 100%;
+  padding-right: 0;
+}
+
+/* On a phone the role's name may wrap between its words, so the status keeps room for a long reason;
+   a word is never split. */
+@media (max-width: 30rem) {
+  .role-table tbody th {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+}
+
+.role-table thead th {
+  padding-top: 0;
+  color: var(--muted);
+}
+
+.role-table tbody th {
+  font-weight: var(--weight-strong);
+}
+
+/* The role form's confirmation: always mounted so it is announced, and no space while empty. */
+.role-status:not(:empty) {
+  margin-top: var(--space-2);
 }
 
 /* What the public does not see about a card, and a job's recent runs: short plain lists. */
@@ -271,10 +317,18 @@ section > h3 {
   align-self: flex-start;
 }
 
+/* A row of a hairline list starts at its rule's padding, the same above and below its content. */
+.board-cards > li > .stack {
+  margin-top: 0;
+}
+
+/* Every headed block, a .stack form included, sits the same 40 px below the block before it. */
 section + section,
 section + form,
 form + section,
-form + form {
+form + form,
+section + .stack,
+form + .stack {
   margin-top: var(--space-4);
 }
 
@@ -284,13 +338,14 @@ form + form {
   gap: var(--space-2);
 }
 
-/* A reason field with its button, bottoms aligned. */
-.row-end {
-  align-items: flex-end;
+/* A control, a row of them or a fieldset placed straight in a section keeps the forms' 16 px rhythm
+   below it, as a paragraph does, so a focus ring never runs into the next control. */
+section > :is(label, .row, fieldset, button) {
+  margin-bottom: var(--space-2);
 }
 
-.row-end label {
-  flex: 1 1 12rem;
+section > :is(label, .row, fieldset, button):last-child {
+  margin-bottom: 0;
 }
 
 /* The QR code shown while a board member sets up an authenticator app. */

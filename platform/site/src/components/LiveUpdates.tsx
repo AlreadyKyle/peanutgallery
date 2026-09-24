@@ -16,9 +16,10 @@ export function Announcer({ message }: { message: string }) {
 }
 
 /**
- * The live-updates row, laid out from first paint: "Pause live updates" (a toggle) first, then the
- * updates button. The updates button is always there. With nothing waiting it reads "Up to date" and
- * is aria-disabled, never disabled, so it keeps focus; with changes waiting it reads "Show n updates".
+ * The updates row, laid out from first paint: "Pause updates" (a toggle) first, then the updates
+ * button. The updates button is always there. With nothing waiting it reads "Up to date" (or "No new
+ * updates" while the last refresh failed, so it never contradicts the stale line) and is
+ * aria-disabled, never disabled, so it keeps focus; with changes waiting it reads "Show n updates".
  * Both labels share one cell with the longest one hidden, so its width never changes and nothing
  * beside or below it moves. After a press it goes back to "Up to date" in place, with focus kept.
  */
@@ -28,10 +29,13 @@ export function LiveUpdates({
   onTogglePause,
   onShow,
   message = '',
+  stale = false,
   now = () => Date.now(),
 }: {
   count: number;
   paused: boolean;
+  /** The last refresh failed, so the figures on screen may be out of date. */
+  stale?: boolean;
   onTogglePause: () => void;
   onShow: () => void;
   /** Words for the announcer from the page: a card that was funded or shipped. */
@@ -72,7 +76,7 @@ export function LiveUpdates({
         }}
       >
         <span className="label-stack">
-          <span>{updatesLabel(count)}</span>
+          <span>{!waiting && stale ? copy.noNewUpdates : updatesLabel(count)}</span>
           <span aria-hidden="true">{LONGEST_UPDATES_LABEL}</span>
         </span>
       </button>

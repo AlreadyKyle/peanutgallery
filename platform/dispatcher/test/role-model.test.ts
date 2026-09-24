@@ -115,6 +115,12 @@ describe('checkRoleModels', () => {
     expect(lines().map((line) => line.msg)).toEqual(['Studio Head runs on director-class from MODEL_DIRECTOR, but roles.model is claude-sonnet-5; re-seed the roles so /team shows it']);
   });
 
+  it('refuses a role a role job runs whose resolved model has no price, the Game Director without write access included', async () => {
+    const db = new FakeDb();
+    db.roles = [role({ id: 'd', name: 'Game Director', model: 'MODEL_DIRECTOR', write_access: false }), role({ id: 'h', name: 'Host', model: 'MODEL_DIRECTOR', write_access: false })];
+    await expect(checkRoleModels(db, config({ modelDirector: 'unpriced-director' }))).rejects.toThrow(new StartupError('no price in PRICE_TABLE_JSON for Game Director (unpriced-director)', true));
+  });
+
   it('refuses a writing role whose resolved model has no price', async () => {
     const db = new FakeDb();
     db.roles = [role({ name: 'Studio Head', model: 'claude-sonnet-5' })];

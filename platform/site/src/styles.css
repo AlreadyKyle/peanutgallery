@@ -1,6 +1,6 @@
 @import './tokens.css';
 
-/* Peanut Gallery site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
+/* Mob Machine site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
    every rule here. A quiet page of type; the card is the object. */
 
 * {
@@ -9,6 +9,11 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Pulling past the top of the page shows the top bar's ground, not white. Browsers fill the
+     overscroll with one solid colour, the root's (WebKit blends body's over it, so body paints none),
+     never an image; .page paints paper over everything, so this shows only in the overscroll, and
+     past the bottom it is black too. */
+  background-color: var(--signal);
 }
 
 body {
@@ -20,7 +25,6 @@ body {
   /* The font file has no italic and no synthesised slant: an emphasis stays upright everywhere. */
   font-synthesis-style: none;
   color: var(--ink);
-  background: var(--paper);
   overflow-wrap: anywhere;
 }
 
@@ -33,6 +37,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  background: var(--paper);
 }
 
 .wrap,
@@ -54,16 +59,12 @@ main:not(.wide) > * {
   max-width: var(--measure);
 }
 
-/* Terms, Privacy, Refunds and Contact: short prose sections sit closer together than landing sections. */
-.text-page .section {
-  margin-bottom: var(--space-4);
-}
-
 /* Type ------------------------------------------------------------------ */
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   text-wrap: balance;
   font-weight: var(--weight-bold);
@@ -71,26 +72,17 @@ h3 {
 }
 
 h1 {
-  font-size: var(--size-display);
+  font-size: var(--size-h1);
+  line-height: var(--leading-display);
 }
 
 h2 {
-  font-size: var(--size-large);
-  margin-bottom: var(--space-2);
+  font-size: var(--size-h2);
+  margin-bottom: var(--space-3);
 }
 
 h3 {
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-}
-
-/* Roadmap card titles, under a category h3. */
-h4 {
-  margin: 0;
-  text-wrap: balance;
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-  line-height: var(--leading-heading);
+  font-size: var(--size-lead);
 }
 
 p {
@@ -264,14 +256,17 @@ main > .band:first-child {
   justify-content: flex-end;
 }
 
-/* A page whose body arrives after first paint (/card/:id, /thanks) keeps its title where it first
-   renders: the signal plate never grows, and the last band takes the height left over instead. A
-   plate that filled a short window while the body loaded would pin the title to its foot, then
-   collapse and throw the title up the page when the body came. */
+/* While any part of the page is loading (every loading line carries aria-busy="true"), the page is
+   short only until the content arrives: the last band takes the spare height instead, so the heading
+   keeps its place under the top bar rather than dropping to the plate's foot and jumping back. A page
+   whose body arrives after first paint and can stay short (/card/:id, /thanks: main.title-stays)
+   keeps that for good, so its title renders once, where it stays. */
+main:has([aria-busy='true']) > .band:first-child:not(:last-child),
 main.title-stays > .band:first-child {
   flex-grow: 0;
 }
 
+main:has([aria-busy='true']) > .band:last-child:not(:first-child),
 main.title-stays > .band:last-child {
   flex-grow: 1;
 }
@@ -290,12 +285,7 @@ main > .band {
 }
 
 .band > * + * {
-  margin-top: var(--space-4);
-}
-
-.band > .section,
-.band > .hero {
-  margin-bottom: 0;
+  margin-top: var(--band-pad);
 }
 
 main > .band:nth-child(even),
@@ -321,7 +311,6 @@ main > .band:nth-child(2n + 3),
   --outline-press: var(--ink-hover);
   --quiet-fg: var(--muted-on-ink);
   --quiet-edge: var(--field);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -345,7 +334,6 @@ main > .band:first-child,
   --coin-hover: var(--coin-up);
   --quiet-fg: var(--muted-on-signal);
   --quiet-edge: var(--muted-on-signal);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -357,13 +345,8 @@ main > .band:first-child,
   border: 0;
 }
 
-/* Band 1 sits close under the top bar it shares a ground with. */
-main > .band:first-child {
-  padding-top: var(--space-2);
-}
-
 /* Top bar ---------------------------------------------------------------
-   The peanut mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
+   The mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
    sit in the row and Menu goes. Below 22.5rem Play moves into the list. Not sticky. */
 
@@ -393,12 +376,14 @@ main > .band:first-child {
   text-decoration: none;
 }
 
-/* The peanut mark is one colour: on ink it inverts to paper. */
+/* The mark is drawn in the text colour: ink on paper, paper on the signal plate and ink. Its box is
+   its ink, 24 by 30 units of the 32-unit grid, drawn at one pixel a unit (two at 2x), so every
+   straight edge lands on a whole pixel. */
 .mark {
   display: block;
-  width: auto;
-  height: 1.5em;
-  filter: var(--mark-filter);
+  flex: none;
+  width: 1.5rem;
+  height: 1.875rem;
 }
 
 nav a {
@@ -453,7 +438,7 @@ nav a.active {
   }
 }
 
-/* Below 32rem the name is read out but not drawn: the peanut mark stands for it. */
+/* Below 32rem the name is read out but not drawn: the mark stands for it. */
 @media (max-width: 31.99rem) {
   .wordmark-text {
     position: absolute;
@@ -497,10 +482,6 @@ nav a.active {
 
 /* Page heading and sections --------------------------------------------- */
 
-.hero {
-  margin-bottom: var(--space-5);
-}
-
 .hero p,
 .section > p,
 .prose {
@@ -521,19 +502,11 @@ a.target {
 }
 
 .hero h1 {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .lede {
   font-size: var(--size-lead);
-}
-
-.section {
-  margin-bottom: var(--space-5);
-}
-
-.section:last-child {
-  margin-bottom: 0;
 }
 
 .rules {
@@ -714,6 +687,21 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* A figure that did not load: "Not available right now." stacks under the label as a muted body
+   line, like a band whose read failed, instead of taking the figure's unwrapping place. */
+.stat-unavailable {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.stat-unavailable dd {
+  color: var(--text-muted);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  white-space: normal;
+}
+
 /* Cards: a white face with a 2px ink edge; the money and the action pinned to the bottom ---------- */
 
 .card-grid {
@@ -786,7 +774,7 @@ button.link:hover:not(:disabled) {
 /* The Live stamp (the guide and a card's own page): ink-bordered, turned -3 degrees. Rows use the
    plain tag. */
 .tag-stamp {
-  padding: 0.125rem 0.5rem;
+  padding: 0.125rem var(--space-1);
   margin-block: -0.25rem;
   border: 2px solid var(--live-mark);
   border-radius: var(--radius);
@@ -795,8 +783,6 @@ button.link:hover:not(:disabled) {
 
 .card h3 {
   margin-bottom: var(--space-2);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-bold);
 }
 
 .card-summary {
@@ -806,6 +792,40 @@ button.link:hover:not(:disabled) {
 /* Pushed to the bottom so bars and buttons line up across a row of cards. */
 .card-bottom {
   margin-top: auto;
+}
+
+/* From 48rem, where cards sit side by side, each card shares its row's four tracks (CSS subgrid):
+   the index, the title, the summary and the bottom block line up across the row, and a shorter
+   card's spare space splits under its title and its summary instead of pooling above the funding
+   bar as one hollow (DESIGN.md, No dead space). The parts are placed by row, so a card with no
+   summary keeps its bottom block in line. A card an agent wrote holds its summary and byline in one
+   block (.card-text) on the summary's track, so the byline never lands on the bottom block and no
+   card gains a track: an empty track would still add one grid gap above every bar. */
+@media (min-width: 48rem) {
+  .card-grid > .card {
+    display: grid;
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+
+  .card-grid > .card > .card-index {
+    grid-row: 1;
+  }
+
+  .card-grid > .card > h3 {
+    grid-row: 2;
+  }
+
+  .card-grid > .card > .card-summary,
+  .card-grid > .card > .card-text {
+    grid-row: 3;
+  }
+
+  .card-grid > .card > .card-bottom {
+    grid-row: 4;
+    margin-top: 0;
+  }
 }
 
 .card-bottom > .button {
@@ -828,7 +848,7 @@ button.link:hover:not(:disabled) {
   margin-bottom: var(--space-1);
 }
 
-.card > .card-byline {
+.card-text > .card-byline {
   margin: 0 0 var(--space-2);
 }
 
@@ -955,12 +975,18 @@ button.link:hover:not(:disabled) {
 }
 
 /* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names the
-   next card in the waterfall's order (docs/specs/money-surfaces.md). */
+   next card in the waterfall's order (docs/specs/money-surfaces.md). Its agreement line
+   (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and carries the
+   section gap before "Or pick a card". */
 .choice-primary {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-1);
   border-color: var(--primary-bg);
   background: var(--primary-bg);
   color: var(--primary-fg);
+}
+
+.choice-primary + p {
+  margin-bottom: var(--space-4);
 }
 
 .choice-primary .choice-title {
@@ -974,10 +1000,6 @@ button.link:hover:not(:disabled) {
 .choice-primary:hover {
   border-color: var(--primary-hover);
   background: var(--primary-hover);
-}
-
-.choices-heading {
-  font-size: var(--size-large);
 }
 
 .choices {
@@ -1017,8 +1039,9 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--hairline);
 }
 
-/* Rows: small text, hairlines between them, a constant 0.5rem inset (room for the change marker).
-   Queued, Shipped, planned cards and the ledger's rows are rows, never cards. */
+/* Rows: body text, hairlines between them, a constant 0.5rem inset (room for the change marker).
+   The date, the rail and the meta line are small. Queued, Shipped, planned cards and the ledger's
+   rows are rows, never cards. */
 
 .rows {
   margin: 0 0 var(--space-2);
@@ -1030,7 +1053,7 @@ button.link:hover:not(:disabled) {
   gap: 0 var(--space-2);
   padding: var(--space-1);
   border-top: 1px solid var(--hairline);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
 }
 
 .rows li:last-child {
@@ -1040,6 +1063,12 @@ button.link:hover:not(:disabled) {
 .row-time {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.row-time,
+.row-rail,
+.row-meta {
+  font-size: var(--size-small);
 }
 
 /* Rail rows: the time (or the suit) on its own line, then in a 9rem rail from 48rem. */
@@ -1083,7 +1112,7 @@ button.link:hover:not(:disabled) {
 }
 
 .row-title {
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   font-weight: var(--weight-bold);
   text-wrap: pretty;
 }
@@ -1112,7 +1141,7 @@ button.link:hover:not(:disabled) {
 .status-line {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-1);
   max-width: var(--measure);
 }
 
@@ -1235,13 +1264,28 @@ button.link:hover:not(:disabled) {
   margin: 0 0 var(--space-2);
 }
 
+/* A link to the rest of a list on its own page: the words, then an arrow. */
+.more-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .agent {
-  display: flow-root;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
+  column-gap: var(--space-2);
+  align-content: start;
+}
+
+.agent > :not(.avatar) {
+  grid-column: 2;
 }
 
 .agent > .avatar {
-  float: left;
-  margin: 0 var(--space-2) var(--space-1) 0;
+  grid-row: 1 / -1;
+  margin: 0;
 }
 
 /* The Paused tag and the facts line sit together at the bottom of each row (.agent-foot), so the tags
@@ -1276,10 +1320,45 @@ button.link:hover:not(:disabled) {
   font-weight: var(--weight-strong);
 }
 
+/* The roles still to come: equal compact tiles, each a small sleeping avatar beside the name and
+   the job in small type, flowing down balanced columns (CSS columns), so no row is left part-empty
+   however many roles there are. */
+.team-coming {
+  columns: 16rem 3;
+  column-gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-coming > li {
+  break-inside: avoid;
+  margin-bottom: var(--space-3);
+}
+
+.agent-coming {
+  grid-template-rows: auto 1fr auto;
+}
+
+.agent-coming .avatar {
+  width: 3.5rem;
+}
+
+.agent-coming h3 {
+  font-size: var(--size-body);
+}
+
+.agent-coming p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
 /* The team strip: borderless links, avatar beside the name and job. */
 .team-strip {
   display: grid;
   gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .member {
@@ -1449,7 +1528,7 @@ textarea {
   width: 100%;
   max-width: 100%;
   min-height: var(--target);
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-1) 0.75em;
   border: 1px solid var(--field);
   border-radius: var(--radius);
   background: var(--paper);
@@ -1650,17 +1729,13 @@ input[type='radio'] {
 }
 
 /* Forced colours -------------------------------------------------------------
-   Both grounds become Canvas, so a CanvasText rule marks each band edge; the peanut keeps its own
-   colours; the bar's fill takes Highlight so it still reads as filled. */
+   Both grounds become Canvas, so a CanvasText rule marks each band edge; the mark, drawn in the text
+   colour, becomes CanvasText; the bar's fill takes Highlight so it still reads as filled. */
 
 @media (forced-colors: active) {
   main > .band + .band,
   .page:has(> main > .band) > .site-footer {
     border-top: 1px solid CanvasText;
-  }
-
-  .mark {
-    filter: none;
   }
 
   .funding-bar-fill {
@@ -1680,8 +1755,10 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play Dust and the How it works link, side by side. */
+/* Play Dust and the How it works link, side by side, clear of the lede above and the status line
+   below. */
 .hero-actions {
+  margin-top: var(--space-4);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1689,7 +1766,7 @@ input[type='radio'] {
 }
 
 .hero .status-line {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .hero .live-updates {
@@ -1708,14 +1785,15 @@ input[type='radio'] {
 }
 
 /* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
-   nothing leaves an empty column. */
+   nothing leaves an empty column. Stacked, they sit as far apart as any two sections in a band. */
 .pair {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--band-pad) var(--space-4);
 }
 
-.pair > .section {
-  margin-bottom: 0;
+/* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
+.rules-pair {
+  row-gap: var(--space-4);
 }
 
 /* Wider screens ------------------------------------------------------------ */
@@ -1759,16 +1837,6 @@ input[type='radio'] {
     height: 4.5rem;
   }
 
-  .agent {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .agent .avatar {
-    float: none;
-    width: 6rem;
-    margin: 0 0 var(--space-2);
-  }
 }
 
 /* From 48rem to 64rem a strip member's avatar sits over its name, so the job keeps a readable width. */

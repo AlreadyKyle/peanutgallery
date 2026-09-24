@@ -4,7 +4,6 @@ import {
   categoryOf,
   fundableCards,
   fundLink,
-  fundOrder,
   groupCards,
   inCategory,
   inFundingOrder,
@@ -12,6 +11,8 @@ import {
   isPlanned,
   isRunnable,
   nextInLine,
+  noCardTakesMoney,
+  fundingPlace,
   plannedCards,
   shippedOrder,
   sourceLabel,
@@ -101,6 +102,14 @@ describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', ()
     expect(inFundingOrder(s, 'vetoed')).toBe(false);
   });
 
+  it('names no card when the first place in the order is a card the snapshot does not list yet, never a later one', () => {
+    // A new card entered the order first; its words (from /api/cards) have not arrived.
+    const s = snapshot(cards, books(['gone', 'picked', 'open']));
+    expect(fundableCards(s).map((c) => c.id)).toEqual(['picked', 'open']);
+    expect(nextInLine(s)).toBeNull();
+    expect(noCardTakesMoney(s)).toBe(false);
+  });
+
   it('offers no card and names none when the order is empty', () => {
     const s = snapshot(cards, books([]));
     expect(fundableCards(s)).toEqual([]);
@@ -113,6 +122,22 @@ describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', ()
       expect(fundableCards(s)).toEqual([]);
       expect(nextInLine(s)).toBeNull();
       expect(inFundingOrder(s, 'open')).toBe(false);
+    }
+  });
+
+  it("keeps in home's fund group only the open cards in the order, in its order, and every open card when the order did not load", () => {
+    const loaded = snapshot(cards, books(['refunded', 'picked', 'open']));
+    // The vetoed card takes no money, so home neither counts it as open nor draws it; the refunded
+    // card is funded, so it stays queued.
+    expect(groupCards(cards, fundingPlace(loaded)).fund.map((c) => c.id)).toEqual(['picked', 'open']);
+    // Home draws the waterfall's order, the one /contribute offers: a card picked by the board that
+    // the order puts second is second.
+    const reordered = snapshot(cards, books(['open', 'picked']));
+    expect(groupCards(cards, fundingPlace(reordered)).fund.map((c) => c.id)).toEqual(['open', 'picked']);
+    expect(groupCards(cards, fundingPlace(reordered)).fund.map((c) => c.id)).toEqual(fundableCards(reordered).map((c) => c.id));
+    expect(groupCards(cards, fundingPlace(snapshot(cards, books([])))).fund).toEqual([]);
+    for (const s of [snapshot(cards, null, ['money']), { ...snapshot(cards, null), money: undefined }]) {
+      expect(groupCards(cards, fundingPlace(s)).fund.map((c) => c.id)).toEqual(['picked', 'vetoed', 'open']);
     }
   });
 });
@@ -137,24 +162,15 @@ describe('shippedOrder', () => {
   });
 });
 
-describe('fundOrder', () => {
-  it('ranks voted before designing before proposed', () => {
+describe("home's fund group with the order unread", () => {
+  it("draws the roadmap's order: the board's rank, unranked last, then the oldest", () => {
     const cards = [
-      card({ id: 'proposed', stage: 'proposed' }),
-      card({ id: 'designing', stage: 'designing' }),
-      card({ id: 'voted', stage: 'voted' }),
+      card({ id: 'unranked-new', created_at: '2026-09-14T00:00:02Z' }),
+      card({ id: 'rank-2-voted', stage: 'voted', rank: 2 }),
+      card({ id: 'unranked-old', stage: 'designing', created_at: '2026-09-14T00:00:01Z' }),
+      card({ id: 'rank-1', rank: 1 }),
     ];
-    expect([...cards].sort(fundOrder).map((c) => c.id)).toEqual(['voted', 'designing', 'proposed']);
-  });
-
-  it('orders cards of the same stage by funded amount, highest first, then the oldest', () => {
-    const cards = [
-      card({ id: 'low', stage: 'voted', funded_usd: 10 }),
-      card({ id: 'high', stage: 'voted', funded_usd: 30 }),
-      card({ id: 'newer', stage: 'proposed', created_at: '2026-09-14T00:00:02Z' }),
-      card({ id: 'older', stage: 'proposed', created_at: '2026-09-14T00:00:01Z' }),
-    ];
-    expect([...cards].sort(fundOrder).map((c) => c.id)).toEqual(['high', 'low', 'older', 'newer']);
+    expect(groupCards(cards).fund.map((c) => c.id)).toEqual(['rank-1', 'rank-2-voted', 'unranked-old', 'unranked-new']);
   });
 });
 

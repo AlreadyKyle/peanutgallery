@@ -7,6 +7,7 @@
 import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { reconcile } from "../../../ops/jobs/controller.mjs";
+import { applyContributionArgs, reverseContributionArgs } from "./handler.ts";
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
@@ -552,6 +553,34 @@ Deno.test("spend, refunds and releases", OPTS, async (t) => {
     }
   });
 
+  await t.step("waterfall_sweep releases a card the dispatcher rejected directly: its unspent money moves on at step 2 and its spent money stays on the bar", async () => {
+    const s = await studio();
+    try {
+      const rejected = await s.card("Rejected after a failed gate", 10);
+      const p1 = await s.pay("rj1", 1, rejected);
+      const p2 = await s.pay("rj2", 3, rejected);
+      await s.spend(rejected, 1.5); // p1's 1 spent, then 0.5 of p2's 3
+      // The dispatcher rejects a card by writing its stage, never through cancel_card.
+      await s.db.query(`update public.cards set stage = 'rejected' where id = $1`, [rejected]);
+      const next = await s.card("Next in line", 5);
+      assertEquals(await s.sweep(), { released_cards: 1, released_usd: 2.5, promoted: 0, drained_usd: 0 });
+      assertEquals(await s.stage(rejected), "rejected");
+      assertEquals([await s.bar(rejected), await s.bar(next)], [1.5, 2.5]);
+      assertEquals((await s.allocations(String(p1.contribution_id))).map((a) => [a.destination, a.card_id, a.amount_usd, a.step, a.reason]), [
+        ["card", rejected, 1, 1, "credit"],
+      ]);
+      assertEquals((await s.allocations(String(p2.contribution_id))).map((a) => [a.destination, a.card_id, a.amount_usd, a.step, a.reason]), [
+        ["card", rejected, 3, 1, "credit"],
+        ["card", rejected, -2.5, null, "card_release"],
+        ["card", next, 2.5, 2, "card_release"],
+      ]);
+      assertEquals(await s.sweep(), { released_cards: 0, released_usd: 0, promoted: 0, drained_usd: 0 });
+      await s.books();
+    } finally {
+      await s.close();
+    }
+  });
+
   await t.step("cancel_card cancels a card holding money, moves its unspent money to the next cards in line, and refuses building and gated cards", async () => {
     const s = await studio();
     try {
@@ -764,19 +793,29 @@ Deno.test("the terms stamp", OPTS, async () => {
   const s = await studio();
   try {
     const versions = await s.rows<{ version: number; posted_at: Date }>(`select version, posted_at from public.terms_versions order by version`);
-    assertEquals(versions.map((v) => v.version), [1, 2]);
+    assertEquals(versions.map((v) => v.version), [1, 2, 3]);
     const between = new Date(versions[0]!.posted_at.getTime() + 1000).toISOString();
     const stamp = async (key: string, created: string | null) => (await s.pay(key, 1, null, { created })).terms_version;
     assertEquals(await stamp("t1", between), 1);
-    assertEquals(await stamp("t2", new Date(Date.now() + 86_400_000).toISOString()), 2, "a future time counts as now");
+    assertEquals(await stamp("t2", new Date(Date.now() + 86_400_000).toISOString()), 3, "a future time counts as now");
     assertEquals(await stamp("t3", null), null, "no time stamps nothing");
     assertEquals(await stamp("t4", "2026-09-01T00:00:00Z"), null, "no version was posted yet");
     assertEquals(await s.rows(`select terms_version from public.contributions where stripe_event_id in ('evt_t1', 'evt_t2', 'evt_t3', 'evt_t4') order by stripe_event_id`), [
-      { terms_version: 1 }, { terms_version: 2 }, { terms_version: null }, { terms_version: null },
+      { terms_version: 1 }, { terms_version: 3 }, { terms_version: null }, { terms_version: null },
     ]);
     // No argument lets a caller choose a version.
     const args = (await s.row<{ a: string }>(`select pg_get_function_identity_arguments('public.apply_contribution'::regproc) as a`)).a;
     assert(!/version/.test(args), args);
+    // The webhook's own arguments (handler.ts, sent as they are by index.ts) name exactly each RPC's
+    // parameters, and its session time stamps the payment.
+    const params = async (fn: string) => (await s.row<{ n: string[] }>(`select proargnames as n from pg_proc where oid = $1::regproc`, [fn])).n;
+    const parsed = { event_id: "evt_t5", session_id: "cs_t5", amount_total: 100, currency: "usd", studio_pct: 0, display_name: null, contributor_id: "contrib_t5", goal_card_id: null, session_created_at: between };
+    const sent = applyContributionArgs(parsed, { amount_usd: 1, fee_usd: 0, net_usd: 1 }, "email:payer_t5");
+    assertEquals(Object.keys(sent), await params("public.apply_contribution"));
+    const keys = Object.keys(sent);
+    const viaWebhook = (await s.row<{ r: Row }>(`select public.apply_contribution(${keys.map((k, i) => `${k} => $${i + 1}`).join(", ")}) as r`, keys.map((k) => sent[k]))).r;
+    assertEquals(viaWebhook.terms_version, 1);
+    assertEquals(Object.keys(reverseContributionArgs({ event_id: "evt_t5r", session_id: "cs_t5", kind: "refund", kind_total_usd: 1 })), await params("public.reverse_contribution"));
     // Only a payment row carries a stamp.
     await s.refuses(
       `insert into public.contributions (entry, parent_id, rail, contributor_id, terms_version) select 'adjustment', id, 'stripe', 'x', 1 from public.contributions where stripe_event_id = 'evt_t1'`,

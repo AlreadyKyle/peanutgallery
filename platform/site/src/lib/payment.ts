@@ -30,18 +30,6 @@ export function canFund(card: Card): boolean {
   return card.shape === 'goal' && card.funding_target_usd > 0 && !isFullyFunded(card);
 }
 
-const FUND_RANK: Record<string, number> = { voted: 0, designing: 1, proposed: 2 };
-const UNRANKED = 3;
-
-/** Home's Fund what's next order: picked by the board first, then in design, then proposed; then the most funded; then the oldest. */
-export function fundOrder(a: Card, b: Card): number {
-  const rank = (FUND_RANK[a.stage] ?? UNRANKED) - (FUND_RANK[b.stage] ?? UNRANKED);
-  if (rank !== 0) return rank;
-  if (a.funded_usd !== b.funded_usd) return b.funded_usd - a.funded_usd;
-  if (a.created_at === b.created_at) return 0;
-  return a.created_at < b.created_at ? -1 : 1;
-}
-
 /** The waterfall's order, or null when public_money did not load (or a sample snapshot carries none). */
 function fundingOrder(snapshot: Snapshot): FundingPlace[] | null {
   if (snapshot.missing.includes('money') || snapshot.money === undefined || snapshot.money === null) return null;
@@ -63,9 +51,34 @@ export function fundableCards(snapshot: Snapshot): Card[] {
   });
 }
 
-/** The card Fund the next card in line funds first, or null when no card takes money or the order did not load. */
+/**
+ * The card Fund the next card in line funds first: the first place in the waterfall's order. Null when
+ * no card takes money, the order did not load, or the first place's card is not in the snapshot (its
+ * words arrive with /api/cards, which can lag /api/live's order), so the page never names a later card
+ * the money would not reach first.
+ */
 export function nextInLine(snapshot: Snapshot): Card | null {
-  return fundableCards(snapshot)[0] ?? null;
+  const first = fundingOrder(snapshot)?.[0];
+  if (first === undefined) return null;
+  return snapshot.cards.find((card) => card.id === first.card_id) ?? null;
+}
+
+/** The waterfall's order loaded and lists no card: money given now waits in Not on a card yet. */
+export function noCardTakesMoney(snapshot: Snapshot): boolean {
+  return fundingOrder(snapshot)?.length === 0;
+}
+
+/**
+ * Home's Fund what's next: each open card's place in the waterfall's order (0 first), the same order
+ * /contribute offers, or null for a card the order leaves out (a vetoed card), which home neither counts
+ * as open nor draws without its Fund this card among cards that have one. With the order unread every
+ * open card has place 0, so home draws each, none with Fund this card, in the roadmap's order.
+ */
+export function fundingPlace(snapshot: Snapshot): (card: Card) => number | null {
+  const order = fundingOrder(snapshot);
+  if (order === null) return () => 0;
+  const places = new Map(order.map((place, index) => [place.card_id, index]));
+  return (card) => places.get(card.id) ?? null;
 }
 
 /** Whether a card takes money now: it is in the funding order. False when the order did not load. */

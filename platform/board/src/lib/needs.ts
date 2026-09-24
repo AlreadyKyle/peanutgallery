@@ -49,10 +49,17 @@ export type S1Card = { id: string; title: string; stage: string };
  * A card paused at its ceiling that the resume rule will not resume (docs/specs/agent-system-core.md):
  * at the card maximum, or paused at its ceiling a second time.
  */
-export type RuleBlockedCard = { id: string; title: string; why: 'card_max' | 'resumed_before'; actual_usd: number; card_max_usd: number };
+export type RuleBlockedCard = { id: string; title: string; why: RuleBlockedWhy; actual_usd: number; card_max_usd: number };
 
-/** A card holding money whose approval is not current: hidden, not runnable, taking no money. */
-export type VoidCard = { id: string; title: string; stage: string; funded_usd: number };
+/** Why the resume rule leaves a ceiling pause to the board (board_needs_you.rule_blocked). */
+export type RuleBlockedWhy = 'card_max' | 'resumed_before' | 'vetoed' | 'closed_lane';
+const RULE_BLOCKED_WHYS: readonly RuleBlockedWhy[] = ['card_max', 'resumed_before', 'vetoed', 'closed_lane'];
+
+/**
+ * A card whose approval is not current, hidden, not runnable and taking no money, at a stage the board
+ * can cancel, with money that cancelling it moves: the unspent money on its bar plus any on hold.
+ */
+export type VoidCard = { id: string; title: string; stage: string; money_usd: number };
 
 export type NeedsYouData = {
   controller: ControllerRun | null;
@@ -145,7 +152,7 @@ export function needsYouFrom(raw: unknown): NeedsYouData {
     rule_blocked: list(row.rule_blocked).map((card) => ({
       id: String(card.id),
       title: text(card.title) ?? String(card.id),
-      why: card.why === 'resumed_before' ? 'resumed_before' : 'card_max',
+      why: RULE_BLOCKED_WHYS.find((why) => why === card.why) ?? 'card_max',
       actual_usd: num(card.actual_usd) ?? 0,
       card_max_usd: num(card.card_max_usd) ?? 0,
     })),
@@ -153,7 +160,7 @@ export function needsYouFrom(raw: unknown): NeedsYouData {
       id: String(card.id),
       title: text(card.title) ?? String(card.id),
       stage: text(card.stage) ?? '',
-      funded_usd: num(card.funded_usd) ?? 0,
+      money_usd: num(card.money_usd) ?? 0,
     })),
   };
 }

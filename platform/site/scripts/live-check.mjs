@@ -22,17 +22,20 @@
 // (docs/specs/supporter-pages.md). Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
 // in /api/cards' terms since it took effect, lists the earlier ones and answers the next number
-// with the not found page (docs/specs/legal-copy.md). /contribute's Fund the next card in line is first
+// with the not found page (docs/specs/legal-copy.md); from version 3 it names Mob Machine as the
+// operator. /contribute's Fund the next card in line is first
 // and names the next card in line (the first card choice) or says the money waits; /ledger shows
 // exactly one reconciliation line, and its received figure (or "No contributions yet.") matches
 // /api/live's money; while /api/live's studio says the agents are paused for awaiting_credit, home
 // and /contribute say the payout sentence (docs/specs/money-surfaces.md).
+// The studio's name in the home title, og:title and og:site_name, and the top bar's home link named
+// for it with the inline mark (docs/specs/rename.md, docs/specs/machine-mark.md).
 //
 // The site's own documents (docs/specs/site-snapshot.md): no page requests the Supabase host or opens
 // a WebSocket, on any route; /api/live answers 200 JSON with every key in snapshot-keys.json and a
 // browser Cache-Control of max-age=0, a second read within 60 seconds is a CDN hit (production),
 // /api/cards answers 200, /api/live?x=1 answers 400, and one /assets/*.js is immutable.
-// Assets, og:image as an absolute URL, and
+// Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect runs only against production. The
@@ -63,6 +66,8 @@ const SUPABASE_HOST = new URL(
 ).host;
 // The keys each document must carry (docs/specs/site-snapshot.md).
 const SNAPSHOT_KEYS = JSON.parse(readFileSync(new URL('../src/lib/snapshot-keys.json', import.meta.url), 'utf8'));
+// The studio's name (PLAN.md §10 decision 43): the tab title, the link previews and the top bar.
+const STUDIO_NAME = 'Mob Machine';
 const AGREEMENT_TOKENS = ['/terms', '/refunds'];
 // The game's netlify.app host, which every page's top bar links to, from the netlify.toml the site is
 // built with; and the board site's host, from BOARD_SITE_URL in the environment when it is set (the
@@ -99,7 +104,7 @@ const FOOTER_LINKS = [
 const H2_ORDER = ['Building now', "Fund what's next", 'Queued', 'The team', 'Shipped', 'Planned next', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned next']);
 // The grounds, as computed colours: band 1 and the top bar signal, band 2 paper, then ink and paper.
-const SIGNAL = 'rgb(26, 47, 200)';
+const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
 // The status line: the open and building counts, then while paused the paused sentence
@@ -112,6 +117,8 @@ const PAYOUT_SENTENCE =
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
+// The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
+const PICK_BODY = 'Your contribution funds whatever the agents build next.';
 const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
@@ -163,15 +170,28 @@ function postedAt(iso) {
   return `${value('day')} ${value('month').slice(0, 3)} ${value('year')} at ${value('hour')}:${value('minute')} Toronto time`;
 }
 
-/** One of the site's own documents, parsed; null when it does not answer 200 JSON (a local preview has none). */
-async function siteDocument(path) {
-  try {
-    const response = await fetch(BASE + path);
-    if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
-    return await response.json();
-  } catch {
-    return null;
+/**
+ * One of the site's own documents, parsed; null when it does not answer 200 JSON (a local preview has
+ * none). Each is read once per run, so the checks' own reads stay well under the function's rate limit
+ * beside the pages' reads; the header checks below fetch afresh.
+ */
+const documents = new Map();
+function siteDocument(path) {
+  if (!documents.has(path)) {
+    documents.set(
+      path,
+      (async () => {
+        try {
+          const response = await fetch(BASE + path);
+          if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
+          return await response.json();
+        } catch {
+          return null;
+        }
+      })(),
+    );
   }
+  return documents.get(path);
 }
 
 /** The posted Terms versions, oldest first, from /api/cards as the Terms pages read them; null when the read fails. */
@@ -340,10 +360,18 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const reports = await watchPolicy(page);
   await open(page, '/');
+  const homeTitle = await page.title();
+  check(homeTitle === STUDIO_NAME, `home title is ${JSON.stringify(homeTitle)}`);
+  const homeLink = page.getByRole('banner').getByRole('link', { name: STUDIO_NAME, exact: true });
+  const markPaths = await homeLink.locator('svg.mark[aria-hidden="true"] path').count();
+  check((await homeLink.getAttribute('href')) === '/' && markPaths === 1, `the top bar's "${STUDIO_NAME}" link goes home and draws the mark (${markPaths} path)`);
   const main = page.getByRole('main');
   const pool = main.locator('.pool-line .figure');
   const hasData = (await pool.count()) > 0;
 
+  // Home's Fund what's next, in order: /contribute's card choices must be the same cards in the same
+  // order, the waterfall's (docs/specs/money-surfaces.md).
+  const homeFund = (await main.locator('ul.fund-grid h3').allTextContents()).map((title) => title.trim());
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
   if (!hasData) noData(`landing h2 order ${JSON.stringify(h2)}`);
@@ -451,10 +479,21 @@ try {
     const next = NEXT_IN_LINE.exec(body);
     if (!hasData || (await livePart('money')) === null) {
       noData('Fund the next card in line names the next card in line (/api/live money)');
-    } else if (next !== null) {
-      check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
     } else {
-      check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
+      if (next !== null) {
+        check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
+      } else if (body === PICK_BODY) {
+        // Allowed only while the order's first card has no words in /api/cards yet (payment.ts nextInLine).
+        const first = (await livePart('money'))?.funding_order?.[0]?.card_id ?? null;
+        const listed = new Set(((await siteDocument('/api/cards'))?.cards ?? []).map((row) => row.id));
+        check(first !== null && !listed.has(first), `Fund the next card in line names no card only while the order's first card ${first} is not in /api/cards`);
+      } else {
+        check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
+      }
+      check(
+        JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())),
+        `home's Fund what's next shows /contribute's ${titles.length} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
+      );
     }
     try {
       const stripe = await fetch(first[1], { redirect: 'manual' });
@@ -576,6 +615,8 @@ try {
     const text = (await page.getByRole('main').textContent()) ?? '';
     const since = `Version ${newest.version}, in force since ${postedAt(newest.posted_at)}.`;
     check(text.includes(since) && !text.includes('cannot confirm'), `/terms shows "${since}"`);
+    // Version 3 is version 2 with the studio's new name (docs/specs/rename.md).
+    if (newest.version >= 3) check(text.includes(`${STUDIO_NAME} is operated by`), `/terms names ${STUDIO_NAME} as the operator`);
     const earlier = terms.slice(0, -1).map((row) => `/terms/${row.version}`);
     const listed = await page
       .getByRole('region', { name: 'Earlier versions' })
@@ -663,7 +704,7 @@ try {
     }
   }
 
-  for (const asset of ['/favicon.ico', '/peanut.png', '/version.json']) {
+  for (const asset of ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', '/icon-512.png', '/version.json']) {
     const response = await fetch(BASE + asset);
     check(response.status === 200, `${asset} ${response.status}`);
   }
@@ -673,6 +714,10 @@ try {
   const ogImage = index.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? null;
   const absolute = ogImage !== null && /^https:\/\/[^/]+\/.+/.test(ogImage);
   check(absolute, `index og:image is an absolute URL: ${ogImage}`);
+  for (const property of ['og:title', 'og:site_name']) {
+    const value = index.match(new RegExp(`<meta property="${property}" content="([^"]+)"`))?.[1] ?? null;
+    check(value === STUDIO_NAME, `index ${property} ${JSON.stringify(value)}`);
+  }
   const twitter = index.match(/<meta name="twitter:card" content="([^"]+)"/)?.[1] ?? null;
   check(twitter === 'summary_large_image', `index twitter:card ${twitter}`);
   if (absolute && new URL(ogImage).origin === new URL(BASE).origin) {
