@@ -134,8 +134,9 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
   );
 }
 
-function title(answer: Recorded): string {
-  if (answer.supporter === null) return words.title;
+/** Under the Thank you heading: the supporter's number, or nothing for a payment with none. */
+function supporterLine(answer: Recorded): string | undefined {
+  if (answer.supporter === null) return undefined;
   return (answer.supporter.founding ? words.youAreFounding : words.youAre).replace('{n}', formatInteger(answer.supporter.number));
 }
 
@@ -162,7 +163,7 @@ export function Thanks() {
     return (
       <main>
         <div className="band">
-          <PageHeader title={title(state.answer)}>
+          <PageHeader title={words.title} lede={supporterLine(state.answer)}>
             <PausedNotice studio={studio} />
           </PageHeader>
         </div>

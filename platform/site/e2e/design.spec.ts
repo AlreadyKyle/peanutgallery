@@ -4,6 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test } from './fixtures';
+import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
 // reduced motion and accessibility. The guide is the design-system pull request's mockup.
@@ -317,6 +318,38 @@ test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
     for (const band of ['main > .band:nth-child(1)', 'main > .band:nth-child(3)']) {
       const results = await new AxeBuilder({ page }).include(band).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
       expect(results.violations.map((v) => v.id), band).toEqual([]);
+    }
+  });
+});
+
+// The supporter pages (docs/specs/supporter-pages.md), each in the fixture state it draws.
+test.describe('the supporter pages', () => {
+  test.use({ studio: SUPPORTER_STUDIO });
+
+  for (const width of [375, 768, 1440]) {
+    test(`find no axe violation, no sideways scroll and keep the bands at ${width}px`, async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width, height: 900 });
+      for (const [, path] of SUPPORTER_ROUTES) {
+        await settle(page, path);
+        expect(await overflowsHorizontally(page), path).toBe(false);
+        const drawn = await grounds(page);
+        expect(drawn, path).toEqual(expected(drawn.length - 2));
+        const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+        expect(
+          results.violations.map((v) => `${path} ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
+          path,
+        ).toEqual([]);
+      }
+    });
+  }
+
+  test('play nothing under reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const [, path] of SUPPORTER_ROUTES) {
+      await settle(page, path);
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => document.getAnimations().length), path).toBe(0);
     }
   });
 });

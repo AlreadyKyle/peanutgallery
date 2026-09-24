@@ -14,6 +14,9 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
   await page.screenshot({ path: join(SHOTS, `${name}-${width}.png`), fullPage: true });
 }
 
+// The roles the roster marks running whose lane is open, in /team's order (by title).
+const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Platform Director', 'QA', 'Studio Head'];
+
 async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
   await expect(page).toHaveTitle(`${title} · Peanut Gallery`);
@@ -56,40 +59,48 @@ for (const viewport of WIDTHS) {
       await screenshot(page, 'how-it-works', viewport.width);
     });
 
-    test('/team lists the running agents and the ones not running yet, with code-drawn avatars', async ({ page }) => {
+    test('/team puts each role in Running, Starts later or Planned from the roster columns, with code-drawn avatars', async ({ page }) => {
       await page.goto('/team');
       await onlyOneH1(page, 'The team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
-      const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
-      await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
-      await expect(waiting.getByRole('heading', { level: 3 })).toHaveText([
+      const starts = page.getByRole('region', { name: 'Starts later', exact: true });
+      const planned = page.getByRole('region', { name: 'Planned', exact: true });
+      await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
+      // Every starts role with its trigger; the Platform Builder waits on the platform code lane.
+      await expect(starts.getByRole('heading', { level: 3 })).toHaveText([
         'Biz Dev',
         'Community',
-        'Game Designer',
-        'Game Director',
         'Head of Finance',
         'Head of Product',
-        'Host',
         'HR',
         'Janitor',
         'Platform Builder',
-        'Platform Director',
-        'Studio Head',
         'Tech Artist',
       ]);
+      await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when the board opens the studio code lane.');
+      await expect(starts.locator('#agent-r-community')).toContainText('Starts once a named moderator is in place for the community channels.');
+      await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host']);
       const avatars = page.getByRole('main').getByRole('img');
       await expect(avatars).toHaveCount(DEFAULT_STUDIO.roles.length);
       for (const role of DEFAULT_STUDIO.roles) {
         await expect(page.getByRole('img', { name: String(role.species_note) })).toBeVisible();
       }
-      // A running role shows its model; a role that does not run shows none.
-      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(3);
-      await expect(waiting.getByText('claude-', { exact: false })).toHaveCount(0);
+      // A running role shows its model, its cost from contributions and its ships; a role that does not run shows none.
+      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(RUNNING_ROLES.length);
+      await expect(running.locator('#agent-r-builder-a .card-meta')).toHaveText(
+        'claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 0 shipped cards',
+      );
+      for (const region of [starts, planned]) {
+        await expect(region.getByText(/\bclaude-/)).toHaveCount(0);
+        await expect(region.getByText('Spent from contributions')).toHaveCount(0);
+        await expect(region.locator('.card-meta')).toHaveCount(0);
+      }
       // The check scripts/live-check.mjs runs on production, on the same locators.
       const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
-      expect(models).toEqual({ ok: true, message: `/team 3 running roles, each on ${RUNNING_MODEL}: ${Array(3).fill(RUNNING_MODEL).join(', ')}` });
-      await expect(waiting.getByText(/\bclaude-/)).toHaveCount(0);
-      await expect(running.getByText('2 cards shipped', { exact: false })).toBeVisible();
+      expect(models).toEqual({ ok: true, message: `/team ${RUNNING_ROLES.length} running roles, each on ${RUNNING_MODEL}: ${Array(RUNNING_ROLES.length).fill(RUNNING_MODEL).join(', ')}` });
+      // Nothing is paused: every avatar is awake and no row says Paused.
+      await expect(page.locator('svg.avatar[data-pose="asleep"]')).toHaveCount(DEFAULT_STUDIO.roles.length - RUNNING_ROLES.length);
+      await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'team', viewport.width);
     });
@@ -160,20 +171,21 @@ test.describe('the production /team model check', () => {
     test('fails, naming the model it found', async ({ page }) => {
       await page.goto('/team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
-      await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
+      await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
       const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
-      expect(models).toEqual({ ok: false, message: `/team 3 running roles, each on ${RUNNING_MODEL}: claude-sonnet-5, claude-sonnet-5, claude-sonnet-5` });
+      expect(models.ok).toBe(false);
+      expect(models.message).toContain('claude-sonnet-5, claude-sonnet-5');
     });
   });
 
   test.describe('with no role running', () => {
     test.use({
-      studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (CARD_ROLES.has(String(role.title)) ? { ...role, state: 'retired' } : role)) },
+      studio: { ...DEFAULT_STUDIO, roles: DEFAULT_STUDIO.roles.map((role) => (role.status === 'running' ? { ...role, state: 'retired' } : role)) },
     });
 
     test('fails, since the Running section is missing', async ({ page }) => {
       await page.goto('/team');
-      await expect(page.getByRole('region', { name: 'Not running yet', exact: true })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Starts later', exact: true })).toBeVisible();
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running).toHaveCount(0);
       const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());

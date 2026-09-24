@@ -38,9 +38,9 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('group', { name: 'Show cards for' }).getByRole('button')).toHaveText([/^All/, /^Dust/]);
       await expect(page.getByRole('region', { name: 'Queued' }).getByText('A cheaper Cart')).toBeVisible();
 
-      // The team strip: the first three running roles, each linking to its row on /team.
+      // The team strip: the first three roles on the team (lib/roster.ts teamStatus), each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
-      await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'QA']);
+      await expect(team.locator('.member-name')).toHaveText(['Builder A', 'Builder B', 'Game Designer']);
       for (const href of await team.getByRole('link').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
 
       await expect(page.getByRole('region', { name: 'Shipped' }).getByRole('heading', { level: 3 })).toHaveText([
@@ -65,7 +65,10 @@ for (const viewport of WIDTHS) {
       await expect(page.getByText('kill switch', { exact: false })).toHaveCount(0);
       await expect(page.getByRole('tooltip')).toHaveCount(0);
       await expect(page.getByRole('complementary')).toHaveCount(0);
-      await expect(page.locator('a[href^="/card/"]')).toHaveCount(0);
+      // A card's own page is linked only by the Watch links: here, one per shipped row (docs/specs/supporter-pages.md).
+      const shippedCount = await page.getByRole('region', { name: 'Shipped' }).locator('li').count();
+      await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
+      await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
       await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
       await expect(footer.getByText('Everything here is made for all ages.', { exact: false })).toBeVisible();
       await expect(footer.getByRole('link', { name: 'Discord' })).toHaveAttribute('href', DISCORD_INVITE);
