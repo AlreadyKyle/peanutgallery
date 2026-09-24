@@ -59,7 +59,7 @@ Out, and what each waits on:
 1. Append the version's entry to `TERMS_VERSIONS`; never edit a posted entry.
 2. Add a migration that inserts only its row: `insert into public.terms_versions (version) values (n) on conflict (version) do nothing`.
 3. Merge, and wait for the site deploy of the merge sha.
-4. Take a dump, apply that migration through the Management API query endpoint, and at once purge the public site's CDN cache (`netlify api purgeCache --data '{"site_id":"<the public site id>"}'`): since site-snapshot the Terms pages read the posted versions from `/api/cards`, which the CDN otherwise keeps up to about ten minutes, and in that time /terms would name the previous version as in force while `terms_version_at` already stamps new contributions with version n. Then read back its `posted_at` and run the live check, which must show "Version n, in force since".
+4. Take a dump, apply that migration through the Management API query endpoint, and at once purge the public site's CDN cache (`netlify api purgeCache --data '{"body":{"site_id":"<the public site id>"}}'`; the id goes in the body, and a top-level `site_id` answers 400): since site-snapshot the Terms pages read the posted versions from `/api/cards`, which the CDN otherwise keeps up to about ten minutes, and in that time /terms would name the previous version as in force while `terms_version_at` already stamps new contributions with version n. Then read back its `posted_at` and run the live check, which must show "Version n, in force since".
 
 ## Acceptance criteria
 
