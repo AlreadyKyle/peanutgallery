@@ -1,6 +1,5 @@
 import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
-import { SUPABASE_URL } from './fixture-env';
 import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
 
@@ -94,7 +93,8 @@ for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     let release = () => {};
     let held = Promise.resolve();
-    await page.route(`${SUPABASE_URL}/rest/v1/**`, async (route) => {
+    // The site's own documents (/api/live, /api/cards): the page's every data read.
+    await page.route('**/api/**', async (route) => {
       await held;
       await route.fallback();
     });
