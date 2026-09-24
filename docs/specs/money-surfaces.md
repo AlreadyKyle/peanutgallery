@@ -1,6 +1,6 @@
 # Money surfaces: money in, reconciled with Stripe, the next card in line, stopped cards and why the studio is paused
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Built on the merge of money-logic (and home-and-design, #64). It reads what money-logic publishes and writes no SQL. It is a board pull request: it changes kernel files (`legal.ts`, `payment.ts`, `Funding.tsx`, `Ledger.tsx`, the two new kernel components, `docs/`).
 
@@ -76,7 +76,7 @@ Out:
 - [x] Home's status line and the paused notice on /contribute show the identical `pausedSentence` for each of `awaiting_credit`, `spend_limit`, `incident` and `board`, the general line when `pause_reason` is null, and nothing when not paused or the studio row did not load (unit tests and `paused.spec.ts`).
 - [x] `MoneyIn.tsx` and `Stopped.tsx` are in `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` and the parity test passes; `legal.fixedRules[0]` is the new sentence and `docs.test.mjs` still finds the ledger in it; `BACKLOG.md` and PLAN §4 Not built yet no longer list "Split aggregate on the meter" or "Handling a dispute the studio wins"; PLAN §4 The Board's public list names money in, the reconciliation status, Not on a card yet and the shortfall, and stopped cards with their money trail.
 - [x] With `live-studio.ts` carrying `public_money` and `public_stopped_cards` rows (a paused and a rejected card), `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on /contribute and /ledger at 375, 768 and 1440.
-- [ ] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games. (Local half done: production step 1 printed PASS with all four checks PASS, not SKIP, against production data, Evidence, Ship. Open until the deploy: the production run.)
+- [x] `live-check.mjs` checks that Pick for me is first with its next-in-line or waits line, /ledger shows exactly one reconciliation line, /ledger's received figure (or "No contributions yet.") matches `public_money.received_usd` (or `payments` 0) read with the anon key, and / and /contribute show the payout sentence while `pause_reason` is `awaiting_credit`; it passes against the local preview and, after the deploy, against https://peanutgallery.games. (Both halves done: production step 1 printed PASS with all four checks PASS, not SKIP, against production data, and after the deploy of 187f403 the live check against https://peanutgallery.games printed PASS with failed=0, Evidence, Ship and Production.)
 
 ## Verification
 
@@ -245,6 +245,47 @@ The four money checks print PASS, not SKIP, so the criterion's local half is met
 
 The gate passed at 648ed62 (run 35932811094: detect, build, platform, gate; seed-code skipped), but main had moved to fe42a58 (#75, /team) meanwhile, which touches `Landing.tsx`, `paused.spec.ts` and `styles.css`, so the branch merged main again (3710177) rather than merge an untested combination. Two conflicts: `Landing.tsx`'s team strip takes #75's `asleep={false}` (the board: running agents are drawn awake while the studio is paused), and `paused.spec.ts` keeps this branch's reasons and full sentences with #75's awake assertion. Then `pnpm verify` exit 0 (board 71, supabase 286, site 423, seed-1 77, dispatcher 619, gate passed=508, agents 117, ops 124, functions 97 passed, secret-scan files=558, docs 15, rename 6), and `E2E_ROUTE_SHOTS=<folder> E2E_PORT=4447 pnpm --filter @backseat/site e2e`: `2 skipped`, `150 passed (3.4m)`; home at 1440 (the payout sentence in the status line, the team awake) and /contribute at 1440 were looked at.
 
+### Production
+
+Merged with `gh pr merge 71 --squash --match-head-commit 6740ebc…` at 2026-09-23T23:51:30Z as 187f403 (gate run 35934782190 at 6740ebc: detect, build, platform, gate passed; seed-code skipped). gh's local branch switch failed because main is checked out in another worktree, so the remote branch was deleted by hand, after #73 (agent-system-core, stacked on this branch) was set to base main so it stays open.
+
+Production step 2: the public site published 187f403 (Netlify deploy 6ab46604c68c330008074672, 2026-09-23T23:51:50Z); `https://peanutgallery.games/version.json` reads `{"sha":"187f40358ce8578c9eacbf1174d735e032b872c6","builtAt":"2026-09-23T23:51:49.844Z"}`. The board site's build of 187f403 was cancelled for no content change, which is right (no board file changed).
+
+Production step 3, from the main checkout at 187f403, `node platform/site/scripts/live-check.mjs`, exit 0:
+
+```
+PASS live-check https://peanutgallery.games passed=227 failed=0 skipped=0
+PASS home status line says the payout sentence while paused for awaiting_credit
+PASS Fund the next card in line says "Next in line: Stop the unlock count from showing more unlocks than exist", the first of 6 card choices
+PASS /contribute says the payout sentence while paused for awaiting_credit: "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue."
+PASS /ledger shows exactly one reconciliation line: ["Not yet reconciled with Stripe."]
+PASS /ledger says No contributions yet. with public_money.payments 0
+```
+
+`public_money` in production at that moment: payments 0, received 0.0000, not_on_card 0.0000, short 0.0000, board_test 0.5019, reconciled_at and last_run_ok null, six cards in `funding_order`; `public_stopped_cards` has no rows, so /ledger draws no Stopped band. The live /ledger, /contribute and / at 375 and 1440 were looked at: Funding with Not on a card yet $0.00 and "The pool includes $0.50 of the board's own test payment; it funds no card.", Money in with "No contributions yet." and "Not yet reconciled with Stripe.", /contribute naming the next card, and the payout sentence on both.
+
+### Fix forward: home's order
+
+Looking at the live pages found one thing the checks missed: home's Fund what's next drew its own order (`fundOrder`: picked by the board first, then in design, then proposed, then the most funded, then the oldest) while /contribute drew the waterfall's. Production has the voted card (Add Quiet rooms, rank 2) and five proposed cards ranked 1 and 3 to 6, so home led with Add Quiet rooms while /contribute said "Next in line: Stop the unlock count…". The fix: `fundingPlace(snapshot)` (`payment.ts`, kernel) gives each open card its place in `funding_order`, `groupCards` sorts home's fund group by it (with the order unread, every open card in the roadmap's order: rank, unranked last, then the oldest), and `fundOrder` and its stage ranks are deleted. `live-check.mjs` now checks that home's Fund what's next shows /contribute's card choices in the same order. Against production at 187f403 it fails, as it should:
+
+```
+FAIL home's Fund what's next shows /contribute's 6 card choices in the same order: home ["Add Quiet rooms, a fourteenth unlock after Polished rails","Rename the Gatherer to Sweeper","Lower the Cart's starting price from 150 to 120 dust","Stop the unlock count from showing more unlocks than exist","Show how long until the next unlock","Show how much dust each strike adds"]
+```
+
+The new order then tripped the layout audit on a local preview with production data: `1440px / no dead space: balance: side-by-side blocks in ul.card-grid.fund-grid "Stop the unlock count from showing more " differ by 761px (1649 / 969 / 888)`. The cards were level (572px each); the audit was counting the text inside each card's closed "What the agents are told", which is laid out below the card but not drawn, and the longest brief now sat in the first row. This branch first fixed `layout-audit.mjs` itself; while its gate ran, #76 (fb694f5, the gap audit) landed the same fix on main with its own test ("counts only the summary of a closed disclosure as drawn"), so the merge of main takes #76's audit and test and this pull request drops its own.
+
+After the fix, a build with `netlify.toml`'s production values on `vite preview` port 4452, `node platform/site/scripts/live-check.mjs http://localhost:4452 --allow-no-data`, exit 0:
+
+```
+PASS live-check http://localhost:4452 passed=225 failed=0 skipped=3
+PASS Fund the next card in line says "Next in line: Stop the unlock count from showing more unlocks than exist", the first of 6 card choices
+PASS home's Fund what's next shows /contribute's 6 card choices in the same order
+PASS /ledger shows exactly one reconciliation line: ["Not yet reconciled with Stripe."]
+PASS /ledger says No contributions yet. with public_money.payments 0
+```
+
+After merging main at fb694f5 (#76), `pnpm verify` exit 0 (board 71, supabase 286, site 426, seed-1 77, dispatcher 619, gate passed=508, agents 117, ops 124, functions 97 passed, secret-scan files=561, payment-host-scan files=7, docs 15, rename 6). `cards.test.ts` checks home's fund group equals `fundableCards` in order (a card picked by the board that the order puts second is second) and the roadmap's order with the order unread; `changes.test.ts` holds a reorder of the funding order. `E2E_PORT=4447 pnpm --filter @backseat/site e2e` exit 0: `5 skipped`, `148 passed (5.4m)`. Before that merge, one run's 768px title-timing test timed out at a load average near 40 (`page.evaluate: Test timeout of 120000ms exceeded`) and passed on the rerun (`layout-balance.spec.ts` 40 passed). The local preview check above was re-run on the merged tree with the same PASS line (`passed=225 failed=0 skipped=3`). Home at 768 (the launch-shaped fixture) and 1440 (production data) were looked at: the waterfall's order in balanced rows. The fix-forward's own live check after its deploy goes in the ship report, and the next pull request in the series records it here, as this one recorded money-logic's.
+
 ## Decisions
 
 - 2026-09-23, Trimmed (board: "better to be simple and delete than add more convoluted bespoke"; good normal modern standards): 31 criteria became 11. Cut: the `takesMoney` mirror of `money.card_takes_money` and its shared fixture (when `public_money` fails, the site offers only Pick for me, which the waterfall places safely, so no second copy of the rule is needed); the operations clause on /contribute and the operations line on /ledger (the bucket ships at 0% and is removed until a percentage exists; nothing here depended on it but those two lines); the read of `public_card_funding.on_card_usd` (it equals the bar); the cross-package test that scans dispatcher sources for `failing_check` codes (replaced by a per-stage fallback, so no code ever shows raw); the read-count test, the band-colour and band-2 checks (home's style and design tests own the bands rule); the shipped-card funder-count e2e (money-logic owns and tests `public_card_funding`); the attended reviewer session and published review page (replaced by the existing axe suite, home's `layout-balance.spec.ts` and route screenshots looked at); the dependency on layout-balance's gate module (that pull request is dropped). Kept whole: every Problem outcome, the figures adding up, the reconciliation line, the money trail of a stopped card, kernel paths, and the production live check.
@@ -273,6 +314,8 @@ The gate passed at 648ed62 (run 35932811094: detect, build, platform, gate; seed
 - 2026-09-23 (ship): no pg_dump or migration step: this pull request writes no SQL, so its production steps are the local preview check before the merge, the Netlify deploy, the production live check and a docs close-out after it.
 - 2026-09-23 (ship): the two timing tests that failed under a load average of 45 to 48 (`Guide.test.tsx`, the dispatcher's `github.test.ts` merge-unknown test) were re-run, not changed: each passes alone and in the third full `pnpm verify`, and neither is in this pull request's files.
 - 2026-09-23 (ship): with #75 on main, home's team strip is drawn awake while paused (the board's call there), so only the status line carries the pause on home; `pausedSentence` no longer drives the strip.
+- 2026-09-23 (ship): home's Fund what's next draws the waterfall's order, the same cards in the same order as /contribute's choices. home-and-design's order (the board's pick first, then the most funded) predates the waterfall; with both drawn, home and /contribute named different cards first. Money goes by rank, so the site shows rank order everywhere. With the order unread, home draws the roadmap's order (rank, unranked last, then the oldest). A voted card still shows its Picked by the board face.
+- 2026-09-23 (ship): the layout audit leaves out what a closed `details` holds (#76's change, which landed on main while this fix was in its gate; this pull request's own copy was dropped for it). That text is laid out below its card but never drawn, so counting it measured cards the reader sees level as up to 761px apart.
 
 ## Appendix: strings
 
