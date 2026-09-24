@@ -1,54 +1,51 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { SUPABASE_URL } from './fixture-env';
-import { POSTED_TERMS, type StudioFixture } from './studio-fixture';
+import { toDocuments } from './snapshot-documents';
+import { DEFAULT_STUDIO, type StudioFixture } from './studio-fixture';
 
 export { DEFAULT_STUDIO, fundingOrder, moneyRow, POSTED_TERMS, type StudioFixture } from './studio-fixture';
 
 export { expect };
 
-/** Answers every Supabase REST request from the fixture and holds realtime open with no server. */
+/**
+ * Serves /api/live and /api/cards from the fixture, built the way site_live() and site_cards() build
+ * them (snapshot-documents.ts). Any request to the Supabase host fails the test: the public site
+ * reads only its own origin (docs/specs/site-snapshot.md). The documents are rebuilt on each request,
+ * so a test can change the fixture between loads.
+ */
 export async function mockStudio(page: Page, studio: StudioFixture): Promise<void> {
-  await page.routeWebSocket(/\/realtime\/v1\/websocket/, () => {});
-  await page.route(`${SUPABASE_URL}/**`, async (route) => {
+  await page.route(`${SUPABASE_URL}/**`, (route) => route.fulfill({ status: 500, body: 'The public site must not read Supabase' }));
+  await page.route(/\/api\/(live|cards)(\?.*)?$/, async (route) => {
     const url = new URL(route.request().url());
-    const table = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/)?.[1];
-    const ids = url.searchParams.get('id');
-    const rows: Record<string, unknown> = {
-      pool: [studio.pool],
-      cards:
-        ids !== null && ids.startsWith('in.')
-          ? studio.cards.filter((c) => ids.includes(String(c.id))).map((c) => ({ id: c.id, title: c.title }))
-          : studio.cards,
-      public_card_funding: studio.funding,
-      public_card_spend: studio.spend,
-      public_studio: [{ launched_at: studio.launchedAt, paused: studio.paused, platform_lane_open: false, pause_reason: studio.paused ? (studio.pauseReason ?? null) : null }],
-      public_money: studio.money === null ? null : [studio.money],
-      public_stopped_cards: studio.stopped,
-      public_ledger_totals: [studio.totals],
-      public_agent_events: studio.events,
-      deploys: studio.deploys,
-      public_roles: studio.roles,
-      public_terms_versions: studio.terms ?? POSTED_TERMS,
-    };
-    if (table === undefined || !(table in rows) || route.request().method() !== 'GET') {
-      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: `${url.pathname} is not in the e2e fixture` }) });
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json; charset=utf-8', body: '{"error":"Only GET is allowed"}' });
       return;
     }
-    // A read the fixture fails on purpose (money or stopped set to null).
-    if (rows[table] === null) {
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: `${table} failed in the e2e fixture` }) });
+    if (url.search !== '') {
+      await route.fulfill({ status: 400, contentType: 'application/json; charset=utf-8', body: '{"error":"No query string is allowed"}' });
       return;
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows[table]) });
+    const docs = toDocuments(studio);
+    const body = url.pathname === '/api/live' ? docs.live : docs.cards;
+    await route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(body) });
   });
 }
 
-/** Every e2e test gets a page whose Supabase requests the fixture answers; override `studio` per test. */
+/**
+ * Every e2e test gets a page whose /api requests the fixture answers; override `studio` per test. A
+ * test fails when its page requested the Supabase host or opened a WebSocket.
+ */
 export const test = base.extend<{ studio: StudioFixture }>({
   studio: [DEFAULT_STUDIO, { option: true }],
   page: async ({ page, studio }, use) => {
+    const offOrigin: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).host === new URL(SUPABASE_URL).host) offOrigin.push(request.url());
+    });
+    page.on('websocket', (socket) => offOrigin.push(socket.url()));
     await mockStudio(page, studio);
     await use(page);
+    expect(offOrigin, 'the public site requested the Supabase host or opened a WebSocket').toEqual([]);
   },
 });
 

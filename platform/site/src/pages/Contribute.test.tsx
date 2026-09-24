@@ -54,7 +54,7 @@ function source(cards: Card[], paused = false, order: string[] = cards.filter(ca
     missing: [],
     ...over,
   };
-  return { load: () => Promise.resolve(snapshot), subscribe: () => () => {} };
+  return { load: () => Promise.resolve(snapshot) };
 }
 
 /** Every link to checkout on the page: the first choice and each card. */
@@ -192,16 +192,13 @@ describe('Contribute', () => {
   });
 
   it('says the figures may be out of date when a refresh fails', async () => {
-    let onChange = () => {};
+    // A return to the tab loads at once (lib/studio.tsx).
+    const onChange = () => document.dispatchEvent(new Event('visibilitychange'));
     let fail = false;
     const cards = [card({ id: 'g1', title: 'Rename the Gatherer' })];
     const loaded = source(cards);
     renderContribute({
       load: () => (fail ? Promise.reject(new Error('network down')) : loaded.load()),
-      subscribe: (callback) => {
-        onChange = callback;
-        return () => {};
-      },
     });
     const status = screen.getByRole('status');
     await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());

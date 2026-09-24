@@ -68,7 +68,7 @@ function renderRoadmap(source: StudioSource | null) {
 }
 
 function sourceOf(list: Card[]): StudioSource {
-  return { load: () => Promise.resolve(snapshot(list)), subscribe: () => () => {} };
+  return { load: () => Promise.resolve(snapshot(list)) };
 }
 
 beforeEach(() => {
@@ -89,7 +89,6 @@ describe('Roadmap', () => {
           ...snapshot([...cards, drafted]),
           roles: [{ id: 'r-designer', name: 'Game Designer', title: 'Game Designer', description: null, species_note: 'A small red creature.', model: 'claude-opus-5-5', write_access: true, state: 'active', hired_at: '2026-09-14T00:00:00Z' }],
         }),
-      subscribe: () => () => {},
     };
     renderRoadmap(source);
     const next = await screen.findByRole('region', { name: roadmap.horizons.next });

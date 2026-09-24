@@ -1,6 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
-import { loadPostedTerms, termsView, TERMS_READ_TIMEOUT_MS, versionView, type PostedTerms } from './terms';
+import { loadPostedTerms, postedTermsFrom, termsView, TERMS_READ_TIMEOUT_MS, versionView, type PostedTerms } from './terms';
 import { TERMS_VERSIONS } from './terms-versions';
 
 // Which Terms version a page shows (docs/specs/legal-copy.md, Behaviour). Kernel, like terms.ts: a
@@ -97,39 +96,38 @@ describe('versionView: /terms/:version and /refunds/:version', () => {
   });
 });
 
-/** A stand-in for the one supabase-js chain loadPostedTerms calls, recording what it was asked. */
-function fakeClient(answer: { data: unknown; error: { message: string } | null }) {
-  const calls: unknown[][] = [];
-  const chain = {
-    from: (...args: unknown[]) => (calls.push(['from', ...args]), chain),
-    select: (...args: unknown[]) => (calls.push(['select', ...args]), chain),
-    order: (...args: unknown[]) => (calls.push(['order', ...args]), chain),
-    abortSignal: (signal: AbortSignal) => (calls.push(['abortSignal', signal instanceof AbortSignal]), Promise.resolve(answer)),
-  };
-  return { client: chain as unknown as SupabaseClient, calls };
+/** A fetch that answers /api/cards with a card document holding these terms rows, recording what it was asked. */
+function fakeFetch(answer: { status?: number; terms?: unknown; body?: unknown }) {
+  const calls: { url: string; signal: boolean }[] = [];
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, signal: init?.signal instanceof AbortSignal });
+    const body = answer.body !== undefined ? answer.body : { cards: [], roles: [], terms: answer.terms };
+    return new Response(JSON.stringify(body), { status: answer.status ?? 200 });
+  }) as unknown as typeof fetch;
+  return { fetchFn, calls };
 }
 
 describe('loadPostedTerms', () => {
-  it('reads version and posted_at from public_terms_versions in version order, with a 5-second limit', async () => {
-    const { client, calls } = fakeClient({ data: [{ version: 1, posted_at: V1_AT }], error: null });
-    expect(await loadPostedTerms(client)).toEqual([{ version: 1, posted_at: V1_AT }]);
-    expect(calls).toEqual([
-      ['from', 'public_terms_versions'],
-      ['select', 'version,posted_at'],
-      ['order', 'version'],
-      ['abortSignal', true],
+  it('reads version and posted_at from the card document at /api/cards in version order, with a 5-second limit', async () => {
+    const { fetchFn, calls } = fakeFetch({ terms: [{ version: 2, posted_at: V2_AT }, { version: 1, posted_at: V1_AT }] });
+    expect(await loadPostedTerms(fetchFn)).toEqual([
+      { version: 1, posted_at: V1_AT },
+      { version: 2, posted_at: V2_AT },
     ]);
+    expect(calls).toEqual([{ url: '/api/cards', signal: true }]);
     expect(TERMS_READ_TIMEOUT_MS).toBe(5_000);
   });
 
-  it('throws when the read fails or a row is malformed', async () => {
-    await expect(loadPostedTerms(fakeClient({ data: null, error: { message: 'boom' } }).client)).rejects.toThrow('boom');
+  it('throws when the read fails, the document has no terms or a row is malformed', async () => {
+    await expect(loadPostedTerms(fakeFetch({ status: 502, terms: [] }).fetchFn)).rejects.toThrow('answered 502');
+    await expect(loadPostedTerms(fakeFetch({ body: { cards: [] } }).fetchFn)).rejects.toThrow('malformed');
     for (const row of [{ version: '1', posted_at: V1_AT }, { version: 0, posted_at: V1_AT }, { version: 1.5, posted_at: V1_AT }, { version: 1, posted_at: 'soon' }, null]) {
-      await expect(loadPostedTerms(fakeClient({ data: [row], error: null }).client), JSON.stringify(row)).rejects.toThrow('malformed');
+      await expect(loadPostedTerms(fakeFetch({ terms: [row] }).fetchFn), JSON.stringify(row)).rejects.toThrow('malformed');
     }
+    expect(() => postedTermsFrom(null)).toThrow('malformed');
   });
 
   it('answers no rows as an empty list, which the pages treat as unconfirmed', async () => {
-    expect(await loadPostedTerms(fakeClient({ data: [], error: null }).client)).toEqual([]);
+    expect(await loadPostedTerms(fakeFetch({ terms: [] }).fetchFn)).toEqual([]);
   });
 });

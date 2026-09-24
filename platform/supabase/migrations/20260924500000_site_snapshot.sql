@@ -3,9 +3,9 @@
 -- 20260924400000_agent_workflows.sql and can run twice.
 --
 -- site_live() is the figures that move: the pool, the studio row, the ledger
--- totals, the books, the newest stopped cards, each listed card's stage and
--- funding figures, the newest events with their card's title and the newest
--- deploys. site_cards() is the text that rarely moves: the listed cards'
+-- totals, the books, the newest stopped cards, each listed card's stage, bar,
+-- spend and funding figures, the newest events with their card's title and the
+-- newest deploys. site_cards() is the text that rarely moves: the listed cards'
 -- columns, the roles and the posted Terms versions. The site's one Netlify
 -- Function (platform/site/netlify/functions/snapshot.mts) calls each with the
 -- publishable key and the CDN caches the answer, 60 seconds for the live
@@ -106,6 +106,7 @@ as $$
     'cards', coalesce((
       select jsonb_object_agg(c.id::text, jsonb_build_object(
         'stage', c.stage,
+        'funded_usd', c.funded_usd,
         'spent_usd', coalesce(s.spent_usd, 0),
         'contributors', f.contributors,
         'credited_usd', f.credited_usd

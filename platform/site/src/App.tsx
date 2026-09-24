@@ -15,8 +15,11 @@ import { pageNav, pageRoutes, type PageRoute } from './routes';
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
 // the Contribute, Ledger and legal pages, each Terms and Refunds version among them. The card lane's pages come from routes.tsx and never take one of these paths.
 
-/** First path segments only the kernel's pages use; /board is here so it stays the not found page. */
-export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board'];
+/**
+ * First path segments only the kernel uses; /board is here so it stays the not found page, and /api
+ * is the snapshot function's (netlify/functions/snapshot.mts, docs/specs/site-snapshot.md).
+ */
+export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api'];
 
 /**
  * The card lane's routes this frame mounts: the landing at /, and pages whose first path segment is
@@ -35,7 +38,22 @@ export function cardRoutes(routes: readonly PageRoute[]): PageRoute[] {
 // A top bar link from routes.tsx goes to a page on this site: a plain path, never another host.
 const PLAIN_PATH = /^\/[a-z0-9-]*$/;
 
-export function App() {
+/**
+ * Calls onRouteChange on every move to another page after the first render: main.tsx passes the
+ * stale-tab check, so a reader who moves to another page lands on it in the newest build.
+ */
+function useRouteChange(onRouteChange: (() => void) | undefined) {
+  const { pathname } = useLocation();
+  const last = useRef(pathname);
+  useEffect(() => {
+    if (last.current === pathname) return;
+    last.current = pathname;
+    onRouteChange?.();
+  }, [pathname, onRouteChange]);
+}
+
+export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
+  useRouteChange(onRouteChange);
   return (
     <StudioProvider>
       <div className="page">

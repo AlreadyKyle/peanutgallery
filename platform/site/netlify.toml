@@ -15,8 +15,12 @@
   VITE_STRIPE_PAYMENT_LINK_URL = "https://buy.stripe.com/dRm28s4ie0zp6BU0qEafS01"
   VITE_DISCORD_INVITE = "https://discord.gg/rwkbWhMk8r"
   VITE_PLAY_URL = "https://peanutgallery-seed-1.netlify.app"
-  VITE_SUPABASE_URL = "https://lyxndueoeisyqzewflpu.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "sb_publishable_-i-BKWMS4TmEfSldTE9b7g_UMBRV2wh"
+
+# The site's one Netlify Function (docs/specs/site-snapshot.md): /api/live and /api/cards, the two
+# documents every figure on the site comes from, read from Supabase with the publishable key in
+# netlify/lib/public-env.ts and cached by the CDN. The page itself holds no Supabase client.
+[functions]
+  directory = "netlify/functions"
 
 # The netlify.app address always forwards to the studio's own domain.
 [[redirects]]
@@ -97,13 +101,13 @@
   status = 200
 
 # Security headers on every path, the SPA rewrite included (docs/specs/site-truth-pass.md).
-# frame-ancestors, connect-src and form-action are enforced: the page may connect only to itself and
-# to the Supabase project above, over https (REST) and wss (realtime), so script on this origin cannot
-# send data anywhere else (docs/specs/launch-site.md), and no form on it may post anywhere but here
-# (docs/specs/board-site.md). It does not stop a same-origin call to Supabase, nor a link to another
-# host: the gate's payment-host scan fails a build that carries a payment address other than the
-# Payment Link above. The full policy stays report-only: the script, the stylesheet and every image
-# are same-origin.
+# frame-ancestors, connect-src and form-action are enforced: the page may connect only to itself, so
+# script on this origin cannot send data anywhere else (docs/specs/launch-site.md) nor reach the
+# database (docs/specs/site-snapshot.md: its figures come from /api on this origin), and no form on it
+# may post anywhere but here (docs/specs/board-site.md). It does not stop a link to another host: the
+# gate's payment-host scan fails a build that carries a payment address other than the Payment Link
+# above. The full policy stays report-only: the script, the stylesheet and every image are
+# same-origin.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -111,8 +115,16 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; form-action 'self'"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self'; form-action 'self'"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+
+# Vite names every file under /assets by a hash of its contents, so a new build never reuses a name
+# and each file can be kept for a year without a revalidation (docs/specs/site-snapshot.md).
+# index.html, /version.json and /fonts/* keep Netlify's default, which revalidates on every view.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
 
 # The unlisted design guide (docs/specs/design-system.md) shows sample figures, so it asks search
 # engines not to index it in the response itself, not only in the meta tag the page adds once it

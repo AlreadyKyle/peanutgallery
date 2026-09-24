@@ -66,7 +66,7 @@ const snapshot: Snapshot = {
 };
 
 function sourceOf(value: Snapshot): StudioSource {
-  return { load: () => Promise.resolve(value), subscribe: () => () => {} };
+  return { load: () => Promise.resolve(value) };
 }
 
 function renderLedger(source: StudioSource | null) {
@@ -159,14 +159,11 @@ describe('Ledger', () => {
   });
 
   it('says the figures may be out of date under the heading when a refresh fails', async () => {
-    let onChange = () => {};
+    // A return to the tab loads at once (lib/studio.tsx).
+    const onChange = () => document.dispatchEvent(new Event('visibilitychange'));
     let fail = false;
     renderLedger({
       load: () => (fail ? Promise.reject(new Error('network down')) : Promise.resolve(snapshot)),
-      subscribe: (callback) => {
-        onChange = callback;
-        return () => {};
-      },
     });
     const status = screen.getByRole('status');
     await waitFor(() => expect(screen.getByText('$48.56')).toBeTruthy());

@@ -87,7 +87,7 @@ function renderTeam(source: StudioSource | null) {
 }
 
 function sourceOf(value: Snapshot): StudioSource {
-  return { load: () => Promise.resolve(value), subscribe: () => () => {} };
+  return { load: () => Promise.resolve(value) };
 }
 
 function names(region: HTMLElement): string[] {

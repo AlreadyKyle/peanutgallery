@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { clearStoredSessions, PUBLIC_AUTH_OPTIONS, STORED_SESSION_KEY } from './supabase';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { clearStoredSessions, STORED_SESSION_KEY } from './supabase';
 
-// Nobody signs in on the public site once the board has its own (docs/specs/board-site.md).
-describe('the public Supabase client', () => {
-  it('keeps no session: none stored, none refreshed, none read from the address', () => {
-    expect(PUBLIC_AUTH_OPTIONS).toEqual({ persistSession: false, autoRefreshToken: false, detectSessionInUrl: false });
+// Nobody signs in on the public site once the board has its own (docs/specs/board-site.md), and the
+// site holds no Supabase client (docs/specs/site-snapshot.md).
+describe('no Supabase client on the public site', () => {
+  it('has no supabase-js dependency and keeps only the session cleanup and the error message', () => {
+    const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    expect(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })).not.toContain('@supabase/supabase-js');
+    const text = readFileSync(resolve(process.cwd(), 'src/lib/supabase.ts'), 'utf8');
+    expect([...text.matchAll(/^export (?:const|function) (\w+)/gm)].map((m) => m[1])).toEqual(['STORED_SESSION_KEY', 'clearStoredSessions', 'errorMessage']);
   });
 
   it('removes a board session stored here before the move, and nothing else', () => {

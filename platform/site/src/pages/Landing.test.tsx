@@ -222,7 +222,6 @@ function role(id: string, title: string, description: string): Role {
 function fakeSource(over: Partial<Snapshot> = {}): StudioSource {
   return {
     load: () => Promise.resolve({ ...snapshot, ...over }),
-    subscribe: () => () => {},
   };
 }
 
@@ -323,7 +322,7 @@ describe('Landing', () => {
   });
 
   it('shows the loading line while the snapshot loads, and the unavailable line without a database', () => {
-    renderLanding({ load: () => new Promise(() => {}), subscribe: () => () => {} });
+    renderLanding({ load: () => new Promise(() => {}) });
     const loading = document.querySelector('p.status-line')!;
     expect(loading.textContent).toBe(legal.loadingFigures);
     expect(loading.getAttribute('aria-busy')).toBe('true');
@@ -476,14 +475,11 @@ describe('Landing', () => {
   });
 
   it('keeps the figures and says they may be out of date when a refresh fails, until one succeeds', async () => {
-    let onChange = () => {};
+    // A return to the tab loads at once (lib/studio.tsx).
+    const onChange = () => document.dispatchEvent(new Event('visibilitychange'));
     let fail = false;
     renderLanding({
       load: () => (fail ? Promise.reject(new Error('network down')) : Promise.resolve(snapshot)),
-      subscribe: (callback) => {
-        onChange = callback;
-        return () => {};
-      },
     });
     // The live region is in place, empty, before any figure loads, so its text arriving is announced.
     const status = document.querySelector('.hero p.status[role="status"]')!;

@@ -1,5 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { toNumber, type Numeric } from './format';
+import SNAPSHOT_KEYS from './snapshot-keys.json';
 
 export type Pool = {
   balance_usd: number;
@@ -152,9 +152,11 @@ export type Role = {
 };
 
 /**
- * The parts of a snapshot the page can do without. The pool and the cards are the core: when either
- * fails, the whole load fails. When an enrichment fails, the snapshot carries its empty value and
- * names it in `missing`, so a page says that part is unavailable instead of showing zero.
+ * The parts of a snapshot the page can do without. When one is missing, the snapshot carries its
+ * empty value and names it in `missing`, so a page says that part is unavailable instead of showing
+ * zero. From the site's two documents (docs/specs/site-snapshot.md) only the books and the stopped
+ * cards can be missing, when the live document carries them as null; any other missing key, wrong
+ * type or malformed figure rejects the whole load, and a page keeps its last figures marked stale.
  */
 export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'money', 'stopped', 'cardTitles'] as const;
 export type Enrichment = (typeof ENRICHMENTS)[number];
@@ -192,245 +194,155 @@ export type Snapshot = {
   missing: Enrichment[];
 };
 
+
+/** The one thing the pages need from a source: a fresh Snapshot, or a rejection. */
 export interface StudioSource {
   load(): Promise<Snapshot>;
-  subscribe(onChange: () => void): () => void;
 }
 
-type PoolRow = {
-  balance_usd: Numeric;
-  reserve_usd: Numeric;
-  incident_reserve_usd: Numeric;
-  held_usd: Numeric;
-  daily_spent_usd: Numeric;
-  day: string;
-};
+// Kernel (docs/specs/board-site.md, docs/specs/site-snapshot.md): every figure on the site comes from
+// two documents on the site's own origin, which netlify/functions/snapshot.mts builds from
+// site_live() and site_cards() and the CDN caches. The page holds no Supabase client.
 
-type CardRow = {
-  id: string;
-  title: string;
-  summary: string | null;
-  intent: string | null;
-  source: string;
-  stage: string;
-  shape: string;
-  bucket: string;
-  folder: string;
-  horizon: string | null;
-  rank: Numeric | null;
-  executor_role_id: string | null;
-  drafter_role_id?: string | null;
-  funding_target_usd: Numeric;
-  funded_usd: Numeric;
-  created_at: string;
-  updated_at: string;
-  live_at: string | null;
-};
-
-type SpendRow = {
-  card_id: string;
-  spent_usd: Numeric;
-};
-
-type FundingRow = {
-  card_id: string;
-  contributors: Numeric;
-  credited_usd: Numeric;
-};
-
-type StudioRow = {
-  launched_at: string | null;
-  paused: boolean | null;
-  platform_lane_open?: boolean | null;
-  pause_reason?: string | null;
-};
-
-type MoneyRow = {
-  payments: Numeric;
-  received_usd: Numeric;
-  stripe_fees_usd: Numeric;
-  refunded_usd: Numeric;
-  disputed_usd: Numeric;
-  corrections_usd: Numeric;
-  studio_pct_avg: Numeric | null;
-  reserve_usd: Numeric;
-  studio_usd: Numeric;
-  incident_usd: Numeric;
-  held_usd: Numeric;
-  agent_credit_usd: Numeric;
-  not_on_card_usd: Numeric;
-  short_usd: Numeric;
-  board_test_usd: Numeric;
-  reconciled_at: string | null;
-  last_run_ok: boolean | null;
-  funding_order: { card_id: string; room_usd: Numeric }[] | null;
-};
-
-type StoppedRow = {
-  card_id: string;
-  title: string;
-  stage: string;
-  failing_check: string | null;
-  spent_usd: Numeric;
-  funded_usd: Numeric;
-  credited_usd: Numeric;
-  moved: { to_card_id: string | null; to_title: string | null; usd: Numeric }[] | null;
-  stopped_at: string;
-};
-
-type RoleRow = {
-  id: string;
-  name: string;
-  title: string;
-  description: string | null;
-  species_note: string | null;
-  model: string | null;
-  write_access: boolean;
-  state: string;
-  hired_at: string;
-};
-
-type TitleRow = {
-  id: string;
-  title: string;
-};
-
-type TotalsRow = {
-  usd_total: Numeric;
-  input_tokens: Numeric;
-  cached_tokens: Numeric;
-  output_tokens: Numeric;
-  row_count: Numeric;
-};
-
-export const EVENT_LIMIT = 20;
-/**
- * How long one query may take before it is aborted. A hung request would otherwise keep a load
- * pending forever, so a failed refresh would never mark the figures stale.
- */
-export const QUERY_TIMEOUT_MS = 10_000;
-export const DEPLOY_LIMIT = 10;
-/** The ledger lists the newest twelve stopped cards. */
-export const STOPPED_LIMIT = 12;
-/** The public_money and public_stopped_cards columns the site reads (docs/specs/money-surfaces.md). */
-export const MONEY_COLUMNS =
-  'payments,received_usd,stripe_fees_usd,refunded_usd,disputed_usd,corrections_usd,studio_pct_avg,reserve_usd,studio_usd,incident_usd,held_usd,agent_credit_usd,not_on_card_usd,short_usd,board_test_usd,reconciled_at,last_run_ok,funding_order';
-export const STOPPED_COLUMNS = 'card_id,title,stage,failing_check,spent_usd,funded_usd,credited_usd,moved,stopped_at';
-/** The stages the site lists: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
+export const LIVE_URL = '/api/live';
+export const CARDS_URL = '/api/cards';
+/** How long one request may take before it is aborted and the load rejects. */
+export const REQUEST_TIMEOUT_MS = 10_000;
+/** The card document is read again once the copy held is older than this. */
+export const CARDS_MAX_AGE_MS = 5 * 60_000;
+/** The stages the pages list: fund (proposed, designing, voted), queued (funded), building (building, gated) and shipped (live). */
 export const CARD_STAGES = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live'] as const;
-/** The card columns the site reads. Each one must be in the anon column grant on cards. */
-export const CARD_COLUMNS =
-  'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,drafter_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at';
-/** The public_roles columns the site reads. The site never reads the roles table itself. */
-export const ROLE_COLUMNS = 'id,name,title,description,species_note,model,write_access,state,hired_at';
-export const REALTIME_LISTENERS = [
-  { table: 'pool' },
-  { table: 'cards' },
-  { table: 'deploys' },
-] as const;
 
-const zeroTotals: LedgerTotals = {
-  usd_total: 0,
-  input_tokens: 0,
-  cached_tokens: 0,
-  output_tokens: 0,
-  row_count: 0,
-};
+type JsonType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
+type KeySpec = Record<string, string | readonly string[]>;
+type Doc = Record<string, unknown>;
 
-let subscriptionCount = 0;
+/** The keys each document must carry and their JSON types; the Deno migration test checks SQL against it. */
+export const REQUIRED_KEYS: { live: KeySpec; cards: KeySpec } = SNAPSHOT_KEYS;
 
-function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T | null {
-  if (result.error) throw new Error(result.error.message);
-  return result.data;
+function jsonType(value: unknown): JsonType {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value as JsonType;
 }
 
-function money(value: Numeric): number {
-  const n = toNumber(value);
+function isDoc(value: unknown): value is Doc {
+  return jsonType(value) === 'object';
+}
+
+/** The document, once every required key is present with its type; keys it does not know are ignored. */
+function checked(name: string, value: unknown, spec: KeySpec): Doc {
+  if (!isDoc(value)) throw new Error(`${name} is not a JSON object`);
+  for (const [key, allowed] of Object.entries(spec)) {
+    if (!(key in value)) throw new Error(`${name} has no ${key}`);
+    const types: readonly string[] = typeof allowed === 'string' ? [allowed] : allowed;
+    const found = jsonType(value[key]);
+    if (!types.includes(found)) throw new Error(`${name}.${key} is ${found}, not ${types.join(' or ')}`);
+  }
+  return value;
+}
+
+function money(value: unknown): number {
+  const n = toNumber(value as Numeric);
   if (n === null) throw new Error(`Malformed numeric value: ${String(value)}`);
   return n;
 }
 
-function poolFrom(row: PoolRow | null): Pool | null {
+function text(row: Doc, key: string): string {
+  const value = row[key];
+  if (typeof value !== 'string') throw new Error(`Malformed ${key}: ${String(value)}`);
+  return value;
+}
+
+function textOrNull(row: Doc, key: string): string | null {
+  const value = row[key];
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') throw new Error(`Malformed ${key}: ${String(value)}`);
+  return value;
+}
+
+function rows(value: unknown, name: string): Doc[] {
+  if (!Array.isArray(value) || !value.every(isDoc)) throw new Error(`Malformed ${name}`);
+  return value;
+}
+
+function poolFrom(row: unknown): Pool | null {
   if (row === null) return null;
+  if (!isDoc(row)) throw new Error('Malformed pool');
   return {
     balance_usd: money(row.balance_usd),
     reserve_usd: money(row.reserve_usd),
     incident_reserve_usd: money(row.incident_reserve_usd),
     held_usd: money(row.held_usd),
     daily_spent_usd: money(row.daily_spent_usd),
-    day: row.day,
+    day: text(row, 'day'),
   };
 }
 
 /** A card with no horizon read (a row from before the column existed) is on horizon now. */
-function horizonFrom(value: string | null | undefined): Horizon {
+function horizonFrom(value: unknown): Horizon {
   return value === 'next' || value === 'later' ? value : 'now';
 }
 
-function rankFrom(value: Numeric | null | undefined): number | null {
+function rankFrom(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   return money(value);
 }
 
-function cardFrom(row: CardRow, spend: Record<string, number>): Card {
+type LiveCard = { stage: string; funded_usd: number; spent_usd: number; funding: CardFunding | null };
+
+function liveCardFrom(value: unknown): LiveCard {
+  if (!isDoc(value)) throw new Error('Malformed live card');
+  const counted = value.contributors !== null && value.contributors !== undefined;
   return {
-    id: row.id,
-    title: row.title,
-    summary: row.summary,
-    intent: row.intent,
-    source: row.source,
-    stage: row.stage,
-    shape: row.shape,
-    bucket: row.bucket,
-    folder: row.folder,
+    stage: text(value, 'stage'),
+    funded_usd: money(value.funded_usd),
+    spent_usd: money(value.spent_usd ?? 0),
+    funding: counted ? { contributors: money(value.contributors), credited_usd: money(value.credited_usd) } : null,
+  };
+}
+
+/** A card from the card document, with the stage, bar and spend the live document carries now. */
+function cardFrom(row: Doc, live: LiveCard): Card {
+  return {
+    id: text(row, 'id'),
+    title: text(row, 'title'),
+    summary: textOrNull(row, 'summary'),
+    intent: textOrNull(row, 'intent'),
+    source: text(row, 'source'),
+    stage: live.stage,
+    shape: text(row, 'shape'),
+    bucket: text(row, 'bucket'),
+    folder: text(row, 'folder'),
     horizon: horizonFrom(row.horizon),
     rank: rankFrom(row.rank),
-    executor_role_id: row.executor_role_id ?? null,
-    drafter_role_id: row.drafter_role_id ?? null,
+    executor_role_id: textOrNull(row, 'executor_role_id'),
+    drafter_role_id: textOrNull(row, 'drafter_role_id'),
     funding_target_usd: money(row.funding_target_usd),
-    funded_usd: money(row.funded_usd),
-    spent_usd: spend[row.id] ?? 0,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    live_at: row.live_at ?? null,
+    funded_usd: live.funded_usd,
+    spent_usd: live.spent_usd,
+    created_at: text(row, 'created_at'),
+    updated_at: text(row, 'updated_at'),
+    live_at: textOrNull(row, 'live_at'),
   };
 }
 
-function roleFrom(row: RoleRow): Role {
+function roleFrom(row: Doc): Role {
   return {
-    id: row.id,
-    name: row.name,
-    title: row.title,
-    description: row.description ?? null,
-    species_note: row.species_note ?? '',
-    model: row.model ?? '',
-    write_access: row.write_access,
-    state: row.state,
-    hired_at: row.hired_at,
+    id: text(row, 'id'),
+    name: text(row, 'name'),
+    title: text(row, 'title'),
+    description: textOrNull(row, 'description'),
+    species_note: textOrNull(row, 'species_note') ?? '',
+    model: textOrNull(row, 'model') ?? '',
+    write_access: row.write_access === true,
+    state: text(row, 'state'),
+    hired_at: text(row, 'hired_at'),
   };
 }
 
-function spendFrom(rows: SpendRow[]): Record<string, number> {
-  const spend: Record<string, number> = {};
-  for (const row of rows) spend[row.card_id] = money(row.spent_usd);
-  return spend;
-}
-
-function fundingFrom(rows: FundingRow[]): Record<string, CardFunding> {
-  const funding: Record<string, CardFunding> = {};
-  for (const row of rows) {
-    funding[row.card_id] = {
-      contributors: money(row.contributors),
-      credited_usd: money(row.credited_usd),
-    };
-  }
-  return funding;
-}
-
-/** The books, or throws on a malformed figure (the enrichment is then missing). No row reads as not loaded. */
-function moneyFrom(row: MoneyRow | null): Money {
-  if (row === null) throw new Error('public_money returned no row');
-  const pct = row.studio_pct_avg === null ? null : money(row.studio_pct_avg);
+function moneyFrom(row: Doc): Money {
+  const order = row.funding_order === null || row.funding_order === undefined ? [] : rows(row.funding_order, 'funding_order');
   return {
     payments: money(row.payments),
     received_usd: money(row.received_usd),
@@ -438,7 +350,7 @@ function moneyFrom(row: MoneyRow | null): Money {
     refunded_usd: money(row.refunded_usd),
     disputed_usd: money(row.disputed_usd),
     corrections_usd: money(row.corrections_usd),
-    studio_pct_avg: pct,
+    studio_pct_avg: row.studio_pct_avg === null || row.studio_pct_avg === undefined ? null : money(row.studio_pct_avg),
     reserve_usd: money(row.reserve_usd),
     studio_usd: money(row.studio_usd),
     incident_usd: money(row.incident_usd),
@@ -447,29 +359,30 @@ function moneyFrom(row: MoneyRow | null): Money {
     not_on_card_usd: money(row.not_on_card_usd),
     short_usd: money(row.short_usd),
     board_test_usd: money(row.board_test_usd),
-    reconciled_at: row.reconciled_at ?? null,
-    last_run_ok: row.last_run_ok ?? null,
-    funding_order: (row.funding_order ?? []).map((place) => ({ card_id: place.card_id, room_usd: money(place.room_usd) })),
+    reconciled_at: textOrNull(row, 'reconciled_at'),
+    last_run_ok: typeof row.last_run_ok === 'boolean' ? row.last_run_ok : null,
+    funding_order: order.map((place) => ({ card_id: text(place, 'card_id'), room_usd: money(place.room_usd) })),
   };
 }
 
-function stoppedFrom(row: StoppedRow): StoppedCard {
-  if (row.stage !== 'paused' && row.stage !== 'rejected') throw new Error(`Unexpected stopped stage: ${row.stage}`);
+function stoppedFrom(row: Doc): StoppedCard {
+  const stage = text(row, 'stage');
+  if (stage !== 'paused' && stage !== 'rejected') throw new Error(`Unexpected stopped stage: ${stage}`);
+  const moved = row.moved === null || row.moved === undefined ? [] : rows(row.moved, 'moved');
   return {
-    card_id: row.card_id,
-    title: row.title,
-    stage: row.stage,
-    failing_check: row.failing_check ?? null,
+    card_id: text(row, 'card_id'),
+    title: text(row, 'title'),
+    stage,
+    failing_check: textOrNull(row, 'failing_check'),
     spent_usd: money(row.spent_usd),
     funded_usd: money(row.funded_usd),
     credited_usd: money(row.credited_usd),
-    moved: (row.moved ?? []).map((move) => ({ to_card_id: move.to_card_id ?? null, to_title: move.to_title ?? null, usd: money(move.usd) })),
-    stopped_at: row.stopped_at,
+    moved: moved.map((move) => ({ to_card_id: textOrNull(move, 'to_card_id'), to_title: textOrNull(move, 'to_title'), usd: money(move.usd) })),
+    stopped_at: text(row, 'stopped_at'),
   };
 }
 
-function totalsFrom(row: TotalsRow | null): LedgerTotals {
-  if (row === null) return zeroTotals;
+function totalsFrom(row: Doc): LedgerTotals {
   return {
     usd_total: money(row.usd_total),
     input_tokens: money(row.input_tokens),
@@ -479,212 +392,106 @@ function totalsFrom(row: TotalsRow | null): LedgerTotals {
   };
 }
 
-function distinctCardIds(events: AgentEvent[]): string[] {
-  const ids = new Set<string>();
-  for (const event of events) if (event.card_id !== null) ids.add(event.card_id);
-  return [...ids];
+/** The Snapshot the pages read, from the two documents. Throws on a missing key, a wrong type or a malformed figure. */
+export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
+  const live = checked('/api/live', liveDoc, REQUIRED_KEYS.live);
+  const text_ = checked('/api/cards', cardsDoc, REQUIRED_KEYS.cards);
+  const liveCards = new Map(Object.entries(live.cards as Doc).map(([id, value]) => [id, liveCardFrom(value)]));
+  const missing = new Set<Enrichment>();
+
+  // A card in the card document but not in the live map is not shown; nor is a paused or rejected
+  // card, which the pages list only through `stopped` (docs/specs/money-surfaces.md).
+  const cards: Card[] = [];
+  for (const row of rows(text_.cards, 'cards')) {
+    const now = liveCards.get(text(row, 'id'));
+    if (now === undefined || !(CARD_STAGES as readonly string[]).includes(now.stage)) continue;
+    cards.push(cardFrom(row, now));
+  }
+  const funding: Record<string, CardFunding> = {};
+  for (const [id, entry] of liveCards) if (entry.funding !== null) funding[id] = entry.funding;
+
+  const studio = live.studio as Doc;
+  const paused = studio.paused === true;
+
+  const events: AgentEvent[] = [];
+  const cardTitles: Record<string, string> = {};
+  for (const row of rows(live.events, 'events')) {
+    const cardId = textOrNull(row, 'card_id');
+    events.push({ id: text(row, 'id'), card_id: cardId, role_id: textOrNull(row, 'role_id'), type: text(row, 'type'), created_at: text(row, 'created_at') });
+    const title = textOrNull(row, 'card_title');
+    if (cardId !== null && title !== null) cardTitles[cardId] = title;
+  }
+
+  let books: Money | null = null;
+  if (live.money === null) missing.add('money');
+  else books = moneyFrom(live.money as Doc);
+  let stopped: StoppedCard[] = [];
+  if (live.stopped === null) missing.add('stopped');
+  else stopped = rows(live.stopped, 'stopped').map(stoppedFrom);
+
+  return {
+    pool: poolFrom(live.pool),
+    cards,
+    funding,
+    launchedAt: textOrNull(studio, 'launched_at'),
+    paused,
+    platformLaneOpen: studio.platform_lane_open === true,
+    pauseReason: paused ? textOrNull(studio, 'pause_reason') : null,
+    totals: totalsFrom(live.totals as Doc),
+    events,
+    deploys: rows(live.deploys, 'deploys').map((row) => ({
+      id: text(row, 'id'),
+      folder: text(row, 'folder'),
+      sha: text(row, 'sha'),
+      is_green: row.is_green === true,
+      created_at: text(row, 'created_at'),
+    })),
+    roles: rows(text_.roles, 'roles').map(roleFrom),
+    cardTitles,
+    money: books,
+    stopped,
+    missing: ENRICHMENTS.filter((name) => missing.has(name)),
+  };
 }
 
-async function loadCardTitles(
-  client: SupabaseClient,
-  ids: string[],
-  signal: AbortSignal,
-): Promise<Record<string, string>> {
-  const titles: Record<string, string> = {};
-  if (ids.length === 0) return titles;
-  const rows = unwrap(
-    await client.from('cards').select('id,title').in('id', ids).abortSignal(signal).returns<TitleRow[]>(),
-  );
-  for (const row of rows ?? []) titles[row.id] = row.title;
-  return titles;
-}
+/**
+ * Reads /api/live on every load, and /api/cards on the first load, when the live map names a card
+ * the held copy does not carry, or when that copy is more than five minutes old. Each request aborts
+ * after ten seconds; a failed request, a status other than 200 or a malformed document rejects.
+ */
+export function createSnapshotSource({
+  fetchFn = fetch,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  now = () => Date.now(),
+}: { fetchFn?: typeof fetch; timeoutMs?: number; now?: () => number } = {}): StudioSource {
+  type Held = { doc: Doc; at: number; ids: Set<string> };
+  let held: Held | null = null;
 
-export function createSupabaseSource(
-  client: SupabaseClient,
-  { timeoutMs = QUERY_TIMEOUT_MS }: { timeoutMs?: number } = {},
-): StudioSource {
+  const read = async (url: string): Promise<unknown> => {
+    const response = await fetchFn(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
+    if (!response.ok) throw new Error(`${url} answered ${response.status}`);
+    return (await response.json()) as unknown;
+  };
+  const readCards = async (): Promise<Held> => {
+    const doc = checked('/api/cards', await read(CARDS_URL), REQUIRED_KEYS.cards);
+    const ids = new Set(rows(doc.cards, 'cards').map((row) => String(row.id)));
+    held = { doc, at: now(), ids };
+    return held;
+  };
+
   return {
     async load() {
-      // Each query gets its own timer. An aborted query resolves with an error, which unwrap throws:
-      // a core query rejects the load, and an enrichment lands in missing.
-      const timeout = () => AbortSignal.timeout(timeoutMs);
-      const failed = new Set<Enrichment>();
-      /** Runs one enrichment; any error, a malformed figure included, names it missing and returns the fallback. */
-      const optional = async <T>(name: Enrichment, run: () => Promise<T>, fallback: T): Promise<T> => {
-        try {
-          return await run();
-        } catch {
-          failed.add(name);
-          return fallback;
-        }
-      };
-
-      const [pool, cardRows, funding, spend, studio, totals, events, deploys, roles, books, stopped] = await Promise.all([
-        client
-          .from('pool')
-          .select('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day')
-          .eq('id', 1)
-          .abortSignal(timeout())
-          .maybeSingle<PoolRow>()
-          .then((result) => poolFrom(unwrap(result))),
-        client
-          .from('cards')
-          .select(CARD_COLUMNS)
-          .in('stage', [...CARD_STAGES])
-          .order('created_at', { ascending: true })
-          .abortSignal(timeout())
-          .returns<CardRow[]>()
-          .then((result) => unwrap(result) ?? []),
-        optional(
-          'funding',
-          async () =>
-            fundingFrom(
-              unwrap(
-                await client
-                  .from('public_card_funding')
-                  .select('card_id,contributors,credited_usd')
-                  .abortSignal(timeout())
-                  .returns<FundingRow[]>(),
-              ) ?? [],
-            ),
-          {},
-        ),
-        optional(
-          'spend',
-          async () =>
-            spendFrom(
-              unwrap(
-                await client.from('public_card_spend').select('card_id,spent_usd').abortSignal(timeout()).returns<SpendRow[]>(),
-              ) ?? [],
-            ),
-          {},
-        ),
-        optional(
-          'studio',
-          async () => {
-            // Every column of the view, which holds public columns only: a column it gains (platform_lane_open)
-            // is read when present and a database without it still loads the pause and the launch.
-            const row = unwrap(
-              await client.from('public_studio').select('*').abortSignal(timeout()).maybeSingle<StudioRow>(),
-            );
-            const paused = row?.paused === true;
-            return {
-              launchedAt: row?.launched_at ?? null,
-              paused,
-              platformLaneOpen: row?.platform_lane_open === true,
-              pauseReason: paused ? (row?.pause_reason ?? null) : null,
-            };
-          },
-          { launchedAt: null, paused: false, platformLaneOpen: false, pauseReason: null as string | null },
-        ),
-        optional(
-          'totals',
-          async () =>
-            totalsFrom(
-              unwrap(await client.from('public_ledger_totals').select('*').abortSignal(timeout()).maybeSingle<TotalsRow>()),
-            ),
-          zeroTotals,
-        ),
-        optional(
-          'events',
-          async () =>
-            unwrap(
-              await client
-                .from('public_agent_events')
-                .select('id,card_id,role_id,type,created_at')
-                .order('created_at', { ascending: false })
-                .limit(EVENT_LIMIT)
-                .abortSignal(timeout())
-                .returns<AgentEvent[]>(),
-            ) ?? [],
-          [] as AgentEvent[],
-        ),
-        optional(
-          'deploys',
-          async () =>
-            unwrap(
-              await client
-                .from('deploys')
-                .select('id,folder,sha,is_green,created_at')
-                .order('created_at', { ascending: false })
-                .limit(DEPLOY_LIMIT)
-                .abortSignal(timeout())
-                .returns<Deploy[]>(),
-            ) ?? [],
-          [] as Deploy[],
-        ),
-        optional(
-          'roles',
-          async () =>
-            (
-              unwrap(
-                await client
-                  .from('public_roles')
-                  .select(ROLE_COLUMNS)
-                  .order('hired_at', { ascending: true })
-                  .order('title', { ascending: true })
-                  .abortSignal(timeout())
-                  .returns<RoleRow[]>(),
-              ) ?? []
-            ).map(roleFrom),
-          [] as Role[],
-        ),
-        optional(
-          'money',
-          async () =>
-            moneyFrom(unwrap(await client.from('public_money').select(MONEY_COLUMNS).abortSignal(timeout()).maybeSingle<MoneyRow>())),
-          null as Money | null,
-        ),
-        optional(
-          'stopped',
-          async () =>
-            (
-              unwrap(
-                await client
-                  .from('public_stopped_cards')
-                  .select(STOPPED_COLUMNS)
-                  .order('stopped_at', { ascending: false })
-                  .limit(STOPPED_LIMIT)
-                  .abortSignal(timeout())
-                  .returns<StoppedRow[]>(),
-              ) ?? []
-            ).map(stoppedFrom),
-          [] as StoppedCard[],
-        ),
-      ]);
-      const cardTitles = await optional('cardTitles', () => loadCardTitles(client, distinctCardIds(events), timeout()), {});
-      return {
-        pool,
-        cards: cardRows.map((row) => cardFrom(row, spend)),
-        funding,
-        launchedAt: studio.launchedAt,
-        paused: studio.paused,
-        platformLaneOpen: studio.platformLaneOpen,
-        pauseReason: studio.pauseReason,
-        totals,
-        events,
-        deploys,
-        roles,
-        cardTitles,
-        money: books,
-        stopped,
-        missing: ENRICHMENTS.filter((name) => failed.has(name)),
-      };
-    },
-    subscribe(onChange) {
-      subscriptionCount += 1;
-      let channel = client.channel(`site-live-${subscriptionCount}`);
-      for (const listener of REALTIME_LISTENERS) {
-        channel = channel.on(
-          'postgres_changes',
-          { event: '*', schema: 'public', ...listener },
-          onChange,
-        );
+      // The first load reads both at once. A later one reads the card document again only when the
+      // live map names a card the held copy lacks, or the copy is over five minutes old.
+      const kept = held;
+      const [liveDoc, fresh] = await Promise.all([read(LIVE_URL), kept === null ? readCards() : Promise.resolve(null)]);
+      const live = checked('/api/live', liveDoc, REQUIRED_KEYS.live);
+      let copy = fresh ?? kept!;
+      if (fresh === null) {
+        const unknown = Object.keys(live.cards as Doc).some((id) => !copy.ids.has(id));
+        if (unknown || now() - copy.at > CARDS_MAX_AGE_MS) copy = await readCards();
       }
-      channel.subscribe();
-      return () => {
-        void client.removeChannel(channel);
-      };
+      return snapshotFrom(live, copy.doc);
     },
   };
 }

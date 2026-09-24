@@ -2,9 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Test data for the e2e build. Every Supabase request the site makes is answered here, and the
- * realtime socket is held open without a server, so an e2e run never reads or writes the database.
- * The roles come from the real role specs in platform/agents; everything else is fixture data.
+ * Test data for the e2e build and the unit tests. The e2e run serves it as the site's two /api
+ * documents (snapshot-documents.ts), so it never reads or writes the database. The roles come from
+ * the real role specs in platform/agents; everything else is fixture data.
  */
 export type StudioFixture = {
   paused: boolean;

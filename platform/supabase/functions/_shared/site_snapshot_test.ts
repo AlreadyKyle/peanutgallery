@@ -169,8 +169,8 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       await s.db.query(`insert into public.agent_events (card_id, role_id, type) values ($1, $2, 'start')`, [card!.id, s.roleId]);
       const doc = await s.live();
       const entry = (doc.cards as Record<string, Doc>)[card!.id as string]!;
-      assertEquals(Object.keys(entry).sort(), ["contributors", "credited_usd", "spent_usd", "stage"]);
-      assertEquals([entry.stage, entry.spent_usd, entry.contributors, entry.credited_usd], ["voted", 0, null, null]);
+      assertEquals(Object.keys(entry).sort(), ["contributors", "credited_usd", "funded_usd", "spent_usd", "stage"]);
+      assertEquals([entry.stage, entry.funded_usd, entry.spent_usd, entry.contributors, entry.credited_usd], ["voted", 0, 0, null, null]);
       const [event] = doc.events as Doc[];
       assertEquals([event!.card_id, event!.card_title, event!.type], [card!.id, card!.title, "start"]);
       assertEquals(Object.keys(doc.pool as Doc).sort(), ["balance_usd", "daily_spent_usd", "day", "held_usd", "incident_reserve_usd", "reserve_usd"]);

@@ -60,7 +60,7 @@ export default defineConfig({
   preview: { port: 4173, headers: netlifyHeaders(readFileSync(join(import.meta.dirname, 'netlify.toml'), 'utf8')) },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}', 'build-sha.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'netlify/**/*.test.ts', 'build-sha.test.ts'],
     env: { TZ: 'UTC' },
   },
 });
