@@ -18,7 +18,7 @@ for (const viewport of WIDTHS) {
       await expect(main.getByRole('link', { name: 'How it works', exact: true })).toHaveAttribute('href', '/how-it-works');
       // The status line, from the fixture: two cards open, nothing building, the agents running.
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
-      await expect(main.getByRole('button', { name: 'Pause live updates' })).toBeVisible();
+      await expect(main.getByRole('button', { name: 'Pause updates' })).toBeVisible();
       await expect(main.locator('.updates-button')).toHaveText(/Up to date/);
 
       await expect(main.getByRole('heading', { level: 2 })).toHaveText([

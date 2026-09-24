@@ -150,6 +150,14 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
 // (docs/specs/agent-system-core.md). It only reads and answers false for no card.
 const CALLABLE_RPCS: Array<[string, Record<string, unknown>]> = [["card_is_public", { p_card: NO_CARD }]];
 
+// The public site's two documents (docs/specs/site-snapshot.md): security invoker functions anon
+// calls on purpose, each answering one JSON object with these top-level keys. They only read, as
+// anon, so they return nothing anon could not already read.
+const SNAPSHOT_RPCS: Array<[string, string[]]> = [
+  ["site_live", ["built_at", "cards", "deploys", "events", "money", "pool", "stopped", "studio", "totals"]],
+  ["site_cards", ["cards", "roles", "terms"]],
+];
+
 // The money schema holds the waterfall's helpers and is not exposed: PostgREST refuses any request
 // that names it (PGRST106) before a function is looked up.
 const MONEY_SCHEMA = "money";
@@ -299,6 +307,18 @@ async function main(): Promise<void> {
       expected: "readable",
       actual: error ? "error" : data === false ? "readable" : "error",
       detail: error ? `${error.code ?? "error"} ${error.message}` : `answered ${JSON.stringify(data)}`,
+    });
+  }
+
+  for (const [name, keys] of SNAPSHOT_RPCS) {
+    const { data, error } = await db.rpc(name, {});
+    const present = typeof data === "object" && data !== null && !Array.isArray(data) ? Object.keys(data as object) : [];
+    const lacking = keys.filter((key) => !present.includes(key));
+    outcomes.push({
+      relation: `rpc ${name} (the site's document)`,
+      expected: "readable",
+      actual: error ? "error" : lacking.length === 0 ? "readable" : "error",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : lacking.length === 0 ? `keys ${keys.join(",")}` : `missing ${lacking.join(",")}`,
     });
   }
 

@@ -10,6 +10,7 @@ import {
   isFullyFunded,
   isRunnable,
   nextInLine,
+  noCardTakesMoney,
   fundingPlace,
   plannedCards,
   shippedOrder,
@@ -98,6 +99,14 @@ describe('fundableCards, nextInLine and inFundingOrder (payment.ts, kernel)', ()
     expect(nextInLine(s)?.id).toBe('refunded');
     expect(inFundingOrder(s, 'refunded')).toBe(true);
     expect(inFundingOrder(s, 'vetoed')).toBe(false);
+  });
+
+  it('names no card when the first place in the order is a card the snapshot does not list yet, never a later one', () => {
+    // A new card entered the order first; its words (from /api/cards) have not arrived.
+    const s = snapshot(cards, books(['gone', 'picked', 'open']));
+    expect(fundableCards(s).map((c) => c.id)).toEqual(['picked', 'open']);
+    expect(nextInLine(s)).toBeNull();
+    expect(noCardTakesMoney(s)).toBe(false);
   });
 
   it('offers no card and names none when the order is empty', () => {

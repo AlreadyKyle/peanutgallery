@@ -94,7 +94,14 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
       <StaleNotice studio={studio} />
       {/* With no snapshot to update (the read failed), the row would claim "Up to date" about nothing. */}
       {live.view === null && studio.state !== 'loading' ? null : (
-        <LiveUpdates count={live.count} paused={live.paused} onTogglePause={live.togglePause} onShow={live.show} message={live.message} />
+        <LiveUpdates
+          count={live.count}
+          paused={live.paused}
+          stale={studio.state === 'ready' && studio.stale}
+          onTogglePause={live.togglePause}
+          onShow={live.show}
+          message={live.message}
+        />
       )}
     </div>
   );

@@ -2272,3 +2272,56 @@ describe("agent-workflows migration", () => {
     for (const name of AGENT_WORKFLOWS_FUNCTIONS) expect(block("RPC_PROBES")).toContain(`["${name}",`);
   });
 });
+
+// docs/specs/site-snapshot.md: the public site's two documents, read as anon.
+const SITE_SNAPSHOT_FILE = "20260924500000_site_snapshot.sql";
+const siteSnapshotSql = launchFile(SITE_SNAPSHOT_FILE);
+
+describe("site-snapshot migration", () => {
+  it("comes straight after agent-workflows, sets a lock timeout first and reloads the schema last", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(SITE_SNAPSHOT_FILE);
+    expect(names[at - 1]).toBe(AGENT_WORKFLOWS_FILE);
+    expect(withoutComments(siteSnapshotSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(siteSnapshotSql).split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("makes each document a stable, security invoker SQL function returning jsonb with search_path public", () => {
+    for (const name of ["site_live", "site_cards"]) {
+      expect(functionBlockIn(siteSnapshotSql, name)).toContain(
+        `create or replace function public.${name}() returns jsonb\nlanguage sql\nstable\nsecurity invoker\nset search_path = public\nas $$`,
+      );
+    }
+    expect(withoutComments(siteSnapshotSql)).not.toMatch(/security definer/);
+  });
+
+  it("revokes each from public and grants execute to anon, authenticated and the service role", () => {
+    const body = withoutComments(siteSnapshotSql);
+    for (const name of ["site_live", "site_cards"]) {
+      expect(body).toContain(`revoke all on function public.${name}() from public;`);
+      expect(body).toContain(`grant execute on function public.${name}() to anon, authenticated, service_role;`);
+    }
+  });
+
+  it("lists the same cards in both documents, and adds no removed object", () => {
+    const listed = (name: string) => {
+      const block = functionBlockIn(siteSnapshotSql, name);
+      return block.slice(block.indexOf("with listed as ("), block.indexOf("select jsonb_build_object("));
+    };
+    expect(listed("site_live")).toBe(listed("site_cards"));
+    expect(listed("site_live")).toContain("limit 200");
+    expect(listed("site_live")).toContain("limit 50");
+    for (const removed of ["card_open_for_funding", "site_cards_body", "site_cards_version", "public_reconciliation"]) {
+      expect(siteSnapshotSql).not.toContain(removed);
+    }
+    expect(siteSnapshotSql).not.toMatch(/create or replace view public\.public_studio/);
+  });
+
+  it("is probed by anon-negative-test: both documents called as anon with their keys", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const start = script.indexOf("const SNAPSHOT_RPCS");
+    const block = script.slice(start, script.indexOf("];", start));
+    expect(block).toContain('["site_live", [');
+    expect(block).toContain('["site_cards", ["cards", "roles", "terms"]]');
+  });
+});

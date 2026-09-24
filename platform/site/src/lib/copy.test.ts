@@ -86,6 +86,7 @@ describe('copy rules', () => {
       ...Object.values(legal.pauseReasons),
       copy.pauseLiveUpdates,
       copy.upToDate,
+      copy.noNewUpdates,
       copy.showUpdates,
       copy.liveUpdatesPaused,
       copy.now,

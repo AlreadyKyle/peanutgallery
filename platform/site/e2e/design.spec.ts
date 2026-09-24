@@ -117,7 +117,7 @@ test.describe('the design guide', () => {
 
   test('marks the pressed Pause with a 3px paper border and the check glyph on signal and on ink', async ({ page }) => {
     await settle(page, GUIDE);
-    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause live updates' });
+    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause updates' });
     await pause.click();
     await expect(pause).toHaveAttribute('aria-pressed', 'true');
     await expect(pause).toHaveCSS('border-top-width', '3px');
@@ -149,7 +149,7 @@ test.describe('the design guide', () => {
     await settle(page, GUIDE);
     const band = page.locator('main > .band:nth-child(1)');
     const updates = band.locator('.updates-button');
-    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause live updates' });
+    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause updates' });
     const before = [await place(updates), await place(pause)];
     await band.getByRole('button', { name: 'Add sample updates' }).click();
     await expect(updates).toHaveText(/Show 3 updates/);

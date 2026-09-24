@@ -1,4 +1,3 @@
-import { SUPABASE_URL } from './fixture-env';
 import { expect, test } from './fixtures';
 
 const PAGES = [
@@ -74,10 +73,11 @@ test("/terms/1's Refunds link goes to /refunds/1, the words that applied with ve
 for (const width of [375, 768, 1440]) {
   test(`the Terms pages keep their layout while the versions read runs, at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    // Each page load's read waits until the test releases it.
+    // Each page load's read of the posted versions (the card document, /api/cards) waits until the
+    // test releases it.
     let release = () => {};
     let held = Promise.resolve();
-    await page.route(`${SUPABASE_URL}/rest/v1/public_terms_versions**`, async (route) => {
+    await page.route('**/api/cards', async (route) => {
       await held;
       await route.fallback();
     });

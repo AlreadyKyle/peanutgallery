@@ -17,16 +17,21 @@
 // draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
 // rest; /roadmap shows no bar and no fund link. Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
-// in public_terms_versions since it took effect, lists the earlier ones and answers the next number
+// in /api/cards' terms since it took effect, lists the earlier ones and answers the next number
 // with the not found page (docs/specs/legal-copy.md); from version 3 it names Mob Machine as the
 // operator. /contribute's Fund the next card in line is first
 // and names the next card in line (the first card choice) or says the money waits; /ledger shows
 // exactly one reconciliation line, and its received figure (or "No contributions yet.") matches
-// public_money read with the publishable key; while public_studio says the agents are paused for
-// awaiting_credit, home and /contribute say the payout sentence (docs/specs/money-surfaces.md).
+// /api/live's money; while /api/live's studio says the agents are paused for awaiting_credit, home
+// and /contribute say the payout sentence (docs/specs/money-surfaces.md).
 // The studio's name in the home title, og:title and og:site_name, and the top bar's home link named
-// for it with the inline mark (docs/specs/rename.md, docs/specs/machine-mark.md). Assets (the icons
-// and version.json), og:image as an absolute URL, and
+// for it with the inline mark (docs/specs/rename.md, docs/specs/machine-mark.md).
+//
+// The site's own documents (docs/specs/site-snapshot.md): no page requests the Supabase host or opens
+// a WebSocket, on any route; /api/live answers 200 JSON with every key in snapshot-keys.json and a
+// browser Cache-Control of max-age=0, a second read within 60 seconds is a CDN hit (production),
+// /api/cards answers 200, /api/live?x=1 answers 400, and one /assets/*.js is immutable.
+// Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect runs only against production. The
@@ -39,8 +44,8 @@
 // securitypolicyviolation, which fires for enforced and report-only policies alike, and any report
 // fails the run whatever the console printed (docs/specs/site-truth-pass.md, docs/specs/launch-site.md).
 //
-// The data checks need the site to reach its database. A local build without the Supabase values
-// has none; --allow-no-data turns those checks into SKIP lines instead of failures.
+// The data checks need the site's /api documents. A local `vite preview` has no Netlify Function, so
+// it has none; --allow-no-data turns those checks into SKIP lines instead of failures.
 //
 // The first line is PASS or FAIL with the counts; one line per check follows. Exit 0 pass, 1 fail.
 
@@ -51,13 +56,14 @@ import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
+// The Supabase host the snapshot function reads (netlify/lib/public-env.ts). No page may request it.
+const SUPABASE_HOST = new URL(
+  readFileSync(new URL('../netlify/lib/public-env.ts', import.meta.url), 'utf8').match(/SUPABASE_URL = '([^']+)'/)?.[1] ?? 'https://invalid.supabase.co',
+).host;
+// The keys each document must carry (docs/specs/site-snapshot.md).
+const SNAPSHOT_KEYS = JSON.parse(readFileSync(new URL('../src/lib/snapshot-keys.json', import.meta.url), 'utf8'));
 // The studio's name (PLAN.md §10 decision 43): the tab title, the link previews and the top bar.
 const STUDIO_NAME = 'Mob Machine';
-const TOML = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
-// The public read the Terms pages make (docs/specs/legal-copy.md): the project and the publishable key
-// the site is built with, from netlify.toml, where both are public.
-const SUPABASE_URL = TOML.match(/^\s*VITE_SUPABASE_URL\s*=\s*"([^"]+)"/m)?.[1] ?? '';
-const SUPABASE_ANON_KEY = TOML.match(/^\s*VITE_SUPABASE_ANON_KEY\s*=\s*"([^"]+)"/m)?.[1] ?? '';
 const AGREEMENT_TOKENS = ['/terms', '/refunds'];
 // The game's netlify.app host, which every page's top bar links to, from the netlify.toml the site is
 // built with; and the board site's host, from BOARD_SITE_URL in the environment when it is set (the
@@ -106,6 +112,8 @@ const PAYOUT_SENTENCE =
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
+// The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
+const PICK_BODY = 'Your contribution funds whatever the agents build next.';
 const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
@@ -113,11 +121,11 @@ const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 // The headers netlify.toml sends on every path, by exact value (docs/specs/site-truth-pass.md).
 const REPORT_ONLY_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
-  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
+  "connect-src 'self'; " +
   "object-src 'none'; base-uri 'self'; form-action 'self'";
 const ENFORCED_POLICY =
   "frame-ancestors 'none'; " +
-  "connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co; " +
+  "connect-src 'self'; " +
   "form-action 'self'";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
@@ -157,32 +165,42 @@ function postedAt(iso) {
   return `${value('day')} ${value('month').slice(0, 3)} ${value('year')} at ${value('hour')}:${value('minute')} Toronto time`;
 }
 
-/** The posted Terms versions, oldest first, read the way the site reads them; null when the read fails. */
-async function postedTerms() {
-  if (SUPABASE_URL === '' || SUPABASE_ANON_KEY === '') return null;
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/public_terms_versions?select=version,posted_at&order=version`, {
-      headers: { apikey: SUPABASE_ANON_KEY },
-    });
-    if (!response.ok) return null;
-    const rows = await response.json();
-    return Array.isArray(rows) && rows.length > 0 ? rows : null;
-  } catch {
-    return null;
+/**
+ * One of the site's own documents, parsed; null when it does not answer 200 JSON (a local preview has
+ * none). Each is read once per run, so the checks' own reads stay well under the function's rate limit
+ * beside the pages' reads; the header checks below fetch afresh.
+ */
+const documents = new Map();
+function siteDocument(path) {
+  if (!documents.has(path)) {
+    documents.set(
+      path,
+      (async () => {
+        try {
+          const response = await fetch(BASE + path);
+          if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
+          return await response.json();
+        } catch {
+          return null;
+        }
+      })(),
+    );
   }
+  return documents.get(path);
 }
 
-/** One row of a public view read the way the site reads it, with the publishable key; null when the read fails. */
-async function publicRow(view, columns) {
-  if (SUPABASE_URL === '' || SUPABASE_ANON_KEY === '') return null;
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${view}?select=${columns}`, { headers: { apikey: SUPABASE_ANON_KEY } });
-    if (!response.ok) return null;
-    const rows = await response.json();
-    return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
-  } catch {
-    return null;
-  }
+/** The posted Terms versions, oldest first, from /api/cards as the Terms pages read them; null when the read fails. */
+async function postedTerms() {
+  const doc = await siteDocument('/api/cards');
+  const rows = doc?.terms;
+  return Array.isArray(rows) && rows.length > 0 ? [...rows].sort((a, b) => a.version - b.version) : null;
+}
+
+/** A part of /api/live the pages read (studio, money); null when the document or the part is missing. */
+async function livePart(key) {
+  const doc = await siteDocument('/api/live');
+  const part = doc?.[key];
+  return part !== null && typeof part === 'object' ? part : null;
 }
 
 /**
@@ -249,7 +267,7 @@ function checkPolicy(reports, label) {
 
 async function open(page, path) {
   const response = await page.goto(BASE + path, { waitUntil: 'load' });
-  // Realtime keeps a socket open, so network idle may never come; give the data a moment either way.
+  // The page polls /api/live each minute, so give the first load a moment either way.
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.waitForTimeout(1_500);
   return response;
@@ -265,9 +283,20 @@ try {
     const reports = await watchPolicy(page);
     const errors = [];
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
+      if (message.type() !== 'error') return;
+      // A local preview has no snapshot function, so the browser logs each /api read's 404; with
+      // --allow-no-data those are the missing data, not a page error.
+      const from = message.location()?.url ?? '';
+      if (allowNoData && from !== '' && new URL(from).pathname.startsWith('/api/')) return;
+      errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(String(error)));
+    // The page reads only its own origin (docs/specs/site-snapshot.md): no Supabase request, no socket.
+    const offOrigin = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).host === SUPABASE_HOST) offOrigin.push(`${request.url()} on ${new URL(page.url()).pathname}`);
+    });
+    page.on('websocket', (socket) => offOrigin.push(`WebSocket ${socket.url()} on ${new URL(page.url()).pathname}`));
     const namesBoard = [];
     for (const path of ROUTES) {
       const response = await open(page, path);
@@ -297,6 +326,7 @@ try {
     if (BOARD_HOST === null) skip(`${width}px the board site's address on every route: BOARD_SITE_URL is not set`);
     else check(namesBoard.length === 0, `${width}px no route names the board site's address${namesBoard.length === 0 ? '' : `: ${namesBoard.join(', ')}`}`);
     check(errors.length === 0, `${width}px no console errors${errors.length === 0 ? '' : `: ${errors.slice(0, 3).join(' | ')}`}`);
+    check(offOrigin.length === 0, `${width}px no page requests the Supabase host or opens a WebSocket${offOrigin.length === 0 ? '' : `: ${offOrigin.slice(0, 3).join(' | ')}`}`);
     checkPolicy(reports, `${width}px`);
     await page.close();
   }
@@ -339,7 +369,8 @@ try {
   const homeFund = (await main.locator('ul.fund-grid h3').allTextContents()).map((title) => title.trim());
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
-  check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
+  if (!hasData) noData(`landing h2 order ${JSON.stringify(h2)}`);
+  else check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
 
   const topContribute = page.getByRole('banner').getByRole('link', { name: 'Contribute', exact: true });
   if ((await topContribute.count()) === 0) {
@@ -361,7 +392,7 @@ try {
   } else {
     const status = ((await main.locator('p.status-line').textContent()) ?? '').trim();
     check(STATUS_LINE.test(status), `status line: ${status}`);
-    const home = await publicRow('public_studio', 'paused,pause_reason');
+    const home = await livePart('studio');
     if (home !== null && home.paused === true && home.pause_reason === 'awaiting_credit') {
       check(status.endsWith(` ${PAYOUT_SENTENCE}`), 'home status line says the payout sentence while paused for awaiting_credit');
     } else {
@@ -441,11 +472,16 @@ try {
     const body = ((await page.getByRole('main').locator('a.choice-primary .choice-body').textContent()) ?? '').trim();
     const titles = await page.getByRole('main').locator('ul.choices .choice-title').allTextContents();
     const next = NEXT_IN_LINE.exec(body);
-    if (!hasData || (await publicRow('public_money', 'payments')) === null) {
-      noData('Fund the next card in line names the next card in line (public_money)');
+    if (!hasData || (await livePart('money')) === null) {
+      noData('Fund the next card in line names the next card in line (/api/live money)');
     } else {
       if (next !== null) {
         check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
+      } else if (body === PICK_BODY) {
+        // Allowed only while the order's first card has no words in /api/cards yet (payment.ts nextInLine).
+        const first = (await livePart('money'))?.funding_order?.[0]?.card_id ?? null;
+        const listed = new Set(((await siteDocument('/api/cards'))?.cards ?? []).map((row) => row.id));
+        check(first !== null && !listed.has(first), `Fund the next card in line names no card only while the order's first card ${first} is not in /api/cards`);
       } else {
         check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
       }
@@ -463,7 +499,7 @@ try {
   }
   // The pause reason (docs/specs/money-surfaces.md): while the studio waits for a payout, /contribute's
   // notice says the payout sentence; home's status line is checked with the landing below.
-  const studioRow = await publicRow('public_studio', 'paused,pause_reason');
+  const studioRow = await livePart('studio');
   const awaitingCredit = studioRow !== null && studioRow.paused === true && studioRow.pause_reason === 'awaiting_credit';
   if (studioRow === null) {
     noData('the pause reason on /contribute');
@@ -481,18 +517,18 @@ try {
       .getByRole('main')
       .locator('p')
       .evaluateAll((ps) => ps.map((p) => (p.textContent ?? '').trim()).filter((text) => /reconciled with Stripe/i.test(text)));
-    const books = await publicRow('public_money', 'payments,received_usd');
+    const books = await livePart('money');
     if (!hasData || books === null) {
       noData('/ledger reconciliation line and money in');
     } else {
       check(lines.length === 1 && RECONCILE_LINE.test(lines[0]), `/ledger shows exactly one reconciliation line: ${JSON.stringify(lines)}`);
       const moneyIn = page.getByRole('region', { name: 'Money in' });
       if (Number(books.payments) === 0) {
-        check((await moneyIn.getByText('No contributions yet.', { exact: true }).count()) === 1, '/ledger says No contributions yet. with public_money.payments 0');
+        check((await moneyIn.getByText('No contributions yet.', { exact: true }).count()) === 1, '/ledger says No contributions yet. with /api/live money.payments 0');
       } else {
         const want = USD.format(Number(books.received_usd));
         const shown = ((await moneyIn.locator('.stat', { hasText: 'Received' }).locator('dd').first().textContent()) ?? '').trim();
-        check(shown === want, `/ledger received ${shown} matches public_money.received_usd ${want} (${books.payments} payments)`);
+        check(shown === want, `/ledger received ${shown} matches /api/live money.received_usd ${want} (${books.payments} payments)`);
       }
     }
   }
@@ -560,6 +596,56 @@ try {
   await page.waitForTimeout(500);
   checkPolicy(reports, 'landing, contribute, how it works, team, roadmap and terms interactions');
   await page.close();
+
+  // The site's own documents and their caching (docs/specs/site-snapshot.md).
+  {
+    const jsonType = (value) => (value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value);
+    const keysOk = (doc, spec) =>
+      Object.entries(spec).filter(([key, allowed]) => !(key in doc) || ![allowed].flat().includes(jsonType(doc[key]))).map(([key]) => key);
+    const first = await fetch(`${BASE}/api/live`);
+    const type = first.headers.get('content-type') ?? '';
+    if (!type.includes('application/json') && allowNoData) {
+      skip(`/api: ${BASE} has no snapshot function (answered ${first.status} ${type})`);
+    } else {
+      const doc = await first.json().catch(() => null);
+      // Every key of the document, and of each card in its map: a card's stage, ship time and horizon
+      // come from here together (docs/specs/site-snapshot.md).
+      const liveCards = doc !== null && jsonType(doc.cards) === 'object' ? Object.entries(doc.cards) : [];
+      const wrong =
+        doc === null
+          ? ['not JSON']
+          : [
+              ...keysOk(doc, SNAPSHOT_KEYS.live),
+              ...liveCards.flatMap(([id, entry]) => (jsonType(entry) === 'object' ? keysOk(entry, SNAPSHOT_KEYS.live_card) : ['']).map((key) => `cards.${id}${key === '' ? '' : `.${key}`}`)),
+            ];
+      const browser = first.headers.get('cache-control') ?? '';
+      check(first.status === 200 && wrong.length === 0, `/api/live ${first.status} ${type}${wrong.length === 0 ? ', every key in snapshot-keys.json' : `: missing or wrong ${wrong.join(', ')}`}`);
+      check(/max-age=0/.test(browser), `/api/live Cache-Control: ${browser}`);
+      if (LOCAL.test(BASE)) {
+        skip('/api/live second read is a CDN hit: a local server has no CDN');
+      } else {
+        const second = await fetch(`${BASE}/api/live`);
+        const status = second.headers.get('cache-status') ?? '';
+        check(second.status === 200 && /\bhit\b/i.test(status), `/api/live read again within 60 seconds: ${second.status} Cache-Status ${status}`);
+      }
+      const cards = await fetch(`${BASE}/api/cards`);
+      const cardsDoc = await cards.json().catch(() => null);
+      const cardsWrong = cardsDoc === null ? ['not JSON'] : keysOk(cardsDoc, SNAPSHOT_KEYS.cards);
+      check(cards.status === 200 && cardsWrong.length === 0, `/api/cards ${cards.status}${cardsWrong.length === 0 ? ', every key in snapshot-keys.json' : `: missing or wrong ${cardsWrong.join(', ')}`}`);
+      const query = await fetch(`${BASE}/api/live?x=1`);
+      check(query.status === 400 && (query.headers.get('cache-control') ?? '') === 'no-store', `/api/live?x=1 ${query.status} Cache-Control ${query.headers.get('cache-control')}`);
+    }
+    const html = await (await fetch(`${BASE}/`)).text();
+    const script = html.match(/<script[^>]+src="(\/assets\/[^"]+\.js)"/)?.[1] ?? null;
+    if (script === null) {
+      check(false, 'index.html names a script under /assets');
+    } else {
+      const asset = await fetch(BASE + script, { method: 'HEAD' });
+      const cache = asset.headers.get('cache-control') ?? '';
+      if (LOCAL.test(BASE) && !/immutable/.test(cache)) skip(`${script} Cache-Control ${cache}: a local server does not send netlify.toml's asset headers`);
+      else check(/immutable/.test(cache) && /max-age=31536000/.test(cache), `${script} Cache-Control: ${cache}`);
+    }
+  }
 
   for (const asset of ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', '/icon-512.png', '/version.json']) {
     const response = await fetch(BASE + asset);

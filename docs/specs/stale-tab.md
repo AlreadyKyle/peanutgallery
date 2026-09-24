@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded in part by `site-snapshot.md`: the watcher also checks on every in-app route change, `watchForNewBuild` returns `{ check, stop }`, and a tab reloads at most once per served build (sessionStorage `pg:reloaded-for`).
+
 ## Problem
 
 The board followed the Play link, pressed Back, and landed on the ledger page in the design the site had before 14 September: the pool figure in the top bar, the old type. Nothing on the server is stale; every page serves the current build. Chrome and Safari keep a whole page in the back/forward cache, so pressing Back after a cross-site link restores the document that tab loaded, with the code and copy of the build it started with. The same happens to any tab left open across a deploy, which at a studio that ships several times an hour is every tab.

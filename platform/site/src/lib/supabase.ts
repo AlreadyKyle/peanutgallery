@@ -1,16 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { siteEnv } from './env';
-
-/**
- * Nobody signs in on the public site: the board signs in on its own site (docs/specs/board-site.md).
- * So this client keeps no session. It stores none, refreshes none, and never reads tokens from the
- * address, so a sign-in link that lands here by mistake leaves no session on this origin.
- */
-export const PUBLIC_AUTH_OPTIONS = {
-  persistSession: false,
-  autoRefreshToken: false,
-  detectSessionInUrl: false,
-} as const;
+// Nobody signs in on the public site: the board signs in on its own site (docs/specs/board-site.md),
+// and the site holds no Supabase client at all; its figures come from its own /api documents
+// (docs/specs/site-snapshot.md). What is left here clears a session an older build stored.
 
 /** The key supabase-js stored a session under before the board moved: sb-<project>-auth-token. */
 export const STORED_SESSION_KEY = /^sb-[a-z0-9]+-auth-token(-code-verifier)?$/;
@@ -29,18 +19,6 @@ export function clearStoredSessions(storage: Pick<Storage, 'length' | 'key' | 'r
   }
   for (const key of keys) storage.removeItem(key);
   return keys.length;
-}
-
-let cached: SupabaseClient | null = null;
-let resolved = false;
-
-export function getClient(): SupabaseClient | null {
-  if (resolved) return cached;
-  resolved = true;
-  const env = siteEnv();
-  if (env.supabaseUrl === '' || env.supabaseAnonKey === '') return null;
-  cached = createClient(env.supabaseUrl, env.supabaseAnonKey, { auth: { ...PUBLIC_AUTH_OPTIONS } });
-  return cached;
 }
 
 export function errorMessage(error: unknown): string {

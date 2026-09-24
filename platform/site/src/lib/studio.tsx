@@ -4,9 +4,12 @@ import { errorMessage } from './supabase';
 import { legal } from './legal';
 
 // Kernel (docs/specs/board-site.md): the one load and poll of the snapshot every figure on the site
-// comes through.
-export const POLL_MS = 15_000;
-export const REFRESH_DEBOUNCE_MS = 500;
+// comes through. It reads the site's own /api documents (docs/specs/site-snapshot.md) once a minute,
+// only while the tab is visible: a hidden tab makes no request, and a return to the tab loads at once.
+// A failed load is retried after a minute, the wait doubling to at most ten minutes, and a success
+// resets it.
+export const POLL_MS = 60_000;
+export const BACKOFF_MAX_MS = 600_000;
 
 export type StudioState =
   | { state: 'unconfigured' }
@@ -60,15 +63,29 @@ function useStudioLoad(active: boolean): StudioState {
     if (source === null) return;
     let live = true;
     let latest = 0;
-    let pending: ReturnType<typeof setTimeout> | null = null;
-    const load = () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let retryMs = POLL_MS;
+    const visible = () => document.visibilityState === 'visible';
+    const clear = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+    const schedule = (ms: number) => {
+      clear();
+      if (live && visible()) timer = setTimeout(load, ms);
+    };
+    function load() {
+      clear();
       latest += 1;
       const request = latest;
       const current = () => live && request === latest;
-      source
+      source!
         .load()
         .then((snapshot) => {
-          if (current()) setState({ state: 'ready', snapshot, stale: false });
+          if (!current()) return;
+          setState({ state: 'ready', snapshot, stale: false });
+          retryMs = POLL_MS;
+          schedule(POLL_MS);
         })
         .catch((error: unknown) => {
           if (!current()) return;
@@ -78,25 +95,20 @@ function useStudioLoad(active: boolean): StudioState {
             if (previous.state !== 'ready') return { state: 'error', message: errorMessage(error) };
             return previous.stale ? previous : { ...previous, stale: true };
           });
+          schedule(retryMs);
+          retryMs = Math.min(retryMs * 2, BACKOFF_MAX_MS);
         });
+    }
+    const onVisibility = () => {
+      if (visible()) load();
+      else clear();
     };
-    // Every change notice and poll tick goes through one trailing debounce so a burst of
-    // realtime events produces a single reload.
-    const refresh = () => {
-      if (pending !== null) clearTimeout(pending);
-      pending = setTimeout(() => {
-        pending = null;
-        load();
-      }, REFRESH_DEBOUNCE_MS);
-    };
-    load();
-    const unsubscribe = source.subscribe(refresh);
-    const timer = setInterval(refresh, POLL_MS);
+    if (visible()) load();
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       live = false;
-      if (pending !== null) clearTimeout(pending);
-      unsubscribe();
-      clearInterval(timer);
+      clear();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [source]);
 

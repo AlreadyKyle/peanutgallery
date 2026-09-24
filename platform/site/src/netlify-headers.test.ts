@@ -35,7 +35,6 @@ function directives(policy: string): Record<string, string[]> {
 }
 
 const headers = headersFor('/*');
-const supabaseUrl = toml.match(/^\s*VITE_SUPABASE_URL\s*=\s*"([^"]+)"/m)?.[1] ?? '';
 
 describe('netlify.toml security headers', () => {
   it('sends the fixed headers on every path', () => {
@@ -45,9 +44,8 @@ describe('netlify.toml security headers', () => {
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
 
-  it('enforces frame-ancestors, connect-src to the site and its Supabase project only, and form-action to the site', () => {
-    const host = new URL(supabaseUrl).host;
-    expect(headers['Content-Security-Policy']).toBe(`frame-ancestors 'none'; connect-src 'self' https://${host} wss://${host}; form-action 'self'`);
+  it('enforces frame-ancestors, connect-src to the site alone, and form-action to the site', () => {
+    expect(headers['Content-Security-Policy']).toBe("frame-ancestors 'none'; connect-src 'self'; form-action 'self'");
     const enforced = directives(headers['Content-Security-Policy'] ?? '');
     expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src', 'form-action']);
   });
@@ -63,8 +61,10 @@ describe('netlify.toml security headers', () => {
       ...['/contribute', '/ledger', '/terms', '/terms/*', '/privacy', '/refunds', '/refunds/*', '/contact'].map((path) => [path, '/index.html', '200', 'force']),
     ]);
     // The same paths App.tsx keeps from the card lane's routes; /board/*, /terms/* and /refunds/* (the
-    // posted Terms versions, docs/specs/legal-copy.md) sit under a segment already listed.
-    expect(KERNEL_SEGMENTS.map((segment) => `/${segment}`).sort()).toEqual(
+    // posted Terms versions, docs/specs/legal-copy.md) sit under a segment already listed. /api is the
+    // snapshot function's (docs/specs/site-snapshot.md), which its own config routes, not a redirect.
+    expect(KERNEL_SEGMENTS).toContain('api');
+    expect(KERNEL_SEGMENTS.filter((segment) => segment !== 'api').map((segment) => `/${segment}`).sort()).toEqual(
       rules
         .slice(1, spa)
         .map(([from]) => from)
@@ -105,11 +105,30 @@ describe('netlify.toml security headers', () => {
     }
   });
 
-  it('lets the site reach its Supabase project over https and wss', () => {
-    expect(supabaseUrl).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
-    const host = new URL(supabaseUrl).host;
+  it('lets the page connect to its own origin only: no Supabase host, no WebSocket, and no Supabase build value', () => {
     const policy = directives(headers['Content-Security-Policy-Report-Only'] ?? '');
-    expect(policy['connect-src']).toEqual(["'self'", `https://${host}`, `wss://${host}`]);
+    expect(policy['connect-src']).toEqual(["'self'"]);
+    expect(directives(headers['Content-Security-Policy'] ?? '')['connect-src']).toEqual(["'self'"]);
+    expect(toml).not.toMatch(/VITE_SUPABASE_/);
+    expect(toml).not.toMatch(/supabase\.co/);
+  });
+});
+
+describe('netlify.toml caching and functions', () => {
+  it('serves the hashed build files under /assets immutable for a year', () => {
+    expect(headersFor('/assets/*')).toEqual({ 'Cache-Control': 'public, max-age=31536000, immutable' });
+  });
+
+  it('leaves index.html, /version.json and /fonts/* on Netlify\'s default, which revalidates', () => {
+    for (const path of ['/index.html', '/version.json', '/fonts/*', '/*']) {
+      expect(headersFor(path)['Cache-Control'], path).toBeUndefined();
+    }
+    const blocks = [...toml.matchAll(/^\s*for\s*=\s*"([^"]*)"/gm)].map((m) => m[1]);
+    expect(blocks.filter((path) => /immutable/.test(JSON.stringify(headersFor(path!))))).toEqual(['/assets/*']);
+  });
+
+  it('builds its functions from netlify/functions', () => {
+    expect(toml).toMatch(/^\[functions\]\s*\n\s*directory = "netlify\/functions"$/m);
   });
 });
 

@@ -12,7 +12,6 @@ import { expect, test } from './fixtures';
 const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page', '/design-kit-7q4m'];
 const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.url)), 'utf8');
 const enforced = toml.match(/^\s*Content-Security-Policy\s*=\s*"([^"]*)"/m)?.[1] ?? '';
-const host = new URL(SUPABASE_URL).host;
 
 async function watchPolicy(page: Page): Promise<string[]> {
   const reports: string[] = [];
@@ -27,26 +26,28 @@ async function watchPolicy(page: Page): Promise<string[]> {
   return reports;
 }
 
-test('the preview sends the enforced policy from netlify.toml: frame-ancestors, connect-src to the site and Supabase only, and form-action', async ({ page }) => {
-  expect(enforced).toBe(`frame-ancestors 'none'; connect-src 'self' https://${host} wss://${host}; form-action 'self'`);
+test('the preview sends the enforced policy from netlify.toml: frame-ancestors, connect-src to the site alone, and form-action', async ({ page }) => {
+  expect(enforced).toBe("frame-ancestors 'none'; connect-src 'self'; form-action 'self'");
   const response = await page.goto('/');
   expect(response?.headers()['content-security-policy']).toBe(enforced);
-  expect(response?.headers()['content-security-policy-report-only']).toContain(`connect-src 'self' https://${host} wss://${host}`);
+  expect(response?.headers()['content-security-policy-report-only']).toContain("connect-src 'self';");
 });
 
-test('every route loads its data under the policy with no report', async ({ page }) => {
+test('every route loads its data from the site\'s own /api under the policy with no report', async ({ page }) => {
   const reports = await watchPolicy(page);
+  const api: string[] = [];
   const supabase: string[] = [];
   page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/')) api.push(request.url());
     if (request.url().startsWith(SUPABASE_URL)) supabase.push(request.url());
   });
   for (const path of ROUTES) {
     await page.goto(path);
-    // Realtime holds a socket open, so network idle may not come; give the data a moment either way.
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   }
-  // The pages did reach the (fixture) database through the allowed host, and nothing was reported.
-  expect(supabase.length).toBeGreaterThan(0);
+  // The pages read the (fixture) documents from their own origin, never the database, and nothing was reported.
+  expect(api.length).toBeGreaterThan(0);
+  expect(supabase).toEqual([]);
   expect(reports).toEqual([]);
 });
 

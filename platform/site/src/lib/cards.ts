@@ -14,6 +14,7 @@ export {
   inFundingOrder,
   isFullyFunded,
   nextInLine,
+  noCardTakesMoney,
   type CardCategory,
   type CategoryFilter,
 } from './payment';

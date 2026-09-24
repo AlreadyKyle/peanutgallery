@@ -1,6 +1,6 @@
 # Agent workflows: the Studio Head's ranking, the Game Designer's drafts graded by the Game Director, and a filter on public agent text
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Built on the merge of agent-system-core (approvals, dealing after the cooling window, the card text guard, `jobs` and `job_runs`, `enqueue_manual_job` with typed input, board-session waiting) and home-and-design (#64, the Card component the AI-agent label goes on). Most files it changes are kernel. The ones that are not are the public site's: the card face and /roadmap's rows that show the AI-agent label, home's live-updates row, the copy and styles they use, `platform/site/DESIGN.md`, and their unit and e2e tests.
 
@@ -266,7 +266,18 @@ The second now puts a board-vetoed card back on now: `rankable_cards` leaves it 
 3. `20260924400000_agent_workflows.sql` at 345a006 (sha256 2920663b…05f9), wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`.
 4. Read-backs: `card_drafts` exists with row security on and 0 rows; the nine functions (`apply_card_ranking`, `approve_card_draft`, `card_from_draft`, `card_rank_problem`, `card_ranking_places`, `cards_agent_text_guard`, `rankable_cards`, `record_card_draft`, `withdraw_card_draft`) exist; `approve_card_draft`'s arguments read `p_draft uuid, p_approver_role uuid, p_grader_ref text, p_verdict jsonb` (no default); anon may not select `card_drafts` or execute `apply_card_ranking`, authenticated may not execute `approve_card_draft`, the service role may; the jobs read `[{"name":"draft_card","role":"Game Designer","calls_model":true,"runs_when_paused":true},{"name":"studio_ranking","role":"Studio Head","calls_model":true,"runs_when_paused":true}]`; `rankable_cards()` lists 6 of the 12 cards on now; `public.ledger_identity() ->> 'holds'` → `"true"`. `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` (`card_drafts` and all eight new functions refused with 42501); `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards`.
 
-The gate, the merge and the steps after it are recorded by the next pull request that touches the specs.
+### The gate, the merge and production after it (24 September 2026, UTC; recorded by site-snapshot)
+
+5. The gate at the head sha, on the board's Mac (`scripts/local-gate.sh`, PLAN.md §10 decision 44): `LOCAL GATE PASS pr=77 head=361c322c70a21cfa6413fdc92cff56343ae8b939 base=ff512b9114dc59fe64a5f561cd5ca95eaae40403 merge=9f5b676682636b4f1937657ad8b2423ef6d5f3c6 seed=true platform=true lane=code site=true functions=true log=/Users/kylesmith/peanutgallery-launch/gate-logs/pr77-361c322.log`. The log shows site e2e `162 passed`, board e2e `7 passed`, functions `115 passed`, gate tests 508, GATE PASS for the build and the bot, and the commit status `local-gate success`.
+6. The merge: origin/main was ff512b9, the PASS line's base. #80 was retargeted to main first (`gh pr edit 80 --base main`), so deleting this branch could not close it. `gh pr merge 77 --squash --match-head-commit 361c322…` with the PASS line in the body → `MERGED` as c65e7cb2eaa99a5ad487c8f6fddb5488f1ac72af at 2026-09-24T04:42:40Z; the remote branch is deleted.
+7. After the merge, from main (production steps 5 and 7; step 6 is below):
+   - Step 5, the roles: `pnpm --filter @backseat/supabase seed` → `roles: 16 upserted`. The Game Designer reads back `{"agent_class":"planner","write_access":true,"tools_json":["Read","Glob","Grep","Bash"]}`, and the writers are Builder A, Builder B, the Game Designer, the Platform Builder, QA and the Studio Head.
+   - Step 5, the backlog: the `file-backlog` dry run → `2 would be inserted, 2 would be updated, 0 would be removed` (inserting "Scheduled and unattended role jobs" and "Studio card drafting", updating the Community and Studio Head intents); `--apply` → `done: 2 inserted, 2 updated, 0 removed, 43 unchanged, 0 skipped`.
+   - `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` and `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 59 cards`, again after the merge.
+   - Step 7: c65e7cb is ready on the public site (70df3957, 04:43:04Z) and the board's (51051b5b, 04:43:39Z); `node platform/site/scripts/live-check.mjs` → `PASS live-check https://peanutgallery.games passed=236 failed=0 skipped=0`, and the live page's build sha reads c65e7cb2eaa99a5ad487c8f6fddb5488f1ac72af. Live screenshots of /roadmap, home and /team at 375 and 1440 were looked at: no horizontal overflow, and the new /roadmap lede renders. The private SYSTEM.md page (https://claude.ai/artifact/JMy2LBnN8f1yA8vVJPUEhS) is at version 2 with the two role jobs.
+8. Step 6, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `docs/BOARD-SETUP.md`. Installing it runs main, which already carries both job handlers, so nothing is left to redeploy.
+
+Every Verification line is now run and quoted: `pnpm verify`, the function, dispatcher, supabase, agents and docs tests and both e2e runs above; the gate at the head sha (5); and production (the dump's size, both scripts' PASS lines with `ledger_identity()` read back, the two jobs, the Game Designer's row after the re-seed, and the live check).
 
 ## Decisions
 

@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Snapshot, StudioSource } from './source';
-import { POLL_MS, REFRESH_DEBOUNCE_MS, SourceProvider, useStudio } from './studio';
+import { BACKOFF_MAX_MS, POLL_MS, SourceProvider, useStudio } from './studio';
 
 function snapshotWithBalance(balance: number): Snapshot {
   return {
@@ -28,20 +28,26 @@ function snapshotWithBalance(balance: number): Snapshot {
 
 type Pending = { resolve: (snapshot: Snapshot) => void; reject: (error: Error) => void };
 
+let visibility: DocumentVisibilityState = 'visible';
+
+/** Sets the tab's visibility and tells the page, as the browser does. */
+function setVisibility(value: DocumentVisibilityState) {
+  visibility = value;
+  act(() => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+}
+
 function controlledSource() {
   const loads: Pending[] = [];
-  let onChange: () => void = () => {};
   const source: StudioSource = {
     load: () =>
       new Promise<Snapshot>((resolve, reject) => {
         loads.push({ resolve, reject });
       }),
-    subscribe: (callback) => {
-      onChange = callback;
-      return () => {};
-    },
   };
-  return { source, loads, notify: () => onChange() };
+  // A return to the tab loads at once, which the tests use to ask for the next load.
+  return { source, loads, notify: () => setVisibility('visible') };
 }
 
 function renderStudio(source: StudioSource | null) {
@@ -68,11 +74,14 @@ async function flush(ms = 0) {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  visibility = 'visible';
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('useStudio', () => {
@@ -91,7 +100,6 @@ describe('useStudio', () => {
     expect(staleOf(result)).toBe(false);
 
     notify();
-    await flush(REFRESH_DEBOUNCE_MS);
     await act(async () => loads[1]?.reject(new Error('network down')));
     expect(balanceOf(result)).toBe(10);
   });
@@ -103,18 +111,15 @@ describe('useStudio', () => {
     expect(staleOf(result)).toBe(false);
 
     notify();
-    await flush(REFRESH_DEBOUNCE_MS);
     await act(async () => loads[1]?.reject(new Error('network down')));
     expect(staleOf(result)).toBe(true);
     expect(balanceOf(result)).toBe(10);
 
     notify();
-    await flush(REFRESH_DEBOUNCE_MS);
     await act(async () => loads[2]?.reject(new Error('still down')));
     expect(staleOf(result)).toBe(true);
 
     notify();
-    await flush(REFRESH_DEBOUNCE_MS);
     await act(async () => loads[3]?.resolve(snapshotWithBalance(12)));
     expect(staleOf(result)).toBe(false);
     expect(balanceOf(result)).toBe(12);
@@ -132,7 +137,6 @@ describe('useStudio', () => {
     const { result } = renderStudio(source);
 
     notify();
-    await flush(REFRESH_DEBOUNCE_MS);
     expect(loads).toHaveLength(2);
 
     await act(async () => loads[1]?.resolve(snapshotWithBalance(20)));
@@ -142,39 +146,83 @@ describe('useStudio', () => {
     expect(balanceOf(result)).toBe(20);
   });
 
-  it('collapses rapid change notices into one load', async () => {
-    const { source, loads, notify } = controlledSource();
-    renderStudio(source);
-    expect(loads).toHaveLength(1);
-
-    notify();
-    await flush(REFRESH_DEBOUNCE_MS - 100);
-    notify();
-    await flush(REFRESH_DEBOUNCE_MS - 100);
-    expect(loads).toHaveLength(1);
-
-    await flush(100);
-    expect(loads).toHaveLength(2);
-  });
-
-  it('polls on the fixed interval', async () => {
+  it('reads every 60 seconds while visible, counting from the end of each load', async () => {
     const { source, loads } = controlledSource();
     renderStudio(source);
+    expect(POLL_MS).toBe(60_000);
     expect(loads).toHaveLength(1);
-
+    await flush(POLL_MS * 2);
+    expect(loads).toHaveLength(1);
+    await act(async () => loads[0]?.resolve(snapshotWithBalance(1)));
     await flush(POLL_MS - 1);
     expect(loads).toHaveLength(1);
-    await flush(1 + REFRESH_DEBOUNCE_MS);
+    await flush(1);
     expect(loads).toHaveLength(2);
-    await flush(POLL_MS + REFRESH_DEBOUNCE_MS);
+    await act(async () => loads[1]?.resolve(snapshotWithBalance(2)));
+    await flush(POLL_MS);
     expect(loads).toHaveLength(3);
+  });
+
+  it('makes no load while the tab is hidden, and loads at once on a return', async () => {
+    const { source, loads } = controlledSource();
+    const { result } = renderStudio(source);
+    await act(async () => loads[0]?.resolve(snapshotWithBalance(1)));
+    setVisibility('hidden');
+    await flush(3 * 60_000);
+    expect(loads).toHaveLength(1);
+    setVisibility('visible');
+    expect(loads).toHaveLength(2);
+    await act(async () => loads[1]?.resolve(snapshotWithBalance(2)));
+    expect(balanceOf(result)).toBe(2);
+  });
+
+  it('makes no load from a tab opened hidden until it is shown', async () => {
+    visibility = 'hidden';
+    const { source, loads } = controlledSource();
+    const { result } = renderStudio(source);
+    await flush(3 * 60_000);
+    expect(loads).toHaveLength(0);
+    expect(result.current.state).toBe('loading');
+    setVisibility('visible');
+    expect(loads).toHaveLength(1);
+  });
+
+  it('retries a failed load after 60 seconds, doubling to 10 minutes, and a success resets the wait', async () => {
+    const { source, loads } = controlledSource();
+    renderStudio(source);
+    await act(async () => loads[0]?.resolve(snapshotWithBalance(1)));
+    await flush(POLL_MS);
+    expect(loads).toHaveLength(2);
+    /** How long until the next load starts, in 5-second steps. */
+    const waitForNext = async () => {
+      const before = loads.length;
+      let waited = 0;
+      while (loads.length === before && waited <= BACKOFF_MAX_MS) {
+        await flush(5_000);
+        waited += 5_000;
+      }
+      return waited;
+    };
+    const waits: number[] = [];
+    for (let n = 0; n < 6; n += 1) {
+      await act(async () => loads[loads.length - 1]?.reject(new Error('down')));
+      waits.push(await waitForNext());
+    }
+    expect(BACKOFF_MAX_MS).toBe(600_000);
+    expect(waits).toEqual([60_000, 120_000, 240_000, 480_000, 600_000, 600_000]);
+    await act(async () => loads[loads.length - 1]?.resolve(snapshotWithBalance(2)));
+    expect(await waitForNext()).toBe(60_000);
+    await act(async () => loads[loads.length - 1]?.reject(new Error('down')));
+    expect(await waitForNext()).toBe(60_000);
   });
 
   it('stops loading after unmount', async () => {
     const { source, loads } = controlledSource();
     const { unmount } = renderStudio(source);
+    await act(async () => loads[0]?.resolve(snapshotWithBalance(1)));
     unmount();
-    await flush(POLL_MS + REFRESH_DEBOUNCE_MS);
+    await flush(POLL_MS * 2);
+    setVisibility('visible');
     expect(loads).toHaveLength(1);
   });
 });

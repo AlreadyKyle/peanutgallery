@@ -51,9 +51,21 @@ export function fundableCards(snapshot: Snapshot): Card[] {
   });
 }
 
-/** The card Fund the next card in line funds first, or null when no card takes money or the order did not load. */
+/**
+ * The card Fund the next card in line funds first: the first place in the waterfall's order. Null when
+ * no card takes money, the order did not load, or the first place's card is not in the snapshot (its
+ * words arrive with /api/cards, which can lag /api/live's order), so the page never names a later card
+ * the money would not reach first.
+ */
 export function nextInLine(snapshot: Snapshot): Card | null {
-  return fundableCards(snapshot)[0] ?? null;
+  const first = fundingOrder(snapshot)?.[0];
+  if (first === undefined) return null;
+  return snapshot.cards.find((card) => card.id === first.card_id) ?? null;
+}
+
+/** The waterfall's order loaded and lists no card: money given now waits in Not on a card yet. */
+export function noCardTakesMoney(snapshot: Snapshot): boolean {
+  return fundingOrder(snapshot)?.length === 0;
 }
 
 /**

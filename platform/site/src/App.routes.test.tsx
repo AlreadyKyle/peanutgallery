@@ -98,11 +98,11 @@ describe('the kernel frame and the card lane routes', () => {
 });
 
 describe('cardRoutes', () => {
-  it('drops a kernel path in any case or spelling, /board, and a dynamic, optional or catch-all first segment', () => {
+  it('drops a kernel path in any case or spelling, /board, /api, and a dynamic, optional or catch-all first segment', () => {
     const element = null;
     const paths = ['/', '/team', '/how-it-works', '/roadmap/next', '/ledger', '/LEDGER', 'contribute', '/terms/', '//privacy', '/refunds/x', '/contact',
-      '/board', '/:slug', '/ledger?', '/*', '*', '/%6Cedger', ''];
+      '/board', '/api', '/api/live', '/API/cards', '/:slug', '/ledger?', '/*', '*', '/%6Cedger', ''];
     expect(cardRoutes(paths.map((path) => ({ path, element }))).map((route) => route.path)).toEqual(['/', '/team', '/how-it-works', '/roadmap/next']);
-    expect(KERNEL_SEGMENTS).toEqual(['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board']);
+    expect(KERNEL_SEGMENTS).toEqual(['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api']);
   });
 });

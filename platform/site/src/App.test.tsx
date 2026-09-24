@@ -322,7 +322,6 @@ describe('Site chrome', () => {
         loads += 1;
         return Promise.resolve(snapshot);
       },
-      subscribe: () => () => {},
     });
     // The StudioProvider loads once; the meter and every card read the shared snapshot.
     await waitFor(() => expect(screen.getAllByText('$48.56').length).toBeGreaterThan(0));
@@ -330,7 +329,7 @@ describe('Site chrome', () => {
   });
 
   it('shows no pool figure in the top bar', () => {
-    renderAt('/', { load: () => Promise.resolve(snapshot), subscribe: () => () => {} });
+    renderAt('/', { load: () => Promise.resolve(snapshot) });
     expect(within(screen.getByRole('banner')).queryByText('$48.56')).toBeNull();
   });
 });

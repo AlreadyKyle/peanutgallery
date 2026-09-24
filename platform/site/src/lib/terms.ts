@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { getClient } from './supabase';
+import { CARDS_URL } from './source';
 import { TERMS_VERSIONS, type TermsVersion } from './terms-versions';
 
 // Which Terms version is in force (docs/specs/legal-copy.md). The Terms and Refunds pages, and only
-// they, read public.public_terms_versions (version, posted_at) themselves rather than through the
-// snapshot, so they stay readable when the pool or the cards fail and no other page pays for the
-// read. Kernel (platform/gate/kernel-paths.txt): what this decides is which words a reader is told
+// they, read the posted versions (public_terms_versions: version, posted_at), from the terms rows of
+// the site's card document, /api/cards (docs/specs/site-snapshot.md), a read the CDN answers.
+// Kernel (platform/gate/kernel-paths.txt): what this decides is which words a reader is told
 // applied to their money.
 
 /** One posted version: its number and when it took effect. */
@@ -33,26 +32,25 @@ function isPostedRow(row: unknown): row is PostedRow {
   );
 }
 
+/** The posted versions in a card document, oldest first. Throws when the document or a row is malformed. */
+export function postedTermsFrom(doc: unknown): PostedRow[] {
+  const rows = typeof doc === 'object' && doc !== null ? (doc as { terms?: unknown }).terms : undefined;
+  if (!Array.isArray(rows) || !rows.every(isPostedRow)) throw new Error('/api/cards returned a malformed terms row');
+  return rows.map((row) => ({ version: row.version, posted_at: row.posted_at })).sort((a, b) => a.version - b.version);
+}
+
 /** Every posted version, oldest first. Throws when the read fails, times out or returns a malformed row. */
-export async function loadPostedTerms(client: SupabaseClient): Promise<PostedRow[]> {
-  const { data, error } = await client
-    .from('public_terms_versions')
-    .select('version,posted_at')
-    .order('version')
-    .abortSignal(AbortSignal.timeout(TERMS_READ_TIMEOUT_MS));
-  if (error) throw new Error(error.message);
-  const rows: unknown[] = data ?? [];
-  if (!rows.every(isPostedRow)) throw new Error('public_terms_versions returned a malformed row');
-  return rows.map((row) => ({ version: row.version, posted_at: row.posted_at }));
+export async function loadPostedTerms(fetchFn: typeof fetch): Promise<PostedRow[]> {
+  const response = await fetchFn(CARDS_URL, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(TERMS_READ_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`${CARDS_URL} answered ${response.status}`);
+  return postedTermsFrom(await response.json());
 }
 
 export type TermsLoader = () => Promise<PostedRow[]>;
 
-/** The site's own read. Rejects when the build has no database settings. */
+/** The site's own read, from its card document. */
 export function defaultTermsLoader(): Promise<PostedRow[]> {
-  const client = getClient();
-  if (client === null) return Promise.reject(new Error('The site has no database settings'));
-  return loadPostedTerms(client);
+  return loadPostedTerms(fetch.bind(globalThis));
 }
 
 /** Tests put a fake loader here; the site uses the default. */

@@ -64,7 +64,7 @@ function renderPage(source: StudioSource | null) {
 }
 
 function sourceOf(value: Snapshot): StudioSource {
-  return { load: () => Promise.resolve(value), subscribe: () => () => {} };
+  return { load: () => Promise.resolve(value) };
 }
 
 function figures(): HTMLElement[] {

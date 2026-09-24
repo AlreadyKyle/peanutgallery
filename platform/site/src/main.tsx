@@ -2,18 +2,27 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
-import { watchForNewBuild } from './lib/freshness';
-import { createSupabaseSource } from './lib/source';
+import { safeSessionStorage, watchForNewBuild } from './lib/freshness';
+import { createSnapshotSource } from './lib/source';
 import { SourceProvider } from './lib/studio';
-import { clearStoredSessions, getClient } from './lib/supabase';
+import { clearStoredSessions } from './lib/supabase';
 import './styles.css';
 
 // Kernel (docs/specs/board-site.md): the entry index.html loads. It builds the data source every
-// figure comes through, clears any stored session and mounts the kernel frame in App.tsx.
+// figure comes through (the site's own /api documents, docs/specs/site-snapshot.md), clears any
+// stored session and mounts the kernel frame in App.tsx.
 //
-// A tab restored from the back/forward cache runs the build it started with; reload when the
-// site has moved on.
-watchForNewBuild({ doc: document, win: window, fetchFn: fetch.bind(window), reload: () => { window.location.reload(); } });
+// A tab restored from the back/forward cache, returned to, or moved to another page runs the build
+// it started with; reload when the site has moved on, at most once per served build.
+const freshness = watchForNewBuild({
+  doc: document,
+  win: window,
+  fetchFn: fetch.bind(window),
+  reload: () => {
+    window.location.reload();
+  },
+  storage: safeSessionStorage(window),
+});
 
 try {
   clearStoredSessions(window.localStorage);
@@ -21,8 +30,7 @@ try {
   // Storage blocked by the browser: there is nothing stored to clear.
 }
 
-const client = getClient();
-const source = client === null ? null : createSupabaseSource(client);
+const source = createSnapshotSource({ fetchFn: fetch.bind(window) });
 const root = document.getElementById('root');
 if (root === null) throw new Error('Missing #root element');
 
@@ -30,7 +38,7 @@ createRoot(root).render(
   <StrictMode>
     <SourceProvider source={source}>
       <BrowserRouter>
-        <App />
+        <App onRouteChange={freshness.check} />
       </BrowserRouter>
     </SourceProvider>
   </StrictMode>,

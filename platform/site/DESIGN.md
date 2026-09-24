@@ -194,7 +194,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **The change rule.** A changed figure or row gets `.changed`: `box-shadow: inset 3px 0 0 currentColor` until the next poll, no layout (rows keep a constant 0.5rem inset for it). `currentColor`, never ink: paper on signal and in an ink band, ink on paper and on the work face **(tested, e2e)**. Forced colours drop it; the announcer carries funded and shipped.
 
-**The live-updates row** (`LiveUpdates.tsx`). Laid out from first paint: "Pause live updates" (`aria-pressed`) first, then the updates button, which is always there. With nothing waiting it reads "Up to date" and is `aria-disabled` (never `disabled`, so it keeps focus); with changes waiting, "Show *n* updates", capped at 99+. Both labels share one grid cell with the longest one hidden, so its width never changes **(e2e: neither button moves when the label changes; focus stays after a press)**. While paused, the row says "Live updates are paused." The count is announced on none to some, at most once a minute.
+**The live-updates row** (`LiveUpdates.tsx`). Laid out from first paint: "Pause updates" (`aria-pressed`) first, then the updates button, which is always there. With nothing waiting it reads "Up to date" (or "No new updates" while the figures on screen may be out of date, so it never contradicts the stale line above it) and is `aria-disabled` (never `disabled`, so it keeps focus); with changes waiting, "Show *n* updates", capped at 99+. Both labels share one grid cell with the longest one hidden, so its width never changes **(e2e: neither button moves when the label changes; focus stays after a press)**. While paused, the row says "Updates are paused." The count is announced on none to some, at most once a minute.
 
 **The announcer.** One polite live region (`Announcer`, `role="status"`): funded and shipped are said once.
 
@@ -224,6 +224,8 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 **`/ledger`** (kernel): Funding (with Not on a card yet, and one line each for the shortfall and the board's test payment while they are above zero), Money in (the figures, or "No contributions yet.", then exactly one reconciliation line), Stopped cards (only while there are any), Agent work and Deploys, stacked full width, a band each, so no short block sits beside a long list. Stopped cards are the one public list of paused and rejected cards: rail rows, never card faces, the date stopped in the rail, then the title, the reason in plain words and the money (a paused card's state tag and that its money stays on it; a card that didn't ship, who funded it and where its unspent money went), under Paused and Didn't ship, each list drawn only with rows. A part whose read failed says "Not available right now." instead of a figure.
 
 **Stale and missing figures** are unchanged: a failed refresh keeps the figures and says so in `p.status` (`role="status"`); a part that did not load says "Not available right now." instead of a zero.
+
+**How fresh the figures are.** The site reads its own cached documents (`docs/specs/site-snapshot.md`): a visible tab reads the figures once a minute, and a hidden tab reads nothing until the reader comes back, when it reads at once. Figures and stages run up to about three minutes behind the database, and card text up to about fifteen minutes. Nothing on the page may promise more: no "live" or "real time" wording near a figure, and a figure's change marker lasts until the next read, a minute later.
 
 ## Motion
 

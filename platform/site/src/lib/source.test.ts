@@ -1,631 +1,344 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_STUDIO, fundingOrder, moneyRow, type StudioFixture } from '../../e2e/studio-fixture';
+import { toDocuments } from '../../e2e/snapshot-documents';
+import { fundableCards, groupCards, plannedCards } from './cards';
+import SNAPSHOT_KEYS from './snapshot-keys.json';
 import {
-  CARD_COLUMNS,
-  CARD_STAGES,
-  createSupabaseSource,
-  DEPLOY_LIMIT,
+  CARDS_MAX_AGE_MS,
+  CARDS_URL,
+  createSnapshotSource,
   ENRICHMENTS,
-  EVENT_LIMIT,
-  MONEY_COLUMNS,
-  QUERY_TIMEOUT_MS,
-  REALTIME_LISTENERS,
-  ROLE_COLUMNS,
-  STOPPED_COLUMNS,
-  STOPPED_LIMIT,
-  type Snapshot,
+  LIVE_URL,
+  REQUEST_TIMEOUT_MS,
+  REQUIRED_KEYS,
+  snapshotFrom,
 } from './source';
 
-type Query = {
-  table: string;
-  select: string;
-  filters: string[];
-  orders: { column: string; ascending: boolean }[];
-  limit: number | null;
-  terminal: string;
-  signal: AbortSignal | null;
-};
+type Docs = { live: Record<string, unknown>; cards: Record<string, unknown> };
 
-type Listener = { table: string; filter: string | null };
-type Channel = { topic: string; listeners: Listener[]; subscribed: number };
-
-type Rows = Record<string, unknown>;
-
-function rowsFor(query: Query): unknown {
-  switch (query.table) {
-    case 'pool':
-      return {
-        balance_usd: '48.5600',
-        reserve_usd: '7.1000',
-        incident_reserve_usd: '2.5600',
-        held_usd: '0.0000',
-        daily_spent_usd: '0.0000',
-        day: '2026-09-14',
-      };
-    case 'cards':
-      if (query.filters.some((f) => f.startsWith('in id'))) {
-        return [{ id: 'c1', title: 'Week 1: the loop' }];
-      }
-      return [
-        {
-          id: 'c1',
-          title: 'Week 1: the loop',
-          summary: 'The first playable loop.',
-          intent: 'Build the core loop.',
-          source: 'board',
-          stage: 'voted',
-          shape: 'goal',
-          bucket: 'game',
-          folder: 'seed-1',
-          horizon: 'now',
-          rank: 2,
-          executor_role_id: 'r1',
-          funding_target_usd: '100.0000',
-          funded_usd: '25.0000',
-          created_at: '2026-09-14T00:00:00Z',
-          updated_at: '2026-09-14T02:00:00Z',
-          live_at: null,
-        },
-      ];
-    case 'public_card_spend':
-      return [{ card_id: 'c1', spent_usd: '0.4200' }];
-    case 'public_card_funding':
-      return [{ card_id: 'c1', contributors: '3', credited_usd: '18.5000' }];
-    case 'public_studio':
-      return { launched_at: '2026-09-20T00:00:00Z', paused: true, pause_reason: 'awaiting_credit' };
-    case 'public_money':
-      return {
-        payments: 3,
-        received_usd: '30.0000',
-        stripe_fees_usd: '1.5000',
-        refunded_usd: '5.0000',
-        disputed_usd: '0.0000',
-        corrections_usd: '0.0000',
-        studio_pct_avg: '22.50',
-        reserve_usd: '2.3500',
-        studio_usd: '4.2300',
-        incident_usd: '0.8500',
-        held_usd: '0.0000',
-        agent_credit_usd: '16.0700',
-        not_on_card_usd: '1.2000',
-        short_usd: '0.0000',
-        board_test_usd: '0.5019',
-        reconciled_at: '2026-09-23T04:00:00+00:00',
-        last_run_ok: true,
-        funding_order: [{ position: 1, card_id: 'c1', room_usd: 75 }],
-      };
-    case 'public_stopped_cards':
-      return [
-        {
-          card_id: 'c9',
-          title: 'A card that stopped',
-          stage: 'rejected',
-          failing_check: 'gate',
-          spent_usd: '0.3000',
-          funded_usd: '0.0000',
-          credited_usd: '2.0000',
-          moved: [
-            { to_card_id: 'c1', to_title: 'Week 1: the loop', usd: 1.2 },
-            { to_card_id: null, to_title: null, usd: 0.5 },
-          ],
-          stopped_at: '2026-09-22T10:00:00Z',
-        },
-      ];
-    case 'public_ledger_totals':
-      return {
-        usd_total: '1.2500',
-        input_tokens: '12000',
-        cached_tokens: '3000',
-        output_tokens: '800',
-        row_count: '3',
-      };
-    case 'public_agent_events':
-      return [
-        { id: 'e1', card_id: 'c1', role_id: 'r1', type: 'start', created_at: '2026-09-14T01:00:00Z' },
-        { id: 'e2', card_id: 'c1', role_id: null, type: 'ship', created_at: '2026-09-14T01:05:00Z' },
-        { id: 'e3', card_id: null, role_id: 'r1', type: 'error', created_at: '2026-09-14T01:06:00Z' },
-      ];
-    case 'deploys':
-      return [];
-    case 'public_roles':
-      return [
-        {
-          id: 'r1',
-          name: 'Builder A',
-          title: 'Builder A',
-          description: 'Builds game cards.',
-          species_note: 'A small blue creature with two round antennae and stubby legs.',
-          model: 'claude-sonnet-5',
-          write_access: true,
-          state: 'active',
-          hired_at: '2026-09-14T00:00:00Z',
-        },
-      ];
-    default:
-      throw new Error(`Unexpected table ${query.table}`);
-  }
+/** A fetch that answers the two documents from `docs()`, recording each URL it was asked for. */
+function serving(docs: () => Docs, status: Partial<Record<string, number>> = {}) {
+  const calls: string[] = [];
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    calls.push(url);
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    const body = url === LIVE_URL ? docs().live : url === CARDS_URL ? docs().cards : { error: 'not found' };
+    return new Response(JSON.stringify(body), { status: status[url] ?? (url === LIVE_URL || url === CARDS_URL ? 200 : 404) });
+  }) as unknown as typeof fetch;
+  return { fetchFn, calls };
 }
 
-function fakeClient(
-  options: {
-    events?: unknown[];
-    failTable?: string;
-    failTitles?: boolean;
-    /** A table whose query never answers; it settles only when its signal aborts, as supabase-js does. */
-    hangTable?: string;
-    rows?: Record<string, unknown>;
-  } = {},
-) {
-  const queries: Query[] = [];
-  const channels: Channel[] = [];
-  const removed: string[] = [];
-
-  function from(table: string) {
-    const query: Query = { table, select: '', filters: [], orders: [], limit: null, terminal: '', signal: null };
-    queries.push(query);
-    const resolve = () => {
-      if (table === options.hangTable) {
-        // supabase-js reports an aborted request as an error result, not a rejection.
-        return new Promise((settle) => {
-          query.signal?.addEventListener('abort', () =>
-            settle({ data: null, error: { message: 'AbortError: signal is aborted without reason' } }),
-          );
-        });
-      }
-      const titles = table === 'cards' && query.filters.some((f) => f.startsWith('in id'));
-      if (table === options.failTable || (options.failTitles === true && titles)) {
-        return Promise.resolve({ data: null, error: { message: `${table} is unavailable` } });
-      }
-      const data =
-        options.rows !== undefined && table in options.rows
-          ? options.rows[table]
-          : table === 'public_agent_events' && options.events !== undefined
-            ? options.events
-            : rowsFor(query);
-      return Promise.resolve({ data, error: null });
-    };
-    const builder = {
-      select(columns: string) {
-        query.select = columns;
-        return builder;
-      },
-      eq(column: string, value: unknown) {
-        query.filters.push(`eq ${column} ${String(value)}`);
-        return builder;
-      },
-      in(column: string, values: string[]) {
-        query.filters.push(`in ${column} ${values.join(',')}`);
-        return builder;
-      },
-      order(column: string, opts: { ascending: boolean }) {
-        query.orders.push({ column, ascending: opts.ascending });
-        return builder;
-      },
-      limit(count: number) {
-        query.limit = count;
-        return builder;
-      },
-      abortSignal(signal: AbortSignal) {
-        query.signal = signal;
-        return builder;
-      },
-      maybeSingle() {
-        query.terminal = 'maybeSingle';
-        return resolve();
-      },
-      returns() {
-        query.terminal = 'returns';
-        return resolve();
-      },
-    };
-    return builder;
-  }
-
-  function channel(topic: string) {
-    const record: Channel = { topic, listeners: [], subscribed: 0 };
-    channels.push(record);
-    const chan = {
-      topic,
-      on(_type: string, spec: Rows, _callback: () => void) {
-        record.listeners.push({
-          table: String(spec.table),
-          filter: typeof spec.filter === 'string' ? spec.filter : null,
-        });
-        return chan;
-      },
-      subscribe() {
-        record.subscribed += 1;
-        return chan;
-      },
-    };
-    return chan;
-  }
-
-  const client = {
-    from,
-    channel,
-    removeChannel(chan: { topic: string }) {
-      removed.push(chan.topic);
-      return Promise.resolve('ok');
-    },
-  };
-
-  return { client: client as unknown as SupabaseClient, queries, channels, removed };
+function studioWith(fields: Partial<StudioFixture>): StudioFixture {
+  return { ...DEFAULT_STUDIO, ...fields };
 }
 
-function emptyQuery(table: string): Query {
-  return { table, select: '', filters: [], orders: [], limit: null, terminal: '', signal: null };
-}
+const golden = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/__fixtures__/snapshot-golden.json'), 'utf8')) as unknown;
 
-function query(queries: Query[], table: string, index = 0): Query {
-  const match = queries.filter((q) => q.table === table)[index];
-  if (match === undefined) throw new Error(`No query ${index} on ${table}`);
-  return match;
-}
+describe('the golden snapshot', () => {
+  it('equals the Snapshot main built from the same fixture through the Supabase client, captured before it was removed', async () => {
+    const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO));
+    const snapshot = await createSnapshotSource({ fetchFn }).load();
+    expect(snapshot).toEqual(golden);
+  });
+});
 
-describe('createSupabaseSource.load', () => {
-  it('reads the contract tables and views with the contract shapes', async () => {
-    const fake = fakeClient();
-    const snapshot = await createSupabaseSource(fake.client).load();
+describe('createSnapshotSource.load', () => {
+  it('reads both documents on the first load, then /api/live alone each minute', async () => {
+    let clock = 0;
+    const { fetchFn, calls } = serving(() => toDocuments(DEFAULT_STUDIO));
+    const source = createSnapshotSource({ fetchFn, now: () => clock });
+    await source.load();
+    expect([...calls].sort()).toEqual([CARDS_URL, LIVE_URL].sort());
+    for (let minute = 1; minute <= 5; minute += 1) {
+      clock = minute * 60_000;
+      await source.load();
+    }
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(1);
+    expect(calls.filter((url) => url === LIVE_URL)).toHaveLength(6);
+  });
 
-    const pool = query(fake.queries, 'pool');
-    expect(pool.select).toBe('balance_usd,reserve_usd,incident_reserve_usd,held_usd,daily_spent_usd,day');
-    expect(pool.filters).toEqual(['eq id 1']);
-    expect(pool.terminal).toBe('maybeSingle');
+  it('reads /api/cards again once its copy is over five minutes old', async () => {
+    let clock = 0;
+    const { fetchFn, calls } = serving(() => toDocuments(DEFAULT_STUDIO));
+    const source = createSnapshotSource({ fetchFn, now: () => clock });
+    await source.load();
+    clock = CARDS_MAX_AGE_MS;
+    await source.load();
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(1);
+    clock = CARDS_MAX_AGE_MS + 1;
+    await source.load();
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(2);
+    expect(CARDS_MAX_AGE_MS).toBe(300_000);
+  });
 
-    const cards = query(fake.queries, 'cards');
-    // horizon and rank must stay in the anon column grant on cards (20260922000300_backlog.sql).
-    expect(CARD_COLUMNS).toBe(
-      'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,drafter_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at',
+  it('reads /api/cards again when the live map names a card it does not hold, and shows the card once it has it', async () => {
+    const extra = { ...DEFAULT_STUDIO.cards[0]!, id: '00000000-0000-4000-8000-0000000000ff', title: 'A new card', created_at: '2026-09-16T00:00:00Z' };
+    let docs = toDocuments(DEFAULT_STUDIO);
+    const { fetchFn, calls } = serving(() => docs);
+    const source = createSnapshotSource({ fetchFn, now: () => 0 });
+    await source.load();
+    docs = toDocuments(studioWith({ cards: [...DEFAULT_STUDIO.cards, extra] }));
+    const snapshot = await source.load();
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(2);
+    expect(snapshot.cards.map((card) => card.title)).toContain('A new card');
+  });
+
+  it('does not show a card the card document holds but the live map does not', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const cards = docs.live.cards as Record<string, unknown>;
+    const gone = String((docs.cards.cards as Record<string, unknown>[])[0]!.id);
+    delete cards[gone];
+    const snapshot = snapshotFrom(docs.live, docs.cards);
+    expect(snapshot.cards.map((card) => card.id)).not.toContain(gone);
+    expect(snapshot.cards).toHaveLength(DEFAULT_STUDIO.cards.length - 1);
+  });
+
+  it('takes each card’s stage, bar and spend from the live map, which moves each minute', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const id = String(DEFAULT_STUDIO.cards[0]!.id);
+    const map = docs.live.cards as Record<string, Record<string, unknown>>;
+    map[id] = { ...map[id], stage: 'building', funded_usd: 1.5, spent_usd: 0.25, contributors: 4, credited_usd: 1.5 };
+    const card = snapshotFrom(docs.live, docs.cards).cards.find((c) => c.id === id)!;
+    expect([card.stage, card.funded_usd, card.spent_usd]).toEqual(['building', 1.5, 0.25]);
+    expect(snapshotFrom(docs.live, docs.cards).funding[id]).toEqual({ contributors: 4, credited_usd: 1.5 });
+  });
+
+  it('shows a card that just shipped with its ship time from the live map while the card document still says building', async () => {
+    // The card document was built before the ship (CDN 300 seconds, stale 300 more); the live
+    // document after it (60 seconds). The card shows live, shipped when the live map says, and first
+    // among the shipped cards, not live with the building row's times.
+    const building = DEFAULT_STUDIO.cards.find((card) => card.stage === 'funded')!;
+    const before = toDocuments(studioWith({ cards: DEFAULT_STUDIO.cards.map((card) => (card === building ? { ...card, stage: 'building' } : card)) }));
+    const shipped = { ...building, stage: 'live', live_at: '2026-09-23T12:00:00Z', updated_at: '2026-09-23T12:00:00Z' };
+    const after = toDocuments(studioWith({ cards: DEFAULT_STUDIO.cards.map((card) => (card === building ? shipped : card)) }));
+    const card = snapshotFrom(after.live, before.cards).cards.find((c) => c.id === building.id)!;
+    expect([card.stage, card.live_at, card.updated_at]).toEqual(['live', '2026-09-23T12:00:00Z', '2026-09-23T12:00:00Z']);
+    const shippedTitles = groupCards(snapshotFrom(after.live, before.cards).cards).shipped.map((c) => c.title);
+    expect(shippedTitles[0]).toBe(building.title);
+    // The same through the source: the held card document is fresh enough, so it is not read again.
+    let docs = before;
+    const { fetchFn, calls } = serving(() => docs);
+    const source = createSnapshotSource({ fetchFn, now: () => 0 });
+    await source.load();
+    docs = { live: after.live, cards: before.cards };
+    const loaded = await source.load();
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(1);
+    expect(loaded.cards.find((c) => c.id === building.id)?.live_at).toBe('2026-09-23T12:00:00Z');
+  });
+
+  it('moves a card the board deals from next to now into the fund group with its target, as funding_order lists it', () => {
+    // The deal sets horizon, rank, target and builder in one write (set_card_horizon); the card
+    // document still has the card on next with no target.
+    const planned = DEFAULT_STUDIO.cards.find((card) => card.horizon === 'next')!;
+    const dealt = { ...planned, horizon: 'now', rank: 1, funding_target_usd: '4.0000', executor_role_id: 'r-builder-a' };
+    const before = toDocuments(DEFAULT_STUDIO);
+    const after = toDocuments(
+      studioWith({
+        cards: DEFAULT_STUDIO.cards.map((card) => (card === planned ? dealt : card)),
+        money: moneyRow({ funding_order: fundingOrder([planned.id]) }),
+      }),
     );
-    expect(cards.select).toBe(CARD_COLUMNS);
-    expect([...CARD_STAGES]).toEqual(['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live']);
-    expect(cards.filters).toEqual([`in stage ${CARD_STAGES.join(',')}`]);
-    expect(cards.orders).toEqual([{ column: 'created_at', ascending: true }]);
+    const snapshot = snapshotFrom(after.live, before.cards);
+    const card = snapshot.cards.find((c) => c.id === planned.id)!;
+    expect([card.horizon, card.rank, card.funding_target_usd, card.executor_role_id]).toEqual(['now', 1, 4, 'r-builder-a']);
+    expect(groupCards(snapshot.cards).fund.map((c) => c.id)).toContain(planned.id);
+    expect(plannedCards(snapshot.cards).next.map((c) => c.id)).not.toContain(planned.id);
+    expect(fundableCards(snapshot).map((c) => c.id)).toEqual([planned.id]);
+  });
 
-    const funding = query(fake.queries, 'public_card_funding');
-    expect(funding.select).toBe('card_id,contributors,credited_usd');
-    expect(funding.terminal).toBe('returns');
+  it('takes nothing that moves from the card document: only a card’s words, source, shape, folder, drafter and creation', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const scrambled = (docs.cards.cards as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      stage: 'proposed',
+      horizon: 'later',
+      rank: 99,
+      executor_role_id: 'r-stale',
+      funding_target_usd: 999,
+      funded_usd: 999,
+      live_at: '2000-01-01T00:00:00Z',
+      updated_at: '2000-01-01T00:00:00Z',
+    }));
+    expect(snapshotFrom(docs.live, { ...docs.cards, cards: scrambled })).toEqual(golden);
+  });
 
-    const spend = query(fake.queries, 'public_card_spend');
-    expect(spend.select).toBe('card_id,spent_usd');
-    expect(spend.terminal).toBe('returns');
+  it('rejects a live map card missing a key or holding one of the wrong JSON type', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const id = String(DEFAULT_STUDIO.cards[0]!.id);
+    const map = docs.live.cards as Record<string, Record<string, unknown>>;
+    for (const key of Object.keys(REQUIRED_KEYS.live_card)) {
+      const entry = { ...map[id] };
+      delete entry[key];
+      expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: entry } }, docs.cards), key).toThrow(`/api/live cards.${id} has no ${key}`);
+    }
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: { ...map[id], live_at: 5 } } }, docs.cards)).toThrow(`/api/live cards.${id}.live_at is number`);
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: { ...map[id], horizon: 'soon' } } }, docs.cards)).toThrow('Malformed horizon: soon');
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: 'live' } }, docs.cards)).toThrow(`/api/live cards.${id} is not a JSON object`);
+  });
 
-    const studio = query(fake.queries, 'public_studio');
-    // Every column of the view, so platform_lane_open is read once the view has it.
-    expect(studio.select).toBe('*');
-    expect(studio.terminal).toBe('maybeSingle');
+  it('lists paused and rejected cards only through stopped, as the pages do today', () => {
+    const paused = { ...DEFAULT_STUDIO.cards[0]!, id: '00000000-0000-4000-8000-0000000000aa', stage: 'paused' };
+    const rejected = { ...DEFAULT_STUDIO.cards[0]!, id: '00000000-0000-4000-8000-0000000000bb', stage: 'rejected' };
+    const docs = toDocuments(studioWith({ cards: [...DEFAULT_STUDIO.cards, paused, rejected] }));
+    expect(Object.keys(docs.live.cards as object)).toEqual(expect.arrayContaining([paused.id, rejected.id]));
+    const ids = snapshotFrom(docs.live, docs.cards).cards.map((card) => card.id);
+    expect(ids).not.toContain(paused.id);
+    expect(ids).not.toContain(rejected.id);
+  });
 
-    expect(query(fake.queries, 'public_ledger_totals').terminal).toBe('maybeSingle');
+  it('ignores a key it does not know, in either document or a row', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const snapshot = snapshotFrom(
+      { ...docs.live, supporters: [{ n: 1 }], reports: null },
+      { ...docs.cards, board_work: 'later', cards: (docs.cards.cards as object[]).map((row) => ({ ...row, future_column: 1 })) },
+    );
+    expect(snapshot).toEqual(golden);
+  });
 
-    // public_money: one row, every money-in figure, the reconcile, the funding order; no operations column.
-    const books = query(fake.queries, 'public_money');
-    expect(books.select).toBe(MONEY_COLUMNS);
-    expect(MONEY_COLUMNS).not.toMatch(/operations/);
-    expect(books.terminal).toBe('maybeSingle');
+  it('rejects a document missing a required key or holding one of the wrong JSON type', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    for (const key of Object.keys(REQUIRED_KEYS.live)) {
+      const live = { ...docs.live };
+      delete live[key];
+      expect(() => snapshotFrom(live, docs.cards), key).toThrow(`/api/live has no ${key}`);
+    }
+    for (const key of Object.keys(REQUIRED_KEYS.cards)) {
+      const cards = { ...docs.cards };
+      delete cards[key];
+      expect(() => snapshotFrom(docs.live, cards), key).toThrow(`/api/cards has no ${key}`);
+    }
+    expect(() => snapshotFrom({ ...docs.live, cards: [] }, docs.cards)).toThrow('/api/live.cards is array');
+    expect(() => snapshotFrom({ ...docs.live, events: {} }, docs.cards)).toThrow('/api/live.events is object');
+    expect(() => snapshotFrom({ ...docs.live, studio: null }, docs.cards)).toThrow('/api/live.studio is null');
+    expect(() => snapshotFrom(docs.live, { ...docs.cards, terms: 'x' })).toThrow('/api/cards.terms is string');
+    expect(() => snapshotFrom([], docs.cards)).toThrow('/api/live is not a JSON object');
+  });
 
-    const stopped = query(fake.queries, 'public_stopped_cards');
-    expect(stopped.select).toBe(STOPPED_COLUMNS);
-    expect(stopped.orders).toEqual([{ column: 'stopped_at', ascending: false }]);
-    expect(stopped.limit).toBe(STOPPED_LIMIT);
-    expect(STOPPED_LIMIT).toBe(12);
+  it('marks a null money or stopped missing and keeps everything else', () => {
+    for (const [fields, name] of [
+      [{ money: null }, 'money'],
+      [{ stopped: null }, 'stopped'],
+    ] as const) {
+      const docs = toDocuments(studioWith(fields));
+      const snapshot = snapshotFrom(docs.live, docs.cards);
+      expect(snapshot.missing).toEqual([name]);
+      if (name === 'money') expect(snapshot.money).toBeNull();
+      else expect(snapshot.stopped).toEqual([]);
+      expect(snapshot.pool?.balance_usd).toBe(12.34);
+    }
+    const both = toDocuments(studioWith({ money: null, stopped: null }));
+    expect(snapshotFrom(both.live, both.cards).missing).toEqual(['money', 'stopped']);
+  });
 
-    const events = query(fake.queries, 'public_agent_events');
-    expect(events.select).toBe('id,card_id,role_id,type,created_at,step,usd');
-    expect(events.orders).toEqual([{ column: 'created_at', ascending: false }]);
-    expect(events.limit).toBe(EVENT_LIMIT);
+  it('rejects the load on a malformed figure, never showing zero', () => {
+    const cases: Partial<StudioFixture>[] = [
+      { pool: { ...DEFAULT_STUDIO.pool, balance_usd: 'abc' } },
+      { totals: { ...DEFAULT_STUDIO.totals, usd_total: 'x' } },
+      { money: moneyRow({ short_usd: 'x' }) },
+      { money: moneyRow({ funding_order: [{ card_id: 'c1', room_usd: 'y' }] }) },
+      { spend: [{ card_id: DEFAULT_STUDIO.cards[4]!.id, spent_usd: 'z' }] },
+      { funding: [{ card_id: DEFAULT_STUDIO.cards[0]!.id, contributors: 'y', credited_usd: '0' }] },
+      { stopped: [{ card_id: 'c9', title: 'Stopped', stage: 'rejected', failing_check: null, spent_usd: 'z', funded_usd: '0', credited_usd: '0', moved: [], stopped_at: '2026-09-22T10:00:00Z' }] },
+    ];
+    for (const fields of cases) {
+      const docs = toDocuments(studioWith(fields));
+      // A card's figure in the live map that is not a number fails its type check; any other, money().
+      expect(() => snapshotFrom(docs.live, docs.cards), JSON.stringify(fields)).toThrow(/Malformed|is string, not number/);
+    }
+  });
 
-    const deploys = query(fake.queries, 'deploys');
-    // The smoke bot's raw output is not read at all; the site shows only passed or failed.
-    expect(deploys.select).toBe('id,folder,sha,is_green,created_at');
-    expect(deploys.orders).toEqual([{ column: 'created_at', ascending: false }]);
-    expect(deploys.limit).toBe(DEPLOY_LIMIT);
+  it('keeps the books’ order: funding_order is the waterfall’s, card by card', () => {
+    const order = fundingOrder([DEFAULT_STUDIO.cards[1]!.id, DEFAULT_STUDIO.cards[0]!.id]);
+    const docs = toDocuments(studioWith({ money: moneyRow({ funding_order: order }) }));
+    expect(snapshotFrom(docs.live, docs.cards).money?.funding_order).toEqual(order.map(({ card_id }) => ({ card_id, room_usd: 1 })));
+  });
 
-    const roles = query(fake.queries, 'public_roles');
-    expect(ROLE_COLUMNS).toBe('id,name,title,description,species_note,model,write_access,state,hired_at');
-    expect(roles.select).toBe(ROLE_COLUMNS);
-    expect(roles.orders).toEqual([
-      { column: 'hired_at', ascending: true },
-      { column: 'title', ascending: true },
-    ]);
-
-    expect(snapshot.pool).toEqual({
-      balance_usd: 48.56,
-      reserve_usd: 7.1,
-      incident_reserve_usd: 2.56,
-      held_usd: 0,
-      daily_spent_usd: 0,
-      day: '2026-09-14',
-    });
-    expect(snapshot.cards).toEqual([
-      {
-        id: 'c1',
-        title: 'Week 1: the loop',
-        summary: 'The first playable loop.',
-        intent: 'Build the core loop.',
-        source: 'board',
-        stage: 'voted',
-        shape: 'goal',
-        bucket: 'game',
-        folder: 'seed-1',
-        horizon: 'now',
-        rank: 2,
-        executor_role_id: 'r1',
-        drafter_role_id: null,
-        funding_target_usd: 100,
-        funded_usd: 25,
-        spent_usd: 0.42,
-        created_at: '2026-09-14T00:00:00Z',
-        updated_at: '2026-09-14T02:00:00Z',
-        live_at: null,
-      },
-    ]);
-    expect(snapshot.funding).toEqual({ c1: { contributors: 3, credited_usd: 18.5 } });
-    expect(snapshot.launchedAt).toBe('2026-09-20T00:00:00Z');
-    expect(snapshot.paused).toBe(true);
-    expect(snapshot.pauseReason).toBe('awaiting_credit');
-    expect(snapshot.money).toEqual({
-      payments: 3,
-      received_usd: 30,
-      stripe_fees_usd: 1.5,
-      refunded_usd: 5,
-      disputed_usd: 0,
-      corrections_usd: 0,
-      studio_pct_avg: 22.5,
-      reserve_usd: 2.35,
-      studio_usd: 4.23,
-      incident_usd: 0.85,
-      held_usd: 0,
-      agent_credit_usd: 16.07,
-      not_on_card_usd: 1.2,
-      short_usd: 0,
-      board_test_usd: 0.5019,
-      reconciled_at: '2026-09-23T04:00:00+00:00',
-      last_run_ok: true,
-      funding_order: [{ card_id: 'c1', room_usd: 75 }],
-    });
-    expect(snapshot.stopped).toEqual([
-      {
-        card_id: 'c9',
-        title: 'A card that stopped',
-        stage: 'rejected',
-        failing_check: 'gate',
-        spent_usd: 0.3,
-        funded_usd: 0,
-        credited_usd: 2,
-        moved: [
-          { to_card_id: 'c1', to_title: 'Week 1: the loop', usd: 1.2 },
-          { to_card_id: null, to_title: null, usd: 0.5 },
+  it('reads each card’s horizon and rank from the live map, and the pause and the lane only when true', () => {
+    const base = DEFAULT_STUDIO.cards[0]!;
+    const docs = toDocuments(
+      studioWith({
+        cards: [
+          { ...base, id: 'a', horizon: 'now', rank: null },
+          { ...base, id: 'n', horizon: 'next', rank: '3', created_at: '2026-09-15T00:01:00Z' },
+          { ...base, id: 'l', horizon: 'later', rank: 1, created_at: '2026-09-15T00:02:00Z' },
         ],
-        stopped_at: '2026-09-22T10:00:00Z',
-      },
-    ]);
-    expect(snapshot.totals).toEqual({
-      usd_total: 1.25,
-      input_tokens: 12000,
-      cached_tokens: 3000,
-      output_tokens: 800,
-      row_count: 3,
-    });
-    expect(snapshot.events).toHaveLength(3);
-    expect(snapshot.roles).toEqual([
-      {
-        id: 'r1',
-        name: 'Builder A',
-        title: 'Builder A',
-        description: 'Builds game cards.',
-        species_note: 'A small blue creature with two round antennae and stubby legs.',
-        model: 'claude-sonnet-5',
-        write_access: true,
-        state: 'active',
-        hired_at: '2026-09-14T00:00:00Z',
-      },
-    ]);
-    expect(fake.queries.some((q) => q.table === 'roles')).toBe(false);
-    expect(snapshot.missing).toEqual([]);
-    // Every query, the title lookup included, carries a timeout signal.
-    expect(fake.queries.map((q) => [q.table, q.signal instanceof AbortSignal])).toEqual(
-      fake.queries.map((q) => [q.table, true]),
+        paused: true,
+        pauseReason: 'awaiting_credit',
+      }),
     );
+    const snapshot = snapshotFrom(docs.live, docs.cards);
+    expect(snapshot.cards.map((card) => [card.id, card.horizon, card.rank])).toEqual([
+      ['a', 'now', null],
+      ['n', 'next', 3],
+      ['l', 'later', 1],
+    ]);
+    expect([snapshot.paused, snapshot.pauseReason, snapshot.platformLaneOpen]).toEqual([true, 'awaiting_credit', false]);
+    const open = { ...docs.live, studio: { launched_at: null, paused: false, platform_lane_open: true, pause_reason: 'board' } };
+    const unpaused = snapshotFrom(open, docs.cards);
+    expect([unpaused.paused, unpaused.pauseReason, unpaused.platformLaneOpen]).toEqual([false, null, true]);
   });
 
-  it('fetches titles only for the distinct card ids in the loaded events', async () => {
-    const fake = fakeClient();
-    const snapshot = await createSupabaseSource(fake.client).load();
-    const titles = query(fake.queries, 'cards', 1);
-    expect(titles.select).toBe('id,title');
-    expect(titles.filters).toEqual(['in id c1']);
-    expect(snapshot.cardTitles).toEqual({ c1: 'Week 1: the loop' });
+  it('builds card titles for events from the live document', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const snapshot = snapshotFrom(docs.live, docs.cards);
+    expect(snapshot.cardTitles).toEqual({ [String(DEFAULT_STUDIO.cards[4]!.id)]: DEFAULT_STUDIO.cards[4]!.title });
+    expect(Object.keys(snapshot.events[0]!).sort()).toEqual(['card_id', 'created_at', 'id', 'role_id', 'type']);
   });
 
-  it('skips the title query when no event names a card', async () => {
-    const fake = fakeClient({ events: [] });
-    const snapshot = await createSupabaseSource(fake.client).load();
-    expect(fake.queries.filter((q) => q.table === 'cards')).toHaveLength(1);
-    expect(snapshot.cardTitles).toEqual({});
+  it("keeps a line's step and amount, which the pages turn into what the database did to a card", () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const events = docs.live.events as Record<string, unknown>[];
+    const live = { ...docs.live, events: [{ ...events[0]!, role_id: null, type: 'message', step: 'ceiling_top_up', usd: 2.5 }, ...events.slice(1)] };
+    const [first] = snapshotFrom(live, docs.cards).events;
+    expect([first!.step, first!.usd]).toEqual(['ceiling_top_up', 2.5]);
+    expect(() => snapshotFrom({ ...docs.live, events: [{ ...events[0]!, usd: 'x' }] }, docs.cards)).toThrow('Malformed');
   });
 
-  it('rejects with the database error message when the pool fails', async () => {
-    const fake = fakeClient({ failTable: 'pool' });
-    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('pool is unavailable');
+  it('rejects when a document answers other than 200', async () => {
+    for (const url of [LIVE_URL, CARDS_URL]) {
+      const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO), { [url]: 502 });
+      await expect(createSnapshotSource({ fetchFn }).load()).rejects.toThrow(`${url} answered 502`);
+    }
   });
 
-  it('aborts a request that never answers through supabase-js itself, and rejects the load', async () => {
-    // A fetch that never responds and, like the browser's, rejects with the signal's reason on abort.
-    const hung = (_url: RequestInfo | URL, init?: RequestInit) =>
+  it('aborts a request that never answers after its timeout, and rejects the load', async () => {
+    const hung = ((_url: string, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
         const signal = init?.signal;
         if (signal === undefined || signal === null) return;
-        if (signal.aborted) reject(signal.reason);
-        else signal.addEventListener('abort', () => reject(signal.reason));
-      });
-    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
-      global: { fetch: hung },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    await expect(createSupabaseSource(client, { timeoutMs: 20 }).load()).rejects.toThrow(/TimeoutError|AbortError/);
+        signal.addEventListener('abort', () => reject(signal.reason));
+      })) as unknown as typeof fetch;
+    await expect(createSnapshotSource({ fetchFn: hung, timeoutMs: 20 }).load()).rejects.toThrow(/TimeoutError|timed out|aborted/i);
+    expect(REQUEST_TIMEOUT_MS).toBe(10_000);
   });
 
-  it('rejects when a core query never answers, once its timeout aborts it', async () => {
-    const fake = fakeClient({ hangTable: 'pool' });
-    await expect(createSupabaseSource(fake.client, { timeoutMs: 20 }).load()).rejects.toThrow('AbortError');
-  });
-
-  it('names an enrichment as missing when its query never answers, once its timeout aborts it', async () => {
-    const fake = fakeClient({ hangTable: 'deploys' });
-    const snapshot = await createSupabaseSource(fake.client, { timeoutMs: 20 }).load();
-    expect(snapshot.missing).toEqual(['deploys']);
-    expect(snapshot.deploys).toEqual([]);
-    expect(snapshot.pool?.balance_usd).toBe(48.56);
-  });
-
-  it('times each query out after ten seconds by default', () => {
-    expect(QUERY_TIMEOUT_MS).toBe(10_000);
-  });
-
-  it('rejects when the cards fail', async () => {
-    const fake = fakeClient({ failTable: 'cards' });
-    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('cards is unavailable');
-  });
-
-  it('rejects when a pool figure is malformed', async () => {
-    const fake = fakeClient({ rows: { pool: { ...(rowsFor(emptyQuery('pool')) as object), balance_usd: 'abc' } } });
-    await expect(createSupabaseSource(fake.client).load()).rejects.toThrow('Malformed numeric value: abc');
-  });
-
-  it('names every enrichment the site reads', () => {
+  it('names every enrichment the pages know, of which only money and stopped can now be missing', () => {
     expect([...ENRICHMENTS]).toEqual(['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'money', 'stopped', 'cardTitles']);
   });
 
-  // Each enrichment, the table or view it reads, and the empty value the snapshot falls back to.
-  const enrichments: [string, string, (snapshot: Snapshot) => void][] = [
-    ['funding', 'public_card_funding', (s) => expect(s.funding).toEqual({})],
-    ['spend', 'public_card_spend', (s) => expect(s.cards[0]?.spent_usd).toBe(0)],
-    [
-      'studio',
-      'public_studio',
-      (s) => {
-        expect(s.launchedAt).toBeNull();
-        expect(s.paused).toBe(false);
-        expect(s.pauseReason).toBeNull();
-      },
-    ],
-    ['totals', 'public_ledger_totals', (s) => expect(s.totals.usd_total).toBe(0)],
-    [
-      'events',
-      'public_agent_events',
-      (s) => {
-        expect(s.events).toEqual([]);
-        expect(s.cardTitles).toEqual({});
-      },
-    ],
-    ['deploys', 'deploys', (s) => expect(s.deploys).toEqual([])],
-    ['roles', 'public_roles', (s) => expect(s.roles).toEqual([])],
-    ['money', 'public_money', (s) => expect(s.money).toBeNull()],
-    ['stopped', 'public_stopped_cards', (s) => expect(s.stopped).toEqual([])],
-  ];
-
-  for (const [name, table, fallback] of enrichments) {
-    it(`keeps the pool and the cards and names ${name} as missing when ${table} fails`, async () => {
-      const fake = fakeClient({ failTable: table });
-      const snapshot = await createSupabaseSource(fake.client).load();
-      expect(snapshot.missing).toEqual([name]);
-      expect(snapshot.pool?.balance_usd).toBe(48.56);
-      expect(snapshot.cards.map((card) => card.id)).toEqual(['c1']);
-      fallback(snapshot);
-    });
-  }
-
-  it('names an enrichment as missing when one of its figures is malformed', async () => {
-    const fake = fakeClient({ rows: { public_card_funding: [{ card_id: 'c1', contributors: 'abc', credited_usd: '1.0000' }] } });
-    const snapshot = await createSupabaseSource(fake.client).load();
-    expect(snapshot.missing).toEqual(['funding']);
-    expect(snapshot.funding).toEqual({});
-  });
-
-  it('names the money as missing when public_money returns no row or a malformed figure, and the stopped cards on a malformed row', async () => {
-    for (const rows of [
-      { public_money: null },
-      { public_money: { ...(rowsFor(emptyQuery('public_money')) as object), short_usd: 'x' } },
-      { public_money: { ...(rowsFor(emptyQuery('public_money')) as object), funding_order: [{ card_id: 'c1', room_usd: 'y' }] } },
-    ]) {
-      const snapshot = await createSupabaseSource(fakeClient({ rows }).client).load();
-      expect(snapshot.missing).toEqual(['money']);
-      expect(snapshot.money).toBeNull();
-    }
-    const stopped = await createSupabaseSource(
-      fakeClient({ rows: { public_stopped_cards: [{ ...(rowsFor(emptyQuery('public_stopped_cards')) as object[])[0], spent_usd: 'z' }] } }).client,
-    ).load();
-    expect(stopped.missing).toEqual(['stopped']);
-    expect(stopped.stopped).toEqual([]);
-  });
-
-  it('reads no pause reason while the studio is not paused', async () => {
-    const snapshot = await createSupabaseSource(
-      fakeClient({ rows: { public_studio: { launched_at: null, paused: false, pause_reason: 'board' } } }).client,
-    ).load();
-    expect(snapshot.paused).toBe(false);
-    expect(snapshot.pauseReason).toBeNull();
-  });
-
-  it('names the card titles as missing when the title query fails', async () => {
-    const fake = fakeClient({ failTitles: true });
-    const snapshot = await createSupabaseSource(fake.client).load();
-    expect(snapshot.missing).toEqual(['cardTitles']);
-    expect(snapshot.cardTitles).toEqual({});
-    expect(snapshot.events).toHaveLength(3);
-  });
-
-  it('lists several missing parts in a fixed order', async () => {
-    const fake = fakeClient({
-      rows: {
-        public_ledger_totals: { usd_total: 'x', input_tokens: '0', cached_tokens: '0', output_tokens: '0', row_count: '0' },
-        public_card_funding: [{ card_id: 'c1', contributors: 'y', credited_usd: '0' }],
-      },
-    });
-    const snapshot = await createSupabaseSource(fake.client).load();
-    expect(snapshot.missing).toEqual(['funding', 'totals']);
-  });
-});
-
-describe('horizon, rank and pause', () => {
-  it('reads a card with no horizon as horizon now and keeps next and later', async () => {
-    const base = (rowsFor(emptyQuery('cards')) as Record<string, unknown>[])[0]!;
-    const fake = fakeClient({
-      rows: {
-        cards: [
-          { ...base, id: 'old', horizon: null, rank: null },
-          { ...base, id: 'n', horizon: 'next', rank: '3' },
-          { ...base, id: 'l', horizon: 'later', rank: null },
-        ],
-      },
-    });
-    const snapshot = await createSupabaseSource(fake.client).load();
-    expect(snapshot.cards.map((card) => [card.id, card.horizon, card.rank])).toEqual([
-      ['old', 'now', null],
-      ['n', 'next', 3],
-      ['l', 'later', null],
+  it('requires the keys snapshot-keys.json lists, which the Deno migration test checks against the SQL', () => {
+    expect(REQUIRED_KEYS).toEqual(SNAPSHOT_KEYS);
+    expect(Object.keys(SNAPSHOT_KEYS.live).sort()).toEqual(['built_at', 'cards', 'deploys', 'events', 'money', 'pool', 'stopped', 'studio', 'totals']);
+    expect(Object.keys(SNAPSHOT_KEYS.live_card).sort()).toEqual([
+      'contributors',
+      'credited_usd',
+      'executor_role_id',
+      'funded_usd',
+      'funding_target_usd',
+      'horizon',
+      'live_at',
+      'rank',
+      'spent_usd',
+      'stage',
+      'updated_at',
     ]);
-  });
-
-  it('reads paused as false unless the studio row says true', async () => {
-    const fake = fakeClient({ rows: { public_studio: { launched_at: null, paused: null } } });
-    expect((await createSupabaseSource(fake.client).load()).paused).toBe(false);
-  });
-
-  it('reads the platform code lane as open only when the studio row says so, and closed on a database without the column', async () => {
-    const open = fakeClient({ rows: { public_studio: { launched_at: null, paused: false, platform_lane_open: true } } });
-    expect((await createSupabaseSource(open.client).load()).platformLaneOpen).toBe(true);
-    const before = fakeClient({ rows: { public_studio: { launched_at: null, paused: true } } });
-    const snapshot = await createSupabaseSource(before.client).load();
-    expect(snapshot.platformLaneOpen).toBe(false);
-    expect(snapshot.paused).toBe(true);
+    expect(Object.keys(SNAPSHOT_KEYS.cards).sort()).toEqual(['cards', 'roles', 'terms']);
   });
 });
 
-describe('the roles table', () => {
+describe('the site reads only its own origin', () => {
   /** Every non-test source file under src, read as text. */
   function sources(dir: string): [string, string][] {
     return readdirSync(dir).flatMap((name) => {
@@ -635,38 +348,21 @@ describe('the roles table', () => {
       return [[path, readFileSync(path, 'utf8')] as [string, string]];
     });
   }
+  const all = sources(resolve(process.cwd(), 'src'));
 
-  it('is never queried by the site, which reads public_roles instead', () => {
-    const offenders = sources(resolve(process.cwd(), 'src'))
-      .filter(([, text]) => /\.from\(\s*['"]roles['"]\s*\)/.test(text))
-      .map(([path]) => path);
+  it('imports no Supabase client, names no Supabase host and opens no WebSocket', () => {
+    const offenders = all.filter(([, text]) => /@supabase\/|supabase\.co|new WebSocket|realtime/i.test(text)).map(([path]) => path);
     expect(offenders).toEqual([]);
   });
-});
 
-describe('createSupabaseSource.subscribe', () => {
-  it('joins a fresh channel on every subscription and listens to the published tables', () => {
-    const expected: Listener[] = [
-      { table: 'pool', filter: null },
-      { table: 'cards', filter: null },
-      { table: 'deploys', filter: null },
-    ];
-    expect(REALTIME_LISTENERS.map((l) => l.table)).toEqual(expected.map((l) => l.table));
-    const fake = fakeClient();
-    const source = createSupabaseSource(fake.client);
-    const onChange = () => {};
-
-    const first = source.subscribe(onChange);
-    first();
-    source.subscribe(onChange);
-
-    expect(fake.channels).toHaveLength(2);
-    const [a, b] = fake.channels;
-    expect(a?.topic).not.toBe(b?.topic);
-    expect(a?.subscribed).toBe(1);
-    expect(b?.subscribed).toBe(1);
-    expect(a?.listeners).toEqual(expected);
-    expect(b?.listeners).toEqual(expected);
-    expect(fake.removed).toEqual([a?.topic]);
+  it('holds no open-for-funding rule of its own: canFund only for sample and example cards', () => {
+    expect(all.filter(([, text]) => /isOpenForFunding|takesMoney/.test(text)).map(([path]) => path)).toEqual([]);
+    const callers = all
+      .filter(([path, text]) => !path.endsWith('payment.ts') && !path.endsWith('cards.ts') && /\bcanFund\b/.test(text.replace(/^import [^;]*;$/gm, '')))
+      .map(([path]) => path.slice(path.indexOf('src/')));
+    // Funding.tsx draws a sample card's button; HowItWorks.tsx picks the card its example shows.
+    expect(callers.sort()).toEqual(['src/components/Funding.tsx', 'src/pages/HowItWorks.tsx']);
+    const funding = all.find(([path]) => path.endsWith('components/Funding.tsx'))![1];
+    expect(funding).toMatch(/mode === 'sample' && canFund\(card\)/);
   });
 });
