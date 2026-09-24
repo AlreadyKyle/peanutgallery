@@ -148,6 +148,7 @@ export const copy = {
   // A card's own page (docs/specs/supporter-pages.md).
   cardPage: {
     back: 'All cards',
+    cardTitle: 'A card',
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
     unavailable: 'This card could not be loaded right now.',
@@ -178,7 +179,7 @@ export const copy = {
     play: 'Play',
     replay: 'Replay',
     label: 'Play how this card was built',
-    replayLabel: 'Play how this card was built again',
+    replayLabel: 'Replay how this card was built',
     opened: 'The card was dealt.',
     funded: 'Its bar filled.',
     started: 'An agent started work.',

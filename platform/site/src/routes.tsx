@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { copy } from './lib/copy';
+import { CardPage } from './pages/CardPage';
 import { Guide, GUIDE_PATH } from './pages/Guide';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
@@ -18,6 +19,8 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/how-it-works', element: <HowItWorks /> },
   { path: '/team', element: <Team /> },
   { path: '/roadmap', element: <Roadmap /> },
+  // A card's own page (docs/specs/supporter-pages.md): the Watch links and /ledger's Stopped rows link it.
+  { path: '/card/:id', element: <CardPage /> },
   // The design guide: unlisted (no top bar link, nothing links to it) and not indexed (DESIGN.md, Mockups).
   { path: GUIDE_PATH, element: <Guide /> },
 ];

@@ -92,7 +92,8 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         {shown === 'rejected' ? (
           <>
             {reason === undefined ? null : <p className="card-meta">{reason}</p>}
-            <p className="card-meta">{legal.notBuiltMoney}</p>
+            {/* A real card's own page says where its money went, card by card, below the face. */}
+            {mode === 'sample' ? <p className="card-meta">{legal.notBuiltMoney}</p> : null}
           </>
         ) : shown === 'live' ? (
           <>

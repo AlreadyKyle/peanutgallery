@@ -51,11 +51,36 @@ function PausedTag() {
   );
 }
 
-function StoppedRow({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
+/**
+ * A stopped card's reason and money trail: why it stopped, what it spent, who funded it and where its
+ * unspent money went (or that a paused card keeps its money). /ledger's row and the card's own page
+ * (docs/specs/supporter-pages.md) say it in the same words.
+ */
+export function StoppedFacts({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
   const spent = `${formatUsd(card.spent_usd)} ${legal.spent}`;
   const paused = card.stage === 'paused';
   const funded = paused ? null : fundedBy(card, snapshot);
   const moved = paused ? null : movedLine(card);
+  return (
+    <>
+      <p data-stopped="reason">{stopReason(card)}</p>
+      <p className="row-meta">
+        {paused ? <PausedTag /> : null}
+        <span className="card-meta" data-stopped="money">
+          {[spent, funded].filter((part): part is string => part !== null).join(' · ')}
+        </span>
+      </p>
+      {paused ? <p className="muted">{legal.pausedMoneyStays}</p> : null}
+      {moved === null ? null : (
+        <p className="muted" data-stopped="moved">
+          {moved}
+        </p>
+      )}
+    </>
+  );
+}
+
+function StoppedRow({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
   return (
     <li data-card={card.card_id}>
       <span className="row-time">{formatDate(card.stopped_at)}</span>
@@ -63,13 +88,7 @@ function StoppedRow({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot 
         <h4 className="row-title">
           <Link to={`/card/${card.card_id}`}>{card.title}</Link>
         </h4>
-        <p>{stopReason(card)}</p>
-        <p className="row-meta">
-          {paused ? <PausedTag /> : null}
-          <span className="card-meta">{[spent, funded].filter((part): part is string => part !== null).join(' · ')}</span>
-        </p>
-        {paused ? <p className="muted">{legal.pausedMoneyStays}</p> : null}
-        {moved === null ? null : <p className="muted">{moved}</p>}
+        <StoppedFacts card={card} snapshot={snapshot} />
       </div>
     </li>
   );
