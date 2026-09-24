@@ -118,7 +118,7 @@ async function studio() {
     ])).r;
   };
   const approve = async (id: string, grader = `director-session-${id}`) =>
-    (await row<{ id: string }>(`select public.approve_card_draft($1, $2, $3, '{"reason_codes":["fits_pillars"]}'::jsonb) as id`, [id, roles.director, grader])).id;
+    (await row<{ id: string }>(`select public.approve_card_draft($1, $2, $3, '{"result":"approved","reason_codes":["fits_pillars"]}'::jsonb) as id`, [id, roles.director, grader])).id;
   const draftRow = async (id: string) => await row<Row>(`select * from public.card_drafts where id = $1`, [id]);
   const cardRow = async (id: string) => await row<Row>(`select * from public.cards where id = $1`, [id]);
   const cardCount = async () => (await row<{ n: number }>(`select count(*)::int as n from public.cards`)).n;
@@ -154,7 +154,7 @@ Deno.test("a draft is private and every draft and ranking function is the servic
     await t.step("anon and authenticated may call none of the new functions", async () => {
       const calls = [
         `select public.record_card_draft(null, '${s.roles.designer}', '{}'::jsonb, 'm')`,
-        `select public.approve_card_draft('${d.id}', '${s.roles.director}', 'g')`,
+        `select public.approve_card_draft('${d.id}', '${s.roles.director}', 'g', '{"result":"approved"}'::jsonb)`,
         `select public.withdraw_card_draft('${d.id}', array['off_pillar'])`,
         `select public.apply_card_ranking(gen_random_uuid(), array[]::uuid[])`,
         `select public.rankable_cards()`,
@@ -250,15 +250,29 @@ Deno.test("approval inserts one seed-1 card from the graded draft, which takes n
     await t.step("approval is refused, writing no card, when the grader ref is the maker's, the approver made it, or the card is not ready", async () => {
       const before = await s.cardCount();
       const same = await s.draft({ title: "Same session" }, "one-session");
-      await s.refuses(`select public.approve_card_draft($1, $2, 'one-session')`, "The grader ref must differ from the maker ref", [same.id, s.roles.director]);
-      await s.refuses(`select public.approve_card_draft($1, $2, 'other-session')`, "The approver cannot be the card's proposer, drafter or executor", [same.id, s.roles.designer]);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'one-session', '{"result":"approved"}'::jsonb)`, "The grader ref must differ from the maker ref", [same.id, s.roles.director]);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'other-session', '{"result":"approved"}'::jsonb)`, "The approver cannot be the card's proposer, drafter or executor", [same.id, s.roles.designer]);
       const noExecutor = await s.draft({ title: "No executor", executor_role_id: null });
-      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-x')`, "A card on now needs an executor role", [noExecutor.id, s.roles.director]);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-x', '{"result":"approved"}'::jsonb)`, "A card on now needs an executor role", [noExecutor.id, s.roles.director]);
       const noCheck = await s.draft({ title: "No check", acceptance_test: "It feels better." });
-      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-y')`, "needs a check: line", [noCheck.id, s.roles.director]);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-y', '{"result":"approved"}'::jsonb)`, "needs a check: line", [noCheck.id, s.roles.director]);
       assertEquals(await s.cardCount(), before);
       assertEquals((await s.draftRow(same.id)).status, "drafted");
-      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-z')`, "is already approved", [d.id, s.roles.director]);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-z', '{"result":"approved"}'::jsonb)`, "is already approved", [d.id, s.roles.director]);
+    });
+
+    await t.step("approval is refused, writing no card, unless the grader's own verdict is approved", async () => {
+      const before = await s.cardCount();
+      const graded = await s.draft({ title: "Graded, not approved" });
+      for (const verdict of ['{"result":"revise","reason_codes":["unclear_text"]}', '{"result":"flagged","reason_codes":["off_pillar"]}', '{"reason_codes":["fits_pillars"]}', '{"verdict":"approved"}']) {
+        await s.refuses(`select public.approve_card_draft($1, $2, 'grader-v', $3::jsonb)`, "Only an approved verdict approves a draft", [graded.id, s.roles.director, verdict]);
+      }
+      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-v', null)`, "The verdict must be a JSON object", [graded.id, s.roles.director]);
+      assertEquals(await s.cardCount(), before);
+      assertEquals((await s.draftRow(graded.id)).status, "drafted");
+      const id = await s.approve(graded.id);
+      const stored = await s.row<{ verdict: Row }>(`select verdict from public.card_approvals where card_id = $1`, [id]);
+      assertEquals([stored.verdict.result, stored.verdict.verdict], ["approved", "approved"], "the approval row carries the grader's own result");
     });
   } finally {
     await s.close();
@@ -274,7 +288,7 @@ Deno.test("a withdrawal writes no card and ends the draft", OPTS, async () => {
     const stored = await s.draftRow(d.id);
     assertEquals([stored.status, stored.reason_codes, stored.card_id], ["withdrawn", ["off_pillar", "too_big"], null]);
     assertEquals(await s.cardCount(), 0);
-    await s.refuses(`select public.approve_card_draft($1, $2, 'grader')`, "is already withdrawn", [d.id, s.roles.director]);
+    await s.refuses(`select public.approve_card_draft($1, $2, 'grader', '{"result":"approved"}'::jsonb)`, "is already withdrawn", [d.id, s.roles.director]);
     await s.refuses(`select public.withdraw_card_draft($1, array['again'])`, "is already withdrawn", [d.id]);
   } finally {
     await s.close();
@@ -336,13 +350,18 @@ Deno.test("apply_card_ranking writes rank only, on open cards on now with no mon
       assertEquals(held.held_usd, 5);
       assertEquals(Number((await s.cardRow(withHold)).funded_usd), 0, "nothing on its bar, only a hold");
       await s.db.exec(`update public.studio_state set credit_daily_cap_usd = 10000 where id = 1`);
-      assertEquals((await s.row<{ ids: string[] }>(`select public.rankable_cards() as ids`)).ids, open, "the open cards on now with no money, in funding order");
+      // Vetoed by the board and put back on now: open by stage, but step 2 funds it never, so trading
+      // its rank could move a card the line funds past one it leaves out.
+      const vetoed = await s.boardCard("Vetoed, back on now", { rank: 13 });
+      await s.db.query(`update public.cards set board_vetoed = true, board_veto_reason = 'Off pillar.' where id = $1`, [vetoed]);
+      assertEquals((await s.row<{ ids: string[] }>(`select public.rankable_cards() as ids`)).ids, open, "the open cards on now in step 2's line with no money, in funding order");
       const before = await s.rows(`select id, rank from public.cards order by id`);
       await s.refuses(`select public.apply_card_ranking($1, array['00000000-0000-4000-8000-000000000000']::uuid[])`, "does not exist", [run]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "is not on now", [run, [open[1], next]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "is not open for funding", [run, [funded]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "holds money", [run, [withMoney]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, `Card ${withHold} holds money`, [run, [open[0], withHold]]);
+      await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, `Card ${vetoed} takes no money`, [run, [vetoed, open[0]]]);
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "names a card twice", [run, [open[0], open[0]]]);
       const other = await running("draft_card");
       await s.refuses(`select public.apply_card_ranking($1, $2::uuid[])`, "only from a running studio_ranking run", [other, [open[0]]]);

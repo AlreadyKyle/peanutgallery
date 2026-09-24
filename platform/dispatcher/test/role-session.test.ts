@@ -138,6 +138,18 @@ describe('runRoleSession', () => {
     expect(t.db.pool.balance_usd).toBe(50);
   });
 
+  it('runs on the model its role resolves to when the session starts, as card sessions do, not a stale roles.model', async () => {
+    // MODEL_DIRECTOR changed and the dispatcher restarted, with the roles not re-seeded.
+    const stale = { ...director, model: 'stale-director' };
+    const t = setup(oneTurn);
+    const resolved = await runRoleSession(request({ role: stale }), { ...t.deps, resolveModel: () => 'director-class' });
+    expect(resolved).toMatchObject({ ok: true });
+    expect(t.adapter.specs.map((spec) => spec.model)).toEqual(['director-class']);
+    const unresolved = setup(oneTurn);
+    expect(await runRoleSession(request({ role: stale }), unresolved.deps)).toMatchObject({ ok: false, reason: 'no price for model stale-director' });
+    expect(unresolved.adapter.specs).toEqual([]);
+  });
+
   it('fails, marked as invalid output, when the final message is not exactly one schema-valid object', async () => {
     for (const text of ['Approved.', `${VERDICT}\n${VERDICT}`, JSON.stringify({ result: 'approved', reason_codes: ['off_pillar'] })]) {
       const t = setup(oneTurn, { result: text });

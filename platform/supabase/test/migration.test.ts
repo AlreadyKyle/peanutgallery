@@ -2249,6 +2249,10 @@ describe("agent-workflows migration", () => {
     expect(approve).toContain("'proposed', 'next', 'neutral',\n    now() + make_interval(mins => coalesce(v_window, 0))");
     expect(approve).toContain("if public.card_content_hash(v_id) is distinct from v_draft.content_sha256 then");
     expect(approve).toContain("perform public.record_card_approval(");
+    // Only the grader's own approved verdict approves; the function never supplies one.
+    expect(approve).toContain("if coalesce(p_verdict ->> 'result', '') <> 'approved' then");
+    expect(approve).toContain("p_verdict || jsonb_build_object('verdict', p_verdict ->> 'result', 'draft_id', p_draft)");
+    expect(approve).not.toContain("default '{}'");
   });
 
   it("seeds both jobs manual only, model-calling and running while the studio is paused, with no pg_cron schedule", () => {

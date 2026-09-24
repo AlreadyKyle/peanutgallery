@@ -112,11 +112,13 @@ export const legal = {
   } as Record<string, string>,
   // What the database itself did to a card, on a line no role wrote (public_agent_events' step and
   // usd, docs/specs/agent-system-core.md): dealt to now after the cooling window, and the resume rule
-  // with the amount it took from Not on a card yet.
+  // with the amount it took from Not on a card yet. One step has a role: the Studio Head's Rank now
+  // (docs/specs/agent-workflows.md), which reads after the role's name.
   eventSteps: {
     dealt: 'Dealt to now',
     ceiling_top_up: 'Topped up with {usd} from Not on a card yet',
     resume_rule: 'Resumed by rule after its spending limit',
+    ranked: 'ranked the cards open for funding',
   } as Record<string, string>,
   // The worked path of a contribution on /how-it-works: its steps, the split example's rows and
   // where the money goes. The page's title, lede and example labels are in copy.ts.

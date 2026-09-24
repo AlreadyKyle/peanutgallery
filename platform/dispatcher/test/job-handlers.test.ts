@@ -285,6 +285,16 @@ describe('draft_card', () => {
     expect([never.db.drafts, never.db.draftCards]).toEqual([[], []]);
   });
 
+  it('sends back a draft whose text is blank or whose estimate rounds to nothing as the schema check, before record_card_draft could refuse it', async () => {
+    // record_card_draft refuses these (card_from_draft trims text and rounds the estimate to 4
+    // places), so the schema refuses them first and the round goes back to the Designer.
+    for (const blank of [{ ...DRAFT, title: '   ' }, { ...DRAFT, intent: '\n\t' }, { ...DRAFT, estimate_usd: 0.00004 }]) {
+      const t = setup({ designer: [JSON.stringify(blank), JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] }, 'draft_card');
+      expect(await draftCard(t.context), JSON.stringify(blank)).toMatchObject({ result: 'approved', rounds: [{ round: 1, draft_id: null, check: { name: 'schema' } }, { round: 2 }] });
+      expect(t.db.drafts.map((d) => d.status)).toEqual(['approved']);
+    }
+  });
+
   it('fails the run, writing no card, when a model call fails or the Director does not answer with one verdict', async () => {
     const designerDown = setup({ designer: [JSON.stringify(DRAFT)], fail: ['designer'] }, 'draft_card');
     await expect(draftCard(designerDown.context)).rejects.toThrow("the Game Designer's session failed: the model call failed");

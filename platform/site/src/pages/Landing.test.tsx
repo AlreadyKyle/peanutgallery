@@ -327,9 +327,14 @@ describe('Landing', () => {
     const loading = document.querySelector('p.status-line')!;
     expect(loading.textContent).toBe(legal.loadingFigures);
     expect(loading.getAttribute('aria-busy')).toBe('true');
+    // The live-updates row is laid out while the snapshot loads.
+    expect(document.querySelector('.updates-button')).not.toBeNull();
     cleanup();
     renderLanding(null);
     expect(document.querySelector('p.status-line')?.textContent).toBe(legal.meterUnavailable);
+    // With no snapshot, nothing claims to be up to date or offers to pause updates.
+    expect(document.querySelector('.updates-button')).toBeNull();
+    expect(screen.queryByText(/Up to date/)).toBeNull();
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();

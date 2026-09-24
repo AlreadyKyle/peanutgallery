@@ -375,6 +375,11 @@ export class FakeDb implements Db {
   }
   async recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string) {
     if (this.rpcError.recordCardDraft) throw this.rpcError.recordCardDraft;
+    // As card_from_draft refuses: blank text after trimming, or an estimate that rounds to 0 at 4 places.
+    for (const key of ['title', 'summary', 'intent', 'acceptance_test'] as const) {
+      if (fields[key].trim() === '') throw new Error(`db record_card_draft: A draft needs its ${key}`);
+    }
+    if (!(Math.round(fields.estimate_usd * 10_000) / 10_000 > 0)) throw new Error('db record_card_draft: The estimate must be above zero');
     const id = `draft-${this.drafts.length + 1}`;
     const content_sha256 = `sha-${JSON.stringify(fields)}`;
     this.drafts.push({ id, job_run_id: runId, role_id: roleId, fields: { ...fields }, content_sha256, status: 'drafted', reason_codes: [], maker_ref: makerRef, grader_ref: null, card_id: null });
@@ -384,6 +389,7 @@ export class FakeDb implements Db {
     if (this.rpcError.approveCardDraft) throw this.rpcError.approveCardDraft;
     const draft = this.drafts.find((d) => d.id === draftId);
     if (!draft || draft.status !== 'drafted') throw new Error(`db approve_card_draft: Draft ${draftId} is not drafted`);
+    if (verdict.result !== 'approved') throw new Error('db approve_card_draft: Only an approved verdict approves a draft');
     if (graderRef === draft.maker_ref) throw new Error('db approve_card_draft: The grader ref must differ from the maker ref');
     if (approverRoleId === draft.role_id || approverRoleId === draft.fields.executor_role_id) throw new Error("db approve_card_draft: The approver cannot be the card's proposer, drafter or executor");
     const cardId = `card-from-${draftId}`;

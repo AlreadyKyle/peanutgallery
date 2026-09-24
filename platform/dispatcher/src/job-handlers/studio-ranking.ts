@@ -1,7 +1,7 @@
 // studio_ranking, the board's Rank now (docs/specs/agent-workflows.md): one attended Studio Head
 // session orders the cards on now that are open for funding and hold no money on their bar or on
 // hold, and apply_card_ranking has the named cards trade the ranks they hold, at most ten changes,
-// with one public event of ids and ranks. Which cards are rankable comes from rankable_cards, the
+// with one event (step ranked; its ids and ranks stay private). Which cards are rankable comes from rankable_cards, the
 // same test the ranking refuses on, so a card whose only money is a payment on hold is never
 // offered. The Studio Head sees typed card fields only; a card a supporter or the community
 // proposed carries no text. A failed session, or an answer that names a card it may not rank, fails

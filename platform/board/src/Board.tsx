@@ -407,8 +407,9 @@ function BoardControls({
 }) {
   const studio = useBoardStudioState(client);
   const [draft, setDraft] = useState<CreditDraft | null>(null);
-  // The cards listed under Cards, which only the second factor shows; Needs you links to these only.
-  const [listedCards, setListedCards] = useState<ReadonlySet<string>>(() => new Set());
+  // The cards listed under Cards, id to title, which only the second factor shows; Needs you and the
+  // role jobs' output link to these only.
+  const [listedCards, setListedCards] = useState<ReadonlyMap<string, string>>(() => new Map());
   const creditForm = useRef<HTMLFormElement | null>(null);
 
   function fillCredit(next: CreditDraft) {
@@ -425,7 +426,7 @@ function BoardControls({
       <StudioStatus client={client} studio={studio} canChange={secondFactor} />
       <SessionStatus client={client} />
       <RolePauses client={client} canPause={secondFactor} canResume={secondFactor} />
-      <JobsPanel client={client} canRun={secondFactor} />
+      <JobsPanel client={client} canRun={secondFactor} cardTitles={listedCards} />
       {secondFactor ? (
         <>
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
@@ -1138,7 +1139,7 @@ function CardMarks({ card }: { card: BoardCard }) {
  * Every card the board can still move, cancel or resume, now first, then the roadmap. It tells Needs
  * you which cards are listed (onListed), so an inbox item links only to a row that is on the page.
  */
-function CardControls({ client, onListed }: { client: SupabaseClient; onListed: (ids: ReadonlySet<string>) => void }) {
+function CardControls({ client, onListed }: { client: SupabaseClient; onListed: (cards: ReadonlyMap<string, string>) => void }) {
   const [cards, setCards] = useState<BoardCard[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
@@ -1160,7 +1161,7 @@ function CardControls({ client, onListed }: { client: SupabaseClient; onListed: 
   }, [refresh]);
 
   useEffect(() => {
-    onListed(new Set((cards ?? []).map((card) => card.id)));
+    onListed(new Map((cards ?? []).map((card) => [card.id, card.title])));
   }, [cards, onListed]);
 
   // An action that changes a card's horizon or rank moves its row, and a browser drops focus from an
@@ -1423,25 +1424,58 @@ const RUN_WORDS: Record<string, string> = {
 
 const shortCard = (id: string) => id.replace(/-/g, '').slice(0, 8);
 
+/** A code in running text: already_holds reads "already holds". */
+const codeWords = (code: string) => code.replace(/_/g, ' ');
+
+/** The Game Director's verdict on a round, in words. */
+const VERDICT_WORDS: Record<string, string> = {
+  approved: 'Approved',
+  revise: 'Sent back to revise',
+  flagged: 'Flagged',
+};
+
+/**
+ * A card a run names: its title, linked to its row under Cards while that row is listed (as Needs you
+ * links), else the fallback title, else its short id.
+ */
+function CardName({ id, titles, fallback = null }: { id: string; titles: ReadonlyMap<string, string>; fallback?: string | null }) {
+  const title = titles.get(id);
+  if (title !== undefined) return <a href={`#card-${id}`}>{title}</a>;
+  return <>{fallback ?? `card ${shortCard(id)}`}</>;
+}
+
 /** A role job's typed output under its run: the ranking's moves, or the draft's result and rounds. */
-function RunOutputLines({ output }: { output: RunOutput }) {
+function RunOutputLines({ output, cardTitles }: { output: RunOutput; cardTitles: ReadonlyMap<string, string> }) {
   if (output.kind === 'ranking') {
     return (
-      <p className="muted">
-        {output.moves.length === 0
-          ? 'Moved no card.'
-          : `Moved ${output.moves.map((move) => `${shortCard(move.card_id)} from ${move.from ?? 'no rank'} to ${move.to}`).join('; ')}.`}
-        {output.unapplied > 0 ? ` ${output.unapplied} more kept their ranks.` : ''}
-      </p>
+      <>
+        {output.moves.length === 0 ? (
+          <p className="muted">Moved no card.</p>
+        ) : (
+          <ol className="job-runs">
+            {output.moves.map((move) => (
+              <li key={move.card_id}>
+                <CardName id={move.card_id} titles={cardTitles} />: from {move.from === null ? 'no rank' : `rank ${move.from}`} to rank {move.to}
+              </li>
+            ))}
+          </ol>
+        )}
+        {output.unapplied > 0 ? <p className="muted">{output.unapplied === 1 ? '1 more kept its rank.' : `${output.unapplied} more kept their ranks.`}</p> : null}
+      </>
     );
   }
-  const head =
-    output.result === 'approved' && output.card_id
-      ? `Approved: card ${shortCard(output.card_id)} waits out the cooling window, then is dealt to now.`
-      : `Withdrawn${output.reason ? `: ${output.reason.replace(/_/g, ' ')}` : ''}. No card was written.`;
+  const approvedTitle = output.rounds.find((round) => round.verdict?.result === 'approved')?.title ?? null;
   return (
     <>
-      <p className="muted">{head}</p>
+      <p className="muted">
+        {output.result === 'approved' && output.card_id ? (
+          <>
+            Approved: <CardName id={output.card_id} titles={cardTitles} fallback={approvedTitle} /> waits out the cooling window, then is dealt to now.
+          </>
+        ) : (
+          `Withdrawn${output.reason ? `: ${codeWords(output.reason)}` : ''}. No card was written.`
+        )}
+      </p>
       {output.rounds.length === 0 ? null : (
         <ol className="job-runs">
           {output.rounds.map((round) => (
@@ -1449,8 +1483,10 @@ function RunOutputLines({ output }: { output: RunOutput }) {
               {round.title === null
                 ? 'No valid draft.'
                 : `${round.title} (${round.lane ?? 'no lane'}, ${round.executor ?? 'no executor'}, ${round.estimate_usd === null ? 'no estimate' : formatUsd(round.estimate_usd)}): ${round.summary ?? ''}`}
-              {round.check ? ` Refused by the ${round.check.name} check: ${round.check.detail}` : ''}
-              {round.verdict ? ` Graded ${round.verdict.result}: ${round.verdict.reason_codes.join(', ')}.${round.verdict.note ? ` ${round.verdict.note}` : ''}` : ''}
+              {round.check ? ` Refused by the ${codeWords(round.check.name)} check: ${round.check.detail}` : ''}
+              {round.verdict
+                ? ` ${VERDICT_WORDS[round.verdict.result] ?? codeWords(round.verdict.result)}: ${round.verdict.reason_codes.map(codeWords).join(', ')}.${round.verdict.note ? ` ${round.verdict.note}` : ''}`
+                : ''}
             </li>
           ))}
         </ol>
@@ -1485,7 +1521,19 @@ const REASON_WORDS: Record<string, string> = {
   handler_error: 'it hit an error',
 };
 
-function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; job: BoardJob; canRun: boolean; onChanged: () => Promise<void> }) {
+function JobRow({
+  client,
+  job,
+  canRun,
+  cardTitles,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  job: BoardJob;
+  canRun: boolean;
+  cardTitles: ReadonlyMap<string, string>;
+  onChanged: () => Promise<void>;
+}) {
   // The role jobs have a button of their own and send {}; every other job takes typed input.
   const named = JOB_BUTTONS[job.name];
   const [reason, setReason] = useState('');
@@ -1540,7 +1588,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
                 <li key={run.id}>
                   {formatDateTime(run.created_at)} · {ORIGIN_WORDS[run.origin] ?? run.origin} · {RUN_WORDS[run.status] ?? run.status}
                   {run.reason ? `: ${REASON_WORDS[run.reason] ?? run.reason}` : ''}
-                  {output ? <RunOutputLines output={output} /> : null}
+                  {output ? <RunOutputLines output={output} cardTitles={cardTitles} /> : null}
                 </li>
               );
             })}
@@ -1574,7 +1622,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
  * failed. Run now queues a board-origin run; a model-calling one runs only while a board member is
  * signed in here, billed to the board's plan.
  */
-function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean }) {
+function JobsPanel({ client, canRun, cardTitles }: { client: SupabaseClient; canRun: boolean; cardTitles: ReadonlyMap<string, string> }) {
   const [jobs, setJobs] = useState<BoardJob[] | null>(null);
   const [loadError, setLoadError] = useState('');
 
@@ -1600,7 +1648,7 @@ function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean
       {jobs !== null && jobs.length > 0 ? (
         <ul className="board-cards">
           {jobs.map((job) => (
-            <JobRow key={job.name} client={client} job={job} canRun={canRun} onChanged={refresh} />
+            <JobRow key={job.name} client={client} job={job} canRun={canRun} cardTitles={cardTitles} onChanged={refresh} />
           ))}
         </ul>
       ) : null}

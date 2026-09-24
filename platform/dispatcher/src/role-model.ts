@@ -11,6 +11,10 @@ import type { DispatcherConfig } from './config.js';
 import type { Role } from './db.js';
 
 export const MODEL_TOKENS = ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST'] as const;
+
+// The roles the board's role jobs run (studio_ranking, draft_card; docs/specs/agent-workflows.md).
+// The Game Director grades with no write access, so startup checks their models by name as well.
+export const ROLE_JOB_ROLES: readonly string[] = ['Studio Head', 'Game Designer', 'Game Director'];
 export type ModelToken = (typeof MODEL_TOKENS)[number];
 
 export function isModelToken(value: string): value is ModelToken {

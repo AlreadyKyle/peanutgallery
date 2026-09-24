@@ -119,7 +119,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. They are not open for funding until the board moves them to Fund what\'s next.',
+    lede: 'Cards the studio plans to build and has not built yet. They open for funding when they move to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
     horizonIntros: {

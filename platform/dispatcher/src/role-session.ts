@@ -38,6 +38,9 @@ export interface RoleSessionDeps {
   scripts: boolean;
   typed: TypedOutput;
   priceTable: PriceTable;
+  // The model a role runs on when its session starts: the env value of its MODEL_* token first
+  // (role-model.ts resolveRoleModel), as card sessions do. Without it, roles.model as stored.
+  resolveModel?: (role: Role) => string;
   maxTurns: number;
   maxMs: number;
   boardSessionTtlMin: number;
@@ -80,8 +83,7 @@ function isBash(tool: string): boolean {
 
 // The session spec: the role's own tools, Bash as seed-1's package scripts, in the scratch worktree.
 // Without scripts (an unattended process) Bash is left out, whatever the role spec holds.
-export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number, scripts: boolean): SessionSpec {
-  const model = request.role.model.trim();
+export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number, scripts: boolean, model = request.role.model.trim()): SessionSpec {
   return {
     cardId: `job-${request.runId}`,
     worktree: request.worktree,
@@ -111,10 +113,11 @@ export async function runRoleSession<T>(request: RoleSessionRequest, deps: RoleS
   if (deps.adapter.mode !== 'attended') return fail('a role job runs attended, on the founder plan');
   const toolProblem = roleToolProblem(roleTools(role));
   if (toolProblem) return fail(toolProblem);
-  if (!role.model.trim()) return fail(`role ${role.name} has no model`);
-  if (!modelPrice(deps.priceTable, role.model.trim())) return fail(`no price for model ${role.model}`);
+  const model = (deps.resolveModel ? deps.resolveModel(role) : role.model).trim();
+  if (!model) return fail(`role ${role.name} has no model`);
+  if (!modelPrice(deps.priceTable, model)) return fail(`no price for model ${model}`);
   if (!(request.budgetUsd > 0)) return fail('the session budget must be above zero');
-  const spec = roleSessionSpec(request, deps.maxTurns, deps.scripts);
+  const spec = roleSessionSpec(request, deps.maxTurns, deps.scripts, model);
   try {
     await deps.adapter.preflight(spec);
   } catch (error) {

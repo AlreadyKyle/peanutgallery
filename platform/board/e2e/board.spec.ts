@@ -194,7 +194,14 @@ const JOBS = [
         reason: null,
         created_at: '2026-09-23T12:00:00Z',
         finished_at: '2026-09-23T12:02:00Z',
-        output: { moves: [{ card_id: '11111111-1111-4111-8111-111111111111', from: 2, to: 1 }], unapplied: 0 },
+        // The first move names a card listed under Cards, the second one that is not.
+        output: {
+          moves: [
+            { card_id: 'c0000000-0000-4000-8000-000000000004', from: null, to: 1 },
+            { card_id: '11111111-1111-4111-8111-111111111111', from: 4, to: 2 },
+          ],
+          unapplied: 0,
+        },
       },
     ],
   },
@@ -408,13 +415,15 @@ test('at the second factor the board sees and vetoes an undealt agent card, paus
   await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();
   // Rank now and Draft a game card queue board-origin runs with {}, and each run shows its typed output.
   const rank = page.getByRole('form', { name: 'Job studio_ranking' });
-  await expect(rank.getByText('Moved 11111111 from 2 to 1.')).toBeVisible();
+  // Each moved card on its own line: by title, linked to its row under Cards, or by short id when not listed.
+  await expect(rank.locator('ol.job-runs > li')).toHaveText(['Bigger pockets for the gatherers: from no rank to rank 1', 'card 11111111: from rank 4 to rank 2']);
+  await expect(rank.getByRole('link', { name: 'Bigger pockets for the gatherers' })).toHaveAttribute('href', '#card-c0000000-0000-4000-8000-000000000004');
   await rank.getByLabel('Reason').fill('New cards on now');
   await rank.getByRole('button', { name: 'Rank now' }).click();
   await expect(rank.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();
   const draft = page.getByRole('form', { name: 'Job draft_card' });
-  await expect(draft.getByText('Approved: card 22222222 waits out the cooling window, then is dealt to now.')).toBeVisible();
-  await expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more to build. Graded approved: fits_pillars.')).toBeVisible();
+  await expect(draft.getByText('Approved: Gatherers cost 11 waits out the cooling window, then is dealt to now.')).toBeVisible();
+  await expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more to build. Approved: fits pillars.')).toBeVisible();
   await draft.getByLabel('Reason').fill('Short of cards');
   await draft.getByRole('button', { name: 'Draft a game card' }).click();
   await expect(draft.getByText('Queued. It runs while a board member is signed in here.')).toBeVisible();

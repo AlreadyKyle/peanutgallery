@@ -11,10 +11,12 @@
 -- card. Agent-written card text changes only while a board RPC or the draft
 -- path has set peanutgallery.card_writer.
 --
--- apply_card_ranking writes rank only, on cards on now that are open for
--- funding and hold no money, which trade the places they already hold, so
--- every other card keeps its place in line; at most ten changes a run, with
--- one event that names the moved cards and their ranks. Both jobs are queued by the
+-- apply_card_ranking writes rank only, on cards in step 2's line that are open
+-- for funding and hold no money, which trade the places they already hold, so
+-- every other card keeps its place in line; at most ten changes a run, with one
+-- event, step 'ranked': the public reads that the Studio Head ranked the open
+-- cards, and its payload, which the public view leaves out, names the moved
+-- cards and their ranks for the board. Both jobs are queued by the
 -- board at /board and run while the studio is paused, since they spend no
 -- studio money.
 
@@ -210,7 +212,7 @@ $$;
 -- From the Game Director's approved verdict: one card on next at proposed,
 -- dealt by the tick once opens_at passes, and its draft approval.
 
-create or replace function public.approve_card_draft(p_draft uuid, p_approver_role uuid, p_grader_ref text, p_verdict jsonb default '{}'::jsonb) returns uuid
+create or replace function public.approve_card_draft(p_draft uuid, p_approver_role uuid, p_grader_ref text, p_verdict jsonb) returns uuid
 language plpgsql
 security definer
 set search_path = public
@@ -228,8 +230,12 @@ begin
   if p_grader_ref is null or btrim(p_grader_ref) = '' then
     raise exception 'A grader ref is required';
   end if;
-  if p_verdict is not null and jsonb_typeof(p_verdict) <> 'object' then
+  if p_verdict is null or jsonb_typeof(p_verdict) <> 'object' then
     raise exception 'The verdict must be a JSON object';
+  end if;
+  -- The grader's own result, never one this function supplies: only an approved verdict approves.
+  if coalesce(p_verdict ->> 'result', '') <> 'approved' then
+    raise exception 'Only an approved verdict approves a draft';
   end if;
   select * into v_draft from public.card_drafts where id = p_draft for update;
   if not found then
@@ -267,7 +273,7 @@ begin
     raise exception 'The card''s content hash is not the graded draft''s';
   end if;
   perform public.record_card_approval(
-    v_id, 'draft', coalesce(p_verdict, '{}'::jsonb) || jsonb_build_object('verdict', 'approved', 'draft_id', p_draft),
+    v_id, 'draft', p_verdict || jsonb_build_object('verdict', p_verdict ->> 'result', 'draft_id', p_draft),
     p_approver_role, v_draft.role_id, v_draft.maker_ref, btrim(p_grader_ref), v_draft.content_sha256, v_draft.job_run_id
   );
   update public.card_drafts
@@ -305,7 +311,10 @@ $$;
 
 -- g. The ranking ----------------------------------------------------------------------------------
 -- Why the ranking may not name a card, or null when it may: the card is off
--- now, not open for funding, or holds money on its bar or on hold. It is the
+-- now, not open for funding, not in step 2's line (money.card_takes_money: a
+-- vetoed card, a hidden one, one with no executor or in a closed lane), or
+-- holds money on its bar or on hold. So every card a ranking names is one step
+-- 2 funds, and trading their ranks moves no card the line leaves out. It is the
 -- one test apply_card_ranking refuses on and rankable_cards lists by, so the
 -- Studio Head is offered exactly the cards the ranking accepts.
 
@@ -318,6 +327,7 @@ as $$
   select case
     when c.horizon is distinct from 'now' then 'is not on now'
     when c.stage not in ('proposed', 'designing', 'voted') then 'is not open for funding'
+    when not money.card_takes_money(c, money.lane_open()) then 'takes no money'
     when public.card_money_held(c.id) then 'holds money'
   end
 $$;
@@ -419,7 +429,8 @@ $$;
 -- cards trade the places they hold, in the order given (card_ranking_places).
 -- At most ten ranks change a run: the longest start of the order whose changes
 -- fit in ten is applied, and the rest of the named cards keep their ranks. One
--- event names the moved cards with their old and new ranks.
+-- event, step 'ranked', names the moved cards with their old and new ranks in
+-- its payload, which public_agent_events leaves out.
 
 create or replace function public.apply_card_ranking(p_run uuid, p_order uuid[]) returns jsonb
 language plpgsql

@@ -2,7 +2,7 @@
 // their sessions run under, the scratch checkout of main, the public-text filter, and the typed
 // reduction every card passes through before a prompt sees it.
 import type { AgentAdapter } from '../adapters/types.js';
-import type { OpenCardRow } from '../db.js';
+import type { OpenCardRow, Role } from '../db.js';
 import type { JobContext } from '../jobs.js';
 import type { PriceTable } from '../pricing.js';
 import type { PublicTextResult } from '../public-text.js';
@@ -24,6 +24,8 @@ export interface WorkflowDeps {
   roleAdapter: AgentAdapter;
   typed: TypedOutput;
   priceTable: PriceTable;
+  // The model each role runs on (role-model.ts resolveRoleModel), as card sessions resolve it.
+  resolveModel?: (role: Role) => string;
   sessionMaxTurns: number;
   sessionMaxMs: number;
   boardSessionTtlMin: number;
@@ -91,6 +93,7 @@ export function sessionDeps(context: JobContext, workflow: WorkflowDeps): RoleSe
     scripts: context.mode === 'attended',
     typed: workflow.typed,
     priceTable: workflow.priceTable,
+    ...(workflow.resolveModel === undefined ? {} : { resolveModel: workflow.resolveModel }),
     maxTurns: workflow.sessionMaxTurns,
     maxMs: workflow.sessionMaxMs,
     boardSessionTtlMin: workflow.boardSessionTtlMin,

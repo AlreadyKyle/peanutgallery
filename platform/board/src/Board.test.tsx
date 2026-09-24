@@ -1458,7 +1458,7 @@ describe('Board agent system controls', () => {
     expect(job.getByText('Studio Head · calls a model, on the board plan while you are signed in · runs while the studio is paused')).toBeTruthy();
     // The origin and the reason in words, never the stored codes; the heading is the job's name in words.
     expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · scheduled · skipped: only the board starts a model run`)).toBeTruthy();
-    expect(job.getByRole('heading', { name: 'Studio ranking' })).toBeTruthy();
+    expect(job.getByRole('heading', { name: 'Weekly report' })).toBeTruthy();
     fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '[1]' } });
     fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Report now' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Job weekly_report' }));
@@ -1472,6 +1472,8 @@ describe('Board agent system controls', () => {
   });
 
   it('queues Rank now and Draft a game card as board-origin runs with {}, and shows each run\'s typed output', async () => {
+    // The first moved card is listed under Cards, so the output names it by title and links to its row.
+    fake.cards = [card({ id: '11111111-1111-4111-8111-111111111111', title: 'Faster gatherers', rank: 1 })];
     fake.jobs = [
       {
         name: 'studio_ranking',
@@ -1487,7 +1489,13 @@ describe('Board agent system controls', () => {
             reason: null,
             created_at: '2026-09-14T11:00:00Z',
             finished_at: '2026-09-14T11:02:00Z',
-            output: { moves: [{ card_id: '11111111-1111-4111-8111-111111111111', from: 3, to: 1 }], unapplied: 2 },
+            output: {
+              moves: [
+                { card_id: '11111111-1111-4111-8111-111111111111', from: 3, to: 1 },
+                { card_id: '33333333-3333-4333-8333-333333333333', from: null, to: 4 },
+              ],
+              unapplied: 2,
+            },
           },
         ],
       },
@@ -1531,12 +1539,18 @@ describe('Board agent system controls', () => {
     await flush();
     const rank = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
     expect(rank.queryByLabelText('Input (JSON, optional)')).toBeNull();
-    expect(rank.getByText('Moved 11111111 from 3 to 1. 2 more kept their ranks.')).toBeTruthy();
+    // Each moved card on its own line, by title with a link to its row when listed, else by short id.
+    const moves = rank.getAllByRole('listitem').filter((item) => item.parentElement?.tagName === 'OL');
+    expect(moves.map((item) => item.textContent)).toEqual(['Faster gatherers: from rank 3 to rank 1', 'card 33333333: from no rank to rank 4']);
+    expect(within(moves[0]!).getByRole('link', { name: 'Faster gatherers' }).getAttribute('href')).toBe('#card-11111111-1111-4111-8111-111111111111');
+    expect(rank.getByText('2 more kept their ranks.')).toBeTruthy();
     const draft = within(screen.getByRole('form', { name: 'Job draft_card' }));
-    expect(draft.getByText('Approved: card 22222222 waits out the cooling window, then is dealt to now.')).toBeTruthy();
-    expect(draft.getByText('Gatherers cost 10 (config, Builder A, $0.50): No change. Refused by the already_holds check: already true on main')).toBeTruthy();
-    expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more. Graded revise: unclear_text. Say dust.')).toBeTruthy();
-    expect(draft.getByText('Gatherers cost 11 dust (config, Builder A, $0.50): Building a gatherer costs 11 dust. Graded approved: fits_pillars.')).toBeTruthy();
+    // The approved card is not listed yet, so it is named by its approved round's title, with no link.
+    expect(draft.getByText('Approved: Gatherers cost 11 dust waits out the cooling window, then is dealt to now.')).toBeTruthy();
+    // Codes read as words: the check, the verdict and its reasons.
+    expect(draft.getByText('Gatherers cost 10 (config, Builder A, $0.50): No change. Refused by the already holds check: already true on main')).toBeTruthy();
+    expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more. Sent back to revise: unclear text. Say dust.')).toBeTruthy();
+    expect(draft.getByText('Gatherers cost 11 dust (config, Builder A, $0.50): Building a gatherer costs 11 dust. Approved: fits pillars.')).toBeTruthy();
     expect(draft.getByText('Withdrawn: flagged. No card was written.')).toBeTruthy();
     fireEvent.change(rank.getByLabelText('Reason'), { target: { value: 'New cards on now' } });
     fireEvent.click(rank.getByRole('button', { name: 'Rank now' }));
