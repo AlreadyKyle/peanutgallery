@@ -13,7 +13,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import { useLiveHome, type HomeView } from '../lib/live';
-import { runsCards } from '../lib/roster';
+import { teamStrip } from '../lib/roster';
 import type { Snapshot } from '../lib/source';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
@@ -117,8 +117,8 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
 
 function TeamSection({ view }: { view: HomeView }) {
   const snapshot = view.snapshot;
-  const laneOpen = snapshot.platformLaneOpen === true;
-  const roles = snapshot.roles.filter((role) => role.state === 'active' && runsCards(role, laneOpen)).slice(0, 3);
+  // The same rule as /team (lib/roster.ts teamStatus): roles on the team, running or paused.
+  const roles = teamStrip(snapshot);
   if (roles.length === 0) return null;
   return (
     <div className="band">
@@ -169,7 +169,7 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
           {snapshot.missing.includes('events') ? (
             <p className="muted">{legal.partUnavailable}</p>
           ) : (
-            <EventList snapshot={snapshot} limit={HOME_ACTIONS} />
+            <EventList snapshot={snapshot} limit={HOME_ACTIONS} collapse />
           )}
         </>
       )}

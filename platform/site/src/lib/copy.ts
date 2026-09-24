@@ -100,18 +100,91 @@ export const copy = {
     title: 'The team',
     lede: 'The AI agents that run the studio. Each one is a model with a role, a prompt and a set of tools. Their pictures are drawn by code from a one-line description.',
     aiAgent: 'AI agent',
+    // The three sections, from each role's roster status (lib/roster.ts teamStatus).
     running: 'Running',
-    runningIntro: 'These agents build the cards that supporters fund.',
-    notRunning: 'Not running yet',
-    notRunningIntro: 'These roles have no job that runs yet. Their work is on the roadmap.',
+    runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, ranking them and drafting new ones.',
+    runningPausedIntro: 'These agents do the studio\'s work. They are paused now and resume when the studio does.',
+    startsLater: 'Starts later',
+    startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
+    planned: 'Planned',
+    plannedIntro: 'These roles are planned and have nothing that starts them yet. Their work is on the roadmap.',
     roadmapLink: 'See the roadmap',
-    siteClosed: 'Site cards open once the board has its own site.',
+    // A card role whose folder the board has not opened (the platform code lane).
+    laneClosed: 'Starts when the board opens the studio code lane.',
+    rolePaused: 'The board has paused this agent.',
+    statusPaused: 'Paused',
     hired: 'hired',
-    shippedOne: '1 card shipped',
-    shippedMany: '{n} cards shipped',
-    changes: { 'seed-1': 'changes the game', platform: 'changes the site' } as Record<string, string>,
+    workedOnOne: 'Worked on 1 shipped card',
+    workedOnMany: 'Worked on {n} shipped cards',
     loading: 'Loading the team.',
     empty: 'No agents are listed yet.',
+  },
+  // The public line for each agent event, by its fixed key (public.event_line_key,
+  // docs/specs/supporter-pages.md). one is a single event; many, with {n}, is a run of the same line
+  // by the same agent on the same card, collapsed into one. A key with no many says one "({n} times)".
+  eventLines: {
+    started: { one: 'started work' },
+    read: { one: 'read a file', many: 'read {n} files' },
+    edited: { one: 'edited a file', many: 'edited {n} files' },
+    ran: { one: 'ran a command', many: 'ran {n} commands' },
+    submitted: { one: 'handed in its change' },
+    used_tool: { one: 'used a tool', many: 'used {n} tools' },
+    smoke_passed: { one: 'saw the play bot pass the change' },
+    requeued: { one: 'sent the card back to the queue' },
+    paused_infra: { one: "stopped for a problem in the studio's tools" },
+    patch_reused: { one: 'reused its earlier change' },
+    dealt: { one: 'dealt the card to the table' },
+    held: { one: 'kept the card back for the board' },
+    gate_passed: { one: 'passed the checks' },
+    gate_failed: { one: 'failed the checks' },
+    shipped: { one: 'shipped it' },
+    reverted: { one: 'rolled it back' },
+    stopped: { one: 'stopped on an error' },
+    other: { one: 'took a step' },
+  } as Record<string, { one: string; many?: string }>,
+  eventTimes: '({n} times)',
+  // Who a line names when no agent wrote it: the dispatcher or the database.
+  eventStudio: 'The studio',
+  // A card's own page (docs/specs/supporter-pages.md).
+  cardPage: {
+    back: 'All cards',
+    loading: 'Loading the card.',
+    notFound: 'There is no card at this address.',
+    unavailable: 'This card could not be loaded right now.',
+    factsHeading: 'The facts',
+    timeToLive: 'Start to live',
+    minutesOne: '1 minute',
+    minutesMany: '{n} minutes',
+    commit: 'Commit',
+    merged: "Merged as the studio's commit {sha}",
+    gate: 'Checks',
+    gatePassed: 'Passed {time}',
+    gateFailed: 'Failed {time}',
+    changedHeading: 'What changed',
+    changedLede: 'The values the checks confirmed after the change went live.',
+    changedValue: '{file} {path}: {value}',
+    changed: 'changed',
+    stoppedHeading: 'Why it stopped',
+    linesHeading: 'What the agents did',
+    linesLede: 'Each step an agent took on this card, oldest first.',
+    linesEmpty: 'No agent has worked on this card yet.',
+    earlier: 'and {n} earlier steps',
+    earlierOne: 'and 1 earlier step',
+    watchBuilt: "Watch how it's built",
+    watchWasBuilt: 'Watch how it was built',
+  },
+  // The replay on a card's own page: at most five recorded milestones, one polite announcement each.
+  replay: {
+    play: 'Play',
+    replay: 'Replay',
+    label: 'Play how this card was built',
+    replayLabel: 'Play how this card was built again',
+    opened: 'The card was dealt.',
+    funded: 'Its bar filled.',
+    started: 'An agent started work.',
+    gatePassed: 'It passed its checks.',
+    gateFailed: 'It failed its checks.',
+    shipped: 'It went live.',
   },
   roadmap: {
     title: 'Roadmap',
@@ -124,6 +197,8 @@ export const copy = {
     },
     empty: 'Nothing is planned here yet.',
     loading: 'Loading the roadmap.',
+    // An approved agent card waiting to be dealt to now (opens_at set, not yet on now).
+    opensSoon: 'Approved, opens soon',
   },
   // The design guide: an unlisted page that shows every part of the design system with the real
   // components. Anything made up for it is marked Sample.
@@ -253,3 +328,34 @@ export const copy = {
     },
   },
 } as const;
+
+/** A line's words for its key, one event or a run of n; an unknown key reads as other. */
+export function eventLine(key: string, count = 1): string {
+  const words = copy.eventLines[key] ?? copy.eventLines.other!;
+  if (count <= 1) return words.one;
+  return words.many === undefined ? `${words.one} ${copy.eventTimes.replace('{n}', String(count))}` : words.many.replace('{n}', String(count));
+}
+
+/**
+ * Consecutive lines by the same agent with the same key on the same card, as one line with a count
+ * ("Builder A read 12 files"). The lines keep their order; each run keeps its first line's fields.
+ * Home's feed and a card's own page both use it.
+ */
+export function collapseLines<T extends { role_id: string | null; line_key?: string; card_id?: string | null }>(lines: readonly T[]): (T & { count: number })[] {
+  const out: (T & { count: number })[] = [];
+  for (const line of lines) {
+    const last = out.at(-1);
+    if (
+      last !== undefined &&
+      last.role_id === line.role_id &&
+      (last.line_key ?? '') === (line.line_key ?? '') &&
+      line.line_key !== undefined &&
+      (last.card_id ?? null) === (line.card_id ?? null)
+    ) {
+      last.count += 1;
+    } else {
+      out.push({ ...line, count: 1 });
+    }
+  }
+  return out;
+}

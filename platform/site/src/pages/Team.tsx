@@ -1,50 +1,83 @@
 import { Link } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
+import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
+import { pausedSentence } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
 import { copy } from '../lib/copy';
-import { formatDate, formatInteger } from '../lib/format';
+import { formatInteger, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
-import { cardRoleFolder, runsCards } from '../lib/roster';
-import type { Card, Role, Snapshot } from '../lib/source';
+import { onTheTeam, teamStatus, type TeamStatus } from '../lib/roster';
+import type { Role, Snapshot } from '../lib/source';
 import { unavailableLine, useStudio } from '../lib/studio';
 
 const team = copy.team;
 
-/** How many live cards this role built. */
-export function shippedBy(role: Role, cards: readonly Card[]): number {
-  return cards.filter((card) => card.stage === 'live' && card.executor_role_id === role.id).length;
-}
-
 /**
- * The facts line under a role. A running role shows its model, when it was hired, what it has
- * shipped and what it changes. A role that does not run yet shows none of that, because none of it
- * is true of the studio today; it says it is not running, and why when a closed lane is the reason.
+ * The facts line under a running or paused role: its model, what its work paid for with
+ * contributions has cost (all time, then the last 7 days) and how many shipped cards it worked on,
+ * from public_role_stats. Only rows billed to the studio count, so a role whose work the founder paid
+ * for shows $0.00, which is true. A role that does not run shows no facts line.
  */
-export function roleFacts(role: Role, cards: readonly Card[], platformLaneOpen = false): string {
-  if (!runsCards(role, platformLaneOpen)) {
-    const folder = cardRoleFolder(role);
-    return folder === null ? `${team.notRunning}.` : `${team.notRunning}. ${team.siteClosed}`;
-  }
-  const shipped = shippedBy(role, cards);
-  const shippedLine = shipped === 1 ? team.shippedOne : team.shippedMany.replace('{n}', formatInteger(shipped));
-  const folder = cardRoleFolder(role) ?? '';
-  return [role.model, `${team.hired} ${formatDate(role.hired_at)}`, shippedLine, team.changes[folder]]
-    .filter((part) => part !== undefined && part !== '')
-    .join(' · ');
+export function roleFacts(role: Role, snapshot: Snapshot): string {
+  const stats = snapshot.roleStats?.[role.id];
+  if (stats === undefined) return role.model;
+  const spent = legal.teamSpent.replace('{total}', formatUsd(stats.spent_usd)).replace('{week}', formatUsd(stats.spent_7d_usd));
+  const ships = stats.shipped_cards === 1 ? team.workedOnOne : team.workedOnMany.replace('{n}', formatInteger(stats.shipped_cards));
+  return [role.model, spent, ships].filter((part) => part !== '').join(' · ');
 }
 
-function RoleRow({ role, cards, platformLaneOpen, asleep }: { role: Role; cards: readonly Card[]; platformLaneOpen: boolean; asleep: boolean }) {
-  const titleId = `role-${role.id}`;
+function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; snapshot: Snapshot }) {
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
+  // The studio's pause is said once, above the list; a role's own pause, on its row.
+  const why = status.kind === 'paused' ? (status.by === 'role' ? status.sentence : null) : status.sentence;
   return (
-    <li className="agent" id={`agent-${role.id}`}>
-      <Avatar note={role.species_note} asleep={asleep} />
-      <h3 id={titleId}>{role.name}</h3>
+    <li className="agent" id={`agent-${role.id}`} data-status={status.kind}>
+      <Avatar note={role.species_note} asleep={status.kind !== 'running'} />
+      <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      <p className="card-meta">{roleFacts(role, cards, platformLaneOpen)}</p>
+      {status.kind === 'paused' ? (
+        <p className="row-meta">
+          <span className="tag" data-state="paused">
+            <Glyph name="pause" />
+            {team.statusPaused}
+          </span>
+        </p>
+      ) : null}
+      {onTheTeam(status) ? <p className="card-meta">{roleFacts(role, snapshot)}</p> : null}
+      {why === null ? null : <p className="muted agent-status">{why}</p>}
     </li>
+  );
+}
+
+function Section({ id, heading, intro, rows, snapshot, link = false }: {
+  id: string;
+  heading: string;
+  intro: string;
+  rows: { role: Role; status: TeamStatus }[];
+  snapshot: Snapshot;
+  link?: boolean;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="section" aria-labelledby={id}>
+      <h2 id={id}>{heading}</h2>
+      <p className="muted">
+        {intro}
+        {link ? (
+          <>
+            {' '}
+            <Link to="/roadmap">{team.roadmapLink}</Link>
+          </>
+        ) : null}
+      </p>
+      <ul className="team-grid">
+        {rows.map(({ role, status }) => (
+          <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -52,45 +85,30 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
   if (snapshot.missing.includes('roles')) return <p className="muted">{legal.partUnavailable}</p>;
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
-  const laneOpen = snapshot.platformLaneOpen === true;
-  // Asleep only once the studio row has loaded and says the agents are paused.
-  const asleep = snapshot.paused && !snapshot.missing.includes('studio');
-  const running = roles.filter((role) => runsCards(role, laneOpen));
-  const waiting = roles.filter((role) => !runsCards(role, laneOpen));
+  const rows = roles.map((role) => ({ role, status: teamStatus(role, snapshot) }));
+  const studioPause = pausedSentence(snapshot);
+  const running = rows.filter((row) => onTheTeam(row.status));
   return (
     <>
-      {running.length === 0 ? null : (
-        <section className="section" aria-labelledby="team-running">
-          <h2 id="team-running">{team.running}</h2>
-          <p className="muted">{team.runningIntro}</p>
-          <ul className="team-grid">
-            {running.map((role) => (
-              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
-            ))}
-          </ul>
-        </section>
-      )}
-      {waiting.length === 0 ? null : (
-        <section className="section" aria-labelledby="team-waiting">
-          <h2 id="team-waiting">{team.notRunning}</h2>
-          <p className="muted">
-            {team.notRunningIntro} <Link to="/roadmap">{team.roadmapLink}</Link>
-          </p>
-          <ul className="team-grid">
-            {waiting.map((role) => (
-              <RoleRow key={role.id} role={role} cards={snapshot.cards} platformLaneOpen={laneOpen} asleep={asleep} />
-            ))}
-          </ul>
-        </section>
-      )}
+      <Section
+        id="team-running"
+        heading={team.running}
+        intro={studioPause === null ? team.runningIntro : `${team.runningPausedIntro} ${studioPause}`}
+        rows={running}
+        snapshot={snapshot}
+      />
+      <Section id="team-starts" heading={team.startsLater} intro={team.startsLaterIntro} rows={rows.filter((row) => row.status.kind === 'starts')} snapshot={snapshot} />
+      <Section id="team-planned" heading={team.planned} intro={team.plannedIntro} rows={rows.filter((row) => row.status.kind === 'planned')} snapshot={snapshot} link />
     </>
   );
 }
 
 /**
- * Meet the team: every active role from public_roles, running roles first. Running is a fact the
- * site derives, not a label: only a role that builds cards in an open folder runs. No scorecards.
- * Two bands: the heading on the signal plate, and every agent row on paper (DESIGN.md, Bands).
+ * Meet the team: every active role from public_roles in three sections from the roster's own columns
+ * (lib/roster.ts teamStatus): Running (with the paused rows while the studio or the role is paused),
+ * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
+ * the shipped cards; the rest show when they start. Two bands: the heading on the signal plate, and
+ * every agent row on paper (DESIGN.md, Bands).
  */
 export function Team() {
   const studio = useStudio();

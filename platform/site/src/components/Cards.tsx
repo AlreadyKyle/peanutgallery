@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { categoryOf, groupCards, inCategory, shippedAt, sourceLabel, visibleFilters, type CategoryFilter } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { formatDate } from '../lib/format';
+import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
 import { shippedMeta, type SpecRow } from './Funding';
@@ -174,6 +175,13 @@ export function ShippedRow({ card, snapshot, example = false }: { card: Card; sn
           <StateTag face="live" />
           <span className="card-meta">{shippedMeta(card, snapshot, sourceLabel(card.source))}</span>
         </p>
+        {example ? null : (
+          <p className="row-link">
+            <Link to={`/card/${card.id}`} aria-describedby={`shipped-title-${card.id}`}>
+              {copy.cardPage.watchWasBuilt}
+            </Link>
+          </p>
+        )}
       </div>
     </li>
   );
@@ -197,10 +205,22 @@ export function ShippedList({ cards, snapshot }: { cards: Card[]; snapshot: Snap
   );
 }
 
+/**
+ * A planned card's state on /roadmap (docs/specs/supporter-pages.md): held by the board with its
+ * reason when vetoed; approved and opening soon when an approved agent card waits to be dealt (its
+ * opens_at is set and it is not on now); else planned and not built yet.
+ */
+export function plannedState(card: Card): { label: string; reason: string | null } {
+  if (card.board_vetoed === true) return { label: legal.heldByBoard, reason: blank(card.board_veto_reason ?? null) ? null : card.board_veto_reason! };
+  if (card.opens_at && card.horizon !== 'now') return { label: copy.roadmap.opensSoon, reason: null };
+  return { label: copy.roadmap.planned, reason: null };
+}
+
 /** A planned card as a rail row: its suit in the rail, then its title, and on /roadmap its summary and state. */
 export function PlannedRow({ card, detail = false, byline = null }: { card: Card; detail?: boolean; byline?: string | null }) {
+  const state = plannedState(card);
   return (
-    <li>
+    <li data-card={card.id}>
       <span className="row-rail">
         <SuitTag suit={categoryOf(card)} />
       </span>
@@ -208,7 +228,8 @@ export function PlannedRow({ card, detail = false, byline = null }: { card: Card
         <h3 className="row-title">{card.title}</h3>
         {!detail || blank(card.summary) ? null : <p>{card.summary}</p>}
         {detail && byline ? <p className="card-meta card-byline">{byline}</p> : null}
-        {detail ? <p className="card-meta">{copy.roadmap.planned}</p> : null}
+        {detail ? <p className="card-meta">{state.label}</p> : null}
+        {detail && state.reason !== null ? <p className="muted">{state.reason}</p> : null}
       </div>
     </li>
   );

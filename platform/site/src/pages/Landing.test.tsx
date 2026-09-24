@@ -216,6 +216,11 @@ function role(id: string, title: string, description: string): Role {
     write_access: true,
     state: 'active',
     hired_at: '2026-09-14T00:00:00Z',
+    // The roster marks each running; the Platform Builder's closed lane starts it later (teamStatus).
+    status: 'running',
+    trigger: null,
+    paused: false,
+    paused_reason: null,
   };
 }
 
@@ -280,8 +285,10 @@ describe('Landing', () => {
     // No Right now panel, no How it works steps, no fixed rules on home any more.
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(screen.queryByText(legal.fixedRulesIntro)).toBeNull();
-    // No card page yet, so nothing links to one.
-    expect(container.querySelector('a[href^="/card/"]')).toBeNull();
+    // Each card page link is a Watch link: on the building face and on each shipped row (supporter-pages).
+    const watch = [...container.querySelectorAll('a[href^="/card/"]')].map((a) => a.textContent);
+    expect(watch.length).toBeGreaterThan(0);
+    expect(new Set(watch)).toEqual(new Set([copy.cardPage.watchBuilt, copy.cardPage.watchWasBuilt]));
   });
 
   it('says in one status line how many cards are open and building, with the figures at 600', async () => {

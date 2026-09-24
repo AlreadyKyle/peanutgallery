@@ -205,16 +205,20 @@ describe('the card faces', () => {
   it('names the agent building a card and what it has spent, on the work face with no bar', () => {
     const building = card({ stage: 'building', spent_usd: 0.42, executor_role_id: 'r1' });
     const { container } = render(
-      <ul>
-        <CardFace
-          card={building}
-          snapshot={{
-            ...snapshot([building]),
-            roles: [{ id: 'r1', name: 'Builder A', title: 'Builder A', description: null, species_note: '', model: '', write_access: true, state: 'active', hired_at: '' }],
-          }}
-        />
-      </ul>,
+      <MemoryRouter>
+        <ul>
+          <CardFace
+            card={building}
+            snapshot={{
+              ...snapshot([building]),
+              roles: [{ id: 'r1', name: 'Builder A', title: 'Builder A', description: null, species_note: '', model: '', write_access: true, state: 'active', hired_at: '' }],
+            }}
+          />
+        </ul>
+      </MemoryRouter>,
     );
+    // The building face links its own page (docs/specs/supporter-pages.md).
+    expect(screen.getByRole('link', { name: copy.cardPage.watchBuilt }).getAttribute('href')).toBe(`/card/${building.id}`);
     expect(screen.getByText(`${copy.buildingBy.replace('{name}', 'Builder A')} · $0.42 ${legal.spentSoFar}`)).toBeTruthy();
     expect(container.querySelector('li.card')?.getAttribute('data-face')).toBe('building');
     expect(screen.queryByRole('progressbar')).toBeNull();

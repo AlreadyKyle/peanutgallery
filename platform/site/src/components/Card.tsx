@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { categoryOf, faceOf, sourceLabel, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
@@ -59,13 +60,18 @@ export type CardFaceProps = {
   changed?: readonly SpecRow[];
   /** The title takes focus from script (the fund grid's Show all moves focus to it). */
   focusable?: boolean;
+  /**
+   * A building or checks face links the card's own page, "Watch how it's built", in live mode
+   * (docs/specs/supporter-pages.md). The card's own page draws its face with this off.
+   */
+  watch?: boolean;
 };
 
 /**
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
@@ -106,6 +112,13 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         ) : (
           <CardMoney card={card} snapshot={snapshot} titleId={titleId} who={whoOn(card, snapshot)} mode={mode} changed={changed} />
         )}
+        {watch && mode === 'live' && (shown === 'building' || shown === 'checks') ? (
+          <p className="card-watch">
+            <Link to={`/card/${card.id}`} aria-describedby={titleId}>
+              {copy.cardPage.watchBuilt}
+            </Link>
+          </p>
+        ) : null}
         {mode === 'example' ? null : <Brief intent={card.intent} />}
       </div>
     </li>

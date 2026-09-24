@@ -4,7 +4,7 @@ import { announcementText, changesHeight, diffSnapshots, MAX_MOTIONS_PER_POLL } 
 import { faceOf, groupCards, plannedCards, type CardGroups } from './cards';
 import { formatInteger, formatUsd, percent } from './format';
 import { deal, flip, fundTick } from './motion';
-import { runsCards } from './roster';
+import { teamStrip } from './roster';
 import type { Card, CardFunding, Snapshot } from './source';
 import type { StudioState } from './studio';
 
@@ -94,10 +94,7 @@ export function applyChanges(display: Snapshot, changes: readonly InPlace[]): Sn
 }
 
 function firstRunning(snapshot: Snapshot): string {
-  const laneOpen = snapshot.platformLaneOpen === true;
-  return snapshot.roles
-    .filter((role) => role.state === 'active' && runsCards(role, laneOpen))
-    .slice(0, 3)
+  return teamStrip(snapshot)
     .map((role) => `${role.id}:${role.name}:${role.description ?? ''}`)
     .join('|');
 }
