@@ -246,7 +246,7 @@ describe('plain and readable', () => {
   });
 
   it('balances the lines of every heading', () => {
-    const headings = ALL_RULES.find((rule) => rule.selector.replace(/\s+/g, '') === 'h1,h2,h3');
+    const headings = ALL_RULES.find((rule) => rule.selector.replace(/\s+/g, '') === 'h1,h2,h3,h4');
     expect(headings?.body).toMatch(/text-wrap:\s*balance/);
   });
 

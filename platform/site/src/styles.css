@@ -63,7 +63,8 @@ main:not(.wide) > * {
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   text-wrap: balance;
   font-weight: var(--weight-bold);
@@ -283,11 +284,6 @@ main > .band {
   margin-top: var(--band-pad);
 }
 
-.band > .section,
-.band > .hero {
-  margin-bottom: 0;
-}
-
 main > .band:nth-child(even),
 .page:has(> main > .band:last-child:nth-child(odd)) > .site-footer {
   background: var(--paper);
@@ -482,10 +478,6 @@ nav a.active {
 
 /* Page heading and sections --------------------------------------------- */
 
-.hero {
-  margin-bottom: var(--space-5);
-}
-
 .hero p,
 .section > p,
 .prose {
@@ -511,14 +503,6 @@ a.target {
 
 .lede {
   font-size: var(--size-lead);
-}
-
-.section {
-  margin-bottom: var(--space-5);
-}
-
-.section:last-child {
-  margin-bottom: 0;
 }
 
 .rules {
@@ -1039,8 +1023,9 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--hairline);
 }
 
-/* Rows: small text, hairlines between them, a constant 0.5rem inset (room for the change marker).
-   Queued, Shipped, planned cards and the ledger's rows are rows, never cards. */
+/* Rows: body text, hairlines between them, a constant 0.5rem inset (room for the change marker).
+   The date, the rail and the meta line are small. Queued, Shipped, planned cards and the ledger's
+   rows are rows, never cards. */
 
 .rows {
   margin: 0 0 var(--space-2);
@@ -1052,7 +1037,7 @@ button.link:hover:not(:disabled) {
   gap: 0 var(--space-2);
   padding: var(--space-1);
   border-top: 1px solid var(--hairline);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
 }
 
 .rows li:last-child {
@@ -1062,6 +1047,12 @@ button.link:hover:not(:disabled) {
 .row-time {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.row-time,
+.row-rail,
+.row-meta {
+  font-size: var(--size-small);
 }
 
 /* Rail rows: the time (or the suit) on its own line, then in a 9rem rail from 48rem. */
@@ -1105,7 +1096,7 @@ button.link:hover:not(:disabled) {
 }
 
 .row-title {
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   font-weight: var(--weight-bold);
   text-wrap: pretty;
 }
@@ -1773,14 +1764,15 @@ input[type='radio'] {
 }
 
 /* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
-   nothing leaves an empty column. */
+   nothing leaves an empty column. Stacked, they sit as far apart as any two sections in a band. */
 .pair {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--band-pad) var(--space-4);
 }
 
-.pair > .section {
-  margin-bottom: 0;
+/* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
+.rules-pair {
+  row-gap: var(--space-4);
 }
 
 /* Wider screens ------------------------------------------------------------ */
