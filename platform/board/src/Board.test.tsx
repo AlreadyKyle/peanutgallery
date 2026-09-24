@@ -159,6 +159,18 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         return Promise.resolve({ data: null, error: { message: 'launch refused' } });
       }
       if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
+      // The card RPCs change the card as the database does, so the cards read gives it back changed: a
+      // veto moves a card on now with no money to next, a cancelled card is rejected and leaves the list.
+      if (name === 'set_card_veto' || name === 'cancel_card' || name === 'set_card_horizon') {
+        const id = args?.p_card;
+        fake.cards = fake.cards.map((c) => {
+          if (c.id !== id) return c;
+          if (name === 'cancel_card') return { ...c, stage: 'rejected' };
+          if (name === 'set_card_horizon') return { ...c, horizon: String(args?.p_horizon), rank: (args?.p_rank as number | null) ?? null };
+          const vetoed = args?.p_vetoed === true;
+          return { ...c, board_vetoed: vetoed, board_veto_reason: vetoed ? String(args?.p_reason) : null, horizon: vetoed && c.horizon === 'now' ? 'next' : c.horizon };
+        });
+      }
       // set_role_pause changes the role, as the database does, so board_roles reads it back changed.
       if (name === 'set_role_pause') {
         fake.boardRoles = fake.boardRoles.map((r) =>
@@ -186,6 +198,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
     },
     from: (table: string) => {
       const record = { table, columns: '', filters: [] as string[] };
+      let only: { column: string; values: string[] } | null = null;
       fake.selects.push(record);
       const builder = {
         select(columns: string) {
@@ -194,6 +207,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         },
         in(column: string, values: string[]) {
           record.filters.push(`in ${column} ${values.join(',')}`);
+          only = { column, values };
           return builder;
         },
         order(column: string) {
@@ -201,7 +215,8 @@ vi.mock('./lib/supabase', async (importOriginal) => {
           return builder;
         },
         returns() {
-          const data = table === 'cards' ? [...fake.cards] : table === 'public_roles' ? [...fake.roleRows] : [];
+          const cards = fake.cards.filter((c) => only === null || only.values.includes(String(c[only.column as keyof FakeCard])));
+          const data = table === 'cards' ? cards : table === 'public_roles' ? [...fake.roleRows] : [];
           return Promise.resolve({ data, error: null });
         },
       };
@@ -224,6 +239,16 @@ const ROLE_ROWS = [
 ];
 
 const EMPTY_NEEDS = { controller: null, last_credit_purchase: null, incident_reserve_usd: 0, s1_cards: [] };
+
+// docs/specs/agent-system-core.md: two ceiling pauses the rule will not resume and a void card with money.
+const NEEDS_CARDS = {
+  ...EMPTY_NEEDS,
+  rule_blocked: [
+    { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
+    { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
+  ],
+  approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }],
+};
 
 const startedAt = new Date('2026-09-14T12:00:00Z');
 const notActive = 'Board session: not active. Keep this page open to run attended agent sessions.';
@@ -800,17 +825,44 @@ describe('Board card controls', () => {
     );
   });
 
-  it('says how much unspent money a cancellation moved on', async () => {
-    fake.cards = [card({ id: 'x2', title: 'Holds money' })];
+  it('says above the list how much unspent money a cancellation moved on, since the cancelled card leaves the list, and focuses it', async () => {
+    fake.cards = [card({ id: 'x2', title: 'Holds money' }), card({ id: 'x3', title: 'Stays' })];
     fake.cancelResult = { card_id: 'x2', stage: 'rejected', from_stage: 'voted', moved_usd: 1.8, moved_to: [] };
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderBoard();
     await flush();
     const form = cardForm('Holds money');
     fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Out of scope.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    const button = form.getByRole('button', { name: 'Cancel card' });
+    button.focus();
+    fireEvent.click(button);
     await flush();
-    expect(form.getByText('Card cancelled. $1.80 of unspent money moved to the next cards in line.')).toBeTruthy();
+    expect(screen.queryByRole('form', { name: 'Card Holds money' })).toBeNull();
+    const cards = within(screen.getByRole('region', { name: 'Cards' }));
+    const notice = cards.getByText('Card Holds money cancelled. $1.80 of unspent money moved to the next cards in line.');
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(document.activeElement).toBe(notice);
+    expect(cardForm('Stays').queryByRole('status')).toBeNull();
+  });
+
+  it('keeps the row, its confirmation and focus when a save moves the card', async () => {
+    fake.cards = [card({ id: 'm1', title: 'Moves', horizon: 'now' }), card({ id: 'm2', title: 'Another', horizon: 'next', rank: 1 })];
+    await renderBoard();
+    await flush();
+    const form = cardForm('Moves');
+    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'later' } });
+    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '4' } });
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Not yet.' } });
+    const save = form.getByRole('button', { name: 'Save horizon and rank' });
+    save.focus();
+    fireEvent.submit(screen.getByRole('form', { name: 'Card Moves' }));
+    await flush();
+    const after = cardForm('Moves');
+    expect(after.getByRole('status').textContent).toBe('Card saved.');
+    expect(after.getByText(/horizon later · rank 4/)).toBeTruthy();
+    expect((after.getByLabelText('Horizon') as HTMLSelectElement).value).toBe('later');
+    expect(after.getByRole('button', { name: 'Save horizon and rank' })).toBe(save);
+    expect(document.activeElement).toBe(save);
   });
 
   it('resumes a paused card with a new estimate, and offers resume on paused cards only', async () => {
@@ -1417,16 +1469,39 @@ describe('Board agent system controls', () => {
     expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt']));
   });
 
-  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each pointing at Cards', async () => {
-    fake.needs = {
-      ...EMPTY_NEEDS,
-      rule_blocked: [
-        { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
-        { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
-      ],
-      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', funded_usd: 2 }],
-    };
+  it('vetoes a card on now with one button that keeps focus and says so, though the veto moves the card to next', async () => {
+    fake.cards = [card({ id: 'on-now', title: 'On now', horizon: 'now' }), card({ id: 'on-next', title: 'On next', horizon: 'next', rank: 1 })];
     await renderBoard();
+    await flush();
+    const form = cardForm('On now');
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Off pillar' } });
+    const toggle = form.getByRole('button', { name: 'Veto card' });
+    toggle.focus();
+    fireEvent.click(toggle);
+    await flush();
+    const after = cardForm('On now');
+    expect(after.getByRole('status').textContent).toBe('Card vetoed.');
+    expect(after.getByText(/horizon next/)).toBeTruthy();
+    // The same element, now reading Lift veto, still has focus.
+    expect(after.getByRole('button', { name: 'Lift veto' })).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+    fireEvent.change(after.getByLabelText('Reason'), { target: { value: 'Back in' } });
+    fireEvent.click(toggle);
+    await flush();
+    expect(cardForm('On now').getByRole('status').textContent).toBe('Veto lifted.');
+    expect(toggle.textContent).toBe('Veto card');
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each linking to its row under Cards', async () => {
+    fake.needs = { ...NEEDS_CARDS };
+    fake.cards = [
+      card({ id: 'max', title: 'At the maximum', stage: 'paused' }),
+      card({ id: 'twice', title: 'Paused twice', stage: 'paused' }),
+      card({ id: 'void', title: 'Rewritten', source: 'agent', drafter_role_id: 'r-designer' }),
+    ];
+    await renderBoard();
+    await flush();
     const needs = within(screen.getByRole('region', { name: 'Needs you' }));
     expect(needs.getByText('Card At the maximum is paused at its ceiling at the card maximum of $25.00.')).toBeTruthy();
     // resumed_before covers a first resume by the rule or by the board.
@@ -1434,5 +1509,31 @@ describe('Board agent system controls', () => {
     expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice']);
     expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
     expect(needs.getByRole('link', { name: 'Cancel it under Cards' }).getAttribute('href')).toBe('#card-void');
+    // Every link has its row on the page.
+    for (const link of needs.getAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('#'))) {
+      expect(document.getElementById(link.getAttribute('href')!.slice(1)), link.getAttribute('href')!).not.toBeNull();
+    }
+  });
+
+  it('names the second factor and links to no card at the first factor, where Cards is not shown', async () => {
+    fake.aal = 'aal1';
+    fake.needs = { ...NEEDS_CARDS };
+    await renderBoard();
+    const region = screen.getByRole('region', { name: 'Needs you' });
+    const needs = within(region);
+    expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
+    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
+    expect(needs.getByText(/Verify your second factor, then cancel it under Cards, which moves its unspent money/)).toBeTruthy();
+    expect(needs.getAllByText(/The rule will not resume it: verify your second factor, then resume it with a new estimate, or cancel it, under Cards\./)).toHaveLength(2);
+  });
+
+  it('links to no card while the cards read has not listed it', async () => {
+    fake.needs = { ...NEEDS_CARDS };
+    fake.cards = [];
+    await renderBoard();
+    await flush();
+    const region = screen.getByRole('region', { name: 'Needs you' });
+    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
+    expect(within(region).getByText(/Cancel it under Cards, which moves its unspent money/)).toBeTruthy();
   });
 });

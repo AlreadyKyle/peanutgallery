@@ -512,6 +512,8 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
     await s.spend(voided, 1);
     await s.db.query(`insert into public.agent_events (card_id, role_id, type) values ($1, $2, 'start'), (null, $2, 'message')`, [voided, s.roles.builder]);
     await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [voided]);
+    // The card that takes the voided card's released money, in the step that cancels it.
+    let taker = "";
 
     const readAll = async () => ({
       cards: (await s.rows<{ id: string }>(`select id from public.cards order by created_at`)).map((r) => r.id),
@@ -559,13 +561,14 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       ]);
       // Needs you lists a card holding money whose approval is not current.
       await s.signInAs(BOARD_EMAIL, "aal1");
-      const needs = (await s.row<{ n: { approval_void: { id: string }[] } }>(`select public.board_needs_you() as n`)).n;
-      assertEquals(needs.approval_void.map((c) => c.id), [voided]);
+      const needs = (await s.row<{ n: { approval_void: { id: string; money_usd: number }[] } }>(`select public.board_needs_you() as n`)).n;
+      // $4 paid, $1 spent: the $3 left on its bar is what cancelling it moves.
+      assertEquals(needs.approval_void.map((c) => [c.id, Number(c.money_usd)]), [[voided, 3]]);
     });
 
     await t.step("a stopped card's money moved to a card whose approval is not current shows no title for it", async () => {
       // The voided card's money moves on when the board cancels it; then the card that took it is voided too.
-      const taker = await s.card("Agent, takes the release", { horizon: "now", target: 10 });
+      taker = await s.card("Agent, takes the release", { horizon: "now", target: 10 });
       await s.approve(taker);
       await s.signInAs(BOARD_EMAIL, "aal2");
       await s.db.query(`update public.cards set stage = 'paused' where id = $1`, [voided]);
@@ -581,6 +584,28 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       await s.rawEdit(taker, "title = 'Rewritten outside a board RPC'");
       const after = (await s.asRole("anon", () => s.row<{ moved: { to_card_id: string; to_title: string | null }[] }>(`select moved from public.public_stopped_cards where card_id = $1`, [board]))).moved;
       assertEquals(after.map((m) => [m.to_card_id, m.to_title]), [[taker, null]]);
+    });
+
+    await t.step("a void card leaves Needs you once the board cancels it, though its spent money stays on its bar, and a live one is left to the sweep", async () => {
+      const voidCards = async () =>
+        (await s.row<{ n: { approval_void: { id: string; stage: string }[] } }>(`select public.board_needs_you() as n`)).n.approval_void.map((c) => [c.id, c.stage]);
+      await s.signInAs(BOARD_EMAIL, "aal2");
+      // The cancelled void card is rejected with its $1 of spend still on its bar, and is not listed.
+      const cancelled = await s.cardRow(voided);
+      assertEquals([cancelled.stage, Number(cancelled.funded_usd)], ["rejected", 1]);
+      // The taker, voided while it holds the released money, is listed until the board cancels it too.
+      assertEquals(await voidCards(), [[taker, "proposed"]]);
+      await s.db.query(`select public.cancel_card($1, 'Voided')`, [taker]);
+      assertEquals(await voidCards(), []);
+      await s.refuses(`select public.cancel_card($1, 'Again')`, "cannot be cancelled", [taker]);
+      // A shipped card whose approval is voided is not the board's to cancel: the sweep moves its unspent money.
+      const shipped = await s.card("Agent, shipped", { horizon: "now", target: 10 });
+      await s.approve(shipped);
+      await s.pay("v3", 2, shipped);
+      await s.db.query(`update public.cards set stage = 'live' where id = $1`, [shipped]);
+      await s.rawEdit(shipped, "title = 'Rewritten after it shipped'");
+      assertEquals(await voidCards(), []);
+      await s.identity();
     });
   } finally {
     await s.close();

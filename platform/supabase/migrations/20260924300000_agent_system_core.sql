@@ -1388,12 +1388,26 @@ begin
     where c.stage = 'paused' and c.failing_check = 'ceiling' and c.horizon = 'now'
   ) x
   where x.resumed_before or least(round(1.5 * round(x.actual_usd, 4), 4), coalesce(v_max, 0)) <= x.actual_usd;
-  select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'title', c.title, 'stage', c.stage, 'funded_usd', c.funded_usd) order by c.created_at, c.id), '[]'::jsonb)
+  -- A void card whose money the board can still move by cancelling it: a stage
+  -- cancel_card takes, with unspent money on its bar or a payment on hold naming
+  -- it. Spent money stays on a bar after a cancel, and the sweep moves a live or
+  -- rejected card's unspent money on by itself, so neither is listed.
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'title', x.title, 'stage', x.stage, 'money_usd', x.unspent_usd + x.held_usd) order by x.created_at, x.id), '[]'::jsonb)
   into v_void
-  from public.cards c
-  where public.card_needs_approval(c.source, c.drafter_role_id)
-    and not public.card_approved(c.id)
-    and public.card_money_held(c.id);
+  from (
+    select c.id, c.title, c.stage, c.created_at,
+      greatest(c.funded_usd - money.card_studio_spend(c.id), 0) as unspent_usd,
+      coalesce((
+        select sum(greatest(p.held_usd + coalesce((select sum(h.held_usd) from public.contributions h where h.parent_id = p.id), 0), 0))
+        from public.contributions p
+        where p.goal_card_id = c.id and p.entry = 'payment'
+      ), 0) as held_usd
+    from public.cards c
+    where public.card_needs_approval(c.source, c.drafter_role_id)
+      and not public.card_approved(c.id)
+      and c.stage in ('proposed', 'designing', 'voted', 'funded', 'paused')
+  ) x
+  where x.unspent_usd + x.held_usd > 0;
   return jsonb_build_object(
     'controller', v_controller,
     'last_credit_purchase', v_purchase,

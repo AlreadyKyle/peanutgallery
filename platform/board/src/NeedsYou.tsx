@@ -25,13 +25,24 @@ function settlementNote(amount: number | null, currency: string | null): string 
   return ` (${formatAmount(amount, currency)} in Stripe's currency)`;
 }
 
+/**
+ * Where a card item sends the board: a link to the card's row under Cards once that row is on the
+ * page, and plain words while it is not (at the first factor Cards is not shown; at the second, while
+ * the cards read is loading or has failed), so no link ever points at nothing.
+ */
+function ToCard({ id, listed, children }: { id: string; listed: ReadonlySet<string>; children: string }) {
+  return listed.has(id) ? <a href={`#card-${id}`}>{children}</a> : <>{children}</>;
+}
+
 function Item({
   item,
   canRecord,
+  listedCards,
   onFillCredit,
 }: {
   item: NeedsItem;
   canRecord: boolean;
+  listedCards: ReadonlySet<string>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   if (item.kind === 'dispute') {
@@ -55,11 +66,14 @@ function Item({
       <li>
         <p>
           <strong>
-            Card {item.card.title} holds {formatUsd(item.card.funded_usd)} but its approval is not current.
+            Card {item.card.title} holds {formatUsd(item.card.money_usd)} but its approval is not current.
           </strong>{' '}
           Its text was changed outside a board control, so the public does not see it, no session runs it and it takes
-          no money. <a href={`#card-${item.card.id}`}>Cancel it under Cards</a>, which moves its unspent money to the next
-          cards in line.
+          no money. {canRecord ? null : 'Verify your second factor, then '}
+          <ToCard id={item.card.id} listed={listedCards}>
+            {canRecord ? 'Cancel it under Cards' : 'cancel it under Cards'}
+          </ToCard>
+          , which moves its unspent money to the next cards in line.
         </p>
       </li>
     );
@@ -75,7 +89,11 @@ function Item({
               : ' a second time, after it was resumed once.'}
           </strong>{' '}
           It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
-          <a href={`#card-${item.card.id}`}>resume it with a new estimate, or cancel it, under Cards</a>.
+          {canRecord ? null : 'verify your second factor, then '}
+          <ToCard id={item.card.id} listed={listedCards}>
+            resume it with a new estimate, or cancel it, under Cards
+          </ToCard>
+          .
         </p>
       </li>
     );
@@ -152,15 +170,18 @@ function ControllerLine({ data }: { data: NeedsYouData }) {
 
 /**
  * The board's first screen: the standing duties that are due now, usually none. It reads at aal1;
- * the one control, filling in the credit form, needs the second factor like the form itself.
+ * the one control, filling in the credit form, needs the second factor like the form itself, and a
+ * card item links to its row under Cards only once that row is listed (listedCards).
  */
 export function NeedsYou({
   client,
   canRecord,
+  listedCards,
   onFillCredit,
 }: {
   client: SupabaseClient;
   canRecord: boolean;
+  listedCards: ReadonlySet<string>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   const [data, setData] = useState<NeedsYouData | null>(null);
@@ -205,6 +226,7 @@ export function NeedsYou({
                   key={item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}-${item.card.id}`}
                   item={item}
                   canRecord={canRecord}
+                  listedCards={listedCards}
                   onFillCredit={onFillCredit}
                 />
               ))}

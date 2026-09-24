@@ -1,5 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
   agentModes,
   boardStudioState,
@@ -402,6 +402,8 @@ function BoardControls({
 }) {
   const studio = useBoardStudioState(client);
   const [draft, setDraft] = useState<CreditDraft | null>(null);
+  // The cards listed under Cards, which only the second factor shows; Needs you links to these only.
+  const [listedCards, setListedCards] = useState<ReadonlySet<string>>(() => new Set());
   const creditForm = useRef<HTMLFormElement | null>(null);
 
   function fillCredit(next: CreditDraft) {
@@ -411,7 +413,7 @@ function BoardControls({
 
   return (
     <>
-      <NeedsYou client={client} canRecord={secondFactor} onFillCredit={fillCredit} />
+      <NeedsYou client={client} canRecord={secondFactor} listedCards={listedCards} onFillCredit={fillCredit} />
       {secondFactor ? null : <TwoFactor client={client} onVerified={onVerified} />}
       {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
@@ -424,7 +426,7 @@ function BoardControls({
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CoolingWindowForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CreditPurchaseForm client={client} draft={draft} formRef={creditForm} />
-          <CardControls client={client} />
+          <CardControls client={client} onListed={setListedCards} />
           <SecondFactorForms client={client} />
         </>
       ) : null}
@@ -875,15 +877,23 @@ const STAGE_WORDS: Record<string, string> = {
   paused: 'paused',
 };
 
-/** The horizon, rank, target, cancel and resume controls for one card. */
+/**
+ * The horizon, rank, target, veto, cancel and resume controls for one card. The row is keyed by the
+ * card alone, so it stays mounted when an action changes the card's stage, horizon or rank: its
+ * confirmation stays shown and announced, and the fields follow the card as the database has it.
+ */
 function CardControl({
   client,
   card,
   onChanged,
+  onCancelled,
 }: {
   client: SupabaseClient;
   card: BoardCard;
-  onChanged: () => Promise<void>;
+  /** Reloads the list; `focused` is the control to focus again if the reload moved this row. */
+  onChanged: (focused: HTMLElement | null) => Promise<void>;
+  /** A cancelled card leaves the list, so its confirmation is said above the list. */
+  onCancelled: (notice: string) => void;
 }) {
   const [horizon, setHorizon] = useState<Horizon>(card.horizon);
   const [rank, setRank] = useState(card.rank === null ? '' : String(card.rank));
@@ -893,6 +903,16 @@ function CardControl({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const idBase = useId();
+  const row = useRef<HTMLLIElement | null>(null);
+  const stored = `${card.stage} ${card.horizon} ${card.rank} ${card.funding_target_usd} ${card.estimate_usd}`;
+  const [shown, setShown] = useState(stored);
+  if (shown !== stored) {
+    setShown(stored);
+    setHorizon(card.horizon);
+    setRank(card.rank === null ? '' : String(card.rank));
+    setTarget(card.funding_target_usd > 0 ? String(card.funding_target_usd) : '');
+    setEstimate(card.estimate_usd > 0 ? String(card.estimate_usd) : '');
+  }
   // Horizon and rank change only while the card is open for funding; the target only on a move to now.
   const movable = HORIZON_STAGES.includes(card.stage);
   const settableTarget = movable && card.horizon !== 'now';
@@ -905,14 +925,16 @@ function CardControl({
     return reason.trim();
   }
 
-  async function run(action: () => Promise<void>, done: string | (() => string)) {
+  async function run(action: () => Promise<void>, done: string) {
     if (busy) return;
+    const active = document.activeElement;
+    const focused = active instanceof HTMLElement && row.current?.contains(active) ? active : null;
     setBusy(true);
     try {
       await action();
-      setMessage(typeof done === 'string' ? done : done());
+      setMessage(done);
       setReason('');
-      await onChanged();
+      await onChanged(focused);
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
@@ -955,13 +977,10 @@ function CardControl({
     const why = needReason();
     if (why === null) return;
     if (!window.confirm(CANCEL_CONFIRM)) return;
-    let moved = 0;
-    await run(
-      async () => {
-        moved = await cancelCard(client, card.id, why);
-      },
-      () => (moved > 0 ? `Card cancelled. $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : 'Card cancelled.'),
-    );
+    await run(async () => {
+      const moved = await cancelCard(client, card.id, why);
+      onCancelled(`Card ${card.title} cancelled.${moved > 0 ? ` $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : ''}`);
+    }, '');
   }
 
   async function resume() {
@@ -982,7 +1001,7 @@ function CardControl({
   }
 
   return (
-    <li id={`card-${card.id}`}>
+    <li id={`card-${card.id}`} ref={row}>
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
         <p>
@@ -1058,14 +1077,10 @@ function CardControl({
               Resume card
             </button>
           ) : null}
-          {canVeto(card) ? (
-            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(true)}>
-              Veto card
-            </button>
-          ) : null}
-          {canUnveto(card) ? (
-            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(false)}>
-              Lift veto
+          {/* One button that changes its words, so the keyboard user's focus stays on it after a veto. */}
+          {canVeto(card) || canUnveto(card) ? (
+            <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void veto(!card.board_vetoed)}>
+              {card.board_vetoed ? 'Lift veto' : 'Veto card'}
             </button>
           ) : null}
           <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void cancel()}>
@@ -1098,16 +1113,23 @@ function CardMarks({ card }: { card: BoardCard }) {
   );
 }
 
-/** Every card the board can still move, cancel or resume, now first, then the roadmap. */
-function CardControls({ client }: { client: SupabaseClient }) {
+/**
+ * Every card the board can still move, cancel or resume, now first, then the roadmap. It tells Needs
+ * you which cards are listed (onListed), so an inbox item links only to a row that is on the page.
+ */
+function CardControls({ client, onListed }: { client: SupabaseClient; onListed: (ids: ReadonlySet<string>) => void }) {
   const [cards, setCards] = useState<BoardCard[] | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [notice, setNotice] = useState('');
+  const noticeLine = useRef<HTMLParagraphElement | null>(null);
+  const refocus = useRef<HTMLElement | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       setCards(await fetchBoardCards(client));
       setLoadError('');
     } catch (error) {
+      refocus.current = null;
       setLoadError(errorMessage(error));
     }
   }, [client]);
@@ -1115,6 +1137,30 @@ function CardControls({ client }: { client: SupabaseClient }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    onListed(new Set((cards ?? []).map((card) => card.id)));
+  }, [cards, onListed]);
+
+  // An action that changes a card's horizon or rank moves its row, and a browser drops focus from an
+  // element it moves; a cancelled card leaves the list. Once the list is redrawn, the control that was
+  // focused gets focus back, or the notice does when its card is gone, unless focus went elsewhere.
+  useLayoutEffect(() => {
+    const control = refocus.current;
+    refocus.current = null;
+    if (control === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    (control.isConnected ? control : noticeLine.current)?.focus();
+  }, [cards]);
+
+  const changed = useCallback(
+    async (focused: HTMLElement | null) => {
+      refocus.current = focused;
+      await refresh();
+    },
+    [refresh],
+  );
 
   return (
     <section aria-label="Cards">
@@ -1124,12 +1170,17 @@ function CardControls({ client }: { client: SupabaseClient }) {
         with a new estimate. Each change needs a reason and is recorded. Undealt and hidden agent cards are listed
         here, and nowhere public.
       </p>
+      {notice === '' ? null : (
+        <p role="status" tabIndex={-1} ref={noticeLine}>
+          {notice}
+        </p>
+      )}
       {cards === null ? <p role="status">{loadError === '' ? 'Loading the cards.' : loadError}</p> : null}
       {cards !== null && cards.length === 0 ? <p>No cards to manage.</p> : null}
       {cards !== null && cards.length > 0 ? (
         <ul className="board-cards">
           {cards.map((card) => (
-            <CardControl key={`${card.id}-${card.horizon}-${card.rank}-${card.stage}`} client={client} card={card} onChanged={refresh} />
+            <CardControl key={card.id} client={client} card={card} onChanged={changed} onCancelled={setNotice} />
           ))}
         </ul>
       ) : null}
