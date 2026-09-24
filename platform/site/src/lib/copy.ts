@@ -127,7 +127,8 @@ export const copy = {
   // The public line for each agent event, by its fixed key (public.event_line_key,
   // docs/specs/supporter-pages.md). one is a single event; many, with {n}, is a run of the same line
   // by the same agent on the same card, collapsed into one. A key with no many says one "({n} times)".
-  // The held step's words are legal.ts's (lib/lines.ts), since this file carries no money word.
+  // The top-up, resume and ranking steps' words are legal.ts's (lib/lines.ts), since this file
+  // carries no money word.
   eventLines: {
     started: { one: 'started work' },
     read: { one: 'read a file', many: 'read {n} files' },

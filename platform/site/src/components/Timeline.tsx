@@ -30,7 +30,7 @@ export function Timeline({ lines, count, roles }: { lines: readonly CardLine[]; 
                 {formatDateTime(line.created_at)}
               </time>
               <span className="row-body">
-                <span className="row-strong">{`${who} ${eventLine(line.line_key, line.count)}`}</span>
+                <span className="row-strong">{`${who} ${eventLine(line.line_key, line.count, line.usd)}`}</span>
               </span>
             </li>
           );

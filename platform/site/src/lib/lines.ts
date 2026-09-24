@@ -1,4 +1,5 @@
 import { copy } from './copy';
+import { formatUsd, toNumber, type Numeric } from './format';
 import { legal } from './legal';
 
 // Kernel (docs/specs/supporter-pages.md): the public line for each agent event, by its fixed key
@@ -7,14 +8,20 @@ import { legal } from './legal';
 
 type LineWords = { one: string; many?: string };
 
-/** The words for every key: copy.ts's, and the held step's from legal.ts. */
-const WORDS: Record<string, LineWords> = { ...copy.eventLines, held: { one: legal.eventLineHeld } };
+/** The words for every key: copy.ts's, and legal.ts's for the steps that name money or funding. */
+const WORDS: Record<string, LineWords> = { ...copy.eventLines, ...legal.eventLinesMoney };
 
-/** A line's words for its key, one event or a run of n; an unknown key reads as other. */
-export function eventLine(key: string, count = 1): string {
+/** A line's words for its key, one event or a run of n; an unknown key reads as other. A top-up
+ * names its amount: the event's usd (public_agent_events.usd). */
+export function eventLine(key: string, count = 1, usd: Numeric | undefined = null): string {
   const words = WORDS[key] ?? WORDS.other!;
-  if (count <= 1) return words.one;
-  return words.many === undefined ? `${words.one} ${copy.eventTimes.replace('{n}', String(count))}` : words.many.replace('{n}', String(count));
+  const line =
+    count <= 1
+      ? words.one
+      : words.many === undefined
+        ? `${words.one} ${copy.eventTimes.replace('{n}', String(count))}`
+        : words.many.replace('{n}', String(count));
+  return line.replace('{usd}', formatUsd(toNumber(usd) ?? 0));
 }
 
 /**

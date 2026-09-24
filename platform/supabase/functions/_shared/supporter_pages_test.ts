@@ -150,7 +150,7 @@ Deno.test("event_line_key gives every row of the Event lines table in both tool 
     await t.step("message steps, the fallbacks, and every other type", async () => {
       const steps: [string, string][] = [
         ["smoke_pass", "smoke_passed"], ["requeue", "requeued"], ["infrastructure", "paused_infra"], ["patch_reused", "patch_reused"],
-        ["dealt", "dealt"], ["held", "held"], ["ranked", "none"], ["resume_rule", "none"], ["ceiling_top_up", "none"],
+        ["dealt", "dealt"], ["ceiling_top_up", "topped_up"], ["resume_rule", "resumed"], ["ranked", "ranked"], ["held", "none"],
       ];
       for (const [step, want] of steps) assertEquals(await key("message", { step, detail: "free text" }), want, step);
       assertEquals(await key("message", { text: "Anything an agent wrote" }), "none");
@@ -174,18 +174,39 @@ Deno.test("event_line_key gives every row of the Event lines table in both tool 
       const cols = (await s.rows<{ c: string }>(
         `select column_name as c from information_schema.columns where table_schema = 'public' and table_name = 'public_agent_events' order by ordinal_position`,
       )).map((r) => r.c);
-      assertEquals(cols, ["id", "card_id", "role_id", "type", "created_at", "line_key"]);
+      assertEquals(cols, ["id", "card_id", "role_id", "type", "created_at", "step", "usd", "line_key"]);
+    });
+
+    await t.step("the database's own steps reach the public: a top-up with its amount, a resume, and the Studio Head's ranking", async () => {
+      const c = await s.card("A topped-up card", 1);
+      await s.db.query(
+        `insert into public.agent_events (card_id, role_id, type, payload_json, created_at) values
+           ($1, null, 'message', '{"step":"ceiling_top_up","usd":1.25}'::jsonb, '2026-09-01T00:00:00Z'),
+           ($1, null, 'message', '{"step":"resume_rule"}'::jsonb, '2026-09-01T00:00:01Z'),
+           (null, $2, 'message', '{"step":"ranked","moves":[{"card":"x","from":2,"to":1}]}'::jsonb, '2026-09-01T00:00:02Z')`,
+        [c, s.builder],
+      );
+      const seen = await s.asAnon(async () =>
+        await s.rows<{ step: string | null; usd: string | null; line_key: string }>(
+          `select step, usd::text as usd, line_key from public.public_agent_events where line_key in ('topped_up', 'resumed', 'ranked') order by line_key`,
+        )
+      );
+      assertEquals(seen, [
+        { step: null, usd: null, line_key: "ranked" },
+        { step: "resume_rule", usd: null, line_key: "resumed" },
+        { step: "ceiling_top_up", usd: "1.2500", line_key: "topped_up" },
+      ]);
     });
 
     await t.step("site_live()'s events never carry key none, and hold the newest 20 with a key", async () => {
       const c = await s.card("A card", 1);
       for (let k = 0; k < 30; k += 1) await s.event(c, "tool_result", { content: "output" }, `2026-09-20T00:${String(k).padStart(2, "0")}:00Z`);
       for (let k = 0; k < 22; k += 1) await s.event(c, "tool_call", { name: k % 2 ? "Read" : "read" }, `2026-09-19T00:${String(k).padStart(2, "0")}:00Z`);
-      await s.event(c, "message", { step: "ranked" }, "2026-09-21T00:00:00Z");
+      await s.event(c, "message", { text: "Anything an agent wrote" }, "2026-09-21T00:00:00Z");
       const events = (await s.live()).events as Doc[];
       assertEquals(events.length, 20);
       assert(events.every((e) => e.line_key === "read"), JSON.stringify(events.map((e) => e.line_key)));
-      assertEquals(Object.keys(events[0]!).sort(), ["card_id", "card_title", "created_at", "id", "line_key", "role_id", "type"]);
+      assertEquals(Object.keys(events[0]!).sort(), ["card_id", "card_title", "created_at", "id", "line_key", "role_id", "step", "type", "usd"]);
     });
   } finally {
     await s.close();
@@ -444,7 +465,7 @@ Deno.test("site_card returns a public card's document, and public_role_stats cou
       assertEquals(lines.at(-1)!.line_key, "shipped", "oldest first, the newest last");
       const times = lines.map((l) => String(l.created_at));
       assertEquals(times, [...times].sort());
-      assertEquals(Object.keys(lines[0]!).sort(), ["created_at", "line_key", "role_id"]);
+      assertEquals(Object.keys(lines[0]!).sort(), ["created_at", "line_key", "role_id", "usd"]);
       const milestones = doc.milestones as Doc;
       assertEquals(milestones.gate, "passed", "the latest gate result");
       assert(String(milestones.started_at).startsWith("2026-09-10T00:00:00"), String(milestones.started_at));

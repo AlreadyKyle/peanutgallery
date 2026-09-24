@@ -117,8 +117,9 @@ type FunctionConfig = {
 
 // The paths only, with no method key, so any method reaches the function and a wrong one answers
 // 405. The rate limit is the second of the two code-based rules legacy Free allows (snapshot.mts
-// takes the first).
+// takes the first), at snapshot.mts's 300 a minute per IP and domain: a card page reads /api/live
+// and /api/cards too, and readers behind one address (a school, an office) share the limit.
 export const config: FunctionConfig = {
   path: ['/api/card/:id', '/api/thanks'],
-  rateLimit: { windowLimit: 60, windowSize: 60, aggregateBy: ['ip', 'domain'] },
+  rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

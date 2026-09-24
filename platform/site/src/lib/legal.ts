@@ -327,8 +327,14 @@ export const legal = {
   // /roadmap's label on a card the board vetoed, beside the board's reason. Here, not in copy.ts,
   // because the site-kernel test keeps the word held out of copy.ts.
   heldByBoard: 'Held by the board',
-  // The agent step that keeps a card back for the board (event line key held, lib/lines.ts).
-  eventLineHeld: 'kept the card back for the board',
+  // The public lines for the database's own steps that name money or funding (event line keys
+  // topped_up, resumed and ranked, lib/lines.ts): the top-up with its amount, the resume by rule,
+  // and the Studio Head's ranking. Here, not in copy.ts, because copy.ts carries no money word.
+  eventLinesMoney: {
+    topped_up: { one: 'topped the card up with {usd} from Not on a card yet' },
+    resumed: { one: 'resumed the card by rule after its spending limit' },
+    ranked: { one: 'ranked the cards open for funding' },
+  } as Record<string, { one: string; many?: string }>,
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
   thanks: {

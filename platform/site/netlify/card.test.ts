@@ -173,10 +173,10 @@ describe('methods, paths and the config', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('names its two paths, with no method, and sets the 60-a-minute rate limit per IP and domain', () => {
+  it('names its two paths, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
       path: ['/api/card/:id', '/api/thanks'],
-      rateLimit: { windowLimit: 60, windowSize: 60, aggregateBy: ['ip', 'domain'] },
+      rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');
   });

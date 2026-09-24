@@ -9,7 +9,12 @@ describe('event lines', () => {
     expect(eventLine('ran', 3)).toBe('ran 3 commands');
     expect(eventLine('gate_passed', 2)).toBe('passed the checks (2 times)');
     expect(eventLine('brand_new_key')).toBe(copy.eventLines.other!.one);
-    for (const key of ['started', 'read', 'edited', 'ran', 'submitted', 'used_tool', 'smoke_passed', 'requeued', 'paused_infra', 'patch_reused', 'dealt', 'held', 'gate_passed', 'gate_failed', 'shipped', 'reverted', 'stopped', 'other']) {
+    // The database's own steps: a top-up names its amount, filled by the caller.
+    expect(eventLine('topped_up', 1, 1.25)).toBe('topped the card up with $1.25 from Not on a card yet');
+    expect(eventLine('topped_up', 1, '0.5000')).toBe('topped the card up with $0.50 from Not on a card yet');
+    expect(eventLine('resumed')).toBe('resumed the card by rule after its spending limit');
+    expect(eventLine('ranked')).toBe('ranked the cards open for funding');
+    for (const key of ['started', 'read', 'edited', 'ran', 'submitted', 'used_tool', 'smoke_passed', 'requeued', 'paused_infra', 'patch_reused', 'dealt', 'topped_up', 'resumed', 'ranked', 'gate_passed', 'gate_failed', 'shipped', 'reverted', 'stopped', 'other']) {
       expect(eventLine(key), key).not.toBe(key === 'other' ? '' : copy.eventLines.other!.one);
     }
   });

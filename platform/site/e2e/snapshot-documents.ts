@@ -22,7 +22,9 @@ const STEP_KEYS: Record<string, string> = {
   infrastructure: 'paused_infra',
   patch_reused: 'patch_reused',
   dealt: 'dealt',
-  held: 'held',
+  ceiling_top_up: 'topped_up',
+  resume_rule: 'resumed',
+  ranked: 'ranked',
 };
 const TYPE_KEYS: Record<string, string> = {
   start: 'started',

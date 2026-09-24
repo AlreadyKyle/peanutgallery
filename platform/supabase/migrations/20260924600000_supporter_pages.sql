@@ -6,8 +6,11 @@
 -- tool name (compared without regard to case, so Claude Code's Read and
 -- Managed Agents' read give the same key) and its message step, never from
 -- free text. public_agent_events gains it as line_key, appended after the
--- columns agent-system-core left; a row whose key is none (a tool result, an
--- unlisted message) never reaches a public document.
+-- columns agent-system-core left (step and usd last); a row whose key is none
+-- (a tool result, an unlisted message) never reaches a public document. The
+-- database's own steps get keys too: dealt, a top-up from Not on a card yet
+-- (its amount is the view's usd), a resume by rule, and the Studio Head's
+-- ranking, which the step column leaves out because a role wrote it.
 --
 -- public_card_supporters lists each supporter on every card their money
 -- reached, with the same test public_card_funding counts contributors by: a
@@ -27,8 +30,8 @@
 -- or payer key.
 --
 -- site_live() and site_cards() are recreated from site-snapshot's versions:
--- events carry line_key and leave key none out, and the live document gains
--- role_stats. site_cards()'s roles already carry status, trigger, paused and
+-- events keep step and usd, carry line_key and leave key none out, and the
+-- live document gains role_stats. site_cards()'s roles already carry status, trigger, paused and
 -- paused_reason through public_roles, so it is recreated unchanged in shape.
 
 set lock_timeout = '5s';
@@ -63,7 +66,9 @@ as $$
         when 'infrastructure' then 'paused_infra'
         when 'patch_reused' then 'patch_reused'
         when 'dealt' then 'dealt'
-        when 'held' then 'held'
+        when 'ceiling_top_up' then 'topped_up'
+        when 'resume_rule' then 'resumed'
+        when 'ranked' then 'ranked'
         else 'none'
       end
     when 'tool_result' then 'none'
@@ -81,11 +86,17 @@ revoke all on function public.event_line_key(public.agent_event_type, jsonb) fro
 grant execute on function public.event_line_key(public.agent_event_type, jsonb) to anon, authenticated, service_role;
 
 -- b. public_agent_events --------------------------------------------------------
--- agent-system-core's definition, its columns in order and its filter kept,
--- with line_key appended.
+-- agent-system-core's definition, its columns in order (step and usd included:
+-- create or replace view cannot drop a column) and its filter kept, with
+-- line_key appended after usd.
 
 create or replace view public.public_agent_events with (security_invoker = false) as
-  select id, card_id, role_id, type, created_at, public.event_line_key(type, payload_json) as line_key
+  select id, card_id, role_id, type, created_at,
+    case when role_id is null and type = 'message' and payload_json ->> 'step' in ('dealt', 'ceiling_top_up', 'resume_rule')
+      then payload_json ->> 'step' end as step,
+    case when role_id is null and type = 'message' and payload_json ->> 'step' = 'ceiling_top_up'
+      then (payload_json ->> 'usd')::numeric(12,4) end as usd,
+    public.event_line_key(type, payload_json) as line_key
   from public.agent_events
   where card_id is null or public.card_is_public(card_id);
 
@@ -179,9 +190,9 @@ as $$
     ), '[]'::jsonb),
     'supporter_count', (select count(*) from public.public_card_supporters where card_id = c.id)::integer,
     'lines', coalesce((
-      select jsonb_agg(jsonb_build_object('role_id', e.role_id, 'line_key', e.line_key, 'created_at', e.created_at) order by e.created_at, e.id)
+      select jsonb_agg(jsonb_build_object('role_id', e.role_id, 'line_key', e.line_key, 'usd', e.usd, 'created_at', e.created_at) order by e.created_at, e.id)
       from (
-        select id, role_id, line_key, created_at from public.public_agent_events
+        select id, role_id, line_key, usd, created_at from public.public_agent_events
         where card_id = c.id and line_key <> 'none'
         order by created_at desc, id desc
         limit 200
@@ -306,8 +317,8 @@ grant execute on function public.thanks_for_session(text) to anon, authenticated
 -- g. site_cards and site_live ---------------------------------------------------
 -- site-snapshot's versions. site_cards() is unchanged in shape: public_roles
 -- already carries each role's status, trigger, paused and paused_reason.
--- site_live()'s events carry line_key and leave key none out (the newest 20
--- with a key), and it gains role_stats.
+-- site_live()'s events keep step and usd, carry line_key and leave key none
+-- out (the newest 20 with a key), and it gains role_stats.
 
 create or replace function public.site_cards() returns jsonb
 language sql
@@ -407,10 +418,10 @@ as $$
     'events', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', e.id, 'card_id', e.card_id, 'role_id', e.role_id, 'type', e.type,
-        'created_at', e.created_at, 'card_title', c.title, 'line_key', e.line_key
+        'created_at', e.created_at, 'step', e.step, 'usd', e.usd, 'card_title', c.title, 'line_key', e.line_key
       ) order by e.created_at desc, e.id desc)
       from (
-        select id, card_id, role_id, type, created_at, line_key from public.public_agent_events
+        select id, card_id, role_id, type, created_at, step, usd, line_key from public.public_agent_events
         where line_key <> 'none'
         order by created_at desc, id desc
         limit 20

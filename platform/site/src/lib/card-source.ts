@@ -24,7 +24,7 @@ export type DetailCard = Card & {
 };
 
 export type Supporter = { number: number; founding: boolean };
-export type CardLine = { role_id: string | null; line_key: string; created_at: string };
+export type CardLine = { role_id: string | null; line_key: string; created_at: string; usd?: number | string | null };
 export type Milestones = {
   created_at: string;
   started_at: string | null;
@@ -134,7 +134,13 @@ export function cardDetailFrom(value: unknown): CardDetail {
     spent_usd: spent,
     supporters: list(root.supporters, 'supporters').map((row) => ({ number: money(row.number), founding: row.founding === true })),
     supporter_count: money(root.supporter_count),
-    lines: list(root.lines, 'lines').map((row) => ({ role_id: textOrNull(row, 'role_id'), line_key: text(row, 'line_key'), created_at: text(row, 'created_at') })),
+    lines: list(root.lines, 'lines').map((row) => ({
+      role_id: textOrNull(row, 'role_id'),
+      line_key: text(row, 'line_key'),
+      created_at: text(row, 'created_at'),
+      // A top-up's amount (public_agent_events.usd); null on every other line.
+      ...(row.usd === null || row.usd === undefined ? {} : { usd: row.usd as number | string }),
+    })),
     line_count: money(root.line_count),
     milestones: {
       created_at: text(milestones, 'created_at'),

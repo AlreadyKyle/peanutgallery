@@ -26,9 +26,7 @@ export function eventText(event: AgentEvent & { count?: number }, roleTitles: Re
     const verb = eventVerb(event);
     return role === null ? verb : `${role} ${verb}`;
   }
-  // A top-up's line carries its amount ({usd}).
-  const line = eventLine(event.line_key, event.count ?? 1).replace('{usd}', formatUsd(toNumber(event.usd ?? null) ?? 0));
-  return `${role ?? copy.eventStudio} ${line}`;
+  return `${role ?? copy.eventStudio} ${eventLine(event.line_key, event.count ?? 1, event.usd)}`;
 }
 
 export function EventList({ snapshot, limit, focusAt, collapse = false }: { snapshot: Snapshot; limit?: number; focusAt?: number; collapse?: boolean }) {
