@@ -297,8 +297,9 @@ function TwoFactor({
     <section aria-label="Two-factor sign-in">
       <h2>Two-factor sign-in</h2>
       <p>
-        A second factor is needed before you can pause agents, go live, change the agent mode or the caps, record
-        credit, move, cancel or resume cards, or file cards, directives and notes.
+        A second factor is needed before you can pause agents or roles, go live, change the agent mode, the caps or
+        the cooling window, record credit, move, veto, cancel or resume cards, run a job now, or file cards,
+        directives and notes.
       </p>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
@@ -974,6 +975,7 @@ function CardControl({
   }
 
   async function cancel() {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     if (!window.confirm(CANCEL_CONFIRM)) return;
@@ -984,6 +986,7 @@ function CardControl({
   }
 
   async function resume() {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     const value = dollars(estimate);
@@ -995,6 +998,7 @@ function CardControl({
   }
 
   async function veto(vetoed: boolean) {
+    if (busy) return;
     const why = needReason();
     if (why === null) return;
     await run(() => setCardVeto(client, card.id, vetoed, why), vetoed ? 'Card vetoed.' : 'Veto lifted.');
@@ -1005,7 +1009,7 @@ function CardControl({
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
         <p>
-          {STAGE_WORDS[card.stage] ?? card.stage} · horizon {card.horizon}
+          {stageWord(card)} · horizon {card.horizon}
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
           {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
         </p>
@@ -1093,6 +1097,19 @@ function CardControl({
   );
 }
 
+/** The board's veto reason after a colon, without its own closing stop, so the mark ends with one. */
+function vetoReason(reason: string | null): string {
+  const trimmed = (reason ?? '').trim().replace(/[.!?]+$/, '');
+  return trimmed === '' ? '' : `: ${trimmed}`;
+}
+
+/** The card row's stage word; a vetoed card or one waiting to be dealt is not open for funding. */
+function stageWord(card: BoardCard): string {
+  if (card.board_vetoed && HORIZON_STAGES.includes(card.stage)) return 'vetoed';
+  if (undealt(card)) return 'waiting to be dealt';
+  return STAGE_WORDS[card.stage] ?? card.stage;
+}
+
 /**
  * What the public does not see about a card (docs/specs/agent-system-core.md): an approved agent card
  * waiting to be dealt, an agent card with no current approval, and the board's veto.
@@ -1102,7 +1119,7 @@ function CardMarks({ card }: { card: BoardCard }) {
   if (card.approval === 'current') marks.push('Written by an agent; its approval is current.');
   if (undealt(card)) marks.push(`Waiting to be dealt: moves to now at ${formatDateTime(card.opens_at!)}.`);
   if (card.approval === 'missing') marks.push('Hidden: written by an agent with no current approval. The public does not see it, no session runs it and it takes no money.');
-  if (card.board_vetoed) marks.push(`Vetoed by the board${card.board_veto_reason ? `: ${card.board_veto_reason}` : ''}. It is never dealt or run.`);
+  if (card.board_vetoed) marks.push(`Vetoed by the board${vetoReason(card.board_veto_reason)}. It is never dealt or run.`);
   if (marks.length === 0) return null;
   return (
     <ul className="marks">
@@ -1330,7 +1347,12 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
       <h2>Roles</h2>
       <p>
         Pause a role to stop its work: it starts nothing, and a session it is running stops and its card goes back to
-        funded. {canResume ? 'Resuming needs a reason too.' : 'Only the board resumes a role.'}
+        funded.{' '}
+        {canResume
+          ? 'Resuming needs a reason too.'
+          : canPause
+            ? 'Only the board resumes a role.'
+            : 'Verify your second factor to pause or resume a role.'}
       </p>
       {roles === null ? <p role="status">{loadError === '' ? 'Loading the roles.' : loadError}</p> : null}
       {roles !== null && roles.length === 0 ? <p>No roles yet.</p> : null}
@@ -1395,6 +1417,32 @@ const RUN_WORDS: Record<string, string> = {
   skipped: 'skipped',
 };
 
+/** A job's name as a heading: studio_ranking reads "Studio ranking". */
+function jobTitle(name: string): string {
+  const words = name.replace(/_/g, ' ').trim();
+  return words === '' ? name : words[0]!.toUpperCase() + words.slice(1);
+}
+
+/** Who queued a run. */
+const ORIGIN_WORDS: Record<string, string> = {
+  board: 'Run now',
+  schedule: 'scheduled',
+  event: 'after an event',
+  operator: 'by the operator',
+};
+
+/** Why a run was skipped or stopped, for the reasons the dispatcher writes; any other is shown as written. */
+const REASON_WORDS: Record<string, string> = {
+  role_paused: 'its role is paused',
+  studio_paused: 'the studio is paused',
+  not_board_origin: 'only the board starts a model run',
+  board_session_lapsed: 'no board member was signed in',
+  dispatcher_stopping: 'the dispatcher stopped',
+  dispatcher_restart: 'the dispatcher restarted',
+  no_handler: 'no code runs this job yet',
+  handler_error: 'it hit an error',
+};
+
 function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; job: BoardJob; canRun: boolean; onChanged: () => Promise<void> }) {
   const [reason, setReason] = useState('');
   const [input, setInput] = useState('');
@@ -1432,7 +1480,7 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
   return (
     <li>
       <form className="stack" onSubmit={runNow} aria-label={`Job ${job.name}`}>
-        <h3>{job.name}</h3>
+        <h3>{jobTitle(job.name)}</h3>
         <p>
           {job.role_name ?? 'No role'} · {job.calls_model ? 'calls a model, on the board plan while you are signed in' : 'code only'}
           {job.runs_when_paused ? ' · runs while the studio is paused' : ''}
@@ -1444,8 +1492,8 @@ function JobRow({ client, job, canRun, onChanged }: { client: SupabaseClient; jo
           <ul className="job-runs">
             {job.runs.map((run) => (
               <li key={run.id}>
-                {formatDateTime(run.created_at)} · {run.origin} · {RUN_WORDS[run.status] ?? run.status}
-                {run.reason ? `: ${run.reason}` : ''}
+                {formatDateTime(run.created_at)} · {ORIGIN_WORDS[run.origin] ?? run.origin} · {RUN_WORDS[run.status] ?? run.status}
+                {run.reason ? `: ${REASON_WORDS[run.reason] ?? run.reason}` : ''}
               </li>
             ))}
           </ul>
@@ -1498,6 +1546,7 @@ function JobsPanel({ client, canRun }: { client: SupabaseClient; canRun: boolean
       <h2>Jobs</h2>
       {jobs === null ? <p role="status">{loadError === '' ? 'Loading the jobs.' : loadError}</p> : null}
       {jobs !== null && jobs.length === 0 ? <p>No jobs yet. Each is added with the work it runs.</p> : null}
+      {jobs !== null && jobs.length > 0 && !canRun ? <p>Verify your second factor to run a job now.</p> : null}
       {jobs !== null && jobs.length > 0 ? (
         <ul className="board-cards">
           {jobs.map((job) => (

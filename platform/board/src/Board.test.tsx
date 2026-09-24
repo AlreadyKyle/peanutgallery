@@ -246,6 +246,8 @@ const NEEDS_CARDS = {
   rule_blocked: [
     { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
     { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
+    { id: 'vetoed', title: 'Director vetoed', why: 'vetoed', actual_usd: 3, card_max_usd: 25 },
+    { id: 'lane', title: 'Platform code', why: 'closed_lane', actual_usd: 3, card_max_usd: 25 },
   ],
   approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }],
 };
@@ -968,7 +970,7 @@ describe('Board two-factor sign-in', () => {
     const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
     expect(
       within(step).getByText(
-        'A second factor is needed before you can pause agents, go live, change the agent mode or the caps, record credit, move, cancel or resume cards, or file cards, directives and notes.',
+        'A second factor is needed before you can pause agents or roles, go live, change the agent mode, the caps or the cooling window, record credit, move, veto, cancel or resume cards, run a job now, or file cards, directives and notes.',
       ),
     ).toBeTruthy();
     expectNoSecondFactorControls();
@@ -1027,6 +1029,10 @@ describe('Board two-factor sign-in', () => {
     expectNoSecondFactorControls();
     expect(screen.getByText('Agents: running.')).toBeTruthy();
     expect(screen.getByText('Agent mode: attended.')).toBeTruthy();
+    // The board at the first factor is told what it lacks, not that only the board resumes a role.
+    const roles = within(screen.getByRole('region', { name: 'Roles' }));
+    expect(roles.getByText('Verify your second factor to pause or resume a role.', { exact: false })).toBeTruthy();
+    expect(roles.queryByText('Only the board resumes a role.', { exact: false })).toBeNull();
     expect(screen.getByText(activeLine(startedAt))).toBeTruthy();
     expect(callsNamed('board_heartbeat')).toHaveLength(1);
     expect(callsNamed('board_studio_state')).toHaveLength(1);
@@ -1406,6 +1412,27 @@ describe('Board agent system controls', () => {
     expect(button.getAttribute('aria-disabled')).toBe('false');
   });
 
+  it('ignores Cancel card, Resume card and a veto while another action on the same card runs, with no confirmation shown', async () => {
+    fake.cards = [card({ id: 'busy', title: 'Busy card', horizon: 'next' })];
+    fake.held = 'set_card_horizon';
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderBoard();
+    await flush();
+    const form = cardForm('Busy card');
+    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Move it' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Card Busy card' }));
+    await flush();
+    fireEvent.click(form.getByRole('button', { name: 'Cancel card' }));
+    fireEvent.click(form.getByRole('button', { name: 'Veto card' }));
+    await flush();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(callsNamed('cancel_card')).toHaveLength(0);
+    expect(callsNamed('set_card_veto')).toHaveLength(0);
+    await act(async () => fake.release());
+    await flush();
+    confirm.mockRestore();
+  });
+
   it('never disables a control only because its action is running', () => {
     // Every busy control in the board site keeps its focus the same way (the test above shows one).
     // vitest runs in the package root; jsdom gives import.meta.url an http scheme.
@@ -1429,7 +1456,9 @@ describe('Board agent system controls', () => {
     await flush();
     const job = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
     expect(job.getByText('Studio Head · calls a model, on the board plan while you are signed in · runs while the studio is paused')).toBeTruthy();
-    expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · schedule · skipped: not_board_origin`)).toBeTruthy();
+    // The origin and the reason in words, never the stored codes; the heading is the job's name in words.
+    expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · scheduled · skipped: only the board starts a model run`)).toBeTruthy();
+    expect(job.getByRole('heading', { name: 'Studio ranking' })).toBeTruthy();
     fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '[1]' } });
     fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Rank now' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Job studio_ranking' }));
@@ -1446,11 +1475,18 @@ describe('Board agent system controls', () => {
     fake.cards = [
       card({ id: 'undealt', title: 'Approved, waiting', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer', opens_at: '2026-09-14T13:00:00Z' }),
       card({ id: 'hidden', title: 'No current approval', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer' }),
-      card({ id: 'vetoed', title: 'Vetoed card', horizon: 'next', board_vetoed: true, board_veto_reason: 'Off pillar' }),
+      card({ id: 'vetoed', title: 'Vetoed card', horizon: 'next', board_vetoed: true, board_veto_reason: 'Off pillar.' }),
+      // A vetoed agent card with an opens_at is not also waiting to be dealt.
+      card({ id: 'vetoed-agent', title: 'Vetoed agent card', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer', opens_at: '2026-09-14T13:00:00Z', board_vetoed: true, board_veto_reason: 'No' }),
     ];
-    fake.publicCards = ['undealt'];
+    fake.publicCards = ['undealt', 'vetoed-agent'];
     await renderBoard();
     await flush();
+    // The status line agrees with the marks: not open for funding while waiting to be dealt or vetoed.
+    expect(cardForm('Approved, waiting').getByText(/^waiting to be dealt · horizon next/)).toBeTruthy();
+    expect(cardForm('Vetoed card').getByText(/^vetoed · horizon next/)).toBeTruthy();
+    expect(cardForm('Vetoed agent card').queryByText(/Waiting to be dealt/)).toBeNull();
+    expect(cardForm('Vetoed agent card').getByText('Vetoed by the board: No. It is never dealt or run.')).toBeTruthy();
     expect(cardForm('Approved, waiting').getByText(`Waiting to be dealt: moves to now at ${formatDateTime('2026-09-14T13:00:00Z')}.`)).toBeTruthy();
     expect(cardForm('No current approval').getByText(/^Hidden: written by an agent with no current approval/)).toBeTruthy();
     expect(cardForm('Vetoed card').getByText('Vetoed by the board: Off pillar. It is never dealt or run.')).toBeTruthy();
@@ -1466,7 +1502,7 @@ describe('Board agent system controls', () => {
       { p_card: 'vetoed', p_vetoed: false, p_reason: 'Fine now' },
     ]);
     // Only agent-written cards are asked about their approval; the board-filed one is not.
-    expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt']));
+    expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt', 'vetoed-agent']));
   });
 
   it('vetoes a card on now with one button that keeps focus and says so, though the veto moves the card to next', async () => {
@@ -1498,15 +1534,20 @@ describe('Board agent system controls', () => {
     fake.cards = [
       card({ id: 'max', title: 'At the maximum', stage: 'paused' }),
       card({ id: 'twice', title: 'Paused twice', stage: 'paused' }),
+      card({ id: 'vetoed', title: 'Director vetoed', stage: 'paused' }),
+      card({ id: 'lane', title: 'Platform code', stage: 'paused' }),
       card({ id: 'void', title: 'Rewritten', source: 'agent', drafter_role_id: 'r-designer' }),
     ];
     await renderBoard();
     await flush();
     const needs = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(needs.getByText('Card At the maximum is paused at its ceiling at the card maximum of $25.00.')).toBeTruthy();
+    expect(needs.getByText('Card At the maximum is paused at the card maximum of $25.00.')).toBeTruthy();
     // resumed_before covers a first resume by the rule or by the board.
     expect(needs.getByText('Card Paused twice is paused at its ceiling a second time, after it was resumed once.')).toBeTruthy();
-    expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice']);
+    // The rule also leaves a vetoed card and a closed-lane card to the board.
+    expect(needs.getByText('Card Director vetoed is paused at its ceiling and vetoed, so no session would run it.')).toBeTruthy();
+    expect(needs.getByText('Card Platform code is paused at its ceiling, and the platform code lane is closed.')).toBeTruthy();
+    expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice', '#card-vetoed', '#card-lane']);
     expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
     expect(needs.getByRole('link', { name: 'Cancel it under Cards' }).getAttribute('href')).toBe('#card-void');
     // Every link has its row on the page.
@@ -1524,7 +1565,7 @@ describe('Board agent system controls', () => {
     expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
     expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
     expect(needs.getByText(/Verify your second factor, then cancel it under Cards, which moves its unspent money/)).toBeTruthy();
-    expect(needs.getAllByText(/The rule will not resume it: verify your second factor, then resume it with a new estimate, or cancel it, under Cards\./)).toHaveLength(2);
+    expect(needs.getAllByText(/The rule will not resume it: verify your second factor, then resume it with a new estimate, or cancel it, under Cards\./)).toHaveLength(4);
   });
 
   it('links to no card while the cards read has not listed it', async () => {

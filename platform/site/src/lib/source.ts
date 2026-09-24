@@ -64,6 +64,10 @@ export type AgentEvent = {
   role_id: string | null;
   type: string;
   created_at: string;
+  // What the database did to a card on a line no role wrote (dealt, ceiling_top_up, resume_rule), and
+  // the top-up's amount; absent or null on every other line.
+  step?: string | null;
+  usd?: number | string | null;
 };
 
 /** A deploy row. The smoke bot's raw output stays in the database; the site shows only passed or failed. */
@@ -584,7 +588,7 @@ export function createSupabaseSource(
             unwrap(
               await client
                 .from('public_agent_events')
-                .select('id,card_id,role_id,type,created_at')
+                .select('id,card_id,role_id,type,created_at,step,usd')
                 .order('created_at', { ascending: false })
                 .limit(EVENT_LIMIT)
                 .abortSignal(timeout())
