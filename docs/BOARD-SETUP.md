@@ -318,8 +318,11 @@ No agent touches Stripe; these are yours.
   refund (`docs/specs/money-surfaces.md`). The fee Stripe keeps on the refund ($0.2662) is booked to the
   studio share automatically; there is nothing to record by hand.
 - **After-payment redirect.** Payment Link → After payment: redirect customers to
-  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
-  is live.
+  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Ready once I tell you /thanks
+  is live (`docs/specs/supporter-pages.md`); until then Stripe shows its own receipt page, and
+  /thanks works for anyone who opens it with a session id. After it is set, the next real payment
+  lands on /thanks with its supporter number and the cards it reached; tell me and I quote it in the
+  spec's Evidence.
 
 **Tell me:** "Stripe settings done", and Stripe's reply on the category when it comes.
 

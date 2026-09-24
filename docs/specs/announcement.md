@@ -28,7 +28,7 @@ Out: Twitch, the host, micro-votes, the name vote (the studio is already named).
 - The /board heartbeat under 3 minutes.
 - Link previews render in the X and LinkedIn preview tools.
 
-**Clip.** A screen recording of a funded card going from Fund what's next to Building now to Shipped, with the change visible in Dust. The board records it, or Claude records it in the Browser pane with the board's okay.
+**Clip.** The first player-funded card's own page, `/card/<its id>`, with its replay: the deal, the bar filling, the flip to Building now, the checks and the Live stamp, then what changed and its supporters (`docs/specs/supporter-pages.md`). A screen recording of it, with the change visible in Dust, is optional; the board records it, or Claude records it in the Browser pane with the board's okay.
 
 **Drafts** in `docs/launch/` (board posts them):
 - Reddit posts for r/ClaudeAI, r/incremental_games and r/artificial (not r/gamedev)

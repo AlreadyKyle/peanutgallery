@@ -398,3 +398,11 @@ everything else, in the order the board would take it.
 - rank: 42
 - summary: The Platform Builder drafts studio cards and the Platform Director writes their check lines and grades them.
 - intent: Today agents draft seed-1 game cards only (Draft a game card), and the board files every studio card. The studio lane's drafts would be Platform Builder proposals whose check lines the Platform Director writes, graded against platform/site/DESIGN.md, with the same checks, cooling window and approval as game drafts. It waits on the studio lane's first built card. It is not built yet.
+
+### More on a card's own page
+- bucket: studio
+- folder: platform
+- horizon: later
+- rank: 43
+- summary: A card's page gains link previews, its design frames, a Play this version link, a Share button and more of the agents' steps.
+- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones. Left for later: a link preview per card, the design review's frames, a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, supporter names chosen by supporters (free text, so it needs moderation first), the hand-off lines (Drafted by, Approved by) and ranking moves, the value a config change replaced, and a Share button. It is not built yet.
