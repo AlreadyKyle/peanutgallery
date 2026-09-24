@@ -34,9 +34,9 @@ describe('netlify.toml', () => {
     expect(supabaseUrl).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
     expect(toml).toMatch(/^\s*VITE_SUPABASE_ANON_KEY = "sb_publishable_[A-Za-z0-9_-]+"$/m);
     expect(toml).not.toMatch(/service_role|sb_secret_|STRIPE|VITE_STRIPE/);
-    // The same project the public site reads.
-    const site = readFileSync(resolve(root, '../site/netlify.toml'), 'utf8');
-    expect(site.match(/^\s*VITE_SUPABASE_URL\s*=\s*"([^"]+)"/m)?.[1]).toBe(supabaseUrl);
+    // The same project the public site's snapshot function reads (docs/specs/site-snapshot.md).
+    const site = readFileSync(resolve(root, '../site/netlify/lib/public-env.ts'), 'utf8');
+    expect(site.match(/SUPABASE_URL = '([^']+)'/)?.[1]).toBe(supabaseUrl);
   });
 
   it('skips card and dependabot branches and builds only when this folder or the workspace files changed', () => {

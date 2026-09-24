@@ -1,9 +1,10 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/public-env';
-import snapshot, { config, RPC_TIMEOUT_MS } from './snapshot.mts';
+// Beside the functions folder, not in it: Netlify deploys every file in netlify/functions as a function.
+import snapshot, { config, RPC_TIMEOUT_MS } from './functions/snapshot.mts';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/public-env';
 
 const ORIGIN = 'https://site.example';
 const LIVE_BODY = '{"built_at":"2026-09-23T00:00:00+00:00","cards":{}}';
@@ -128,7 +129,7 @@ describe('the snapshot function', () => {
 });
 
 describe('the public values', () => {
-  const siteDir = join(import.meta.dirname, '..', '..');
+  const siteDir = join(import.meta.dirname, '..');
 
   it('holds the publishable key, never a secret, and the board site’s Supabase URL', () => {
     expect(SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')).toBe(true);
@@ -142,5 +143,11 @@ describe('the public values', () => {
       expect(text, file).not.toMatch(/process\.env|Netlify\.env|Deno\.env|import\.meta\.env/);
       expect(text, file).not.toMatch(/service_role|SERVICE_ROLE|sb_secret_/);
     }
+  });
+});
+
+describe('the functions folder', () => {
+  it('holds the snapshot function alone, since Netlify deploys every file there as a function', () => {
+    expect(readdirSync(join(import.meta.dirname, 'functions'))).toEqual(['snapshot.mts']);
   });
 });
