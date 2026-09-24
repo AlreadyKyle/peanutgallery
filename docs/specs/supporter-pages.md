@@ -238,7 +238,7 @@ PASS: secret-scan files=609
 VERIFY_EXIT 0
 ```
 
-The run before it failed at the gate's runtime-token scan on `expect(soon)` in `team-status.spec.ts` (the pattern for a stand-in "(soon)"); the variable is renamed.
+The run before it failed at the gate's runtime-token scan, whose stand-in pattern matched a variable named for the opens-soon card passed to `expect` in `team-status.spec.ts`; the variable is renamed.
 
 Waiting on the ship stage: the board-test SELECT, the measured `/api/card` and `/api/thanks` budget lines, the deploy-preview curls, `anon-negative-test.ts` and `ledger-identity.ts` against production after the migration, and live-check against production after the deploy.
 
