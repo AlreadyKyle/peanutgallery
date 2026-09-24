@@ -121,6 +121,28 @@ rename.test.mjs: tests 6, pass 6, fail 0
 EXIT 0
 ```
 
+After merging `origin/main` at b2d5126 (the rename, #79, and the local gate, #81: PLAN §10's agent system core decision is now 45) and fixing the reviews' minor findings (Decisions, last list), `pnpm verify` at the repository root exits 0 again:
+
+```
+platform/board test:       Tests  92 passed (92)
+platform/site test:       Tests  429 passed (429)
+platform/supabase test:       Tests  297 passed (297)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  640 passed (640)
+platform/gate test: PASS: gate tests passed=508
+test:agents: tests 119, pass 119, fail 0
+test:ops: tests 124, pass 124, fail 0
+test:functions: ok | 107 passed (143 steps) | 0 failed
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=573
+docs.test.mjs: tests 17, pass 17, fail 0
+rename.test.mjs: tests 8, pass 8, fail 0; tier 1 carries the old name nowhere
+EXIT 0
+```
+
+`BOARD_E2E_PORT=4410 pnpm --filter @backseat/board e2e` → `7 passed (4.5s)`: test 5 now also follows Needs you's void line to a hidden agent card holding $2.00, marked "Hidden: written by an agent with no current approval" with its Cancel card button, and reads the job run as "scheduled · skipped: its role is paused"; tests 6 and 7 keep the 16 px rhythm at 375, 768 and 1440 with the job row and form spacing changed, and `BOARD_E2E_SHOTS=<folder>` keeps each width's screenshot, which was looked at for the Roles table and the Jobs row. `E2E_PORT=4411 pnpm --filter @backseat/site e2e` → `148 passed (3.1m)`, `5 skipped`, after the event list's change. New tests for the minor findings: `agent_system_test.ts` criterion 3 (an `opens_at` earlier than the approval plus the window deals nothing; nothing is dealt while the studio is paused), criterion 5 (anon reads no raw ledger row of the voided card; `dispatcher_card_spend` reads its $1 for the service role and refuses anon; the ledger policy names `card_is_public(card_id)`), criterion 7 (a service-role or first-factor call for a board-origin run is refused, a board-origin parent's child is not), criterion 8 (the public event lines read `ceiling_top_up` 1.25 and `resume_rule`; a Director-vetoed and a closed-lane card answer `blocked` with no allocation and are listed in Needs you; nothing resumes while the studio is paused, and the card resumes on the next call after); `jobs.test.ts` (the board model run in both studio modes, a running model job stopped with `board_session_lapsed`, a blank error finished as `handler_error`, the fake refusing an empty reason as `finish_job_run` does); `Board.test.tsx` (the new Needs you lines, the first-factor Roles line, the status words, one stop after a veto reason, no veto-and-waiting pair, run origins and reasons in words, and Cancel card and a veto ignored with no confirmation while a save runs); `EventList.test.tsx`.
+
 `test:functions` runs `money_logic_test.ts` as merged on main (12 tests, `git diff origin/main -- platform/supabase/functions/_shared/money_logic_test.ts` is empty), and it passes on the recreated predicate. `pnpm --filter @backseat/dispatcher test`, `pnpm --filter @backseat/supabase test` and `pnpm test:ops` are the lines above.
 
 `platform/supabase/functions/_shared/agent_system_test.ts` (PGlite, every migration, the append-only triggers on), one test per criterion:

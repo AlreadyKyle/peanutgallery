@@ -109,7 +109,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
 | `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and the domain half, which waits on the board registering one |
 | `specs/machine-mark.md` | built | the live check on production after the deploy |
-| `specs/local-gate.md` | built | its own pull request's local gate PASS line, quoted in the merge body, recorded in the spec by the next pull request that touches the specs |
+| `specs/local-gate.md` | done | #81 merged as b2d5126 on its own local gate PASS line (head aed3776, base 5f40ab5), quoted in the merge body and in the spec's Evidence |
 | `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
 ### The launch series

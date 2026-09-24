@@ -1,6 +1,6 @@
 # The local gate
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -40,7 +40,7 @@ How to go back: the included minutes reset each month; or the board adds an Acti
 - [x] Its header says it is run from main's checkout, never from a pull request's own copy.
 - [x] It refuses a `card/` branch and a Node other than 22.
 - [x] PLAN.md §10 decision 44 records the board's decision and the merge rule; ROADMAP's standing facts "Merging" and "Actions minutes" say how merging works now and how to switch back; BOARD-SETUP has the board's item "GitHub Actions minutes".
-- [ ] This pull request merged on its own local gate PASS line for its exact head, quoted in the merge body.
+- [x] This pull request merged on its own local gate PASS line for its exact head, quoted in the merge body.
 
 ## Verification
 
@@ -52,6 +52,15 @@ How to go back: the included minutes reset each month; or the board adds an Acti
 - `bash -n scripts/local-gate.sh` and `shellcheck -S warning scripts/local-gate.sh` exit 0. Against the copy it was made from, the only changes are the header, the repository found from the script's own location, the log folder under `${LOCAL_GATE_DIR:-$HOME/.local-gate}`, the commit status posted to `repos/{owner}/{repo}` (the repository `gh` reads from the checkout), and the Node 22 check.
 - `pnpm verify` at 3652de5 (the branch before this evidence), exit 0: seed-1 77, dispatcher 619, supabase 286, site 426 and board 71 tests passed; "PASS: gate tests passed=508"; agents 117 and ops 124 pass; "GATE PASS folder=seed-1 lane=code" and "GATE PASS folder=platform lane=code"; "PASS: secret-scan files=568"; docs 15 of 15; rename 8 of 8 and "tier 1 carries the old name nowhere".
 - The PASS line for this pull request's head is quoted in its squash merge's body; the next pull request that touches the specs quotes it here and moves this spec to done.
+- Recorded by agent-system-core (#73), the next pull request that touches the specs. The gate, run as `bash /Users/kylesmith/peanutgallery-launch/local-gate.sh 81 4378` (the tested copy, since main did not yet carry `scripts/local-gate.sh`):
+
+  ```
+  LOCAL GATE PASS pr=81 head=aed3776b70807de76239e4eb2e84bc1073ebbad3 base=5f40ab52a53142fd87a69ba9de67de40752f2d7c merge=a2bb15c02da0e818bd9fd32e0b0a55778751b542 seed=true platform=true lane=code site=true functions=true log=/Users/kylesmith/peanutgallery-launch/gate-logs/pr81-aed3776.log
+  ```
+
+  Its log shows "PASS: gate tests passed=508", functions "97 passed (106 steps) | 0 failed", site e2e "148 passed (3.1m)", board e2e "6 passed (3.3s)", and GATE PASS for seed-1's checks, build and bot and for the platform's checks and build; the commit status reads back as "local-gate success". Just before the merge `origin/main` was 5f40ab52a53142fd87a69ba9de67de40752f2d7c, the PASS line's base, and the head was aed3776. `gh pr merge 81 --squash --match-head-commit aed3776b70807de76239e4eb2e84bc1073ebbad3` with the PASS line in the body made b2d5126 "Local gate while GitHub Actions minutes are out (#81)"; `git log -1 --format=%B b2d5126` opens with that PASS line, and `gh pr view 81` reads `MERGED 2026-09-24T03:39:16Z b2d5126e42ce8b081d2c777cd4ce9853d7776739`. The branch `docs/local-gate` is deleted (`git ls-remote origin refs/heads/docs/local-gate` prints nothing).
+  - Production: none needed. The pull request changes only `docs/` and `scripts/`, so Netlify's ignore rule cancelled the b2d5126 build on both sites ("Canceled build due to no content change", 70df3957 and 51051b5b), and the live public page still carries build-sha 5f40ab52a53142fd87a69ba9de67de40752f2d7c, which is right since no site content changed.
+  - Every Verification line is run and quoted: `pnpm verify` above, and the PASS line for the pull request's exact head with its base equal to `origin/main` at merge time. Status done.
 
 ## Decisions
 
