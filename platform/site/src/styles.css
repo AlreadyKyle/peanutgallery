@@ -1953,7 +1953,9 @@ input[type='radio'] {
   max-width: 20rem;
 }
 
-@media (min-width: 48rem) {
+/* Side by side only where the facts column is wide enough to stay near the face's height; stacked on
+   a tablet, where the face beside a narrow facts column would leave a hollow under it. */
+@media (min-width: 64rem) {
   .card-page {
     grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
     align-items: start;

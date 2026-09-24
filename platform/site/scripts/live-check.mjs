@@ -7,15 +7,19 @@
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages, Terms and Refunds version 1, and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
+// pages, Terms and Refunds version 1, /thanks and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
 // Policy report. The landing's h2 order, read from the page: Building now, the team, Shipped and
 // Planned next appear only when there is something to show. The status line, the pool figure, the
 // shipped rows, the fund links, the category filters and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
-// draws every agent, runs at least one, shows claude-opus-5-5 on each that runs and no model on the
-// rest; /roadmap shows no bar and no fund link. Every Payment Link on home and /contribute carries the
+// draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
+// each running or paused row and no model on the rest; /roadmap shows no bar and no fund link. The
+// newest live card's own page has its title as the one h1, its commit and a Supporters section;
+// /thanks with no session is a plain thank-you and a made-up session reads as recording with the
+// query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store
+// (docs/specs/supporter-pages.md). Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
 // in /api/cards' terms since it took effect, lists the earlier ones and answers the next number
 // with the not found page (docs/specs/legal-copy.md). /contribute's Fund the next card in line is first
@@ -83,6 +87,7 @@ const ROUTES = [
   '/refunds',
   '/refunds/1',
   '/contact',
+  '/thanks',
   '/no-such-page',
 ];
 const FOOTER_LINKS = [
@@ -510,13 +515,48 @@ try {
     const named = await page.getByRole('main').locator('svg.avatar title').allTextContents();
     check(avatars > 0 && named.length === avatars && named.every((note) => note.trim() !== ''), `/team ${avatars} avatars, each named`);
     // At least one role runs and every role that runs shows claude-opus-5-5 (PLAN.md §10 decision
-    // 36; team-models.mjs); a role that does not run shows no model, since none runs it.
+    // 36; team-models.mjs); a role that does not run shows no model, since none runs it. /team's
+    // sections come from the roster's columns (lib/roster.ts teamStatus, docs/specs/supporter-pages.md):
+    // Running holds the running and paused rows, then Starts later and Planned.
     const running = page.getByRole('region', { name: 'Running', exact: true });
-    const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
-    const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
+    const later = [page.getByRole('region', { name: 'Starts later', exact: true }), page.getByRole('region', { name: 'Planned', exact: true })];
+    const sections = await page.getByRole('main').locator('section h2').allTextContents();
+    check(sections[0] === 'Running' && sections.every((name) => ['Running', 'Starts later', 'Planned'].includes(name)), `/team sections ${JSON.stringify(sections)}`);
+    const models = runningModelsCheck(await running.locator('li.agent:is([data-status="running"], [data-status="paused"]) .card-meta').allTextContents());
     check(models.ok, models.message);
-    const waitingModels = (await waiting.count()) === 0 ? 0 : await waiting.getByText(/\bclaude-/).count();
+    let waitingModels = 0;
+    for (const region of later) waitingModels += (await region.count()) === 0 ? 0 : await region.getByText(/\bclaude-/).count();
     check(waitingModels === 0, `/team shows no model for a role that does not run (${waitingModels} found)`);
+  }
+
+  // A card's own page and /thanks (docs/specs/supporter-pages.md): the newest live card's page has its
+  // title as the one h1, its commit when the card has one and a Supporters section; /thanks with no
+  // session is a plain thank-you; a made-up session drops out of the address and reads as recording.
+  {
+    const live = await livePart('cards');
+    const newest = live === null ? null : (Object.entries(live).filter(([, card]) => card?.stage === 'live' && typeof card.live_at === 'string').sort((a, b) => b[1].live_at.localeCompare(a[1].live_at))[0]?.[0] ?? null);
+    const detail = newest === null ? null : await siteDocument(`/api/card/${newest}`);
+    if (newest === null || detail === null) {
+      noData('/card/<the newest live card>');
+    } else {
+      await open(page, `/card/${newest}`);
+      const h1 = await page.locator('h1').allTextContents();
+      check(JSON.stringify(h1) === JSON.stringify([detail.card.title]), `/card/${newest} one h1, its title: ${JSON.stringify(h1)}`);
+      const sha = typeof detail.card.commit_sha === 'string' ? detail.card.commit_sha.slice(0, 7) : null;
+      const commit = ((await page.locator('[data-fact="commit"]').allTextContents())[0] ?? '').trim();
+      check(sha === null ? commit === '' : commit === `Merged as the studio's commit ${sha}`, `/card/${newest} commit line ${JSON.stringify(commit)} for commit_sha ${sha ?? 'none'}`);
+      check((await page.getByRole('region', { name: 'Supporters', exact: true }).count()) === 1, `/card/${newest} has a Supporters section`);
+    }
+    await open(page, '/thanks');
+    const plain = await page.locator('h1').allTextContents();
+    check(JSON.stringify(plain) === JSON.stringify(['Thank you']), `/thanks with no session: ${JSON.stringify(plain)}`);
+    await open(page, '/thanks?session=cs_test_invalid0000000000');
+    const recording = await page.locator('h1').allTextContents();
+    const address = new URL(page.url());
+    check(
+      JSON.stringify(recording) === JSON.stringify(['Recording your payment…']) && address.pathname === '/thanks' && address.search === '',
+      `/thanks?session=cs_test_invalid0000000000 shows ${JSON.stringify(recording)} at ${address.pathname}${address.search}`,
+    );
   }
 
   await open(page, '/roadmap');
@@ -593,6 +633,16 @@ try {
       check(cards.status === 200 && cardsWrong.length === 0, `/api/cards ${cards.status}${cardsWrong.length === 0 ? ', every key in snapshot-keys.json' : `: missing or wrong ${cardsWrong.join(', ')}`}`);
       const query = await fetch(`${BASE}/api/live?x=1`);
       check(query.status === 400 && (query.headers.get('cache-control') ?? '') === 'no-store', `/api/live?x=1 ${query.status} Cache-Control ${query.headers.get('cache-control')}`);
+      // The card function (docs/specs/supporter-pages.md): a malformed id is a 400 before any read, and
+      // /api/thanks answers a made-up session exactly pending, never cached.
+      const malformed = await fetch(`${BASE}/api/card/not-a-card`);
+      check(malformed.status === 400 && (malformed.headers.get('cache-control') ?? '') === 'no-store', `/api/card/not-a-card ${malformed.status} Cache-Control ${malformed.headers.get('cache-control')}`);
+      const thanks = await fetch(`${BASE}/api/thanks`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: 'cs_test_invalid0000000000' }) });
+      const thanksBody = await thanks.text();
+      check(
+        thanks.status === 200 && thanksBody === '{"status":"pending"}' && (thanks.headers.get('cache-control') ?? '') === 'no-store',
+        `/api/thanks with a made-up session ${thanks.status} ${thanksBody} Cache-Control ${thanks.headers.get('cache-control')}`,
+      );
     }
     const html = await (await fetch(`${BASE}/`)).text();
     const script = html.match(/<script[^>]+src="(\/assets\/[^"]+\.js)"/)?.[1] ?? null;
