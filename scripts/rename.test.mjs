@@ -2,7 +2,7 @@
 // drift guard that fails when a tracked file carries the old name or domain without a tier.
 
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -30,6 +30,30 @@ test('rewrite replaces the display name in every spelling and the domain in ever
       'the Front Row',
     ].join('\n'),
   );
+});
+
+test('rewrite leaves the domain exactly as written when it is unchanged or not given', () => {
+  // The rename to Mob Machine kept peanutgallery.games (PLAN.md §10 decision 42); the tests' mixed-case
+  // addresses test case-insensitive matching, so they must not be lowercased.
+  const before = 'Peanut Gallery mails Board@PeanutGallery.games from www.peanutgallery.games';
+  const after = 'Mob Machine mails Board@PeanutGallery.games from www.peanutgallery.games';
+  assert.equal(rewrite(before, { name: 'Mob Machine', domain: 'PeanutGallery.GAMES' }), after);
+  assert.equal(rewrite(before, { name: 'Mob Machine' }), after);
+});
+
+test('--check fails on the old name in a tier-1 file; --check-domain on the old domain as well', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rename-check-'));
+  const script = join(repoRoot, 'scripts', 'rename.mjs');
+  const run = (flag) => spawnSync(process.execPath, [script, flag], { cwd: root, encoding: 'utf8' });
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  writeFileSync(join(root, TIERS[1][0]), 'Mob Machine at https://peanutgallery.games\n');
+  execFileSync('git', ['add', '.'], { cwd: root });
+  assert.equal(run('--check').status, 0);
+  assert.equal(run('--check-domain').status, 1);
+  writeFileSync(join(root, TIERS[1][0]), 'the Peanut Gallery\n');
+  const named = run('--check');
+  assert.equal(named.status, 1);
+  assert.match(named.stdout, /still carries the old name in 1 files/);
 });
 
 test('rewrite leaves internal identifiers and the kept history lines alone', () => {
