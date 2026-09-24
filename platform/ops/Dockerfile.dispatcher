@@ -46,7 +46,7 @@ RUN groupadd --gid 10002 build \
 COPY --chmod=0755 dispatcher-entrypoint.sh /usr/local/bin/dispatcher-entrypoint.sh
 
 USER 10001:10001
-RUN git config --global user.name "Peanut Gallery agents" \
+RUN git config --global user.name "Mob Machine agents" \
   && git config --global user.email agents@peanutgallery.games
 
 # pnpm 11 reads its store location from pnpm_config_store_dir (it ignores npm_config_store_dir). Only

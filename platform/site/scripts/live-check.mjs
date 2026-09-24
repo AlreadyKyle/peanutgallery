@@ -18,12 +18,15 @@
 // rest; /roadmap shows no bar and no fund link. Every Payment Link on home and /contribute carries the
 // agreement (the Terms, the Refunds page and the age condition), and /terms shows the newest version
 // in public_terms_versions since it took effect, lists the earlier ones and answers the next number
-// with the not found page (docs/specs/legal-copy.md). /contribute's Fund the next card in line is first
+// with the not found page (docs/specs/legal-copy.md); from version 3 it names Mob Machine as the
+// operator. /contribute's Fund the next card in line is first
 // and names the next card in line (the first card choice) or says the money waits; /ledger shows
 // exactly one reconciliation line, and its received figure (or "No contributions yet.") matches
 // public_money read with the publishable key; while public_studio says the agents are paused for
 // awaiting_credit, home and /contribute say the payout sentence (docs/specs/money-surfaces.md).
-// Assets, og:image as an absolute URL, and
+// The studio's name in the home title, og:title and og:site_name, and the top bar's home link named
+// for it with the inline mark (docs/specs/rename.md, docs/specs/machine-mark.md). Assets (the icons
+// and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect runs only against production. The
@@ -48,6 +51,8 @@ import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
+// The studio's name (PLAN.md §10 decision 43): the tab title, the link previews and the top bar.
+const STUDIO_NAME = 'Mob Machine';
 const TOML = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
 // The public read the Terms pages make (docs/specs/legal-copy.md): the project and the publishable key
 // the site is built with, from netlify.toml, where both are public.
@@ -320,6 +325,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const reports = await watchPolicy(page);
   await open(page, '/');
+  const homeTitle = await page.title();
+  check(homeTitle === STUDIO_NAME, `home title is ${JSON.stringify(homeTitle)}`);
+  const homeLink = page.getByRole('banner').getByRole('link', { name: STUDIO_NAME, exact: true });
+  const markPaths = await homeLink.locator('svg.mark[aria-hidden="true"] path').count();
+  check((await homeLink.getAttribute('href')) === '/' && markPaths === 1, `the top bar's "${STUDIO_NAME}" link goes home and draws the mark (${markPaths} path)`);
   const main = page.getByRole('main');
   const pool = main.locator('.pool-line .figure');
   const hasData = (await pool.count()) > 0;
@@ -529,6 +539,8 @@ try {
     const text = (await page.getByRole('main').textContent()) ?? '';
     const since = `Version ${newest.version}, in force since ${postedAt(newest.posted_at)}.`;
     check(text.includes(since) && !text.includes('cannot confirm'), `/terms shows "${since}"`);
+    // Version 3 is version 2 with the studio's new name (docs/specs/rename.md).
+    if (newest.version >= 3) check(text.includes(`${STUDIO_NAME} is operated by`), `/terms names ${STUDIO_NAME} as the operator`);
     const earlier = terms.slice(0, -1).map((row) => `/terms/${row.version}`);
     const listed = await page
       .getByRole('region', { name: 'Earlier versions' })
@@ -549,7 +561,7 @@ try {
   checkPolicy(reports, 'landing, contribute, how it works, team, roadmap and terms interactions');
   await page.close();
 
-  for (const asset of ['/favicon.ico', '/peanut.png', '/version.json']) {
+  for (const asset of ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', '/icon-512.png', '/version.json']) {
     const response = await fetch(BASE + asset);
     check(response.status === 200, `${asset} ${response.status}`);
   }
@@ -559,6 +571,10 @@ try {
   const ogImage = index.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? null;
   const absolute = ogImage !== null && /^https:\/\/[^/]+\/.+/.test(ogImage);
   check(absolute, `index og:image is an absolute URL: ${ogImage}`);
+  for (const property of ['og:title', 'og:site_name']) {
+    const value = index.match(new RegExp(`<meta property="${property}" content="([^"]+)"`))?.[1] ?? null;
+    check(value === STUDIO_NAME, `index ${property} ${JSON.stringify(value)}`);
+  }
   const twitter = index.match(/<meta name="twitter:card" content="([^"]+)"/)?.[1] ?? null;
   check(twitter === 'summary_large_image', `index twitter:card ${twitter}`);
   if (absolute && new URL(ogImage).origin === new URL(BASE).origin) {

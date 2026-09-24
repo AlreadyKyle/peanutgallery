@@ -1,4 +1,4 @@
-# systemd unit for the Peanut Gallery dispatcher container on the VPS (docs/specs/vps.md).
+# systemd unit for the Mob Machine dispatcher container on the VPS (docs/specs/vps.md).
 # provision.sh and deploy.sh install it at /etc/systemd/system/dispatcher.service. provision.sh
 # enables it and never starts it: starting it is the cutover (README.md).
 #
@@ -14,7 +14,7 @@
 # Exit 78 is a startup failure no restart can fix and is never restarted. Either way the unit ends
 # failed and OnFailure= starts dispatcher-alert.service.
 [Unit]
-Description=Peanut Gallery dispatcher
+Description=Mob Machine dispatcher
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target

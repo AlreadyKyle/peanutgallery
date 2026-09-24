@@ -78,7 +78,7 @@ beforeAll(async () => {
   await writeFile(path.join(repo, 'CLAUDE.md'), '# Root\n\nRoot instructions for every session.\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'CLAUDE.md'), '# Seed\n\nSeed instructions: the sim is deterministic.\n', 'utf8');
   await writeFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), SPAWN, 'utf8');
-  await writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>Peanut Gallery</title>\n', 'utf8');
+  await writeFile(path.join(repo, 'platform', 'site', 'page.html'), '<title>Mob Machine</title>\n', 'utf8');
   await writeFile(path.join(repo, 'platform', 'agents', 'prompts', 'builder-a.md'), '# Builder A\n\nYou are Builder A.\n', 'utf8');
   await git(['add', '-A'], repo);
   await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit', '-q', '-m', 'base'], repo);

@@ -212,7 +212,7 @@ const OLDER_GREEN = { id: 'row-1', folder: 'platform' as const, sha: 'older-sha'
 
 const editSite: FakeScript = async (spec, emit) => {
   await emit(startEvent());
-  await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), '<title>Peanut Gallery</title>\n', 'utf8');
+  await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), '<title>Mob Machine</title>\n', 'utf8');
   await emit(usageEvent(1, 100));
 };
 

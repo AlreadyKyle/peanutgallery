@@ -166,7 +166,7 @@ export function dispatcherEnvEntries(dotenvText, operator) {
 }
 
 export function dispatcherEnvText(entries) {
-  const lines = ['# Peanut Gallery dispatcher on the VPS. Written by platform/ops/make-dispatcher-env.sh; docker --env-file format.'];
+  const lines = ['# Mob Machine dispatcher on the VPS. Written by platform/ops/make-dispatcher-env.sh; docker --env-file format.'];
   for (const [key, value] of entries) lines.push(`${key}=${value}`);
   return `${lines.join('\n')}\n`;
 }

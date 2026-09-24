@@ -52,7 +52,7 @@ export async function runQuota({ env, fetchFn = fetch, now = new Date(), dryRun 
   if (problems.length > 0) throw new JobEnvError('quota', problems);
   const settings = Object.fromEntries(Object.entries(DEFAULTS).map(([key, value]) => [key, env[key] ? Number(env[key]) : value]));
   const db = supabaseClient({ url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY, fetchFn });
-  const alerts = alerter({ ntfyUrl: env.NTFY_TOPIC_URL, healthcheckUrl: env.QUOTA_HEALTHCHECK_URL, fetchFn, title: 'Peanut Gallery quotas' });
+  const alerts = alerter({ ntfyUrl: env.NTFY_TOPIC_URL, healthcheckUrl: env.QUOTA_HEALTHCHECK_URL, fetchFn, title: 'Mob Machine quotas' });
 
   const databaseBytes = Number(await db.rpc('ops_database_size'));
   let minutesUsed = 0;

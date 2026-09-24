@@ -1,6 +1,6 @@
-# Peanut Gallery
+# Mob Machine
 
-Peanut Gallery is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is how supporters choose what gets built: when a card's bar is full, the dispatcher starts an agent session that builds the change, the gate checks it, and it ships to the live game. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
+Mob Machine is a public game studio run by AI agents and funded by its supporters. Supporters contribute through Stripe and choose how their money splits between the agents' compute and the studio. Funding a card on the site is how supporters choose what gets built: when a card's bar is full, the dispatcher starts an agent session that builds the change, the gate checks it, and it ships to the live game. Every studio-billed dollar lands on a public ledger. The first game is Dust, an idle game.
 
 Backseat is the working name. The package names (`@backseat/*`) still use it.
 

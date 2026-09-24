@@ -1,6 +1,6 @@
 # The system map
 
-Who does what at Peanut Gallery, what may change what, what pays for each kind of work, and where the board can step in. `docs/PLAN.md` is the constitution (§3 for the roster, §4 for cards and the board, §6 for the pipeline); this page is the map of how those rules run, and `docs/specs/agent-system-core.md` built most of it. Anything a later pull request builds is marked not built yet, with its spec.
+Who does what at Mob Machine, what may change what, what pays for each kind of work, and where the board can step in. `docs/PLAN.md` is the constitution (§3 for the roster, §4 for cards and the board, §6 for the pipeline); this page is the map of how those rules run, and `docs/specs/agent-system-core.md` built most of it. Anything a later pull request builds is marked not built yet, with its spec.
 
 ## The roles
 

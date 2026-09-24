@@ -1,7 +1,7 @@
 # Runs peanutgallery-quota.service once a day (docs/specs/money-safety.md). Persistent= makes up a
 # missed run at the next boot.
 [Unit]
-Description=Peanut Gallery quota check
+Description=Mob Machine quota check
 
 [Timer]
 OnCalendar=*-*-* 07:37:00 UTC
