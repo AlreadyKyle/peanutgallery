@@ -139,11 +139,16 @@ it goes in the repository.
 
 ### What I do after the merge, each with your allow
 
-Post Terms version 3 (a dump, its migration, the live check showing "Version 3, in force since");
-the read-only check for cards whose public text still carries the old name; `managed:apply` for the
-agent's new description, with the new version in the Mac host's env file, before the dispatcher next
-runs unattended; and the Stripe webhook's redeploy for its alert title. `docs/specs/rename.md` lists
-them in order.
+Done on 23 September 2026, after the merge: Terms version 3 is posted and /terms shows
+"Version 3, in force since"; the one card whose public text still carried the old name is fixed,
+with a dump first; the Stripe webhook is redeployed with its new alert title; the live check passes.
+`docs/specs/rename.md` has the evidence.
+
+Still open: `managed:apply` for the agent's new description. It failed with "Your credit balance is
+too low to access the Anthropic API": the studio's Anthropic organisation has no credit yet, which
+is bought only from a payout (step 22). It runs after that, with its new version put in the Mac
+host's env file once the host is installed (step 3), and before the dispatcher next runs unattended.
+Nothing for you to do beyond steps 3 and 22.
 
 ---
 
@@ -619,8 +624,9 @@ yours.
 - **Delete `KEYS.md`** from the repository folder on your Mac (see **Standing items**).
 - **HST registration review** when cumulative receipts reach $15k (see **Standing items**).
 - **Record the trademark search** for "Mob Machine".
-- **Later, only if limits bite:** make the repository public when Actions minutes run short; move the
-  sites to Cloudflare Pages before Mid; Supabase Pro at about 400 MB; grow the Anthropic tier.
+- **Later, only if limits bite:** move the sites to Cloudflare Pages before Mid; Supabase Pro at
+  about 400 MB; grow the Anthropic tier. Actions minutes have already run short: see **GitHub
+  Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
 
 ---
@@ -647,6 +653,23 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 
 ## Standing items, outside the order
 
+- **GitHub Actions minutes.** On 23 September 2026 the account's included Actions minutes ran out,
+  and with its $0 spending limit every gate job is refused within seconds. You said "just do
+  everything locally for now", so the gate workflow is disabled and I merge board pull requests on
+  the local gate, the same checks run on your Mac (`scripts/local-gate.sh`, `docs/specs/local-gate.md`).
+  Cards cannot merge until Actions is back; the studio is paused anyway. Three ways back, your call:
+  1. **Wait** for the included minutes to reset at the start of the next billing cycle. Free.
+  2. **Make the repository public:** GitHub → the repository → **Settings** → **General** →
+     **Danger Zone** → **Change visibility** → **Make public**. Standard runners are free on public
+     repositories. Everything in the repository, history included, becomes readable by anyone.
+  3. **Add an Actions budget:** GitHub → your profile picture → **Settings** → **Billing and
+     licensing** → **Budgets and alerts**. This is a spend, so it is an exception you name to
+     `docs/PLAN.md` §10 decision 35.
+
+  Once minutes are back, run `gh workflow enable gate` (or tell me to), and every pull request,
+  cards included, merges on the Actions gate again.
+
+  **Tell me:** "Actions is back" and which of the three.
 - **Claude Code on the Mac: 2.1.280 or newer.** Attended sessions need it, because 2.1.139 refuses
   `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision 36).
   `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
@@ -681,6 +704,7 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
+- Bringing GitHub Actions minutes back: waiting for the reset, a public repository, or a budget.
 
 ---
 
