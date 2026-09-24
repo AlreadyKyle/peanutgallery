@@ -273,6 +273,13 @@ describe('plain and readable', () => {
       expect(rule?.body, selector).toContain('min-height: var(--target)');
     }
   });
+
+  it('draws the mark at one pixel a unit, so its straight edges land on whole pixels at 1x', () => {
+    const box = read('brand/mark.svg').match(/viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"/);
+    const body = rules(styles).find((r) => r.selector === '.mark')?.body ?? '';
+    const px = (side: string) => 16 * Number(body.match(new RegExp(`${side}:\\s*([0-9.]+)rem`))?.[1]);
+    expect([px('width'), px('height')]).toEqual([Number(box?.[1]), Number(box?.[2])]);
+  });
 });
 
 describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {

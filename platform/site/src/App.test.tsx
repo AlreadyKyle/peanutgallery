@@ -192,6 +192,7 @@ describe('Site chrome', () => {
     expect(mark?.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
     const source = readFileSync(resolve(process.cwd(), 'brand/mark.svg'), 'utf8');
     expect(source).toContain(`d="${mark?.querySelector('path')?.getAttribute('d')}"`);
+    expect(source).toContain(`viewBox="${mark?.getAttribute('viewBox')}"`);
     expect(source).toContain('fill="currentColor"');
     expect(within(nav()).queryByRole('link', { name: copy.home })).toBeNull();
     expect(within(nav()).getByRole('link', { name: 'Ledger' }).getAttribute('href')).toBe('/ledger');

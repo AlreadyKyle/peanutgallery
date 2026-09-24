@@ -1,7 +1,8 @@
 // The studio's mark (docs/specs/machine-mark.md): a small machine with a screen, two pixel eyes, a
 // coin slot and two feet, on a 32-unit grid. It is one even-odd path drawn in the text colour, so it
 // is ink on paper and paper on the signal plate and ink bands with no filter, and CanvasText under
-// forced colours. platform/site/brand/mark.svg is the same drawing (App.test.tsx holds them equal);
+// forced colours. Its box is its ink (x 4 to 28, y 2 to 32), which styles.css draws at one pixel a
+// unit. platform/site/brand/mark.svg is the same drawing and box (App.test.tsx holds them equal);
 // the icons and the link preview are made from that file. Kernel: the top bar draws it.
 
 export const MARK_PATH =
@@ -10,7 +11,7 @@ export const MARK_PATH =
 /** The mark, decorative: the link or heading beside it carries the name. */
 export function MachineMark() {
   return (
-    <svg className="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <svg className="mark" viewBox="4 2 24 30" aria-hidden="true" focusable="false">
       <path fill="currentColor" fillRule="evenodd" d={MARK_PATH} />
     </svg>
   );

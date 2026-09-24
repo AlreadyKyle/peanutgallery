@@ -39,7 +39,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
 4. [x] The link preview: `node platform/site/scripts/og-image.mjs` (the name from `copy.ts`, the address from `index.html`, the mark from `brand/mark.svg`), and `public/og.png` committed. Domain: run it again.
 5. [x] `pnpm verify`, the site e2e and the board e2e (Evidence). Pull request, merge on a green gate.
 6. [ ] The board's steps below: the name ones after the deploy; the domain ones when the board has registered one.
-7. [ ] Production data: the read-only query below; fix any hit through /board or a data migration with a dump first (`specs/money-safety.md`).
+7. [ ] Production data: the read-only name query below; fix any hit through /board or a data migration with a dump first (`specs/money-safety.md`). A card that links to peanutgallery.games or the game's netlify.app address is correct until the domain moves, so the name query does not look for either. Domain: the domain query below.
 8. [ ] The managed agent: `agent.yaml` and `environment.yaml` changed in tier 1 (the description and system text name the studio), so run `pnpm --filter @backseat/dispatcher managed:apply` with the board's allow and put the new `MANAGED_AGENT_VERSION` in the Mac host's `env/dispatcher.env`, then `platform/ops/mac/install.sh`. The startup check refuses an agent that differs from `agent.yaml`, so the unattended dispatcher does not start until this is done. The `name:` keys stay, because `managed:apply` finds the agent by name and a new name makes a new agent and a new id.
 9. [x] Tier 2 ran in the same pull request (`--apply --tier 2`), since nothing in it waits on the domain. The ntfy titles change on the Mac after `install.sh`.
 10. [ ] Update the memory files and this spec's Evidence; this spec is built, and moves to done when every line of Verification has run.
@@ -73,12 +73,14 @@ Written out with the clicks in `docs/BOARD-SETUP.md`, "Rename to Mob Machine".
 
 ### Production data
 
-Read-only, on production, after the deploy. Rows the site shows publicly that still say the old name:
+Read-only, on production, after the deploy. Rows the site shows publicly that still say the old name, with the pattern of `OLD_NAME` in `scripts/rename.mjs` ("Peanut Gallery" or `Peanut+Gallery` in any case), which leaves the domain alone:
 
 ```sql
 select id, title, summary from public.cards
-where concat_ws(' ', title, summary, intent, acceptance_test) ~* 'peanut ?gallery|peanutgallery\.games';
+where concat_ws(' ', title, summary, intent, acceptance_test) ~* 'peanut[ +]gallery';
 ```
+
+Domain, in the domain's pull request: the same query with `~* 'peanutgallery\.games'`. Directive D3 links to the site and names the game's address (`platform/supabase/lib/directives.ts`), so its filed card is one of the hits; each is fixed the same way. The game's `peanutgallery-seed-1.netlify.app` address follows only if the game's address moves (the open questions).
 
 ### Tier 2: internal (ran with tier 1)
 
@@ -103,9 +105,9 @@ Counted by the script, never rewritten, each because renaming it costs more than
 - [x] Terms version 3 is version 2 with the name changed and nothing else (`copy.test.ts`), and its migration inserts only its row (`migration.test.ts`, `migration_test.ts`).
 - [ ] The live site at peanutgallery.games carries the new name in the title, the header, the link preview and, once version 3 is posted, the Terms (the live check).
 - [ ] The game's tab title and studio line carry the new name (built; live after the game's deploy).
-- [ ] The production data query returns no rows.
+- [ ] The production data name query returns no rows.
 - [ ] Every board step above is ticked.
-- [ ] Domain: https://{{DOMAIN}} serves the site; https://peanutgallery.games/<any path> answers 301 to the same path on `{{DOMAIN}}`; the game's studio line links to `{{DOMAIN}}`; `--check-domain` is clean.
+- [ ] Domain: https://{{DOMAIN}} serves the site; https://peanutgallery.games/<any path> answers 301 to the same path on `{{DOMAIN}}`; the game's studio line links to `{{DOMAIN}}`; `--check-domain` is clean; the production data domain query returns no rows.
 
 ## Verification
 
@@ -113,7 +115,7 @@ Counted by the script, never rewritten, each because renaming it costs more than
 - `pnpm verify`
 - `pnpm --filter @backseat/site e2e` and `pnpm --filter @backseat/board e2e`
 - `node platform/site/scripts/live-check.mjs` against production, after the deploy and again after version 3 is posted
-- The production data query, output quoted
+- The production data name query, output quoted; domain: the domain query, output quoted
 - Domain: `curl -sI https://peanutgallery.games/how-it-works` shows a 301 to `https://{{DOMAIN}}/how-it-works`, and a link preview of `https://{{DOMAIN}}` (the Open Graph debugger of one platform) shows the new og.png and title
 
 ## Production steps (need the board's allow)
@@ -122,7 +124,7 @@ In order, after the merge, the studio paused:
 
 1. Wait for the site deploy of the merge sha, and check that /terms still shows "Version 2, in force since" (version 3 is carried, not posted).
 2. Take a dump, apply `20260925000000_terms_version_3.sql` through the Management API query endpoint (or `supabase db push` once the history repair has run), read back `select version, posted_at from public.terms_versions order by version`, and run the live check, which must show "Version 3, in force since" and "/terms names Mob Machine as the operator".
-3. The production data query below; fix any hit with a dump first.
+3. The production data name query; fix any hit with a dump first. A card that links to the current domain or the game's address is left as it is.
 4. `managed:apply` and the Mac host's `MANAGED_AGENT_VERSION` (step 8 above), before the dispatcher next starts unattended.
 5. `stripe-webhook` deployed from main, whose ntfy alert title now reads "Mob Machine payments". Cosmetic, so it can ride the next webhook deploy.
 
@@ -145,4 +147,5 @@ In order, after the merge, the studio paused:
 - 23 September 2026: the board named the studio Mob Machine and asked for a new mark made by the studio; the domain waits until the board registers one. So only the name moves now: the rewrite leaves an unchanged domain exactly as written, `--check` looks for the name only and joins `pnpm verify`, and `--check-domain` is kept for the domain's pull request.
 - 23 September 2026: tiers 1 and 2 in one pull request. Tier 2 is alert titles and internal prose, nothing in it waits on the domain, and one review is simpler than two.
 - 23 September 2026: the Terms get version 3, version 2's words with the name changed, rather than an edit: posted words are what applied to the money given under them. Its migration is named for the day after money-logic's so it sorts after every migration already on main or in an open pull request.
+- 23 September 2026, after review: the production data query looks for the name only, with `OLD_NAME`'s pattern. Its first form, `'peanut ?gallery|peanutgallery\.games'`, also matched the domain and the game's address (the optional space let `peanut ?gallery` match `peanutgallery`), so it could not return no rows before the domain moves and asked for correct links to be rewritten. The domain pattern moved to the domain's pull request.
 - 23 September 2026: Supabase Auth's Site URL stays the board site's address. This spec's first draft moved it and the redirect list to the new domain; `specs/board-site.md`, written the same day, put sign-in on the board's own site with nothing on the public domain, and that stands. Only the sign-in email's sender name changes.

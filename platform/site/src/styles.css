@@ -395,12 +395,14 @@ main > .band:first-child {
   text-decoration: none;
 }
 
-/* The mark is drawn in the text colour: ink on paper, paper on the signal plate and ink. */
+/* The mark is drawn in the text colour: ink on paper, paper on the signal plate and ink. Its box is
+   its ink, 24 by 30 units of the 32-unit grid, drawn at one pixel a unit (two at 2x), so every
+   straight edge lands on a whole pixel. */
 .mark {
   display: block;
   flex: none;
   width: 1.5rem;
-  height: 1.5rem;
+  height: 1.875rem;
 }
 
 nav a {
