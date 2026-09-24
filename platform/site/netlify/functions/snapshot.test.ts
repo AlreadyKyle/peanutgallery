@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/public-env';
 import snapshot, { config, RPC_TIMEOUT_MS } from './snapshot.mts';
 
-const ORIGIN = 'https://peanutgallery.games';
+const ORIGIN = 'https://site.example';
 const LIVE_BODY = '{"built_at":"2026-09-23T00:00:00+00:00","cards":{}}';
 
 type Call = { url: string; init: RequestInit };

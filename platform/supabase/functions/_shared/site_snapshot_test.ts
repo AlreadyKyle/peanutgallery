@@ -229,3 +229,50 @@ Deno.test("with 1,100 live cards and cards on every other stage, both documents 
     await s.close();
   }
 });
+
+Deno.test("BOARD-SETUP's pause statement does what set_paused(true) does, and the live document shows it", OPTS, async (t) => {
+  const s = await studio();
+  try {
+    const setup = await Deno.readTextFile(new URL("../../../../docs/BOARD-SETUP.md", import.meta.url));
+    const section = setup.slice(setup.indexOf("## Pause when the board site is down"));
+    const statement = section.match(/```sql\n\s*([^\n]+)\n\s*```/)?.[1]?.trim();
+    assert(statement !== undefined && statement.startsWith("update public.studio_state set paused = true"), "BOARD-SETUP carries one pause statement");
+    const state = async () =>
+      await s.row<{ paused: boolean; pause_reason: string | null; paused_by: string | null; paused_set: boolean }>(
+        `select paused, pause_reason, paused_by, paused_at is not null as paused_set from public.studio_state where id = 1`,
+      );
+    const email = "board@peanutgallery.games";
+    await s.db.query(`insert into public.board_members (email, role) values ($1, 'board') on conflict do nothing`, [email]);
+    await s.db.exec(`update public.studio_state set paused = false where id = 1`);
+
+    await t.step("set_paused(true) from the board site: paused, the board's reason, who and when", async () => {
+      const before = await state();
+      assertEquals([before.paused, before.pause_reason], [false, null]);
+      await s.db.query(`select set_config('request.jwt.claim.email', $1, false)`, [email]);
+      await s.db.query(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ email, aal: "aal2" })]);
+      await s.db.exec(`set role authenticated`);
+      try {
+        await s.db.exec(`select public.set_paused(true)`);
+      } finally {
+        await s.db.exec(`reset role`);
+      }
+      const after = await state();
+      assertEquals([after.paused, after.pause_reason, after.paused_by, after.paused_set], [true, "board", email, true]);
+      console.log(`set_paused(true): before ${JSON.stringify(before)} after ${JSON.stringify(after)}`);
+      await s.db.exec(`update public.studio_state set paused = false, paused_by = null, paused_at = null where id = 1`);
+    });
+
+    await t.step("the SQL editor statement: the same pause and reason, with the SQL editor as who", async () => {
+      const before = await state();
+      assertEquals([before.paused, before.pause_reason], [false, null]);
+      await s.db.exec(statement!);
+      const after = await state();
+      assertEquals([after.paused, after.pause_reason, after.paused_by, after.paused_set], [true, "board", "sql-editor", true]);
+      console.log(`BOARD-SETUP statement: before ${JSON.stringify(before)} after ${JSON.stringify(after)}`);
+      const studioDoc = (await s.live()).studio as Doc;
+      assertEquals([studioDoc.paused, studioDoc.pause_reason], [true, "board"]);
+    });
+  } finally {
+    await s.close();
+  }
+});

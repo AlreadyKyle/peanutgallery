@@ -220,6 +220,20 @@ team, so this also tells me how its builds count.
 
 **Tell me:** "legacy Free" or "credit-based Free".
 
+**The function budget** (`docs/specs/site-snapshot.md`). The public site now reads its figures from
+one Netlify Function, which the CDN caches, so at most about 52,000 of legacy Free's 125,000
+invocations a month go to it however many people read the site (the table in `docs/PLAN.md`
+Appendix A, "Public site function budget"). Stay on legacy Free. While you are on that page:
+
+- Confirm Netlify's **usage notifications** go to your address. They are the only alert that the
+  sites are close to a limit.
+- At 100% of any limit Netlify pauses **every** site on the team until the next cycle, the board's
+  site and its Pause included. Money keeps moving (Stripe, the webhook and the dispatcher use no
+  Netlify Function); **Pause when the board site is down** below is how you pause the agents then.
+  Restoring the sites before the cycle ends needs a payment method and a paid plan: your call.
+- Optional: a second free Netlify team for the board's site alone, so an overrun on the public site
+  cannot take the board's Pause with it.
+
 ### 9. ntfy (5 minutes, free)
 
 **Why.** The topic exists and the Stripe webhook already posts to it (see **Done**), but your phone
@@ -567,6 +581,32 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
   It is untracked, so the deletion cannot be undone; `.gitignore` keeps it out of the repository
   either way.
 
+## Pause when the board site is down
+
+If Netlify has paused the sites (a usage limit, above) or the board's site is down for any other
+reason, the Pause button is gone with it. Two ways to stop the agents without Netlify, either one
+enough:
+
+1. **Stop the dispatcher on the Mac.** In Terminal on the host Mac:
+
+   ```sh
+   launchctl bootout gui/$(id -u)/studio.peanutgallery.dispatcher
+   ```
+
+   It finishes and meters any running session, then stops; once healthchecks.io is set up (step 6)
+   it emails you that the dispatcher is down. `platform/ops/mac/install.sh --start` starts it again.
+
+2. **Pause the studio in the database.** Supabase dashboard → the project → **SQL Editor**, paste
+   this one statement and **Run**. It does what the board site's Pause (`set_paused(true)`) does,
+   with the board as the reason; the dispatcher sleeps at its next tick and the site says the board
+   has paused the agents within about three minutes.
+
+   ```sql
+   update public.studio_state set paused = true, paused_by = 'sql-editor', paused_at = now(), pause_reason = 'board' where id = 1;
+   ```
+
+   Resume from the board's site once it is back.
+
 ## What only you can do
 
 - The Resend account, its DNS records and its SMTP key.
@@ -586,6 +626,7 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
+- The Netlify plan, its usage notifications, and any paid plan after an overrun.
 
 ---
 

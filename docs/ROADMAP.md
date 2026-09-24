@@ -120,7 +120,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 3 | `specs/money-surfaces.md` | built | the next card in line on /contribute; money in, reconciliation, Not on a card yet and stopped cards on /ledger; the pause reason |
 | 4 | `specs/agent-system-core.md` | built | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
 | 5 | `specs/agent-workflows.md` | built | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
-| 6 | `specs/site-snapshot.md` | agreed | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
+| 6 | `specs/site-snapshot.md` | built | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
 | 7 | `specs/supporter-pages.md` | agreed | /thanks, /card/:id with the replay, supporter credits, /team statuses |
 | 8 | `specs/studio-reports.md` | agreed | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 9 | `specs/design-review.md` | agreed | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |

@@ -226,6 +226,8 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **Stale and missing figures** are unchanged: a failed refresh keeps the figures and says so in `p.status` (`role="status"`); a part that did not load says "Not available right now." instead of a zero.
 
+**How fresh the figures are.** The site reads its own cached documents (`docs/specs/site-snapshot.md`): a visible tab reads the figures once a minute, and a hidden tab reads nothing until the reader comes back, when it reads at once. Live figures and stages run up to about three minutes behind the database, and card text up to about fifteen minutes. Nothing on the page may promise more: no "live" or "real time" wording near a figure, and a figure's change marker lasts until the next read, a minute later.
+
 ## Motion
 
 Only `transform` and `opacity` move. Every `transition` and `animation` lives inside `@media (prefers-reduced-motion: no-preference)`, uses the duration and easing tokens, and never runs forever; there are no `@keyframes`, view transitions, `@starting-style` or `linear()` **(tested)**. Static transforms (the Live stamp's −3°, the bar's fill position) are geometry and allowed anywhere. `lib/motion.ts` plays each moment with the Web Animations API and, under reduced motion (anything but no-preference), applies the end state at once, so `document.getAnimations()` stays empty **(tested, e2e)**.
