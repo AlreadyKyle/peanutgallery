@@ -10,7 +10,7 @@
 # - It holds `caffeinate -i -s` for as long as it runs, so the Mac does not idle-sleep, or sleep at all
 #   while it is on power. Closing the lid still sleeps it.
 # - It maps exit codes as systemd would. Exit 78, or a failed check here, is a startup failure no
-#   restart can fix: it posts "Peanut Gallery dispatcher stopped on <host>: fatal startup error" to
+#   restart can fix: it posts "Mob Machine dispatcher stopped on <host>: fatal startup error" to
 #   ntfy and exits 0, which launchd's KeepAlive {SuccessfulExit=false} does not restart. Any other exit
 #   waits 30 seconds, doubling at each failure in a row to 30 minutes at the seventh, then exits 1 so
 #   launchd starts it again. A run of 10 minutes or more resets the count. The ninth start within 6
@@ -57,7 +57,7 @@ alert() {
   [ -s "$NTFY_FILE" ] || return 0
   url=$(head -n 1 "$NTFY_FILE" | tr -d '[:space:]')
   config=$(mktemp "$STATE_DIR/ntfy.XXXXXX")
-  printf 'url = "%s"\nheader = "Title: Peanut Gallery dispatcher"\ndata-binary = "%s"\noutput = "/dev/null"\n' "$url" "$1" > "$config"
+  printf 'url = "%s"\nheader = "Title: Mob Machine dispatcher"\ndata-binary = "%s"\noutput = "/dev/null"\n' "$url" "$1" > "$config"
   curl -fsS --max-time 20 -K "$config" || note "could not post to ntfy"
   rm -f "$config"
 }
@@ -148,7 +148,7 @@ check_layout() {
 # stop_fatal <reason>: a startup failure no restart can fix.
 stop_fatal() {
   note "stopped: fatal startup error: $1"
-  alert "Peanut Gallery dispatcher stopped on $(host_name): fatal startup error"
+  alert "Mob Machine dispatcher stopped on $(host_name): fatal startup error"
   rm -f "$FAILURES_FILE"
   exit 0
 }
@@ -179,7 +179,7 @@ main() {
   now=$(date +%s)
   if ! record_start "$now"; then
     note "stopped: $START_LIMIT_BURST starts in 6 hours; fix the cause, then clear $STARTS_FILE and start it again (platform/ops/README.md, The Mac host)"
-    alert "Peanut Gallery dispatcher stopped on $(host_name): $START_LIMIT_BURST starts in 6 hours"
+    alert "Mob Machine dispatcher stopped on $(host_name): $START_LIMIT_BURST starts in 6 hours"
     exit 0
   fi
 

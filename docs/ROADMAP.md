@@ -107,6 +107,8 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
 | `specs/design-system.md` | built | the replay, the next-in-line sentence and the gate's design frames wait on supporter-loop, money-logic and agent-system; the bands on every page and the new home are `specs/home-and-design.md` |
 | `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
+| `specs/rename.md` | built | the name is Mob Machine (PLAN.md §10 decision 42): Terms version 3 posted after the deploy, the production data query, `managed:apply`, and the board's Stripe, Discord and signature steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine); the domain half waits on the board registering one |
+| `specs/machine-mark.md` | built | the live check on production after the deploy |
 | `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
 
 ### The launch series
@@ -134,11 +136,11 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 |---|---|---|
 | `specs/announcement.md` | draft | the clip, the drafts and Go live, the last steps before the announcement |
 | `specs/gate-local-output.md` | built | none |
-| `specs/rename.md` | draft | the board's choice of the new name and domain; the migration then runs from the spec and `scripts/rename.mjs` |
 
 ## Standing facts for any session
 
 - **Production.**
+  - The studio is Mob Machine (PLAN.md §10 decision 42); the domain stays peanutgallery.games until the board registers a new one (`specs/rename.md`).
   - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
   - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and peanutgallery.games/board is a plain not found page.
   - Supabase project `lyxndueoeisyqzewflpu`.

@@ -16,7 +16,7 @@
 #   only its own job's keys (make-jobs-env.sh).
 # - backup: platform/ops/mac/backup-mac.sh with env/backup-mac.env.
 #
-# A job that fails posts "Peanut Gallery job <job> failed on <host>" to ntfy, as
+# A job that fails posts "Mob Machine job <job> failed on <host>" to ntfy, as
 # peanutgallery-job-alert@.service does. Output goes to ~/peanutgallery-host/logs/<job>.log, rotated at
 # 5 MB. PEANUTGALLERY_HOST names another host folder (the ops tests use it).
 set -euo pipefail
@@ -67,7 +67,7 @@ alert() {
   [ -s "$NTFY_FILE" ] || return 0
   url=$(head -n 1 "$NTFY_FILE" | tr -d '[:space:]')
   config=$(mktemp "$STATE_DIR/ntfy.XXXXXX")
-  printf 'url = "%s"\nheader = "Title: Peanut Gallery job"\ndata-binary = "%s"\noutput = "/dev/null"\n' "$url" "$1" > "$config"
+  printf 'url = "%s"\nheader = "Title: Mob Machine job"\ndata-binary = "%s"\noutput = "/dev/null"\n' "$url" "$1" > "$config"
   curl -fsS --max-time 20 -K "$config" || echo "run-job: could not post to ntfy"
   rm -f "$config"
 }
@@ -153,7 +153,7 @@ main() {
   fi
   if [ "$status" -ne 0 ]; then
     echo "run-job: $job failed with exit $status"
-    alert "Peanut Gallery job $job failed on $(host_name); see $log"
+    alert "Mob Machine job $job failed on $(host_name); see $log"
     exit "$status"
   fi
   echo "run-job: $job done"

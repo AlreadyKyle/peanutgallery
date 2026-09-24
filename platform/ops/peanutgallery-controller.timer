@@ -1,7 +1,7 @@
 # Runs peanutgallery-controller.service once a day, after the backup (docs/specs/money-safety.md).
 # Persistent= makes up a missed run at the next boot.
 [Unit]
-Description=Peanut Gallery Controller: the daily reconciliation with Stripe
+Description=Mob Machine Controller: the daily reconciliation with Stripe
 
 [Timer]
 OnCalendar=*-*-* 07:07:00 UTC

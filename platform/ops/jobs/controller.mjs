@@ -362,7 +362,7 @@ export async function runController({ env, fetchFn = fetch, now = new Date(), dr
   if (problems.length > 0) throw new JobEnvError('controller', problems);
   const db = supabaseClient({ url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY, fetchFn });
   const stripe = stripeReader({ key: env.STRIPE_READ_KEY, fetchFn, version: stripeApiVersion() });
-  const alerts = alerter({ ntfyUrl: env.NTFY_TOPIC_URL, healthcheckUrl: env.CONTROLLER_HEALTHCHECK_URL, fetchFn, title: 'Peanut Gallery Controller' });
+  const alerts = alerter({ ntfyUrl: env.NTFY_TOPIC_URL, healthcheckUrl: env.CONTROLLER_HEALTHCHECK_URL, fetchFn, title: 'Mob Machine Controller' });
 
   const startedAt = now.toISOString();
   const [identity, figures] = await Promise.all([db.rpc('ledger_identity'), db.rpc('controller_figures')]);

@@ -61,7 +61,7 @@ export function jobEnvEntries(job, dotenvText, operator) {
 }
 
 export function jobEnvText(job, entries) {
-  const lines = [`# Peanut Gallery ${job} job. Written by platform/ops/make-jobs-env.sh; docker --env-file format.`];
+  const lines = [`# Mob Machine ${job} job. Written by platform/ops/make-jobs-env.sh; docker --env-file format.`];
   for (const [key, value] of entries) lines.push(`${key}=${value}`);
   return `${lines.join('\n')}\n`;
 }

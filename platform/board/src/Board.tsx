@@ -283,7 +283,7 @@ function TwoFactor({
         <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
       ) : null}
       {state !== null && state.verifiedFactorId !== null ? (
-        <p>Enter the code your authenticator app shows for Peanut Gallery.</p>
+        <p>Enter the code your authenticator app shows for Mob Machine.</p>
       ) : null}
       {state !== null && state.verifiedFactorId === null && enrolment === null ? (
         <>

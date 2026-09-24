@@ -3,10 +3,10 @@
 # and does nothing when that file is absent. It reads no other file and needs no secret.
 # provision.sh and deploy.sh install it at /etc/systemd/system/dispatcher-alert.service.
 [Unit]
-Description=Tell the board the Peanut Gallery dispatcher unit failed
+Description=Tell the board the Mob Machine dispatcher unit failed
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'f=/etc/peanutgallery/ntfy.url; [ -s "$$f" ] || exit 0; exec /usr/bin/curl -fsS --max-time 20 -H "Title: Peanut Gallery dispatcher" --data-binary "Peanut Gallery dispatcher unit failed on %H" "$$(head -n 1 "$$f" | tr -d "[:space:]")"'
+ExecStart=/bin/sh -c 'f=/etc/peanutgallery/ntfy.url; [ -s "$$f" ] || exit 0; exec /usr/bin/curl -fsS --max-time 20 -H "Title: Mob Machine dispatcher" --data-binary "Mob Machine dispatcher unit failed on %H" "$$(head -n 1 "$$f" | tr -d "[:space:]")"'
