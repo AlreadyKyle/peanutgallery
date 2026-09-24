@@ -110,4 +110,4 @@ No role job spends supporters' or studio money, and `record_usage` refuses a stu
 - Cancel a card, or resume a paused one with a new estimate.
 - Run a job now, with typed input.
 - Set the caps and record Console credit purchases.
-- Needs you lists what waits on the board: disputes, S1 cards, credit to buy, the ceiling pauses the rule will not resume, and cards holding money whose approval is not current.
+- Needs you lists what waits on the board: disputes, S1 cards, credit to buy, the ceiling pauses the rule will not resume, and cards whose approval is not current holding money a cancel would move.

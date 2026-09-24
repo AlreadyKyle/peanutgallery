@@ -540,7 +540,9 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - **A card the resume rule will not resume:** one paused at its ceiling at the card maximum, or a
   second time. Resume it with a new estimate or cancel it. The inbox lists each one.
 - **A card holding money whose approval is not current:** its text was changed outside a board
-  control, so it is hidden and takes no money. Cancel it. The inbox lists each one.
+  control, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
+  money on; the inbox lists each one until then. Money it already spent stays on its bar, and a card
+  that has shipped is left to the sweep.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
   The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
   only those, so every other one waits for you.

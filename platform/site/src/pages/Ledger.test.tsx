@@ -226,6 +226,8 @@ describe('Ledger', () => {
     await waitFor(() => expect(within(funding).getByText(legal.notOnCard)).toBeTruthy());
     const row = within(funding).getByText(legal.notOnCard).closest('.stat')!;
     expect(row.querySelector('dd')?.textContent).toBe('$1.25');
+    // It names the one case where its money goes to a card that is not the next to open.
+    expect(within(row as HTMLElement).getByText(legal.notOnCardTopUp)).toBeTruthy();
     expect(within(funding).queryByText(/short by/)).toBeNull();
     expect(within(funding).queryByText(/test payment/)).toBeNull();
     cleanup();

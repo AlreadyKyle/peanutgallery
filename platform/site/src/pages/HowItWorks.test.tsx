@@ -98,6 +98,15 @@ describe('How it works', () => {
     expect(screen.getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });
 
+  it('says where money on no card waits, and the one case where it goes to a card that is not the next to open', () => {
+    renderPage(null);
+    const section = screen.getByRole('region', { name: 'Where the money goes' });
+    expect(within(section).getByText(/waits in Not on a card yet for the next card to open\./).textContent).toContain(legal.notOnCardTopUp);
+    // The resume rule's numbers (docs/specs/agent-system-core.md): once, first ceiling pause, 1.5 times the cost so far.
+    expect(legal.notOnCardTopUp).toMatch(/spending limit for the first time/);
+    expect(legal.notOnCardTopUp).toMatch(/once, to spend up to 1\.5 times what it has cost so far/);
+  });
+
   it('never renders a Payment Link, a fund button or a Play link, even with real open cards and the link set', async () => {
     const open = card({ id: '0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d', title: 'Real open card', funding_target_usd: 5, funded_usd: 2 });
     const live = card({ id: 'l1', title: 'Real shipped card', stage: 'live', live_at: '2026-09-15T00:00:00Z' });
