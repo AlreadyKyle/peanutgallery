@@ -62,7 +62,7 @@ export function Contribute() {
               <LinkedText text={legal.contributeAgreement} />
             </p>
 
-            <h2 className="choices-heading">{legal.orPickACard}</h2>
+            <h2>{legal.orPickACard}</h2>
             <Guarded studio={studio}>
               {(snapshot) => {
                 if (!hasOrder(snapshot)) return <p className="muted">{legal.partUnavailable}</p>;
