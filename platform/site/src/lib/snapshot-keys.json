@@ -1,0 +1,18 @@
+{
+  "live": {
+    "built_at": "string",
+    "pool": ["object", "null"],
+    "studio": "object",
+    "totals": "object",
+    "money": ["object", "null"],
+    "stopped": ["array", "null"],
+    "cards": "object",
+    "events": "array",
+    "deploys": "array"
+  },
+  "cards": {
+    "cards": "array",
+    "roles": "array",
+    "terms": "array"
+  }
+}

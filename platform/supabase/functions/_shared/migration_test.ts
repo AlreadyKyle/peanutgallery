@@ -286,6 +286,7 @@ Deno.test("migrations on PGlite", {
         "20260924200000_money_logic.sql",
         "20260924300000_agent_system_core.sql",
         "20260924400000_agent_workflows.sql",
+        "20260924500000_site_snapshot.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -3972,7 +3973,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "function privileges: anon only card_is_public, authenticated the board RPCs and card_is_public, service_role the rest, one file_card",
+      "function privileges: anon only card_is_public and the site's two documents, authenticated the board RPCs and those three, service_role the rest, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -4051,8 +4052,9 @@ Deno.test("migrations on PGlite", {
           "withdraw_card_draft",
         ];
         // A policy's functions run as the caller, so anon and authenticated execute the one
-        // the cards policy calls (agent-system-core.md).
-        const everyone = ["card_is_public"];
+        // the cards policy calls (agent-system-core.md), and the public site's two documents,
+        // which run as the caller too (site-snapshot.md).
+        const everyone = ["card_is_public", "site_cards", "site_live"];
         assertEquals(
           privileges.map((p) => p.proname),
           [
@@ -4087,15 +4089,15 @@ Deno.test("migrations on PGlite", {
             assertEquals(p.service_role, true, `service_role on ${p.proname}`);
           }
         }
-        // Every function authenticated may run is security definer, so the board's
-        // RPCs read cards with the owner's rights and the column grants do not
-        // limit them. The four trigger functions, and terms_version_at, which only
-        // the service role and security definer functions call, run with the
-        // caller's rights.
+        // Every board RPC is security definer, so it reads cards with the owner's
+        // rights and the column grants do not limit it. The four trigger functions,
+        // terms_version_at, which only the service role and security definer
+        // functions call, and the site's two documents, which read as anon under
+        // anon's own grants, run with the caller's rights.
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "studio_pause_reason", "terms_version_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
       },
     );
 
