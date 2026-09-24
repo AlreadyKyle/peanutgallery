@@ -66,6 +66,9 @@ const needsYou = {
   last_credit_purchase: null,
   incident_reserve_usd: 0.4,
   s1_cards: [],
+  // A ceiling pause the resume rule will not resume: the card is PAUSED below.
+  rule_blocked: [{ id: 'c0000000-0000-4000-8000-000000000005', title: 'Paused at the maximum', why: 'card_max', actual_usd: '25.0000', card_max_usd: '25.0000' }],
+  approval_void: [],
 };
 
 const studio = {
@@ -107,6 +110,26 @@ const UNDEALT = {
   board_veto_reason: null,
 };
 
+// A board card on now with no money, which a veto moves to next, and one paused at its ceiling at the
+// card maximum, which Needs you lists.
+const ON_NOW = {
+  ...UNDEALT,
+  id: 'c0000000-0000-4000-8000-000000000004',
+  title: 'Bigger pockets for the gatherers',
+  horizon: 'now',
+  rank: null,
+  source: 'board',
+  drafter_role_id: null,
+  opens_at: null,
+};
+const PAUSED = {
+  ...ON_NOW,
+  id: 'c0000000-0000-4000-8000-000000000005',
+  title: 'Paused at the maximum',
+  stage: 'paused',
+  funded_usd: '3.0000',
+};
+
 const ROLES = [
   { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
   { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
@@ -138,6 +161,7 @@ async function answerSupabase(
   { role = 'board', aal2 = false, bodies = [] }: { role?: 'board' | 'moderator'; aal2?: boolean; bodies?: Record<string, unknown>[] } = {},
 ) {
   let roles = ROLES.map((r) => ({ ...r }));
+  let boardCards = [...cards, ON_NOW, PAUSED, UNDEALT].map((c) => ({ ...c }));
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
@@ -171,14 +195,23 @@ async function answerSupabase(
         return json(JOBS);
       case '/rest/v1/rpc/card_is_public':
         return json(true);
-      case '/rest/v1/rpc/set_card_veto':
-        return json({ card_id: UNDEALT.id, board_vetoed: true, horizon: 'next', opens_at: UNDEALT.opens_at });
+      case '/rest/v1/rpc/set_card_veto': {
+        // The card changes as the database changes it: a veto moves a card on now with no money to next.
+        const change = JSON.parse(body ?? '{}') as { p_card: string; p_vetoed: boolean; p_reason: string };
+        boardCards = boardCards.map((c) =>
+          c.id === change.p_card
+            ? { ...c, board_vetoed: change.p_vetoed, board_veto_reason: change.p_vetoed ? change.p_reason : null, horizon: change.p_vetoed && c.horizon === 'now' ? 'next' : c.horizon }
+            : c,
+        );
+        const changed = boardCards.find((c) => c.id === change.p_card)!;
+        return json({ card_id: changed.id, board_vetoed: changed.board_vetoed, horizon: changed.horizon, opens_at: changed.opens_at ?? null });
+      }
       case '/rest/v1/public_roles':
         return json(PUBLIC_ROLES);
       case '/rest/v1/cards': {
         // Only the board member's own token reads the undealt card, as cards_board_read allows.
         const bearer = route.request().headers()['authorization'] ?? '';
-        return json(bearer.includes('.') && bearer.split('.').length === 3 ? [...cards, UNDEALT] : []);
+        return json(bearer.includes('.') && bearer.split('.').length === 3 ? boardCards : []);
       }
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
@@ -224,6 +257,9 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   await expect(inbox.getByText('Answer dispute du_e2e for $5.00 by 1 Oct 2026.')).toBeVisible();
   await expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeVisible();
   await expect(inbox.getByText('Verify your second factor, then fill in the record form from here.', { exact: false })).toBeVisible();
+  // Cards is shown only at the second factor, so the ceiling pause names the second factor and links nowhere.
+  await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or cancel it, under Cards.', { exact: false })).toBeVisible();
+  await expect(inbox.locator('a[href^="#"]')).toHaveCount(0);
   // Needs you is the first section on the page, above the two-factor step.
   const sections = await page.locator('main section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
   expect(sections[0]).toBe('Needs you');
@@ -260,13 +296,34 @@ test('at the second factor the board sees and vetoes an undealt agent card, paus
   await signIn(page, 'aal2');
   await page.goto('/');
 
+  // Needs you's ceiling pause links to the card's row under Cards, which is on the page.
+  const toCard = page.getByRole('region', { name: 'Needs you' }).getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' });
+  await expect(toCard).toHaveAttribute('href', `#card-${PAUSED.id}`);
+  await toCard.click();
+  await expect(page.locator(`#card-${PAUSED.id}`)).toBeInViewport();
+
+  // A keyboard user vetoes a card on now: the veto moves it to next, and the confirmation is shown and
+  // focus stays on the one veto button, which now reads Lift veto.
+  const onNow = page.getByRole('form', { name: `Card ${ON_NOW.title}` });
+  await onNow.getByLabel('Reason').focus();
+  await page.keyboard.type('Off pillar');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(onNow.getByRole('button', { name: 'Veto card' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(onNow.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(onNow.getByText(/ · horizon next · /)).toBeVisible();
+  await expect(onNow.getByRole('button', { name: 'Lift veto' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: ON_NOW.id, p_vetoed: true, p_reason: 'Off pillar' } });
+
   const card = page.getByRole('form', { name: `Card ${UNDEALT.title}` });
   await expect(card).toBeVisible();
   await expect(card.getByText('Written by an agent; its approval is current.')).toBeVisible();
   await expect(card.getByText(/^Waiting to be dealt: moves to now at /)).toBeVisible();
   await card.getByLabel('Reason').fill('Not this week');
   await card.getByRole('button', { name: 'Veto card' }).click();
-  await expect(card.getByText('Card vetoed.')).toBeVisible();
+  await expect(card.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(card.getByRole('button', { name: 'Lift veto' })).toBeFocused();
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: UNDEALT.id, p_vetoed: true, p_reason: 'Not this week' } });
 
   const roles = page.getByRole('region', { name: 'Roles' });
