@@ -95,6 +95,14 @@
   status = 200
   force = true
 
+# /thanks is where Stripe's redirect lands after a payment (docs/specs/supporter-pages.md): the app's,
+# from kernel code, whatever the build holds at that path.
+[[redirects]]
+  from = "/thanks"
+  to = "/index.html"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

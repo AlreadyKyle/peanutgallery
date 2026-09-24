@@ -19,6 +19,7 @@ vi.mock('./routes', async () => {
       { path: '/refunds/', element: page('Card refunds') },
       { path: 'terms', element: page('Card terms') },
       { path: '/board', element: page('Card board') },
+      { path: '/thanks', element: page('Card thanks') },
       { path: '/:slug', element: page('Card slug') },
       { path: '/ledger?', element: page('Card optional ledger') },
       { path: '*', element: page('Card catch-all') },
@@ -57,7 +58,7 @@ afterEach(() => {
 });
 
 describe('the kernel frame and the card lane routes', () => {
-  it('keeps the Contribute, Ledger and legal pages on their paths whatever routes.tsx declares', () => {
+  it('keeps the Contribute, Ledger, legal and /thanks pages on their paths whatever routes.tsx declares', () => {
     const pages: [string, string][] = [
       ['/ledger', legal.ledger],
       ['/contribute', legal.contributeTitle],
@@ -67,6 +68,7 @@ describe('the kernel frame and the card lane routes', () => {
       ['/refunds', NEWEST_TERMS.refunds.title],
       ['/refunds/1', 'Refunds, version 1'],
       ['/contact', legal.contact.title],
+      ['/thanks', legal.thanks.title],
     ];
     for (const [path, title] of pages) {
       renderAt(path);
@@ -101,8 +103,8 @@ describe('cardRoutes', () => {
   it('drops a kernel path in any case or spelling, /board, /api, and a dynamic, optional or catch-all first segment', () => {
     const element = null;
     const paths = ['/', '/team', '/how-it-works', '/roadmap/next', '/ledger', '/LEDGER', 'contribute', '/terms/', '//privacy', '/refunds/x', '/contact',
-      '/board', '/api', '/api/live', '/API/cards', '/:slug', '/ledger?', '/*', '*', '/%6Cedger', ''];
-    expect(cardRoutes(paths.map((path) => ({ path, element }))).map((route) => route.path)).toEqual(['/', '/team', '/how-it-works', '/roadmap/next']);
-    expect(KERNEL_SEGMENTS).toEqual(['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api']);
+      '/board', '/api', '/api/live', '/API/cards', '/thanks', '/Thanks/x', '/:slug', '/ledger?', '/*', '*', '/%6Cedger', '', '/card/:id'];
+    expect(cardRoutes(paths.map((path) => ({ path, element }))).map((route) => route.path)).toEqual(['/', '/team', '/how-it-works', '/roadmap/next', '/card/:id']);
+    expect(KERNEL_SEGMENTS).toEqual(['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api', 'thanks']);
   });
 });

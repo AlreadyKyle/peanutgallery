@@ -287,6 +287,51 @@ export const legal = {
     main_red: 'The automated checks were already failing before this change.',
     pr_head: 'The change did not reach GitHub in time.',
   } as Record<string, string>,
+  // A card's own page and its supporters (docs/specs/supporter-pages.md). A supporter shows only as
+  // a number, in number order, with no amount, time or name.
+  costLabel: 'Cost from contributions',
+  supportersHeading: 'Supporters',
+  supportersLede: 'Everyone whose money reached this card, by supporter number.',
+  supporter: 'Supporter {n}',
+  foundingSupporter: 'Founding supporter {n}',
+  supportersMore: 'and {n} more',
+  supportersNone: 'No supporters yet.',
+  // /team's running and paused rows: what the role's work paid for with contributions has cost. Only
+  // rows billed to the studio count; founder-billed work stays private (PLAN.md §4 The Board).
+  teamSpent: 'Spent from contributions {total}, {week} in the last 7 days',
+  // /roadmap's label on a card the board vetoed, beside the board's reason. Here, not in copy.ts,
+  // because the site-kernel test keeps the word held out of copy.ts.
+  heldByBoard: 'Held by the board',
+  // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
+  // an email or a name, and an unknown session reads the same as one not yet recorded.
+  thanks: {
+    title: 'Thank you',
+    recordingTitle: 'Recording your payment…',
+    recordingLede: 'This page checks again every 5 seconds, so you can leave it open.',
+    recordingBody: 'Your supporter number and the cards your money reached show here once the studio has recorded your payment.',
+    fallback: "Stripe has taken your payment and emailed your receipt. It can take a few minutes to reach the studio's books.",
+    youAre: 'Thank you for your support. You are Supporter {n}.',
+    youAreFounding: 'Thank you for your support. You are Founding supporter {n}.',
+    plainLede: 'Thank you for supporting the studio.',
+    reachedHeading: 'Where your money went',
+    reachedLede: 'The cards your contribution reached, the one you picked first.',
+    reachedNone: 'Your contribution has not reached a card yet.',
+    stateOpen: 'Open for funding',
+    stateFunded: 'Funded and waiting for the agents.',
+    stateBuilding: 'Being built now.',
+    stateChecks: 'Being checked.',
+    stateLive: 'Live.',
+    stateStopped: 'Stopped before it shipped. Its page says why.',
+    cardFallback: 'A card your money reached',
+    held: 'Your contribution is held before it counts, until {date}.',
+    waiting: 'Part of your contribution waits as Not on a card yet and goes to the next card that opens.',
+    reversed: 'This payment was refunded or disputed, so nothing from it is on a card.',
+    terms: 'Your contribution is under version {n} of the {terms}, including the {refunds}.',
+    followHeading: 'Follow along',
+    watchCard: 'Watch this card',
+    discord: 'Get told when it ships',
+    discordAge: 'Discord is for ages 13 and over.',
+  },
   pausedFallback: 'It stopped on a check the board is looking into.',
   rejectedFallback: "It did not pass one of the studio's checks.",
   continueToCheckout: 'Continue to checkout',
@@ -347,6 +392,14 @@ export const legal = {
         heading: 'What is public',
         paragraphs: [
           "The public pages show totals, such as the money available and each card's number of contributors. They never show names or email addresses.",
+        ],
+      },
+      {
+        heading: 'Supporter numbers',
+        paragraphs: [
+          'Supporter numbers are public on the cards your money reached.',
+          'A number belongs to one receipt email, which the studio stores only as a one-way hash, so paying with two email addresses gives two numbers.',
+          'Nothing public shows a name or an email address.',
         ],
       },
       {

@@ -13,6 +13,7 @@ import {
   REQUEST_TIMEOUT_MS,
   REQUIRED_KEYS,
   snapshotFrom,
+  type Snapshot,
 } from './source';
 
 type Docs = { live: Record<string, unknown>; cards: Record<string, unknown> };
@@ -35,11 +36,41 @@ function studioWith(fields: Partial<StudioFixture>): StudioFixture {
 
 const golden = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/__fixtures__/snapshot-golden.json'), 'utf8')) as unknown;
 
+/**
+ * The Snapshot without what supporter-pages added (docs/specs/supporter-pages.md): role stats, the
+ * roster's status, trigger and pause, a card's dealing and veto, and each event's line key. The
+ * golden was captured before them, so it cannot hold them; they are checked on their own below.
+ */
+function beforeSupporterPages(snapshot: Snapshot): unknown {
+  const { roleStats: _stats, ...rest } = snapshot;
+  return {
+    ...rest,
+    cards: rest.cards.map(({ opens_at: _o, board_vetoed: _v, board_veto_reason: _r, ...card }) => card),
+    roles: rest.roles.map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, ...role }) => role),
+    events: rest.events.map(({ line_key: _k, ...event }) => event),
+  };
+}
+
 describe('the golden snapshot', () => {
   it('equals the Snapshot main built from the same fixture through the Supabase client, captured before it was removed', async () => {
     const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO));
     const snapshot = await createSnapshotSource({ fetchFn }).load();
-    expect(snapshot).toEqual(golden);
+    expect(beforeSupporterPages(snapshot)).toEqual(golden);
+  });
+
+  it('adds each event line key, the role stats and the roster columns (supporter-pages)', async () => {
+    const { fetchFn } = serving(() =>
+      toDocuments({ ...DEFAULT_STUDIO, roleStats: { [String(DEFAULT_STUDIO.roles[0]!.id)]: { spent_usd: '1.2500', spent_7d_usd: '0.5000', shipped_cards: 2 } } }),
+    );
+    const snapshot = await createSnapshotSource({ fetchFn }).load();
+    expect(snapshot.events.map((event) => event.line_key)).toEqual(['shipped', 'used_tool', 'started']);
+    expect(snapshot.roleStats?.[String(DEFAULT_STUDIO.roles[0]!.id)]).toEqual({ spent_usd: 1.25, spent_7d_usd: 0.5, shipped_cards: 2 });
+    expect(Object.keys(snapshot.roleStats ?? {})).toHaveLength(DEFAULT_STUDIO.roles.length);
+    const builder = snapshot.roles.find((role) => role.title === 'Builder A')!;
+    expect([builder.status, builder.trigger, builder.paused, builder.paused_reason]).toEqual(['running', null, false, null]);
+    const biz = snapshot.roles.find((role) => role.title === 'Biz Dev')!;
+    expect([biz.status, biz.trigger]).toEqual(['starts', 'Starts last, once every other role in the launch roster is built.']);
+    expect(snapshot.cards.every((card) => card.board_vetoed === false && card.opens_at === null)).toBe(true);
   });
 });
 
@@ -119,7 +150,7 @@ describe('createSnapshotSource.load', () => {
       { ...docs.live, supporters: [{ n: 1 }], reports: null },
       { ...docs.cards, board_work: 'later', cards: (docs.cards.cards as object[]).map((row) => ({ ...row, future_column: 1 })) },
     );
-    expect(snapshot).toEqual(golden);
+    expect(beforeSupporterPages(snapshot)).toEqual(golden);
   });
 
   it('rejects a document missing a required key or holding one of the wrong JSON type', () => {
@@ -206,7 +237,7 @@ describe('createSnapshotSource.load', () => {
     const docs = toDocuments(DEFAULT_STUDIO);
     const snapshot = snapshotFrom(docs.live, docs.cards);
     expect(snapshot.cardTitles).toEqual({ [String(DEFAULT_STUDIO.cards[4]!.id)]: DEFAULT_STUDIO.cards[4]!.title });
-    expect(Object.keys(snapshot.events[0]!).sort()).toEqual(['card_id', 'created_at', 'id', 'role_id', 'type']);
+    expect(Object.keys(snapshot.events[0]!).sort()).toEqual(['card_id', 'created_at', 'id', 'line_key', 'role_id', 'type']);
   });
 
   it('rejects when a document answers other than 200', async () => {
@@ -233,7 +264,7 @@ describe('createSnapshotSource.load', () => {
 
   it('requires the keys snapshot-keys.json lists, which the Deno migration test checks against the SQL', () => {
     expect(REQUIRED_KEYS).toEqual(SNAPSHOT_KEYS);
-    expect(Object.keys(SNAPSHOT_KEYS.live).sort()).toEqual(['built_at', 'cards', 'deploys', 'events', 'money', 'pool', 'stopped', 'studio', 'totals']);
+    expect(Object.keys(SNAPSHOT_KEYS.live).sort()).toEqual(['built_at', 'cards', 'deploys', 'events', 'money', 'pool', 'role_stats', 'stopped', 'studio', 'totals']);
     expect(Object.keys(SNAPSHOT_KEYS.cards).sort()).toEqual(['cards', 'roles', 'terms']);
   });
 });

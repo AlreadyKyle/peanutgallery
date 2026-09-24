@@ -1,4 +1,6 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render as renderPlain, screen, within } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
@@ -57,12 +59,16 @@ const REJECTED = stopped({
   ],
 });
 
+// Each row's title links the card's own page, so the rows render inside a router.
+const render = (element: ReactElement) => renderPlain(<MemoryRouter>{element}</MemoryRouter>);
+
 describe('Stopped', () => {
   it('lists a paused card under Paused with its state tag, reason, spend and that its money stays on it', () => {
     render(<Stopped snapshot={snapshot([PAUSED])} />);
     const list = screen.getByRole('region', { name: legal.pausedHeading });
     const row = within(list).getByRole('listitem');
     expect(within(row).getByRole('heading', { level: 4 }).textContent).toBe('A paused card');
+    expect(within(row).getByRole('link', { name: 'A paused card' }).getAttribute('href')).toBe(`/card/${PAUSED.card_id}`);
     expect(within(row).getByText(legal.failingCheckWords.ceiling!)).toBeTruthy();
     const tag = row.querySelector('.tag[data-state="paused"]')!;
     expect(tag.textContent).toBe(STATE_TAGS.paused.word);
@@ -117,9 +123,9 @@ describe('Stopped', () => {
   });
 
   it('draws nothing with no stopped cards', () => {
-    const { container } = render(<Stopped snapshot={snapshot([])} />);
+    const { container } = renderPlain(<Stopped snapshot={snapshot([])} />);
     expect(container.innerHTML).toBe('');
-    const again = render(<Stopped snapshot={{ ...snapshot([]), stopped: undefined }} />);
+    const again = renderPlain(<Stopped snapshot={{ ...snapshot([]), stopped: undefined }} />);
     expect(again.container.innerHTML).toBe('');
   });
 });

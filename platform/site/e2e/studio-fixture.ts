@@ -25,6 +25,12 @@ export type StudioFixture = {
   money: Record<string, unknown> | null;
   /** public_stopped_cards, newest first; null answers the read with an error. */
   stopped: Record<string, unknown>[] | null;
+  /** public_role_stats by role id; a role left out has spent nothing and shipped nothing. */
+  roleStats?: Record<string, { spent_usd?: number | string; spent_7d_usd?: number | string; shipped_cards?: number }>;
+  /** /api/card/:id documents by card id (card-documents.ts builds them); an id left out is built from the fixture. */
+  cardDetails?: Record<string, Record<string, unknown>>;
+  /** /api/thanks answers by session id; a session left out answers {"status":"pending"}. */
+  thanks?: Record<string, Record<string, unknown>>;
 };
 
 /** A public_money row: every figure zero, nothing reconciled and an empty order, with `fields` over it. */
@@ -70,7 +76,16 @@ const MODELS: Record<string, string> = {
   MODEL_HOST: 'claude-haiku-4-5',
 };
 
-type RoleSpec = { name: string; title: string; species_note: string; model: string; write_access: boolean; description?: string };
+type RoleSpec = {
+  name: string;
+  title: string;
+  species_note: string;
+  model: string;
+  write_access: boolean;
+  description?: string;
+  status?: string;
+  trigger?: string;
+};
 
 function roleId(title: string): string {
   return `r-${title.toLowerCase().replace(/[^a-z]+/g, '-')}`;
@@ -92,6 +107,10 @@ function rolesFromSpecs(): Record<string, unknown>[] {
       write_access: spec.write_access,
       state: 'active',
       hired_at: '2026-09-14T00:00:00Z',
+      status: spec.status ?? null,
+      trigger: spec.trigger ?? null,
+      paused: false,
+      paused_reason: null,
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 }

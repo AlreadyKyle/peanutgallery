@@ -48,6 +48,14 @@ export type Card = {
   updated_at: string;
   /** When the card went live; null before it ships. */
   live_at: string | null;
+  /**
+   * When an approved agent card is dealt to horizon now (docs/specs/agent-system-core.md); null or
+   * absent for a card that is not waiting to be dealt.
+   */
+  opens_at?: string | null;
+  /** The board has held the card back, with its reason; absent reads as not vetoed. */
+  board_vetoed?: boolean;
+  board_veto_reason?: string | null;
 };
 
 export type CardFunding = {
@@ -69,6 +77,19 @@ export type AgentEvent = {
   role_id: string | null;
   type: string;
   created_at: string;
+  /**
+   * The event's fixed public line (public.event_line_key, docs/specs/supporter-pages.md): started,
+   * read, edited, ran, submitted, used_tool, a message step's key, gate_passed and so on. Absent in a
+   * document from before the key existed; the page then says the type's verb.
+   */
+  line_key?: string;
+};
+
+/** A role's studio-billed spend and ships, from public_role_stats (docs/specs/supporter-pages.md). */
+export type RoleStats = {
+  spent_usd: number;
+  spent_7d_usd: number;
+  shipped_cards: number;
 };
 
 /** A deploy row. The smoke bot's raw output stays in the database; the site shows only passed or failed. */
@@ -149,6 +170,13 @@ export type Role = {
   write_access: boolean;
   state: string;
   hired_at: string;
+  /** The roster's place for the role (docs/specs/carry-over.md): running, starts or planned; null when unset. */
+  status?: string | null;
+  /** When a role that does not run yet starts, in one sentence; null when unset. */
+  trigger?: string | null;
+  /** The board or the moderator has paused the role (docs/specs/agent-system-core.md), with its reason. */
+  paused?: boolean;
+  paused_reason?: string | null;
 };
 
 /**
@@ -190,6 +218,11 @@ export type Snapshot = {
   money?: Money | null;
   /** The newest rejected and paused cards, from public_stopped_cards; empty when it did not load. */
   stopped?: StoppedCard[];
+  /**
+   * Each role's studio-billed spend and ships, by role id, from public_role_stats. A snapshot built
+   * without it (a sample or a test) leaves it out, and /team then shows no cost or ships.
+   */
+  roleStats?: Record<string, RoleStats>;
   /** The enrichments that failed to load, in ENRICHMENTS order. */
   missing: Enrichment[];
 };
@@ -324,6 +357,9 @@ function cardFrom(row: Doc, live: LiveCard): Card {
     created_at: text(row, 'created_at'),
     updated_at: text(row, 'updated_at'),
     live_at: textOrNull(row, 'live_at'),
+    opens_at: textOrNull(row, 'opens_at'),
+    board_vetoed: row.board_vetoed === true,
+    board_veto_reason: textOrNull(row, 'board_veto_reason'),
   };
 }
 
@@ -338,7 +374,23 @@ function roleFrom(row: Doc): Role {
     write_access: row.write_access === true,
     state: text(row, 'state'),
     hired_at: text(row, 'hired_at'),
+    status: textOrNull(row, 'status'),
+    trigger: textOrNull(row, 'trigger'),
+    paused: row.paused === true,
+    paused_reason: textOrNull(row, 'paused_reason'),
   };
+}
+
+function roleStatsFrom(value: unknown): Record<string, RoleStats> {
+  const stats: Record<string, RoleStats> = {};
+  for (const row of rows(value, 'role_stats')) {
+    stats[text(row, 'role_id')] = {
+      spent_usd: money(row.spent_usd),
+      spent_7d_usd: money(row.spent_7d_usd),
+      shipped_cards: money(row.shipped_cards),
+    };
+  }
+  return stats;
 }
 
 function moneyFrom(row: Doc): Money {
@@ -365,7 +417,8 @@ function moneyFrom(row: Doc): Money {
   };
 }
 
-function stoppedFrom(row: Doc): StoppedCard {
+/** A public_stopped_cards row; card-source.ts reads a card's own row with it. */
+export function stoppedFrom(row: Doc): StoppedCard {
   const stage = text(row, 'stage');
   if (stage !== 'paused' && stage !== 'rejected') throw new Error(`Unexpected stopped stage: ${stage}`);
   const moved = row.moved === null || row.moved === undefined ? [] : rows(row.moved, 'moved');
@@ -417,7 +470,15 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const cardTitles: Record<string, string> = {};
   for (const row of rows(live.events, 'events')) {
     const cardId = textOrNull(row, 'card_id');
-    events.push({ id: text(row, 'id'), card_id: cardId, role_id: textOrNull(row, 'role_id'), type: text(row, 'type'), created_at: text(row, 'created_at') });
+    const lineKey = textOrNull(row, 'line_key');
+    events.push({
+      id: text(row, 'id'),
+      card_id: cardId,
+      role_id: textOrNull(row, 'role_id'),
+      type: text(row, 'type'),
+      created_at: text(row, 'created_at'),
+      ...(lineKey === null ? {} : { line_key: lineKey }),
+    });
     const title = textOrNull(row, 'card_title');
     if (cardId !== null && title !== null) cardTitles[cardId] = title;
   }
@@ -450,6 +511,7 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
     cardTitles,
     money: books,
     stopped,
+    roleStats: roleStatsFrom(live.role_stats),
     missing: ENRICHMENTS.filter((name) => missing.has(name)),
   };
 }

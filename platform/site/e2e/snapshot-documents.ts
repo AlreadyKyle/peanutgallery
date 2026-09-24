@@ -13,6 +13,49 @@ export type SnapshotDocuments = { live: Record<string, unknown>; cards: Record<s
 
 const OPEN_OR_PAUSED = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'paused'];
 
+const READ_TOOLS = ['read', 'grep', 'glob', 'ls'];
+const EDIT_TOOLS = ['edit', 'write', 'multiedit', 'notebookedit'];
+const STEP_KEYS: Record<string, string> = {
+  smoke_pass: 'smoke_passed',
+  requeue: 'requeued',
+  infrastructure: 'paused_infra',
+  patch_reused: 'patch_reused',
+  dealt: 'dealt',
+  held: 'held',
+};
+const TYPE_KEYS: Record<string, string> = {
+  start: 'started',
+  tool_result: 'none',
+  gate_pass: 'gate_passed',
+  gate_fail: 'gate_failed',
+  ship: 'shipped',
+  revert: 'reverted',
+  error: 'stopped',
+};
+
+/**
+ * public.event_line_key in TypeScript, for fixtures (docs/specs/supporter-pages.md): a fixture event
+ * may carry its tool `name` or message `step` in `payload`, or give its `line_key` outright.
+ */
+export function lineKeyOf(type: string, payload: Record<string, unknown> = {}): string {
+  if (type === 'tool_call') {
+    const name = String(payload.name ?? '').toLowerCase();
+    if (READ_TOOLS.includes(name)) return 'read';
+    if (EDIT_TOOLS.includes(name)) return 'edited';
+    if (name === 'bash') return 'ran';
+    if (name === 'submit_patch') return 'submitted';
+    return 'used_tool';
+  }
+  if (type === 'message') return STEP_KEYS[String(payload.step ?? '')] ?? 'none';
+  return TYPE_KEYS[type] ?? 'other';
+}
+
+/** A fixture event's line key: its own, else the one its type and payload give. */
+export function eventLineKey(event: Record<string, unknown>): string {
+  if (typeof event.line_key === 'string') return event.line_key;
+  return lineKeyOf(text(event.type), (event.payload as Record<string, unknown> | undefined) ?? {});
+}
+
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 const desc = (key: string) => (a: Record<string, unknown>, b: Record<string, unknown>) =>
   text(b[key]).localeCompare(text(a[key])) || text(b.id).localeCompare(text(a.id));
@@ -86,18 +129,28 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
     money: studio.money,
     stopped: studio.stopped === null ? null : studio.stopped.slice(0, 12),
     cards: liveCards,
+    // The newest 20 with a public line; key none never reaches the document.
     events: [...studio.events]
+      .filter((event) => eventLineKey(event) !== 'none')
       .sort(desc('created_at'))
       .slice(0, 20)
-      .map(({ id, card_id, role_id, type, created_at }) => ({
-        id,
-        card_id,
-        role_id,
-        type,
-        created_at,
-        card_title: card_id === null ? null : (titles.get(card_id) ?? null),
+      .map((event) => ({
+        id: event.id,
+        card_id: event.card_id,
+        role_id: event.role_id,
+        type: event.type,
+        created_at: event.created_at,
+        card_title: event.card_id === null ? null : (titles.get(event.card_id) ?? null),
+        line_key: eventLineKey(event),
       })),
     deploys: studio.deploys.slice(0, 10).map(({ id, folder, sha, is_green, created_at }) => ({ id, folder, sha, is_green, created_at })),
+    role_stats: studio.roles.map((role) => ({
+      role_id: role.id,
+      spent_usd: 0,
+      spent_7d_usd: 0,
+      shipped_cards: 0,
+      ...(studio.roleStats?.[text(role.id)] ?? {}),
+    })),
   };
   const cards = {
     cards: listed,

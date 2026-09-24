@@ -15,9 +15,11 @@ const TOKENS = /(\{email\}|\{refunds\}|\{terms\}|\{discord\})/;
 /**
  * A paragraph from legal.ts or terms-versions.ts with its {email}, {refunds}, {terms} and {discord}
  * tokens turned into links. Kernel (docs/specs/board-site.md): it renders the legal pages and the
- * agreement lines before checkout.
+ * agreement lines before checkout. With `version`, {terms} and {refunds} link that posted version's
+ * pages (/thanks's terms line, docs/specs/supporter-pages.md).
  */
-export function LinkedText({ text }: { text: string }) {
+export function LinkedText({ text, version }: { text: string; version?: number }) {
+  const at = version === undefined ? '' : `/${version}`;
   const env = siteEnv();
   return (
     <>
@@ -31,14 +33,14 @@ export function LinkedText({ text }: { text: string }) {
         }
         if (part === '{refunds}') {
           return (
-            <Link key={index} to="/refunds">
+            <Link key={index} to={`/refunds${at}`}>
               {legal.refundsPageLink}
             </Link>
           );
         }
         if (part === '{terms}') {
           return (
-            <Link key={index} to="/terms">
+            <Link key={index} to={`/terms${at}`}>
               {legal.footerLinks.terms}
             </Link>
           );
