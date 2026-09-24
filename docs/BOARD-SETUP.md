@@ -332,9 +332,14 @@ team, so this also tells me how its builds count.
 **Tell me:** "legacy Free" or "credit-based Free".
 
 **The function budget** (`docs/specs/site-snapshot.md`). The public site now reads its figures from
-one Netlify Function, which the CDN caches, so at most about 52,000 of legacy Free's 125,000
-invocations a month go to it however many people read the site (the table in `docs/PLAN.md`
-Appendix A, "Public site function budget"). Stay on legacy Free. While you are on that page:
+one Netlify Function, which the CDN caches, so it builds its documents at most about 52,000 times a
+month however many people read the site (the table in `docs/PLAN.md` Appendix A, "Public site
+function budget"), of legacy Free's 125,000 invocations. Answers the CDN does not keep still cost one
+invocation each: a failed read of the database (a 502 while Supabase is down or slow), a request
+with a query string (400), another method (405) or an unknown path (404). During a long Supabase
+outage every open tab's retry is such an invocation (at most one a minute per tab, backing off to one
+every ten minutes), so the usage notifications below are the alert for that case. Stay on legacy
+Free. While you are on that page:
 
 - Confirm Netlify's **usage notifications** go to your address. They are the only alert that the
   sites are close to a limit.

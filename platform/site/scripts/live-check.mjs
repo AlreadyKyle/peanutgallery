@@ -112,6 +112,8 @@ const PAYOUT_SENTENCE =
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
+// The line naming no card, which /contribute shows while the first card in the order is not in /api/cards yet.
+const PICK_BODY = 'Your contribution funds whatever the agents build next.';
 const RECONCILE_LINE = /^(Reconciled with Stripe on \d{1,2} [A-Z][a-z]{2} \d{4}|Not yet reconciled with Stripe)\.$/;
 const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
@@ -462,6 +464,11 @@ try {
     } else {
       if (next !== null) {
         check(titles.length > 0 && titles[0] === next[1], `Fund the next card in line says "${body}", the first of ${titles.length} card choices`);
+      } else if (body === PICK_BODY) {
+        // Allowed only while the order's first card has no words in /api/cards yet (payment.ts nextInLine).
+        const first = (await livePart('money'))?.funding_order?.[0]?.card_id ?? null;
+        const listed = new Set(((await siteDocument('/api/cards'))?.cards ?? []).map((row) => row.id));
+        check(first !== null && !listed.has(first), `Fund the next card in line names no card only while the order's first card ${first} is not in /api/cards`);
       } else {
         check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
       }

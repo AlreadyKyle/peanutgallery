@@ -6,7 +6,7 @@ import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
-import { fundableCards, fundLink, nextInLine } from '../lib/payment';
+import { fundableCards, fundLink, nextInLine, noCardTakesMoney } from '../lib/payment';
 import type { Snapshot } from '../lib/source';
 import { useStudio, type StudioState } from '../lib/studio';
 
@@ -24,12 +24,14 @@ function hasOrder(snapshot: Snapshot): boolean {
 /**
  * Fund the next card in line's second line: the first card in the funding order, or that the money
  * waits in Not on a card yet when no card takes money. It names no card while the order is loading
- * or did not load; the money is placed by the waterfall either way.
+ * or did not load, or while the first card in it has not reached the page yet; the money is placed
+ * by the waterfall either way.
  */
 function pickForMeBody(studio: StudioState): string {
   if (studio.state !== 'ready' || !hasOrder(studio.snapshot)) return legal.pickForMeBody;
+  if (noCardTakesMoney(studio.snapshot)) return legal.nextInLineNone;
   const next = nextInLine(studio.snapshot);
-  return next === null ? legal.nextInLineNone : legal.nextInLine.replace('{title}', next.title);
+  return next === null ? legal.pickForMeBody : legal.nextInLine.replace('{title}', next.title);
 }
 
 /**

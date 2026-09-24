@@ -54,6 +54,18 @@ describe('the live-updates row', () => {
     expect(button.querySelector('.label-stack > span')?.textContent).toBe(copy.upToDate);
   });
 
+  it('reads No new updates, never Up to date, while the last refresh failed, and still shows a waiting count', () => {
+    const noop = () => undefined;
+    const { rerender } = render(<LiveUpdates count={0} paused={false} stale onTogglePause={noop} onShow={noop} />);
+    expect(updates().querySelector('.label-stack > span')?.textContent).toBe(copy.noNewUpdates);
+    expect(updates().textContent).not.toContain(copy.upToDate);
+    expect(updates().getAttribute('aria-disabled')).toBe('true');
+    rerender(<LiveUpdates count={3} paused={false} stale onTogglePause={noop} onShow={noop} />);
+    expect(updates().querySelector('.label-stack > span')?.textContent).toBe('Show 3 updates');
+    // The longest label still holds the width.
+    expect(copy.noNewUpdates.length).toBeLessThan('Show 99+ updates'.length);
+  });
+
   it('marks Pause pressed with the check glyph and says the updates are paused', () => {
     render(<Row />);
     const pause = screen.getByRole('button', { name: copy.pauseLiveUpdates });

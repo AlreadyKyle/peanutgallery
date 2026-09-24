@@ -74,12 +74,15 @@ export const copy = {
   // or the plain line when the roles did not load.
   writtenBy: 'Written by the {role}, an AI agent',
   writtenByAgent: 'Written by an AI agent',
-  // The live-updates row and the one polite announcer.
-  pauseLiveUpdates: 'Pause live updates',
+  // The updates row and the one polite announcer. The figures run up to about three minutes behind
+  // (DESIGN.md, How fresh the figures are), so nothing here says live; and while a refresh has failed
+  // the quiet button says there is nothing new rather than that the page is up to date.
+  pauseLiveUpdates: 'Pause updates',
   upToDate: 'Up to date',
+  noNewUpdates: 'No new updates',
   showUpdates: 'Show {n} updates',
   showOneUpdate: 'Show 1 update',
-  liveUpdatesPaused: 'Live updates are paused.',
+  liveUpdatesPaused: 'Updates are paused.',
   updatesWaiting: 'New updates are waiting below the status line.',
   announceFunded: '{title} is fully funded.',
   announceShipped: '{title} is live.',
