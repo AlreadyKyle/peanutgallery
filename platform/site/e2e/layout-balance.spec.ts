@@ -149,3 +149,21 @@ test('finds each planted gap', async ({ page }) => {
     expect(findings.some((line) => line.startsWith(kind)), `${kind} in ${JSON.stringify(findings)}`).toBe(true);
   }
 });
+
+// A closed disclosure draws only its summary: the brief inside a card's closed "What the agents are
+// told" is laid out but not painted, so it never makes a card look taller than its neighbour. Open,
+// the same brief is drawn and counts.
+test('counts only the summary of a closed disclosure as drawn', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const card = (open: boolean) => `<li style="border:2px solid #111;padding:16px"><h3>A card</h3>
+    <details${open ? ' open' : ''}><summary>What the agents are told</summary><p style="height:900px">A long brief.</p></details></li>`;
+  const grid = (open: boolean) => `<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
+    <ul style="display:grid;grid-template-columns:1fr 1fr;gap:24px;list-style:none;padding:0;align-items:start">
+      ${card(open)}<li style="border:2px solid #111;padding:16px"><h3>Its neighbour</h3><p>Short.</p></li>
+    </ul></body></html>`;
+  await page.setContent(grid(false));
+  expect((await page.evaluate(auditLayout, LIMITS)).filter((line) => line.startsWith('balance:'))).toEqual([]);
+  await page.setContent(grid(true));
+  expect((await page.evaluate(auditLayout, LIMITS)).some((line) => line.startsWith('balance:'))).toBe(true);
+});
+

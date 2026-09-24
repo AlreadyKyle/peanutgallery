@@ -827,6 +827,37 @@ button.link:hover:not(:disabled) {
   margin-top: auto;
 }
 
+/* From 48rem, where cards sit side by side, each card shares its row's four tracks (CSS subgrid):
+   the index, the title, the summary and the bottom block line up across the row, and a shorter
+   card's spare space splits under its title and its summary instead of pooling above the funding
+   bar as one hollow (DESIGN.md, No dead space). The parts are placed by row, so a card with no
+   summary keeps its bottom block in line. */
+@media (min-width: 48rem) {
+  .card-grid > .card {
+    display: grid;
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+
+  .card-grid > .card > .card-index {
+    grid-row: 1;
+  }
+
+  .card-grid > .card > h3 {
+    grid-row: 2;
+  }
+
+  .card-grid > .card > .card-summary {
+    grid-row: 3;
+  }
+
+  .card-grid > .card > .card-bottom {
+    grid-row: 4;
+    margin-top: 0;
+  }
+}
+
 .card-bottom > .button {
   margin-top: var(--space-2);
 }
