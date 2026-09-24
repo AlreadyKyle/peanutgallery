@@ -122,6 +122,7 @@ export const copy = {
   // The public line for each agent event, by its fixed key (public.event_line_key,
   // docs/specs/supporter-pages.md). one is a single event; many, with {n}, is a run of the same line
   // by the same agent on the same card, collapsed into one. A key with no many says one "({n} times)".
+  // The held step's words are legal.ts's (lib/lines.ts), since this file carries no money word.
   eventLines: {
     started: { one: 'started work' },
     read: { one: 'read a file', many: 'read {n} files' },
@@ -134,7 +135,6 @@ export const copy = {
     paused_infra: { one: "stopped for a problem in the studio's tools" },
     patch_reused: { one: 'reused its earlier change' },
     dealt: { one: 'dealt the card to the table' },
-    held: { one: 'kept the card back for the board' },
     gate_passed: { one: 'passed the checks' },
     gate_failed: { one: 'failed the checks' },
     shipped: { one: 'shipped it' },
@@ -329,34 +329,3 @@ export const copy = {
     },
   },
 } as const;
-
-/** A line's words for its key, one event or a run of n; an unknown key reads as other. */
-export function eventLine(key: string, count = 1): string {
-  const words = copy.eventLines[key] ?? copy.eventLines.other!;
-  if (count <= 1) return words.one;
-  return words.many === undefined ? `${words.one} ${copy.eventTimes.replace('{n}', String(count))}` : words.many.replace('{n}', String(count));
-}
-
-/**
- * Consecutive lines by the same agent with the same key on the same card, as one line with a count
- * ("Builder A read 12 files"). The lines keep their order; each run keeps its first line's fields.
- * Home's feed and a card's own page both use it.
- */
-export function collapseLines<T extends { role_id: string | null; line_key?: string; card_id?: string | null }>(lines: readonly T[]): (T & { count: number })[] {
-  const out: (T & { count: number })[] = [];
-  for (const line of lines) {
-    const last = out.at(-1);
-    if (
-      last !== undefined &&
-      last.role_id === line.role_id &&
-      (last.line_key ?? '') === (line.line_key ?? '') &&
-      line.line_key !== undefined &&
-      (last.card_id ?? null) === (line.card_id ?? null)
-    ) {
-      last.count += 1;
-    } else {
-      out.push({ ...line, count: 1 });
-    }
-  }
-  return out;
-}

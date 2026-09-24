@@ -1,5 +1,6 @@
 import type { CardLine, LineRole } from '../lib/card-source';
-import { collapseLines, copy, eventLine } from '../lib/copy';
+import { copy } from '../lib/copy';
+import { collapseLines, eventLine } from '../lib/lines';
 import { formatDateTime, formatInteger } from '../lib/format';
 
 /**

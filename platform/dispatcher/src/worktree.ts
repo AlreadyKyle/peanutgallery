@@ -194,6 +194,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/components/Supporters.tsx',
   'platform/site/src/components/TextPage.tsx',
   'platform/site/src/lib/card-source.ts',
+  'platform/site/src/lib/lines.ts',
   'platform/site/src/lib/env.ts',
   'platform/site/src/lib/format.ts',
   'platform/site/src/lib/legal.ts',

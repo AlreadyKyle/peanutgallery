@@ -522,7 +522,7 @@ try {
     const later = [page.getByRole('region', { name: 'Starts later', exact: true }), page.getByRole('region', { name: 'Planned', exact: true })];
     const sections = await page.getByRole('main').locator('section h2').allTextContents();
     check(sections[0] === 'Running' && sections.every((name) => ['Running', 'Starts later', 'Planned'].includes(name)), `/team sections ${JSON.stringify(sections)}`);
-    const models = runningModelsCheck(await running.locator('li.agent:is([data-status="running"], [data-status="paused"]) .card-meta').allTextContents());
+    const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
     check(models.ok, models.message);
     let waitingModels = 0;
     for (const region of later) waitingModels += (await region.count()) === 0 ? 0 : await region.getByText(/\bclaude-/).count();

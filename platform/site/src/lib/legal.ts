@@ -302,6 +302,8 @@ export const legal = {
   // /roadmap's label on a card the board vetoed, beside the board's reason. Here, not in copy.ts,
   // because the site-kernel test keeps the word held out of copy.ts.
   heldByBoard: 'Held by the board',
+  // The agent step that keeps a card back for the board (event line key held, lib/lines.ts).
+  eventLineHeld: 'kept the card back for the board',
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
   thanks: {

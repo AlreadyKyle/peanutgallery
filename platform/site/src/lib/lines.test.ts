@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { collapseLines, copy, eventLine } from './copy';
+import { copy } from './copy';
+import { collapseLines, eventLine } from './lines';
 
 describe('event lines', () => {
   it('says each key in words, one event or a run of n, and an unknown key as other', () => {
@@ -9,7 +10,7 @@ describe('event lines', () => {
     expect(eventLine('gate_passed', 2)).toBe('passed the checks (2 times)');
     expect(eventLine('brand_new_key')).toBe(copy.eventLines.other!.one);
     for (const key of ['started', 'read', 'edited', 'ran', 'submitted', 'used_tool', 'smoke_passed', 'requeued', 'paused_infra', 'patch_reused', 'dealt', 'held', 'gate_passed', 'gate_failed', 'shipped', 'reverted', 'stopped', 'other']) {
-      expect(copy.eventLines[key], key).toBeDefined();
+      expect(eventLine(key), key).not.toBe(key === 'other' ? '' : copy.eventLines.other!.one);
     }
   });
 

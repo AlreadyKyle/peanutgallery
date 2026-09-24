@@ -1,4 +1,5 @@
-import { collapseLines, copy, eventLine } from '../lib/copy';
+import { copy } from '../lib/copy';
+import { collapseLines, eventLine } from '../lib/lines';
 import { legal } from '../lib/legal';
 import { formatDateTime } from '../lib/format';
 import type { AgentEvent, Snapshot } from '../lib/source';
