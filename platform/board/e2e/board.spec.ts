@@ -161,7 +161,7 @@ async function answerSupabase(
   { role = 'board', aal2 = false, bodies = [] }: { role?: 'board' | 'moderator'; aal2?: boolean; bodies?: Record<string, unknown>[] } = {},
 ) {
   let roles = ROLES.map((r) => ({ ...r }));
-  let boardCards = [...cards, ON_NOW, PAUSED, UNDEALT].map((c) => ({ ...c }));
+  let boardCards: (Record<string, unknown> & { id: string; horizon: string })[] = [...cards, ON_NOW, PAUSED, UNDEALT].map((c) => ({ ...c }));
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);

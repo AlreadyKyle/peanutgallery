@@ -38,26 +38,31 @@ function loadedMoney(snapshot: Snapshot): Money | null {
 }
 
 /**
- * The Funding band's Not on a card yet figure, from not_on_card_usd, with the one case where its money
- * goes to a card that is not the next to open (resume by rule). When public_money did not load, Stat's
- * unread row says "Not available right now." under the label, never in the figure's place.
+ * The Funding band's Not on a card yet figure, from not_on_card_usd. When public_money did not load,
+ * Stat's unread row says "Not available right now." under the label, never in the figure's place.
  */
 export function NotOnCardStat({ snapshot }: { snapshot: Snapshot }) {
   const money = loadedMoney(snapshot);
+  return <Stat label={legal.notOnCard} description={legal.describeNotOnCard} value={money === null ? null : formatUsd(money.not_on_card_usd)} />;
+}
+
+/**
+ * Under the Funding band's figures: the one case where Not on a card yet funds a card that is not the
+ * next to open (a rule, so it is said whether or not the figures loaded; a full-width line, since
+ * beside the figure it would stand a tall column against a one-line amount), then the shortfall while
+ * there is one and the board's test payment while it is booked.
+ */
+export function FundingLines({ snapshot }: { snapshot: Snapshot }) {
+  const money = loadedMoney(snapshot);
   return (
-    <Stat
-      label={legal.notOnCard}
-      description={legal.describeNotOnCard}
-      note={legal.notOnCardTopUp}
-      value={money === null ? null : formatUsd(money.not_on_card_usd)}
-    />
+    <>
+      <p className="muted small">{legal.notOnCardTopUp}</p>
+      {money === null ? null : <FundingFigureLines money={money} />}
+    </>
   );
 }
 
-/** Under the Funding band's figures: the shortfall while there is one, and the board's test payment while it is booked. */
-export function FundingLines({ snapshot }: { snapshot: Snapshot }) {
-  const money = loadedMoney(snapshot);
-  if (money === null) return null;
+function FundingFigureLines({ money }: { money: Money }) {
   return (
     <>
       {money.short_usd > 0 ? <p className="muted small">{legal.shortBy.replace('{usd}', formatUsd(money.short_usd))}</p> : null}
