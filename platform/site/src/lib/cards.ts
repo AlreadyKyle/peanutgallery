@@ -111,6 +111,16 @@ export function faceOf(card: Card): Face {
   return 'open';
 }
 
+/**
+ * A card on the roadmap, not open: on horizon next or later and not yet started. Its own page draws
+ * the roadmap's state (Cards.tsx plannedState) instead of a face, since faceOf would call it open for
+ * funding and it takes no money.
+ */
+export function isPlanned(card: Card): boolean {
+  const face = faceOf(card);
+  return !isRunnable(card) && (face === 'open' || face === 'picked');
+}
+
 export function inCategory(card: Card, filter: CategoryFilter): boolean {
   return filter === 'all' || categoryOf(card) === filter;
 }

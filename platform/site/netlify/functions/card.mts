@@ -36,7 +36,12 @@ function refuse(status: number, message: string, extra: Record<string, string> =
   return answer(status, JSON.stringify({ error: message }), { ...NO_STORE, ...extra });
 }
 
-/** The RPC's JSON body as text, or null for a Supabase error, a timeout, a network failure or a body that is not JSON. */
+/**
+ * The RPC's JSON body as compact JSON text, or null for a Supabase error, a timeout, a network failure
+ * or a body that is not JSON. PostgREST prints a jsonb result in jsonb's text form, with a space after
+ * each colon and comma ('{"status": "pending"}'); the function answers one canonical form instead, so
+ * an exact answer such as /api/thanks' pending reads the same from the fixtures and from production.
+ */
 async function rpc(name: string, args: Record<string, unknown>): Promise<string | null> {
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
@@ -46,9 +51,7 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<string 
       signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
     });
     if (!response.ok) return null;
-    const body = await response.text();
-    JSON.parse(body);
-    return body;
+    return JSON.stringify(JSON.parse(await response.text()));
   } catch {
     return null;
   }

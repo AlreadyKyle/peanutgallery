@@ -43,6 +43,11 @@ const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => res
  * site's own motion (lib/motion.ts) at a fixed pace, says each step once in a polite live region,
  * then shows the card as it is now and reads Replay. Under reduced motion, or with nothing recorded,
  * there is no Play button and the page shows the end state.
+ *
+ * Same slot and height (DESIGN.md, Motion): while Play is offered, a hidden copy of every face the
+ * replay can show sits in the face's grid cell, so the slot is always as tall as the tallest of them
+ * and the face stretches to it. Nothing below the card, the Play button included, moves as the faces
+ * change.
  */
 export function Replay({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   const steps = replaySteps(detail);
@@ -79,24 +84,37 @@ export function Replay({ detail, snapshot }: { detail: CardDetail; snapshot: Sna
     setPlayed(true);
   }
 
+  const endFace = detail.stopped === null ? undefined : detail.stopped.stage === 'paused' ? 'paused' : 'rejected';
+  const reason = detail.stopped === null ? undefined : stopReason(detail.stopped);
+  const asAt = (s: Step) => ({ ...card, stage: s.stage, funded_usd: s.full ? card.funding_target_usd : 0, live_at: s.key === 'shipped' ? card.live_at : null });
   const step = at === null ? null : steps[at]!;
-  const shown =
-    step === null
-      ? card
-      : { ...card, stage: step.stage, funded_usd: step.full ? card.funding_target_usd : 0, live_at: step.key === 'shipped' ? card.live_at : null };
   return (
     <div className="replay">
-      <ul className="card-solo" ref={slot}>
-        <CardFace
-          card={shown}
-          snapshot={snapshot}
-          mode={step === null ? 'live' : 'example'}
-          face={step?.face ?? (detail.stopped === null ? undefined : detail.stopped.stage === 'paused' ? 'paused' : 'rejected')}
-          stamp={step === null ? card.stage === 'live' : step.key === 'shipped'}
-          reason={step === null && detail.stopped !== null ? stopReason(detail.stopped) : undefined}
-          watch={false}
-        />
-      </ul>
+      <div className="card-slot">
+        <ul className="card-solo" ref={slot}>
+          <CardFace
+            card={step === null ? card : asAt(step)}
+            snapshot={snapshot}
+            mode={step === null ? 'live' : 'example'}
+            face={step?.face ?? endFace}
+            stamp={step === null ? card.stage === 'live' : step.key === 'shipped'}
+            reason={step === null ? reason : undefined}
+            watch={false}
+          />
+        </ul>
+        {canPlay ? (
+          <>
+            <ul className="card-sizer" aria-hidden="true" inert>
+              <CardFace card={card} snapshot={snapshot} face={endFace} stamp={card.stage === 'live'} reason={reason} watch={false} ghost />
+            </ul>
+            {steps.map((s) => (
+              <ul key={s.key} className="card-sizer" aria-hidden="true" inert>
+                <CardFace card={asAt(s)} snapshot={snapshot} mode="example" face={s.face} stamp={s.key === 'shipped'} watch={false} ghost />
+              </ul>
+            ))}
+          </>
+        ) : null}
+      </div>
       {canPlay ? (
         <p className="replay-actions">
           <button

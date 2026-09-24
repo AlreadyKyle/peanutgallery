@@ -66,9 +66,12 @@ export function auditLayout(limits) {
   const rectOf = (r) => ({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
 
   // What each element draws: its own box when it paints (a fill, an edge or a replaced element),
-  // its text, and what its children draw. Leaves are kept too, for the hollow check.
+  // its text, and what its children draw. Leaves are kept too, for the hollow check. A closed
+  // <details> draws only its summary: the browser still reports boxes for the text it hides, and
+  // counting them would pad a column with space nobody sees.
   const extent = new Map();
   const leaves = [];
+  const closed = (el) => el.tagName === 'DETAILS' && !el.open;
   const walk = (el) => {
     if (hidden(el)) {
       extent.set(el, null);
@@ -83,6 +86,7 @@ export function auditLayout(limits) {
     }
     if (!REPLACED.has(el.tagName)) {
       for (const child of el.childNodes) {
+        if (closed(el) && child.nodeName !== 'SUMMARY') continue;
         if (child.nodeType === Node.TEXT_NODE) {
           if (child.textContent.trim() === '') continue;
           const range = document.createRange();

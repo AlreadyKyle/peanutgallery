@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { DISCORD_INVITE } from './fixture-env';
-import { expect, test } from './fixtures';
+import { expect, mockStudio, test } from './fixtures';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
 // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md): the session leaves the
@@ -32,6 +32,25 @@ test('takes the session out of the address as soon as it is read, and asks about
   await page.reload();
   await expect(page.getByText('You are Supporter 12.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/thanks$/);
+});
+
+test('keeps the title where it first renders when the payment goes from recording to recorded', async ({ page }) => {
+  const studio = { ...SUPPORTER_STUDIO, thanks: { ...SUPPORTER_STUDIO.thanks } };
+  await mockStudio(page, studio);
+  await page.clock.install();
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const session = `cs_test_recordsLater${width}0000`;
+    await page.goto(`/thanks?session=${session}`);
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveText('Recording your payment…');
+    const pending = await heading.boundingBox();
+    studio.thanks[session] = SUPPORTER_STUDIO.thanks![SESSIONS.recorded]!;
+    await page.clock.runFor(5_000);
+    await expect(heading).toHaveText('Thank you');
+    const recorded = await heading.boundingBox();
+    expect(Math.round(recorded!.y), `${width}px`).toBe(Math.round(pending!.y));
+  }
 });
 
 test('drops a malformed session from the address and asks nothing', async ({ page }) => {

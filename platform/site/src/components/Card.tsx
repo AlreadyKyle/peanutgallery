@@ -65,13 +65,18 @@ export type CardFaceProps = {
    * (docs/specs/supporter-pages.md). The card's own page draws its face with this off.
    */
   watch?: boolean;
+  /**
+   * A hidden copy that only holds a slot's height (Replay.tsx): its title carries no id, so the id the
+   * visible face's links point at stays unique.
+   */
+  ghost?: boolean;
 };
 
 /**
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
@@ -83,7 +88,7 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         <SuitTag suit={categoryOf(card)} />
         <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
-      <h3 id={titleId} tabIndex={focusable ? -1 : undefined}>
+      <h3 id={ghost ? undefined : titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}
       </h3>
       {blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>}

@@ -9,6 +9,7 @@ import {
   inCategory,
   inFundingOrder,
   isFullyFunded,
+  isPlanned,
   isRunnable,
   nextInLine,
   plannedCards,
@@ -167,6 +168,20 @@ describe('faceOf', () => {
     expect(faceOf(card({ stage: 'designing' }))).toBe('open');
     expect(faceOf(card({ stage: 'proposed' }))).toBe('open');
     expect(faceOf(card({ stage: 'anything-else' }))).toBe('open');
+  });
+});
+
+describe('isPlanned', () => {
+  it('is a next or later card not yet started, which faceOf alone would call open', () => {
+    for (const horizon of ['next', 'later'] as const) {
+      expect(isPlanned(card({ horizon, stage: 'proposed' }))).toBe(true);
+      expect(isPlanned(card({ horizon, stage: 'voted' }))).toBe(true);
+      expect(isPlanned(card({ horizon, stage: 'proposed', opens_at: '2026-09-24T18:00:00Z' }))).toBe(true);
+      expect(isPlanned(card({ horizon, stage: 'live' }))).toBe(false);
+      expect(isPlanned(card({ horizon, stage: 'building' }))).toBe(false);
+    }
+    expect(isPlanned(card({ horizon: 'now', stage: 'proposed' }))).toBe(false);
+    expect(isPlanned(card({ horizon: 'now', stage: 'voted' }))).toBe(false);
   });
 });
 

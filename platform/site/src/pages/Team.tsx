@@ -37,16 +37,29 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
       <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      {status.kind === 'paused' ? (
-        <p className="row-meta">
-          <span className="tag" data-state="paused">
-            <Glyph name="pause" />
-            {team.statusPaused}
-          </span>
-        </p>
-      ) : null}
-      {onTheTeam(status) ? <p className="card-meta">{roleFacts(role, snapshot)}</p> : null}
-      {why === null ? null : <p className="muted agent-status">{why}</p>}
+      {/* The row's foot is pinned to its bottom, so it lines up across a row: on a running or paused
+          row the Paused tag and the facts (a role's own reason sits above them), on any other row
+          when it starts. */}
+      {onTheTeam(status) ? (
+        <>
+          {why === null ? null : <p className="muted agent-status">{why}</p>}
+          <div className="agent-foot">
+            {status.kind === 'paused' ? (
+              <p className="row-meta">
+                <span className="tag" data-state="paused">
+                  <Glyph name="pause" />
+                  {team.statusPaused}
+                </span>
+              </p>
+            ) : null}
+            <p className="card-meta">{roleFacts(role, snapshot)}</p>
+          </div>
+        </>
+      ) : why === null ? null : (
+        <div className="agent-foot">
+          <p className="muted agent-status">{why}</p>
+        </div>
+      )}
     </li>
   );
 }

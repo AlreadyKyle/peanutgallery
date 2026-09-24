@@ -264,6 +264,18 @@ main > .band:first-child {
   justify-content: flex-end;
 }
 
+/* A page whose body arrives after first paint (/card/:id, /thanks) keeps its title where it first
+   renders: the signal plate never grows, and the last band takes the height left over instead. A
+   plate that filled a short window while the body loaded would pin the title to its foot, then
+   collapse and throw the title up the page when the body came. */
+main.title-stays > .band:first-child {
+  flex-grow: 0;
+}
+
+main.title-stays > .band:last-child {
+  flex-grow: 1;
+}
+
 /* A page that is not wide keeps each band's blocks to the reading measure. */
 main:not(.wide) > .band > * {
   max-width: var(--measure);
@@ -1232,10 +1244,19 @@ button.link:hover:not(:disabled) {
   margin: 0 var(--space-2) var(--space-1) 0;
 }
 
-/* The facts line sits at the bottom of each row, so the lines align across a row of agents. */
-.agent .card-meta {
+/* The Paused tag and the facts line sit together at the bottom of each row (.agent-foot), so the tags
+   and the lines align across a row of agents. */
+.agent-foot {
   margin-top: auto;
   padding-top: var(--space-1);
+}
+
+.agent-foot > * {
+  margin: 0;
+}
+
+.agent-foot > * + * {
+  margin-top: var(--space-1);
 }
 
 .agent .avatar {
@@ -1841,8 +1862,7 @@ input[type='radio'] {
 
 /* Supporter pages (docs/specs/supporter-pages.md) ------------------------------------------- */
 
-/* A card's own page: the face with Play beside the facts from 48rem, stacked on a phone. The face
-   keeps a card's width; the facts take the rest of the row. */
+/* A card's own page: one column at the reading measure at every width, the face first. */
 .back {
   margin: 0 0 var(--space-2);
 }
@@ -1851,23 +1871,36 @@ input[type='radio'] {
   margin-right: 0.375rem;
 }
 
-.card-page {
+/* The face's slot (Replay.tsx): the face and a hidden copy of every face Play can show share one
+   grid cell, so the cell is as tall as the tallest and the face stretches to it (its bottom block
+   pinned, as in a card row). Same slot and height: nothing under the card moves during Play. */
+.card-slot {
   display: grid;
-  gap: var(--space-4);
 }
 
-.card-solo {
+.card-slot > * {
+  grid-area: 1 / 1;
+  display: grid;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.card-sizer {
+  visibility: hidden;
 }
 
 .replay-actions {
   margin: var(--space-2) 0 0;
 }
 
-.card-page-facts > .section + .section {
-  margin-top: var(--space-4);
+/* A planned card's roadmap state, in the face's place. */
+.card-planned > * {
+  margin: 0;
+}
+
+.card-planned > * + * {
+  margin-top: var(--space-1);
 }
 
 /* The facts: the spec rows' look at body size, label muted, value ink, tabular, hairline rules. */
@@ -1910,15 +1943,20 @@ input[type='radio'] {
   overflow-wrap: anywhere;
 }
 
-/* Supporters: numbers in a wrapping run, hairlines between, no tiles. */
+/* Supporters: the numbers in newspaper columns, filled down then across in number order, so the names
+   line up in columns at every width instead of a ragged run. No tiles. */
 .supporters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  columns: 12rem;
+  column-gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
   font-variant-numeric: tabular-nums;
+}
+
+.supporters > li {
+  break-inside: avoid;
+  padding-block: 0.125rem;
 }
 
 .supporters-more {
@@ -1957,13 +1995,4 @@ ol.timeline {
 .reached .funding-bar {
   margin-top: var(--space-1);
   max-width: 20rem;
-}
-
-/* Side by side only where the facts column is wide enough to stay near the face's height; stacked on
-   a tablet, where the face beside a narrow facts column would leave a hollow under it. */
-@media (min-width: 64rem) {
-  .card-page {
-    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
-    align-items: start;
-  }
 }

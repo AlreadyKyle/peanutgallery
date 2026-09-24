@@ -34,6 +34,42 @@ test.describe('while the studio is paused', () => {
   });
 });
 
+test.describe('the rows of each section', () => {
+  test.use({ studio: SUPPORTER_STUDIO });
+
+  test('end their feet together and line up their Paused tags across each row', async ({ page }) => {
+    for (const width of [768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/team');
+      await expect(page.locator('li.agent').first()).toBeVisible();
+      // Rows of agents side by side, grouped by where each starts; within a row, each foot line's top.
+      const misaligned = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const grid of document.querySelectorAll('.team-grid')) {
+          const rows = new Map<number, Element[]>();
+          for (const agent of grid.querySelectorAll(':scope > li.agent')) {
+            const top = Math.round(agent.getBoundingClientRect().top);
+            rows.set(top, [...(rows.get(top) ?? []), agent]);
+          }
+          for (const agents of rows.values()) {
+            if (agents.length < 2) continue;
+            // Each agent's last line ends at the row's foot, and the Paused tags start on one line.
+            for (const [part, edge] of [
+              [':scope > :last-child', 'bottom'],
+              ['.tag[data-state="paused"]', 'top'],
+            ] as const) {
+              const at = agents.map((agent) => agent.querySelector(part)).filter((el) => el !== null).map((el) => Math.round(el!.getBoundingClientRect()[edge]));
+              if (at.length > 1 && Math.max(...at) - Math.min(...at) > 1) out.push(`${part} ${edge}: ${at.join(', ')}`);
+            }
+          }
+        }
+        return out;
+      });
+      expect(misaligned, `${width}px`).toEqual([]);
+    }
+  });
+});
+
 test.describe('with one role paused by the board', () => {
   const reason = 'Paused while its checks are rewritten.';
   test.use({

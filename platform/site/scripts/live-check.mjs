@@ -639,8 +639,15 @@ try {
       check(malformed.status === 400 && (malformed.headers.get('cache-control') ?? '') === 'no-store', `/api/card/not-a-card ${malformed.status} Cache-Control ${malformed.headers.get('cache-control')}`);
       const thanks = await fetch(`${BASE}/api/thanks`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: 'cs_test_invalid0000000000' }) });
       const thanksBody = await thanks.text();
+      // Compared as JSON, not as text: the value is what the page reads, whatever spacing carries it.
+      let thanksAnswer = null;
+      try {
+        thanksAnswer = JSON.stringify(JSON.parse(thanksBody));
+      } catch {
+        thanksAnswer = null;
+      }
       check(
-        thanks.status === 200 && thanksBody === '{"status":"pending"}' && (thanks.headers.get('cache-control') ?? '') === 'no-store',
+        thanks.status === 200 && thanksAnswer === '{"status":"pending"}' && (thanks.headers.get('cache-control') ?? '') === 'no-store',
         `/api/thanks with a made-up session ${thanks.status} ${thanksBody} Cache-Control ${thanks.headers.get('cache-control')}`,
       );
     }

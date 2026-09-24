@@ -98,3 +98,26 @@ test('finds each planted gap', async ({ page }) => {
     expect(findings.some((line) => line.startsWith(kind)), `${kind} in ${JSON.stringify(findings)}`).toBe(true);
   }
 });
+
+// A closed <details> draws only its summary: the text it hides neither pads a short column (so a real
+// gap beside it is still found) nor makes a balanced pair look unbalanced.
+test('counts a closed disclosure as its summary only', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const hidden = 'Words the disclosure keeps closed. '.repeat(120);
+  await page.setContent(`<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
+    <main>
+      <div id="gap" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+        <div><p>A short column.</p><details><summary>What the agents are told</summary><p>${hidden}</p></details></div>
+        <div><p style="height:600px;margin:0;border:1px solid #111">A tall column.</p></div>
+      </div>
+      <div id="even" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+        <div><p>A column.</p><details><summary>What the agents are told</summary><p>${hidden}</p></details></div>
+        <div><p>A column.</p><p>Its second line.</p></div>
+      </div>
+    </main>
+  </body></html>`);
+  const findings = await page.evaluate(auditLayout, LIMITS);
+  const balance = findings.filter((line) => line.startsWith('balance:'));
+  expect(balance, JSON.stringify(findings)).toHaveLength(1);
+  expect(balance[0]).toContain('div#gap');
+});

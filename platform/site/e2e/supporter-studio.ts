@@ -22,6 +22,10 @@ export const REJECTED_CARD_ID = String(LIVE_STUDIO.stopped![1]!.card_id);
 export const PAUSED_CARD_ID = String(LIVE_STUDIO.stopped![0]!.card_id);
 /** An open card with no supporters. */
 export const OPEN_CARD_ID = String(LIVE_STUDIO.cards[1]!.id);
+/** A live card with no config checks, so no What changed: the launch studio's newest ship. */
+export const PLAIN_LIVE_ID = String(LIVE_STUDIO.cards.filter((card) => card.stage === 'live').at(-1)!.id);
+/** A card on the roadmap's Later, with no target: planned, not open. */
+export const PLANNED_CARD_ID = String(LIVE_STUDIO.cards.find((card) => card.horizon === 'later')!.id);
 export const LIVE_TITLE = 'The Gatherer is now the Sweeper';
 export const COMMIT = '4f2a9c1e7b3d5a8c0e6f1b2d4a7c9e0f3b5d8a1c';
 export const VETO_REASON = 'It overlaps the card being built now.';
@@ -213,8 +217,14 @@ export const SUPPORTER_STUDIO: StudioFixture = {
 /** The supporter pages, each with the fixture state it draws, for the design, layout and screenshot runs. */
 export const SUPPORTER_ROUTES: [string, string][] = [
   ['card-live', `/card/${LIVE_CARD_ID}`],
+  ['card-live-plain', `/card/${PLAIN_LIVE_ID}`],
+  ['card-open', `/card/${OPEN_CARD_ID}`],
   ['card-building', `/card/${BUILDING_CARD_ID}`],
   ['card-rejected', `/card/${REJECTED_CARD_ID}`],
+  ['card-planned', `/card/${PLANNED_CARD_ID}`],
+  ['card-opens-soon', `/card/${OPENS_SOON_ID}`],
+  // Before any session is stored in this tab: /thanks keeps the last one in sessionStorage.
+  ['thanks-none', '/thanks'],
   ['thanks-recorded', `/thanks?session=${SESSIONS.recorded}`],
   ['thanks-pending', `/thanks?session=${SESSIONS.pending}`],
   ['thanks-not-counted', `/thanks?session=${SESSIONS.notCounted}`],

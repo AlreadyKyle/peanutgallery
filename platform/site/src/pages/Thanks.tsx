@@ -140,6 +140,8 @@ function supporterLine(answer: Recorded): string | undefined {
   return (answer.supporter.founding ? words.youAreFounding : words.youAre).replace('{n}', formatInteger(answer.supporter.number));
 }
 
+// Every state keeps the signal plate to its title (main.title-stays, styles.css): the page starts
+// pending and grows when the answer comes, so a plate that filled the window would move the title.
 export function Thanks() {
   const studio = useStudio();
   const state = useThanks();
@@ -147,7 +149,7 @@ export function Thanks() {
 
   if (state.kind === 'pending') {
     return (
-      <main>
+      <main className="title-stays">
         <div className="band">
           <PageHeader title={words.recordingTitle} lede={words.recordingLede} />
         </div>
@@ -161,7 +163,7 @@ export function Thanks() {
   }
   if (state.kind === 'recorded') {
     return (
-      <main>
+      <main className="title-stays">
         <div className="band">
           <PageHeader title={words.title} lede={supporterLine(state.answer)}>
             <PausedNotice studio={studio} />
@@ -175,7 +177,7 @@ export function Thanks() {
   }
   // No session, the board's own test payment, or not recorded after three minutes: a plain thank-you.
   return (
-    <main>
+    <main className="title-stays">
       <div className="band">
         <PageHeader title={words.title} lede={state.kind === 'fallback' ? words.fallback : words.plainLede} />
       </div>

@@ -123,6 +123,17 @@ describe('POST /api/thanks', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("answers PostgREST's jsonb text, with its spaces, as exactly {\"status\":\"pending\"}", async () => {
+    // PostgREST prints a jsonb result as jsonb's text form, a space after each colon and comma; the
+    // answer live-check compares, and every other, is the compact form.
+    stubFetch(ok('{"status": "pending"}'));
+    const response = await post(JSON.stringify({ session: SESSION }));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('{"status":"pending"}');
+    stubFetch(ok('{"card": {"id": "00000000-0000-4000-8000-000000000004"}, "supporters": []}'));
+    expect(await (await request(`/api/card/${CARD_ID}`)).text()).toBe(CARD_BODY);
+  });
+
   it('answers 502 no-store when Supabase fails', async () => {
     stubFetch(() => Promise.resolve(new Response('{"message":"boom"}', { status: 500 })));
     const response = await post(JSON.stringify({ session: SESSION }));
