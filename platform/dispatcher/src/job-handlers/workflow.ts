@@ -86,6 +86,9 @@ export function sessionDeps(context: JobContext, workflow: WorkflowDeps): RoleSe
   return {
     db: context.db,
     adapter: workflow.roleAdapter,
+    // Bash (the folder's package scripts) only in an attended process: the unattended host runs no
+    // agent-written code (PLAN §6, decision 25).
+    scripts: context.mode === 'attended',
     typed: workflow.typed,
     priceTable: workflow.priceTable,
     maxTurns: workflow.sessionMaxTurns,

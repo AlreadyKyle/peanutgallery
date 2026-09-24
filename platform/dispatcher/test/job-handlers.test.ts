@@ -223,6 +223,16 @@ describe('draft_card', () => {
     for (const row of t.db.ledger) expect([row.billed_to, row.card_id]).toEqual(['founder', null]);
   });
 
+  it('gives the Game Designer no Bash in an unattended process, so no seed-1 code runs on the host, and still approves', async () => {
+    const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] }, 'draft_card');
+    const output = await draftCard({ ...t.context, mode: 'unattended' });
+    expect(t.sessions.map((s) => [s.kind, s.tools])).toEqual([
+      ['designer', ['Read', 'Glob', 'Grep']],
+      ['director', ['Read', 'Glob', 'Grep']],
+    ]);
+    expect(output).toMatchObject({ result: 'approved', card_id: 'card-from-draft-1' });
+  });
+
   it('starts a new round on revise, giving the Designer the codes, the note and its last draft, then approves', async () => {
     const second = { ...DRAFT, summary: 'Building a gatherer costs 11 dust.' };
     const t = setup({ designer: [JSON.stringify(DRAFT), JSON.stringify(second)], director: [verdict('revise', ['unclear_text'], 'Say it costs dust.'), verdict('approved', ['fits_pillars'])] }, 'draft_card');

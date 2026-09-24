@@ -368,9 +368,10 @@ function useBoardStudioState(client: SupabaseClient): StudioLoad {
   return { state, loadError, refresh };
 }
 
-// The roles that build cards, loaded once for the card and directive forms. Every other role, the
-// directors, the Host, Biz Dev and the Community agent among them, has no job that runs yet, so none
-// is offered (lib/board.ts CARD_ROLE_FOLDERS).
+// The roles that build cards, loaded once for the card and directive forms. No other role builds a
+// card, so none is offered (lib/board.ts CARD_ROLE_FOLDERS): the Studio Head, the Game Designer and
+// the Game Director run Rank now and Draft a game card, and the Host, Biz Dev and the Community agent
+// have no job that runs yet.
 function useCardRoles(client: SupabaseClient): { roles: Role[]; loadError: string } {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loadError, setLoadError] = useState('');

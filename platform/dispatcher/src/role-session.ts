@@ -4,6 +4,9 @@
 // - the session holds exactly its role spec's tools, which may only be Read, Glob, Grep and Bash
 //   (Bash as the folder's package scripts), never Write, Edit, a web tool, an MCP tool or a
 //   fallback model; the init line must show no other tool and no API key;
+// - in an unattended process it holds no Bash either: the seed's scripts are agent-written code, and
+//   no agent-written code runs on the unattended dispatcher's host (PLAN §6, decision 25), so there a
+//   role session reads with Read, Glob and Grep only, and nothing is installed for it;
 // - every turn is metered as card sessions are (metering.ts) and written billed to the founder with
 //   the role and no card, each row under its own request id, so a replayed write is recorded once;
 // - it stops when the board session lapses, the role is paused, the job is stopped, or it runs past
@@ -30,6 +33,9 @@ export interface RoleSessionDeps {
   db: Pick<Db, 'recordUsage' | 'boardSessionActive' | 'roleState'>;
   // The attended adapter, whatever mode the card sessions run in.
   adapter: AgentAdapter;
+  // Whether a session may run its folder's package scripts (Bash): true only when this process runs
+  // attended; the unattended host runs no agent-written code.
+  scripts: boolean;
   typed: TypedOutput;
   priceTable: PriceTable;
   maxTurns: number;
@@ -68,8 +74,13 @@ export function roleToolProblem(tools: readonly string[]): string | null {
   return null;
 }
 
+function isBash(tool: string): boolean {
+  return tool === 'Bash' || tool.startsWith('Bash(');
+}
+
 // The session spec: the role's own tools, Bash as seed-1's package scripts, in the scratch worktree.
-export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number): SessionSpec {
+// Without scripts (an unattended process) Bash is left out, whatever the role spec holds.
+export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number, scripts: boolean): SessionSpec {
   const model = request.role.model.trim();
   return {
     cardId: `job-${request.runId}`,
@@ -77,7 +88,7 @@ export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number): 
     prompt: request.prompt,
     systemPromptFile: rolePromptFile(request.role, request.worktree),
     model,
-    roleTools: roleTools(request.role),
+    roleTools: roleTools(request.role).filter((tool) => scripts || !isBash(tool)),
     folder: 'seed-1',
     maxTurns,
     maxBudgetUsd: round4(request.budgetUsd),
@@ -85,9 +96,9 @@ export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number): 
   };
 }
 
-// Why an init line refuses the session, or null.
-function startRefusal(event: Extract<AgentEvent, { type: 'start' }>): string | null {
-  const refused = [...refusedTools(event.tools), ...event.tools.filter((tool) => NEVER_TOOLS.includes(tool))];
+// Why an init line refuses the session, or null. Without scripts, Bash is refused too.
+function startRefusal(event: Extract<AgentEvent, { type: 'start' }>, scripts: boolean): string | null {
+  const refused = [...refusedTools(event.tools), ...event.tools.filter((tool) => NEVER_TOOLS.includes(tool) || (!scripts && isBash(tool)))];
   if (refused.length > 0) return `session exposes tools a role job may not hold: ${refused.join(', ')}`;
   if (event.apiKeySource === API_KEY_SOURCE) return 'session bills an API key; a role job runs on the founder plan';
   return null;
@@ -103,7 +114,7 @@ export async function runRoleSession<T>(request: RoleSessionRequest, deps: RoleS
   if (!role.model.trim()) return fail(`role ${role.name} has no model`);
   if (!modelPrice(deps.priceTable, role.model.trim())) return fail(`no price for model ${role.model}`);
   if (!(request.budgetUsd > 0)) return fail('the session budget must be above zero');
-  const spec = roleSessionSpec(request, deps.maxTurns);
+  const spec = roleSessionSpec(request, deps.maxTurns, deps.scripts);
   try {
     await deps.adapter.preflight(spec);
   } catch (error) {
@@ -148,7 +159,7 @@ export async function runRoleSession<T>(request: RoleSessionRequest, deps: RoleS
     switch (event.type) {
       case 'start': {
         if (event.sessionId) ref = `claude:${event.sessionId}`;
-        const refusal = startRefusal(event);
+        const refusal = startRefusal(event, deps.scripts);
         if (refusal) abort(refusal);
         return;
       }

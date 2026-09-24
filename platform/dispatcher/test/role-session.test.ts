@@ -34,6 +34,7 @@ function setup(script: FakeScript, options: FakeOptions = {}) {
   const deps: RoleSessionDeps = {
     db,
     adapter,
+    scripts: true,
     typed,
     priceTable: PRICE_TABLE,
     maxTurns: 20,
@@ -56,7 +57,7 @@ const oneTurn: FakeScript = async (_spec, emit) => {
 describe('the role session spec', () => {
   it('holds exactly the role spec tools, with Bash as seed-1 package scripts, and no argument names Write, Edit, a web tool, an MCP tool or a fallback model', () => {
     for (const r of [director, designer]) {
-      const spec = roleSessionSpec(request({ role: r }), 20);
+      const spec = roleSessionSpec(request({ role: r }), 20, true);
       expect(spec.roleTools).toEqual(r.tools_json);
       const args = claudeArgs(spec, 'role prompt');
       expect(args).not.toContain('--fallback-model');
@@ -76,6 +77,35 @@ describe('the role session spec', () => {
       }
       expect(args[args.indexOf('--mcp-config') + 1]).toBe('{"mcpServers":{}}');
     }
+  });
+
+  // PLAN §6 and decision 25: no agent-written code runs on the unattended dispatcher's host, and the
+  // seed's package scripts are agent-written code.
+  it('in an unattended process holds no Bash, so the seed scripts never run on the host and nothing is installed', async () => {
+    const spec = roleSessionSpec(request({ role: designer }), 20, false);
+    expect(spec.roleTools).toEqual(READ_SET);
+    const args = claudeArgs(spec, 'role prompt');
+    expect(args[args.indexOf('--tools') + 1]!.split(',')).toEqual(READ_SET);
+    const allowed = args.slice(args.indexOf('--allowedTools') + 1, args.indexOf('--disallowedTools'));
+    expect(allowed.filter((rule) => rule.startsWith('Bash'))).toEqual([]);
+    for (const tools of [['Read', 'Bash'], ['Read', 'Bash(pnpm --filter @backseat/seed-1 test:*)']]) {
+      expect(roleSessionSpec(request({ role: { ...designer, tools_json: tools } }), 20, false).roleTools).toEqual(['Read']);
+    }
+    // The Designer's session in an unattended process starts with Read, Glob and Grep only.
+    const t = setup(async (s, emit) => {
+      await emit({ type: 'start', sessionId: 'designer-session', model: 'director-class', tools: s.roleTools, apiKeySource: 'none' });
+      await emit(usageEvent(1, 400, 'director-class'));
+    });
+    const result = await runRoleSession(request({ role: designer }), { ...t.deps, scripts: false });
+    expect(result.ok).toBe(true);
+    expect(t.adapter.specs.map((s) => s.roleTools)).toEqual([READ_SET]);
+    // An init line that still shows Bash stops the session.
+    const shown = setup(async (_s, emit, signal) => {
+      await emit({ type: 'start', sessionId: 'designer-session', model: 'director-class', tools: DESIGNER_TOOLS, apiKeySource: 'none' });
+      await untilAborted(signal, 2000);
+    });
+    const stopped = await runRoleSession(request({ role: designer }), { ...shown.deps, scripts: false });
+    expect(stopped).toMatchObject({ ok: false, reason: 'session exposes tools a role job may not hold: Bash' });
   });
 
   it('refuses a role that holds Write, Edit, a web tool or an MCP tool, before any session starts', async () => {

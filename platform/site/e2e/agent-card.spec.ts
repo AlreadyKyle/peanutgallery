@@ -92,3 +92,49 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 1440, height: 100
     await screenshot(page, 'home-agent-card-row', viewport.width);
   });
 }
+
+// The space from a card's text to its bottom block, per card on the page's card grids: from the
+// summary on a card no agent wrote, from the byline on one an agent wrote. Side by side a summary
+// fills its track, so a card with no byline measures exactly the phone rhythm (the summary's 16px
+// margin); a fifth, empty track for the byline once put a 24px grid gap above every bar.
+async function textToBottom(page: Page): Promise<{ byline: boolean; gap: number }[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.card-grid > li.card')].flatMap((card) => {
+      const text = card.querySelector('.card-byline') ?? card.querySelector('.card-summary');
+      const bottom = card.querySelector('.card-bottom');
+      // A card behind the phone's Show all is not drawn.
+      if (!text || !bottom || card.getBoundingClientRect().height === 0) return [];
+      return [{ byline: text.classList.contains('card-byline'), gap: bottom.getBoundingClientRect().top - text.getBoundingClientRect().bottom }];
+    }),
+  );
+}
+
+for (const viewport of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
+  test(`at ${viewport.width}px a card with no byline keeps 16px from its summary to its bottom block, and the byline keeps at least that`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.locator('.card-byline')).toHaveCount(1);
+    const gaps = await textToBottom(page);
+    expect(gaps.filter((g) => !g.byline).length).toBeGreaterThanOrEqual(2);
+    for (const { byline, gap } of gaps) {
+      if (byline) expect(gap).toBeGreaterThanOrEqual(15);
+      else expect(Math.abs(gap - 16), `summary to bottom block ${gap}px`).toBeLessThanOrEqual(1);
+    }
+  });
+}
+
+test.describe('with no card an agent wrote, as on the live studio today', () => {
+  test.use({ studio: DEFAULT_STUDIO });
+
+  for (const viewport of [{ width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
+    test(`at ${viewport.width}px every card keeps 16px from its summary to its bottom block`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.locator('.card-grid > li.card').first()).toBeVisible();
+      await expect(page.locator('.card-byline')).toHaveCount(0);
+      const gaps = await textToBottom(page);
+      expect(gaps.length).toBeGreaterThan(0);
+      for (const { gap } of gaps) expect(Math.abs(gap - 16), `summary to bottom block ${gap}px`).toBeLessThanOrEqual(1);
+    });
+  }
+});

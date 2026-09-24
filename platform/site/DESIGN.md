@@ -136,7 +136,7 @@ Every public page is a stack of full-bleed bands:
 | Home, no team roles loaded | signal · paper · **ink** (Shipped, Planned next) · **paper** (Where the money goes) · **ink** footer |
 | `/contribute` | signal (intro, paused notice) · paper (Fund the next card in line, the choices, the split, the USD note) · ink footer |
 | `/how-it-works` | signal (intro, paused notice) · paper (the six steps, each over its example) · ink (Where the money goes, Holds and refunds, Rules that never change) · paper footer |
-| `/team` | signal · paper (Running, then Not running yet) · ink footer |
+| `/team` | signal · paper (Running, then Not building cards) · ink footer |
 | `/roadmap` | signal · paper (Next) · ink (Later) · paper footer |
 | `/ledger` | signal · paper (Funding) · ink (Money in) · paper (Stopped cards, only while there are any) · then Agent work and Deploys by position, ink and paper in turn · the footer on the ground after the last band |
 | Terms, Privacy, Refunds, Contact | signal (title, lede) · paper (the text and its last-changed line) · ink footer |

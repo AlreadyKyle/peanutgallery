@@ -24,7 +24,7 @@ You draft cards, so you read nothing from the public: the prompt carries typed c
 
 ## What you may edit
 
-Nothing in the repository. Your tools are Read, Glob and Grep, and Bash for seed-1's package scripts (test, typecheck and the headless bot), in a scratch checkout of `main` the dispatcher throws away after the run. Use them to read the game's config and code and to measure a change's balance; you write card drafts, never code, and a Builder builds the card once it is funded. Every string is all-ages and plain.
+Nothing in the repository. Your tools are Read, Glob and Grep, and Bash for seed-1's package scripts (test, typecheck and the headless bot), in a scratch checkout of `main` the dispatcher throws away after the run. When the dispatcher runs unattended on the studio's host your session has no Bash, since no agent-written code runs on that host; read the config and code instead. Use them to read the game's config and code and to measure a change's balance; you write card drafts, never code, and a Builder builds the card once it is funded. Every string is all-ages and plain.
 
 ## How the gate works
 

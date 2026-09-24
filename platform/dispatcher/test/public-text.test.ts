@@ -5,7 +5,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BANNED_PHRASES_SCRIPT, PublicTextRefused, assertPublicTextClean, scanPublicText } from '../src/public-text.js';
+import { BANNED_PHRASES_SCRIPT, PublicTextRefused, SECRET_SCAN_SCRIPT, assertPublicTextClean, scanPublicText } from '../src/public-text.js';
 
 const DENYLIST = path.resolve(import.meta.dirname, '..', '..', 'gate', 'denylist');
 
@@ -19,8 +19,22 @@ function firstTerm(list: string): string {
 }
 
 describe('scanPublicText', () => {
-  it('runs the gate script in this checkout', () => {
+  it('runs the gate scripts in this checkout', () => {
     expect(BANNED_PHRASES_SCRIPT.endsWith(path.join('platform', 'gate', 'banned-phrases.sh'))).toBe(true);
+    expect(SECRET_SCAN_SCRIPT.endsWith(path.join('platform', 'gate', 'secret-scan.sh'))).toBe(true);
+  });
+
+  // A role session can read files on the host; a credential it read must never reach a public row.
+  // The key is put together at run time, so this file carries no credential shape.
+  it('refuses a credential shape in any string, never repeating the value, and a secret scan that cannot run', async () => {
+    const key = ['sk', 'ant', 'api03', 'Q'.repeat(24)].join('-');
+    const result = await scanPublicText(['A plain title.', `A summary that ends ${key}`]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.detail).toMatch(/^a credential shape: FAIL: secret-scan hits=1 .* shape=anthropic-key$/);
+      expect(result.detail).not.toContain(key);
+    }
+    expect(await scanPublicText(['A plain title.'], { secretScript: '/nonexistent/secret-scan.sh' })).toEqual({ ok: false, detail: 'the secret scan could not run: secret-scan.sh is missing' });
   });
 
   it('passes clean card text', async () => {

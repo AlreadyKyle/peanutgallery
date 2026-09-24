@@ -827,16 +827,17 @@ button.link:hover:not(:disabled) {
   margin-top: auto;
 }
 
-/* From 48rem, where cards sit side by side, each card shares its row's five tracks (CSS subgrid):
-   the index, the title, the summary, the byline of a card an agent wrote and the bottom block line
-   up across the row, and a shorter card's spare space splits under its title and its summary
-   instead of pooling above the funding bar as one hollow (DESIGN.md, No dead space). The parts are
-   placed by row, so a card with no summary keeps its bottom block in line, and the byline never
-   lands on the bottom block; on a row with no agent card its track is empty and takes no height. */
+/* From 48rem, where cards sit side by side, each card shares its row's four tracks (CSS subgrid):
+   the index, the title, the summary and the bottom block line up across the row, and a shorter
+   card's spare space splits under its title and its summary instead of pooling above the funding
+   bar as one hollow (DESIGN.md, No dead space). The parts are placed by row, so a card with no
+   summary keeps its bottom block in line. A card an agent wrote holds its summary and byline in one
+   block (.card-text) on the summary's track, so the byline never lands on the bottom block and no
+   card gains a track: an empty track would still add one grid gap above every bar. */
 @media (min-width: 48rem) {
   .card-grid > .card {
     display: grid;
-    grid-row: span 5;
+    grid-row: span 4;
     grid-template-rows: subgrid;
     row-gap: 0;
   }
@@ -849,16 +850,13 @@ button.link:hover:not(:disabled) {
     grid-row: 2;
   }
 
-  .card-grid > .card > .card-summary {
+  .card-grid > .card > .card-summary,
+  .card-grid > .card > .card-text {
     grid-row: 3;
   }
 
-  .card-grid > .card > .card-byline {
-    grid-row: 4;
-  }
-
   .card-grid > .card > .card-bottom {
-    grid-row: 5;
+    grid-row: 4;
     margin-top: 0;
   }
 }
@@ -883,7 +881,7 @@ button.link:hover:not(:disabled) {
   margin-bottom: var(--space-1);
 }
 
-.card > .card-byline {
+.card-text > .card-byline {
   margin: 0 0 var(--space-2);
 }
 

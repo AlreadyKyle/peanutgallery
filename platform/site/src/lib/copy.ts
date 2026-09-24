@@ -102,8 +102,10 @@ export const copy = {
     aiAgent: 'AI agent',
     running: 'Running',
     runningIntro: 'These agents build the cards that supporters fund.',
-    notRunning: 'Not running yet',
-    notRunningIntro: 'These roles have no job that runs yet. Their work is on the roadmap.',
+    notRunning: 'Not building cards',
+    // True of every role under it: the Studio Head ranks, the Game Designer drafts and the Game
+    // Director grades when the board asks (docs/specs/agent-workflows.md); the rest have no job yet.
+    notRunningIntro: 'These roles build no cards. Some rank, draft or grade cards when the board asks; the others have no job yet, and their work is on the roadmap.',
     roadmapLink: 'See the roadmap',
     // Home's team strip shows three agents; this link goes to the rest on /team.
     meetAll: 'Meet the whole team',

@@ -496,7 +496,7 @@ try {
     // At least one role runs and every role that runs shows claude-opus-5-5 (PLAN.md §10 decision
     // 36; team-models.mjs); a role that does not run shows no model, since none runs it.
     const running = page.getByRole('region', { name: 'Running', exact: true });
-    const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
+    const waiting = page.getByRole('region', { name: 'Not building cards', exact: true });
     const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
     check(models.ok, models.message);
     const waitingModels = (await waiting.count()) === 0 ? 0 : await waiting.getByText(/\bclaude-/).count();

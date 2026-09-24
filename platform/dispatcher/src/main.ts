@@ -105,9 +105,11 @@ async function main(): Promise<void> {
   });
   const jobState: JobState = { running: null };
   // The role jobs run attended through claude -p on the founder's plan in either studio mode
-  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them.
+  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them. Its
+  // Read, Glob and Grep deny rules name the code clone too, whose .env holds the dispatcher's keys, and
+  // there its sessions hold no Bash (role-session.ts), since the host runs no agent-written code.
   const workflow: WorkflowDeps = {
-    roleAdapter: adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot }),
+    roleAdapter: adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot }),
     typed: new TypedOutput(),
     priceTable: config.priceTable,
     sessionMaxTurns: config.sessionMaxTurns,
