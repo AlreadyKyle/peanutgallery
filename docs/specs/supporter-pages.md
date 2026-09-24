@@ -147,7 +147,100 @@ Board items (listed, none blocks this pull request):
 
 ## Evidence
 
-Added when the status moves to built or done: money-logic's and agent-system-core's merged table and column names; the board-test SELECT; the measured budget lines.
+Built on `launch/supporter-pages`, stacked on `launch/site-snapshot` (#80) at 23aa1e1, which stacks on agent-workflows (#77) and agent-system-core (#73); none of them had merged. The production lines of Verification, the deploy-preview curls and production steps 1 to 8 are the ship stage's and are not run here, so the Production criterion waits on them. The migration is not applied to production.
+
+**The merged names this pull request reads.** money-logic: `contribution_allocations` (card_id, payment_id, amount_usd, reason, destination), `contributions` (id, contributor_id, stripe_session_id, requested_card_id, goal_card_id, hold_until, terms_version), `supporters` (number, contributor_id, founding), `board_test_payments`, `money.payment_counts(payment)`, `public_card_funding.contributors`, `public_stopped_cards`. agent-system-core: `card_is_public(card)`, the filtered `public_agent_events`, `roles.paused` and `paused_reason`, `cards.opens_at`, `board_vetoed` and `board_veto_reason`, the `dealt` and `held` message steps. site-snapshot: `site_live()`, `site_cards()`, `snapshot-keys.json`, `snapshot.mts`'s headers and `netlify/lib/public-env.ts`. The agent events' payload column is `payload_json`.
+
+**Production, read only (Management API SELECTs, 23 September 2026).** Production has money-logic and money-surfaces but not agent-system-core (no `card_is_public`, no `opens_at`). It holds 57 cards (6 live), 241 agent events of which 112 get a line key other than none (129 are tool results and free-form messages that never reach a public document), 16 roles, no supporter on any card (the board's test payment is the only payment), no stopped card, and the studio paused for `awaiting_credit`.
+
+`deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/supporter_pages_test.ts` (criteria 1 to 4):
+
+```
+event_line_key gives every row of the Event lines table in both tool namings, and public_agent_events appends line_key ...
+  tool calls as session.ts writes them (Claude Code) and as managed.ts writes them (Managed Agents) give the same key ... ok
+  message steps, the fallbacks, and every other type ... ok
+  the function is immutable and anon may execute it ... ok
+  public_agent_events keeps its columns in order, appends line_key, and exposes no payload ... ok
+  site_live()'s events never carry key none, and hold the newest 20 with a key ... ok
+supporter credits follow money.payment_counts, leave out the board's test payment and agree with the contributor counts ...
+  the board's test payment has no number, and the first other payer is Supporter 1 ... ok
+  each counted payer is listed on every card their money reached, with number and founding ... ok
+  a full refund after part of the money was spent removes the payer from the card ... ok
+  a lost full dispute removes the payer; a reinstatement restores them ... ok
+  a held payment is credited for the part that reached a card ... ok
+  for every card, public_card_funding.contributors equals its row count in public_card_supporters, and the board payer is on none ... ok
+  anon reads the view; the supporters table stays closed ... ok
+thanks_for_session answers exactly its keys in each state, as a security definer anon may execute ...
+  security definer, search_path public, anon and authenticated may execute, public may not ... ok
+  a malformed or unknown session is exactly pending ... ok
+  the board's test payment is exactly not_counted ... ok
+  a recorded payment: supporter, the named card, reached, credited, the terms version ... ok
+  reached names the card first, then the cards the rest went to, at most five ... ok
+  money beyond every card's room waits: waiting is true ... ok
+  a held payment says held with a New York date ... ok
+  a refunded payment is reversed and reaches no card ... ok
+  no answer carries an amount, an email, a contributor id or a payer key ... ok
+site_card returns a public card's document, and public_role_stats counts only studio-billed rows and live cards ...
+  site_card is stable, security invoker, anon's and not public's ... ok
+  an unknown id, and a card the public may not read, answer null ... ok
+  a live card: public columns, funding, cost, the first 24 supporters and their count, the newest 200 lines and their total, milestones ... ok
+  a building card has its start and no live time; a rejected card carries its public_stopped_cards row ... ok
+  public_role_stats sums only studio-billed rows and counts only live cards ... ok
+  both documents carry every key in snapshot-keys.json with its type; roles carry status, trigger and the pause ... ok
+  the migration applies a second time ... ok
+ok | 4 passed (28 steps) | 0 failed (3s)
+```
+
+`pnpm --filter @backseat/site exec vitest run netlify/card.test.ts --reporter=verbose` (criterion 5):
+
+```
+✓ GET /api/card/:id > answers a card id that is not a uuid 400, no-store, with no Supabase call
+✓ GET /api/card/:id > answers a query string 400 before any Supabase call, since the CDN would key on it
+✓ GET /api/card/:id > answers an unknown card 404 when site_card returns null
+✓ GET /api/card/:id > answers a known card 200 from site_card with the publishable key and the /api/live CDN header
+✓ GET /api/card/:id > answers 502 no-store when Supabase fails or times out
+✓ POST /api/thanks > passes a well-formed session to thanks_for_session and answers no-store on both cache headers
+✓ POST /api/thanks > answers a malformed session, a body that is not JSON and a body over 1 KB 400, no-store, with no Supabase call
+✓ POST /api/thanks > answers 502 no-store when Supabase fails
+✓ POST /api/thanks > takes the same session ids as /thanks does
+✓ methods, paths and the config > answers any other method 405, with no Supabase call
+✓ methods, paths and the config > answers a path it does not serve 404
+✓ methods, paths and the config > names its two paths, with no method, and sets the 60-a-minute rate limit per IP and domain
+✓ methods, paths and the config > reads no environment variable and holds no secret
+Tests  13 passed (13)
+```
+
+`E2E_PORT=4443 pnpm --filter @backseat/site exec playwright test` (criteria 6 to 10: `thanks.spec.ts`, `card.spec.ts`, `team-status.spec.ts`, the /team, landing and roadmap cases in `pages.spec.ts` and `landing.spec.ts`, and the supporter pages in `design.spec.ts` and `layout-balance.spec.ts` at 375, 768 and 1440 px):
+
+```
+Running 171 tests using 4 workers
+  5 skipped
+  166 passed (2.7m)
+```
+
+The five skipped are the screenshot tests, which run only with `E2E_ROUTE_SHOTS` or `E2E_SCREENSHOTS` set. `layout-balance.spec.ts`'s first run of the supporter pages failed at 768px ("side-by-side blocks in div.card-page … differ by 281px (360 / 641)"); the card page now stacks below 64rem and the three widths pass. platform/board did not change, so its e2e suite was not run.
+
+**Screens looked at, on production's data.** A local build served production's public rows (the SELECTs above, built into the two documents and each card's document by the e2e builders, since `site_card` is not in production yet) at 375 and 1440px: `/card/23b1883a-7844-407a-bd83-f42056d47602` (the newest live card, "Merged as the studio's commit fc55225", one config value under What changed, "No supporters yet.", its 56 events shown as 12 lines: 26 carry a line key, and runs collapse), the live card with the most steps, `/thanks` with no session, with `cs_test_invalid0000000000` (recording, query dropped) and with a made-up recorded answer on a real open card, and `/team` (seven running roles, all paused for `awaiting_credit`, eight in Starts later, the Host in Planned). The first pass found a card's steps list indented 40px past its heading (an `ol` kept the browser's list padding); the second pass shows it flush.
+
+`rm -rf platform/site/dist-e2e platform/board/dist-e2e && npm_config_workspace_concurrency=1 pnpm verify` at e3d400e exits 0, one package at a time because other agents were loading the machine:
+
+```
+platform/board test:       Tests  86 passed (86)
+platform/supabase test:       Tests  309 passed (309)
+platform/site test:       Tests  473 passed (473)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  677 passed (677)
+platform/gate test: PASS: gate tests passed=524
+ok | 120 passed (188 steps) | 0 failed (37s)
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=609
+VERIFY_EXIT 0
+```
+
+The run before it failed at the gate's runtime-token scan on `expect(soon)` in `team-status.spec.ts` (the pattern for a stand-in "(soon)"); the variable is renamed.
+
+Waiting on the ship stage: the board-test SELECT, the measured `/api/card` and `/api/thanks` budget lines, the deploy-preview curls, `anon-negative-test.ts` and `ledger-identity.ts` against production after the migration, and live-check against production after the deploy.
 
 ## Decisions
 
