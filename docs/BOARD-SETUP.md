@@ -35,10 +35,120 @@ they were done under.
 - **B. Needed before the announcement.** They don't block the build.
 - **C. The launch sequence.** Run in order once A and B are done.
 - **D. Open topics.** Nothing waits on them.
+- **Rename to Mob Machine.** Its own short list, just below. Nothing in A to D waits on it.
 
 Where something below is already done, it says so and points at **Done**. On 23 September 2026 the
 host moved from Oracle to your Mac (`docs/PLAN.md` §10 decision 38), so the Oracle account and its
 sign-in are gone from this list, and the backup key is part of the Mac's step.
+
+---
+
+## Rename to Mob Machine
+
+**Why.** You renamed the studio Mob Machine on 23 September 2026 (`docs/PLAN.md` §10 decision 43),
+with a new mark in place of the peanut: a small machine with two eyes, drawn in code
+(`docs/specs/machine-mark.md`). Once the rename pull request is merged and deployed, the site, the
+link preview, the icons, the game's tab, the agents and the alerts all say Mob Machine, and the
+Terms say it from version 3, which I post after the deploy. The steps below are the places only you
+can change. There is no new domain yet: the site stays at peanutgallery.games, so R1 to R4 are for
+now, R5 is registering one when you choose, and R6 follows it (`docs/specs/rename.md`).
+
+The icon file for Stripe and Discord is `platform/site/public/icon-512.png` in the repository, also
+at https://peanutgallery.games/icon-512.png once the rename is deployed: the white machine on black,
+512 by 512, with room around it for a round crop.
+
+### R1. Stripe (10 minutes, free), after the rename is deployed
+
+1. Stripe Dashboard → Settings (the gear, top right) → **Business** → **Public details**.
+   - **Public business name:** `Mob Machine`.
+   - **Statement descriptor:** `MOB MACHINE`. If a **Shortened descriptor** is set, `MOBMACHINE`.
+   - Save. Expected: the fields read back the new values; new card statements say MOB MACHINE.
+2. Settings → **Business** → **Branding**: **Icon** → upload `icon-512.png` → Save. Expected: the
+   preview of the checkout page shows the machine.
+3. **Product catalog** → the product the Payment Link sells → **Edit product**. If its name or
+   description still carries the old studio name, change it to Mob Machine and save. Expected:
+   opening the Payment Link (the Contribute button on the site) shows the new words at checkout.
+4. Leave the Payment Link's after-payment redirect as it is: it changes with the domain (R6).
+
+**Tell me:** "Stripe says Mob Machine."
+
+### R2. Discord (5 minutes, free)
+
+1. In the Discord app, click the server's name at the top left → **Server Settings** → **Server
+   Profile** (**Overview** in older versions).
+2. **Name:** `Mob Machine`. **Icon:** Change or Upload Image → `icon-512.png` → Apply.
+3. **Save Changes.** Expected: the server list shows the white machine, and the invite on the site
+   (the Discord link in the menu) still opens the server under its new name: an invite survives a
+   rename, so nothing in the repository changes.
+
+**Tell me:** "Discord is renamed."
+
+### R3. The hello@clayhouse.studio signature (2 minutes)
+
+In the mail app that sends as hello@clayhouse.studio, open the signature settings (in Gmail: the
+gear → **See all settings** → **General** → **Signature**) and change the old studio name to Mob
+Machine. The address itself stays (`docs/PLAN.md` §10 decision 37). Expected: a test mail to yourself ends
+with the new name.
+
+**Tell me:** "The signature says Mob Machine."
+
+### R4. The sign-in email's sender name (nothing to click now)
+
+The board's sign-in email comes from Supabase through Resend (step 2). When I connect it, the sender
+name is Mob Machine, not the old name the board-site spec was written with. The Site URL and the
+redirect list stay the board's own site's address, which has nothing to do with the public domain,
+so a new domain does not touch them. Expected: the next sign-in link you get says it is from Mob
+Machine. Your authenticator app keeps the old label on the second factor you already enrolled; that
+is only a label.
+
+**Tell me:** nothing, unless the sign-in email still shows the old name.
+
+### R5. Register the new domain (when you choose; not free)
+
+A domain costs money, so it is your call and your timing: from a payout's studio share, or an
+exception you name to decision 35. Nothing waits on it; the site works at peanutgallery.games.
+
+1. Register the domain at the registrar you use for peanutgallery.games (GoDaddy).
+2. Keep peanutgallery.games registered and on auto-renew: old links, shared previews, search results
+   and the address on the agents' commits keep reaching the studio.
+
+**Tell me:** "The domain is <name>." Then I open the domain's pull request: the script's domain
+pass, the 301 from peanutgallery.games to the new domain, the game's link, the preview image and the
+live check, with `pnpm verify` switched to checking the domain too.
+
+### R6. The domain on Netlify and Stripe (15 minutes, free), once I say its pull request is ready
+
+1. app.netlify.com → the site **peanutgallerygames** → **Domain management** → **Add a domain** →
+   type the new domain → **Verify** → **Add domain**. Add `www.` the same way.
+2. At the registrar, add the DNS records Netlify lists beside the new domain. Wait until Netlify
+   stops showing "Pending DNS verification".
+3. Beside the new domain: **Options** → **Set as primary domain**. Keep peanutgallery.games in the
+   list as an alias; the 301 needs it there.
+4. **HTTPS** → **Verify DNS configuration**, then wait for "Your site has HTTPS enabled".
+   Expected: https://<new domain> opens the site with a padlock.
+5. Stripe → Payment Links → the link → **After payment**: the redirect URL's
+   https://peanutgallery.games becomes https://<new domain>, the rest unchanged.
+
+**Tell me:** "The domain is live on Netlify." I then merge the domain's pull request and run the
+live check against the new address.
+
+### Handles
+
+When the Twitch channel in the backlog is made, take it under Mob Machine and tell me the handle, so
+it goes in the repository.
+
+### What I do after the merge, each with your allow
+
+Done on 23 September 2026, after the merge: Terms version 3 is posted and /terms shows
+"Version 3, in force since"; the one card whose public text still carried the old name is fixed,
+with a dump first; the Stripe webhook is redeployed with its new alert title; the live check passes.
+`docs/specs/rename.md` has the evidence.
+
+Still open: `managed:apply` for the agent's new description. It failed with "Your credit balance is
+too low to access the Anthropic API": the studio's Anthropic organisation has no credit yet, which
+is bought only from a payout (step 22). It runs after that, with its new version put in the Mac
+host's env file once the host is installed (step 3), and before the dispatcher next runs unattended.
+Nothing for you to do beyond steps 3 and 22.
 
 ---
 
@@ -65,7 +175,8 @@ Pause for an hour. Resend's free plan sends it instead.
 3. Create an SMTP key (an API key with sending access) and put it in `.env` at the repository root
    as `RESEND_SMTP_KEY=…`. Never paste it in chat.
 
-Then I point Supabase Auth's email at Resend (custom SMTP) with a sender on that subdomain, and send
+Then I point Supabase Auth's email at Resend (custom SMTP) with a sender on that subdomain named Mob
+Machine (**Rename to Mob Machine**, R4), and send
 you a sign-in link to check it arrives.
 
 **Unblocks:** the moderator's sign-in, and a Pause that can't be rate-limited.
@@ -158,14 +269,14 @@ For each one:
    Actions and Plan as read-only, add them by hand (+ Add permissions); an existing token keeps its
    value when you edit it. GitHub may also ignore the link's expiry; check the date it shows.
 
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Peanut+Gallery+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Mob+Machine+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026** (see
    **Done**); if it lacks Plan read, edit it and add it.
 2. **The read token** (it mounts the repository into each Managed Agents session): Contents read
    only.
 
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-read&description=Peanut+Gallery+agent+sessions,+read+only&target_name=AlreadyKyle&expires_in=366&contents=read
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-read&description=Mob+Machine+agent+sessions,+read+only&target_name=AlreadyKyle&expires_in=366&contents=read
 
    Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026.**
    Before the cutover I prove it cannot write: a push with it must answer 403, and the unattended
@@ -173,7 +284,7 @@ For each one:
 3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token, Actions
    read and Plan read included. **Still to do.**
 
-   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Peanut+Gallery+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
+   https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Mob+Machine+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
    is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
@@ -510,8 +621,8 @@ yours.
   cooling window before it is dealt to now; you can veto it there as with any card.
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
-  HST threshold and income tax on the pool, and Ontario business-name registration for "Peanut
-  Gallery" ($60). I book nothing. The lawyer's questions on the legal pages
+  HST threshold and income tax on the pool, and Ontario business-name registration for "Mob
+  Machine" ($60). I book nothing. The lawyer's questions on the legal pages
   (`docs/specs/legal-copy.md`): whether a contribution is a consumer internet agreement under the
   Consumer Protection Act, 2002; whether the Consumer Protection Act, 2023 is in force yet; whether
   a copy of the agreement must be delivered within 15 days, and how; and the wording of the age
@@ -522,9 +633,10 @@ yours.
   **Open decisions**).
 - **Delete `KEYS.md`** from the repository folder on your Mac (see **Standing items**).
 - **HST registration review** when cumulative receipts reach $15k (see **Standing items**).
-- **Record the trademark search** for "Peanut Gallery".
-- **Later, only if limits bite:** make the repository public when Actions minutes run short; move the
-  sites to Cloudflare Pages before Mid; Supabase Pro at about 400 MB; grow the Anthropic tier.
+- **Record the trademark search** for "Mob Machine".
+- **Later, only if limits bite:** move the sites to Cloudflare Pages before Mid; Supabase Pro at
+  about 400 MB; grow the Anthropic tier. Actions minutes have already run short: see **GitHub
+  Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
 
 ---
@@ -557,6 +669,23 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 
 ## Standing items, outside the order
 
+- **GitHub Actions minutes.** On 23 September 2026 the account's included Actions minutes ran out,
+  and with its $0 spending limit every gate job is refused within seconds. You said "just do
+  everything locally for now", so the gate workflow is disabled and I merge board pull requests on
+  the local gate, the same checks run on your Mac (`scripts/local-gate.sh`, `docs/specs/local-gate.md`).
+  Cards cannot merge until Actions is back; the studio is paused anyway. Three ways back, your call:
+  1. **Wait** for the included minutes to reset at the start of the next billing cycle. Free.
+  2. **Make the repository public:** GitHub → the repository → **Settings** → **General** →
+     **Danger Zone** → **Change visibility** → **Make public**. Standard runners are free on public
+     repositories. Everything in the repository, history included, becomes readable by anyone.
+  3. **Add an Actions budget:** GitHub → your profile picture → **Settings** → **Billing and
+     licensing** → **Budgets and alerts**. This is a spend, so it is an exception you name to
+     `docs/PLAN.md` §10 decision 35.
+
+  Once minutes are back, run `gh workflow enable gate` (or tell me to), and every pull request,
+  cards included, merges on the Actions gate again.
+
+  **Tell me:** "Actions is back" and which of the three.
 - **Claude Code on the Mac: 2.1.280 or newer.** Attended sessions need it, because 2.1.139 refuses
   `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision 36).
   `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
@@ -591,6 +720,7 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
 - Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
+- Bringing GitHub Actions minutes back: waiting for the reset, a public repository, or a budget.
 
 ---
 

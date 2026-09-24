@@ -353,7 +353,26 @@ Deno.test("criterion 3: an approved agent card is dealt to now at opens_at, and 
       assertEquals(await s.deal(), []);
       await s.db.query(`update public.cards set opens_at = now() - interval '59 minutes 59 seconds' + interval '60 minutes' where id = $1`, [id]);
       assertEquals(await s.deal(), []);
+      // An opens_at written earlier than the approval plus the window deals nothing: Postgres applies
+      // the window from the newest draft approval, whatever opens_at says.
       await s.db.query(`update public.cards set opens_at = now() - interval '1 second' where id = $1`, [id]);
+      assertEquals(await s.deal(), []);
+      // An hour passes: the approval is back-dated around its append-only guard, as only a test may.
+      await s.db.exec(`alter table public.card_approvals disable trigger card_approvals_append_only`);
+      await s.db.query(`update public.card_approvals set created_at = created_at - interval '60 minutes' where card_id = $1`, [id]);
+      await s.db.exec(`alter table public.card_approvals enable trigger card_approvals_append_only`);
+      assertEquals(await s.deal(), [id]);
+      await s.db.query(`select public.set_cooling_window(0, 'Back to none')`);
+      await s.signInAs(null);
+    });
+
+    await t.step("nothing is dealt while the studio is paused, and the card is dealt on the first tick after", async () => {
+      const id = await s.card("Dealt after the pause", { opensAt: "2026-09-01T00:00:00Z" });
+      await s.approve(id);
+      await s.db.query(`update public.studio_state set paused = true where id = 1`);
+      assertEquals(await s.deal(), []);
+      assertEquals((await s.cardRow(id)).horizon, "next");
+      await s.db.query(`update public.studio_state set paused = false where id = 1`);
       assertEquals(await s.deal(), [id]);
     });
 
@@ -521,12 +540,14 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
       spend: (await s.rows<{ card_id: string }>(`select card_id from public.public_card_spend`)).map((r) => r.card_id),
       stopped: (await s.rows<{ card_id: string }>(`select card_id from public.public_stopped_cards`)).map((r) => r.card_id),
       events: (await s.rows<{ card_id: string | null }>(`select card_id from public.public_agent_events order by created_at, card_id nulls first`)).map((r) => r.card_id),
+      ledger: (await s.rows<{ card_id: string }>(`select distinct card_id from public.ledger where card_id is not null`)).map((r) => r.card_id),
     });
 
     await t.step("before the approval is voided, the public reads it everywhere", async () => {
       const seen = await s.asRole("anon", readAll);
       assertEquals(seen.cards, [board, approvedCard, voided]);
       assert(seen.funding.includes(voided) && seen.spend.includes(voided) && seen.stopped.includes(voided) && seen.events.includes(voided));
+      assert(seen.ledger.includes(voided));
     });
 
     await t.step("anon and a signed-in non-member read no agent card without a current approval, through cards or any public view, and every board card", async () => {
@@ -535,9 +556,16 @@ Deno.test("criterion 5: outside the board an agent-written card is readable only
         await s.signInAs(email, email ? "aal2" : null);
         const seen = await s.asRole(who, readAll);
         assertEquals(seen.cards, [board, approvedCard], who);
-        for (const view of ["funding", "spend", "stopped"] as const) assertEquals(seen[view].includes(voided), false, `${who} ${view}`);
+        for (const view of ["funding", "spend", "stopped", "ledger"] as const) assertEquals(seen[view].includes(voided), false, `${who} ${view}`);
         assertEquals(seen.events, [null], `${who}: the card-less event stays`);
       }
+      await s.signInAs(null);
+      // The dispatcher's throttle still reads the hidden card's spend, so its hold is not overstated.
+      const spent = await s.asRole("service_role", () => s.rows<{ card_id: string; spent_usd: string }>(`select card_id, spent_usd from public.dispatcher_card_spend`));
+      assertEquals(spent.map((r) => [r.card_id, Number(r.spent_usd)]), [[voided, 1]]);
+      await s.asRole("anon", () => s.refuses(`select * from public.dispatcher_card_spend`, "permission denied"));
+      const ledgerPolicy = await s.row<{ qual: string }>(`select qual from pg_policies where tablename = 'ledger' and policyname = 'ledger_public_read'`);
+      assert(ledgerPolicy.qual.includes("card_is_public(card_id)"), ledgerPolicy.qual);
     });
 
     await t.step("a board member reads every card, undealt and hidden included", async () => {
@@ -764,6 +792,19 @@ Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
       assertEquals((await s.row<{ n: number }>(`select count(*)::int as n from public.board_actions where action = 'enqueue_manual_job'`)).n, 1);
     });
 
+    await t.step("only the board labels a run as its own: a service-role call for a board-origin run with no board-origin parent is refused", async () => {
+      await s.signInAs(null);
+      await s.refuses(`select public.enqueue_job_run('studio_ranking', 'board', null, null, '{}'::jsonb, null)`, "Only the board queues a board-origin run");
+      const scheduled = await enqueue("studio_ranking", "event");
+      await s.refuses(`select public.enqueue_job_run('studio_ranking', 'board', null, null, '{}'::jsonb, $1)`, "Only the board queues a board-origin run", [scheduled.id]);
+      // At the first factor the board cannot either; Run now needs the second.
+      await s.signInAs(BOARD_EMAIL, "aal1");
+      await s.refuses(`select public.enqueue_job_run('studio_ranking', 'board', null, null, '{}'::jsonb, null)`, "Only the board queues a board-origin run");
+      await s.signInAs(null);
+      const board = (await s.row<{ id: string }>(`select id from public.job_runs where origin = 'board' and parent_run_id is null limit 1`)).id;
+      assertEquals((await enqueue("studio_ranking", "board", null, board)).created, true);
+    });
+
     await t.step("a claim is refused without the lease; fail_running_job_runs is the lease holder's alone", async () => {
       const run = (await enqueue("tidy_up", "operator")).id;
       assertEquals((await s.row<{ ok: boolean }>(`select public.claim_job_run($1, 'mac') as ok`, [run])).ok, false);
@@ -862,6 +903,9 @@ Deno.test("criterion 8: resume by rule, once per card, topping the bar up from m
         { step: "ceiling_top_up", usd: 1.25 },
         { step: "resume_rule", estimate_usd: 1.5, ceiling_usd: 2.25, actual_usd: 1.5, top_up_usd: 1.25 },
       ]);
+      // The public list says what happened, with the amount, and reads nothing else of the payload.
+      const seen = await s.asRole("anon", () => s.rows<{ step: string; usd: string | null }>(`select step, usd from public.public_agent_events where card_id = $1 order by created_at, step = 'resume_rule'`, [id]));
+      assertEquals(seen.map((e) => [e.step, e.usd === null ? null : Number(e.usd)]), [["ceiling_top_up", 1.25], ["resume_rule", null]]);
       // The funding target never changes, so the approval stands: approved, runnable and public.
       assertEquals([await s.approved(id), await s.isPublic(id)], [true, true]);
       assertEquals((await s.row<{ a: boolean }>(`select approved as a from public.dispatcher_cards where id = $1`, [id])).a, true);
@@ -926,6 +970,43 @@ Deno.test("criterion 8: resume by rule, once per card, topping the bar up from m
       const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
       assertEquals(needs.rule_blocked.filter((c) => c.id === card).map((c) => c.why), ["resumed_before"]);
       await s.signInAs(null);
+      await s.identity();
+    });
+
+    await t.step("a vetoed or closed-lane card is never resumed by the rule and is listed in Needs you; while the studio is paused nothing resumes", async () => {
+      await s.signInAs(null);
+      const pausedAtCeiling = async (key: string, card: string) => {
+        await s.pay(key, 1, card);
+        await s.db.query(`update public.cards set stage = 'building' where id = $1`, [card]);
+        await s.spend(card, 1.5);
+        await s.db.query(`update public.cards set stage = 'paused', failing_check = 'ceiling' where id = $1`, [card]);
+      };
+      const vetoed = await s.card("Director vetoed at its ceiling", { source: "board", horizon: "now", target: 1 });
+      await pausedAtCeiling("vetoed", vetoed);
+      await s.db.query(`update public.cards set director_stance = 'vetoed' where id = $1`, [vetoed]);
+      await s.db.query(`update public.studio_state set platform_lane_open = true where id = 1`);
+      const closed = await s.card("Closed lane at its ceiling", { source: "board", horizon: "now", target: 1, folder: "platform", lane: "code" });
+      await pausedAtCeiling("closed", closed);
+      await s.db.query(`update public.studio_state set platform_lane_open = false where id = 1`);
+      const allocations = (await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n;
+      assertEquals((await s.row<{ r: Row }>(`select public.resume_card_by_rule($1) as r`, [vetoed])).r.blocked, "vetoed");
+      assertEquals((await s.row<{ r: Row }>(`select public.resume_card_by_rule($1) as r`, [closed])).r.blocked, "closed_lane");
+      assertEquals([(await s.cardRow(vetoed)).stage, (await s.cardRow(closed)).stage], ["paused", "paused"]);
+      assertEquals((await s.row<{ n: number }>(`select count(*)::int as n from public.contribution_allocations`)).n, allocations);
+      await s.signInAs(BOARD_EMAIL, "aal1");
+      const needs = (await s.row<{ n: { rule_blocked: { id: string; why: string }[] } }>(`select public.board_needs_you() as n`)).n;
+      assertEquals(needs.rule_blocked.filter((c) => c.id === vetoed || c.id === closed).map((c) => [c.id, c.why]), [[vetoed, "vetoed"], [closed, "closed_lane"]]);
+      await s.signInAs(null);
+
+      const later = await s.card("Resumed after the pause", { source: "board", horizon: "now", target: 1 });
+      await pausedAtCeiling("later", later);
+      await s.db.query(`update public.studio_state set paused = true where id = 1`);
+      assertEquals((await s.row<{ r: { resumed: number } }>(`select public.resume_due_by_rule() as r`)).r.resumed, 0);
+      assertEquals((await s.cardRow(later)).stage, "paused");
+      await s.db.query(`update public.studio_state set paused = false where id = 1`);
+      const due = (await s.row<{ r: { resumed: number; results: Row[] } }>(`select public.resume_due_by_rule() as r`)).r;
+      assertEquals(due.results.filter((r) => r.card_id === later).map((r) => r.resumed), [true]);
+      assertEquals((await s.cardRow(later)).stage, "funded");
       await s.identity();
     });
 

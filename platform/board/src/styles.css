@@ -268,6 +268,16 @@ section > h3 {
   padding-right: 0;
 }
 
+/* On a phone the role's name may wrap between its words, so the status keeps room for a long reason;
+   a word is never split. */
+@media (max-width: 30rem) {
+  .role-table tbody th {
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+}
+
 .role-table thead th {
   padding-top: 0;
   color: var(--muted);
@@ -307,10 +317,18 @@ section > h3 {
   align-self: flex-start;
 }
 
+/* A row of a hairline list starts at its rule's padding, the same above and below its content. */
+.board-cards > li > .stack {
+  margin-top: 0;
+}
+
+/* Every headed block, a .stack form included, sits the same 40 px below the block before it. */
 section + section,
 section + form,
 form + section,
-form + form {
+form + form,
+section + .stack,
+form + .stack {
   margin-top: var(--space-4);
 }
 

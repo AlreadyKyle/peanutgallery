@@ -5,7 +5,7 @@
 # can read and cannot move money. A mismatch alerts the board through ntfy from the job itself;
 # OnFailure= posts when the job could not run at all. Started by peanutgallery-controller.timer.
 [Unit]
-Description=Peanut Gallery Controller: the daily reconciliation with Stripe
+Description=Mob Machine Controller: the daily reconciliation with Stripe
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target

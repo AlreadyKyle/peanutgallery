@@ -182,6 +182,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/components/Funding.tsx',
   'platform/site/src/components/Guarded.tsx',
   'platform/site/src/components/LedgerSummary.tsx',
+  'platform/site/src/components/Mark.tsx',
   'platform/site/src/components/Meter.tsx',
   'platform/site/src/components/MoneyIn.tsx',
   'platform/site/src/components/NotFound.tsx',

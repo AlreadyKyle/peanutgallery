@@ -1898,8 +1898,11 @@ describe("board-site migration", () => {
 
 // docs/specs/legal-copy.md: numbered Terms versions, append-only, read by the public through one view.
 const TERMS_VERSION_2_FILE = "20260924100100_terms_version_2.sql";
+// Version 3: version 2's words with the studio's new name (docs/specs/rename.md).
+const TERMS_VERSION_3_FILE = "20260925000000_terms_version_3.sql";
 const termsVersionsSql = launchFile(TERMS_VERSIONS_FILE);
 const termsVersion2Sql = launchFile(TERMS_VERSION_2_FILE);
+const termsVersion3Sql = launchFile(TERMS_VERSION_3_FILE);
 
 describe("terms-versions migrations", () => {
   it("come after the board-site file, in order, and the first sets a lock timeout first", () => {
@@ -1925,6 +1928,9 @@ describe("terms-versions migrations", () => {
       "insert into public.terms_versions (version, posted_at) values (1, '2026-09-23 01:32:51+00')\n  on conflict (version) do nothing",
     ]);
     expect(withoutComments(termsVersion2Sql)).toBe("insert into public.terms_versions (version) values (2) on conflict (version) do nothing;");
+    expect(withoutComments(termsVersion3Sql)).toBe("insert into public.terms_versions (version) values (3) on conflict (version) do nothing;");
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    expect(names.indexOf(TERMS_VERSION_3_FILE)).toBeGreaterThan(names.indexOf(MONEY_LOGIC_FILE));
   });
 
   it("keeps the table behind row level security, readable by the service role only, and revokes before it grants", () => {
@@ -2098,7 +2104,7 @@ describe("money-logic migration", () => {
 const AGENT_SYSTEM_CORE_FILE = "20260924300000_agent_system_core.sql";
 const agentSystemCoreSql = launchFile(AGENT_SYSTEM_CORE_FILE);
 // Every table, view and function the migration adds that anon must not reach.
-const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards"];
+const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards", "dispatcher_card_spend"];
 const AGENT_SYSTEM_CORE_FUNCTIONS = [
   "record_card_approval",
   "card_content_hash",

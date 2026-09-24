@@ -102,7 +102,7 @@ async function notify(message: string): Promise<void> {
   if (!NTFY_TOPIC_URL.startsWith("https://")) return;
   const res = await fetch(NTFY_TOPIC_URL, {
     method: "POST",
-    headers: { Title: "Peanut Gallery payments" },
+    headers: { Title: "Mob Machine payments" },
     body: message,
     signal: AbortSignal.timeout(NOTIFY_TIMEOUT_MS),
   });

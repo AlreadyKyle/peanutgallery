@@ -3,7 +3,7 @@
 # provision.sh installs it and enables the timer only once /etc/peanutgallery/backup.env passes its
 # check. On failure the script pings the backup healthcheck's /fail and OnFailure= posts to ntfy.
 [Unit]
-Description=Peanut Gallery nightly database backup
+Description=Mob Machine nightly database backup
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target

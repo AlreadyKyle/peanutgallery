@@ -8,7 +8,8 @@ import { TERMS_VERSIONS } from './terms-versions';
 
 const V1_AT = '2026-09-23T01:32:51+00:00';
 const V2_AT = '2026-09-24T15:00:00+00:00';
-const [V1, V2] = TERMS_VERSIONS;
+const V3_AT = '2026-09-25T15:00:00+00:00';
+const [V1, V2, V3] = TERMS_VERSIONS;
 const ready = (...rows: [number, string][]): PostedTerms => ({ state: 'ready', rows: rows.map(([version, posted_at]) => ({ version, posted_at })) });
 
 describe('termsView: /terms and /refunds', () => {
@@ -17,6 +18,7 @@ describe('termsView: /terms and /refunds', () => {
   });
 
   it('shows the newest posted version with when it took effect, and every earlier one with its range', () => {
+    // Version 3 is in the bundle and not posted here: version 2 is the one in force.
     expect(termsView(ready([1, V1_AT], [2, V2_AT]))).toEqual({
       state: 'confirmed',
       entry: V2,
@@ -47,12 +49,12 @@ describe('termsView: /terms and /refunds', () => {
   });
 
   it('cannot confirm, and shows the newest bundled words, when the read fails, times out or returns no row', () => {
-    expect(termsView({ state: 'failed' })).toEqual({ state: 'unconfirmed', entry: V2 });
-    expect(termsView(ready())).toEqual({ state: 'unconfirmed', entry: V2 });
+    expect(termsView({ state: 'failed' })).toEqual({ state: 'unconfirmed', entry: V3 });
+    expect(termsView(ready())).toEqual({ state: 'unconfirmed', entry: V3 });
   });
 
   it('cannot confirm when the database lists a version newer than this build carries', () => {
-    expect(termsView(ready([1, V1_AT], [2, V2_AT], [3, '2027-01-01T00:00:00Z']))).toEqual({ state: 'unconfirmed', entry: V2 });
+    expect(termsView(ready([1, V1_AT], [2, V2_AT], [3, V3_AT], [4, '2027-01-01T00:00:00Z']))).toEqual({ state: 'unconfirmed', entry: V3 });
     // A build that carries version 1 only, after version 2 is posted.
     expect(termsView(ready([1, V1_AT], [2, V2_AT]), [V1!])).toEqual({ state: 'unconfirmed', entry: V1 });
   });
@@ -68,13 +70,14 @@ describe('versionView: /terms/:version and /refunds/:version', () => {
   });
 
   it('is the not found page for a version this build does not carry, even before the read answers', () => {
-    expect(versionView('3', posted)).toEqual({ state: 'not-found' });
+    expect(versionView('4', posted)).toEqual({ state: 'not-found' });
     expect(versionView('9999', { state: 'loading' })).toEqual({ state: 'not-found' });
-    expect(versionView('3', { state: 'failed' })).toEqual({ state: 'not-found' });
+    expect(versionView('4', { state: 'failed' })).toEqual({ state: 'not-found' });
   });
 
   it('is the not found page for a bundled version that is not posted', () => {
     expect(versionView('2', ready([1, V1_AT]))).toEqual({ state: 'not-found' });
+    expect(versionView('3', posted)).toEqual({ state: 'not-found' });
   });
 
   it('waits while the read runs', () => {
@@ -93,7 +96,7 @@ describe('versionView: /terms/:version and /refunds/:version', () => {
   it('shows the bundled words of that version, unconfirmed, when the read fails, returns no row or runs ahead of the build', () => {
     expect(versionView('1', { state: 'failed' })).toEqual({ state: 'unconfirmed', entry: V1 });
     expect(versionView('2', ready())).toEqual({ state: 'unconfirmed', entry: V2 });
-    expect(versionView('1', ready([1, V1_AT], [2, V2_AT], [3, '2027-01-01T00:00:00Z']))).toEqual({ state: 'unconfirmed', entry: V1 });
+    expect(versionView('1', ready([1, V1_AT], [2, V2_AT], [3, V3_AT], [4, '2027-01-01T00:00:00Z']))).toEqual({ state: 'unconfirmed', entry: V1 });
   });
 });
 

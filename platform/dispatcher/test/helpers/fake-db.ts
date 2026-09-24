@@ -341,6 +341,7 @@ export class FakeDb implements Db {
   async finishJobRun(runId: string, status: 'succeeded' | 'failed' | 'skipped', reason: string | null, output: Record<string, unknown> | null) {
     const run = this.jobRuns.find((r) => r.id === runId);
     if (!run || !(run.status === 'running' || (run.status === 'queued' && status === 'skipped'))) throw new Error(`db finish_job_run: job run ${runId} is not running`);
+    if (status !== 'succeeded' && (reason === null || reason.trim() === '')) throw new Error('db finish_job_run: A failed or skipped run needs a reason');
     run.status = status;
     run.reason = reason;
     run.output = output;

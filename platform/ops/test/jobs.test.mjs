@@ -465,7 +465,7 @@ describe('the Controller run', () => {
     assert.deepEqual(row.figures.reinstated, [{ dispute_id: 'dp_fixture_won', session_id: 'cs_fixture_a', amount_usd: 10, done: true, reinstated_usd: 10 }]);
     const alert = calls.find((call) => call.url === 'https://ntfy.sh/fixture-topic');
     assert.match(alert.body, /webhook_delivered: \{"event":"evt_fixture_lost"/);
-    assert.equal(alert.headers.Title, 'Peanut Gallery Controller');
+    assert.equal(alert.headers.Title, 'Mob Machine Controller');
     assert.ok(calls.some((call) => call.url === 'https://hc-ping.com/fixture-controller/fail'));
   });
 

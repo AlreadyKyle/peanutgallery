@@ -3,7 +3,7 @@
 // statement of money are in legal.ts (kernel), which pages read directly; copy.ts does not repeat or
 // spread them (docs/specs/board-site.md).
 export const copy = {
-  studioName: 'Peanut Gallery',
+  studioName: 'Mob Machine',
   // The pitch line (PLAN.md §2), split so the first sentence can be the page heading.
   pitchTitle: 'Watch AI agents build a game studio and free games.',
   pitchBody: 'Fund the card you want built next.',
@@ -186,7 +186,7 @@ export const copy = {
       'Leave dead space: side-by-side blocks balance or stack, and nothing leaves an empty column.',
     ],
     markHeading: 'The mark',
-    markNote: 'The peanut mark is one colour and inverts to paper on signal and ink.',
+    markNote: 'The mark is a small machine drawn in the text colour: ink on paper, paper on signal and ink.',
     castHeading: 'The cast on ink',
     castNote: 'An avatar sits on a paper disc on ink and draws unchanged. No avatar sits on the signal plate.',
     cardsHeading: 'The card in every state',

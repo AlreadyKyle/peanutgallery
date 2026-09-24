@@ -187,7 +187,7 @@ async function mainBlocks(deps: TickDeps): Promise<MainReason | null> {
   return null;
 }
 
-// Two reads, both summed in the database: each card's studio spend (public_card_spend) and the spend
+// Two reads, both summed in the database: each card's studio spend (dispatcher_card_spend) and the spend
 // totals (studio_spend_totals), so a tick never downloads the ledger.
 async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
   const now = deps.now();

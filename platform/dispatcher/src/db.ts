@@ -248,7 +248,8 @@ export interface Db {
   // Writes the patch only while the card is in one of the expected stages; false when it was not,
   // so a stage the board set in the meantime is never overwritten.
   updateCardIf(id: string, expectedStages: readonly string[], patch: CardPatch): Promise<boolean>;
-  // Each card's studio-billed spend (public_card_spend), for the cards named; a card with none is absent.
+  // Each card's studio-billed spend (dispatcher_card_spend, every card, hidden ones included), for the cards
+  // named; a card with none is absent.
   cardSpend(cardIds: readonly string[]): Promise<Map<string, number>>;
   spendTotals(monthStart: Date, tierStart: Date): Promise<SpendTotals>;
   getRole(id: string): Promise<Role>;
@@ -536,8 +537,8 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async cardSpend(cardIds) {
       const spend = new Map<string, number>();
       if (cardIds.length === 0) return spend;
-      const { data, error } = await client.from('public_card_spend').select('card_id, spent_usd').in('card_id', [...cardIds]);
-      if (error) fail('public_card_spend', error);
+      const { data, error } = await client.from('dispatcher_card_spend').select('card_id, spent_usd').in('card_id', [...cardIds]);
+      if (error) fail('dispatcher_card_spend', error);
       for (const row of rows(data)) spend.set(text(row, 'card_id'), num(row, 'spent_usd'));
       return spend;
     },

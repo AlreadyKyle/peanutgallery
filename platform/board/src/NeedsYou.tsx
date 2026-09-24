@@ -13,6 +13,7 @@ import {
   type CreditDraft,
   type NeedsItem,
   type NeedsYouData,
+  type RuleBlockedWhy,
 } from './lib/needs';
 import { errorMessage } from './lib/supabase';
 
@@ -33,6 +34,14 @@ function settlementNote(amount: number | null, currency: string | null): string 
 function ToCard({ id, listed, children }: { id: string; listed: ReadonlySet<string>; children: string }) {
   return listed.has(id) ? <a href={`#card-${id}`}>{children}</a> : <>{children}</>;
 }
+
+/** Why the resume rule leaves a ceiling pause to the board, as the headline's end. */
+const RULE_BLOCKED_WORDS: Record<RuleBlockedWhy, string> = {
+  card_max: 'is paused at the card maximum of {max}.',
+  resumed_before: 'is paused at its ceiling a second time, after it was resumed once.',
+  vetoed: 'is paused at its ceiling and vetoed, so no session would run it.',
+  closed_lane: 'is paused at its ceiling, and the platform code lane is closed.',
+};
 
 function Item({
   item,
@@ -82,12 +91,7 @@ function Item({
     return (
       <li>
         <p>
-          <strong>
-            Card {item.card.title} is paused at its ceiling
-            {item.card.why === 'card_max'
-              ? ` at the card maximum of ${formatUsd(item.card.card_max_usd)}.`
-              : ' a second time, after it was resumed once.'}
-          </strong>{' '}
+          <strong>Card {item.card.title} {RULE_BLOCKED_WORDS[item.card.why].replace('{max}', formatUsd(item.card.card_max_usd))}</strong>{' '}
           It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
           {canRecord ? null : 'verify your second factor, then '}
           <ToCard id={item.card.id} listed={listedCards}>

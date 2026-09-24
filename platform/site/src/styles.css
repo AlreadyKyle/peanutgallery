@@ -1,6 +1,6 @@
 @import './tokens.css';
 
-/* Peanut Gallery site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
+/* Mob Machine site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
    every rule here. A quiet page of type; the card is the object. */
 
 * {
@@ -59,16 +59,12 @@ main:not(.wide) > * {
   max-width: var(--measure);
 }
 
-/* Terms, Privacy, Refunds and Contact: short prose sections sit closer together than landing sections. */
-.text-page .section {
-  margin-bottom: var(--space-4);
-}
-
 /* Type ------------------------------------------------------------------ */
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   margin: 0;
   text-wrap: balance;
   font-weight: var(--weight-bold);
@@ -76,26 +72,17 @@ h3 {
 }
 
 h1 {
-  font-size: var(--size-display);
+  font-size: var(--size-h1);
+  line-height: var(--leading-display);
 }
 
 h2 {
-  font-size: var(--size-large);
-  margin-bottom: var(--space-2);
+  font-size: var(--size-h2);
+  margin-bottom: var(--space-3);
 }
 
 h3 {
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-}
-
-/* Roadmap card titles, under a category h3. */
-h4 {
-  margin: 0;
-  text-wrap: balance;
-  font-size: var(--size-body);
-  font-weight: var(--weight-strong);
-  line-height: var(--leading-heading);
+  font-size: var(--size-lead);
 }
 
 p {
@@ -297,11 +284,6 @@ main > .band {
   margin-top: var(--band-pad);
 }
 
-.band > .section,
-.band > .hero {
-  margin-bottom: 0;
-}
-
 main > .band:nth-child(even),
 .page:has(> main > .band:last-child:nth-child(odd)) > .site-footer {
   background: var(--paper);
@@ -325,7 +307,6 @@ main > .band:nth-child(2n + 3),
   --outline-press: var(--ink-hover);
   --quiet-fg: var(--muted-on-ink);
   --quiet-edge: var(--field);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -349,7 +330,6 @@ main > .band:first-child,
   --coin-hover: var(--coin-up);
   --quiet-fg: var(--muted-on-signal);
   --quiet-edge: var(--muted-on-signal);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -361,13 +341,8 @@ main > .band:first-child,
   border: 0;
 }
 
-/* Band 1 sits under the top bar it shares a ground with, with room for the headline to breathe. */
-main > .band:first-child {
-  padding-top: var(--space-4);
-}
-
 /* Top bar ---------------------------------------------------------------
-   The peanut mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
+   The mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
    sit in the row and Menu goes. Below 22.5rem Play moves into the list. Not sticky. */
 
@@ -397,12 +372,14 @@ main > .band:first-child {
   text-decoration: none;
 }
 
-/* The peanut mark is one colour: on ink it inverts to paper. */
+/* The mark is drawn in the text colour: ink on paper, paper on the signal plate and ink. Its box is
+   its ink, 24 by 30 units of the 32-unit grid, drawn at one pixel a unit (two at 2x), so every
+   straight edge lands on a whole pixel. */
 .mark {
   display: block;
-  width: auto;
-  height: 1.5em;
-  filter: var(--mark-filter);
+  flex: none;
+  width: 1.5rem;
+  height: 1.875rem;
 }
 
 nav a {
@@ -457,7 +434,7 @@ nav a.active {
   }
 }
 
-/* Below 32rem the name is read out but not drawn: the peanut mark stands for it. */
+/* Below 32rem the name is read out but not drawn: the mark stands for it. */
 @media (max-width: 31.99rem) {
   .wordmark-text {
     position: absolute;
@@ -501,10 +478,6 @@ nav a.active {
 
 /* Page heading and sections --------------------------------------------- */
 
-.hero {
-  margin-bottom: var(--space-5);
-}
-
 .hero p,
 .section > p,
 .prose {
@@ -525,19 +498,11 @@ a.target {
 }
 
 .hero h1 {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .lede {
   font-size: var(--size-lead);
-}
-
-.section {
-  margin-bottom: var(--space-5);
-}
-
-.section:last-child {
-  margin-bottom: 0;
 }
 
 .rules {
@@ -805,7 +770,7 @@ button.link:hover:not(:disabled) {
 /* The Live stamp (the guide and a card's own page): ink-bordered, turned -3 degrees. Rows use the
    plain tag. */
 .tag-stamp {
-  padding: 0.125rem 0.5rem;
+  padding: 0.125rem var(--space-1);
   margin-block: -0.25rem;
   border: 2px solid var(--live-mark);
   border-radius: var(--radius);
@@ -814,8 +779,6 @@ button.link:hover:not(:disabled) {
 
 .card h3 {
   margin-bottom: var(--space-2);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-bold);
 }
 
 .card-summary {
@@ -1035,10 +998,6 @@ button.link:hover:not(:disabled) {
   background: var(--primary-hover);
 }
 
-.choices-heading {
-  font-size: var(--size-large);
-}
-
 .choices {
   display: grid;
   gap: var(--space-2);
@@ -1076,8 +1035,9 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--hairline);
 }
 
-/* Rows: small text, hairlines between them, a constant 0.5rem inset (room for the change marker).
-   Queued, Shipped, planned cards and the ledger's rows are rows, never cards. */
+/* Rows: body text, hairlines between them, a constant 0.5rem inset (room for the change marker).
+   The date, the rail and the meta line are small. Queued, Shipped, planned cards and the ledger's
+   rows are rows, never cards. */
 
 .rows {
   margin: 0 0 var(--space-2);
@@ -1089,7 +1049,7 @@ button.link:hover:not(:disabled) {
   gap: 0 var(--space-2);
   padding: var(--space-1);
   border-top: 1px solid var(--hairline);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
 }
 
 .rows li:last-child {
@@ -1099,6 +1059,12 @@ button.link:hover:not(:disabled) {
 .row-time {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.row-time,
+.row-rail,
+.row-meta {
+  font-size: var(--size-small);
 }
 
 /* Rail rows: the time (or the suit) on its own line, then in a 9rem rail from 48rem. */
@@ -1142,7 +1108,7 @@ button.link:hover:not(:disabled) {
 }
 
 .row-title {
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   font-weight: var(--weight-bold);
   text-wrap: pretty;
 }
@@ -1171,7 +1137,7 @@ button.link:hover:not(:disabled) {
 .status-line {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-1);
   max-width: var(--measure);
 }
 
@@ -1549,7 +1515,7 @@ textarea {
   width: 100%;
   max-width: 100%;
   min-height: var(--target);
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-1) 0.75em;
   border: 1px solid var(--field);
   border-radius: var(--radius);
   background: var(--paper);
@@ -1750,17 +1716,13 @@ input[type='radio'] {
 }
 
 /* Forced colours -------------------------------------------------------------
-   Both grounds become Canvas, so a CanvasText rule marks each band edge; the peanut keeps its own
-   colours; the bar's fill takes Highlight so it still reads as filled. */
+   Both grounds become Canvas, so a CanvasText rule marks each band edge; the mark, drawn in the text
+   colour, becomes CanvasText; the bar's fill takes Highlight so it still reads as filled. */
 
 @media (forced-colors: active) {
   main > .band + .band,
   .page:has(> main > .band) > .site-footer {
     border-top: 1px solid CanvasText;
-  }
-
-  .mark {
-    filter: none;
   }
 
   .funding-bar-fill {
@@ -1780,8 +1742,10 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play Dust and the How it works link, side by side. */
+/* Play Dust and the How it works link, side by side, clear of the lede above and the status line
+   below. */
 .hero-actions {
+  margin-top: var(--space-4);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1789,7 +1753,7 @@ input[type='radio'] {
 }
 
 .hero .status-line {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .hero .live-updates {
@@ -1808,14 +1772,15 @@ input[type='radio'] {
 }
 
 /* Two blocks side by side from 64rem (home's Shipped and Planned next). One alone takes the row, so
-   nothing leaves an empty column. */
+   nothing leaves an empty column. Stacked, they sit as far apart as any two sections in a band. */
 .pair {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--band-pad) var(--space-4);
 }
 
-.pair > .section {
-  margin-bottom: 0;
+/* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
+.rules-pair {
+  row-gap: var(--space-4);
 }
 
 /* Wider screens ------------------------------------------------------------ */

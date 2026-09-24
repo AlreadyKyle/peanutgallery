@@ -8,6 +8,7 @@ import {
   shouldAnnounceCount,
   updatesLabel,
 } from './changes';
+import { books } from './books.test-fixture';
 import { copy } from './copy';
 import type { Card, Snapshot } from './source';
 
@@ -58,12 +59,12 @@ describe('diffSnapshots', () => {
     expect(diffSnapshots(null, snap([card('a', { funded_usd: 5 })]), visible)).toEqual({ motions: [], still: [], held: [], announce: [] });
   });
 
-  it('plays a fund tick when a card on screen gains money, and holds the reorder it causes', () => {
-    const before = snap([card('a', { funded_usd: 2 }), card('b', { funded_usd: 1 })]);
-    const after = snap([card('a', { funded_usd: 2 }), card('b', { funded_usd: 4 })]);
+  it('plays a fund tick when a card on screen gains money, and holds a reorder of the funding order', () => {
+    const before = { ...snap([card('a', { funded_usd: 2 }), card('b', { funded_usd: 1 })]), money: books(['a', 'b']) };
+    const after = { ...snap([card('a', { funded_usd: 2 }), card('b', { funded_usd: 4 })]), money: books(['b', 'a']) };
     const diff = diffSnapshots(before, after, visible);
     expect(diff.motions).toEqual([{ kind: 'fund', id: 'b', from: 1, to: 4 }]);
-    // The fund order puts the most funded first, so both cards would move: held, never applied live.
+    // The waterfall's order changed, so both cards would move: held, never applied live.
     expect(diff.held).toEqual([
       { kind: 'move', id: 'b' },
       { kind: 'move', id: 'a' },

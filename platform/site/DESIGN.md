@@ -1,4 +1,4 @@
-# Peanut Gallery site style guide
+# Mob Machine site style guide
 
 The one source of truth for how the public site looks and moves. The board's own site (`platform/board`, docs/specs/board-site.md) keeps its own stylesheet and form rules. The approved direction behind this guide is `docs/specs/design-system.md`; the home page, the top bar, the bands on every page, the colour system and the layout audit are `docs/specs/home-and-design.md`.
 
@@ -6,7 +6,7 @@ Tokens live in `src/tokens.css`; the rules in `src/styles.css`, which imports it
 
 ## Brand, in one paragraph
 
-A quiet, precise table (Teenage Engineering's precision) where real cards (Cards Against Humanity's card-as-object, never its tone) are funded with arcade coins and built by a cast of code-drawn aliens. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the peanut mark. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
+A quiet, precise table (Teenage Engineering's precision) where real cards (Cards Against Humanity's card-as-object, never its tone) are funded with arcade coins and built by a cast of code-drawn aliens. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the mark, a small machine with two eyes, drawn in the text colour. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
 
 ## Principles
 
@@ -54,7 +54,7 @@ Colours are written only in `tokens.css`, and there only in `:root` **(tested)**
 
 Retired: `--accent`, `--track`, `--radius-box`, and `--ground` as a background (its value lives on as `--paper-hover`) **(tested)**.
 
-**Roles.** Components read role tokens, never grounds: `--text-muted`, `--hairline`, `--focus-colour`, `--primary-bg/-fg/-hover/-press`, `--outline-bg/-fg/-hover/-press`, `--coin-hover`, `--quiet-fg`, `--quiet-edge`, `--mark-filter`, `--suit-tile-game`, `--suit-tile-studio` and `--live-mark`. `:root` sets them for paper; the signal plate and the ink bands reset them from their position (Bands). So nothing needs a band class to draw correctly on any ground.
+**Roles.** Components read role tokens, never grounds: `--text-muted`, `--hairline`, `--focus-colour`, `--primary-bg/-fg/-hover/-press`, `--outline-bg/-fg/-hover/-press`, `--coin-hover`, `--quiet-fg`, `--quiet-edge`, `--suit-tile-game`, `--suit-tile-studio` and `--live-mark`. `:root` sets them for paper; the signal plate and the ink bands reset them from their position (Bands). So nothing needs a band class to draw correctly on any ground.
 
 | Role | Paper (`:root`) | Signal (band 1, top bar) | Ink (odd bands from 3) |
 |---|---|---|---|
@@ -66,7 +66,6 @@ Retired: `--accent`, `--track`, `--radius-box`, and `--ground` as a background (
 | `--outline-hover` / `-press` | paper-hover / line | signal-deep / signal-press | ink-hover |
 | `--coin-hover` | coin-down | coin-up | coin-down |
 | `--quiet-fg` / `--quiet-edge` | muted / field | muted-on-signal | muted-on-ink / field |
-| `--mark-filter` | none | `invert(1)` | `invert(1)` |
 | `--suit-tile-game` / `-studio` | suit-game / suit-studio | transparent | transparent |
 | `--live-mark` | live | currentColor | currentColor |
 
@@ -75,21 +74,21 @@ Retired: `--accent`, `--track`, `--radius-box`, and `--ground` as a background (
 | Token | Value | Use |
 |---|---|---|
 | `--weight-body` / `--medium` / `--strong` / `--bold` | 400 / 500 / 600 / 700 | Body / nav / labels, buttons, figures / headings, card titles, wordmark. Nothing below 400 **(tested)** |
-| `--leading-body` / `--leading-heading` | 1.6 / 1.25 | |
+| `--leading-body` / `--leading-heading` / `--leading-display` | 1.6 / 1.2 / 1.1 | Text / `h2` and `h3` / the page heading |
 
-Five sizes on a 1.2 ratio from a 17px body; every font-size is one of them **(tested)**.
+**The type scale** (the board's call, 23 September 2026: the page heading read small and the top of every page cramped). Five sizes. Text holds still; the two headings grow with the viewport through `clamp()` (fluid type), from a 390px phone to a 1440px screen, with no breakpoint. Every font-size in `styles.css` is a `--size-*` token that `tokens.css` defines, with one exception: `code` is 0.9em of the text around it **(tested)**.
 
 | Token | Size | Roles |
 |---|---|---|
-| `--size-small` | 14px | Meta lines, the card's index row and spec rows, rows, the footer, captions |
-| `--size-body` | 17px | Paragraphs, nav, buttons, the wordmark |
-| `--size-lead` | 20px | The lede, figures, **card titles (`.card h3`, 700, balanced)** **(tested)** |
-| `--size-large` | 24px | Section headings (`h2`) |
-| `--size-display` | 30px | The page heading (`h1`), once per page |
+| `--size-small` | 14px | Meta lines, the card's index row and spec rows, a row's date, rail and meta line, the footer, captions. Nothing smaller but `code`, which is 0.9em of its text: about 12.6px inside a small line, such as the design guide's token names |
+| `--size-body` | 17px | Paragraphs, nav, buttons, the wordmark, a row's title and text |
+| `--size-lead` | 20px | The lede, figures, every `h3` and card title (700, balanced) |
+| `--size-h2` | 24px to 32px | Section headings (`h2`): `clamp(1.5rem, 1.25rem + 1vw, 2rem)` |
+| `--size-h1` | 33px to 56px | The page heading (`h1`), once per page: `clamp(2rem, 1.5rem + 2.25vw, 3.5rem)` |
 
 Money and counts use tabular figures.
 
-**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. `--band-pad` is the block padding inside a band and the space between sections in one band: `--space-4` below 48rem, `--space-5` from 48rem (raised on 23 September 2026 at the board's call that sections sat too close). `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
+**Space and shape.** `--space-1` … `--space-5` (0.5 / 1 / 1.5 / 2.5 / 4rem), `--gutter` 1.25rem, `--measure` 44rem, `--wrap` 72rem. Every margin, padding and gap of 0.5rem or more is a token; smaller values are optical nudges inside a component, and em values scale a control's padding with its own text **(tested)**. `--band-pad` is the block padding inside a band, band 1's included, and the space between sections in one band: `clamp(3rem, 9vw, 6rem)`, 48px on a phone, about 69px at 768px and 96px from about 1070px (raised twice on 23 September 2026 at the board's call that sections sat too close). Headings keep more space above than below: a section's `h2` has `--band-pad` above it and `--space-3` under it. `--rail` 9rem is the time column of a row from 48rem. `--radius` 0.375rem (buttons, fields, chips, choices), `--radius-card` 1rem, `--radius-tile` 0.25rem (the funding bar and the suit tile). `--target` 2.75rem, the 44px minimum. Card inset and grid gap are `--space-3`. Running text sets `text-wrap: pretty`, so a paragraph never ends on a lone word.
 
 **Focus.** `:focus-visible` is a 3px solid outline in `--focus-colour` at a 2px offset **(tested)**: signal on paper (9.19; 7.16 on the work face), paper on the signal plate (9.19) and in an ink band (18.88) **(e2e)**. The offset gap, which shows the ground, keeps a paper ring apart from a paper-filled button or Contribute.
 
@@ -128,7 +127,7 @@ Every public page is a stack of full-bleed bands:
 2. Cards, funding bars, card-like choices and `/team`'s agent rows sit only in band 2, which is always drawn (it shows its empty state rather than disappearing). A later band with nothing to show is not drawn, and the bands after it take their colour from their new position **(e2e: no `.card`, `.funding-bar`, `.choice` or `.agent` outside band 2, on every route and with empty data)**.
 3. On signal and on ink, only the role values: paper for text, links, glyphs, edges, the pressed border, the change marker and the focus ring; the band's muted tone for secondary text; its hairline. Suit tiles and the Live mark reset to the text colour. The coin and Contribute stay as they are; avatars sit only on paper and ink (on a paper disc there), never on the signal plate.
 
-**Set once, never per page** **(tested)**. Every direct child of `main` is a `.band`, `display: flow-root`, so no child margin opens a strip of page ground between two grounds **(e2e: every seam measures 0)**. `main > .band:first-child` and `.page:has(> main > .band:first-child) > .topbar` are signal; `main > .band:nth-child(even)` is paper; `main > .band:nth-child(2n + 3)` is ink; the footer is paper when `main`'s last band is odd and ink when it is even. The role resets hang off the same positional selectors, and no class names a band colour. A band holds one or more `h2` sections, `--space-4` apart, with `--band-pad` above and below; band 1 sits `--space-2` under the top bar **(e2e: bands in order on every route)**. On a page shorter than the window, band 1 takes the spare height and sets its heading at its foot. While any part of the page is loading, the last band takes it instead, so the heading never drops to the plate's foot and jumps back when the data arrives; every loading line carries `aria-busy="true"`, which is how the rule knows **(e2e: every title holds still while the data loads)**.
+**Set once, never per page** **(tested)**. Every direct child of `main` is a `.band`, `display: flow-root`, so no child margin opens a strip of page ground between two grounds **(e2e: every seam measures 0)**. `main > .band:first-child` and `.page:has(> main > .band:first-child) > .topbar` are signal; `main > .band:nth-child(even)` is paper; `main > .band:nth-child(2n + 3)` is ink; the footer is paper when `main`'s last band is odd and ink when it is even. The role resets hang off the same positional selectors, and no class names a band colour. A band holds one or more `h2` sections, `--band-pad` apart, with `--band-pad` above and below; band 1 takes the same `--band-pad` under the top bar, so the headline never sits jammed under it **(e2e: bands in order on every route)**. In band 1 the page heading has `--space-3` under it; on home the lede has `--space-4` before Play Dust, which has `--space-4` before the status line. On a page shorter than the window, band 1 takes the spare height and sets its heading at its foot. While any part of the page is loading, the last band takes it instead, so the heading never drops to the plate's foot and jumps back when the data arrives; every loading line carries `aria-busy="true"`, which is how the rule knows **(e2e: every title holds still while the data loads)**.
 
 | Page | Bands, top to bottom |
 |---|---|
@@ -154,9 +153,9 @@ Every public page is a stack of full-bleed bands:
 | Quiet ("Up to date") | muted label, field edge | muted-on-signal label and edge | muted-on-ink label, field edge |
 | Pressed | 3px currentColor border and the check glyph, in every mode | the same (paper) | the same (paper) |
 | Links, change marker | ink | paper | paper |
-| Peanut mark | as drawn | inverted | inverted |
+| The mark | ink | paper | paper |
 
-**Forced colours.** Every ground becomes Canvas, so each band after the first, and the footer, gets a 1px CanvasText top border; the peanut's filter is dropped; the Funded glyph's coin fill falls back to CanvasText and each suit tile gets a 1px CanvasText edge; the Picked ribbon and the Paused hatch are backgrounds and drop, and the word and glyph carry the state **(tested, e2e)**.
+**Forced colours.** Every ground becomes Canvas, so each band after the first, and the footer, gets a 1px CanvasText top border; the mark, drawn in the text colour, becomes CanvasText; the Funded glyph's coin fill falls back to CanvasText and each suit tile gets a 1px CanvasText edge; the Picked ribbon and the Paused hatch are backgrounds and drop, and the word and glyph carry the state **(tested, e2e)**.
 
 ## Components
 
@@ -199,7 +198,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **The announcer.** One polite live region (`Announcer`, `role="status"`): funded and shipped are said once.
 
-**Rows.** `ul.rows`: small text, hairlines between rows, a constant 0.5rem inset. Queued, Shipped, the roadmap and the ledger's rows are rows, never cards. **Rail rows** (`ul.rows.rail`): the rail cell (the time, or for Queued and planned cards the suit tag) on its own line below 48rem and in the 9rem `--rail` column from 48rem, so every list's text column lines up. A shipped row reads: the date in the rail; the title; then the suit tag, the Live tag and what it cost and who funded it (`.row-meta`). There is no card page yet, so no row links to one. The ledger shows the ten newest agent actions and "Show all *n* agent actions", which shows the rest and moves focus to the eleventh; home shows five.
+**Rows.** `ul.rows`: the title and text at the body size, the date, the rail and the meta line small, hairlines between rows, a constant 0.5rem inset. Queued, Shipped, the roadmap and the ledger's rows are rows, never cards. **Rail rows** (`ul.rows.rail`): the rail cell (the time, or for Queued and planned cards the suit tag) on its own line below 48rem and in the 9rem `--rail` column from 48rem, so every list's text column lines up. A shipped row reads: the date in the rail; the title; then the suit tag, the Live tag and what it cost and who funded it (`.row-meta`). There is no card page yet, so no row links to one. The ledger shows the ten newest agent actions and "Show all *n* agent actions", which shows the rest and moves focus to the eleventh; home shows five.
 
 **Status line and paused notice.** The status line is home's one true sentence from data, its figures at 600 (`p.status-line`): how many cards are open, how many are building, and, with the pause glyph before it, the paused sentence (`pausedSentence`: the reason's sentence, or the general line when none is given); home says the pause only here. The glyph is a marker beside the sentence, so the layout audit leaves the pair alone (`data-balance="ignore"`). The paused notice (`p.notice`, kernel `PausedNotice`) says the same sentence as the status line in one plain 600 line with the pause glyph drawn in CSS (two 3px bars in `currentColor`), no box, in the page header on the signal plate of pages without a status line (`/contribute`, `/how-it-works`). Neither glyph can wrap onto a line of its own.
 
@@ -209,12 +208,12 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **Home** (`pages/Landing.tsx`), in the board's order, drawn from one snapshot held still while the page is open (`lib/live.ts`):
 1. **What it is** (signal): the pitch as `h1`, the lede, Play Dust (primary, the cartridge) and How it works, the status line, then the live-updates row.
-2. **Building now** (only while a card builds), **Fund what's next** (its sentence, the filters, the grid in funding order; a phone shows three cards and "Show all *n* cards", which reveals the rest and focuses the fourth card's title; with the waterfall's order loaded, only the open cards in it, so a card that takes no money, such as a vetoed one, is neither counted by the status line nor drawn without its Fund this card in a row of cards that have one; with the order unread, every open card, none with Fund this card) and **Queued** (rows) (paper, the only band with cards).
+2. **Building now** (only while a card builds), **Fund what's next** (its sentence, the filters, the grid in the waterfall's order, the same cards in the same order as /contribute's choices; a phone shows three cards and "Show all *n* cards", which reveals the rest and focuses the fourth card's title; with the waterfall's order loaded, only the open cards in it, so a card that takes no money, such as a vetoed one, is neither counted by the status line nor drawn without its Fund this card in a row of cards that have one; with the order unread, every open card, none with Fund this card, in the roadmap's order: the board's rank, unranked last, then the oldest) and **Queued** (rows) (paper, the only band with cards).
 3. **The team** (ink): the team strip.
-4. **Shipped** (the latest three) and **Planned next** (the next three planned titles) as rail rows, side by side from 64rem (3:2), each linking to `/roadmap`; one alone takes the row (paper).
+4. **Shipped** (the latest three) and **Planned next** (the next three planned titles) as rail rows, side by side from 64rem (3:2) and `--band-pad` apart when they stack, like any two sections, each linking to `/roadmap`; one alone takes the row (paper).
 5. **Where the money goes** (ink): the pool with the coin, the split sentence from the fixed constants in `payment.ts`, "These are contributions, not donations.", the five latest agent actions and Full ledger.
 
-**The top bar** (`App.tsx`, kernel), on the signal plate: below 32rem the peanut mark (named "Peanut Gallery"), Play (outline, the cartridge), Contribute (the coin) and **Menu**, a real button with `aria-expanded` that opens the page links as an inline list inside `nav`; Escape closes it and returns focus to the button, and a route change closes it. Below 22.5rem Play moves into the list. The wordmark shows from 32rem, and from 64rem the links sit in the row and Menu goes. One 60px row from 320px up, not sticky, wrapping only at 200% text **(e2e: at most 61px at 320 to 390px)**.
+**The top bar** (`App.tsx`, kernel), on the signal plate: below 32rem the mark (inline SVG in the text colour, the link named "Mob Machine"), Play (outline, the cartridge), Contribute (the coin) and **Menu**, a real button with `aria-expanded` that opens the page links as an inline list inside `nav`; Escape closes it and returns focus to the button, and a route change closes it. Below 22.5rem Play moves into the list. The wordmark shows from 32rem, and from 64rem the links sit in the row and Menu goes. One 60px row from 320px up, not sticky, wrapping only at 200% text **(e2e: at most 61px at 320 to 390px)**.
 
 **`/contribute`** (kernel): **Fund the next card in line** first (the primary fill), whose second line names the first card in the waterfall's order ("Next in line: *title*"), says the money waits in Not on a card yet when no card takes money, and names no card when the order did not load ("Your contribution funds whatever the agents build next."); then "Or pick a card" with a choice per card in the funding order, in that order (1px ink, `--radius`, a funding bar), "Anything beyond a card's target funds the next cards in line.", the split and the USD note. With the order unread, "Not available right now." stands in for the choices. Directly under that first choice, before any card, the agreement line (small, muted): the Terms and the Refunds page as links and the age condition. It sits `--space-1` under the choice, as its caption, and keeps the choice's `--space-4` before "Or pick a card" **(e2e: layout balance, rhythm)**. A card anywhere draws its live Fund this card only while it is in the funding order.
 
@@ -240,8 +239,9 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 
 ## Breakpoints
 
-- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width. Below 32rem the wordmark is read out but not drawn; the peanut stands for it.
-- From 48rem: two-column card and team grids and the guide's demo grids; rail rows put their time in the rail; the team strip is one row; `--band-pad` grows.
+- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
+- Fluid, with no breakpoint: `--size-h1`, `--size-h2` and `--band-pad` grow with the viewport.
+- From 48rem: two-column card and team grids and the guide's demo grids; rail rows put their time in the rail; the team strip is one row.
 - From 64rem: the page links sit in the top bar and Menu goes; home's Shipped and Planned next sit side by side.
 - From 72rem: three-column card and team grids. Below 72rem a third column squeezes card text until a short card is left hollow beside a long one (measured at 1024px on the launch cards: a 95px hollow), so two columns hold to 72rem.
 
@@ -249,7 +249,7 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 
 **Side-by-side blocks balance or stack; nothing leaves an empty column.** The board caught two such gaps by eye (home's pitch beside a tall panel, the ledger's Funding beside a long Ledger); the site now catches them itself. `scripts/layout-audit.mjs` holds the checks, the layout balance e2e test (`e2e/layout-balance.spec.ts`) runs them on every public route and the guide at 320, 375, 768, 1024 and 1440px with the launch-shaped fixture (long lists), the default fixture, empty data and home with 1, 2, 4, 5 and 7 open cards, and it fails the gate on any finding **(e2e)**:
 
-- **Balance:** two blocks side by side in one row (grid cells or flex items) differ in the height of what they draw by at most max(160px, 35% of the taller). A block that must break this is marked `data-balance="ignore"` with a comment in the code saying why; none is today.
+- **Balance:** two blocks side by side in one row (grid cells or flex items) differ in the height of what they draw by at most max(160px, 35% of the taller); what a closed `details` holds (a card's What the agents are told) is laid out but not drawn, so it is not counted. A block that must break this is marked `data-balance="ignore"` with a comment in the code saying why; none is today.
 - **Hollow:** inside a band, no run of empty space between two blocks is longer than 240px (the last band's tail, which meets the footer on a short page, is not a hollow).
 - **Overflow:** no element reaches past the viewport once its clipping ancestors apply, and the page never scrolls sideways.
 - **Seams:** the top bar, every band and the footer touch exactly.
@@ -273,6 +273,8 @@ A design change ships with a mockup built from the real components, not a pictur
 By the design system: italic nowhere (was: the wordmark only); the contrast test covers every ground (was: white only); cards have a 2px ink edge and `--radius-card`, choices 1px ink and `--radius` (was: `--line` boxes with `--radius-box`); a card has four text styles; card `h3` moves from body to lead; `--paper` is the page ground; `--accent`, `--track` and `--radius-box` retire; the paused notice has no box; `/team` rows are `li.agent`, not `li.card.role`.
 
 By home and design (`docs/specs/home-and-design.md`): black and white only becomes the colour system (the board's decision); principle 10 becomes one colour, one meaning; band 1 is signal (was: odd bands ink from the first); "No suit fills" becomes the suit tile; the focus ring on paper is signal (was: ink); the primary button on paper is signal (was: ink); `--work` is `#dfe2f7` (was `#d4e1ee`); the top bar's 30rem rule becomes the Menu; the landing order becomes the board's; the Right now panel goes; three-column grids start at 72rem (was: 64rem); `/how-it-works` stacks each step (was: text beside its example); the ledger stacks its bands (was: Funding beside the Ledger); No dead space is a rule, checked in the gate.
+
+By the type scale (the board's call, 23 September 2026): the page heading is 33px to 56px with the viewport (was 30px), section headings 24px to 32px (was 24px), every `h3` 20px and bold (was 17px and 600 but on cards); `--size-large` and `--size-display` become `--size-h2` and `--size-h1`; `--band-pad` is fluid, 48px to 96px (was 40px, then 64px from 48rem), and band 1 takes it under the top bar (was 40px); a row's title and text take the body size (was 14px), so the roadmap and home's Shipped and Planned next no longer read as fine print; home's Shipped and Planned next stack `--band-pad` apart (was `--space-4`); the test pinning five exact sizes on a 1.2 ratio becomes the check that every font-size and every spacing value comes from a token; the roadmap's old `h4` rule goes, and `h4` (the ledger's stopped-card titles) takes the heading rule with `h1` to `h3`; the text pages' section margin, the `.hero` and `.section` bottom margins and their resets go, since the band rule overrode them on every route (checked by deleting them from the live stylesheet on every route at 375 to 1440px, with no element moving).
 
 ## Copy rules
 

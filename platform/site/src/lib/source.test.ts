@@ -313,7 +313,7 @@ describe('createSupabaseSource.load', () => {
     expect(STOPPED_LIMIT).toBe(12);
 
     const events = query(fake.queries, 'public_agent_events');
-    expect(events.select).toBe('id,card_id,role_id,type,created_at');
+    expect(events.select).toBe('id,card_id,role_id,type,created_at,step,usd');
     expect(events.orders).toEqual([{ column: 'created_at', ascending: false }]);
     expect(events.limit).toBe(EVENT_LIMIT);
 

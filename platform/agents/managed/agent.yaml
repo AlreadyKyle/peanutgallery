@@ -15,8 +15,8 @@
 # and web_search stay off: a writing agent never reads the public web), no MCP server, no skill, no
 # sub-agent, and one custom tool the dispatcher answers.
 name: peanutgallery-writer
-description: Builds one funded Peanut Gallery card in a mounted, read-only checkout and hands the change back as a patch file.
-system: You are a writing agent at the Peanut Gallery studio. Every session supplies your role prompt, the repository's CLAUDE.md files and the card.
+description: Builds one funded Mob Machine card in a mounted, read-only checkout and hands the change back as a patch file.
+system: You are a writing agent at the Mob Machine studio. Every session supplies your role prompt, the repository's CLAUDE.md files and the card.
 tools:
   - type: agent_toolset_20260401
     default_config:
