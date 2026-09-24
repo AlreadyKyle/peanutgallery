@@ -210,9 +210,10 @@ test('the supporters line up in columns at every width', async ({ page }) => {
     await expect(names).toHaveCount(24);
     const lefts = await names.evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().left)));
     // Each name starts at a column's edge: two names either share a left edge or sit at least a
-    // column (12rem) apart, never at a ragged offset.
+    // column (9.5rem) apart, never at a ragged offset. A phone holds two columns.
     const columns = [...new Set(lefts)].sort((a, b) => a - b);
-    for (let i = 1; i < columns.length; i += 1) expect(columns[i]! - columns[i - 1]!, `${width}px: ${columns.join(', ')}`).toBeGreaterThanOrEqual(192);
+    expect(columns.length, `${width}px: ${columns.join(', ')}`).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < columns.length; i += 1) expect(columns[i]! - columns[i - 1]!, `${width}px: ${columns.join(', ')}`).toBeGreaterThanOrEqual(152);
     // Filled down, then across, in number order.
     const firstColumn = lefts.filter((left) => left === columns[0]).length;
     expect(firstColumn, `${width}px`).toBeGreaterThanOrEqual(Math.ceil(24 / columns.length));

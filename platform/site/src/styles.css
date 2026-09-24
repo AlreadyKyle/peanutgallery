@@ -1944,10 +1944,12 @@ input[type='radio'] {
 }
 
 /* Supporters: the numbers in newspaper columns, filled down then across in number order, so the names
-   line up in columns at every width instead of a ragged run. No tiles. */
+   line up in columns at every width instead of a ragged run: two on a phone, four at the measure.
+   Small text, so "Founding supporter 24" fits a 9.5rem column. No tiles. */
 .supporters {
-  columns: 12rem;
+  columns: 9.5rem;
   column-gap: var(--space-3);
+  font-size: var(--size-small);
   margin: 0;
   padding: 0;
   list-style: none;
