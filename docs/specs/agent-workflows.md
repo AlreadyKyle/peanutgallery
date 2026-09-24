@@ -69,27 +69,26 @@ Out, and what each waits on:
 
 ## Evidence
 
-Built on `launch/agent-workflows` from `launch/agent-system-core` at 25dd35f (stacked on agent-system-core, which had not merged). The production lines of Verification and the production steps are the ship stage's and are not run here; the gate result at the pull request's head sha is quoted in the pull request.
+Built on `launch/agent-workflows` from `launch/agent-system-core` at 25dd35f (stacked on agent-system-core, which had not merged), then merged with agent-system-core's review fixes, which carry main through the gap audit (#76). The production lines of Verification and the production steps are the ship stage's and are not run here; the gate result at the pull request's head sha is quoted in the pull request.
 
-`rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify` exits 0 (`EXIT 0`), run with `npm_config_workspace_concurrency=1` so the packages' tests run one at a time: with other agents loading the machine (load average near 90), two parallel runs each timed out one untouched dispatcher test at 5 s (`test/github.test.ts` once, `test/pipeline.test.ts` once), and each passed alone (`Tests  676 passed (676)`). Its package lines:
+After the review fixes, `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify` exits 0 (`EXIT 0`), run with `npm_config_workspace_concurrency=1` so the packages' tests run one at a time while other agents load the machine. Its package lines:
 
 ```
-platform/board test:       Tests  86 passed (86)
-platform/supabase test:       Tests  304 passed (304)
-platform/site test:       Tests  418 passed (418)
-seed-1 test:       Tests  77 passed (77)
-platform/dispatcher test:       Tests  676 passed (676)
 platform/gate test: PASS: gate tests passed=508
-ok | 112 passed (148 steps) | 0 failed
+platform/board test:       Tests  93 passed (93)
+platform/site test:       Tests  431 passed (431)
+platform/supabase test:       Tests  304 passed (304)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  679 passed (679)
+ok | 115 passed (157 steps) | 0 failed
 GATE PASS folder=seed-1 lane=code
 GATE PASS folder=platform lane=code
-PASS: secret-scan files=579
+PASS: secret-scan files=584
 ```
 
 `pnpm test:functions`, `platform/supabase/functions/_shared/agent_workflows_test.ts` (criteria 4 and 5's SQL half, and the jobs' seed for 6):
 
 ```
-running 7 tests from ./platform/supabase/functions/_shared/agent_workflows_test.ts
 a draft is private and every draft and ranking function is the service role's ...
   anon and authenticated read no draft, a board member included; the service role reads it ... ok
   anon and authenticated may call none of the new functions ... ok
@@ -105,11 +104,20 @@ approval inserts one seed-1 card from the graded draft, which takes no money unt
 a withdrawal writes no card and ends the draft ... ok
 the card text guard accepts agent text from the board and draft paths only ... ok
 apply_card_ranking writes rank only, on open cards on now with no money, at most ten a run ...
-  each refusal names the card, and a refused ranking writes nothing ... ok
-  the reverse of twelve cards changes ten, in the order given, and writes one event of ids and positions ... ok
-  a card already at its position is not a change ... ok
+  each refusal names the card, and a refused ranking writes nothing; rankable_cards lists the cards it accepts ... ok
+  the reverse of twelve applies the longest start of the order that fits in ten changes, and leaves no two cards on now one rank ... ok
+  an order the cards already stand in is not a change ... ok
+a ranking trades only the places the named cards hold, so a card holding money keeps its place in line ...
+  ranked cards: the unchanged order moves nothing, and a card holding money stays first ... ok
+  sparse ranks: the named cards keep the ranks they hold, and the card holding money between them keeps its own ... ok
+  unranked cards: they go after every rank on now, only where they already are, and the next payment still reaches the card holding money ... ok
+  an unranked card holding money: no card behind it passes it, and a card ahead of it can still move ... ok
+  a rank another card in line shares is not traded, a funded card with room included ... ok
 the two jobs are seeded manual, model-calling and running while the studio is paused, linked to their roles ... ok
+ok | 8 passed (17 steps) | 0 failed
 ```
+
+The ranking steps read `money.funding_order()` after each ranking. With `apply_card_ranking` put back to position n gets rank n (the new helpers kept), 6 of those steps fail; the reverse of twelve, for one, funded Open 0 first.
 
 `pnpm --filter @backseat/dispatcher test`, the new files (criteria 1, 2, 3, 5 and 6):
 
@@ -134,46 +142,42 @@ the two jobs are seeded manual, model-calling and running while the studio is pa
  ✓ test/role-session.test.ts > runRoleSession > stops a session whose init line shows a write tool or an API key
  ✓ test/role-session.test.ts > runRoleSession > stops when the board session lapses, and runs only attended
  ✓ test/job-handlers.test.ts > studio_ranking > shows typed fields only, a community card as id, stage, horizon, bucket and funded, and applies the order
+ ✓ test/job-handlers.test.ts > studio_ranking > never offers a card whose only money is a payment on hold, and the ranking of the others applies
  ✓ test/job-handlers.test.ts > studio_ranking > fails, writing no rank, when the answer names a card that holds money or is off now, or the session fails
- ✓ test/job-handlers.test.ts > draft_card > approves a draft that passes the checks and the Director, from a separate session, with the draft fields and the target equal to the estimate
- ✓ test/job-handlers.test.ts > draft_card > starts a new round on revise, giving the Designer the codes, the note and its last draft, then approves
- ✓ test/job-handlers.test.ts > draft_card > withdraws a flagged draft with its reason codes and writes no card
- ✓ test/job-handlers.test.ts > draft_card > withdraws after a third round without approval
- ✓ test/job-handlers.test.ts > draft_card > refuses a draft by its check before any grading and sends it back as a new round
- ✓ test/job-handlers.test.ts > draft_card > refuses an answer that is not one valid draft as the schema check, and fails the run with nothing written after three
- ✓ test/job-handlers.test.ts > draft_card > fails the run, writing no card, when a model call fails or the Director does not answer with one verdict
- ✓ test/job-handlers.test.ts > draft_card > keeps community free text out of the Designer and Director prompts, and passes the floor and the named open cards
- ✓ test/job-handlers.test.ts > draft_card > refuses to start without an unpaused Game Director, or with input other than {} or {floor, open_cards}
+ ✓ test/job-handlers.test.ts > draft_card > (the nine draft_card tests, unchanged)
  ✓ test/job-handlers.test.ts > the two jobs on the queue > registers both handlers
  ✓ test/job-handlers.test.ts > the two jobs on the queue > runs a board-origin Rank now in attended mode while the studio is paused and a board member is signed in, and waits otherwise
  ✓ test/job-handlers.test.ts > the two jobs on the queue > runs a board-origin Rank now in unattended mode while the studio is paused and a board member is signed in, and waits otherwise
- ✓ test/public-text.test.ts > scanPublicText > runs the gate script in this checkout
- ✓ test/public-text.test.ts > scanPublicText > passes clean card text
- ✓ test/public-text.test.ts > scanPublicText > refuses a deny-list hit in any string, and a trademark too
- ✓ test/public-text.test.ts > scanPublicText > refuses when the scan cannot run: the script missing, or any other exit
- Test Files  5 passed (5)
-      Tests  37 passed (37)
+ ✓ test/db.test.ts > createSupabaseDb queries > reads the rankable cards from rankable_cards, the test apply_card_ranking refuses on, and refuses an answer that is not a list
+ ✓ test/public-text.test.ts > scanPublicText > (the four tests, unchanged)
 ```
 
-`pnpm --filter @backseat/supabase test` (the static migration checks and the anon probes' list, criterion 4): `Tests  304 passed (304)`. `pnpm test:agents` (criteria 3 and 8: the schemas, the rubric's pillars and rating verbatim, Biz Dev and Community): `ℹ tests 125`, `ℹ pass 125`, `ℹ fail 0`. `pnpm test:docs`: `ℹ tests 18`, `ℹ pass 18`, `ℹ fail 0`.
+With the handler's old `funded_usd === 0` test put back, the three studio_ranking tests fail: the held card is offered as rankable.
 
-`BOARD_E2E_PORT=4437 pnpm --filter @backseat/board e2e` (criterion 6, Rank now and Draft a game card queue `{}` and each run shows its typed output):
+`pnpm --filter @backseat/supabase test` (the static migration checks and the anon probes' list, criterion 4): `Tests  304 passed (304)`. `pnpm test:agents` (criteria 3 and 8): `ℹ tests 124`, `ℹ pass 124`, `ℹ fail 0`. `pnpm test:docs`: `ℹ tests 18`, `ℹ pass 18`, `ℹ fail 0`.
+
+`BOARD_E2E_PORT=4463 pnpm --filter @backseat/board e2e` (criterion 6, Rank now and Draft a game card queue `{}` and each run shows its typed output):
 
 ```
-  ✓  5 e2e/board.spec.ts:275:1 › at the second factor the board sees and vetoes an undealt agent card, and reads the roles, the jobs and the cooling window, under the enforced policy
-  5 passed (3.1s)
+  ✓  5 e2e/board.spec.ts:334:1 › at the second factor the board sees and vetoes an undealt agent card, pauses a role from the keyboard, and reads the jobs and the cooling window, under the enforced policy
+  7 passed (4.6s)
 ```
 
-`E2E_PORT=4439 pnpm --filter @backseat/site e2e` (criterion 7, `e2e/agent-card.spec.ts` at 375 and 1440 px):
+`E2E_PORT=4461 pnpm --filter @backseat/site e2e` (criterion 7, `e2e/agent-card.spec.ts` at 375, 768 and 1440 px, and the layout audit with an agent card): `157 passed (3.2m)`, `5 skipped`, among them:
 
 ```
   ✓ e2e/agent-card.spec.ts › at 375px › the drafted card on the fund grid says the Game Designer wrote it, and no other card says so
   ✓ e2e/agent-card.spec.ts › at 375px › /roadmap shows the line on the waiting agent card only
   ✓ e2e/agent-card.spec.ts › at 1440px › the drafted card on the fund grid says the Game Designer wrote it, and no other card says so
   ✓ e2e/agent-card.spec.ts › at 1440px › /roadmap shows the line on the waiting agent card only
-  5 skipped
-  128 passed (2.3m)
+  ✓ e2e/agent-card.spec.ts › at 768px the byline ends above the bottom block, and the bars in its row line up
+  ✓ e2e/agent-card.spec.ts › at 1440px the byline ends above the bottom block, and the bars in its row line up
+  ✓ e2e/layout-balance.spec.ts › layout balance, home with an open card an agent drafted › leaves no dead space at 768px
+  ✓ e2e/layout-balance.spec.ts › layout balance, home with an open card an agent drafted › leaves no dead space at 1024px
+  ✓ e2e/layout-balance.spec.ts › layout balance, home with an open card an agent drafted › leaves no dead space at 1440px
 ```
+
+With the card subgrid put back to four tracks, all five byline and layout tests at 768, 1024 and 1440 fail: the byline was drawn through the funding bar.
 
 Production (the ship stage, after the production steps): the pre-migration dump's size, `anon-negative-test.ts` and `ledger-identity.ts` PASS and `select public.ledger_identity()` are quoted in the pull request when run.
 
@@ -201,3 +205,9 @@ Production (the ship stage, after the production steps): the pre-migration dump'
   - The executors a draft may name are the seed-1 card roles the site and the board already offer (Builder A, Builder B and QA), active, unpaused and of the writer class.
   - The AI-agent line is on the card face and on /roadmap's rows, which carry the summary of an approved agent card waiting on next. Home's title-only rows and the shipped rows carry none; supporter-pages' /card/:id is where a card's full text lands.
   - The Community backlog entry no longer names Reddit, X or a board review.
+- 2026-09-23, review fixes (no board question):
+  - The ranking's "a card holding money keeps its place" is now enforced, not assumed. Position n getting rank n tied or passed every card the ranking may not touch (a card with money, a card left out, a change past the cap), and step 2 breaks rank ties by age, so new money could fund a card the Studio Head had not put first ahead of a card half funded. `card_ranking_places` has the named cards trade the ranks they already hold, in the order given; an unranked card's place is after every rank on now, and unranked cards that already stand in the order given keep no number. Every card the order does not name keeps its rank and its place in step 2's line.
+  - Where trading could still move another card, the named card keeps its rank and counts as not applied: another card in line (on now at proposed, designing, voted or funded, the stages step 2 funds) shares its rank, or it is unranked behind an older unranked card the order leaves out. A shared rank is the board's to break; the ranking never creates one.
+  - The ten-change cap applies the longest start of the order whose changes fit in ten, the named cards in it trading their own ranks, so no stale rank ever ties a new one. `unapplied` counts the named cards whose place was not set. The board shows them as "n more kept their ranks."
+  - Which cards are rankable is one SQL test, `card_rank_problem` (off now, not open for funding, money on the bar or a payment on hold naming the card). `apply_card_ranking` refuses on it and `rankable_cards` lists by it, and the dispatcher offers the Studio Head only what `rankable_cards` returns. A card with an empty bar and a payment on hold (the daily credit cap used up) was offered before and failed every Rank now until the hold released.
+  - The card subgrid from main's gap audit (#76) gains a fifth track for the byline: index, title, summary, byline, bottom block. With four, the byline fell into the bottom block's row and was drawn through the funding bar at 768 and 1440.
