@@ -60,7 +60,6 @@ beforeAll(async () => {
     tickMs: 60_000,
     worktreeRoot: path.join(dir, '.worktrees'),
     maxConcurrency: 1,
-    schedulerEnabled: false,
     claudeBin: 'claude',
     boardSessionTtlMin: 3,
     studioAnthropicApiKey: null,
@@ -148,6 +147,8 @@ describe('recoverOrphans', () => {
     );
     expect(background).toEqual([]);
     expect(resumed).toEqual([]);
+    // Recovery reads building and gated cards from dispatcher_cards, which holds every stage.
+    expect(db.stagesRead).toEqual([['building', 'gated']]);
     expect(looked).toEqual([gatedUnmerged.id]);
     expect(db.cards.map((c) => [c.stage, c.failing_check, c.actual_usd])).toEqual([
       ['paused', 'dispatcher_restart', 0.5],

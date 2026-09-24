@@ -9,6 +9,9 @@ import type {
   Db,
   Deploy,
   DeployInput,
+  EnqueueInput,
+  Job,
+  JobRun,
   Pool,
   RecordUsageResult,
   Role,
@@ -44,6 +47,10 @@ export function card(overrides: Partial<Card> = {}): Card {
     commit_sha: null,
     failing_check: null,
     created_at: '2026-09-14T14:00:00.000Z',
+    needs_approval: false,
+    approved: false,
+    board_vetoed: false,
+    executor_paused: false,
     ...overrides,
   };
 }
@@ -57,6 +64,8 @@ export function role(overrides: Partial<Role> = {}): Role {
     prompt_path: 'platform/agents/prompts/builder-a.md',
     tools_json: ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'],
     write_access: true,
+    agent_class: 'writer',
+    paused: false,
     ...overrides,
   };
 }
@@ -74,6 +83,14 @@ export interface EventRow {
   payload: Record<string, unknown>;
 }
 
+// A job run as job_runs keeps it.
+export interface FakeJobRun extends JobRun {
+  idem_key: string;
+  reason: string | null;
+  output: Record<string, unknown> | null;
+  holder: string | null;
+}
+
 export class FakeDb implements Db {
   studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500, anthropic_tier_cap_usd: null, platform_lane_open: false };
   pool: Pool = { balance_usd: 50, reserve_usd: 0, incident_reserve_usd: 0, daily_spent_usd: 0, day: '2026-09-14' };
@@ -84,6 +101,8 @@ export class FakeDb implements Db {
   events: EventRow[] = [];
   deploys: Deploy[] = [];
   claims = 0;
+  // The stages each listCardsInStages call asked for.
+  stagesRead: string[][] = [];
   heartbeats: Date[] = [];
   heartbeatError: Error | null = null;
   // Console credit the board has recorded buying; ample by default so money tests set it.
@@ -93,6 +112,16 @@ export class FakeDb implements Db {
   clock = () => NOW.getTime();
   pausedBy: string | null = null;
   pauseReason: string | null = null;
+  // The job queue, as job_runs keeps it (20260924300000_agent_system_core.sql).
+  jobList: Job[] = [];
+  jobRuns: FakeJobRun[] = [];
+  // What deal_due_cards and resume_due_by_rule answer, and how often they were called.
+  dueCards: string[] = [];
+  dealCalls = 0;
+  dealError: Error | null = null;
+  resumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
+  resumeCalls = 0;
+  resumeError: Error | null = null;
 
   async getStudioState() {
     return { ...this.studio };
@@ -155,11 +184,14 @@ export class FakeDb implements Db {
   async boardSessionActive() {
     return this.boardActive;
   }
-  async listFundedCards() {
-    return this.cards.filter((c) => c.stage === 'funded').map((c) => ({ ...c }));
-  }
+  // dispatcher_cards holds every stage (agent_system_test.ts reads a card at each one), so the fake
+  // filters by the stages asked for alone; the executor's pause is read from its role, as the view
+  // joins it.
   async listCardsInStages(stages: string[]) {
-    return this.cards.filter((c) => stages.includes(c.stage)).map((c) => ({ ...c }));
+    this.stagesRead.push([...stages]);
+    return this.cards
+      .filter((c) => stages.includes(c.stage))
+      .map((c) => ({ ...c, executor_paused: c.executor_paused || this.roles.some((r) => r.id === c.executor_role_id && r.paused) }));
   }
   async claimCard(id: string) {
     this.claims += 1;
@@ -210,6 +242,90 @@ export class FakeDb implements Db {
   }
   async insertDeploy(input: DeployInput) {
     this.deploys.push({ id: `deploy-${this.deploys.length + 1}`, created_at: new Date(NOW.getTime() + this.deploys.length * 1000).toISOString(), ...input });
+  }
+  async dealDueCards() {
+    this.dealCalls += 1;
+    if (this.dealError) throw this.dealError;
+    const dealt = [...this.dueCards];
+    this.dueCards = [];
+    for (const id of dealt) {
+      const found = this.cards.find((c) => c.id === id);
+      if (found) found.horizon = 'now';
+    }
+    return dealt;
+  }
+  async resumeDueByRule() {
+    this.resumeCalls += 1;
+    if (this.resumeError) throw this.resumeError;
+    return this.resumeResult;
+  }
+  // enqueue_job_run: a key once, one queued scheduled run per job, and a board parent's origin.
+  async enqueueJobRun(input: EnqueueInput) {
+    const parent = input.parentRunId ? this.jobRuns.find((r) => r.id === input.parentRunId) : undefined;
+    const origin = parent?.origin === 'board' ? 'board' : input.origin;
+    const key = input.key ?? `${input.job}:${origin}:${this.jobRuns.length + 1}`;
+    const same = this.jobRuns.find((r) => r.idem_key === key);
+    if (same) return { id: same.id, created: false };
+    const queuedSchedule = origin === 'schedule' ? this.jobRuns.find((r) => r.job_name === input.job && r.status === 'queued' && r.origin === 'schedule') : undefined;
+    if (queuedSchedule) return { id: queuedSchedule.id, created: false };
+    const run: FakeJobRun = {
+      id: `run-${this.jobRuns.length + 1}`,
+      job_name: input.job,
+      origin,
+      status: 'queued',
+      card_id: input.cardId ?? null,
+      input: input.input ?? {},
+      parent_run_id: input.parentRunId ?? null,
+      created_at: new Date(this.clock() + this.jobRuns.length).toISOString(),
+      idem_key: key,
+      reason: null,
+      output: null,
+      holder: null,
+    };
+    this.jobRuns.push(run);
+    return { id: run.id, created: true };
+  }
+  async queuedRuns(limit: number) {
+    return this.jobRuns
+      .filter((r) => r.status === 'queued')
+      .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1))
+      .slice(0, limit)
+      .map((r) => ({ ...r, input: { ...r.input } }));
+  }
+  private holdsLease(holder: string) {
+    return this.lease !== null && this.lease.holder === holder && this.lease.expiresAt > this.clock();
+  }
+  async claimJobRun(runId: string, holder: string) {
+    const run = this.jobRuns.find((r) => r.id === runId);
+    if (!run || run.status !== 'queued' || !this.holdsLease(holder)) return false;
+    run.status = 'running';
+    run.holder = holder;
+    return true;
+  }
+  async finishJobRun(runId: string, status: 'succeeded' | 'failed' | 'skipped', reason: string | null, output: Record<string, unknown> | null) {
+    const run = this.jobRuns.find((r) => r.id === runId);
+    if (!run || !(run.status === 'running' || (run.status === 'queued' && status === 'skipped'))) throw new Error(`db finish_job_run: job run ${runId} is not running`);
+    if (status !== 'succeeded' && (reason === null || reason.trim() === '')) throw new Error('db finish_job_run: A failed or skipped run needs a reason');
+    run.status = status;
+    run.reason = reason;
+    run.output = output;
+  }
+  async failRunningJobRuns(holder: string, reason: string) {
+    if (!this.holdsLease(holder)) throw new Error('db fail_running_job_runs: Only the dispatcher lease holder fails running job runs');
+    const running = this.jobRuns.filter((r) => r.status === 'running');
+    for (const run of running) {
+      run.status = 'failed';
+      run.reason = reason;
+    }
+    return running.length;
+  }
+  async jobs() {
+    return this.jobList.map((j) => ({ ...j }));
+  }
+  async roleState(roleId: string) {
+    const found = this.roles.find((r) => r.id === roleId);
+    if (!found) throw new Error(`db role state: no row for ${roleId}`);
+    return { paused: found.paused, state: 'active' };
   }
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);

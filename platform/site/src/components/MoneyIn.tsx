@@ -46,10 +46,23 @@ export function NotOnCardStat({ snapshot }: { snapshot: Snapshot }) {
   return <Stat label={legal.notOnCard} description={legal.describeNotOnCard} value={money === null ? null : formatUsd(money.not_on_card_usd)} />;
 }
 
-/** Under the Funding band's figures: the shortfall while there is one, and the board's test payment while it is booked. */
+/**
+ * Under the Funding band's figures: the one case where Not on a card yet funds a card that is not the
+ * next to open (a rule, so it is said whether or not the figures loaded; a full-width line, since
+ * beside the figure it would stand a tall column against a one-line amount), then the shortfall while
+ * there is one and the board's test payment while it is booked.
+ */
 export function FundingLines({ snapshot }: { snapshot: Snapshot }) {
   const money = loadedMoney(snapshot);
-  if (money === null) return null;
+  return (
+    <>
+      <p className="muted small">{legal.notOnCardTopUp}</p>
+      {money === null ? null : <FundingFigureLines money={money} />}
+    </>
+  );
+}
+
+function FundingFigureLines({ money }: { money: Money }) {
   return (
     <>
       {money.short_usd > 0 ? <p className="muted small">{legal.shortBy.replace('{usd}', formatUsd(money.short_usd))}</p> : null}

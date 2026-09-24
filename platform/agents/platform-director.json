@@ -7,8 +7,9 @@
   "budget_share": 0,
   "voice": "exacting",
   "prompt_path": "platform/agents/prompts/platform-director.md",
-  "tools": [],
+  "tools": ["Read", "Glob", "Grep"],
   "metrics": ["first_pass_rate", "reopen_rate"],
+  "class": "reviewer",
   "write_access": false,
   "status": "running"
 }

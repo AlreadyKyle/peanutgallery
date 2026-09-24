@@ -34,7 +34,8 @@ const BOARD_EMAIL = "board@peanutgallery.games";
 const MODERATOR_EMAIL = "mod@peanutgallery.games";
 const OUTSIDER_EMAIL = "someone@peanutgallery.games";
 // money-logic.md adds contribution_allocations, supporters and board_test_payments to the guard.
-const APPEND_ONLY = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments"];
+// agent-system-core.md adds card_approvals.
+const APPEND_ONLY = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments", "card_approvals"];
 
 type Row = Record<string, unknown>;
 

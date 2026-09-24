@@ -182,8 +182,8 @@ class CardStop extends Error {
   }
 }
 
-// A card that goes back to funded, to be claimed again: main moved while it was in the gate, or the
-// throttle's budget was gone by the time its session started.
+// A card that goes back to funded, to be claimed again: main moved while it was in the gate, the
+// throttle's budget was gone by the time its session started, or its executor role was paused.
 class Requeue extends Error {
   readonly from: readonly string[];
   readonly failingCheck: string;
@@ -624,6 +624,10 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   if (run.outcome === 'completed') return;
   if (run.outcome === 'adapter_paused') throw new CardStop('paused', run.failingCheck ?? 'adapter', run.detail);
   if (run.outcome === 'insufficient_balance') throw new Requeue(['building'], 'insufficient_balance', run.detail, false);
+  // A paused executor role is not the card's fault: the card goes back to funded with no rejection,
+  // as after an infrastructure stop, and runnable() leaves it until the board resumes the role
+  // (docs/specs/agent-system-core.md).
+  if (run.outcome === 'role_paused') throw new Requeue(['building'], 'role_paused', run.detail, false);
   if (run.outcome === 'credit_exhausted') {
     // The next session would fail the same way, so the studio stops until the board buys credit.
     const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: Console credit needed (card ${shortId(card.id)})`, deps.now(), 'awaiting_credit'));

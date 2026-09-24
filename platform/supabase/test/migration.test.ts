@@ -2098,3 +2098,102 @@ describe("money-logic migration", () => {
     expect(script).toContain("await db.schema(MONEY_SCHEMA).rpc(");
   });
 });
+
+// docs/specs/agent-system-core.md: approvals, dealing after the cooling window, the board's and the
+// roles' controls, the job queue and resume by rule.
+const AGENT_SYSTEM_CORE_FILE = "20260924300000_agent_system_core.sql";
+const agentSystemCoreSql = launchFile(AGENT_SYSTEM_CORE_FILE);
+// Every table, view and function the migration adds that anon must not reach.
+const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards", "dispatcher_card_spend"];
+const AGENT_SYSTEM_CORE_FUNCTIONS = [
+  "record_card_approval",
+  "card_content_hash",
+  "card_content_hash_of",
+  "card_needs_approval",
+  "card_approved",
+  "card_money_held",
+  "card_ready_problem",
+  "card_ceiling_resumed",
+  "deal_due_cards",
+  "resume_card_by_rule",
+  "resume_due_by_rule",
+  "enqueue_job_run",
+  "claim_job_run",
+  "finish_job_run",
+  "fail_running_job_runs",
+  "set_cooling_window",
+  "set_role_pause",
+  "set_card_veto",
+  "enqueue_manual_job",
+  "board_jobs",
+  "board_roles",
+];
+
+describe("agent-system-core migration", () => {
+  it("comes straight after money-logic and sets a lock timeout first", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(AGENT_SYSTEM_CORE_FILE);
+    expect(at).toBeGreaterThan(0);
+    expect(names[at - 1]).toBe(MONEY_LOGIC_FILE);
+    expect(withoutComments(agentSystemCoreSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(agentSystemCoreSql).split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("keeps card_approvals private and append-only: select for the service role, nothing for anon or authenticated, the money tables' guard", () => {
+    const body = withoutComments(agentSystemCoreSql);
+    expect(body).toContain("alter table public.card_approvals enable row level security;");
+    expect(body).toContain("revoke all on public.card_approvals from anon, authenticated, service_role;\ngrant select on public.card_approvals to service_role;");
+    expect(body).toContain("create trigger card_approvals_append_only before update or delete on public.card_approvals\n  for each row execute function public.refuse_money_change();");
+    expect(body).toContain("create trigger card_approvals_no_truncate before truncate on public.card_approvals\n  for each statement execute function public.refuse_money_change();");
+    expect(body).not.toMatch(/grant (insert|update|delete|all)[^;]*public\.card_approvals/);
+    expect(body).toContain("revoke all on public.jobs, public.job_runs from anon, authenticated;");
+    expect(body).toContain("revoke all on table public.dispatcher_cards from anon, authenticated, service_role;\ngrant select on public.dispatcher_cards to service_role;");
+  });
+
+  it("grants card_is_public to anon, which the cards policy calls as the caller, and every other new function to the service role or the board", () => {
+    const body = withoutComments(agentSystemCoreSql);
+    expect(body).toContain("grant execute on function public.card_is_public(uuid) to anon, authenticated, service_role;");
+    expect(body).toContain("create policy cards_public_read on public.cards for select to anon, authenticated using (public.card_is_public(id));");
+    expect(body).toContain("create policy cards_board_read on public.cards for select to authenticated using (public.is_board_member());");
+    for (const name of AGENT_SYSTEM_CORE_FUNCTIONS) {
+      expect(body, name).toMatch(new RegExp(`revoke all on function public\\.${name}\\([^)]*\\) from public, anon`));
+    }
+    expect(body).toContain("revoke all on function money.top_up_card(uuid, numeric) from public, anon, authenticated, service_role;");
+    expect(body).not.toMatch(/grant execute on function money\./);
+  });
+
+  it("adds two conditions to money-logic's predicate and keeps its body otherwise", () => {
+    const predicate = (sql: string) => {
+      const start = sql.indexOf("create or replace function money.card_takes_money(");
+      return sql.slice(start, sql.indexOf("\n$$;", start));
+    };
+    const before = predicate(moneyLogicSql);
+    const after = predicate(agentSystemCoreSql);
+    expect(after).toBe(before.replace("not coalesce(p_lane_open, false))", "not coalesce(p_lane_open, false))\n    and not c.board_vetoed\n    and public.card_is_public(c.id)"));
+    const select = readFileSync(resolve(MIGRATIONS_DIR, "..", "..", "dispatcher", "src", "select.ts"), "utf8");
+    expect(select).toContain("20260924300000_agent_system_core.sql");
+    expect(select).toContain("if (card.needs_approval && !card.approved) return false;");
+    expect(select).toContain("if (card.board_vetoed) return false;");
+  });
+
+  it("keeps record_usage at nine arguments and refuses a studio row with no card", () => {
+    const body = functionBlockIn(agentSystemCoreSql, "record_usage");
+    expect(body).toContain("  p_billed_to public.ledger_billing default 'studio',\n  p_request_id text default null\n) returns jsonb");
+    expect(body).toContain("if p_billed_to = 'studio'::public.ledger_billing and p_card_id is null then\n    raise exception 'A studio row names a card';");
+    expect(withoutComments(agentSystemCoreSql)).toContain(`grant execute on function public.record_usage(uuid, uuid, text, integer, integer, integer, numeric, public.ledger_billing, text) to service_role;`);
+  });
+
+  it("is probed by anon-negative-test: the new tables and views refused, every new function refused but card_is_public, which is callable", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    for (const relation of AGENT_SYSTEM_CORE_PRIVATE) expect(block("PRIVATE_TABLES")).toContain(`"${relation}"`);
+    for (const name of AGENT_SYSTEM_CORE_FUNCTIONS) expect(block("RPC_PROBES")).toContain(`["${name}",`);
+    expect(block("RPC_PROBES")).not.toContain('"card_is_public"');
+    expect(script).toContain('const CALLABLE_RPCS: Array<[string, Record<string, unknown>]> = [["card_is_public", { p_card: NO_CARD }]];');
+    expect(script).toContain('const PUBLIC_ROLE_CLASS_COLUMNS = "agent_class,paused,paused_reason";');
+    expect(script).toContain('relation: "cards(agent-written without an approval)"');
+  });
+});

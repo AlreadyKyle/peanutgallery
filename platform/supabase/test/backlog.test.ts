@@ -107,6 +107,13 @@ describe("planBacklog", () => {
     folder: "platform",
     summary: "Let players pick the next card without paying, alongside funding.",
     intent: "A free vote for each signed-in player, counted beside the money on each card, so the audience steers without paying. It is not built yet.",
+    source: "board",
+    funded_usd: "0.0000",
+    funding_target_usd: "0.0000",
+    executor_role_id: null,
+    drafter_role_id: null,
+    opens_at: null,
+    board_vetoed: false,
     ...over,
   });
 
@@ -170,11 +177,79 @@ describe("planBacklog", () => {
     expect(plan.insert.map((r) => r.title)).toEqual(["A second unlock track in Dust"]);
   });
 
+  it("leaves a card with a drafter, an opens_at or a board veto untouched (docs/specs/agent-system-core.md)", () => {
+    const plan = planBacklog(entries, [
+      existing({ title: "Free voting on open cards", rank: 7, drafter_role_id: "role-designer" }),
+      existing({ title: "Studio Head drafts cards from the roadmap", rank: 7, opens_at: "2026-09-24T00:00:00Z" }),
+      existing({ title: "A second unlock track in Dust", folder: "seed-1", rank: 7, board_vetoed: true }),
+      existing({ id: "gone-drafted", title: "An entry that left the file", drafter_role_id: "role-designer" }),
+      existing({ id: "gone-dealing", title: "Another entry that left the file", opens_at: "2026-09-24T00:00:00Z" }),
+      existing({ id: "gone-vetoed", title: "A third entry that left the file", board_vetoed: true }),
+    ]);
+    expect(plan.skipped).toEqual([
+      { title: "Free voting on open cards", reason: "card id-Free voting on open cards is drafted" },
+      { title: "Studio Head drafts cards from the roadmap", reason: "card id-Studio Head drafts cards from the roadmap is waiting to be dealt" },
+      { title: "A second unlock track in Dust", reason: "card id-A second unlock track in Dust is vetoed" },
+    ]);
+    expect([plan.update, plan.insert, plan.remove]).toEqual([[], [], []]);
+  });
+
+  it("lists for removal every planned card whose entry left the file, and only a board-filed one at proposed on next or later that never held money and was never drafted", () => {
+    const gone = (id: string, over: Partial<ExistingCard> = {}) => existing({ id, title: `Left the file ${id}`, ...over });
+    const plan = planBacklog(entries, [
+      existing({ title: "Free voting on open cards" }),
+      gone("split-aggregate"),
+      gone("dispute-won", { horizon: "later" }),
+      gone("on-now", { horizon: "now" }),
+      gone("voted", { stage: "voted" }),
+      gone("agent", { source: "agent" }),
+      gone("funded", { funded_usd: "1.0000" }),
+      gone("targeted", { funding_target_usd: "5.0000" }),
+      gone("with-executor", { executor_role_id: "role-builder-a" }),
+      gone("drafted", { drafter_role_id: "role-designer" }),
+      gone("dealing", { opens_at: "2026-09-24T00:00:00Z" }),
+      gone("vetoed", { board_vetoed: true }),
+      // Read twice (by title and as a planned card): listed once.
+      gone("split-aggregate"),
+    ]);
+    expect(plan.remove).toEqual([
+      { id: "split-aggregate", title: "Left the file split-aggregate" },
+      { id: "dispute-won", title: "Left the file dispute-won" },
+    ]);
+  });
+
   it("updates the backlog copy when a title is also held by a card on now", () => {
     const plan = planBacklog(entries.slice(0, 1), [
       existing({ id: "on-now", title: "Free voting on open cards", horizon: "now", stage: "funded" }),
       existing({ id: "planned", title: "Free voting on open cards", rank: 9 }),
     ]);
     expect(plan.update).toEqual([{ id: "planned", title: "Free voting on open cards", patch: { rank: 1 } }]);
+  });
+});
+
+describe("file-backlog --apply", () => {
+  const script = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..", "scripts", "file-backlog.ts"), "utf8");
+
+  it("deletes the removals in one request, repeating every condition of a removable card as a filter", () => {
+    expect(script.match(/\.delete\(\)/g)).toHaveLength(1);
+    const call = script.slice(script.indexOf(".delete()"), script.indexOf('.select("id");', script.indexOf(".delete()")));
+    for (const filter of [
+      '.in("id", plan.remove.map((card) => card.id))',
+      '.eq("source", "board")',
+      '.eq("stage", "proposed")',
+      '.in("horizon", ["next", "later"])',
+      '.eq("funded_usd", 0)',
+      '.eq("funding_target_usd", 0)',
+      '.is("executor_role_id", null)',
+      '.is("drafter_role_id", null)',
+      '.is("opens_at", null)',
+      '.eq("board_vetoed", false)',
+    ]) {
+      expect(call, filter).toContain(filter);
+    }
+  });
+
+  it("prints a refused delete with the database's message, which names the constraint, and deletes nothing", () => {
+    expect(script).toContain("throw new Error(`cards delete refused, nothing deleted: ${deleted.error.message}");
   });
 });

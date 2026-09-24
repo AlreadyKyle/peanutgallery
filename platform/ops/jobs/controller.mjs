@@ -23,9 +23,8 @@
 // - the Console credit bought covers the studio and overhead spend, and Stripe's balance covers the
 //   Minimum balance figure.
 // What it computes for the board:
-// - the next Console credit purchase: the remaining ceilings of funded cards, plus the operations
-//   bucket up to the role caps (0 until the operations pull request), plus overhead spent since the
-//   last purchase, less the credit left; never more than the agent money Stripe has paid out and not
+// - the next Console credit purchase: the remaining ceilings of funded cards, plus overhead spent
+//   since the last purchase, less the credit left; never more than the agent money Stripe has paid out and not
 //   yet converted, plus the overhead. Agent money is agents less the incident share less any hold,
 //   so the reserve, the incident fund and held money are never in it, and the board's own test
 //   payment (board_test in controller_figures) is left out;
@@ -36,8 +35,6 @@
 import { readFileSync } from 'node:fs';
 import { alerter, floor2, jobEnvProblems, JobEnvError, round2, round4, stripeApiVersion, stripeReader, supabaseClient, toCents } from './lib.mjs';
 
-// The operations bucket the credit formula adds: 0 until the pull request that introduces it.
-export const OPERATIONS_BUCKET_USD = 0;
 // How far back Stripe lets the Events API read, and the window of fees in the Minimum balance.
 export const EVENT_WINDOW_DAYS = 30;
 export const FEE_WINDOW_DAYS = 30;
@@ -262,7 +259,7 @@ export function reconcile({ identity, figures, stripe, now }) {
   const spent = Number(credit.studio_spend_usd) + Number(credit.overhead_usd);
   const creditLeft = round4(bought - spent);
   const creditItems = creditLeft < -TOLERANCE_USD ? [{ bought_usd: bought, spent_usd: round4(spent), fix: 'more was spent on the studio key than the credit recorded: record the missing purchase at /board, or find the spend' }] : [];
-  const need = round4(Number(figures.funded_cards.remaining_ceilings_usd) + OPERATIONS_BUCKET_USD + Number(credit.overhead_since_last_purchase_usd) - creditLeft);
+  const need = round4(Number(figures.funded_cards.remaining_ceilings_usd) + Number(credit.overhead_since_last_purchase_usd) - creditLeft);
   const cap = round4(paidOutAgentUsd + Number(credit.overhead_usd) - bought);
   const purchase = floor2(Math.max(0, Math.min(need, cap)));
 
@@ -316,7 +313,6 @@ export function reconcile({ identity, figures, stripe, now }) {
       credit_purchase: {
         remaining_ceilings_usd: Number(figures.funded_cards.remaining_ceilings_usd),
         funded_cards: Number(figures.funded_cards.count),
-        operations_bucket_usd: OPERATIONS_BUCKET_USD,
         overhead_since_last_purchase_usd: Number(credit.overhead_since_last_purchase_usd),
         credit_left_usd: creditLeft,
         need_usd: need,

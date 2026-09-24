@@ -13,6 +13,7 @@ import {
   type CreditDraft,
   type NeedsItem,
   type NeedsYouData,
+  type RuleBlockedWhy,
 } from './lib/needs';
 import { errorMessage } from './lib/supabase';
 
@@ -25,13 +26,32 @@ function settlementNote(amount: number | null, currency: string | null): string 
   return ` (${formatAmount(amount, currency)} in Stripe's currency)`;
 }
 
+/**
+ * Where a card item sends the board: a link to the card's row under Cards once that row is on the
+ * page, and plain words while it is not (at the first factor Cards is not shown; at the second, while
+ * the cards read is loading or has failed), so no link ever points at nothing.
+ */
+function ToCard({ id, listed, children }: { id: string; listed: ReadonlySet<string>; children: string }) {
+  return listed.has(id) ? <a href={`#card-${id}`}>{children}</a> : <>{children}</>;
+}
+
+/** Why the resume rule leaves a ceiling pause to the board, as the headline's end. */
+const RULE_BLOCKED_WORDS: Record<RuleBlockedWhy, string> = {
+  card_max: 'is paused at the card maximum of {max}.',
+  resumed_before: 'is paused at its ceiling a second time, after it was resumed once.',
+  vetoed: 'is paused at its ceiling and vetoed, so no session would run it.',
+  closed_lane: 'is paused at its ceiling, and the platform code lane is closed.',
+};
+
 function Item({
   item,
   canRecord,
+  listedCards,
   onFillCredit,
 }: {
   item: NeedsItem;
   canRecord: boolean;
+  listedCards: ReadonlySet<string>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   if (item.kind === 'dispute') {
@@ -46,6 +66,38 @@ function Item({
         </p>
         <p>
           <a href={`${STRIPE_DISPUTES_URL}/${encodeURIComponent(item.dispute)}`}>Open the dispute in Stripe</a>
+        </p>
+      </li>
+    );
+  }
+  if (item.kind === 'approval_void') {
+    return (
+      <li>
+        <p>
+          <strong>
+            Card {item.card.title} holds {formatUsd(item.card.money_usd)} but its approval is not current.
+          </strong>{' '}
+          Its text was changed outside a board control, so the public does not see it, no session runs it and it takes
+          no money. {canRecord ? null : 'Verify your second factor, then '}
+          <ToCard id={item.card.id} listed={listedCards}>
+            {canRecord ? 'Cancel it under Cards' : 'cancel it under Cards'}
+          </ToCard>
+          , which moves its unspent money to the next cards in line.
+        </p>
+      </li>
+    );
+  }
+  if (item.kind === 'rule_blocked') {
+    return (
+      <li>
+        <p>
+          <strong>Card {item.card.title} {RULE_BLOCKED_WORDS[item.card.why].replace('{max}', formatUsd(item.card.card_max_usd))}</strong>{' '}
+          It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
+          {canRecord ? null : 'verify your second factor, then '}
+          <ToCard id={item.card.id} listed={listedCards}>
+            resume it with a new estimate, or cancel it, under Cards
+          </ToCard>
+          .
         </p>
       </li>
     );
@@ -122,15 +174,18 @@ function ControllerLine({ data }: { data: NeedsYouData }) {
 
 /**
  * The board's first screen: the standing duties that are due now, usually none. It reads at aal1;
- * the one control, filling in the credit form, needs the second factor like the form itself.
+ * the one control, filling in the credit form, needs the second factor like the form itself, and a
+ * card item links to its row under Cards only once that row is listed (listedCards).
  */
 export function NeedsYou({
   client,
   canRecord,
+  listedCards,
   onFillCredit,
 }: {
   client: SupabaseClient;
   canRecord: boolean;
+  listedCards: ReadonlySet<string>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   const [data, setData] = useState<NeedsYouData | null>(null);
@@ -172,9 +227,10 @@ export function NeedsYou({
             <ul className="needs">
               {items.map((item) => (
                 <Item
-                  key={item.kind === 'dispute' ? item.dispute : item.kind === 'incident' ? item.card.id : 'credit'}
+                  key={item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}-${item.card.id}`}
                   item={item}
                   canRecord={canRecord}
+                  listedCards={listedCards}
                   onFillCredit={onFillCredit}
                 />
               ))}

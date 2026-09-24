@@ -32,6 +32,56 @@ function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}):
   };
 }
 
+describe('tick: dealing, resume by rule and the job queue (docs/specs/agent-system-core.md)', () => {
+  it('deals due cards and resumes by rule before choosing a card, so a card dealt this tick can be chosen', async () => {
+    const db = new FakeDb();
+    db.cards = [card({ horizon: 'next' })];
+    db.dueCards = [card().id];
+    const started: string[] = [];
+    expect(await tick(deps(db, started))).toEqual({ action: 'started', cardId: card().id });
+    expect([db.dealCalls, db.resumeCalls]).toEqual([1, 1]);
+  });
+
+  it('logs a failed deal or resume and goes on with the tick', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    db.dealError = new Error('deal down');
+    db.resumeError = new Error('resume down');
+    const lines: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
+    expect((await tick(deps(db, [], { log }))).action).toBe('started');
+    const warnings = lines.map((line) => JSON.parse(line)).filter((line) => line.level === 'warn').map((line) => [line.msg, line.error]);
+    expect(warnings).toEqual([['deal_due_cards failed', 'deal down'], ['resume_due_by_rule failed', 'resume down']]);
+  });
+
+  it('runs the job tick after the card path on every tick, a sleeping or failing one included, and not while halted', async () => {
+    const db = new FakeDb();
+    db.studio.paused = true;
+    let jobTicks = 0;
+    const jobTick = async () => void (jobTicks += 1);
+    expect(await tick(deps(db, [], { jobTick }))).toEqual({ action: 'sleep', reason: 'paused' });
+    expect(jobTicks).toBe(1);
+    db.studio.paused = false;
+    const failing = Object.assign(new FakeDb(), { getStudioState: async () => { throw new Error('studio_state down'); } });
+    await expect(tick(deps(failing, [], { jobTick }))).rejects.toThrow('studio_state down');
+    expect(jobTicks).toBe(2);
+    haltDispatcher('test halt');
+    try {
+      expect(await tick(deps(db, [], { jobTick }))).toEqual({ action: 'sleep', reason: 'halted' });
+      expect(jobTicks).toBe(2);
+      expect(db.dealCalls).toBe(1);
+    } finally {
+      resetHalt();
+    }
+  });
+
+  it('never lets a failing job tick stop the card path', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    expect((await tick(deps(db, [], { jobTick: async () => { throw new Error('queue down'); } }))).action).toBe('started');
+  });
+});
+
 describe('tick', () => {
   it('claims a funded card exactly once when two ticks race', async () => {
     const db = new FakeDb();

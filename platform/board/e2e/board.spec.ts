@@ -66,6 +66,10 @@ const needsYou = {
   last_credit_purchase: null,
   incident_reserve_usd: 0.4,
   s1_cards: [],
+  // A ceiling pause the resume rule will not resume: the card is PAUSED below.
+  rule_blocked: [{ id: 'c0000000-0000-4000-8000-000000000005', title: 'Paused at the maximum', why: 'card_max', actual_usd: '25.0000', card_max_usd: '25.0000' }],
+  // A card holding money whose approval is not current: the card is HIDDEN below.
+  approval_void: [{ id: 'c0000000-0000-4000-8000-000000000006', title: 'Rewritten outside a board control', stage: 'proposed', money_usd: '2.0000' }],
 };
 
 const studio = {
@@ -82,20 +86,100 @@ const studio = {
   credit_studio_daily_cap_usd: 500,
   anthropic_tier_cap_usd: null,
   platform_lane_open: false,
+  cooling_window_minutes: 0,
 };
+
+// docs/specs/agent-system-core.md: an approved agent card waiting on next to be dealt, which only a
+// board member's session reads (cards_board_read); anon's policy (card_is_public) hides no approved
+// card, but the e2e fixture answers the cards read only with the signed-in board member's token.
+const UNDEALT = {
+  id: '6b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e',
+  title: 'Faster gatherers after the first unlock',
+  stage: 'proposed',
+  horizon: 'next',
+  rank: 1,
+  folder: 'seed-1',
+  lane: 'config',
+  funding_target_usd: '3.0000',
+  funded_usd: '0.0000',
+  estimate_usd: '3.0000',
+  created_at: '2026-09-23T00:00:00Z',
+  source: 'agent',
+  drafter_role_id: 'r-designer',
+  opens_at: '2026-09-25T12:00:00Z',
+  board_vetoed: false,
+  board_veto_reason: null,
+};
+
+// A board card on now with no money, which a veto moves to next, and one paused at its ceiling at the
+// card maximum, which Needs you lists.
+const ON_NOW = {
+  ...UNDEALT,
+  id: 'c0000000-0000-4000-8000-000000000004',
+  title: 'Bigger pockets for the gatherers',
+  horizon: 'now',
+  rank: null,
+  source: 'board',
+  drafter_role_id: null,
+  opens_at: null,
+};
+const PAUSED = {
+  ...ON_NOW,
+  id: 'c0000000-0000-4000-8000-000000000005',
+  title: 'Paused at the maximum',
+  stage: 'paused',
+  funded_usd: '3.0000',
+};
+
+// An agent card with no current approval that holds money: card_is_public answers false for it, so
+// only the board's session reads it, marked Hidden, and Needs you lists it.
+const HIDDEN = {
+  ...UNDEALT,
+  id: 'c0000000-0000-4000-8000-000000000006',
+  title: 'Rewritten outside a board control',
+  horizon: 'now',
+  rank: null,
+  funded_usd: '2.0000',
+  opens_at: null,
+};
+
+const ROLES = [
+  { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
+  { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
+];
+
+const JOBS = [
+  {
+    name: 'tidy_up',
+    role_name: null,
+    calls_model: false,
+    runs_when_paused: true,
+    description: null,
+    runs: [{ id: 'run-e2e', origin: 'schedule', status: 'skipped', reason: 'role_paused', created_at: '2026-09-23T10:00:00Z', finished_at: '2026-09-23T10:00:01Z' }],
+  },
+];
 
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
-const roles = [{ id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' }];
+// The roles public_roles offers as a card's executor.
+const PUBLIC_ROLES = [{ id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' }];
 const cards = [
   { id: 'c-e2e', title: 'An e2e card', stage: 'proposed', horizon: 'now', rank: 1, folder: 'seed-1', lane: 'config', funding_target_usd: 5, funded_usd: 2, estimate_usd: 3, created_at: '2026-09-20T00:00:00Z' },
 ];
 
-async function answerSupabase(page: Page, seen: string[], { role = 'board', aal2 = false }: { role?: 'board' | 'moderator'; aal2?: boolean } = {}) {
+async function answerSupabase(
+  page: Page,
+  seen: string[],
+  { role = 'board', aal2 = false, bodies = [] }: { role?: 'board' | 'moderator'; aal2?: boolean; bodies?: Record<string, unknown>[] } = {},
+) {
+  let roles = ROLES.map((r) => ({ ...r }));
+  let boardCards: (Record<string, unknown> & { id: string; horizon: string })[] = [...cards, ON_NOW, PAUSED, UNDEALT, HIDDEN].map((c) => ({ ...c }));
   await page.route(`${SUPABASE_URL}/**`, async (route: Route) => {
     const url = new URL(route.request().url());
     seen.push(`${route.request().method()} ${url.pathname}`);
+    const body = route.request().postData();
+    if (body) bodies.push({ path: url.pathname, body: JSON.parse(body) });
     const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     switch (url.pathname) {
       case '/auth/v1/user':
@@ -106,16 +190,42 @@ async function answerSupabase(page: Page, seen: string[], { role = 'board', aal2
         return json(role);
       case '/rest/v1/rpc/set_paused':
         return route.fulfill({ status: 204, body: '' });
-      case '/rest/v1/public_roles':
-        return json(roles);
-      case '/rest/v1/cards':
-        return json(cards);
       case '/rest/v1/rpc/board_heartbeat':
         return json(new Date().toISOString());
       case '/rest/v1/rpc/board_studio_state':
         return json(studio);
       case '/rest/v1/rpc/board_needs_you':
         return json(needsYou);
+      case '/rest/v1/rpc/board_roles':
+        return json(roles);
+      case '/rest/v1/rpc/set_role_pause': {
+        // The role changes as the database changes it, so board_roles reads it back changed.
+        const change = JSON.parse(body ?? '{}') as { p_role: string; p_paused: boolean; p_reason: string };
+        roles = roles.map((r) => (r.id === change.p_role ? { ...r, paused: change.p_paused, paused_reason: change.p_paused ? change.p_reason : null } : r));
+        return json(null);
+      }
+      case '/rest/v1/rpc/board_jobs':
+        return json(JOBS);
+      case '/rest/v1/rpc/card_is_public':
+        return json((JSON.parse(body ?? '{}') as { p_card?: string }).p_card !== HIDDEN.id);
+      case '/rest/v1/rpc/set_card_veto': {
+        // The card changes as the database changes it: a veto moves a card on now with no money to next.
+        const change = JSON.parse(body ?? '{}') as { p_card: string; p_vetoed: boolean; p_reason: string };
+        boardCards = boardCards.map((c) =>
+          c.id === change.p_card
+            ? { ...c, board_vetoed: change.p_vetoed, board_veto_reason: change.p_vetoed ? change.p_reason : null, horizon: change.p_vetoed && c.horizon === 'now' ? 'next' : c.horizon }
+            : c,
+        );
+        const changed = boardCards.find((c) => c.id === change.p_card)!;
+        return json({ card_id: changed.id, board_vetoed: changed.board_vetoed, horizon: changed.horizon, opens_at: changed.opens_at ?? null });
+      }
+      case '/rest/v1/public_roles':
+        return json(PUBLIC_ROLES);
+      case '/rest/v1/cards': {
+        // Only the board member's own token reads the undealt card, as cards_board_read allows.
+        const bearer = route.request().headers()['authorization'] ?? '';
+        return json(bearer.includes('.') && bearer.split('.').length === 3 ? boardCards : []);
+      }
       default:
         return route.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"not in the e2e fixtures"}' });
     }
@@ -160,6 +270,9 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   await expect(inbox.getByText('Answer dispute du_e2e for $5.00 by 1 Oct 2026.')).toBeVisible();
   await expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeVisible();
   await expect(inbox.getByText('Verify your second factor, then fill in the record form from here.', { exact: false })).toBeVisible();
+  // Cards is shown only at the second factor, so the ceiling pause names the second factor and links nowhere.
+  await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or cancel it, under Cards.', { exact: false })).toBeVisible();
+  await expect(inbox.locator('a[href^="#"]')).toHaveCount(0);
   // Needs you is the first section on the page, above the two-factor step.
   const sections = await page.locator('main section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
   expect(sections[0]).toBe('Needs you');
@@ -186,6 +299,76 @@ test('a connection to any host but the Supabase project is refused', async ({ pa
   });
   expect(outcomes).toEqual(['refused', 'refused']);
   await expect.poll(() => reports).toContainEqual('enforce connect-src https://example.com/collect on /');
+});
+
+test('at the second factor the board sees and vetoes an undealt agent card, pauses a role from the keyboard, and reads the jobs and the cooling window, under the enforced policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+
+  // Needs you's ceiling pause links to the card's row under Cards, which is on the page.
+  const toCard = page.getByRole('region', { name: 'Needs you' }).getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' });
+  await expect(toCard).toHaveAttribute('href', `#card-${PAUSED.id}`);
+  await toCard.click();
+  await expect(page.locator(`#card-${PAUSED.id}`)).toBeInViewport();
+  // The void card holding money links to its row, where it is marked hidden and can be vetoed or cancelled.
+  const needs = page.getByRole('region', { name: 'Needs you' });
+  await expect(needs.getByText(`Card ${HIDDEN.title} holds $2.00 but its approval is not current.`)).toBeVisible();
+  await expect(needs.getByRole('link', { name: 'Cancel it under Cards' })).toHaveAttribute('href', `#card-${HIDDEN.id}`);
+  const hidden = page.getByRole('form', { name: `Card ${HIDDEN.title}` });
+  await expect(hidden.getByText(/^Hidden: written by an agent with no current approval/)).toBeVisible();
+  await expect(hidden.getByRole('button', { name: 'Cancel card' })).toBeVisible();
+
+  // A keyboard user vetoes a card on now: the veto moves it to next, and the confirmation is shown and
+  // focus stays on the one veto button, which now reads Lift veto.
+  const onNow = page.getByRole('form', { name: `Card ${ON_NOW.title}` });
+  await onNow.getByLabel('Reason').focus();
+  await page.keyboard.type('Off pillar');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(onNow.getByRole('button', { name: 'Veto card' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(onNow.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(onNow.getByText(/ · horizon next · /)).toBeVisible();
+  await expect(onNow.getByRole('button', { name: 'Lift veto' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: ON_NOW.id, p_vetoed: true, p_reason: 'Off pillar' } });
+
+  const card = page.getByRole('form', { name: `Card ${UNDEALT.title}` });
+  await expect(card).toBeVisible();
+  await expect(card.getByText('Written by an agent; its approval is current.')).toBeVisible();
+  await expect(card.getByText(/^Waiting to be dealt: moves to now at /)).toBeVisible();
+  await card.getByLabel('Reason').fill('Not this week');
+  await card.getByRole('button', { name: 'Veto card' }).click();
+  await expect(card.getByRole('status')).toHaveText('Card vetoed.');
+  await expect(card.getByRole('button', { name: 'Lift veto' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_card_veto', body: { p_card: UNDEALT.id, p_vetoed: true, p_reason: 'Not this week' } });
+
+  const roles = page.getByRole('region', { name: 'Roles' });
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeVisible();
+  await expect(roles.getByRole('row', { name: 'QA writer paused: Checking the gate' })).toBeVisible();
+  // A keyboard user pauses a role through the one form; the confirmation is announced and focus stays on the button.
+  await roles.getByRole('combobox').selectOption({ label: 'Game Director' });
+  await roles.getByRole('textbox', { name: 'Reason' }).focus();
+  await page.keyboard.type('Too many loops');
+  await page.keyboard.press('Tab');
+  await expect(roles.getByRole('button', { name: 'Pause Game Director' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(roles.getByRole('status')).toHaveText('Game Director paused.');
+  await expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeVisible();
+  await expect(roles.getByRole('button', { name: 'Resume Game Director' })).toBeFocused();
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_role_pause', body: { p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' } });
+  const jobs = page.getByRole('region', { name: 'Jobs' });
+  await expect(jobs.getByText('scheduled · skipped: its role is paused', { exact: false })).toBeVisible();
+  await expect(jobs.getByRole('button', { name: 'Run now' })).toBeVisible();
+  await expect(page.getByRole('form', { name: 'Set the cooling window' }).getByLabel('Cooling window (minutes)')).toHaveValue('0');
+
+  // The cards read carried the board member's session, never the anon key alone.
+  expect(seen).toContain('GET /rest/v1/cards');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  expect(reports).toEqual([]);
 });
 
 /**
@@ -224,6 +407,8 @@ for (const [who, role, aal] of [
       await expect(page.getByRole('region', { name: 'Pause and resume' }).getByRole('status')).toHaveText('Agents paused.');
       const tight = (await sectionGaps(page)).filter(({ gap }) => gap < 15.5);
       expect(tight, `${width} px`).toEqual([]);
+      // BOARD_E2E_SHOTS=<folder> keeps a full-page screenshot of each width to look at.
+      if (process.env.BOARD_E2E_SHOTS) await page.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/${role}-${width}.png`, fullPage: true });
 
       // Reached from the keyboard, the select shows its focus ring, which must end above the buttons.
       await page.getByLabel('Pause reason').focus();

@@ -9,6 +9,7 @@
   "prompt_path": "platform/agents/prompts/head-of-finance.md",
   "tools": [],
   "metrics": ["estimate_accuracy", "cost_per_ship"],
+  "class": "read_only",
   "write_access": false,
   "status": "starts",
   "trigger": "Starts at the cutover, once the first Stripe payout has bought Console credit."

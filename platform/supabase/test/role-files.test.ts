@@ -38,7 +38,15 @@ describe("readRoleSpecs against platform/agents", () => {
       expect(spec.description.endsWith("."), spec.name).toBe(true);
     }
     const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
-    expect(idle).toEqual(["Biz Dev", "Community", "Game Designer", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
+    expect(idle).toEqual(["Biz Dev", "Community", "Game Designer", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
+    // The trust classes (docs/specs/agent-system-core.md), and write access exactly for a writer or planner with tools.
+    const byClass = (klass: string) => specs.filter((s) => s.class === klass).map((s) => s.name).sort();
+    expect(byClass("writer")).toEqual(["Builder A", "Builder B", "Platform Builder", "QA", "Tech Artist"]);
+    expect(byClass("planner")).toEqual(["Game Designer", "HR", "Studio Head"]);
+    expect(byClass("reviewer")).toEqual(["Game Director", "Platform Director"]);
+    expect(byClass("read_only")).toEqual(["Head of Finance", "Janitor"]);
+    expect(byClass("web_only")).toEqual(["Biz Dev", "Community", "Head of Product", "Host"]);
+    for (const spec of specs) expect(spec.write_access, spec.name).toBe((spec.class === "writer" || spec.class === "planner") && spec.tools.length > 0);
     expect(specs.some((s) => s.name === "Scout")).toBe(false);
     // Running is a fact the site derives (Team.tsx, runsCards) and says once, as the heading a role
     // sits under; a description that also said it would repeat it, or go stale when the role starts.

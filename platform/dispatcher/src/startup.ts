@@ -136,6 +136,16 @@ export async function checkCodeReadonly(codeRoot: string): Promise<void> {
   }
 }
 
+// At startup, once the lease is held: a job run still marked running belonged to a process that is
+// gone, so it is finished as failed (fail_running_job_runs, docs/specs/agent-system-core.md).
+export const RESTART_REASON = 'dispatcher_restart';
+
+export async function failStaleJobRuns(db: Db, holder: string, log: Logger): Promise<number> {
+  const count = await db.failRunningJobRuns(holder, RESTART_REASON);
+  log.info('startup', `${count} running job run(s) finished as failed`, { count, reason: RESTART_REASON });
+  return count;
+}
+
 // The code root check runs first, before any database read. The mode and role model checks run next
 // so a process that could not run a card never spends money on a probe.
 export async function startupChecks(deps: StartupDeps): Promise<void> {

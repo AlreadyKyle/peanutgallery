@@ -36,6 +36,11 @@ const PRIVATE_TABLES = [
   "contribution_allocations",
   "supporters",
   "board_test_payments",
+  "card_approvals",
+  "jobs",
+  "job_runs",
+  "dispatcher_cards",
+  "dispatcher_card_spend",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -59,7 +64,7 @@ const PUBLIC_RELATIONS = [
 // severity and priority are withheld, and so is select=*, which names them;
 // each must be refused with Postgres's permission error, 42501, not some other
 // failure.
-const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank";
+const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank,opens_at,board_vetoed,drafter_role_id";
 const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "*"];
 const PERMISSION_DENIED = "42501";
 
@@ -71,6 +76,8 @@ const STUDIO_COLUMNS_ABSENT = ["paused_by", "paused_at"];
 const UNDEFINED_COLUMN = "42703";
 
 const PUBLIC_ROLE_COLUMNS = "id,name,title,description,species_note,avatar_url,model,write_access,state,hired_at";
+// Each role's trust class and pause (docs/specs/agent-system-core.md).
+const PUBLIC_ROLE_CLASS_COLUMNS = "agent_class,paused,paused_reason";
 
 // Each call is refused by the function itself if the grant is wrong: a holder
 // that holds nothing, a ttl of 0, no reason, a card id that does not exist, a
@@ -102,7 +109,35 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["record_stripe_fee", { p_ref: "anon-negative-test", p_stripe_session_id: "", p_fee_usd: 0 }],
   ["set_paused", { p_paused: false, p_reason: "anon-negative-test" }],
   ["waterfall_sweep", {}],
+  // agent-system-core (docs/specs/agent-system-core.md): approvals, dealing, resume by rule, the
+  // board's controls and the job queue. Each is refused before it reads its arguments; the
+  // arguments name nothing (no card, no role, no job, a holder that holds nothing, no reason).
+  ["record_card_approval", { p_card: NO_CARD, p_kind: "draft", p_verdict: {}, p_approver_role: NO_CARD, p_maker_role: null, p_maker_ref: null, p_grader_ref: "", p_content_sha256: "", p_job_run: null }],
+  ["card_content_hash", { p_card: NO_CARD }],
+  ["card_content_hash_of", { c: {} }],
+  ["card_needs_approval", { p_source: "board", p_drafter: null }],
+  ["card_approved", { p_card: NO_CARD }],
+  ["card_money_held", { p_card: NO_CARD }],
+  ["card_ready_problem", { c: {} }],
+  ["card_ceiling_resumed", { p_card: NO_CARD }],
+  ["deal_due_cards", {}],
+  ["resume_card_by_rule", { p_card: NO_CARD }],
+  ["resume_due_by_rule", {}],
+  ["enqueue_job_run", { p_job: "anon_negative_test", p_origin: "operator" }],
+  ["claim_job_run", { p_run: NO_CARD, p_holder: "anon-negative-test" }],
+  ["finish_job_run", { p_run: NO_CARD, p_status: "skipped", p_reason: "anon-negative-test", p_output: null }],
+  ["fail_running_job_runs", { p_holder: "anon-negative-test", p_reason: "anon-negative-test" }],
+  ["set_cooling_window", { p_minutes: -1, p_reason: null }],
+  ["set_role_pause", { p_role: NO_CARD, p_paused: true, p_reason: null }],
+  ["set_card_veto", { p_card: NO_CARD, p_vetoed: true, p_reason: null }],
+  ["enqueue_manual_job", { p_job: "anon_negative_test", p_card: null, p_reason: null, p_input: {} }],
+  ["board_jobs", {}],
+  ["board_roles", {}],
 ];
+
+// The one function anon runs on purpose: the cards policy calls it as the caller
+// (docs/specs/agent-system-core.md). It only reads and answers false for no card.
+const CALLABLE_RPCS: Array<[string, Record<string, unknown>]> = [["card_is_public", { p_card: NO_CARD }]];
 
 // The money schema holds the waterfall's helpers and is not exposed: PostgREST refuses any request
 // that names it (PGRST106) before a function is looked up.
@@ -187,6 +222,11 @@ async function main(): Promise<void> {
     ...(await probe(db, "public_roles", PUBLIC_ROLE_COLUMNS)),
   });
   outcomes.push({
+    relation: `public_roles(${PUBLIC_ROLE_CLASS_COLUMNS})`,
+    expected: "readable",
+    ...(await probe(db, "public_roles", PUBLIC_ROLE_CLASS_COLUMNS)),
+  });
+  outcomes.push({
     relation: "public_ledger_totals(overhead_usd)",
     expected: "readable",
     ...(await probe(db, "public_ledger_totals", "usd_total,overhead_usd")),
@@ -239,6 +279,36 @@ async function main(): Promise<void> {
 
   for (const [name, rpcArgs] of RPC_PROBES) {
     outcomes.push({ relation: `rpc ${name}`, expected: "refused", ...(await probeRpc(db, name, rpcArgs)) });
+  }
+
+  for (const [name, rpcArgs] of CALLABLE_RPCS) {
+    const { data, error } = await db.rpc(name, rpcArgs);
+    outcomes.push({
+      relation: `rpc ${name} (intentionally callable)`,
+      expected: "readable",
+      actual: error ? "error" : data === false ? "readable" : "error",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : `answered ${JSON.stringify(data)}`,
+    });
+  }
+
+  // No card anon can read lacks an approval it needs: every agent-written card it sees is public.
+  {
+    const { data, error } = await db.from("cards").select("id").or("source.eq.agent,drafter_role_id.not.is.null");
+    let lacking = 0;
+    let detail = error ? `${error.code ?? "error"} ${error.message}` : `${data.length} agent-written card(s) readable`;
+    if (!error) {
+      for (const card of data as { id: string }[]) {
+        const answer = await db.rpc("card_is_public", { p_card: card.id });
+        if (answer.error || answer.data !== true) lacking += 1;
+      }
+      if (lacking > 0) detail = `${lacking} readable agent-written card(s) lack a current approval`;
+    }
+    outcomes.push({
+      relation: "cards(agent-written without an approval)",
+      expected: "empty",
+      actual: error ? "error" : lacking === 0 ? "empty" : "readable",
+      detail,
+    });
   }
 
   // Content-Profile: money. board_test_usd only reads, so even an exposed schema would change nothing.

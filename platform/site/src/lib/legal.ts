@@ -10,6 +10,11 @@
 // contact address as a mailto link, {refunds} a link to the Refunds page, {terms} a link to the Terms
 // and {discord} the Discord invite. The words of the Terms and the Refunds page are not here: every
 // posted version of them is in terms-versions.ts (docs/specs/legal-copy.md).
+// Resume by rule (docs/specs/agent-system-core.md): the one case where money in Not on a card yet goes
+// to a card that is not the next to open. Said under /ledger's Not on a card yet and on /how-it-works.
+const CEILING_TOP_UP =
+  'A card paused at its spending limit for the first time can take enough from Not on a card yet, once, to spend up to 1.5 times what it has cost so far; its bar can then read above its target.';
+
 export const legal = {
   contributeUnavailable: 'Contributions are not open yet.',
   split:
@@ -105,6 +110,14 @@ export const legal = {
     revert: 'reverted',
     error: 'hit an error',
   } as Record<string, string>,
+  // What the database itself did to a card, on a line no role wrote (public_agent_events' step and
+  // usd, docs/specs/agent-system-core.md): dealt to now after the cooling window, and the resume rule
+  // with the amount it took from Not on a card yet.
+  eventSteps: {
+    dealt: 'Dealt to now',
+    ceiling_top_up: 'Topped up with {usd} from Not on a card yet',
+    resume_rule: 'Resumed by rule after its spending limit',
+  } as Record<string, string>,
   // The worked path of a contribution on /how-it-works: its steps, the split example's rows and
   // where the money goes. The page's title, lede and example labels are in copy.ts.
   howMoneyMoves: {
@@ -165,6 +178,7 @@ export const legal = {
           "The split you choose at checkout divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
           "5% of the agents' share goes to an emergency fund for urgent bug fixes, until the fund holds $500. The rest is agent credit.",
           'Agent credit pays for model usage on funded cards, within daily and per-card caps. Money a card does not use stays with the agents and pays for later cards.',
+          `Money given with no card, or beyond a card's target, waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
           "The studio pays for the agents' model usage with contributions once Stripe has paid them out to the studio.",
         ],
       },
@@ -194,6 +208,7 @@ export const legal = {
   // /ledger's Funding band: money on no card yet, the shortfall and the board's test payment.
   notOnCard: 'Not on a card yet',
   describeNotOnCard: "Money given with no card, or beyond a card's target, waiting for the next card to open.",
+  notOnCardTopUp: CEILING_TOP_UP,
   shortBy: 'Waiting cards are short by {usd} until new money arrives.',
   // {usd} is public_money.board_test_usd: the part of the board's test payment that sits in the pool
   // (its agent credit), not the payment itself; its reserve and emergency fund shares sit in those

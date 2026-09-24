@@ -84,7 +84,6 @@ beforeAll(async () => {
     tickMs: 60_000,
     worktreeRoot: path.join(dir, '.worktrees'),
     maxConcurrency: 1,
-    schedulerEnabled: false,
     claudeBin: 'claude',
     boardSessionTtlMin: 3,
     studioAnthropicApiKey: null,
@@ -1223,6 +1222,39 @@ describe('runCardPipeline', () => {
     );
     expect(alert.messages[1]).toMatch(/^Card 4c2f5a1e paused \(usage_tier_cap\): /);
     expect(alert.messages).toHaveLength(2);
+  });
+
+  it('sends the card back to funded with no rejection when its executor role is paused, and it runs again once the role is resumed, with no card action', async () => {
+    const c = card();
+    db.cards = [{ ...c, stage: 'building' }];
+    const alert = new RecordingAlerter();
+    const adapter = new FakeAdapter(async (_spec, emit, signal) => {
+      await emit(startEvent());
+      db.roles[0]!.paused = true;
+      await untilAborted(signal, 2000);
+    });
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), config: { ...config, tickMs: 5 } });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'role_paused' });
+    expect(db.events.find((e) => e.payload.step === 'requeue')?.payload).toMatchObject({ reason: 'role_paused' });
+    expect(alert.messages).toEqual([]);
+    const tickDeps = {
+      db,
+      mode: 'attended' as const,
+      boardSessionTtlMin: 3,
+      maxConcurrency: 1,
+      running: new Map<string, Date>(),
+      budgets: new SessionBudgets(),
+      leaseHolder: 'dispatcher-a',
+      leaseTtlSeconds: 300,
+      stuckAfterMs: 60 * 60_000,
+      now: () => NOW,
+      runCard: async () => undefined,
+      log: silent,
+      alert,
+    };
+    expect(await tick(tickDeps)).toEqual({ action: 'sleep', reason: 'no_eligible_card' });
+    db.roles[0]!.paused = false;
+    expect(await tick(tickDeps)).toEqual({ action: 'started', cardId: c.id });
   });
 
   it('gives the session the budget the tick set, and sends the card back to funded when that budget is gone', async () => {

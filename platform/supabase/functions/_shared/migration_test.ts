@@ -57,13 +57,17 @@ create publication supabase_realtime;
 const PUBLIC_CARD_COLUMNS = [
   "acceptance_test",
   "board_reason",
+  "board_veto_reason",
+  "board_vetoed",
   "branch",
   "bucket",
+  "check_author_role_id",
   "commit_sha",
   "confidence",
   "created_at",
   "design_spec_url",
   "director_stance",
+  "drafter_role_id",
   "estimate_usd",
   "executor_role_id",
   "failing_check",
@@ -75,6 +79,7 @@ const PUBLIC_CARD_COLUMNS = [
   "intent",
   "lane",
   "live_at",
+  "opens_at",
   "proposer_role_id",
   "rank",
   "shape",
@@ -92,6 +97,7 @@ const BOARD_STATE_KEYS = [
   "agent_mode",
   "anthropic_tier_cap_usd",
   "card_max_usd",
+  "cooling_window_minutes",
   "credit_bought_usd",
   "credit_daily_cap_usd",
   "credit_spent_usd",
@@ -108,7 +114,8 @@ const BOARD_STATE_KEYS = [
 
 /** The tables 20260923000020_append_only.sql guards, each with a <table>_append_only trigger. */
 // money-logic.md adds its three tables to the guard; terms_versions keeps its own triggers.
-const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments"];
+// agent-system-core.md adds card_approvals.
+const APPEND_ONLY_TABLES = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments", "card_approvals"];
 
 /** SQL that turns every append-only row trigger off or back on (fixture writes only). */
 function setAppendOnly(state: "disable" | "enable"): string {
@@ -277,6 +284,7 @@ Deno.test("migrations on PGlite", {
         "20260924100000_terms_versions.sql",
         "20260924100100_terms_version_2.sql",
         "20260924200000_money_logic.sql",
+        "20260924300000_agent_system_core.sql",
         "20260925000000_terms_version_3.sql",
       ]);
       for (const m of migrations) {
@@ -311,6 +319,7 @@ Deno.test("migrations on PGlite", {
         "board_members",
         "board_notes",
         "board_test_payments",
+        "card_approvals",
         "card_patches",
         "cards",
         "contribution_allocations",
@@ -321,6 +330,8 @@ Deno.test("migrations on PGlite", {
         "deploys",
         "dispatcher_lease",
         "images",
+        "job_runs",
+        "jobs",
         "ledger",
         "pool",
         "roles",
@@ -336,6 +347,8 @@ Deno.test("migrations on PGlite", {
         `select table_name from information_schema.views where table_schema = 'public' order by 1`,
       );
       assertEquals(views.map((r) => r.table_name), [
+        "dispatcher_card_spend",
+        "dispatcher_cards",
         "last_green",
         "public_agent_events",
         "public_card_funding",
@@ -933,14 +946,22 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "record_usage without a card meters the pool only and refuses bad inputs",
+      "record_usage refuses a studio row with no card, writes a founder row with none, and refuses bad inputs",
       async () => {
+        // agent-system-core.md: studio money is spent only on a card.
+        await refuses(
+          `select public.record_usage(null, $1, 'builder-model-id', 1, 0, 1, 0.01)`,
+          "A studio row names a card",
+          [roleId],
+        );
         const { r } = await row<{ r: Row }>(
-          `select public.record_usage(null, $1, 'builder-model-id', 1, 0, 1, 0.01) as r`,
+          `select public.record_usage(null, $1, 'builder-model-id', 1, 0, 1, 0.01, 'founder') as r`,
           [roleId],
         );
         assertEquals(r.actual_usd, null);
         assertNotEquals(r.ledger_id, null);
+        // Later steps pin the ledger's billing, so the founder row is taken back out.
+        await db.query(`delete from public.ledger where id = $1`, [r.ledger_id]);
         await refuses(
           `select public.record_usage(null, null, '', 1, 0, 1, 0.01)`,
           "p_model is required",
@@ -1000,8 +1021,8 @@ Deno.test("migrations on PGlite", {
           Number((await row<{ n: string }>(`select count(*)::text as n from public.ledger where ${where}`, params)).n);
         const studio = (requestId: string | null) =>
           row<{ r: Row }>(
-            `select public.record_usage(null, $1, 'builder-model-id', 10, 0, 10, 0.25, 'studio', $2) as r`,
-            [roleId, requestId],
+            `select public.record_usage($3, $1, 'builder-model-id', 10, 0, 10, 0.25, 'studio', $2) as r`,
+            [roleId, requestId, oneoffCardId],
           );
         const before = await pool();
         const cardBefore = await row<{ actual_usd: string }>(`select actual_usd from public.cards where id = $1`, [oneoffCardId]);
@@ -1046,8 +1067,8 @@ Deno.test("migrations on PGlite", {
 
         // The old named-argument call, as supabase-js sends it before the dispatcher passes an id.
         const named = await row<{ r: Row }>(
-          `select public.record_usage(p_card_id => null, p_role_id => $1, p_model => 'builder-model-id', p_input_tokens => 1, p_cached_tokens => 0, p_output_tokens => 1, p_usd => 0.01, p_billed_to => 'studio') as r`,
-          [roleId],
+          `select public.record_usage(p_card_id => $2, p_role_id => $1, p_model => 'builder-model-id', p_input_tokens => 1, p_cached_tokens => 0, p_output_tokens => 1, p_usd => 0.01, p_billed_to => 'studio') as r`,
+          [roleId, oneoffCardId],
         );
         const namedRow = await row(`select request_id, usd from public.ledger where id = $1`, [named.r.ledger_id]);
         assertEquals(namedRow, { request_id: null, usd: "0.0100" });
@@ -1056,10 +1077,10 @@ Deno.test("migrations on PGlite", {
         // The same id with any other value is refused, and nothing changes.
         const stable = await pool();
         const conflicts: Array<[string, unknown[]]> = [
-          ["another amount", [null, roleId, "builder-model-id", 0.26, "studio"]],
-          ["another model", [null, roleId, "other-model-id", 0.25, "studio"]],
-          ["another payer", [null, roleId, "builder-model-id", 0.25, "founder"]],
-          ["a card", [oneoffCardId, roleId, "builder-model-id", 0.25, "studio"]],
+          ["another amount", [oneoffCardId, roleId, "builder-model-id", 0.26, "studio"]],
+          ["another model", [oneoffCardId, roleId, "other-model-id", 0.25, "studio"]],
+          ["another payer", [oneoffCardId, roleId, "builder-model-id", 0.25, "founder"]],
+          ["another card", [goalCardId, roleId, "builder-model-id", 0.25, "studio"]],
         ];
         for (const [what, [cardId, role, model, usd, billedTo]] of conflicts) {
           await refuses(
@@ -1072,8 +1093,8 @@ Deno.test("migrations on PGlite", {
         assertEquals(await pool(), stable);
         // The amount is compared after rounding, as it is stored.
         const rounded = await row<{ r: Row }>(
-          `select public.record_usage(null, $1, 'builder-model-id', 10, 0, 10, 0.25004, 'studio', 'probe/one/turn/1') as r`,
-          [roleId],
+          `select public.record_usage($2, $1, 'builder-model-id', 10, 0, 10, 0.25004, 'studio', 'probe/one/turn/1') as r`,
+          [roleId, oneoffCardId],
         );
         assertEquals(rounded.r.ledger_id, first.r.ledger_id);
 
@@ -1980,13 +2001,15 @@ Deno.test("migrations on PGlite", {
           { folder: "seed-1", sha: "a3" },
         ]);
 
+        // agent-system-core.md: the card-less row an earlier step wrote is the founder's now, since a
+        // studio row names a card.
         const totals = await row(`select * from public.public_ledger_totals`);
         assertEquals(totals, {
-          usd_total: "0.2334",
-          input_tokens: 1021,
+          usd_total: "0.2234",
+          input_tokens: 1020,
           cached_tokens: 200,
-          output_tokens: 321,
-          row_count: 4,
+          output_tokens: 320,
+          row_count: 3,
           overhead_usd: "0.0000",
         });
 
@@ -2000,8 +2023,12 @@ Deno.test("migrations on PGlite", {
           "created_at",
           "id",
           "role_id",
+          "step",
           "type",
+          "usd",
         ]);
+        // step and usd name only what the database did to a card; a role's line carries neither.
+        assertEquals([event.step, event.usd], [null, null]);
       },
     );
 
@@ -2071,14 +2098,19 @@ Deno.test("migrations on PGlite", {
         );
         assert(!/(^|[{,])(anon|authenticated)=/.test(acl.acl), `no table-level entry for anon or authenticated: ${acl.acl}`);
         // Superseded (money-logic.md, "no view reads cards"): public_stopped_cards
-        // is the one view that reads cards, and every cards column it reads is one
-        // anon already selects, so no view can hand a withheld column to anon.
+        // is the one public view that reads cards, and every cards column it reads is
+        // one anon already selects, so no view can hand a withheld column to anon.
+        // dispatcher_cards (agent-system-core.md) reads every column for the service
+        // role alone; anon and authenticated hold nothing on it.
         assertEquals(
           await rows(
-            `select view_name from information_schema.view_table_usage where table_schema = 'public' and table_name = 'cards'`,
+            `select view_name from information_schema.view_table_usage where table_schema = 'public' and table_name = 'cards' order by 1`,
           ),
-          [{ view_name: "public_stopped_cards" }],
+          [{ view_name: "dispatcher_cards" }, { view_name: "public_stopped_cards" }],
         );
+        for (const grantee of ["anon", "authenticated"]) {
+          assertEquals((await row<{ has: boolean }>(`select has_table_privilege($1, 'public.dispatcher_cards', 'SELECT') as has`, [grantee])).has, false, grantee);
+        }
         const read = await rows<{ column_name: string }>(
           `select distinct column_name from information_schema.view_column_usage where view_name = 'public_stopped_cards' and table_name = 'cards' order by 1`,
         );
@@ -2102,7 +2134,7 @@ Deno.test("migrations on PGlite", {
           );
           assertEquals(billing, [{ billed_to: "studio" }]);
           const totals = await row(`select * from public.public_ledger_totals`);
-          assertEquals(totals.row_count, 4);
+          assertEquals(totals.row_count, 3);
           const green = await rows(`select * from public.last_green`);
           assertEquals(green.length, 2);
           const cards = await rows(`select id from public.cards`);
@@ -2235,6 +2267,9 @@ Deno.test("migrations on PGlite", {
               "hired_at",
               "status",
               "trigger",
+              "agent_class",
+              "paused",
+              "paused_reason",
             ]);
             assertEquals(roles[0]!.description, "Builds funded game cards as small, tested changes to Dust.");
             for (const table of ["roles", "dispatcher_lease", "card_patches", "board_actions", "credit_purchases"]) {
@@ -3698,12 +3733,13 @@ Deno.test("migrations on PGlite", {
           ),
           already,
         );
-        // Both card triggers are enabled after the run.
+        // Both card triggers are enabled after the run, beside agent-system-core's text guard.
         assertEquals(
           await rows(
             `select tgname, tgenabled from pg_trigger where tgrelid = 'public.cards'::regclass and not tgisinternal order by 1`,
           ),
           [
+            { tgname: "cards_agent_text_guard", tgenabled: "O" },
             { tgname: "cards_set_live_at", tgenabled: "O" },
             { tgname: "cards_set_updated_at", tgenabled: "O" },
           ],
@@ -3865,7 +3901,8 @@ Deno.test("migrations on PGlite", {
         );
         const incident = Number((await row<{ i: string }>(`select incident_reserve_usd as i from public.pool where id = 1`)).i);
         const empty = await needs();
-        assertEquals(Object.keys(empty).sort(), ["controller", "incident_reserve_usd", "last_credit_purchase", "s1_cards"]);
+        // agent-system-core.md adds rule_blocked and approval_void.
+        assertEquals(Object.keys(empty).sort(), ["approval_void", "controller", "incident_reserve_usd", "last_credit_purchase", "rule_blocked", "s1_cards"]);
         assertEquals(empty.controller, null);
         // The S1 cards earlier steps left in a spending stage, oldest first.
         const earlier = await rows(
@@ -3939,7 +3976,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "function privileges: anon none, authenticated the nineteen board RPCs, service_role the rest, one file_card",
+      "function privileges: anon only card_is_public, authenticated the board RPCs and card_is_public, service_role the rest, one file_card",
       async () => {
         const privileges = await rows<{
           proname: string;
@@ -3957,10 +3994,13 @@ Deno.test("migrations on PGlite", {
         const board = [
           "board_aal2",
           "board_heartbeat",
+          "board_jobs",
           "board_needs_you",
           "board_role",
+          "board_roles",
           "board_studio_state",
           "cancel_card",
+          "enqueue_manual_job",
           "file_card",
           "file_directive",
           "file_note",
@@ -3972,31 +4012,54 @@ Deno.test("migrations on PGlite", {
           "set_agent_mode",
           "set_caps",
           "set_card_horizon",
+          "set_card_veto",
+          "set_cooling_window",
           "set_launched",
           "set_paused",
+          "set_role_pause",
         ];
         const service = [
           "apply_contribution",
+          "card_approved",
+          "card_ceiling_resumed",
+          "card_content_hash",
+          "card_content_hash_of",
           "card_ledger_usd",
+          "card_money_held",
+          "card_needs_approval",
+          "card_ready_problem",
           "claim_dispatcher_lease",
+          "claim_job_run",
           "controller_figures",
           "credit_held_contributions",
+          "deal_due_cards",
+          "enqueue_job_run",
+          "fail_running_job_runs",
+          "finish_job_run",
           "ledger_identity",
           "ops_database_size",
+          "record_card_approval",
           "record_dispute_reinstated",
           "record_stripe_fee",
           "record_usage",
           "release_dispatcher_lease",
+          "resume_card_by_rule",
+          "resume_due_by_rule",
           "reverse_contribution",
           "studio_spend_totals",
           "terms_version_at",
           "waterfall_sweep",
         ];
+        // A policy's functions run as the caller, so anon and authenticated execute the one
+        // the cards policy calls (agent-system-core.md).
+        const everyone = ["card_is_public"];
         assertEquals(
           privileges.map((p) => p.proname),
           [
             ...board,
             ...service,
+            ...everyone,
+            "cards_agent_text_guard",
             "refuse_money_change",
             "restrict_auth_users_to_board",
             "set_live_at",
@@ -4014,13 +4077,13 @@ Deno.test("migrations on PGlite", {
           },
         ]);
         for (const p of privileges) {
-          assertEquals(p.anon, false, `anon may not run ${p.proname}`);
+          assertEquals(p.anon, everyone.includes(p.proname), `anon on ${p.proname}`);
           assertEquals(
             p.authenticated,
-            board.includes(p.proname),
+            board.includes(p.proname) || everyone.includes(p.proname),
             `authenticated on ${p.proname}`,
           );
-          if (board.includes(p.proname) || service.includes(p.proname)) {
+          if (board.includes(p.proname) || service.includes(p.proname) || everyone.includes(p.proname)) {
             assertEquals(p.service_role, true, `service_role on ${p.proname}`);
           }
         }

@@ -7,7 +7,11 @@
 // or later) with its rank, and no funding target, executor or acceptance test:
 // it is planned, not open for funding. The script matches cards by title, so
 // it can run again: an entry already filed is updated where the file changed,
-// and one the board has moved to now, or past proposed, is left alone.
+// and one the board has moved to now, or past proposed, is left alone, as is
+// one an agent drafted, one waiting to be dealt and one the board vetoed
+// (docs/specs/agent-system-core.md). A planned card whose entry has left the
+// file is listed for removal; --apply deletes them all in one statement, which
+// the foreign keys refuse whole if anything references one of them.
 // The service role writes the rows, since board_role() is null for it. Run it
 // only once the site lists horizon now cards alone, or the planned cards show
 // as open for funding.
@@ -15,9 +19,9 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadRepoEnv, REPO_ROOT, serviceClient } from "../lib/client.js";
-import { backlogCounts, type ExistingCard, parseBacklog, planBacklog } from "../lib/backlog.js";
+import { backlogCounts, EXISTING_CARD_COLUMNS, type ExistingCard, parseBacklog, planBacklog } from "../lib/backlog.js";
 
-type Result<T> = { data: T; error: null } | { data: null; error: { message: string } };
+type Result<T> = { data: T; error: null } | { data: null; error: { message: string; code?: string; details?: string | null } };
 
 class UsageError extends Error {}
 
@@ -55,6 +59,7 @@ function parseArgs(argv: string[]): { apply: boolean; file: string } {
 
 async function main(): Promise<void> {
   const { apply, file } = parseArgs(process.argv.slice(2));
+  let removed = 0;
   const entries = parseBacklog(await readFile(file, "utf8"));
   const counts = backlogCounts(entries);
   const mode = apply ? "apply" : "dry run";
@@ -63,16 +68,28 @@ async function main(): Promise<void> {
   );
 
   const db = serviceClient(loadRepoEnv());
-  const existing = check(
+  const byTitle = check(
     "cards read",
     await db
       .from("cards")
-      .select("id, title, stage, horizon, rank, bucket, folder, summary, intent")
+      .select(EXISTING_CARD_COLUMNS)
       .in("title", entries.map((e) => e.title))
       .order("created_at", { ascending: true })
       .returns<ExistingCard[]>(),
   );
-  const plan = planBacklog(entries, existing);
+  // Every planned board card, so an entry that left the file is found.
+  const planned = check(
+    "planned cards read",
+    await db
+      .from("cards")
+      .select(EXISTING_CARD_COLUMNS)
+      .eq("source", "board")
+      .eq("stage", "proposed")
+      .in("horizon", ["next", "later"])
+      .order("created_at", { ascending: true })
+      .returns<ExistingCard[]>(),
+  );
+  const plan = planBacklog(entries, [...byTitle, ...planned]);
 
   for (const skip of plan.skipped) console.log(`skip "${skip.title}": ${skip.reason}`);
   for (const title of plan.unchanged) console.log(`unchanged "${title}"`);
@@ -81,6 +98,9 @@ async function main(): Promise<void> {
   }
   for (const change of plan.update) {
     console.log(`${apply ? "update" : "would update"} "${change.title}" (${change.id}): ${Object.keys(change.patch).join(", ")}`);
+  }
+  for (const card of plan.remove) {
+    console.log(`${apply ? "remove" : "would remove"} "${card.title}" (${card.id}): its entry left the file`);
   }
 
   if (apply) {
@@ -96,8 +116,31 @@ async function main(): Promise<void> {
         await db.from("cards").update(change.patch).eq("id", change.id).eq("stage", "proposed").neq("horizon", "now"),
       );
     }
+    if (plan.remove.length > 0) {
+      // One request, one statement, one transaction: every condition of a removable card repeated as
+      // a filter, so a card that changed since the read is kept. A foreign key refuses the whole
+      // statement, and nothing is deleted.
+      const deleted = await db
+        .from("cards")
+        .delete()
+        .in("id", plan.remove.map((card) => card.id))
+        .eq("source", "board")
+        .eq("stage", "proposed")
+        .in("horizon", ["next", "later"])
+        .eq("funded_usd", 0)
+        .eq("funding_target_usd", 0)
+        .is("executor_role_id", null)
+        .is("drafter_role_id", null)
+        .is("opens_at", null)
+        .eq("board_vetoed", false)
+        .select("id");
+      if (deleted.error) {
+        throw new Error(`cards delete refused, nothing deleted: ${deleted.error.message}${deleted.error.details ? ` (${deleted.error.details})` : ""}`);
+      }
+      removed = deleted.data.length;
+    }
   }
-  const summary = `${plan.insert.length} ${apply ? "inserted" : "would be inserted"}, ${plan.update.length} ${apply ? "updated" : "would be updated"}, ${plan.unchanged.length} unchanged, ${plan.skipped.length} skipped`;
+  const summary = `${plan.insert.length} ${apply ? "inserted" : "would be inserted"}, ${plan.update.length} ${apply ? "updated" : "would be updated"}, ${apply ? `${removed} removed` : `${plan.remove.length} would be removed`}, ${plan.unchanged.length} unchanged, ${plan.skipped.length} skipped`;
   console.log(apply ? `done: ${summary}` : `dry run: ${summary}; pass --apply to write`);
 }
 

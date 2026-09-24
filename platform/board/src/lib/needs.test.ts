@@ -29,6 +29,8 @@ describe('needsYouFrom', () => {
       last_credit_purchase: null,
       incident_reserve_usd: 0,
       s1_cards: [],
+      rule_blocked: [],
+      approval_void: [],
     });
     expect(() => needsYouFrom(null)).toThrow('board_needs_you returned nothing');
   });
@@ -64,5 +66,38 @@ describe('dueItems', () => {
   it('leaves the payout id blank for the board to type when the run recorded none', () => {
     const items = dueItems(needsYouFrom({ controller: { ...RUN, latest_payout: null, disputes_to_answer: [] }, last_credit_purchase: null, s1_cards: [] }));
     expect(items).toMatchObject([{ kind: 'credit', draft: { stripe_payout_id: '' } }]);
+  });
+});
+
+// docs/specs/agent-system-core.md: the ceiling pauses the rule will not resume, and the cards holding
+// money whose approval is not current.
+describe('rule_blocked and approval_void', () => {
+  it('reads both lists and puts them after the S1 cards and before the credit purchase', () => {
+    const data = needsYouFrom({
+      controller: RUN,
+      last_credit_purchase: null,
+      incident_reserve_usd: 0,
+      s1_cards: [{ id: 's1', title: 'Outage', stage: 'building' }],
+      rule_blocked: [
+        { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: '25.0000', card_max_usd: '25.0000' },
+        { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: '3.3750', card_max_usd: '25.0000' },
+        { title: 'no id' },
+      ],
+      approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: '2.0000' }],
+    });
+    expect(data.rule_blocked).toEqual([
+      { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
+      { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 3.375, card_max_usd: 25 },
+    ]);
+    expect(data.approval_void).toEqual([{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }]);
+    expect(dueItems(data).map((item) => (item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}:${item.card.id}`))).toEqual([
+      'du_a',
+      'du_b',
+      'incident:s1',
+      'approval_void:void',
+      'rule_blocked:max',
+      'rule_blocked:twice',
+      'credit',
+    ]);
   });
 });

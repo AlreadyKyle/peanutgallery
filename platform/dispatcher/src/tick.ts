@@ -1,8 +1,11 @@
-// The Appendix A loop, one tick: hold the dispatcher lease, read studio_state, check the board
-// session, read the pool, apply the throttle, select the card, claim it with its session budget, and
-// start its pipeline in the background. The heartbeat and the healthcheck ping follow a tick that
-// completed while holding the lease, so a dispatcher whose ticks keep failing, or that another
-// dispatcher has locked out, stops pinging. A halted dispatcher claims nothing and does not ping.
+// The Appendix A loop, one tick: hold the dispatcher lease, deal the approved agent cards whose
+// cooling window has passed and resume the ceiling-paused cards the rule may resume
+// (docs/specs/agent-system-core.md), read studio_state, check the board session, read the pool,
+// apply the throttle, select the card, claim it with its session budget, and start its pipeline in
+// the background; then, however the card path ended, the job queue's tick (jobs.ts). The heartbeat
+// and the healthcheck ping follow a tick that completed while holding the lease, so a dispatcher
+// whose ticks keep failing, or that another dispatcher has locked out, stops pinging. A halted
+// dispatcher claims nothing, deals nothing, runs no job and does not ping.
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
@@ -48,6 +51,8 @@ export interface TickDeps {
   alert: Alerter;
   // main's head and its gate status (docs/specs/money-safety.md); unset, main is not checked.
   mainGate?: () => Promise<{ sha: string; status: GateStatus }>;
+  // The job queue's tick (jobs.ts), run after the card path on every tick that is not halted.
+  jobTick?: () => Promise<unknown>;
 }
 
 // Each claim holds the lease this long; the tick renews it every DISPATCHER_TICK_MS, so it lapses only
@@ -75,10 +80,44 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   deps.alert.forget(`lease:${deps.leaseHolder}`);
   await watchStuckCards(deps);
   const halted = haltReason() !== null;
-  const outcome: TickOutcome = halted ? { action: 'sleep', reason: 'halted' } : await evaluate(deps);
+  if (!halted) await dealAndResume(deps);
+  let outcome: TickOutcome;
+  try {
+    outcome = halted ? { action: 'sleep', reason: 'halted' } : await evaluate(deps);
+  } finally {
+    // A sleeping or failed card path never skips the job queue.
+    if (!halted) await runJobs(deps);
+  }
   await heartbeat(deps);
   if (!halted) await deps.alert.ping();
   return outcome;
+}
+
+// Dealing and resume by rule are the database's (deal_due_cards, resume_due_by_rule); each is
+// logged and never stops the tick.
+async function dealAndResume(deps: TickDeps): Promise<void> {
+  try {
+    const dealt = await deps.db.dealDueCards();
+    if (dealt.length > 0) deps.log.info('tick', `${dealt.length} card(s) dealt to now`, { cards: dealt });
+  } catch (error) {
+    deps.log.warn('tick', 'deal_due_cards failed', { error: errorMessage(error) });
+  }
+  try {
+    const resumed = await deps.db.resumeDueByRule();
+    if (resumed.results.length > 0) deps.log.info('tick', `${resumed.resumed} card(s) resumed by rule`, { results: resumed.results });
+  } catch (error) {
+    deps.log.warn('tick', 'resume_due_by_rule failed', { error: errorMessage(error) });
+  }
+}
+
+async function runJobs(deps: TickDeps): Promise<void> {
+  if (!deps.jobTick) return;
+  try {
+    const outcome = await deps.jobTick();
+    deps.log.info('jobs', 'job tick', { outcome });
+  } catch (error) {
+    deps.log.warn('jobs', 'job tick failed', { error: errorMessage(error) });
+  }
 }
 
 async function evaluate(deps: TickDeps): Promise<TickOutcome> {
@@ -148,7 +187,7 @@ async function mainBlocks(deps: TickDeps): Promise<MainReason | null> {
   return null;
 }
 
-// Two reads, both summed in the database: each card's studio spend (public_card_spend) and the spend
+// Two reads, both summed in the database: each card's studio spend (dispatcher_card_spend) and the spend
 // totals (studio_spend_totals), so a tick never downloads the ledger.
 async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
   const now = deps.now();

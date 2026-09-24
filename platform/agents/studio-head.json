@@ -7,8 +7,9 @@
   "budget_share": 0.10,
   "voice": "terse",
   "prompt_path": "platform/agents/prompts/studio-head.md",
-  "tools": ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
+  "tools": ["Read", "Glob", "Grep"],
   "metrics": ["estimate_accuracy", "cost_per_ship"],
+  "class": "planner",
   "write_access": true,
   "status": "running"
 }

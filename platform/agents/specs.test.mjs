@@ -11,26 +11,30 @@ const agentsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(agentsDir, '..', '..');
 
 const WRITE_SET = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'];
+// The Studio Head and the two Directors read the repository and write nothing in it (docs/specs/agent-system-core.md).
+const READ_SET = ['Read', 'Glob', 'Grep'];
+const WRITE_TOOLS = ['Edit', 'Write', 'Bash'];
+const CLASSES = ['writer', 'planner', 'reviewer', 'read_only', 'web_only'];
 
 // The roster: the nine launch roles and the seven added on 23 September 2026 with no tools and a
 // budget_share of 0, each with its place in the launch roster (README.md).
 const LAUNCH_VALUES = {
-  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'running' },
-  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: [], metrics: ['estimate_accuracy', 'first_pass_rate'], status: 'running' },
-  'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: WRITE_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'running' },
-  'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], status: 'running' },
-  'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], status: 'running' },
-  qa: { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'exact', tools: WRITE_SET, metrics: ['first_pass_rate', 'reopen_rate'], status: 'running' },
-  'platform-builder': { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'cautious', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship'], status: 'running' },
-  'platform-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'exacting', tools: [], metrics: ['first_pass_rate', 'reopen_rate'], status: 'running' },
-  'head-of-finance': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'careful', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'starts' },
-  janitor: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'tidy', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
-  'tech-artist': { model: 'MODEL_BUILDER', budget_share: 0, voice: 'vivid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
-  hr: { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'fair', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], status: 'starts' },
-  'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
-  'biz-dev': { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
-  community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'starts' },
-  host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], status: 'planned' },
+  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'running' },
+  'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: [], metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
+  'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'reviewer', status: 'running' },
+  'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
+  'builder-b': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'brisk', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
+  qa: { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'exact', tools: WRITE_SET, metrics: ['first_pass_rate', 'reopen_rate'], class: 'writer', status: 'running' },
+  'platform-builder': { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'cautious', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship'], class: 'writer', status: 'running' },
+  'platform-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'exacting', tools: READ_SET, metrics: ['first_pass_rate', 'reopen_rate'], class: 'reviewer', status: 'running' },
+  'head-of-finance': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'careful', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'read_only', status: 'starts' },
+  janitor: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'tidy', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'read_only', status: 'starts' },
+  'tech-artist': { model: 'MODEL_BUILDER', budget_share: 0, voice: 'vivid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'writer', status: 'starts' },
+  hr: { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'fair', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'starts' },
+  'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  'biz-dev': { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'curious', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  community: { model: 'MODEL_BUILDER', budget_share: 0.025, voice: 'warm', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
+  host: { model: 'MODEL_HOST', budget_share: 0.05, voice: 'cheerful', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'planned' },
 };
 
 // The roles that run at launch, from the launch plan's roster.
@@ -78,10 +82,12 @@ function checkValue(schema, value, where) {
 const schema = readSchemaFromReadme();
 const specs = readSpecs();
 
-test('the README schema requires twelve keys, allows trigger besides them, and allows no others', () => {
+test('the README schema requires thirteen keys, allows trigger besides them, and allows no others', () => {
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual([...schema.required, 'trigger'].sort(), Object.keys(schema.properties).sort());
-  assert.equal(schema.required.length, 12);
+  assert.equal(schema.required.length, 13);
+  assert.ok(schema.required.includes('class'), 'class is required');
+  assert.deepEqual(schema.properties.class.enum, CLASSES);
   assert.ok(schema.required.includes('description'), 'description is required');
   assert.ok(schema.required.includes('status'), 'status is required');
   assert.deepEqual(schema.properties.status.enum, ['running', 'starts', 'planned']);
@@ -101,7 +107,7 @@ for (const { file, spec } of specs) {
 
   test(`${file} validates against the schema`, () => {
     const expected = spec.status === 'running' ? [...schema.required] : [...schema.required, 'trigger'];
-    assert.deepEqual(Object.keys(spec).sort(), expected.sort(), `${file} carries the twelve keys, and trigger exactly when it is not running`);
+    assert.deepEqual(Object.keys(spec).sort(), expected.sort(), `${file} carries the thirteen keys, and trigger exactly when it is not running`);
     for (const key of Object.keys(spec)) checkValue(schema.properties[key], spec[key], `${file}.${key}`);
   });
 
@@ -110,8 +116,8 @@ for (const { file, spec } of specs) {
     assert.ok(existsSync(join(repoRoot, spec.prompt_path)), `${spec.prompt_path} exists`);
   });
 
-  test(`${file} has write_access exactly when it has tools`, () => {
-    assert.equal(spec.write_access, spec.tools.length > 0);
+  test(`${file} has write_access exactly when it is a writer or a planner with tools`, () => {
+    assert.equal(spec.write_access, (spec.class === 'writer' || spec.class === 'planner') && spec.tools.length > 0);
   });
 
   // A role without tools has no job that runs yet; the site shows the description as is.
@@ -129,9 +135,17 @@ for (const { file, spec } of specs) {
     assert.equal(spec.voice, expected.voice);
     assert.deepEqual(spec.tools, expected.tools);
     assert.deepEqual(spec.metrics, expected.metrics);
+    assert.equal(spec.class, expected.class);
     assert.equal(spec.status, expected.status);
   });
 }
+
+test('the Game Director and the Platform Director hold only Read, Glob and Grep, and the Studio Head holds no write tool', () => {
+  const tools = (file) => specs.find((s) => s.file === file).spec.tools;
+  assert.deepEqual(tools('game-director.json'), READ_SET);
+  assert.deepEqual(tools('platform-director.json'), READ_SET);
+  assert.deepEqual(tools('studio-head.json').filter((tool) => WRITE_TOOLS.includes(tool)), []);
+});
 
 test('role names are unique across files', () => {
   const names = specs.map(({ spec }) => spec.name);
@@ -184,7 +198,7 @@ for (const { file, spec } of specs) {
     assert.ok(prompt.includes(GATE_REVERT), `${spec.prompt_path} contains "${GATE_REVERT}"`);
   });
 
-  if (spec.tools.length === 0) {
+  if (!spec.tools.some((tool) => WRITE_TOOLS.includes(tool))) {
     test(`${file} prompt states that the role has no write tools`, () => {
       assert.ok(readPrompt(spec).includes(PROMPT_NO_WRITE_TOOLS), `${spec.prompt_path} contains "${PROMPT_NO_WRITE_TOOLS}"`);
     });

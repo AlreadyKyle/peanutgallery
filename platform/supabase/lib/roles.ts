@@ -10,6 +10,9 @@ export const METRIC_NAMES = ["first_pass_rate", "cost_per_ship", "estimate_accur
 /** A role's place in the launch roster (platform/agents/README.md). */
 export const ROLE_STATUSES = ["running", "starts", "planned"] as const;
 export type RoleStatus = (typeof ROLE_STATUSES)[number];
+/** A role's trust class (docs/SYSTEM.md, docs/specs/agent-system-core.md); roles.agent_class. */
+export const ROLE_CLASSES = ["writer", "planner", "reviewer", "read_only", "web_only"] as const;
+export type RoleClass = (typeof ROLE_CLASSES)[number];
 
 const REQUIRED_KEYS = [
   "name",
@@ -22,6 +25,7 @@ const REQUIRED_KEYS = [
   "prompt_path",
   "tools",
   "metrics",
+  "class",
   "write_access",
   "status",
 ] as const;
@@ -43,6 +47,8 @@ export interface RoleSpec {
   prompt_path: string;
   tools: string[];
   metrics: string[];
+  /** The trust class; the seed writes it to roles.agent_class. */
+  class: RoleClass;
   write_access: boolean;
   status: RoleStatus;
   /** One plain sentence saying when a role that is not running starts; null for a running role. */
@@ -119,10 +125,14 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
   const metrics = stringList(source, obj, "metrics", METRIC_NAMES);
   if (metrics.length < 2 || metrics.length > 3) fail(source, "metrics must list two or three names");
 
+  const roleClass = nonEmptyString(source, obj, "class");
+  if (!(ROLE_CLASSES as readonly string[]).includes(roleClass)) {
+    fail(source, `class must be one of ${ROLE_CLASSES.join(", ")}`);
+  }
   const writeAccess = obj.write_access;
   if (typeof writeAccess !== "boolean") fail(source, "write_access must be a boolean");
-  if (writeAccess !== (tools.length > 0)) {
-    fail(source, "write_access must be false exactly when tools is empty");
+  if (writeAccess !== ((roleClass === "writer" || roleClass === "planner") && tools.length > 0)) {
+    fail(source, "write_access must be true exactly when the class is writer or planner and tools is not empty");
   }
 
   const status = nonEmptyString(source, obj, "status");
@@ -153,6 +163,7 @@ export function parseRoleSpec(raw: unknown, source: string): RoleSpec {
     prompt_path: promptPath,
     tools,
     metrics,
+    class: roleClass as RoleClass,
     write_access: writeAccess,
     status: status as RoleStatus,
     trigger,

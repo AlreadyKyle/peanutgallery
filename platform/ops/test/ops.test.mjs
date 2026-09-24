@@ -51,7 +51,6 @@ const MAC_DOTENV = {
   DISPATCHER_TICK_MS: '60000',
   DISPATCHER_WORKTREE_ROOT: '/Users/board/peanutgallery/.worktrees',
   DISPATCHER_MAX_CONCURRENCY: '1',
-  DISPATCHER_SCHEDULER: 'on',
   CLAUDE_BIN: '/Users/board/.local/bin/claude',
   BOARD_SESSION_TTL_MIN: '',
   MANAGED_AGENT_ID: 'agent_fixture',
@@ -133,10 +132,9 @@ describe('make-dispatcher-env.sh', () => {
       ['AGENT_HOURLY_RATE_USD', '5'],
       ['DISPATCHER_TICK_MS', '60000'],
       ['DISPATCHER_MAX_CONCURRENCY', '1'],
-      ['DISPATCHER_SCHEDULER', 'on'],
     ]);
     for (const value of SECRET_VALUES) assert.ok(!run.output.includes(value), 'the output names keys only');
-    assert.match(run.stdout, /with 24 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
+    assert.match(run.stdout, /with 23 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
   });
 
   test('copies the director and host models and the session wall clock when .env sets them', () => {
