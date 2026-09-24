@@ -62,8 +62,9 @@ if (!tokens.includes(`url('/${FONT}')`)) throw new Error(`src/tokens.css does no
 const stylesheet = `${tokens.replace(`url('/${FONT}')`, `url('${font}')`)}\n${read('src/styles.css').replace(/^@import [^;]+;\n/m, '')}`;
 const mark = readFileSync(resolve(SITE, 'public/peanut.png')).toString('base64');
 
-// The site's type scale is in rem, so a larger root size scales every token together: at 175% the
-// page heading is 52.5px and the lede 35px, which read at link-preview size.
+// A larger root size scales the rem tokens together. The page heading grows with the viewport on the
+// site, so the card sets it at a fixed 1.875rem: at 175% the heading is 52.5px and the lede 35px,
+// which read at link-preview size.
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -84,7 +85,7 @@ html { font-size: 175%; }
   --mark-filter: invert(1);
 }
 .og .wordmark { font-size: var(--size-lead); }
-.og h1 { margin-bottom: var(--space-2); }
+.og h1 { margin-bottom: var(--space-2); font-size: 1.875rem; line-height: 1.25; }
 .og .lede { max-width: none; }
 .og .address { margin: 0; color: var(--muted-on-signal); font-size: var(--size-small); }
 </style>
