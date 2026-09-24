@@ -32,7 +32,7 @@ Out, and what each waits on:
 
 **Modes and money.** Rank now and Draft a game card queue board-origin runs. They run attended, on the founder's plan through `claude -p`, only while a board member is signed in at /board, and wait otherwise (agent-system-core). This holds in either studio mode, so role jobs never spend studio money. Both jobs run while the studio is paused, since they spend no studio money, so the launch floor can be drafted before launch. Every model call writes a ledger row billed to the founder with its role.
 
-**Sessions.** Each role job is one attended session holding exactly its role spec's tools: the Game Designer has Bash (its folder's package scripts), Read, Glob and Grep in a scratch worktree at origin/main; the Studio Head and the Game Director have at most Read, Glob and Grep. No session holds Write, Edit, a web tool or an MCP tool, and none names a fallback model. A session's final message must be exactly one object valid against its schema, or the run fails and writes nothing.
+**Sessions.** Each role job is one attended session holding exactly its role spec's tools: the Game Designer has Bash (its folder's package scripts), Read, Glob and Grep in a scratch worktree at origin/main; the Studio Head and the Game Director have at most Read, Glob and Grep. In an unattended process a session holds no Bash, so no agent-written code runs on the dispatcher's host (PLAN §6, decision 25), and its Read, Glob and Grep are denied the code clone's `.env` and dispatcher code, the host's env folder, the dumps and every `.env` file under the home folder. No session holds Write, Edit, a web tool or an MCP tool, and none names a fallback model. A session's final message must be exactly one object valid against its schema, or the run fails and writes nothing.
 
 **Drafting.** The Game Designer drafts a new seed-1 game card: title, summary, intent, acceptance test with `check:` lines, lane, executor and one estimate, which is also the funding target (`launch-cards.md`'s five-times rule). A run's typed input is empty, or carries studio-reports' floor context. The dispatcher then checks the draft and refuses it, naming the failed check, when it fails its schema or the definition of ready, holds a `check:` line that does not parse or already holds on main, touches a kernel path or a folder other than seed-1, carries a deny-listed term in any text field, estimates above `card_max_usd`, or names no active, unpaused writer executor for seed-1. A refused draft goes back to the Game Designer as a new round.
 
@@ -42,19 +42,19 @@ Out, and what each waits on:
 
 **Ranking.** The Studio Head sees typed card fields only. A community-sourced card contributes only its id, stage, horizon, bucket and funded amount. It answers with an order of the rankable cards, which the dispatcher reads from the same test the ranking refuses on. `apply_card_ranking` writes `rank` only, on cards on now at proposed, designing or voted with no money on their bar or on hold, at most ten changes a run. The named cards trade the ranks they already hold, so every other card, a card holding money included, keeps its place in the waterfall's line. It runs only when the board presses Rank now, so the board can set a rank afterwards. Each run writes one public event with the moved card ids and their positions.
 
-**Public text.** Every agent-written string a stranger can read is scanned by the gate's `banned-phrases.sh` with every list, trademarks included, before it is written. A hit, or a scan that cannot run, refuses the write. The site shows 'Written by the <role>, an AI agent' beside agent-written card text.
+**Public text.** Every agent-written string a stranger can read is scanned by the gate's `banned-phrases.sh` with every list, trademarks included, and then by its `secret-scan.sh`, before it is written. A hit, or a scan that cannot run, refuses the write. The site shows 'Written by the <role>, an AI agent' beside agent-written card text.
 
 **Biz Dev and Community.** Their prompts define no proposal that passes a board review, name no Reddit or X source, put nothing on the ledger page, and say they are not running yet. No job runs either role.
 
 ## Acceptance criteria
 
-- [x] Each role job session starts with exactly its role spec's tools (the Game Designer: Bash for seed-1's package scripts, Read, Glob and Grep, in a scratch worktree at origin/main; the Studio Head and the Game Director: at most Read, Glob and Grep), never Write, Edit, a web tool, an MCP tool or `--fallback-model`; a final message that is not exactly one schema-valid object, or a failed model call, fails the run with nothing written.
-- [x] The dispatcher refuses, by name and before any grading, a draft that fails its schema or the definition of ready, has a `check:` line that does not parse or already holds on main, touches a kernel path or a folder other than seed-1, estimates above `card_max_usd`, or names no active, unpaused writer executor; and every agent-written public string, draft text fields included, is refused on a `banned-phrases.sh` hit or when the scan cannot run (a test for each refusal).
+- [x] Each role job session starts with exactly its role spec's tools (the Game Designer: Bash for seed-1's package scripts, Read, Glob and Grep, in a scratch worktree at origin/main; the Studio Head and the Game Director: at most Read, Glob and Grep), never Write, Edit, a web tool, an MCP tool or `--fallback-model`, and in an unattended process never Bash, its Read, Glob and Grep denied the code clone's `.env`, the host's env folder and every `.env` file under the home folder; a final message that is not exactly one schema-valid object, or a failed model call, fails the run with nothing written.
+- [x] The dispatcher refuses, by name and before any grading, a draft that fails its schema or the definition of ready, has a `check:` line that does not parse or already holds on main, touches a kernel path or a folder other than seed-1, estimates above `card_max_usd`, or names no active, unpaused writer executor; and every agent-written public string, draft text fields included, is refused on a `banned-phrases.sh` or `secret-scan.sh` hit or when either scan cannot run (a test for each refusal).
 - [x] The Game Director grades in a separate session from the Game Designer using `draft-game.md`, which holds PLAN Appendix A's seven pillars verbatim and the all-ages rating; approved approves, revise starts a new round, and flagged or a third round without approval withdraws the draft with its reason codes, which come from the verdict schema's closed list.
 - [x] A draft is invisible to anon. Approval inserts one seed-1 card, source agent, horizon next, stage proposed, target equal to the estimate, whose content hash equals the graded draft's, and records the approval with a grader ref different from the maker's session; the card stays off now until dealt, and a payment naming it before then credits no bar; a withdrawal writes no card; the card text guard accepts agent text only from the board and draft paths; every draft and ranking RPC is service_role only.
 - [x] `apply_card_ranking` changes `rank` only, refuses an unknown id and any card that is off now, not at proposed, designing or voted, or has money on its bar or on hold; applies at most ten changes; writes one public event with ids and positions only; and the ranking and drafting inputs never contain a community-sourced card's title, summary or intent or any other public free text.
 - [x] Rank now and Draft a game card at /board queue board-origin runs that start only while a board member is signed in, in either studio mode, and wait otherwise; both jobs run while the studio is paused; every model call writes one ledger row billed to the founder with its role, a replayed request id writes nothing, and each run's row at /board shows its typed output.
-- [x] The site shows 'Written by the <role>, an AI agent' beside agent-written card text and nowhere else.
+- [x] The site shows 'Written by the <role>, an AI agent' beside agent-written card text and nowhere else, and a card with no byline keeps 16px from its summary to its bottom block at 375, 768 and 1440; /team does not say the Studio Head, the Game Designer or the Game Director has no job.
 - [x] The Biz Dev and Community prompts contain no board review, no Reddit and no X, and say they are not running yet; the Community prompt puts nothing on the ledger page.
 
 ## Verification
@@ -177,7 +177,46 @@ With the handler's old `funded_usd === 0` test put back, the three studio_rankin
   ✓ e2e/layout-balance.spec.ts › layout balance, home with an open card an agent drafted › leaves no dead space at 1440px
 ```
 
-With the card subgrid put back to four tracks, all five byline and layout tests at 768, 1024 and 1440 fail: the byline was drawn through the funding bar.
+With the card subgrid put back to four tracks, all five byline and layout tests at 768, 1024 and 1440 fail: the byline was drawn through the funding bar. (The third review's fix keeps four tracks with the byline inside the summary's block; see below.)
+
+After the third review's fixes (Decisions, 2026-09-23 third review fixes), `pnpm verify` exits 0 (`EXIT=0`, run with `npm_config_workspace_concurrency=1`):
+
+```
+platform/site test:       Tests  433 passed (433)
+platform/board test:       Tests  93 passed (93)
+platform/supabase test:       Tests  304 passed (304)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  683 passed (683)
+platform/gate test: PASS: gate tests passed=508
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=584
+```
+
+The new dispatcher tests (`vitest run` on the four changed files, `Tests  56 passed (56)`):
+
+```
+ ✓ test/role-session.test.ts > the role session spec > in an unattended process holds no Bash, so the seed scripts never run on the host and nothing is installed
+ ✓ test/job-handlers.test.ts > draft_card > gives the Game Designer no Bash in an unattended process, so no seed-1 code runs on the host, and still approves
+ ✓ test/attended.test.ts > the attended sandbox > denies the Read, Glob and Grep tools the code clone, the host env folder, the dumps and every .env file under the home folder
+ ✓ test/public-text.test.ts > scanPublicText > refuses a credential shape in any string, never repeating the value, and a secret scan that cannot run
+```
+
+`E2E_PORT=4421 pnpm --filter @backseat/site e2e`: `164 passed (3.5m)`, `3 skipped`, among them:
+
+```
+e2e/agent-card.spec.ts › at 375px a card with no byline keeps 16px from its summary to its bottom block, and the byline keeps at least that
+e2e/agent-card.spec.ts › at 768px a card with no byline keeps 16px from its summary to its bottom block, and the byline keeps at least that
+e2e/agent-card.spec.ts › at 1440px a card with no byline keeps 16px from its summary to its bottom block, and the byline keeps at least that
+e2e/agent-card.spec.ts › with no card an agent wrote, as on the live studio today › at 768px every card keeps 16px from its summary to its bottom block
+e2e/agent-card.spec.ts › with no card an agent wrote, as on the live studio today › at 1440px every card keeps 16px from its summary to its bottom block
+e2e/layout-balance.spec.ts › layout balance, home with an open card an agent drafted › leaves no dead space at 768px / 1024px / 1440px
+e2e/pages.spec.ts › at 375 px / at 1440 px › /team lists the running agents and the ones that build no cards, with code-drawn avatars
+```
+
+With the fifth, empty track put back (`span 5`, the bottom block on row 5), the four 768 and 1440 gap tests fail with `summary to bottom block 40px`; 375 passes, since phones lay the card out as a column. `BOARD_E2E_PORT=4422 pnpm --filter @backseat/board e2e`: `7 passed (4.2s)`. Screenshots of home, the agent-card row and /team at 375 and 1440 were looked at: no gap above any bar, the byline under its summary with the row's bars in line, and /team's Not building cards section reads true of every role in it.
+
+The gate at the review fixes' head sha did not start: GitHub refused the jobs, saying the account's recent payments failed or its spending limit needs raising. That is the board's (GitHub Billing & plans); the local `pnpm verify` and gate dry runs above pass, and the gate reruns once billing is fixed.
 
 Production (the ship stage, after the production steps): the pre-migration dump's size, `anon-negative-test.ts` and `ledger-identity.ts` PASS and `select public.ledger_identity()` are quoted in the pull request when run.
 
@@ -210,4 +249,10 @@ Production (the ship stage, after the production steps): the pre-migration dump'
   - Where trading could still move another card, the named card keeps its rank and counts as not applied: another card in line (on now at proposed, designing, voted or funded, the stages step 2 funds) shares its rank, or it is unranked behind an older unranked card the order leaves out. A shared rank is the board's to break; the ranking never creates one.
   - The ten-change cap applies the longest start of the order whose changes fit in ten, the named cards in it trading their own ranks, so no stale rank ever ties a new one. `unapplied` counts the named cards whose place was not set. The board shows them as "n more kept their ranks."
   - Which cards are rankable is one SQL test, `card_rank_problem` (off now, not open for funding, money on the bar or a payment on hold naming the card). `apply_card_ranking` refuses on it and `rankable_cards` lists by it, and the dispatcher offers the Studio Head only what `rankable_cards` returns. A card with an empty bar and a payment on hold (the daily credit cap used up) was offered before and failed every Rank now until the hold released.
-  - The card subgrid from main's gap audit (#76) gains a fifth track for the byline: index, title, summary, byline, bottom block. With four, the byline fell into the bottom block's row and was drawn through the funding bar at 768 and 1440.
+  - The card subgrid from main's gap audit (#76) gains a fifth track for the byline: index, title, summary, byline, bottom block. With four, the byline fell into the bottom block's row and was drawn through the funding bar at 768 and 1440. (Superseded by the third review's fixes: the fifth track is gone.)
+- 2026-09-23, third review fixes (no board question; the salvage run after the usage limit):
+  - Role sessions hold no Bash in an unattended process, rather than the dispatcher refusing role jobs outside attended mode. PLAN §6 and decision 25 say no agent-written code runs on the dispatcher's host, and the Game Designer's seed-1 scripts (and the `pnpm install` before them) are agent-written code; but agent-system-core's decision that model role jobs start in either studio mode stands, since Draft to the floor (launch-card-floor) and studio-reports run on the Mac host after the cutover, which is unattended. So `roleSessionSpec` leaves Bash out whenever the card sessions' mode is unattended, nothing is installed, and an init line that still shows Bash stops the session. In an attended process, where card sessions already run sandboxed on the founder's Mac, the Designer keeps Bash as before. The Designer drafts from Read, Glob and Grep alone on the host; its prompt says so.
+  - The attended adapter's Read, Glob and Grep deny rules name the code clone the dispatcher runs from as well as the work clone (on the Mac host they differ, and the code clone's `.env` holds the service-role key, the studio key and the GitHub tokens), and `HOME_DENY` adds every `.env`, `.env.*` and `*.env` file under the home folder (the board's own checkout, the host's `dispatcher.env` and job env files), `~/peanutgallery-host/env/**` and `~/peanutgallery-dumps/**`. A `.env.example` in a worktree is denied too, which no lane needs. The rules have the shapes the adapter already used; `sandbox:check` is the board's to rerun on its Mac.
+  - The public-text filter runs the gate's `secret-scan.sh` over the same file after `banned-phrases.sh`, so a credential a role session read can never reach a public row; the refusal names the shape and never the value.
+  - The card keeps main's four subgrid tracks. A card an agent wrote holds its summary and byline in one block (`.card-text`) on the summary's track; a card no agent wrote renders exactly as on main. The fifth, empty track added one 24px grid gap above every funding bar from 768px up, on every card, bylines or not (no card on production has one). The agent-card e2e now checks 16px from the summary to the bottom block on every card without a byline at 375, 768 and 1440, with an agent card on the page and without one.
+  - /team's second section is "Not building cards", and its intro says some of its roles rank, draft or grade cards when the board asks and the others have no job yet. "These roles have no job that runs yet" was false of the Studio Head, the Game Designer and the Game Director once their jobs were registered. supporter-pages' `teamStatus` replaces the section later. The board's comment on the card roles says the same.
