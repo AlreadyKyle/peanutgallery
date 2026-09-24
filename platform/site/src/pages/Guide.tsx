@@ -375,6 +375,8 @@ function SignalBand() {
             <p className="caption">
               {guide.primaryNote} {guide.outlineNote} {guide.pressedNote} {guide.coinNote}
             </p>
+            <h3>{guide.focusHeading}</h3>
+            <p className="caption">{guide.focusIntro}</p>
             <h3>{guide.liveHeading}</h3>
             <LiveUpdatesDemo />
             <p className="caption">{guide.liveIntro}</p>
@@ -401,8 +403,6 @@ function SignalBand() {
               <MachineMark />
             </p>
             <p className="caption">{guide.markNote}</p>
-            <h3>{guide.focusHeading}</h3>
-            <p className="caption">{guide.focusIntro}</p>
           </div>
         </div>
       </section>
