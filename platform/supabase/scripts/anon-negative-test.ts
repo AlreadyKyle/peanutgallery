@@ -57,6 +57,10 @@ const PUBLIC_RELATIONS = [
   "public_terms_versions",
   "public_money",
   "public_stopped_cards",
+  // supporter-pages (docs/specs/supporter-pages.md): each card's supporter numbers and each role's
+  // studio-billed spend and ships.
+  "public_card_supporters",
+  "public_role_stats",
 ];
 
 // cards is granted column by column (docs/specs/card-columns-and-open-funding.md).
@@ -149,9 +153,18 @@ const CALLABLE_RPCS: Array<[string, Record<string, unknown>]> = [["card_is_publi
 // calls on purpose, each answering one JSON object with these top-level keys. They only read, as
 // anon, so they return nothing anon could not already read.
 const SNAPSHOT_RPCS: Array<[string, string[]]> = [
-  ["site_live", ["built_at", "cards", "deploys", "events", "money", "pool", "stopped", "studio", "totals"]],
+  ["site_live", ["built_at", "cards", "deploys", "events", "money", "pool", "role_stats", "stopped", "studio", "totals"]],
   ["site_cards", ["cards", "roles", "terms"]],
 ];
+
+// supporter-pages (docs/specs/supporter-pages.md): a card's own document, null for a card that does
+// not exist, and the /thanks answer, which for a session that is not a real one is exactly
+// {"status":"pending"}. Both only read; thanks_for_session is the one security definer function
+// anon calls, and its answer for a made-up session names nothing.
+const CARD_DOCUMENT_KEYS = ["card", "funding", "line_count", "lines", "milestones", "roles", "spent_usd", "stopped", "supporter_count", "supporters"];
+const SUPPORTER_COLUMNS = "card_id,supporter_number,founding";
+const ROLE_STATS_COLUMNS = "role_id,spent_usd,spent_7d_usd,shipped_cards";
+const FAKE_SESSION = "cs_test_anonnegativetest0000";
 
 // The money schema holds the waterfall's helpers and is not exposed: PostgREST refuses any request
 // that names it (PGRST106) before a function is looked up.
@@ -314,6 +327,47 @@ async function main(): Promise<void> {
       expected: "readable",
       actual: error ? "error" : lacking.length === 0 ? "readable" : "error",
       detail: error ? `${error.code ?? "error"} ${error.message}` : lacking.length === 0 ? `keys ${keys.join(",")}` : `missing ${lacking.join(",")}`,
+    });
+  }
+
+  // supporter-pages: the two new views' columns, site_card for no card and for a public live card,
+  // and thanks_for_session for a made-up and a malformed session.
+  outcomes.push({ relation: `public_card_supporters(${SUPPORTER_COLUMNS})`, expected: "readable", ...(await probe(db, "public_card_supporters", SUPPORTER_COLUMNS)) });
+  outcomes.push({ relation: `public_role_stats(${ROLE_STATS_COLUMNS})`, expected: "readable", ...(await probe(db, "public_role_stats", ROLE_STATS_COLUMNS)) });
+  {
+    const { data, error } = await db.rpc("site_card", { p_id: NO_CARD });
+    outcomes.push({
+      relation: "rpc site_card (no card)",
+      expected: "readable",
+      actual: error ? "error" : data === null ? "readable" : "error",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : `answered ${JSON.stringify(data)}`,
+    });
+  }
+  {
+    const live = await db.from("cards").select("id").eq("stage", "live").order("live_at", { ascending: false }).limit(1);
+    const id = (live.data?.[0] as { id?: string } | undefined)?.id;
+    if (live.error || id === undefined) {
+      outcomes.push({ relation: "rpc site_card (a live card)", expected: "readable", actual: "error", detail: live.error ? `${live.error.code ?? "error"} ${live.error.message}` : "no live card to read" });
+    } else {
+      const { data, error } = await db.rpc("site_card", { p_id: id });
+      const keys = typeof data === "object" && data !== null ? Object.keys(data as object).sort() : [];
+      const same = JSON.stringify(keys) === JSON.stringify(CARD_DOCUMENT_KEYS);
+      outcomes.push({
+        relation: "rpc site_card (a live card)",
+        expected: "readable",
+        actual: error ? "error" : same ? "readable" : "error",
+        detail: error ? `${error.code ?? "error"} ${error.message}` : same ? `keys ${keys.join(",")}` : `keys ${keys.join(",")}`,
+      });
+    }
+  }
+  for (const session of [FAKE_SESSION, "not-a-session"]) {
+    const { data, error } = await db.rpc("thanks_for_session", { p_session: session });
+    const exact = JSON.stringify(data) === '{"status":"pending"}';
+    outcomes.push({
+      relation: `rpc thanks_for_session (${session === FAKE_SESSION ? "unknown" : "malformed"})`,
+      expected: "readable",
+      actual: error ? "error" : exact ? "readable" : "error",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : `answered ${JSON.stringify(data)}`,
     });
   }
 

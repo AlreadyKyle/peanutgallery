@@ -74,7 +74,8 @@ async function readMigrations(): Promise<{ name: string; sql: string }[]> {
   return await Promise.all(names.map(async (name) => ({ name, sql: (await Deno.readTextFile(new URL(name, MIGRATIONS_DIR))).replaceAll(PGCRYPTO_LINE, "") })));
 }
 
-async function studio() {
+/** A studio with every migration, or those up to and including `through`. */
+async function studio(opts: { through?: string } = {}) {
   const db = new PGlite();
   const row = async <T extends Row = Row>(sql: string, params: unknown[] = []): Promise<T> => {
     const result = await db.query<T>(sql, params);
@@ -100,7 +101,7 @@ async function studio() {
   };
 
   await db.exec(SHIM);
-  for (const m of await readMigrations()) await db.exec(m.sql);
+  for (const m of await readMigrations()) if (opts.through === undefined || m.name <= opts.through) await db.exec(m.sql);
   await db.exec(
     `insert into public.studio_state (id, credit_daily_cap_usd, credit_studio_daily_cap_usd, card_max_usd, daily_cap_usd, monthly_cap_usd, reserve_pct, incident_cap_usd)
        values (1, 10000, 10000, 5, 100, 500, 0, 0);
@@ -884,9 +885,10 @@ Deno.test("criterion 9's foreign keys: one delete of planned cards removes none 
   }
 });
 
-// The migration runs twice, as a retried apply would, and the reason check keeps money-logic's reasons.
+// The migration runs twice, as a retried apply would (straight after itself, before any later file
+// recreates its views), and the reason check keeps money-logic's reasons.
 Deno.test("the migration applies twice and keeps money-logic's allocation reasons", OPTS, async () => {
-  const s = await studio();
+  const s = await studio({ through: "20260924300000_agent_system_core.sql" });
   try {
     const file = (await readMigrations()).find((m) => m.name === "20260924300000_agent_system_core.sql");
     assert(file, "the agent-system-core migration");

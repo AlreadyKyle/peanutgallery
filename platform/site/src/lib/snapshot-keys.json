@@ -1,14 +1,24 @@
 {
   "live": {
     "built_at": "string",
-    "pool": ["object", "null"],
+    "pool": [
+      "object",
+      "null"
+    ],
     "studio": "object",
     "totals": "object",
-    "money": ["object", "null"],
-    "stopped": ["array", "null"],
+    "money": [
+      "object",
+      "null"
+    ],
+    "stopped": [
+      "array",
+      "null"
+    ],
     "cards": "object",
     "events": "array",
-    "deploys": "array"
+    "deploys": "array",
+    "role_stats": "array"
   },
   "cards": {
     "cards": "array",
