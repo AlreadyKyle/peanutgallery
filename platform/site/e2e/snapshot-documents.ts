@@ -27,11 +27,41 @@ export function listedCards(cards: readonly Record<string, unknown>[]): Record<s
   );
 }
 
+/**
+ * A stopped card the fixture lists only in `stopped`, as the cards table holds it: in the database a
+ * paused or rejected card is a card like any other, so both documents carry it.
+ */
+function stoppedAsCard(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: row.card_id,
+    title: row.title,
+    summary: null,
+    intent: null,
+    source: 'board',
+    stage: row.stage,
+    shape: 'goal',
+    bucket: 'game',
+    folder: 'seed-1',
+    horizon: 'now',
+    rank: null,
+    executor_role_id: null,
+    funding_target_usd: row.funded_usd,
+    funded_usd: row.funded_usd,
+    failing_check: row.failing_check,
+    created_at: row.stopped_at,
+    updated_at: row.stopped_at,
+    live_at: null,
+  };
+}
+
 export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:00+00:00'): SnapshotDocuments {
-  const listed = listedCards(studio.cards);
-  const spend = new Map(studio.spend.map((row) => [row.card_id, row.spent_usd]));
+  const known = new Set(studio.cards.map((card) => card.id));
+  const table = [...studio.cards, ...(studio.stopped ?? []).filter((row) => !known.has(row.card_id)).map(stoppedAsCard)];
+  const listed = listedCards(table);
+  const spend = new Map<unknown, unknown>(studio.spend.map((row) => [row.card_id, row.spent_usd]));
+  for (const row of studio.stopped ?? []) if (!spend.has(row.card_id)) spend.set(row.card_id, row.spent_usd);
   const funding = new Map(studio.funding.map((row) => [row.card_id, row]));
-  const titles = new Map(studio.cards.map((card) => [card.id, card.title]));
+  const titles = new Map(table.map((card) => [card.id, card.title]));
   const liveCards: Record<string, unknown> = {};
   for (const card of listed) {
     const counted = funding.get(card.id);
