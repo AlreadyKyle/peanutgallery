@@ -119,10 +119,10 @@ describe('the snapshot function', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('names its paths only, with no method, and sets the 60-a-minute rate limit per IP and domain', () => {
+  it('names its paths only, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
       path: ['/api/live', '/api/cards'],
-      rateLimit: { windowLimit: 60, windowSize: 60, aggregateBy: ['ip', 'domain'] },
+      rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');
   });

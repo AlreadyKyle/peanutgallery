@@ -165,15 +165,28 @@ function postedAt(iso) {
   return `${value('day')} ${value('month').slice(0, 3)} ${value('year')} at ${value('hour')}:${value('minute')} Toronto time`;
 }
 
-/** One of the site's own documents, parsed; null when it does not answer 200 JSON (a local preview has none). */
-async function siteDocument(path) {
-  try {
-    const response = await fetch(BASE + path);
-    if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
-    return await response.json();
-  } catch {
-    return null;
+/**
+ * One of the site's own documents, parsed; null when it does not answer 200 JSON (a local preview has
+ * none). Each is read once per run, so the checks' own reads stay well under the function's rate limit
+ * beside the pages' reads; the header checks below fetch afresh.
+ */
+const documents = new Map();
+function siteDocument(path) {
+  if (!documents.has(path)) {
+    documents.set(
+      path,
+      (async () => {
+        try {
+          const response = await fetch(BASE + path);
+          if (!response.ok || !(response.headers.get('content-type') ?? '').includes('application/json')) return null;
+          return await response.json();
+        } catch {
+          return null;
+        }
+      })(),
+    );
   }
+  return documents.get(path);
 }
 
 /** The posted Terms versions, oldest first, from /api/cards as the Terms pages read them; null when the read fails. */
