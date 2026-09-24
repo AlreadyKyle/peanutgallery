@@ -4,23 +4,39 @@ import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
-import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
-import { CATEGORY_FILTERS, categoryOf, fundableCards, fundLink, type CardCategory } from '../lib/payment';
-import { useStudio } from '../lib/studio';
+import { fundableCards, fundLink, nextInLine } from '../lib/payment';
+import type { Snapshot } from '../lib/source';
+import { useStudio, type StudioState } from '../lib/studio';
 
 // Kernel (docs/specs/board-site.md): the page that sends money to the Payment Link. Its strings come
-// from legal.ts, the agreement line directly under the first choice among them (docs/specs/legal-copy.md); which cards it offers, in what order and under which heading, and their links, come
-// from payment.ts; every module it reads is kernel but copy.ts (the category names) and PageHeader.
+// from legal.ts, the agreement line directly under the first choice among them (docs/specs/legal-copy.md).
+// Which cards it offers, in what order, and their links come from payment.ts, which reads the
+// waterfall's order (public_money.funding_order, docs/specs/money-surfaces.md); every module it reads
+// is kernel but PageHeader.
 
-const CATEGORIES = CATEGORY_FILTERS.filter((filter): filter is CardCategory => filter !== 'all');
+/** Whether public_money loaded: without it no card is named or offered. */
+function hasOrder(snapshot: Snapshot): boolean {
+  return !snapshot.missing.includes('money') && snapshot.money !== undefined && snapshot.money !== null;
+}
+
+/**
+ * Fund the next card in line's second line: the first card in the funding order, or that the money
+ * waits in Not on a card yet when no card takes money. It names no card while the order is loading
+ * or did not load; the money is placed by the waterfall either way.
+ */
+function pickForMeBody(studio: StudioState): string {
+  if (studio.state !== 'ready' || !hasOrder(studio.snapshot)) return legal.pickForMeBody;
+  const next = nextInLine(studio.snapshot);
+  return next === null ? legal.nextInLineNone : legal.nextInLine.replace('{title}', next.title);
+}
 
 /**
  * The step before checkout, on two bands (DESIGN.md, Bands): the heading and the paused notice on
- * the signal plate, the choices on paper. Fund the next card in line (no card named: money given
- * with no card funds later cards), or one card. Both go to the same Payment Link; a card adds
- * client_reference_id, which the webhook credits to that card.
+ * the signal plate, the choices on paper. Fund the next card in line (money given with no card
+ * funds the next cards in line), or one card from the funding order. Both go to the same Payment
+ * Link; a card adds client_reference_id, which the webhook credits to that card.
  */
 export function Contribute() {
   const env = siteEnv();
@@ -40,7 +56,7 @@ export function Contribute() {
           <div className="contribute">
             <a className="choice choice-primary" href={env.stripePaymentLinkUrl}>
               <span className="choice-title">{legal.pickForMe}</span>
-              <span className="choice-body">{legal.pickForMeBody}</span>
+              <span className="choice-body">{pickForMeBody(studio)}</span>
             </a>
             <p className="muted small">
               <LinkedText text={legal.contributeAgreement} />
@@ -49,31 +65,28 @@ export function Contribute() {
             <h2 className="choices-heading">{legal.orPickACard}</h2>
             <Guarded studio={studio}>
               {(snapshot) => {
-                const fundable = fundableCards(snapshot.cards);
+                if (!hasOrder(snapshot)) return <p className="muted">{legal.partUnavailable}</p>;
+                const fundable = fundableCards(snapshot);
                 if (fundable.length === 0) return <p className="muted">{legal.noFundableCards}</p>;
-                return CATEGORIES.map((category) => {
-                  const cards = fundable.filter((card) => categoryOf(card) === category);
-                  if (cards.length === 0) return null;
-                  return (
-                    <section key={category} className="choice-group" aria-labelledby={`choose-${category}`}>
-                      <h3 id={`choose-${category}`}>{copy.categories[category]}</h3>
-                      <ul className="choices">
-                        {cards.map((card) => (
-                          <li key={card.id}>
-                            <a className="choice" href={fundLink(env.stripePaymentLinkUrl, card.id)}>
-                              <span className="choice-title">{card.title}</span>
-                              {card.summary === null || card.summary.trim() === '' ? null : (
-                                <span className="choice-body">{card.summary}</span>
-                              )}
-                              <FundingBar card={card} />
-                              <span className="choice-meta">{fundingCaption(card, snapshot)}</span>
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  );
-                });
+                return (
+                  <>
+                    <ul className="choices">
+                      {fundable.map((card) => (
+                        <li key={card.id}>
+                          <a className="choice" href={fundLink(env.stripePaymentLinkUrl, card.id)}>
+                            <span className="choice-title">{card.title}</span>
+                            {card.summary === null || card.summary.trim() === '' ? null : (
+                              <span className="choice-body">{card.summary}</span>
+                            )}
+                            <FundingBar card={card} />
+                            <span className="choice-meta">{fundingCaption(card, snapshot)}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="muted small">{legal.waterfallLine}</p>
+                  </>
+                );
               }}
             </Guarded>
             <p className="muted small">{legal.split}</p>

@@ -699,6 +699,21 @@ button.link:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+/* A figure that did not load: "Not available right now." stacks under the label as a muted body
+   line, like a band whose read failed, instead of taking the figure's unwrapping place. */
+.stat-unavailable {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+}
+
+.stat-unavailable dd {
+  color: var(--text-muted);
+  font-size: var(--size-body);
+  font-weight: var(--weight-body);
+  white-space: normal;
+}
+
 /* Cards: a white face with a 2px ink edge; the money and the action pinned to the bottom ---------- */
 
 .card-grid {
@@ -789,6 +804,37 @@ button.link:hover:not(:disabled) {
 /* Pushed to the bottom so bars and buttons line up across a row of cards. */
 .card-bottom {
   margin-top: auto;
+}
+
+/* From 48rem, where cards sit side by side, each card shares its row's four tracks (CSS subgrid):
+   the index, the title, the summary and the bottom block line up across the row, and a shorter
+   card's spare space splits under its title and its summary instead of pooling above the funding
+   bar as one hollow (DESIGN.md, No dead space). The parts are placed by row, so a card with no
+   summary keeps its bottom block in line. */
+@media (min-width: 48rem) {
+  .card-grid > .card {
+    display: grid;
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+
+  .card-grid > .card > .card-index {
+    grid-row: 1;
+  }
+
+  .card-grid > .card > h3 {
+    grid-row: 2;
+  }
+
+  .card-grid > .card > .card-summary {
+    grid-row: 3;
+  }
+
+  .card-grid > .card > .card-bottom {
+    grid-row: 4;
+    margin-top: 0;
+  }
 }
 
 .card-bottom > .button {
@@ -928,8 +974,8 @@ button.link:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names no
-   card until the waterfall's order is public (docs/specs/home-and-design.md). Its agreement line
+/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names the
+   next card in the waterfall's order (docs/specs/money-surfaces.md). Its agreement line
    (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and carries the
    section gap before "Or pick a card". */
 .choice-primary {
@@ -956,19 +1002,10 @@ button.link:hover:not(:disabled) {
   background: var(--primary-hover);
 }
 
-.choice-group {
-  margin-bottom: var(--space-3);
-}
-
-.choice-group h3 {
-  margin-bottom: var(--space-1);
-  color: var(--text-muted);
-  font-size: var(--size-small);
-}
-
 .choices {
   display: grid;
   gap: var(--space-2);
+  margin: 0 0 var(--space-3);
 }
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
@@ -1265,6 +1302,40 @@ button.link:hover:not(:disabled) {
   color: var(--text-muted);
   font-size: var(--size-small);
   font-weight: var(--weight-strong);
+}
+
+/* The roles still to come: equal compact tiles, each a small sleeping avatar beside the name and
+   the job in small type, flowing down balanced columns (CSS columns), so no row is left part-empty
+   however many roles there are. */
+.team-coming {
+  columns: 16rem 3;
+  column-gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-coming > li {
+  break-inside: avoid;
+  margin-bottom: var(--space-3);
+}
+
+.agent-coming {
+  grid-template-rows: auto 1fr auto;
+}
+
+.agent-coming .avatar {
+  width: 3.5rem;
+}
+
+.agent-coming h3 {
+  font-size: var(--size-body);
+}
+
+.agent-coming p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--size-small);
 }
 
 /* The team strip: borderless links, avatar beside the name and job. */

@@ -12,6 +12,8 @@ export { expect };
  */
 export type StudioFixture = {
   paused: boolean;
+  /** public_studio.pause_reason while paused; null or left out for none. */
+  pauseReason?: string | null;
   launchedAt: string | null;
   pool: Record<string, string>;
   cards: Record<string, unknown>[];
@@ -23,7 +25,41 @@ export type StudioFixture = {
   totals: Record<string, string>;
   /** public_terms_versions; versions 1 and 2 posted when left out (docs/specs/legal-copy.md). */
   terms?: Record<string, unknown>[];
+  /** public_money's one row (docs/specs/money-logic.md); null answers the read with an error. */
+  money: Record<string, unknown> | null;
+  /** public_stopped_cards, newest first; null answers the read with an error. */
+  stopped: Record<string, unknown>[] | null;
 };
+
+/** A public_money row: every figure zero, nothing reconciled and an empty order, with `fields` over it. */
+export function moneyRow(fields: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    payments: 0,
+    received_usd: '0.0000',
+    stripe_fees_usd: '0.0000',
+    refunded_usd: '0.0000',
+    disputed_usd: '0.0000',
+    corrections_usd: '0.0000',
+    studio_pct_avg: null,
+    reserve_usd: '0.0000',
+    studio_usd: '0.0000',
+    incident_usd: '0.0000',
+    held_usd: '0.0000',
+    agent_credit_usd: '0.0000',
+    not_on_card_usd: '0.0000',
+    short_usd: '0.0000',
+    board_test_usd: '0.0000',
+    reconciled_at: null,
+    last_run_ok: null,
+    funding_order: [],
+    ...fields,
+  };
+}
+
+/** A funding order in public_money's shape, from card ids in order. */
+export function fundingOrder(ids: readonly unknown[]): Record<string, unknown>[] {
+  return ids.map((card_id, i) => ({ position: i + 1, card_id, room_usd: 1 }));
+}
 
 /** The posted Terms versions the e2e build reads: version 1 at #47's merge, version 2 a day later. */
 export const POSTED_TERMS = [
@@ -129,6 +165,20 @@ export const DEFAULT_STUDIO: StudioFixture = {
   ],
   roles: rolesFromSpecs(),
   totals: { usd_total: '0.2400', input_tokens: '12000', cached_tokens: '3000', output_tokens: '800', row_count: '3' },
+  // Four contributions: 12.00 - 1.40 in fees = 10.60 = 1.06 reserve + 1.91 studio + 0.38 emergency fund + 7.25 agent credit.
+  money: moneyRow({
+    payments: 4,
+    received_usd: '12.0000',
+    stripe_fees_usd: '1.4000',
+    studio_pct_avg: '20.00',
+    reserve_usd: '1.0600',
+    studio_usd: '1.9100',
+    incident_usd: '0.3800',
+    agent_credit_usd: '7.2500',
+    not_on_card_usd: '0.3000',
+    funding_order: fundingOrder([CARDS[1]!.id, CARDS[0]!.id]),
+  }),
+  stopped: [],
 };
 
 /** Answers every Supabase REST request from the fixture and holds realtime open with no server. */
@@ -146,7 +196,9 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
           : studio.cards,
       public_card_funding: studio.funding,
       public_card_spend: studio.spend,
-      public_studio: [{ launched_at: studio.launchedAt, paused: studio.paused }],
+      public_studio: [{ launched_at: studio.launchedAt, paused: studio.paused, platform_lane_open: false, pause_reason: studio.paused ? (studio.pauseReason ?? null) : null }],
+      public_money: studio.money === null ? null : [studio.money],
+      public_stopped_cards: studio.stopped,
       public_ledger_totals: [studio.totals],
       public_agent_events: studio.events,
       deploys: studio.deploys,
@@ -155,6 +207,11 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
     };
     if (table === undefined || !(table in rows) || route.request().method() !== 'GET') {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: `${url.pathname} is not in the e2e fixture` }) });
+      return;
+    }
+    // A read the fixture fails on purpose (money or stopped set to null).
+    if (rows[table] === null) {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: `${table} failed in the e2e fixture` }) });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows[table]) });

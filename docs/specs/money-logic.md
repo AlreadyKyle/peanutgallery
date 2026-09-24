@@ -1,6 +1,6 @@
 # Money logic: one waterfall, allocations, supporter numbers, the terms stamp and the fees Stripe keeps
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Part of the launch series, built on the merge of legal-copy (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). The cross-PR contracts it relies on are in its Decisions under "Reconciled with the series".
 
@@ -166,7 +166,7 @@ The board site:
 - [x] The cancel confirmation says the card's unspent money goes to the next cards in line, and Pause offers the four reasons with the default sending only `p_paused`.
 
 Production:
-- [ ] Production: a pg_dump is taken and listed before the apply; after it, `ledger_identity()` holds with I1 to I5, `cron.job` lists `waterfall-sweep */5 * * * *`, `anon-negative-test.ts` and `ledger-identity.ts` print PASS, and the new `stripe-webhook` version is deployed.
+- [x] Production: a pg_dump is taken and listed before the apply; after it, `ledger_identity()` holds with I1 to I5, `cron.job` lists `waterfall-sweep */5 * * * *`, `anon-negative-test.ts` and `ledger-identity.ts` print PASS, and the new `stripe-webhook` version is deployed.
 
 ## Verification
 
@@ -310,8 +310,85 @@ schema.sql: 214376 bytes; pg_dump --schema-only --quote-all-identifiers --schema
 psql:schema-public-only.sql:3062: ERROR:  schema "money" does not exist
 ```
 
+### Production, 23 September 2026
+
+Before the merge: legal-copy had squash-merged as e14019b and its branch was deleted, which closed #69 (its base). I merged legal-copy's final head 07acbd0 into the branch (clean), then `origin/main` at 0fe4b59: the conflicts were only where the branch carried legal-copy's lines, resolved to the branch's version (main equals 07acbd0 outside `docs/ROADMAP.md` and `docs/specs/legal-copy.md`), with #70's two doc edits applied on top. I restored `launch/legal-copy` at 07acbd0 for a moment to reopen #69, set its base to main and deleted that branch again. `pnpm verify` exit 0 at 8febb2f (board 71, supabase 286, site 382, seed-1 77, dispatcher 619, gate passed=508, agents 117, ops 124, functions 97 passed, secret-scan files=551, docs 15, rename 6, `verify exit 0`); `money_logic_test.ts` `ok | 12 passed (22 steps) | 0 failed`; `BOARD_E2E_PORT=4473 pnpm --filter @backseat/board e2e` `6 passed (4.1s)`. The gate at the head sha 8febb2f passed (run 35927819781: detect, build, seed-code, platform, gate). The production steps ran after the gate and before the merge, the studio paused throughout.
+
+1. `select paused, launched_at, dispatcher_seen_at, now() - dispatcher_seen_at > interval '3 minutes' as dispatcher_idle from public.studio_state`: `[{"paused":true,"launched_at":null,"dispatcher_seen_at":"2026-09-16 04:19:38.678+00","dispatcher_idle":true}]`.
+2. `pg_dump "$BACKUP_DB_URL" --no-owner --format=custom` wrote `~/peanutgallery-dumps/pre-money-logic-20260923T223410Z.dump` (597392 bytes, mode 600); `pg_restore --list` exit 0, 967 lines, with `TABLE DATA public cards`, `contributions`, `controller_runs`, `ledger`, `pool` and `terms_versions`.
+3. Read-only, before the apply:
+
+```
+select public.ledger_identity()
+{"holds":true,"lines":[I1 0.0734 = 0.0734, I2 0.5283 = 0.5283, I3 0 = 0],"contribution_rows":1,...}
+select count(*), max(created_at) from contributions
+[{"count":1,"max":"2026-09-15 01:29:42.613755+00"}]
+the board's test payment
+[{"entry":"payment","stripe_session_id":"cs_live_a1OkB7xDSosjVf25TF8aNhbzy8PoWHrjEpeRGDtUSMaFK0tG0NU5Zl5oOh","amount_usd":"1.0000","net_usd":"0.7338","reserve_usd":"0.0734","agents_usd":"0.5283","incident_usd":"0.0264","studio_usd":"0.1321","held_usd":"0.0000","goal_card_id":null,"refund_rows":0}]
+terms_versions: exists, versions 1 and 2; pool balance_usd 0.5019; cron.job: credit-held-contributions only
+```
+
+4. `20260924200000_money_logic.sql` at 8febb2f (sha256 fb0f3811…b52d), wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`.
+5. Read back:
+
+```
+select public.ledger_identity()
+{"holds":true,"lines":[I1 0.0734/0.0734 drift 0, I2 0.5283/0.5283 drift 0, I3 0/0 drift 0,
+ I4 0/0 drift 0 "payments whose allocations differ from their credit", I5 0/0 drift 0 "cards whose bar differs from their allocations"],
+ "short_usd":0,"not_on_card_usd":0,"contribution_rows":1}
+select destination, card_id, amount_usd, reason from contribution_allocations order by seq
+[{"destination":"board_test","card_id":null,"amount_usd":"0.5019","reason":"backfill"}]
+select count(*) from supporters
+[{"count":0}]
+select jobname, schedule, active from cron.job
+[{"jobname":"credit-held-contributions","schedule":"17 * * * *","active":true},{"jobname":"waterfall-sweep","schedule":"*/5 * * * *","active":true}]
+select * from public_money
+[{"payments":0,"received_usd":"0.0000","stripe_fees_usd":"0.0000","refunded_usd":"0.0000","disputed_usd":"0.0000","corrections_usd":"0.0000","studio_pct_avg":null,"reserve_usd":"0.0000","studio_usd":"0.0000","incident_usd":"0.0000","held_usd":"0.0000","agent_credit_usd":"0.0000","not_on_card_usd":"0.0000","short_usd":"0.0000","board_test_usd":"0.5019","reconciled_at":null,"last_run_ok":null,"funding_order":[6 cards, room 1.5, 0.5, 0.5, 1.5, 1.5, 0.5]}]
+select * from public_stopped_cards
+[]
+select * from public_studio
+[{"launched_at":null,"paused":true,"platform_lane_open":false,"pause_reason":"awaiting_credit"}]
+signatures: apply_contribution(text,text,text,numeric,numeric,integer,uuid,text,text,timestamp with time zone) with defaults; set_paused(boolean,text) with defaults
+privileges: anon usage on money false, service_role usage on money false, service_role insert on contribution_allocations false, anon select on public_money true
+```
+
+6. No step 5 check failed, so nothing was fixed forward and the dump was not needed.
+7. Merged with `gh pr merge 69 --squash --match-head-commit 8febb2f…` at 2026-09-23T22:35:10Z as 2f451e4; the remote branch was deleted (#71, stacked on it, was set to base main first so it stays open). From `platform/` on main at 2f451e4, `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api` (CLI 2.117.0): "Deployed Functions."; `functions list` read back `{"slug":"stripe-webhook","status":"ACTIVE","version":14,"updated_at":"2026-09-23T22:35:27Z","verify_jwt":false}` (version 13 before). No synthetic event was sent.
+8. The anon negative test and the ledger identity, before the merge and again after the deploy, both exit 0:
+
+```
+ok   contribution_allocations          expected refused  actual refused  42501 permission denied for table contribution_allocations
+ok   supporters                        expected refused  actual refused  42501 permission denied for table supporters
+ok   board_test_payments               expected refused  actual refused  42501 permission denied for table board_test_payments
+ok   public_card_funding               expected readable actual readable 0 row(s) returned
+ok   public_money                      expected readable actual readable 1 row(s) returned
+ok   public_stopped_cards              expected readable actual readable 0 row(s) returned
+ok   public_studio(launched_at,paused,platform_lane_open,pause_reason) expected readable actual readable 1 row(s) returned
+ok   rpc record_stripe_fee             expected refused  actual refused  42501 permission denied for function record_stripe_fee
+ok   rpc waterfall_sweep               expected refused  actual refused  42501 permission denied for function waterfall_sweep
+ok   schema money                      expected refused  actual refused  PGRST106 Invalid schema: money
+PASS: anon access matches the RLS contract
+PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards
+I4: 0 payment(s) drifting
+I5: 0 card(s) drifting
+```
+
+The first `waterfall-sweep` run: `cron.job_run_details` `succeeded`, "1 row", 2026-09-23 22:35:00 UTC; afterwards one allocation of 0.5019 and the identity holds, so it moved nothing, as expected with every bar at $0.
+
+9. The board site published 2f451e4 (Netlify deploy 6ab45420d2dc1700082ec166, 2026-09-23T22:35:41Z). Its bundle `/assets/index-D2JTzQMn.js` carries "its unspent money goes to the next cards in line", "of unspent money moved to the next cards in line", "Pause reason", `awaiting_credit`, `spend_limit` and "Waiting for a payout to buy the agents". The public site's build was cancelled for no content change, which is right (no site file changed); it still serves e14019b. The live check on main at 2f451e4: `PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0`.
+10. The dispatcher and Controller changes wait for the cutover's `install.sh --start`, as the spec says; nothing was installed.
+11. Every Verification line has run with its output quoted above or in the build Evidence, so the status is done.
+
+After the docs follow-up (#72, https://github.com/AlreadyKyle/peanutgallery/pull/72) merged as e56ebcf at 2026-09-23T22:56:41Z (both Netlify builds cancelled for no content change), the live check on main at e56ebcf again: `PASS live-check https://peanutgallery.games passed=222 failed=0 skipped=0`. Recorded in money-surfaces' branch (#71), which merged main after #72.
+
 ## Decisions
 
+- 2026-09-23, ship (decided with sensible defaults, as the board ordered; none changes a kernel rule):
+  - The production steps ran after the gate passed at the head sha and before the merge, so production only ever held a migration the gate had passed, and the deployed webhook (nine named arguments) and board site (`set_paused({p_paused})`) kept working in between, as the migration test proves.
+  - The migration went through the Management API wrapped in `begin; … commit;`, like legal-copy's, so a failure anywhere leaves nothing applied.
+  - The webhook was deployed with `npx supabase functions deploy … --use-api` (CLI 2.117.0, the pinned version), the series' standard, so no Docker bundling runs on the Mac.
+  - The dump is named `pre-money-logic-<UTC>.dump` like the rest of the series rather than `<UTC>-before-money-logic.dump`; the flags are the spec's.
+  - #69 was reopened, not replaced: deleting legal-copy's branch had closed it, so its base branch was put back at 07acbd0 for a moment, the pull request reopened and set to main, and the branch deleted again. #71, stacked on this branch, was set to base main before this merge deleted the branch, so it did not close the same way.
 - 2026-09-23, build (decided with sensible defaults, as the board ordered; none changes a kernel rule):
   - Postgres checks the functions a view calls against the role reading the view, even for a view that runs as its owner, so `public_money`, `public_card_funding` and `public_stopped_cards` could not call a `money` helper that anon cannot execute. The four read-only helpers they call carry EXECUTE for anon, authenticated and service_role; no API role has USAGE on the schema, so none can call any money function by name (PostgREST refuses the schema, and SQL answers "permission denied for schema money"), and none of the four writes. The criterion is amended to say so.
   - The closing identity check runs only when `pool` row 1 exists. A fresh database (the tests, before their seed) has no money to check; production has the row, so the check always runs there.

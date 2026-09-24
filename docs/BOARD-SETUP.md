@@ -125,9 +125,10 @@ are its only Stripe reads. The key can't move money.
    Links, Events and Disputes. Nothing else, and no Write anywhere.
 3. Put it in `.env` as `STRIPE_READ_KEY=…`.
 
-Until this key exists the Controller does not run, so the site's reconciliation line shows no
-run yet, and a dispute fee Stripe charges is not booked until its first run
-(`docs/specs/money-logic.md`).
+Until this key exists the Controller does not run, so /ledger says "Not yet reconciled with
+Stripe." under Money in until the Controller's first reconcile passes, and a dispute fee Stripe
+charges is not booked until its first run (`docs/specs/money-logic.md`,
+`docs/specs/money-surfaces.md`).
 
 Before either job first runs, I tell you exactly what each one reads. The host's env check refuses
 `STRIPE_READ_KEY` unless it starts with `rk_live_`, and refuses any value starting `sk_live_` or
@@ -298,7 +299,11 @@ No agent touches Stripe; these are yours.
   15 September 2026 → Refund), before the cutover. Until then it is booked apart
   (`docs/specs/money-logic.md`): it funds no card and sits in no "Not on a card yet" money, gets no
   supporter number, is in no money-in figure on the site, and is left out of the agent money a
-  Console credit purchase may use. The fee Stripe keeps on the refund ($0.2662) is booked to the
+  Console credit purchase may use. Until it is refunded, /ledger's Funding band says in one line
+  "The pool includes $0.50 of the board's own test payment; it funds no card." ($0.50 is the part of
+  your $1.00 that is agent credit in the pool; the rest is Stripe's fee and the reserve's, the
+  studio's and the emergency fund's shares); the line goes after the refund
+  (`docs/specs/money-surfaces.md`). The fee Stripe keeps on the refund ($0.2662) is booked to the
   studio share automatically; there is nothing to record by hand.
 - **After-payment redirect.** Payment Link → After payment: redirect customers to
   `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Do this once I tell you /thanks
