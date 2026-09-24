@@ -240,11 +240,18 @@ section > h3 {
   border-bottom: 1px solid var(--line);
 }
 
-/* Roles: one hairline row each in small text, the columns aligned, and one form under them. */
+/* Roles: one hairline row each in small text, the columns aligned, and one form under them. The
+   name and the class keep to one line (the page's overflow-wrap would otherwise split their words to
+   narrow the column) and the status takes the rest of the row, where a long reason wraps. */
 .role-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--size-small);
+}
+
+.role-table th:not(:last-child),
+.role-table td:not(:last-child) {
+  white-space: nowrap;
 }
 
 .role-table th,
@@ -257,6 +264,7 @@ section > h3 {
 
 .role-table th:last-child,
 .role-table td:last-child {
+  width: 100%;
   padding-right: 0;
 }
 
@@ -267,10 +275,6 @@ section > h3 {
 
 .role-table tbody th {
   font-weight: var(--weight-strong);
-}
-
-.role-form {
-  margin-top: var(--space-3);
 }
 
 /* The role form's confirmation: always mounted so it is announced, and no space while empty. */
@@ -314,15 +318,6 @@ form + form {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-/* Fields with their button, bottoms aligned. */
-.row-end {
-  align-items: flex-end;
-}
-
-.row-end label {
-  flex: 1 1 12rem;
 }
 
 /* The QR code shown while a board member sets up an authenticator app. */

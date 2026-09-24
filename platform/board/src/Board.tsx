@@ -1308,7 +1308,7 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
       ) : null}
       {roles !== null && loadError !== '' ? <p className="error">{loadError}</p> : null}
       {roles !== null && roles.length > 0 && (canPause || canResume) ? (
-        <form className="row row-end role-form" onSubmit={apply} aria-label="Pause or resume a role">
+        <form className="stack" onSubmit={apply} aria-label="Pause or resume a role">
           <label>
             Role
             <select value={role === null ? '' : role.id} onChange={(event) => setChosen(event.target.value)}>
