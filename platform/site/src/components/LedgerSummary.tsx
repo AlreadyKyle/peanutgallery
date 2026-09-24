@@ -23,7 +23,11 @@ export function LedgerSummary({ studio }: { studio: StudioState }) {
     list.current?.querySelector<HTMLElement>('li[tabindex="-1"]')?.focus();
   }, [all]);
   if (studio.state === 'loading') {
-    return <p className="muted">{legal.loadingLedger}</p>;
+    return (
+      <p className="muted" aria-busy="true">
+        {legal.loadingLedger}
+      </p>
+    );
   }
   if (studio.state !== 'ready') {
     return <p className="muted">{unavailableLine(studio)}</p>;

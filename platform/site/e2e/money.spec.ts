@@ -46,12 +46,14 @@ test.describe('/contribute follows the funding order', () => {
     expect(await overflowsHorizontally(page)).toBe(false);
   });
 
-  test("draws a card's live Fund this card only when it is in the order", async ({ page }) => {
+  test('counts and draws on home only the open cards in the order, each with its live Fund this card', async ({ page }) => {
     await page.goto('/');
     const fund = page.getByRole('region', { name: "Fund what's next" });
-    await expect(fund.getByRole('heading', { level: 3, name: String(VETOED.title) })).toBeVisible();
-    const vetoed = fund.locator('li.card', { has: page.getByRole('heading', { level: 3, name: String(VETOED.title) }) });
-    await expect(vetoed.getByRole('link', { name: 'Fund this card' })).toHaveCount(0);
+    await expect(fund.getByRole('heading', { level: 3 })).toHaveCount(2);
+    // The vetoed card takes no money: it is not counted as open, and not drawn without a button among
+    // cards that have one (that misaligns the row's bars).
+    await expect(page.getByRole('main').getByText(String(VETOED.title))).toHaveCount(0);
+    await expect(page.locator('p.status-line')).toHaveText(/^2 cards are open for funding\./);
     const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => a.getAttribute('href')));
     expect(links.sort()).toEqual([`${PAYMENT_LINK}?client_reference_id=${QUIET!.id}`, `${PAYMENT_LINK}?client_reference_id=${RENAME!.id}`].sort());
   });
@@ -66,6 +68,10 @@ test.describe('/contribute with an empty order', () => {
     await expect(main.locator('a.choice-primary')).toContainText('Your contribution waits in Not on a card yet and funds the next card that opens.');
     await expect(main.locator('ul.choices')).toHaveCount(0);
     await expect(main.locator(`a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
+    // Home agrees: no card is open for funding, and Fund what's next draws none.
+    await page.goto('/');
+    await expect(page.locator('p.status-line')).toHaveText(/^No card is open for funding right now\./);
+    await expect(page.getByRole('region', { name: "Fund what's next" }).locator('li.card')).toHaveCount(0);
   });
 });
 
@@ -86,7 +92,8 @@ test.describe('when public_money and public_stopped_cards fail', () => {
   test('/ledger says Not available right now. for each part those reads feed', async ({ page }) => {
     await page.goto('/ledger');
     const funding = page.getByRole('region', { name: 'Funding' });
-    await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('Not available right now.');
+    // Stacked under its label as a muted line, never in the figure's place (Stat.tsx).
+    await expect(funding.locator('.stat.stat-unavailable', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('Not available right now.');
     const moneyIn = page.getByRole('region', { name: 'Money in' });
     await expect(moneyIn.getByText('Not available right now.')).toBeVisible();
     await expect(moneyIn.locator('.stat')).toHaveCount(0);
@@ -176,13 +183,13 @@ test.describe('/ledger Funding: Not on a card yet, the shortfall and the board t
   });
 
   test.describe('short, with the board test payment', () => {
-    test.use({ studio: studio({}, { not_on_card_usd: '0.0000', short_usd: '0.4500', board_test_usd: '1.0000' }) });
+    test.use({ studio: studio({}, { not_on_card_usd: '0.0000', short_usd: '0.4500', board_test_usd: '0.5019' }) });
     test('says waiting cards are short, and names the test payment', async ({ page }) => {
       await page.goto('/ledger');
       const funding = page.getByRole('region', { name: 'Funding' });
       await expect(funding.locator('.stat', { hasText: 'Not on a card yet' }).locator('dd')).toHaveText('$0.00');
       await expect(await ledgerLine(page, 'Waiting cards are short by $0.45 until new money arrives.')).toBeVisible();
-      await expect(await ledgerLine(page, "Includes the board's own test payment of $1.00; it funds no card.")).toBeVisible();
+      await expect(await ledgerLine(page, "The pool includes $0.50 of the board's own test payment; it funds no card.")).toBeVisible();
     });
   });
 });

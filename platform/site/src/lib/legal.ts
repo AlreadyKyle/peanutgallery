@@ -195,7 +195,10 @@ export const legal = {
   notOnCard: 'Not on a card yet',
   describeNotOnCard: "Money given with no card, or beyond a card's target, waiting for the next card to open.",
   shortBy: 'Waiting cards are short by {usd} until new money arrives.',
-  boardTestLine: "Includes the board's own test payment of {usd}; it funds no card.",
+  // {usd} is public_money.board_test_usd: the part of the board's test payment that sits in the pool
+  // (its agent credit), not the payment itself; its reserve and emergency fund shares sit in those
+  // figures and its Stripe fee in none (docs/specs/money-logic.md).
+  boardTestLine: "The pool includes {usd} of the board's own test payment; it funds no card.",
   // /ledger's Money in band: what supporters paid and where it went. The figures add up: received -
   // Stripe fees - refunded - disputed + corrections = reserve + studio + emergency fund + held + agent
   // credit (docs/specs/money-logic.md). The board's own test payment is in none of them.
@@ -286,6 +289,11 @@ export const legal = {
     gate_infrastructure: 'The automated checks could not run.',
     main_red: 'The automated checks were already failing before this change.',
     pr_head: 'The change did not reach GitHub in time.',
+    card_spend: 'The studio could not read what the card had already spent, so the agent was not started.',
+    read_token: "The studio's access to its own code failed a safety check, so the agent was not started.",
+    repo_skills: 'The code held files the agents may not load, so the agent was not started.',
+    system_prompt: "The agent's instructions could not be put together, so it was not started.",
+    ledger: 'The studio could not record what the agent spent, so the work stopped.',
   } as Record<string, string>,
   pausedFallback: 'It stopped on a check the board is looking into.',
   rejectedFallback: "It did not pass one of the studio's checks.",

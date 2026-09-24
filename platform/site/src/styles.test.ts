@@ -349,6 +349,16 @@ describe('colour (DESIGN.md, Colour), measured from tokens.css', () => {
     }
   });
 
+  it('fills the overscroll with the top bar ground: html paints a solid signal and body paints nothing', () => {
+    // Browsers fill a pull past the edge with the root's background colour, never an image, and
+    // WebKit blends body's colour over it; .page paints the paper.
+    const html = ALL_RULES.filter((rule) => rule.selector === 'html');
+    expect(html.map((rule) => rule.body.match(/background[a-z-]*:[^;]*/g) ?? []).flat()).toEqual(['background-color: var(--signal)']);
+    expect(ALL_RULES.filter((rule) => /(^|,)\s*html\b/.test(rule.selector) && rule.selector !== 'html' && /background/.test(rule.body))).toEqual([]);
+    expect(ALL_RULES.filter((rule) => rule.selector === 'body' && /background/.test(rule.body))).toEqual([]);
+    expect(ALL_RULES.find((rule) => rule.selector === '.page')?.body).toMatch(/background:\s*var\(--paper\)/);
+  });
+
   it('never uses a gradient but for the Paused hatch, nor a glow or shadow but the change marker', () => {
     const gradients = ALL_RULES.filter((rule) => /gradient\(/.test(rule.body)).map((rule) => rule.selector);
     expect(gradients).toEqual([".card[data-face='paused']::before"]);

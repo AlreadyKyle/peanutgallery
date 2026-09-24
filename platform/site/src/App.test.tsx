@@ -284,6 +284,15 @@ describe('Site chrome', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('opens a linked page at the top, not at the last page\'s scroll position', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    renderAt('/how-it-works');
+    expect(scrollTo).not.toHaveBeenCalled();
+    fireEvent.click(within(nav()).getByRole('link', { name: legal.ledger }));
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    scrollTo.mockRestore();
+  });
+
   it('draws the Play cartridge exactly as the game suit glyph', () => {
     const kernel = render(<CartridgeMark />).container.innerHTML;
     cleanup();

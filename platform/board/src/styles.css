@@ -320,6 +320,16 @@ form + form {
   gap: var(--space-2);
 }
 
+/* A control, a row of them or a fieldset placed straight in a section keeps the forms' 16 px rhythm
+   below it, as a paragraph does, so a focus ring never runs into the next control. */
+section > :is(label, .row, fieldset, button) {
+  margin-bottom: var(--space-2);
+}
+
+section > :is(label, .row, fieldset, button):last-child {
+  margin-bottom: 0;
+}
+
 /* The QR code shown while a board member sets up an authenticator app. */
 .qr {
   display: block;

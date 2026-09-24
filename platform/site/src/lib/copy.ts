@@ -101,6 +101,8 @@ export const copy = {
     notRunning: 'Not running yet',
     notRunningIntro: 'These roles have no job that runs yet. Their work is on the roadmap.',
     roadmapLink: 'See the roadmap',
+    // Home's team strip shows three agents; this link goes to the rest on /team.
+    meetAll: 'Meet the whole team',
     siteClosed: 'Site cards open once the board has its own site.',
     hired: 'hired',
     shippedOne: '1 card shipped',

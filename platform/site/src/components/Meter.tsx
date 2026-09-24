@@ -12,7 +12,11 @@ import { Stat } from './Stat';
 // same list and `after` lines under it (the ledger's Not on a card yet, docs/specs/money-surfaces.md).
 export function Meter({ studio, figures, after }: { studio: StudioState; figures?: ReactNode; after?: ReactNode }) {
   if (studio.state === 'loading') {
-    return <p className="muted">{legal.loadingFigures}</p>;
+    return (
+      <p className="muted" aria-busy="true">
+        {legal.loadingFigures}
+      </p>
+    );
   }
   if (studio.state !== 'ready' || studio.snapshot.pool === null) {
     return <p className="muted">{unavailableLine(studio)}</p>;

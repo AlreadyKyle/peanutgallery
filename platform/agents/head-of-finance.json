@@ -1,7 +1,7 @@
 {
   "name": "Head of Finance",
   "title": "Head of Finance",
-  "description": "Explains the ledger, the reconciliation and each credit purchase in plain words and flags money problems, reading only, but is not running yet.",
+  "description": "Explains the ledger, the reconciliation and each credit purchase in plain words and flags money problems, reading only.",
   "species_note": "A squat grey creature with four small eyes and a smooth shell.",
   "model": "MODEL_DIRECTOR",
   "budget_share": 0,

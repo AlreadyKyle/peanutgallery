@@ -1,12 +1,11 @@
 import { Link, useParams } from 'react-router-dom';
 import { NotFound } from '../components/NotFound';
-import { PageHeader } from '../components/PageHeader';
 import { LinkedText, TextPage } from '../components/TextPage';
 import { siteEnv } from '../lib/env';
 import { formatPostedAt } from '../lib/format';
 import { legal } from '../lib/legal';
 import { termsView, usePostedTerms, versionView, type EarlierVersion } from '../lib/terms';
-import { NEWEST_TERMS, type TextDoc } from '../lib/terms-versions';
+import { NEWEST_TERMS } from '../lib/terms-versions';
 
 // Terms, Privacy, Refunds and Contact: plain text pages linked from the footer. Kernel, like every
 // string they show, which is in legal.ts and terms-versions.ts (docs/specs/board-site.md,
@@ -31,19 +30,17 @@ function Unconfirmed() {
   );
 }
 
-/** While the versions read runs: the page's title and lede, then one line in place of the words. */
-function Loading({ title, page }: { title: string; page: TextDoc }) {
+/**
+ * While the versions read runs, the page is drawn whole with the words it expects (the newest bundled
+ * version, or version n) and this line under the lede in place of the version line, so only this line
+ * changes when the read answers. A short loading page would let the signal plate fill the window and
+ * set the title at its foot, then jump when the words arrive.
+ */
+function LoadingLine() {
   return (
-    <main className="text-page">
-      <div className="band">
-        <PageHeader title={title} lede={page.lede} />
-      </div>
-      <div className="band">
-        <p className="muted" role="status" aria-busy="true">
-          {legal.termsLoading}
-        </p>
-      </div>
-    </main>
+    <p className="muted" role="status" aria-busy="true">
+      {legal.termsLoading}
+    </p>
   );
 }
 
@@ -68,7 +65,7 @@ function EarlierVersions({ kind, earlier }: { kind: Kind; earlier: readonly Earl
 /** /terms and /refunds: the newest version that is posted and in this build. */
 function CurrentVersion({ kind }: { kind: Kind }) {
   const view = termsView(usePostedTerms());
-  if (view.state === 'loading') return <Loading title={NEWEST_TERMS[kind].title} page={NEWEST_TERMS[kind]} />;
+  if (view.state === 'loading') return <TextPage name={kind} page={NEWEST_TERMS[kind]} status={<LoadingLine />} />;
   const page = view.entry[kind];
   if (view.state === 'unconfirmed') return <TextPage name={kind} page={page} status={<Unconfirmed />} />;
   const since = <p>{fill(legal.termsVersionLine, { n: String(view.entry.version), time: formatPostedAt(view.since) })}</p>;
@@ -76,16 +73,20 @@ function CurrentVersion({ kind }: { kind: Kind }) {
   return <TextPage name={kind} page={page} status={since} footer={footer} />;
 }
 
-/** /terms/n and /refunds/n: one posted version, with when it was in force. */
+/**
+ * /terms/n and /refunds/n: one posted version, with when it was in force. Its {terms} and {refunds}
+ * links go to version n's pages, the words that applied with it.
+ */
 function OneVersion({ kind }: { kind: Kind }) {
   const { version } = useParams();
   const view = versionView(version, usePostedTerms());
   if (view.state === 'not-found') return <NotFound />;
   const page = view.entry[kind];
-  const title = fill(legal.termsVersionTitle, { title: page.title, n: String(view.entry.version) });
-  if (view.state === 'loading') return <Loading title={title} page={page} />;
-  if (view.state === 'unconfirmed') return <TextPage name={kind} page={page} title={title} status={<Unconfirmed />} />;
-  const n = String(view.entry.version);
+  const at = view.entry.version;
+  const title = fill(legal.termsVersionTitle, { title: page.title, n: String(at) });
+  if (view.state === 'loading') return <TextPage name={kind} page={page} title={title} version={at} status={<LoadingLine />} />;
+  if (view.state === 'unconfirmed') return <TextPage name={kind} page={page} title={title} version={at} status={<Unconfirmed />} />;
+  const n = String(at);
   const status =
     view.state === 'current' ? (
       <p>{fill(legal.termsVersionLine, { n, time: formatPostedAt(view.since) })}</p>
@@ -99,7 +100,7 @@ function OneVersion({ kind }: { kind: Kind }) {
         </p>
       </>
     );
-  return <TextPage name={kind} page={page} title={title} status={status} />;
+  return <TextPage name={kind} page={page} title={title} version={at} status={status} />;
 }
 
 export function Terms() {
