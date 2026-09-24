@@ -394,7 +394,7 @@ export const legal = {
     'Contributing means you accept the {terms} in force when your checkout starts, including the {refunds}. To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
   fundAgreement: "By funding you accept the {terms} and the {refunds}, and confirm you are an adult or have a guardian's permission.",
   // Privacy is a notice with its own date, not part of a Terms version.
-  privacyUpdated: 'Last updated 23 September 2026.',
+  privacyUpdated: 'Last updated 24 September 2026.',
   privacy: {
     title: 'Privacy',
     lede: 'What the studio stores when you contribute, and what it does not.',
