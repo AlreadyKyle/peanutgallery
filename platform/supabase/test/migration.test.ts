@@ -2104,7 +2104,7 @@ describe("money-logic migration", () => {
 const AGENT_SYSTEM_CORE_FILE = "20260924300000_agent_system_core.sql";
 const agentSystemCoreSql = launchFile(AGENT_SYSTEM_CORE_FILE);
 // Every table, view and function the migration adds that anon must not reach.
-const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards"];
+const AGENT_SYSTEM_CORE_PRIVATE = ["card_approvals", "jobs", "job_runs", "dispatcher_cards", "dispatcher_card_spend"];
 const AGENT_SYSTEM_CORE_FUNCTIONS = [
   "record_card_approval",
   "card_content_hash",

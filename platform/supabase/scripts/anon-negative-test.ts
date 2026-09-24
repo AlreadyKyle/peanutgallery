@@ -40,6 +40,7 @@ const PRIVATE_TABLES = [
   "jobs",
   "job_runs",
   "dispatcher_cards",
+  "dispatcher_card_spend",
 ];
 
 const PUBLIC_RELATIONS = [

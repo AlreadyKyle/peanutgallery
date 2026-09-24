@@ -347,6 +347,7 @@ Deno.test("migrations on PGlite", {
         `select table_name from information_schema.views where table_schema = 'public' order by 1`,
       );
       assertEquals(views.map((r) => r.table_name), [
+        "dispatcher_card_spend",
         "dispatcher_cards",
         "last_green",
         "public_agent_events",
@@ -2022,8 +2023,12 @@ Deno.test("migrations on PGlite", {
           "created_at",
           "id",
           "role_id",
+          "step",
           "type",
+          "usd",
         ]);
+        // step and usd name only what the database did to a card; a role's line carries neither.
+        assertEquals([event.step, event.usd], [null, null]);
       },
     );
 

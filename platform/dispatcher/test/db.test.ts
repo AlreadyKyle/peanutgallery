@@ -211,11 +211,11 @@ describe('createSupabaseDb queries', () => {
     expect(state.calls[0]?.url).toContain('id=eq.role-1');
   });
 
-  it("reads each card's studio-billed spend from public_card_spend, and asks nothing for no cards", async () => {
+  it("reads each card's studio-billed spend from dispatcher_card_spend, hidden cards included, and asks nothing for no cards", async () => {
     const { fetchFn, seen } = rest([{ card_id: 'a', spent_usd: '1.2500' }]);
     const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
     expect(await db.cardSpend(['a', 'b'])).toEqual(new Map([['a', 1.25]]));
-    expect(seen[0]?.url.pathname).toBe('/rest/v1/public_card_spend');
+    expect(seen[0]?.url.pathname).toBe('/rest/v1/dispatcher_card_spend');
     expect(seen[0]?.url.searchParams.get('card_id')).toBe('in.(a,b)');
     expect(await db.cardSpend([])).toEqual(new Map());
     expect(seen).toHaveLength(1);

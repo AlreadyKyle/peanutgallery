@@ -342,7 +342,9 @@ begin
   if p_approver_role is null then
     raise exception 'An approver role is required';
   end if;
-  select * into v_card from public.cards where id = p_card;
+  -- The card row's lock serialises this with set_card_horizon, so a hash the
+  -- board has just changed is refused here rather than recorded as stale.
+  select * into v_card from public.cards where id = p_card for update;
   if not found then
     raise exception 'Card % does not exist', p_card;
   end if;
@@ -643,6 +645,13 @@ create policy cards_public_read on public.cards for select to anon, authenticate
 drop policy if exists cards_board_read on public.cards;
 create policy cards_board_read on public.cards for select to authenticated using (public.is_board_member());
 
+-- The ledger's public rows (money-fixes' studio and overhead rows), less a card
+-- the public may not read, so summing the raw rows never gives back a hidden
+-- card's id or spend.
+drop policy if exists ledger_public_read on public.ledger;
+create policy ledger_public_read on public.ledger for select to anon, authenticated
+  using (billed_to in ('studio', 'overhead') and (card_id is null or public.card_is_public(card_id)));
+
 -- The public views, each filtered to the cards the public may read. An event
 -- that names no card stays, and a stopped card's money moved to a card the
 -- public may not read shows no title for it.
@@ -704,8 +713,15 @@ create or replace view public.public_card_spend with (security_invoker = false) 
   where billed_to = 'studio' and card_id is not null and public.card_is_public(card_id)
   group by card_id;
 
+-- step and usd name what the database itself did to a card (dealt, topped up
+-- from Not on a card yet, resumed by rule), so the public list says so rather
+-- than "wrote a note"; only those three steps, and only on a line no role wrote.
 create or replace view public.public_agent_events with (security_invoker = false) as
-  select id, card_id, role_id, type, created_at
+  select id, card_id, role_id, type, created_at,
+    case when role_id is null and type = 'message' and payload_json ->> 'step' in ('dealt', 'ceiling_top_up', 'resume_rule')
+      then payload_json ->> 'step' end as step,
+    case when role_id is null and type = 'message' and payload_json ->> 'step' = 'ceiling_top_up'
+      then (payload_json ->> 'usd')::numeric(12,4) end as usd
   from public.agent_events
   where card_id is null or public.card_is_public(card_id);
 
@@ -723,10 +739,18 @@ grant select on public.public_card_spend, public.public_agent_events, public.pub
 -- the vetoes and the executor's pause. The view keeps no stage list of its
 -- own; each caller asks for its stages (a tick the hold stages and building,
 -- startup recovery building and gated), so no stage a caller asks for is
--- ever dropped here.
+-- ever dropped here. Its card columns are listed, not c.*, which Postgres
+-- would fix at creation: a later pull request that adds a cards column the
+-- dispatcher reads drops this view and creates it again with the column, then
+-- repeats its revoke and grant (trimmed/INTERFACES.md).
 create or replace view public.dispatcher_cards with (security_invoker = false) as
   select
-    c.*,
+    c.id, c.bucket, c.source, c.shape, c.lane, c.priority, c.board_reason, c.folder, c.executor_role_id,
+    c.title, c.intent, c.acceptance_test, c.design_spec_url, c.funding_target_usd, c.funded_usd,
+    c.estimate_usd, c.confidence, c.proposer_role_id, c.director_stance, c.veto_reason, c.stage,
+    c.severity, c.actual_usd, c.branch, c.commit_sha, c.failing_check, c.created_at, c.updated_at,
+    c.summary, c.live_at, c.horizon, c.rank, c.drafter_role_id, c.check_author_role_id, c.opens_at,
+    c.board_vetoed, c.board_veto_reason,
     public.card_needs_approval(c.source, c.drafter_role_id) as needs_approval,
     public.card_approved(c.id) as approved,
     coalesce(r.paused, false) as executor_paused
@@ -736,11 +760,28 @@ create or replace view public.dispatcher_cards with (security_invoker = false) a
 revoke all on table public.dispatcher_cards from anon, authenticated, service_role;
 grant select on public.dispatcher_cards to service_role;
 
+-- Each card's studio spend for the dispatcher's throttle, every card included:
+-- public_card_spend leaves out a card the public may not read, which would
+-- overstate a hidden card's hold by what it has spent.
+create or replace view public.dispatcher_card_spend with (security_invoker = false) as
+  select
+    card_id,
+    sum(usd)::numeric(12,4) as spent_usd
+  from public.ledger
+  where billed_to = 'studio' and card_id is not null
+  group by card_id;
+
+revoke all on table public.dispatcher_card_spend from anon, authenticated, service_role;
+grant select on public.dispatcher_card_spend to service_role;
+
 -- k. Dealing and resume by rule (service role) --------------------------------
 
 -- Deals every approved agent card whose cooling window has passed to now, if
 -- it is still approved, vetoed by neither the board nor the Director, its
--- executor is not paused and it is ready.
+-- executor is not paused and it is ready. Nothing is dealt while the studio is
+-- paused. The window is applied here too, from the newest draft approval with
+-- the window as it stands, so no opens_at written earlier than that deals a
+-- card before the board has had its window.
 create or replace function public.deal_due_cards() returns setof uuid
 language plpgsql
 security definer
@@ -748,8 +789,13 @@ set search_path = public
 as $$
 declare
   v_card public.cards%rowtype;
+  v_window integer;
 begin
   perform money.money_lock();
+  if coalesce((select s.paused from public.studio_state s where s.id = 1), false) then
+    return;
+  end if;
+  select coalesce(s.cooling_window_minutes, 0) into v_window from public.studio_state s where s.id = 1;
   for v_card in
     select c.* from public.cards c
     left join public.roles r on r.id = c.executor_role_id
@@ -757,6 +803,10 @@ begin
       and c.stage = 'proposed'
       and c.horizon in ('next', 'later')
       and c.opens_at <= now()
+      and now() >= coalesce(
+        (select max(a.created_at) from public.card_approvals a where a.card_id = c.id and a.kind = 'draft'),
+        '-infinity'::timestamptz
+      ) + make_interval(mins => coalesce(v_window, 0))
       and not c.board_vetoed
       and c.director_stance <> 'vetoed'
       and not coalesce(r.paused, false)
@@ -820,6 +870,15 @@ begin
   if not public.card_is_public(p_card) then
     return jsonb_build_object('card_id', p_card, 'skipped', 'approval_not_current');
   end if;
+  -- runnable()'s other refusals: the rule moves no money onto a card no session
+  -- would start. Each waits for the board in Needs you.
+  if v_card.board_vetoed or v_card.director_stance = 'vetoed' then
+    return jsonb_build_object('card_id', p_card, 'blocked', 'vetoed');
+  end if;
+  if v_card.folder = 'platform' and v_card.lane = 'code'
+    and not coalesce((select s.platform_lane_open from public.studio_state s where s.id = 1), false) then
+    return jsonb_build_object('card_id', p_card, 'blocked', 'closed_lane');
+  end if;
   if public.card_ceiling_resumed(p_card) then
     return jsonb_build_object('card_id', p_card, 'blocked', 'resumed_before');
   end if;
@@ -871,6 +930,11 @@ declare
   v_result jsonb;
   v_results jsonb := '[]'::jsonb;
 begin
+  -- Nothing resumes by rule while the studio is paused; the rule tries again
+  -- on the first tick after the board resumes it.
+  if coalesce((select s.paused from public.studio_state s where s.id = 1), false) then
+    return jsonb_build_object('resumed', 0, 'results', v_results);
+  end if;
   for v_id in
     select c.id from public.cards c
     where c.stage = 'paused'
@@ -1101,6 +1165,13 @@ begin
     if v_parent_origin = 'board' then
       v_origin := 'board';
     end if;
+  end if;
+  -- Only the board labels a run as its own: at the second factor (Run now,
+  -- through enqueue_manual_job, which runs as the board's session), or by
+  -- inheritance from a board-origin run. A model-calling run starts only then.
+  if p_origin = 'board' and v_parent_origin is distinct from 'board'
+    and (public.board_role() is distinct from 'board'::public.board_role or not public.board_aal2()) then
+    raise exception 'Only the board queues a board-origin run';
   end if;
   v_key := coalesce(
     nullif(btrim(p_key), ''),
@@ -1378,16 +1449,25 @@ begin
   select card_max_usd into v_max from public.studio_state where id = 1;
   select coalesce(jsonb_agg(jsonb_build_object(
     'id', x.id, 'title', x.title, 'actual_usd', x.actual_usd, 'card_max_usd', v_max,
-    'why', case when x.resumed_before then 'resumed_before' else 'card_max' end
+    'why', case
+      when x.vetoed then 'vetoed'
+      when x.closed_lane then 'closed_lane'
+      when x.resumed_before then 'resumed_before'
+      else 'card_max'
+    end
   ) order by x.created_at, x.id), '[]'::jsonb)
   into v_rule
   from (
     select c.id, c.title, c.actual_usd, c.created_at,
-      public.card_ceiling_resumed(c.id) as resumed_before
+      public.card_ceiling_resumed(c.id) as resumed_before,
+      (c.board_vetoed or c.director_stance = 'vetoed') as vetoed,
+      (c.folder = 'platform' and c.lane = 'code'
+        and not coalesce((select s.platform_lane_open from public.studio_state s where s.id = 1), false)) as closed_lane
     from public.cards c
     where c.stage = 'paused' and c.failing_check = 'ceiling' and c.horizon = 'now'
   ) x
-  where x.resumed_before or least(round(1.5 * round(x.actual_usd, 4), 4), coalesce(v_max, 0)) <= x.actual_usd;
+  where x.vetoed or x.closed_lane or x.resumed_before
+    or least(round(1.5 * round(x.actual_usd, 4), 4), coalesce(v_max, 0)) <= x.actual_usd;
   -- A void card whose money the board can still move by cancelling it: a stage
   -- cancel_card takes, with unspent money on its bar or a payment on hold naming
   -- it. Spent money stays on a bar after a cancel, and the sweep moves a live or
