@@ -153,29 +153,63 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       for (const card of list) assertEquals(Object.keys(card).sort(), granted);
     });
 
-    await t.step("every key in snapshot-keys.json is present with its JSON type", async () => {
-      const spec = JSON.parse(await Deno.readTextFile(SNAPSHOT_KEYS)) as { live: KeySpec; cards: KeySpec };
-      for (const [name, doc] of [["live", await s.live()], ["cards", await s.cards()]] as const) {
-        for (const [key, allowed] of Object.entries(spec[name])) {
-          assert(key in doc, `${name} document has ${key}`);
+    await t.step("every key in snapshot-keys.json is present with its JSON type, in both documents and every card of the live map", async () => {
+      const spec = JSON.parse(await Deno.readTextFile(SNAPSHOT_KEYS)) as { live: KeySpec; live_card: KeySpec; cards: KeySpec };
+      const liveDoc = await s.live();
+      const entries = Object.entries(liveDoc.cards as Record<string, Doc>).map(([id, entry]) => [`live.cards.${id}`, entry, spec.live_card] as const);
+      assertEquals(entries.length, 2);
+      for (const [name, doc, keys] of [["live", liveDoc, spec.live], ["cards", await s.cards(), spec.cards], ...entries] as const) {
+        for (const [key, allowed] of Object.entries(keys)) {
+          assert(key in doc, `${name} has ${key}`);
           const types = Array.isArray(allowed) ? allowed : [allowed];
           assert(types.includes(jsonType(doc[key])), `${name}.${key} is ${jsonType(doc[key])}, expected ${types.join(" or ")}`);
         }
       }
     });
 
-    await t.step("the live map carries each card's stage, spend and funding figures; events carry their card's title", async () => {
+    await t.step("the live map carries each card's state; events carry their card's title", async () => {
       const [card] = (await s.cards()).cards as Doc[];
       await s.db.query(`insert into public.agent_events (card_id, role_id, type) values ($1, $2, 'start')`, [card!.id, s.roleId]);
       const doc = await s.live();
       const entry = (doc.cards as Record<string, Doc>)[card!.id as string]!;
-      assertEquals(Object.keys(entry).sort(), ["contributors", "credited_usd", "funded_usd", "spent_usd", "stage"]);
+      assertEquals(Object.keys(entry).sort(), [
+        "contributors", "credited_usd", "executor_role_id", "funded_usd", "funding_target_usd", "horizon", "live_at", "rank", "spent_usd", "stage", "updated_at",
+      ]);
       assertEquals([entry.stage, entry.funded_usd, entry.spent_usd, entry.contributors, entry.credited_usd], ["voted", 0, 0, null, null]);
       const [event] = doc.events as Doc[];
       assertEquals([event!.card_id, event!.card_title, event!.type], [card!.id, card!.title, "start"]);
       assertEquals(Object.keys(doc.pool as Doc).sort(), ["balance_usd", "daily_spent_usd", "day", "held_usd", "incident_reserve_usd", "reserve_usd"]);
       assertEquals(Object.keys(doc.studio as Doc).sort(), ["launched_at", "pause_reason", "paused", "platform_lane_open"]);
       assert(Array.isArray((doc.money as Doc).funding_order), "money carries funding_order");
+    });
+
+    await t.step("a card that ships or is dealt to now shows its new ship time, horizon, rank, target and builder in the live map, as site_cards has them", async () => {
+      // The site takes these from the live map (60 seconds) and a card's words from the card document
+      // (300), so the two must hold the same values for every column the live map carries.
+      const MOVING = ["stage", "horizon", "rank", "executor_role_id", "funding_target_usd", "funded_usd", "live_at", "updated_at"];
+      const same = async () => {
+        const liveMap = (await s.live()).cards as Record<string, Doc>;
+        for (const row of (await s.cards()).cards as Doc[]) {
+          const entry = liveMap[row.id as string]!;
+          for (const key of MOVING) assertEquals(entry[key], row[key], `${row.title} ${key}`);
+        }
+        return liveMap;
+      };
+      await same();
+      const voted = ((await s.cards()).cards as Doc[]).find((c) => c.stage === "voted")!;
+      await s.db.query(`update public.cards set stage = 'live' where id = $1`, [voted.id]);
+      const shipped = (await same())[voted.id as string]!;
+      assertEquals(shipped.stage, "live");
+      assert(typeof shipped.live_at === "string", "the ship stamps live_at, and the live map carries it");
+      await s.db.query(
+        `insert into public.cards (bucket, source, shape, lane, folder, title, intent, stage, horizon, rank)
+         values ('game', 'board', 'goal', 'config', 'seed-1', 'Planned', 'An intent.', 'proposed', 'next', 4)`,
+      );
+      const planned = ((await s.cards()).cards as Doc[]).find((c) => c.title === "Planned")!;
+      assertEquals([((await same())[planned.id as string]!).horizon, ((await same())[planned.id as string]!).rank], ["next", 4]);
+      await s.db.query(`update public.cards set horizon = 'now', rank = 1, funding_target_usd = 4, executor_role_id = $2 where id = $1`, [planned.id, s.roleId]);
+      const dealt = (await same())[planned.id as string]!;
+      assertEquals([dealt.horizon, dealt.rank, dealt.funding_target_usd, dealt.executor_role_id], ["now", 1, 4, s.roleId]);
     });
   } finally {
     await s.close();

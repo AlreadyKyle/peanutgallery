@@ -20,6 +20,19 @@
     "deploys": "array",
     "role_stats": "array"
   },
+  "live_card": {
+    "stage": "string",
+    "horizon": "string",
+    "rank": ["number", "null"],
+    "executor_role_id": ["string", "null"],
+    "funding_target_usd": "number",
+    "funded_usd": "number",
+    "spent_usd": "number",
+    "contributors": ["number", "null"],
+    "credited_usd": ["number", "null"],
+    "live_at": ["string", "null"],
+    "updated_at": "string"
+  },
   "cards": {
     "cards": "array",
     "roles": "array",

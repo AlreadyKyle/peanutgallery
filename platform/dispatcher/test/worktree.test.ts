@@ -99,6 +99,28 @@ describe('pure helpers', () => {
     expect(isKernelPath('seed-1/config/spawn-table.json')).toBe(false);
   });
 
+  it('treats Netlify’s own folders as kernel at any depth, whatever .gitignore says: .netlify and the default netlify folder', () => {
+    // Netlify deploys functions, edge functions, headers and forced redirects from .netlify (the
+    // frameworks API) and functions and edge functions from netlify/ when no other folder is set.
+    for (const file of [
+      'platform/site/.netlify/v1/config.json',
+      'platform/site/.netlify/v1/functions/x.mjs',
+      'platform/site/.netlify/v1/edge-functions/x.ts',
+      'platform/site/.netlify/functions-internal/x.mjs',
+      'platform/site/.netlify/edge-functions/x.ts',
+      'platform/site/.netlify/deploy/v1/config.json',
+      'seed-1/.netlify/v1/config.json',
+      'seed-1/.Netlify/v1/functions/x.mjs',
+      'seed-1/netlify/functions/x.mjs',
+      'seed-1/netlify/edge-functions/x.ts',
+    ]) {
+      expect(isKernelPath(file), file).toBe(true);
+    }
+    for (const file of ['seed-1/render/netlify.ts', 'seed-1/content/.netlify.json', 'platform/site/src/pages/Landing.tsx']) expect(isKernelPath(file), file).toBe(false);
+    expect(outsideLane(['seed-1/netlify/functions/x.mjs', 'seed-1/render/main.ts'], lanePaths('seed-1', 'code'))).toEqual(['seed-1/netlify/functions/x.mjs']);
+    expect(outsideLane(['platform/site/.netlify/v1/config.json', 'platform/site/src/pages/Landing.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/.netlify/v1/config.json']);
+  });
+
   it('matches kernel names and paths without regard to case, as a case-insensitive checkout reads them', () => {
     expect(isKernelPath('seed-1/content/claude.md')).toBe(true);
     expect(isKernelPath('.Claude/settings.json')).toBe(true);

@@ -4,8 +4,9 @@ import { POSTED_TERMS, type StudioFixture } from './studio-fixture';
  * The site's two documents (docs/specs/site-snapshot.md) built from a studio fixture the way
  * site_live() and site_cards() build them from the database: the listed set of cards (every card
  * on an open stage or paused, the newest 200 live and the newest 50 rejected), each listed card's
- * stage, bar, spend and funding in the live map, the newest 20 events with their card's title, the
- * newest 10 deploys and the newest 12 stopped cards. A null money or stopped stays null, which the
+ * state in the live map (its stage, horizon, rank, builder, target, bar, spend, funding, ship time
+ * and last change, with each figure a JSON number as jsonb gives it), the newest 20 events with
+ * their card's title, the newest 10 deploys and the newest 12 stopped cards. A null money or stopped stays null, which the
  * page shows as not available. The e2e run serves these at /api/live and /api/cards, and the unit
  * tests build the golden Snapshot from them.
  */
@@ -57,6 +58,9 @@ export function eventLineKey(event: Record<string, unknown>): string {
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+/** A numeric string as the JSON number jsonb gives for a numeric column; anything else as it is, so a malformed figure stays malformed. */
+const figure = (value: unknown): unknown =>
+  typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : value;
 const desc = (key: string) => (a: Record<string, unknown>, b: Record<string, unknown>) =>
   text(b[key]).localeCompare(text(a[key])) || text(b.id).localeCompare(text(a.id));
 
@@ -110,10 +114,16 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
     const counted = funding.get(card.id);
     liveCards[text(card.id)] = {
       stage: card.stage,
-      funded_usd: card.funded_usd,
-      spent_usd: spend.get(card.id) ?? 0,
-      contributors: counted?.contributors ?? null,
-      credited_usd: counted?.credited_usd ?? null,
+      horizon: card.horizon,
+      rank: figure(card.rank ?? null),
+      executor_role_id: card.executor_role_id ?? null,
+      funding_target_usd: figure(card.funding_target_usd),
+      funded_usd: figure(card.funded_usd),
+      spent_usd: figure(spend.get(card.id) ?? 0),
+      contributors: figure(counted?.contributors ?? null),
+      credited_usd: figure(counted?.credited_usd ?? null),
+      live_at: card.live_at ?? null,
+      updated_at: card.updated_at,
     };
   }
   const live = {

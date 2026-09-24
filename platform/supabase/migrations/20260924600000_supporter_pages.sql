@@ -388,10 +388,16 @@ as $$
     'cards', coalesce((
       select jsonb_object_agg(c.id::text, jsonb_build_object(
         'stage', c.stage,
+        'horizon', c.horizon,
+        'rank', c.rank,
+        'executor_role_id', c.executor_role_id,
+        'funding_target_usd', c.funding_target_usd,
         'funded_usd', c.funded_usd,
         'spent_usd', coalesce(s.spent_usd, 0),
         'contributors', f.contributors,
-        'credited_usd', f.credited_usd
+        'credited_usd', f.credited_usd,
+        'live_at', c.live_at,
+        'updated_at', c.updated_at
       ))
       from public.cards c
       left join public.public_card_spend s on s.card_id = c.id

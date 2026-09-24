@@ -567,7 +567,16 @@ try {
       skip(`/api: ${BASE} has no snapshot function (answered ${first.status} ${type})`);
     } else {
       const doc = await first.json().catch(() => null);
-      const wrong = doc === null ? ['not JSON'] : keysOk(doc, SNAPSHOT_KEYS.live);
+      // Every key of the document, and of each card in its map: a card's stage, ship time and horizon
+      // come from here together (docs/specs/site-snapshot.md).
+      const liveCards = doc !== null && jsonType(doc.cards) === 'object' ? Object.entries(doc.cards) : [];
+      const wrong =
+        doc === null
+          ? ['not JSON']
+          : [
+              ...keysOk(doc, SNAPSHOT_KEYS.live),
+              ...liveCards.flatMap(([id, entry]) => (jsonType(entry) === 'object' ? keysOk(entry, SNAPSHOT_KEYS.live_card) : ['']).map((key) => `cards.${id}${key === '' ? '' : `.${key}`}`)),
+            ];
       const browser = first.headers.get('cache-control') ?? '';
       check(first.status === 200 && wrong.length === 0, `/api/live ${first.status} ${type}${wrong.length === 0 ? ', every key in snapshot-keys.json' : `: missing or wrong ${wrong.join(', ')}`}`);
       check(/max-age=0/.test(browser), `/api/live Cache-Control: ${browser}`);

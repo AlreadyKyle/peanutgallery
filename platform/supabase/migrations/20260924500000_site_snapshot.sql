@@ -3,10 +3,14 @@
 -- 20260924400000_agent_workflows.sql and can run twice.
 --
 -- site_live() is the figures that move: the pool, the studio row, the ledger
--- totals, the books, the newest stopped cards, each listed card's stage, bar,
--- spend and funding figures, the newest events with their card's title and the
--- newest deploys. site_cards() is the text that rarely moves: the listed cards'
--- columns, the roles and the posted Terms versions. The site's one Netlify
+-- totals, the books, the newest stopped cards, each listed card's state (every
+-- cards column the pipeline, a payment or the board's deal to now writes: its
+-- stage, horizon, rank, builder, target, bar, spend, funding figures, ship time
+-- and last change), the newest events with their card's title and the newest
+-- deploys. site_cards() is the text that rarely moves: the listed cards'
+-- columns, the roles and the posted Terms versions. The site takes a card's
+-- words from site_cards() and everything else from site_live(), so a card that
+-- ships or is dealt to now shows its new stage, ship time and horizon together. The site's one Netlify
 -- Function (platform/site/netlify/functions/snapshot.mts) calls each with the
 -- publishable key and the CDN caches the answer, 60 seconds for the live
 -- document and 300 for the card document.
@@ -106,10 +110,16 @@ as $$
     'cards', coalesce((
       select jsonb_object_agg(c.id::text, jsonb_build_object(
         'stage', c.stage,
+        'horizon', c.horizon,
+        'rank', c.rank,
+        'executor_role_id', c.executor_role_id,
+        'funding_target_usd', c.funding_target_usd,
         'funded_usd', c.funded_usd,
         'spent_usd', coalesce(s.spent_usd, 0),
         'contributors', f.contributors,
-        'credited_usd', f.credited_usd
+        'credited_usd', f.credited_usd,
+        'live_at', c.live_at,
+        'updated_at', c.updated_at
       ))
       from public.cards c
       left join public.public_card_spend s on s.card_id = c.id
