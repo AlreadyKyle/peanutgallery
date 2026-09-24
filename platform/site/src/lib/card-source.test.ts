@@ -23,7 +23,7 @@ describe('parseChecks', () => {
       { file: 'seed-1/config/game.json', path: 'obj', value: null },
       { file: 'seed-1/config/game.json', path: 'long', value: null },
       { file: 'seed-1/config/game.json', path: 'raw', value: null },
-      { file: 'seed-1/config/game.json', path: 'empty', value: 'null' },
+      { file: 'seed-1/config/game.json', path: 'empty', value: null },
     ]);
   });
 

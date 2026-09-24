@@ -121,7 +121,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 4 | `specs/agent-system-core.md` | built | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
 | 5 | `specs/agent-workflows.md` | built | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
 | 6 | `specs/site-snapshot.md` | built | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
-| 7 | `specs/supporter-pages.md` | agreed | /thanks, /card/:id with the replay, supporter credits, /team statuses |
+| 7 | `specs/supporter-pages.md` | built | /thanks, /card/:id with the replay, supporter credits, /team statuses |
 | 8 | `specs/studio-reports.md` | agreed | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 9 | `specs/design-review.md` | agreed | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
 | 10 | `specs/agent-upkeep.md` | agreed | drift checks, Dependabot with a safe patch merge, the Claude Code pin, the replay eval set |

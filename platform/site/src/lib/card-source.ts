@@ -233,8 +233,8 @@ const MAX_STRING = 200;
 /**
  * The machine lines of a card's already-public acceptance_test, `check: config <file> <path> ==
  * <json>`, for "What changed". A line whose file or path holds any other character is left out. A
- * number, boolean or null shows as written, a string of at most 200 characters in quotes, and
- * anything else (a longer string, an object, an array, text that is not JSON) as null: "changed".
+ * number or boolean shows as written, a string of at most 200 characters in quotes, and
+ * anything else (null, a longer string, an object, an array, text that is not JSON) as null: "changed".
  */
 export function parseChecks(acceptanceTest: string | null): ConfigCheck[] {
   if (acceptanceTest === null) return [];
@@ -247,7 +247,7 @@ export function parseChecks(acceptanceTest: string | null): ConfigCheck[] {
     let value: string | null = null;
     try {
       const parsed: unknown = JSON.parse(json.trim());
-      if (typeof parsed === 'number' || typeof parsed === 'boolean' || parsed === null) value = String(parsed);
+      if (typeof parsed === 'number' || typeof parsed === 'boolean') value = String(parsed);
       else if (typeof parsed === 'string' && parsed.length <= MAX_STRING) value = JSON.stringify(parsed);
     } catch {
       value = null;

@@ -1929,6 +1929,12 @@ input[type='radio'] {
   margin-bottom: var(--space-1);
 }
 
+/* A card's steps are an ordered list, drawn flush like every other rail list. */
+ol.timeline {
+  list-style: none;
+  padding: 0;
+}
+
 /* The Watch link under a building or checks face, and under a shipped row. */
 .card-watch {
   margin: var(--space-2) 0 0;
