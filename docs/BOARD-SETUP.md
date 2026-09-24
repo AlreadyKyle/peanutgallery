@@ -45,7 +45,7 @@ sign-in are gone from this list, and the backup key is part of the Mac's step.
 
 ## Rename to Mob Machine
 
-**Why.** You renamed the studio Mob Machine on 23 September 2026 (`docs/PLAN.md` §10 decision 42),
+**Why.** You renamed the studio Mob Machine on 23 September 2026 (`docs/PLAN.md` §10 decision 43),
 with a new mark in place of the peanut: a small machine with two eyes, drawn in code
 (`docs/specs/machine-mark.md`). Once the rename pull request is merged and deployed, the site, the
 link preview, the icons, the game's tab, the agents and the alerts all say Mob Machine, and the

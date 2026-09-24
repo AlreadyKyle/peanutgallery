@@ -2,7 +2,7 @@
 
 Status: built. Card: none. Owner: board.
 
-The name: **Mob Machine**, the board's call on 23 September 2026 (PLAN.md §10 decision 42), with a new mark in place of the peanut (`specs/machine-mark.md`). The domain: not chosen yet. `{{DOMAIN}}` below stands for it and every line that names it is a pending board step; until the board registers one, the site stays at peanutgallery.games and only the name changes. The rename is not in `docs/BACKLOG.md`, because every backlog entry becomes a public /roadmap card.
+The name: **Mob Machine**, the board's call on 23 September 2026 (PLAN.md §10 decision 43), with a new mark in place of the peanut (`specs/machine-mark.md`). The domain: not chosen yet. `{{DOMAIN}}` below stands for it and every line that names it is a pending board step; until the board registers one, the site stays at peanutgallery.games and only the name changes. The rename is not in `docs/BACKLOG.md`, because every backlog entry becomes a public /roadmap card.
 
 ## Problem
 
@@ -30,7 +30,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
 1. [x] Fill the placeholders in this spec: the name is filled; `{{DOMAIN}}` waits on the board. The mark is settled (below); the game's address waits on the domain.
 2. [x] Branch. `node scripts/rename.mjs --apply --tier 1 --name "Mob Machine" --domain peanutgallery.games` (the domain unchanged on purpose). Domain: the same with `--domain {{DOMAIN}}`.
 3. [x] Hand edits the script cannot make (the domain ones are left for the domain's pull request):
-   - [x] PLAN.md: §10 decision 42 recording the rename and its date, decision 2 marked superseded by it, §3's line naming the studio, and §11 Names. The opening line is the script's. CLAUDE.md's opening paragraph reworded around the new name, keeping that the package names use the working name Backseat.
+   - [x] PLAN.md: §10 decision 43 recording the rename and its date, decision 2 marked superseded by it, §3's line naming the studio, and §11 Names. The opening line is the script's. CLAUDE.md's opening paragraph reworded around the new name, keeping that the package names use the working name Backseat.
    - [x] Grammar and wording read in every rewritten file (`git grep -niE "peanut|gallery" -- platform seed-1 docs ':!docs/specs'`): nothing was built on "peanut" or "gallery" but the mark; "the peanut mark" in `DESIGN.md`, `styles.css`, `App.tsx`, `og-image.mjs` and the Guide's note became the new mark (`specs/machine-mark.md`); "Mob Machine" takes "a" where an article is needed. The Ontario business-name line in BOARD-SETUP was split across two lines, which the script cannot see, and was changed by hand.
    - [x] BOARD-SETUP's Done entry of 20 September 2026 quotes the Terms as they read then, so its "Peanut Gallery" is restored and kept (`KEEP_LINES`).
    - [ ] Domain: `platform/site/netlify.toml`, a forced 301 from `https://peanutgallery.games/*` and `https://www.peanutgallery.games/*` to `https://{{DOMAIN}}/:splat`, beside the existing `.netlify.app` redirect.

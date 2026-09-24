@@ -2,7 +2,7 @@
 
 Status: built. Card: none. Owner: board.
 
-Replaces the peanut of `specs/site-mark.md`, as part of the rename to Mob Machine (`specs/rename.md`, PLAN.md §10 decision 42). This is a board pull request: the top bar, the mark component, `index.html`'s icons and the site's scripts are kernel.
+Replaces the peanut of `specs/site-mark.md`, as part of the rename to Mob Machine (`specs/rename.md`, PLAN.md §10 decision 43). This is a board pull request: the top bar, the mark component, `index.html`'s icons and the site's scripts are kernel.
 
 ## Problem
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The studio rename (docs/specs/rename.md). The display name "Peanut Gallery" became "Mob Machine"
-// (PLAN.md §10 decision 42); the domain peanutgallery.games stays until the board registers a new one.
+// (PLAN.md §10 decision 43); the domain peanutgallery.games stays until the board registers a new one.
 // This script keeps the list of every file that carries the old name or the domain, in tiers, and
 // rewrites a tier on request.
 //
@@ -113,7 +113,7 @@ const HISTORY_PREFIXES = ['docs/specs/', 'platform/supabase/migrations/', 'scrip
 export const KEEP_LINES = [
   'in place of hello@peanutgallery.games', // PLAN §10 decision 37
   'from Peanut Gallery, Backseat Driver, Armchair, Helicopter', // PLAN §10 decision 2
-  'renamed from Peanut Gallery to Mob Machine', // PLAN §10 decision 42
+  'renamed from Peanut Gallery to Mob Machine', // PLAN §10 decision 43
   '"Who runs the studio": "Peanut Gallery is operated by', // BOARD-SETUP Done 3 quotes the Terms of 20 September 2026
 ];
 

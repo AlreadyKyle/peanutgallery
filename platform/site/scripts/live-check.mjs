@@ -51,7 +51,7 @@ import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
 const PRODUCTION = 'https://peanutgallery.games';
-// The studio's name (PLAN.md §10 decision 42): the tab title, the link previews and the top bar.
+// The studio's name (PLAN.md §10 decision 43): the tab title, the link previews and the top bar.
 const STUDIO_NAME = 'Mob Machine';
 const TOML = readFileSync(new URL('../netlify.toml', import.meta.url), 'utf8');
 // The public read the Terms pages make (docs/specs/legal-copy.md): the project and the publishable key

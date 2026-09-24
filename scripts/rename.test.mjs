@@ -33,7 +33,7 @@ test('rewrite replaces the display name in every spelling and the domain in ever
 });
 
 test('rewrite leaves the domain exactly as written when it is unchanged or not given', () => {
-  // The rename to Mob Machine kept peanutgallery.games (PLAN.md §10 decision 42); the tests' mixed-case
+  // The rename to Mob Machine kept peanutgallery.games (PLAN.md §10 decision 43); the tests' mixed-case
   // addresses test case-insensitive matching, so they must not be lowercased.
   const before = 'Peanut Gallery mails Board@PeanutGallery.games from www.peanutgallery.games';
   const after = 'Mob Machine mails Board@PeanutGallery.games from www.peanutgallery.games';

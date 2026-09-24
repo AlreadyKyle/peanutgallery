@@ -246,7 +246,7 @@ export const TERMS_VERSIONS = [
   },
   {
     // Version 3: version 2 with the studio's new name, Mob Machine, and no other change (PLAN.md §10
-    // decision 42, docs/specs/rename.md).
+    // decision 43, docs/specs/rename.md).
     version: 3,
     terms: {
       title: 'Terms',

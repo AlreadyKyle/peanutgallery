@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-Superseded by `specs/machine-mark.md` on 23 September 2026 (PLAN.md §10 decision 42): the peanut and its files are gone. The rest of this spec is the record of what shipped.
+Superseded by `specs/machine-mark.md` on 23 September 2026 (PLAN.md §10 decision 43): the peanut and its files are gone. The rest of this spec is the record of what shipped.
 
 ## Problem
 
