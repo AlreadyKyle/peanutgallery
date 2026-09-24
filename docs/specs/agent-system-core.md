@@ -101,13 +101,13 @@ Board items: none required. Optional at /board: a cooling window length (it ship
 
 ## Evidence
 
-Built on `launch/agent-system-core`, first stacked on `launch/money-surfaces` at f2c6a6c. Money-surfaces has since merged as 187f403, and `origin/main` at fb694f5 (money-surfaces, /team and the gap audit) is merged into the branch (28bdebd, resolved against f2c6a6c so main's squashed predecessors win and only this branch's changes sit on top; no rebase). The production lines of Verification and the production steps are the ship stage's and are not run here; the gate at the pull request's head sha is quoted in the pull request once it has run.
+Built on `launch/agent-system-core`, first stacked on `launch/money-surfaces` at f2c6a6c. Money-surfaces has since merged as 187f403, and `origin/main` at fb694f5 (money-surfaces, /team and the gap audit) is merged into the branch (28bdebd, resolved against f2c6a6c so main's squashed predecessors win and only this branch's changes sit on top; no rebase), then `origin/main` at ecdfba6 (the type scale and money-surfaces' home order), whose one conflict was ROADMAP's two rows. The production lines of Verification and the production steps are the ship stage's and are not run here; the gate at the pull request's head sha is quoted in the pull request once it has run.
 
-`pnpm verify` at the repository root exits 0, after the second review's fixes:
+`pnpm verify` at the repository root exits 0, after the second review's fixes and the merge of ecdfba6:
 
 ```
 platform/board test:       Tests  91 passed (91)
-platform/site test:       Tests  428 passed (428)
+platform/site test:       Tests  425 passed (425)
 platform/supabase test:       Tests  297 passed (297)
 seed-1 test:       Tests  77 passed (77)
 platform/dispatcher test:       Tests  639 passed (639)
