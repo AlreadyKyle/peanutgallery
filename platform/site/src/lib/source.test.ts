@@ -670,3 +670,48 @@ describe('createSupabaseSource.subscribe', () => {
     expect(fake.removed).toEqual([a?.topic]);
   });
 });
+
+describe('the golden snapshot', () => {
+  // The Snapshot main's createSupabaseSource builds from the shared e2e studio fixture, captured
+  // before site-snapshot replaced the source (docs/specs/site-snapshot.md). UPDATE_GOLDEN=1 writes it.
+  it('matches src/lib/__fixtures__/snapshot-golden.json', async () => {
+    const { DEFAULT_STUDIO: studio, POSTED_TERMS } = await import('../../e2e/studio-fixture');
+    const fixtureFetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      const table = url.pathname.match(/^\/rest\/v1\/([a-z_]+)$/)?.[1] ?? '';
+      const ids = url.searchParams.get('id');
+      const rows: Record<string, unknown> = {
+        pool: [studio.pool],
+        cards:
+          ids !== null && ids.startsWith('in.')
+            ? studio.cards.filter((c) => ids.includes(String(c.id))).map((c) => ({ id: c.id, title: c.title }))
+            : studio.cards,
+        public_card_funding: studio.funding,
+        public_card_spend: studio.spend,
+        public_studio: [{ launched_at: studio.launchedAt, paused: studio.paused, platform_lane_open: false, pause_reason: null }],
+        public_money: [studio.money],
+        public_stopped_cards: studio.stopped,
+        public_ledger_totals: [studio.totals],
+        public_agent_events: studio.events,
+        deploys: studio.deploys.map(({ id, folder, sha, is_green, created_at }) => ({ id, folder, sha, is_green, created_at })),
+        public_roles: studio.roles,
+        public_terms_versions: POSTED_TERMS,
+      };
+      if (!(table in rows)) return new Response(JSON.stringify({ message: `${table} not in fixture` }), { status: 404 });
+      return new Response(JSON.stringify(rows[table]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    const client = createClient('https://example.supabase.co', 'sb_publishable_test', {
+      global: { fetch: fixtureFetch },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const snapshot = await createSupabaseSource(client).load();
+    const path = resolve(process.cwd(), 'src/lib/__fixtures__/snapshot-golden.json');
+    if (process.env.UPDATE_GOLDEN === '1') {
+      const { mkdirSync, writeFileSync } = await import('node:fs');
+      mkdirSync(resolve(process.cwd(), 'src/lib/__fixtures__'), { recursive: true });
+      writeFileSync(path, `${JSON.stringify(snapshot, null, 2)}\n`);
+    }
+    expect(snapshot.missing).toEqual([]);
+    expect(snapshot).toEqual(JSON.parse(readFileSync(path, 'utf8')));
+  });
+});
