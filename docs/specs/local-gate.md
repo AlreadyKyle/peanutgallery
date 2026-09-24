@@ -50,6 +50,7 @@ How to go back: the included minutes reset each month; or the board adds an Acti
 ## Evidence
 
 - `bash -n scripts/local-gate.sh` and `shellcheck -S warning scripts/local-gate.sh` exit 0. Against the copy it was made from, the only changes are the header, the repository found from the script's own location, the log folder under `${LOCAL_GATE_DIR:-$HOME/.local-gate}`, the commit status posted to `repos/{owner}/{repo}` (the repository `gh` reads from the checkout), and the Node 22 check.
+- `pnpm verify` at 3652de5 (the branch before this evidence), exit 0: seed-1 77, dispatcher 619, supabase 286, site 426 and board 71 tests passed; "PASS: gate tests passed=508"; agents 117 and ops 124 pass; "GATE PASS folder=seed-1 lane=code" and "GATE PASS folder=platform lane=code"; "PASS: secret-scan files=568"; docs 15 of 15; rename 8 of 8 and "tier 1 carries the old name nowhere".
 - The PASS line for this pull request's head is quoted in its squash merge's body; the next pull request that touches the specs quotes it here and moves this spec to done.
 
 ## Decisions
