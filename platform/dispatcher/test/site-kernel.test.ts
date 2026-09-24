@@ -13,10 +13,10 @@ const CARD_LANE_IMPORTS: Record<string, string> = {
   'platform/site/src/lib/copy.ts': 'names, navigation and loading lines; it states no money rule and labels no figure (checked below)',
   'platform/site/src/components/PageHeader.tsx': 'the h1, the lede and the tab title, from the strings the page passes',
   'platform/site/src/styles.css': "the site's styles, imported once by main.tsx",
-  'platform/site/src/lib/freshness.ts': 'reloads a tab restored from the back/forward cache when a newer build is live (main.tsx)',
+  'platform/site/src/lib/freshness.ts': 'reloads a tab restored, returned to or moved to another page when a newer build is live (main.tsx)',
   'platform/site/src/routes.tsx': "the card lane's own pages and top bar links, which App.tsx filters (App.tsx)",
 };
-const PACKAGES = new Set(['react', 'react-dom', 'react-dom/client', 'react-router-dom', '@supabase/supabase-js']);
+const PACKAGES = new Set(['react', 'react-dom', 'react-dom/client', 'react-router-dom']);
 
 function filesUnder(dir: string): string[] {
   return readdirSync(path.join(REPO, dir)).flatMap((name) => {
