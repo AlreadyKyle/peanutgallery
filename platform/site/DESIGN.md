@@ -1,4 +1,4 @@
-# Peanut Gallery site style guide
+# Mob Machine site style guide
 
 The one source of truth for how the public site looks and moves. The board's own site (`platform/board`, docs/specs/board-site.md) keeps its own stylesheet and form rules. The approved direction behind this guide is `docs/specs/design-system.md`; the home page, the top bar, the bands on every page, the colour system and the layout audit are `docs/specs/home-and-design.md`.
 
@@ -6,7 +6,7 @@ Tokens live in `src/tokens.css`; the rules in `src/styles.css`, which imports it
 
 ## Brand, in one paragraph
 
-A quiet, precise table (Teenage Engineering's precision) where real cards (Cards Against Humanity's card-as-object, never its tone) are funded with arcade coins and built by a cast of code-drawn aliens. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the peanut mark. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
+A quiet, precise table (Teenage Engineering's precision) where real cards (Cards Against Humanity's card-as-object, never its tone) are funded with arcade coins and built by a cast of code-drawn aliens. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the mark, a small machine with two eyes, drawn in the text colour. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
 
 ## Principles
 
@@ -54,7 +54,7 @@ Colours are written only in `tokens.css`, and there only in `:root` **(tested)**
 
 Retired: `--accent`, `--track`, `--radius-box`, and `--ground` as a background (its value lives on as `--paper-hover`) **(tested)**.
 
-**Roles.** Components read role tokens, never grounds: `--text-muted`, `--hairline`, `--focus-colour`, `--primary-bg/-fg/-hover/-press`, `--outline-bg/-fg/-hover/-press`, `--coin-hover`, `--quiet-fg`, `--quiet-edge`, `--mark-filter`, `--suit-tile-game`, `--suit-tile-studio` and `--live-mark`. `:root` sets them for paper; the signal plate and the ink bands reset them from their position (Bands). So nothing needs a band class to draw correctly on any ground.
+**Roles.** Components read role tokens, never grounds: `--text-muted`, `--hairline`, `--focus-colour`, `--primary-bg/-fg/-hover/-press`, `--outline-bg/-fg/-hover/-press`, `--coin-hover`, `--quiet-fg`, `--quiet-edge`, `--suit-tile-game`, `--suit-tile-studio` and `--live-mark`. `:root` sets them for paper; the signal plate and the ink bands reset them from their position (Bands). So nothing needs a band class to draw correctly on any ground.
 
 | Role | Paper (`:root`) | Signal (band 1, top bar) | Ink (odd bands from 3) |
 |---|---|---|---|
@@ -66,7 +66,6 @@ Retired: `--accent`, `--track`, `--radius-box`, and `--ground` as a background (
 | `--outline-hover` / `-press` | paper-hover / line | signal-deep / signal-press | ink-hover |
 | `--coin-hover` | coin-down | coin-up | coin-down |
 | `--quiet-fg` / `--quiet-edge` | muted / field | muted-on-signal | muted-on-ink / field |
-| `--mark-filter` | none | `invert(1)` | `invert(1)` |
 | `--suit-tile-game` / `-studio` | suit-game / suit-studio | transparent | transparent |
 | `--live-mark` | live | currentColor | currentColor |
 
@@ -154,9 +153,9 @@ Every public page is a stack of full-bleed bands:
 | Quiet ("Up to date") | muted label, field edge | muted-on-signal label and edge | muted-on-ink label, field edge |
 | Pressed | 3px currentColor border and the check glyph, in every mode | the same (paper) | the same (paper) |
 | Links, change marker | ink | paper | paper |
-| Peanut mark | as drawn | inverted | inverted |
+| The mark | ink | paper | paper |
 
-**Forced colours.** Every ground becomes Canvas, so each band after the first, and the footer, gets a 1px CanvasText top border; the peanut's filter is dropped; the Funded glyph's coin fill falls back to CanvasText and each suit tile gets a 1px CanvasText edge; the Picked ribbon and the Paused hatch are backgrounds and drop, and the word and glyph carry the state **(tested, e2e)**.
+**Forced colours.** Every ground becomes Canvas, so each band after the first, and the footer, gets a 1px CanvasText top border; the mark, drawn in the text colour, becomes CanvasText; the Funded glyph's coin fill falls back to CanvasText and each suit tile gets a 1px CanvasText edge; the Picked ribbon and the Paused hatch are backgrounds and drop, and the word and glyph carry the state **(tested, e2e)**.
 
 ## Components
 
@@ -214,7 +213,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 4. **Shipped** (the latest three) and **Planned next** (the next three planned titles) as rail rows, side by side from 64rem (3:2), each linking to `/roadmap`; one alone takes the row (paper).
 5. **Where the money goes** (ink): the pool with the coin, the split sentence from the fixed constants in `payment.ts`, "These are contributions, not donations.", the five latest agent actions and Full ledger.
 
-**The top bar** (`App.tsx`, kernel), on the signal plate: below 32rem the peanut mark (named "Peanut Gallery"), Play (outline, the cartridge), Contribute (the coin) and **Menu**, a real button with `aria-expanded` that opens the page links as an inline list inside `nav`; Escape closes it and returns focus to the button, and a route change closes it. Below 22.5rem Play moves into the list. The wordmark shows from 32rem, and from 64rem the links sit in the row and Menu goes. One 60px row from 320px up, not sticky, wrapping only at 200% text **(e2e: at most 61px at 320 to 390px)**.
+**The top bar** (`App.tsx`, kernel), on the signal plate: below 32rem the mark (inline SVG in the text colour, the link named "Mob Machine"), Play (outline, the cartridge), Contribute (the coin) and **Menu**, a real button with `aria-expanded` that opens the page links as an inline list inside `nav`; Escape closes it and returns focus to the button, and a route change closes it. Below 22.5rem Play moves into the list. The wordmark shows from 32rem, and from 64rem the links sit in the row and Menu goes. One 60px row from 320px up, not sticky, wrapping only at 200% text **(e2e: at most 61px at 320 to 390px)**.
 
 **`/contribute`** (kernel): **Fund the next card in line** first (the primary fill), whose second line names the first card in the waterfall's order ("Next in line: *title*"), says the money waits in Not on a card yet when no card takes money, and names no card when the order did not load ("Your contribution funds whatever the agents build next."); then "Or pick a card" with a choice per card in the funding order, in that order (1px ink, `--radius`, a funding bar), "Anything beyond a card's target funds the next cards in line.", the split and the USD note. With the order unread, "Not available right now." stands in for the choices. Directly under that first choice, before any card, the agreement line (small, muted): the Terms and the Refunds page as links and the age condition. It sits `--space-1` under the choice, as its caption, and keeps the choice's `--space-4` before "Or pick a card" **(e2e: layout balance, rhythm)**. A card anywhere draws its live Fund this card only while it is in the funding order.
 
@@ -240,7 +239,7 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 
 ## Breakpoints
 
-- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width. Below 32rem the wordmark is read out but not drawn; the peanut stands for it.
+- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
 - From 48rem: two-column card and team grids and the guide's demo grids; rail rows put their time in the rail; the team strip is one row; `--band-pad` grows.
 - From 64rem: the page links sit in the top bar and Menu goes; home's Shipped and Planned next sit side by side.
 - From 72rem: three-column card and team grids. Below 72rem a third column squeezes card text until a short card is left hollow beside a long one (measured at 1024px on the launch cards: a 95px hollow), so two columns hold to 72rem.

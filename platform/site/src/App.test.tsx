@@ -143,7 +143,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
     await waitFor(() => expect(screen.queryByText(legal.termsLoading)).toBeNull());
     const main = screen.getByRole('main');
     const operator = within(main).getByText((_, element) =>
-      element?.tagName === 'P' && (element.textContent ?? '').startsWith('Peanut Gallery is operated by Kyle Smith, an individual in Ontario, Canada.'),
+      element?.tagName === 'P' && (element.textContent ?? '').startsWith('Mob Machine is operated by Kyle Smith, an individual in Ontario, Canada.'),
     );
     expect(within(operator).getByRole('link', { name: legal.contactEmail })).toBeTruthy();
     expect(within(main).getAllByRole('link', { name: legal.refundsPageLink })[0]!.getAttribute('href')).toBe('/refunds');
@@ -186,9 +186,13 @@ describe('Site chrome', () => {
     const banner = screen.getByRole('banner');
     const wordmark = within(banner).getByRole('link', { name: copy.studioName });
     expect(wordmark.getAttribute('href')).toBe('/');
-    const mark = wordmark.querySelector('img.mark');
-    expect(mark?.getAttribute('src')).toBe('/peanut.png');
-    expect(mark?.getAttribute('alt')).toBe('');
+    // The mark is decorative inline SVG in the text colour, the same drawing as brand/mark.svg.
+    const mark = wordmark.querySelector('svg.mark');
+    expect(mark?.getAttribute('aria-hidden')).toBe('true');
+    expect(mark?.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
+    const source = readFileSync(resolve(process.cwd(), 'brand/mark.svg'), 'utf8');
+    expect(source).toContain(`d="${mark?.querySelector('path')?.getAttribute('d')}"`);
+    expect(source).toContain('fill="currentColor"');
     expect(within(nav()).queryByRole('link', { name: copy.home })).toBeNull();
     expect(within(nav()).getByRole('link', { name: 'Ledger' }).getAttribute('href')).toBe('/ledger');
     expect(

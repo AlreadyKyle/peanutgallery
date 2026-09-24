@@ -79,7 +79,6 @@
   --coin-hover: var(--coin-down);
   --quiet-fg: var(--muted);
   --quiet-edge: var(--field);
-  --mark-filter: none;
   --suit-tile-game: var(--suit-game);
   --suit-tile-studio: var(--suit-studio);
   --live-mark: var(--live);

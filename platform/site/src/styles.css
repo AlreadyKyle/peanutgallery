@@ -1,6 +1,6 @@
 @import './tokens.css';
 
-/* Peanut Gallery site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
+/* Mob Machine site styles. Tokens are in tokens.css; DESIGN.md is the style guide and explains
    every rule here. A quiet page of type; the card is the object. */
 
 * {
@@ -325,7 +325,6 @@ main > .band:nth-child(2n + 3),
   --outline-press: var(--ink-hover);
   --quiet-fg: var(--muted-on-ink);
   --quiet-edge: var(--field);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -349,7 +348,6 @@ main > .band:first-child,
   --coin-hover: var(--coin-up);
   --quiet-fg: var(--muted-on-signal);
   --quiet-edge: var(--muted-on-signal);
-  --mark-filter: invert(1);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -367,7 +365,7 @@ main > .band:first-child {
 }
 
 /* Top bar ---------------------------------------------------------------
-   The peanut mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
+   The mark (the name beside it from 32rem), Play, Contribute and Menu in a 60px row on the
    first band's ink. Menu opens the page links as an inline list under the row; from 64rem the links
    sit in the row and Menu goes. Below 22.5rem Play moves into the list. Not sticky. */
 
@@ -397,12 +395,12 @@ main > .band:first-child {
   text-decoration: none;
 }
 
-/* The peanut mark is one colour: on ink it inverts to paper. */
+/* The mark is drawn in the text colour: ink on paper, paper on the signal plate and ink. */
 .mark {
   display: block;
-  width: auto;
-  height: 1.5em;
-  filter: var(--mark-filter);
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 nav a {
@@ -457,7 +455,7 @@ nav a.active {
   }
 }
 
-/* Below 32rem the name is read out but not drawn: the peanut mark stands for it. */
+/* Below 32rem the name is read out but not drawn: the mark stands for it. */
 @media (max-width: 31.99rem) {
   .wordmark-text {
     position: absolute;
@@ -1738,17 +1736,13 @@ input[type='radio'] {
 }
 
 /* Forced colours -------------------------------------------------------------
-   Both grounds become Canvas, so a CanvasText rule marks each band edge; the peanut keeps its own
-   colours; the bar's fill takes Highlight so it still reads as filled. */
+   Both grounds become Canvas, so a CanvasText rule marks each band edge; the mark, drawn in the text
+   colour, becomes CanvasText; the bar's fill takes Highlight so it still reads as filled. */
 
 @media (forced-colors: active) {
   main > .band + .band,
   .page:has(> main > .band) > .site-footer {
     border-top: 1px solid CanvasText;
-  }
-
-  .mark {
-    filter: none;
   }
 
   .funding-bar-fill {

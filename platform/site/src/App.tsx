@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { CoinMark } from './components/Funding';
+import { MachineMark } from './components/Mark';
 import { NotFound } from './components/NotFound';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
@@ -95,8 +96,8 @@ export function CartridgeMark() {
 }
 
 /**
- * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the peanut mark (with
- * the name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
+ * The top bar (DESIGN.md, Top bar), on the signal plate it shares with band 1: the mark (with the
+ * name from 32rem), Play, Contribute and a Menu button that opens the page links as an inline
  * list; from 64rem the links sit in the row and the Menu button goes. Below 22.5rem Play moves into
  * the list. Escape closes the list and returns focus to the button, and moving to another page
  * closes it.
@@ -123,7 +124,7 @@ function TopBar() {
         }}
       >
         <Link className="wordmark" to="/">
-          <img className="mark" src="/peanut.png" alt="" width={256} height={256} />
+          <MachineMark />
           <span className="wordmark-text">{copy.studioName}</span>
         </Link>
         {play === null ? null : (

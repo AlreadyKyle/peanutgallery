@@ -5,6 +5,7 @@ import { FilterChip, ShippedRow } from '../components/Cards';
 import { CoinMark, FundingBar, type SpecRow } from '../components/Funding';
 import { Glyph, STATE_TAGS, SuitTag, type GlyphName } from '../components/Glyph';
 import { LiveUpdates } from '../components/LiveUpdates';
+import { MachineMark } from '../components/Mark';
 import { PageHeader } from '../components/PageHeader';
 import { TeamStrip } from '../components/TeamStrip';
 import { FACES, type CategoryFilter, type Face } from '../lib/cards';
@@ -397,7 +398,7 @@ function SignalBand() {
             </p>
             <h3>{guide.markHeading}</h3>
             <p className="cluster">
-              <img className="mark" src="/peanut.png" alt="" width={48} height={48} />
+              <MachineMark />
             </p>
             <p className="caption">{guide.markNote}</p>
             <h3>{guide.focusHeading}</h3>
