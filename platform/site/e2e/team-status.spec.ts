@@ -60,9 +60,9 @@ test.describe('/roadmap', () => {
 
   test('labels an approved card waiting to be dealt "Approved, opens soon" and a vetoed one "Held by the board" with its reason', async ({ page }) => {
     await page.goto('/roadmap');
-    const soon = page.locator(`li[data-card="${OPENS_SOON_ID}"]`);
-    await expect(soon).toContainText('Approved, opens soon');
-    await expect(soon).not.toContainText('Held by the board');
+    const opening = page.locator(`li[data-card="${OPENS_SOON_ID}"]`);
+    await expect(opening).toContainText('Approved, opens soon');
+    await expect(opening).not.toContainText('Held by the board');
     const held = page.locator(`li[data-card="${VETOED_ID}"]`);
     await expect(held).toContainText('Held by the board');
     await expect(held).toContainText(VETO_REASON);
