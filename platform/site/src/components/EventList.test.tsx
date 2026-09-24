@@ -10,6 +10,11 @@ describe('eventVerb', () => {
     expect(eventVerb({ type: 'message', step: 'resume_rule', usd: null })).toBe('Resumed by rule after its spending limit');
   });
 
+  it("words the Studio Head's ranking as what it did, never as a note", () => {
+    // apply_card_ranking writes one event, type message with step ranked; its moves stay private.
+    expect(eventVerb({ type: 'message', step: 'ranked', usd: null })).toBe('ranked the cards open for funding');
+  });
+
   it("keeps a role's verb for its event type, and an unknown step falls back to it", () => {
     expect(eventVerb({ type: 'message' })).toBe('wrote a note');
     expect(eventVerb({ type: 'ship', step: null, usd: null })).toBe('shipped');

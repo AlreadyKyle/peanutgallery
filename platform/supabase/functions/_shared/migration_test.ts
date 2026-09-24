@@ -285,6 +285,7 @@ Deno.test("migrations on PGlite", {
         "20260924100100_terms_version_2.sql",
         "20260924200000_money_logic.sql",
         "20260924300000_agent_system_core.sql",
+        "20260924400000_agent_workflows.sql",
         "20260925000000_terms_version_3.sql",
       ]);
       for (const m of migrations) {
@@ -320,6 +321,7 @@ Deno.test("migrations on PGlite", {
         "board_notes",
         "board_test_payments",
         "card_approvals",
+        "card_drafts",
         "card_patches",
         "cards",
         "contribution_allocations",
@@ -4019,14 +4021,19 @@ Deno.test("migrations on PGlite", {
           "set_role_pause",
         ];
         const service = [
+          "apply_card_ranking",
           "apply_contribution",
+          "approve_card_draft",
           "card_approved",
           "card_ceiling_resumed",
           "card_content_hash",
           "card_content_hash_of",
+          "card_from_draft",
           "card_ledger_usd",
           "card_money_held",
           "card_needs_approval",
+          "card_rank_problem",
+          "card_ranking_places",
           "card_ready_problem",
           "claim_dispatcher_lease",
           "claim_job_run",
@@ -4038,7 +4045,9 @@ Deno.test("migrations on PGlite", {
           "finish_job_run",
           "ledger_identity",
           "ops_database_size",
+          "rankable_cards",
           "record_card_approval",
+          "record_card_draft",
           "record_dispute_reinstated",
           "record_stripe_fee",
           "record_usage",
@@ -4049,6 +4058,7 @@ Deno.test("migrations on PGlite", {
           "studio_spend_totals",
           "terms_version_at",
           "waterfall_sweep",
+          "withdraw_card_draft",
         ];
         // A policy's functions run as the caller, so anon and authenticated execute the one
         // the cards policy calls (agent-system-core.md).

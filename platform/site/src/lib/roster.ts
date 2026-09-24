@@ -1,9 +1,9 @@
 import type { Role } from './source';
 
 /**
- * The roles that build cards, and the folder each builds in. Every other role (the directors, the
- * Game Designer, the Host, Biz Dev, the Community agent and the rest of the roster) has no job that
- * runs yet: note triage, card drafting, grading, the report, the stream and outside research are
+ * The roles that build cards, and the folder each builds in. The Studio Head, the Game Designer and
+ * the Game Director run the board's Rank now and Draft a game card and build no card; the rest of the
+ * roster has no job that runs yet: note triage, the report, the stream and outside research are
  * backlog cards. The board's own site keeps the same list for its executor choice
  * (platform/board/src/lib/board.ts).
  */

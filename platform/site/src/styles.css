@@ -794,7 +794,9 @@ button.link:hover:not(:disabled) {
    the index, the title, the summary and the bottom block line up across the row, and a shorter
    card's spare space splits under its title and its summary instead of pooling above the funding
    bar as one hollow (DESIGN.md, No dead space). The parts are placed by row, so a card with no
-   summary keeps its bottom block in line. */
+   summary keeps its bottom block in line. A card an agent wrote holds its summary and byline in one
+   block (.card-text) on the summary's track, so the byline never lands on the bottom block and no
+   card gains a track: an empty track would still add one grid gap above every bar. */
 @media (min-width: 48rem) {
   .card-grid > .card {
     display: grid;
@@ -811,7 +813,8 @@ button.link:hover:not(:disabled) {
     grid-row: 2;
   }
 
-  .card-grid > .card > .card-summary {
+  .card-grid > .card > .card-summary,
+  .card-grid > .card > .card-text {
     grid-row: 3;
   }
 
@@ -834,6 +837,15 @@ button.link:hover:not(:disabled) {
   margin-bottom: 0;
   color: var(--text-muted);
   font-size: var(--size-small);
+}
+
+/* Who wrote an agent card, under its summary (docs/specs/agent-workflows.md). */
+.card-summary:has(+ .card-byline) {
+  margin-bottom: var(--space-1);
+}
+
+.card-text > .card-byline {
+  margin: 0 0 var(--space-2);
 }
 
 /* Funded: the button slot holds a plain line, 44px tall so the row stays aligned. */

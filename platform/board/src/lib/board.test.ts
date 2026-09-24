@@ -180,7 +180,7 @@ describe('agent system controls', () => {
       board_roles: [{ id: 'role-1', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking' }],
     });
     expect(await fetchBoardJobs(c)).toEqual([
-      { name: 'tidy_up', role_name: null, calls_model: false, runs_when_paused: true, description: null, runs: [{ id: 'r1', origin: 'board', status: 'skipped', reason: 'role_paused', created_at: '2026-09-24T00:00:00Z', finished_at: null }] },
+      { name: 'tidy_up', role_name: null, calls_model: false, runs_when_paused: true, description: null, runs: [{ id: 'r1', origin: 'board', status: 'skipped', reason: 'role_paused', created_at: '2026-09-24T00:00:00Z', finished_at: null, output: null }] },
     ]);
     expect(await fetchBoardRoles(c)).toEqual([{ id: 'role-1', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking' }]);
   });
@@ -233,5 +233,22 @@ describe('agent system controls', () => {
     const cards = await fetchBoardCards(c);
     expect(asked.sort()).toEqual(['card_is_public:agent-ok', 'card_is_public:agent-void']);
     expect(cards.map((card) => [card.id, card.approval])).toEqual([['board', 'none'], ['agent-ok', 'current'], ['agent-void', 'missing']]);
+  });
+});
+
+describe('the role jobs (docs/specs/agent-workflows.md)', () => {
+  it('names the two buttons that queue {} and reads each run output for its job', async () => {
+    const { JOB_BUTTONS, runOutputFrom } = await import('./board');
+    expect(JOB_BUTTONS).toEqual({ studio_ranking: 'Rank now', draft_card: 'Draft a game card' });
+    expect(runOutputFrom('studio_ranking', { moves: [{ card_id: 'c1', from: null, to: 1 }], unapplied: 0 })).toEqual({ kind: 'ranking', moves: [{ card_id: 'c1', from: null, to: 1 }], unapplied: 0 });
+    expect(runOutputFrom('draft_card', { result: 'withdrawn', reason: 'no_approval_in_three_rounds', rounds: [{ round: 1, draft: null, check: { name: 'schema', detail: 'not one object' }, verdict: null }] })).toEqual({
+      kind: 'draft',
+      result: 'withdrawn',
+      card_id: null,
+      reason: 'no_approval_in_three_rounds',
+      rounds: [{ round: 1, title: null, summary: null, lane: null, executor: null, estimate_usd: null, check: { name: 'schema', detail: 'not one object' }, verdict: null }],
+    });
+    expect(runOutputFrom('draft_card', null)).toBeNull();
+    expect(runOutputFrom('weekly_report', { anything: 1 })).toBeNull();
   });
 });

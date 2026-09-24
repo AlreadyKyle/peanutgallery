@@ -613,6 +613,12 @@ yours.
   (Cooling window, second factor, up to 10,080 minutes). You can also pause a role or veto a card
   there. There is no operations percentage: no role job spends studio money, and model role jobs run
   only when you start them from the board's site while you are signed in there. Nothing waits on you.
+- **Rank now and Draft a game card (optional, when you want them).** The agent-workflows pull
+  request (`docs/specs/agent-workflows.md`) adds both to the Jobs list on the board's site, at the
+  second factor. Each runs only while you are signed in there, on your Max plan, billed to you on the
+  ledger, never from supporters' or studio money. The first real Draft a game card run is
+  launch-card-floor's drafting session: be signed in at /board for it. A drafted card waits out the
+  cooling window before it is dealt to now; you can veto it there as with any card.
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
   HST threshold and income tax on the pool, and Ontario business-name registration for "Mob

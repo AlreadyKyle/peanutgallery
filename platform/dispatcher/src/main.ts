@@ -11,6 +11,8 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
+import { readFile } from 'node:fs/promises';
+import { AttendedAdapter } from './adapters/attended.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
 import { SessionBudgets } from './budgets.js';
@@ -23,6 +25,11 @@ import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
+import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
+import { scanPublicText } from './public-text.js';
+import { AGENTS_DIR, TypedOutput } from './typed-output.js';
+import { gitAuthEnv } from './worktree.js';
+import { resolveRoleModel } from './role-model.js';
 import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
 import { leaseTtlSeconds, tick } from './tick.js';
 import { sleep } from './time.js';
@@ -98,6 +105,23 @@ async function main(): Promise<void> {
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
   const jobState: JobState = { running: null };
+  // The role jobs run attended through claude -p on the founder's plan in either studio mode
+  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them. Its
+  // Read, Glob and Grep deny rules name the code clone too, whose .env holds the dispatcher's keys, and
+  // there its sessions hold no Bash (role-session.ts), since the host runs no agent-written code.
+  const workflow: WorkflowDeps = {
+    roleAdapter: adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot }),
+    typed: new TypedOutput(),
+    priceTable: config.priceTable,
+    resolveModel: (role) => resolveRoleModel(role, config).model,
+    sessionMaxTurns: config.sessionMaxTurns,
+    sessionMaxMs: config.sessionMaxMinutes * 60_000,
+    boardSessionTtlMin: config.boardSessionTtlMin,
+    watchIntervalMs: config.tickMs,
+    scanText: (strings) => scanPublicText(strings),
+    openWorkspace: (runId) => gitWorkspace(config.repoRoot, config.worktreeRoot, runId, gitAuthEnv(config.githubToken)),
+    rubric: () => readFile(path.join(AGENTS_DIR, 'rubrics', 'draft-game.md'), 'utf8'),
+  };
   log.info('main', 'dispatcher started', {
     mode: config.agentMode,
     tickMs: config.tickMs,
@@ -135,6 +159,7 @@ async function main(): Promise<void> {
         watchIntervalMs: config.tickMs,
         state: jobState,
         stopSignal: stop.signal,
+        workflow,
       }),
   };
 

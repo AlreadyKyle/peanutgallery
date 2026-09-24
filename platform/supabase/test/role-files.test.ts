@@ -38,7 +38,7 @@ describe("readRoleSpecs against platform/agents", () => {
       expect(spec.description.endsWith("."), spec.name).toBe(true);
     }
     const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
-    expect(idle).toEqual(["Biz Dev", "Community", "Game Designer", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
+    expect(idle).toEqual(["Biz Dev", "Community", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
     // The trust classes (docs/specs/agent-system-core.md), and write access exactly for a writer or planner with tools.
     const byClass = (klass: string) => specs.filter((s) => s.class === klass).map((s) => s.name).sort();
     expect(byClass("writer")).toEqual(["Builder A", "Builder B", "Platform Builder", "QA", "Tech Artist"]);

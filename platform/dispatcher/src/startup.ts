@@ -15,7 +15,7 @@ import { StartupError } from './exit-code.js';
 import { gitConfigViolations, originUrl } from './gitconfig.js';
 import { errorMessage, type Logger } from './log.js';
 import { modelPrice } from './pricing.js';
-import { resolveRoleModel } from './role-model.js';
+import { ROLE_JOB_ROLES, resolveRoleModel } from './role-model.js';
 
 
 export interface StartupDeps {
@@ -60,13 +60,15 @@ export async function checkRepositoryGit(repoRoot: string, githubRepo: string): 
 }
 
 // A session runs on the model its role resolves to when the session starts (role-model.ts): the env
-// value of the role's MODEL_* token, else roles.model, else MODEL_BUILDER. A writing role whose model
-// has no price could not be metered, and the price table and the roles are the same on every restart,
-// so it is fatal. A roles.model that differs from the model the env resolves means /team shows a model
+// value of the role's MODEL_* token, else roles.model, else MODEL_BUILDER. A writing role, or a role a
+// role job runs (the Game Director grades with no write access), whose model has no price could not be
+// metered, and the price table and the roles are the same on every restart, so it is fatal. A roles.model that differs from the model the env resolves means /team shows a model
 // that is not the one running; it is logged so the board re-seeds the roles.
 export async function checkRoleModels(db: Db, config: DispatcherConfig, log?: Logger): Promise<void> {
   const roles = await db.listActiveRoles();
-  const writers = roles.filter((role) => role.write_access).map((role) => ({ role, resolved: resolveRoleModel(role, config) }));
+  const writers = roles
+    .filter((role) => role.write_access || ROLE_JOB_ROLES.includes(role.name))
+    .map((role) => ({ role, resolved: resolveRoleModel(role, config) }));
   const unpriced = writers.filter(({ resolved }) => !modelPrice(config.priceTable, resolved.model));
   if (unpriced.length > 0) {
     throw new StartupError(`no price in PRICE_TABLE_JSON for ${unpriced.map(({ role, resolved }) => `${role.name} (${resolved.model})`).join(', ')}`, true);

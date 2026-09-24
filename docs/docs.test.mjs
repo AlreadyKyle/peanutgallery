@@ -506,8 +506,15 @@ test("docs/SYSTEM.md's role table equals the role specs' name, class, status and
 
 test('docs/SYSTEM.md marks what a later pull request builds as not built yet, naming its spec', () => {
   const text = read('docs', 'SYSTEM.md');
-  for (const spec of ['specs/agent-workflows.md', 'specs/agent-upkeep.md', 'specs/studio-reports.md', 'specs/design-review.md']) {
+  for (const spec of ['specs/agent-upkeep.md', 'specs/studio-reports.md', 'specs/design-review.md']) {
     assert.match(text, new RegExp(`not built yet[^\\n]*\\x60${spec.replace('.', '\\.')}\\x60`, 'i'), `SYSTEM.md marks ${spec}'s part as not built yet`);
     assert.ok(existsSync(join(repoRoot, 'docs', spec)), `docs/${spec} exists`);
   }
+});
+
+test('docs/SYSTEM.md names the two role jobs agent-workflows built, and no longer marks them not built', () => {
+  const text = read('docs', 'SYSTEM.md');
+  for (const job of ['studio_ranking', 'draft_card']) assert.match(text, new RegExp(`\\x60${job}\\x60`), `SYSTEM.md names ${job}`);
+  assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/agent-workflows\.md\x60/i);
+  assert.match(text, /## The two role jobs/);
 });

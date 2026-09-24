@@ -43,7 +43,7 @@ everything else, in the order the board would take it.
 - horizon: next
 - rank: 3
 - summary: The Studio Head turns planned items into draft cards for the board to check and open for funding.
-- intent: A scheduled Studio Head session reads this backlog, the ledger and the shipped cards, and files draft cards that meet the definition of ready for the board to edit and move to now. At launch the board files every card, and no job runs the directors. It is not built yet.
+- intent: The Studio Head picks planned cards from this backlog, the ledger and the shipped cards for the Game Designer to draft, each graded by the Game Director and meeting the definition of ready. Today the Game Designer drafts a new game card only when the board presses Draft a game card, and the Studio Head only ranks; picking waits on a planned seed-1 game card to draft. It is not built yet.
 
 ### Studio Head triages board notes
 - bucket: agents
@@ -229,7 +229,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 21
 - summary: An agent that reads the studio's community and proposes lore, requests and a mood summary, with a page for the lore it adds to the game.
-- intent: The Community agent reads the subreddit, the Discord, Twitch chat logs and X mentions and has no write tools. It files lore cards (an adopted meme becomes an in-game item with its origin linked), trend cards (a recurring request with its thread) and a sentiment summary; every proposal passes the content filter, the board and the gate. A Lore page lists what is canon. It is not built yet.
+- intent: The Community agent reads the studio's own Discord and Twitch chat logs and has no write tools. It proposes lore (an adopted term becomes an in-game item with its origin linked) and trends (a recurring request) as typed fields only, so no free text reaches a role with write access; each passes the content filter and the gate. A Lore page lists what is canon. It is not built yet.
 
 ### The name pipeline
 - bucket: studio
@@ -382,3 +382,19 @@ everything else, in the order the board would take it.
 - rank: 40
 - summary: Choose where your contribution goes with sliders on the site, the way Humble Bundle does, instead of a dropdown at checkout.
 - intent: Humble Bundle style sliders on the contribute page set the supporter's Agents/Studio split (default 80/20, which stays the default and is not votable, PLAN.md §4 Kernel), with the 10% chargeback reserve and the incident share shown as fixed and not movable; the site creates the Stripe Checkout Session with the chosen split in its metadata through a Supabase function, replacing the Payment Link's custom dropdown (SPLIT_MAP in platform/supabase/functions/_shared/split.ts); the webhook must still accept only valid splits and keep crediting old Payment Link sessions. Continuous values or 1% steps are a choice to make when it is specced. This is one payment's Agents/Studio split, not the pool's weekly bucket allocation. Requested by the board on 23 September 2026. It is not built yet.
+
+### Scheduled and unattended role jobs
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 41
+- summary: The Studio Head's ranking and the card drafting run on a schedule or an event, without a board member signed in.
+- intent: Today Rank now and Draft a game card run only when the board starts them at /board, attended on the founder's plan while a board member is signed in. Running them weekly or on an event, unattended as Managed Agents sessions with per-class agent definitions and the Managed Agents outcome grader, needs money outside the founder's plan: it waits on an operations percentage, which does not exist. It is not built yet.
+
+### Studio card drafting
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 42
+- summary: The Platform Builder drafts studio cards and the Platform Director writes their check lines and grades them.
+- intent: Today agents draft seed-1 game cards only (Draft a game card), and the board files every studio card. The studio lane's drafts would be Platform Builder proposals whose check lines the Platform Director writes, graded against platform/site/DESIGN.md, with the same checks, cooling window and approval as game drafts. It waits on the studio lane's first built card. It is not built yet.

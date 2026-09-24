@@ -135,7 +135,7 @@ Every public page is a stack of full-bleed bands:
 | Home, no team roles loaded | signal · paper · **ink** (Shipped, Planned next) · **paper** (Where the money goes) · **ink** footer |
 | `/contribute` | signal (intro, paused notice) · paper (Fund the next card in line, the choices, the split, the USD note) · ink footer |
 | `/how-it-works` | signal (intro, paused notice) · paper (the six steps, each over its example) · ink (Where the money goes, Holds and refunds, Rules that never change) · paper footer |
-| `/team` | signal · paper (Running, then Not running yet) · ink footer |
+| `/team` | signal · paper (Running, then Not building cards) · ink footer |
 | `/roadmap` | signal · paper (Next) · ink (Later) · paper footer |
 | `/ledger` | signal · paper (Funding) · ink (Money in) · paper (Stopped cards, only while there are any) · then Agent work and Deploys by position, ink and paper in turn · the footer on the ground after the last band |
 | Terms, Privacy, Refunds, Contact | signal (title, lede) · paper (the text and its last-changed line) · ink footer |
@@ -162,8 +162,8 @@ Every public page is a stack of full-bleed bands:
 **The card** (`components/Card.tsx`, `CardFace`). An `li.card` with `data-face`: a white face, 2px ink edge, `--radius-card`, no shadow, natural height (no aspect floor, clamp or `overflow: hidden`).
 1. The **index row** (small, 600, an 8px gap so the widest pair fits a three-column card): the suit tile and label at the start, the state glyph and word at the end. No pill and no border.
 2. The **title** (`h3`, 20px, 700, balanced).
-3. The **summary** (body).
-4. The **bottom block**, pinned so bars and buttons align across a row: the funding bar; the **spec rows** (`dl.spec-rows`, small, tabular, hairlines: "Funded $1.50 of $3.00" and "Contributors 2"; label muted, value ink); "Fund this card" (outlined, full width, 44px, described by the title), with the agreement line under it (small, muted: the Terms, the Refunds page and the age condition, drawn by `Funding.tsx` so no card layout can drop it; a live link only, never on a sample or example card); the native "What the agents are told" disclosure, or on a card with no brief an empty line of the same height, so its bar still lines up with the cards beside it **(e2e: layout balance)**.
+3. The **summary** (body), and on a card an agent wrote, the **byline** under it (small, muted): "Written by the <role>, an AI agent", the drafting role's title from the roles already loaded. It appears beside agent-written card text and nowhere else **(tested)**. The two share one block (`.card-text`) in the summary's place, so a card no agent wrote keeps its four parts as they were.
+4. The **bottom block**, pinned so bars and buttons align across a row (from 48rem the card's four parts, index, title, summary with its byline, and bottom block, share their row's tracks by CSS subgrid, so the byline never sits on the bar and every card keeps 16px from its summary to its bottom block at every width; a fifth, empty track would still add a 24px grid gap above every bar **(e2e: agent card)**): the funding bar; the **spec rows** (`dl.spec-rows`, small, tabular, hairlines: "Funded $1.50 of $3.00" and "Contributors 2"; label muted, value ink); "Fund this card" (outlined, full width, 44px, described by the title), with the agreement line under it (small, muted: the Terms, the Refunds page and the age condition, drawn by `Funding.tsx` so no card layout can drop it; a live link only, never on a sample or example card); the native "What the agents are told" disclosure, or on a card with no brief an empty line of the same height, so its bar still lines up with the cards beside it **(e2e: layout balance)**.
 
 The money in the bottom block comes from `Funding.tsx` (kernel). Modes: `live` (real links), `example` (`/how-it-works`: no link, button or disclosure at all), `sample` (the guide: the buttons drawn, `aria-disabled`, linking nowhere).
 

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "draft-verdict.schema.json",
+  "title": "Draft verdict",
+  "description": "The Game Director's grade of one card draft against rubrics/draft-game.md. approved carries fits_pillars alone. revise sends the draft back to the Game Designer for another round with the reason codes and the note. flagged withdraws the draft at once; flag it for not_all_ages, breaks_kernel_or_art_policy or duplicate_card. Every code: fits_pillars (meets every rubric line), off_pillar (breaks a Seed 1 pillar), not_all_ages (misses the all-ages rating), not_one_small_change (more than one small change), summary_not_backed (the summary promises more than its check lines prove), estimate_implausible (the estimate does not fit the five-times rule or the change), unclear_text (a player or builder would misread it), duplicate_card (an open card already does this), breaks_kernel_or_art_policy (touches the kernel or needs art other than procedural or vector).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["result", "reason_codes"],
+  "properties": {
+    "result": { "enum": ["approved", "revise", "flagged"] },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "fits_pillars",
+          "off_pillar",
+          "not_all_ages",
+          "not_one_small_change",
+          "summary_not_backed",
+          "estimate_implausible",
+          "unclear_text",
+          "duplicate_card",
+          "breaks_kernel_or_art_policy"
+        ]
+      }
+    },
+    "note": { "type": "string", "maxLength": 600, "description": "For the Game Designer's next round: what to change. Never shown to the public." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "result": { "const": "approved" } } },
+      "then": { "properties": { "reason_codes": { "maxItems": 1, "items": { "const": "fits_pillars" } } } }
+    },
+    {
+      "if": { "properties": { "result": { "enum": ["revise", "flagged"] } } },
+      "then": { "properties": { "reason_codes": { "items": { "not": { "const": "fits_pillars" } } } } }
+    }
+  ]
+}

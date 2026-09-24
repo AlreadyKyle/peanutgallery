@@ -26,6 +26,17 @@ function Brief({ intent }: { intent: string | null }) {
   );
 }
 
+/**
+ * The line beside agent-written card text (docs/specs/agent-workflows.md): the drafting role's title
+ * from the roles already loaded, or the plain line when they did not load; null on a card no agent
+ * wrote.
+ */
+export function writtenBy(card: Card, snapshot: Snapshot): string | null {
+  if (!card.drafter_role_id) return null;
+  const role = snapshot.roles.find((r) => r.id === card.drafter_role_id);
+  return role === undefined ? copy.writtenByAgent : copy.writtenBy.replace('{role}', role.title);
+}
+
 /** Who is on a building card: the role building it when the roles loaded, else who filed it. */
 export function whoOn(card: Card, snapshot: Snapshot): string {
   const role = card.executor_role_id === null ? undefined : snapshot.roles.find((r) => r.id === card.executor_role_id);
@@ -59,6 +70,8 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
   const playable = shown === 'live' && card.folder === 'seed-1' && env.playUrl !== '';
+  const byline = writtenBy(card, snapshot);
+  const summary = blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>;
   return (
     <li className="card" data-face={shown} data-card={card.id}>
       <p className="card-index">
@@ -68,7 +81,16 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
       <h3 id={titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}
       </h3>
-      {blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>}
+      {/* The byline shares the summary's block, so a card keeps its four parts and a card no agent
+          wrote is laid out exactly as before (styles.css, the card subgrid). */}
+      {byline === null ? (
+        summary
+      ) : (
+        <div className="card-text">
+          {summary}
+          <p className="card-meta card-byline">{byline}</p>
+        </div>
+      )}
       <div className="card-bottom">
         {shown === 'rejected' ? (
           <>

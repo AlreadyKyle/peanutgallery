@@ -70,6 +70,10 @@ export const copy = {
   waitingForAgents: 'Waiting for the agents',
   buildingBy: '{name} is building this',
   agentBrief: 'What the agents are told',
+  // Beside agent-written card text only (docs/specs/agent-workflows.md): the drafting role's title,
+  // or the plain line when the roles did not load.
+  writtenBy: 'Written by the {role}, an AI agent',
+  writtenByAgent: 'Written by an AI agent',
   // The live-updates row and the one polite announcer.
   pauseLiveUpdates: 'Pause live updates',
   upToDate: 'Up to date',
@@ -98,8 +102,10 @@ export const copy = {
     aiAgent: 'AI agent',
     running: 'Running',
     runningIntro: 'These agents build the cards that supporters fund.',
-    notRunning: 'Not running yet',
-    notRunningIntro: 'These roles have no job that runs yet. Their work is on the roadmap.',
+    notRunning: 'Not building cards',
+    // True of every role under it: the Studio Head ranks, the Game Designer drafts and the Game
+    // Director grades when the board asks (docs/specs/agent-workflows.md); the rest have no job yet.
+    notRunningIntro: 'These roles build no cards. Some rank, draft or grade cards when the board asks; the others have no job yet, and their work is on the roadmap.',
     roadmapLink: 'See the roadmap',
     // Home's team strip shows three agents; this link goes to the rest on /team.
     meetAll: 'Meet the whole team',
@@ -113,7 +119,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. They are not open for funding until the board moves them to Fund what\'s next.',
+    lede: 'Cards the studio plans to build and has not built yet. They open for funding when they move to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
     horizonIntros: {

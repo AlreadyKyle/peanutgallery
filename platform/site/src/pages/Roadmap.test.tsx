@@ -81,6 +81,30 @@ afterEach(() => {
 });
 
 describe('Roadmap', () => {
+  it('says both ways a planned card opens for funding: the board moves it, or an approved agent card moves by itself', () => {
+    // An approved agent card sits on next until the tick deals it to now after the cooling window.
+    expect(roadmap.lede).toContain('the board moves its own cards there');
+    expect(roadmap.lede).toContain('a card an agent drafted moves there by itself once it is approved');
+    expect(roadmap.lede).not.toContain('until the board moves them');
+  });
+
+  it('says which role wrote an approved agent card waiting on next, and nothing on the cards the board filed', async () => {
+    const drafted = card({ id: 'd1', title: 'Gatherers cost 11', summary: 'The gatherer costs one more.', source: 'agent', drafter_role_id: 'r-designer', rank: 4 });
+    const source: StudioSource = {
+      load: () =>
+        Promise.resolve({
+          ...snapshot([...cards, drafted]),
+          roles: [{ id: 'r-designer', name: 'Game Designer', title: 'Game Designer', description: null, species_note: 'A small red creature.', model: 'claude-opus-5-5', write_access: true, state: 'active', hired_at: '2026-09-14T00:00:00Z' }],
+        }),
+      subscribe: () => () => {},
+    };
+    renderRoadmap(source);
+    const next = await screen.findByRole('region', { name: roadmap.horizons.next });
+    const bylines = next.querySelectorAll('.card-byline');
+    expect([...bylines].map((b) => b.textContent)).toEqual(['Written by the Game Designer, an AI agent']);
+    expect(bylines[0]!.closest('li')!.querySelector('h3')!.textContent).toBe('Gatherers cost 11');
+  });
+
   it('lists next and later cards by horizon in rank order as rail rows, the suit in the rail, each labelled planned', async () => {
     renderRoadmap(sourceOf(cards));
     const next = await screen.findByRole('region', { name: roadmap.horizons.next });

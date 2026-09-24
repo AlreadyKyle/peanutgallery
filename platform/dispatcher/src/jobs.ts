@@ -19,6 +19,7 @@ import type { AgentAdapter, AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Db, Job, JobRun, Role, StudioState } from './db.js';
 import { HANDLERS } from './job-handlers/index.js';
+import type { WorkflowDeps } from './job-handlers/workflow.js';
 import { errorMessage, type Logger } from './log.js';
 
 export interface JobContext {
@@ -38,6 +39,8 @@ export interface JobContext {
   // the dispatcher stops; the handler stops then.
   stopSignal: AbortSignal;
   now: () => Date;
+  // What the role jobs run with (docs/specs/agent-workflows.md); absent where none is configured.
+  workflow?: WorkflowDeps;
 }
 
 // A handler returns the run's output, a JSON object, or nothing.
@@ -71,6 +74,7 @@ export interface JobTickDeps {
   // The dispatcher stopping.
   stopSignal: AbortSignal;
   handlers?: Readonly<Record<string, JobHandler>>;
+  workflow?: WorkflowDeps;
 }
 
 export type JobTickOutcome =
@@ -175,7 +179,19 @@ function start(deps: JobTickDeps, run: JobRun, job: Job, role: Role | null): voi
         await finish('failed', 'no_handler', null);
         return;
       }
-      const output = await handler({ run, job, role, mode: deps.mode, db: deps.db, adapter: deps.adapter, log: deps.log, alert: deps.alert, stopSignal: stop.signal, now: deps.now });
+      const output = await handler({
+        run,
+        job,
+        role,
+        mode: deps.mode,
+        db: deps.db,
+        adapter: deps.adapter,
+        log: deps.log,
+        alert: deps.alert,
+        stopSignal: stop.signal,
+        now: deps.now,
+        ...(deps.workflow ? { workflow: deps.workflow } : {}),
+      });
       const stopped = stopReason();
       if (stopped) await finish('failed', stopped, output ?? null);
       else await finish('succeeded', null, output ?? {});

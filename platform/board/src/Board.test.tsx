@@ -1444,7 +1444,7 @@ describe('Board agent system controls', () => {
   it('lists each job with its last runs, their origin and reason, and queues a board-origin run with typed input', async () => {
     fake.jobs = [
       {
-        name: 'studio_ranking',
+        name: 'weekly_report',
         role_name: 'Studio Head',
         calls_model: true,
         runs_when_paused: true,
@@ -1454,21 +1454,121 @@ describe('Board agent system controls', () => {
     ];
     await renderBoard();
     await flush();
-    const job = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    const job = within(screen.getByRole('form', { name: 'Job weekly_report' }));
     expect(job.getByText('Studio Head · calls a model, on the board plan while you are signed in · runs while the studio is paused')).toBeTruthy();
     // The origin and the reason in words, never the stored codes; the heading is the job's name in words.
     expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · scheduled · skipped: only the board starts a model run`)).toBeTruthy();
-    expect(job.getByRole('heading', { name: 'Studio ranking' })).toBeTruthy();
+    expect(job.getByRole('heading', { name: 'Weekly report' })).toBeTruthy();
     fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '[1]' } });
-    fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Rank now' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Report now' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Job weekly_report' }));
     await flush();
     expect(job.getByText('The input must be a JSON object.')).toBeTruthy();
     fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '{"floor": 3}' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'Job weekly_report' }));
     await flush();
-    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([{ p_job: 'studio_ranking', p_card: null, p_reason: 'Rank now', p_input: { floor: 3 } }]);
+    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([{ p_job: 'weekly_report', p_card: null, p_reason: 'Report now', p_input: { floor: 3 } }]);
     expect(job.getByText('Queued. It runs while a board member is signed in here.')).toBeTruthy();
+  });
+
+  it('queues Rank now and Draft a game card as board-origin runs with {}, and shows each run\'s typed output', async () => {
+    // The first moved card is listed under Cards, so the output names it by title and links to its row.
+    fake.cards = [card({ id: '11111111-1111-4111-8111-111111111111', title: 'Faster gatherers', rank: 1 })];
+    fake.jobs = [
+      {
+        name: 'studio_ranking',
+        role_name: 'Studio Head',
+        calls_model: true,
+        runs_when_paused: true,
+        description: 'Rank now.',
+        runs: [
+          {
+            id: 'rank-1',
+            origin: 'board',
+            status: 'succeeded',
+            reason: null,
+            created_at: '2026-09-14T11:00:00Z',
+            finished_at: '2026-09-14T11:02:00Z',
+            output: {
+              moves: [
+                { card_id: '11111111-1111-4111-8111-111111111111', from: 3, to: 1 },
+                { card_id: '33333333-3333-4333-8333-333333333333', from: null, to: 4 },
+              ],
+              unapplied: 2,
+            },
+          },
+        ],
+      },
+      {
+        name: 'draft_card',
+        role_name: 'Game Designer',
+        calls_model: true,
+        runs_when_paused: true,
+        description: 'Draft a game card.',
+        runs: [
+          {
+            id: 'draft-1',
+            origin: 'board',
+            status: 'succeeded',
+            reason: null,
+            created_at: '2026-09-14T12:00:00Z',
+            finished_at: '2026-09-14T12:09:00Z',
+            output: {
+              result: 'approved',
+              card_id: '22222222-2222-4222-8222-222222222222',
+              rounds: [
+                { round: 1, draft: { title: 'Gatherers cost 10', summary: 'No change.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: { name: 'already_holds', detail: 'already true on main' }, verdict: null },
+                { round: 2, draft: { title: 'Gatherers cost 11', summary: 'The gatherer costs one more.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: null, verdict: { result: 'revise', reason_codes: ['unclear_text'], note: 'Say dust.' } },
+                { round: 3, draft: { title: 'Gatherers cost 11 dust', summary: 'Building a gatherer costs 11 dust.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: null, verdict: { result: 'approved', reason_codes: ['fits_pillars'] } },
+              ],
+            },
+          },
+          {
+            id: 'draft-0',
+            origin: 'board',
+            status: 'succeeded',
+            reason: null,
+            created_at: '2026-09-14T10:00:00Z',
+            finished_at: '2026-09-14T10:05:00Z',
+            output: { result: 'withdrawn', reason: 'flagged', reason_codes: ['duplicate_card'], rounds: [] },
+          },
+        ],
+      },
+    ];
+    await renderBoard();
+    await flush();
+    const rank = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
+    expect(rank.queryByLabelText('Input (JSON, optional)')).toBeNull();
+    // Each moved card on its own line, by title with a link to its row when listed, else by short id.
+    const moves = rank.getAllByRole('listitem').filter((item) => item.parentElement?.tagName === 'OL');
+    expect(moves.map((item) => item.textContent)).toEqual(['Faster gatherers: from rank 3 to rank 1', 'card 33333333: from no rank to rank 4']);
+    expect(within(moves[0]!).getByRole('link', { name: 'Faster gatherers' }).getAttribute('href')).toBe('#card-11111111-1111-4111-8111-111111111111');
+    expect(rank.getByText('2 more kept their ranks.')).toBeTruthy();
+    const draft = within(screen.getByRole('form', { name: 'Job draft_card' }));
+    // The approved card is not listed yet, so it is named by its approved round's title, with no link.
+    expect(draft.getByText('Approved: Gatherers cost 11 dust waits out the cooling window, then is dealt to now.')).toBeTruthy();
+    // Codes read as words: the check, the verdict and its reasons.
+    expect(draft.getByText('Gatherers cost 10 (config, Builder A, $0.50): No change. Refused by the already holds check: already true on main')).toBeTruthy();
+    expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more. Sent back to revise: unclear text. Say dust.')).toBeTruthy();
+    expect(draft.getByText('Gatherers cost 11 dust (config, Builder A, $0.50): Building a gatherer costs 11 dust. Approved: fits pillars.')).toBeTruthy();
+    expect(draft.getByText('Withdrawn: flagged. No card was written.')).toBeTruthy();
+    fireEvent.change(rank.getByLabelText('Reason'), { target: { value: 'New cards on now' } });
+    fireEvent.click(rank.getByRole('button', { name: 'Rank now' }));
+    await flush();
+    fireEvent.change(draft.getByLabelText('Reason'), { target: { value: 'Short of cards' } });
+    fireEvent.click(draft.getByRole('button', { name: 'Draft a game card' }));
+    await flush();
+    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
+      { p_job: 'studio_ranking', p_card: null, p_reason: 'New cards on now', p_input: {} },
+      { p_job: 'draft_card', p_card: null, p_reason: 'Short of cards', p_input: {} },
+    ]);
+    expect(rank.getByText('Queued. It runs while a board member is signed in here.')).toBeTruthy();
+    // Without the second factor the buttons are not offered.
+    cleanup();
+    fake.aal = 'aal1';
+    await renderBoard();
+    await flush();
+    expect(within(screen.getByRole('form', { name: 'Job draft_card' })).queryByRole('button', { name: 'Draft a game card' })).toBeNull();
   });
 
   it('marks an undealt agent card and a hidden one, vetoes the undealt one with a reason, and lifts a veto', async () => {

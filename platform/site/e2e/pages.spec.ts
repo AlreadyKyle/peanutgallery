@@ -56,11 +56,14 @@ for (const viewport of WIDTHS) {
       await screenshot(page, 'how-it-works', viewport.width);
     });
 
-    test('/team lists the running agents and the ones not running yet, with code-drawn avatars', async ({ page }) => {
+    test('/team lists the running agents and the ones that build no cards, with code-drawn avatars', async ({ page }) => {
       await page.goto('/team');
       await onlyOneH1(page, 'The team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
-      const waiting = page.getByRole('region', { name: 'Not running yet', exact: true });
+      const waiting = page.getByRole('region', { name: 'Not building cards', exact: true });
+      // The Studio Head, the Game Designer and the Game Director run jobs when the board asks, so the
+      // section never says its roles have no job.
+      await expect(waiting).not.toContainText('These roles have no job');
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(['Builder A', 'Builder B', 'QA']);
       await expect(waiting.getByRole('heading', { level: 3 })).toHaveText([
         'Biz Dev',
@@ -173,7 +176,7 @@ test.describe('the production /team model check', () => {
 
     test('fails, since the Running section is missing', async ({ page }) => {
       await page.goto('/team');
-      await expect(page.getByRole('region', { name: 'Not running yet', exact: true })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Not building cards', exact: true })).toBeVisible();
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running).toHaveCount(0);
       const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());

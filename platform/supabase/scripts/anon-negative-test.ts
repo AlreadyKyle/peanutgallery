@@ -41,6 +41,7 @@ const PRIVATE_TABLES = [
   "job_runs",
   "dispatcher_cards",
   "dispatcher_card_spend",
+  "card_drafts",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -133,6 +134,16 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["enqueue_manual_job", { p_job: "anon_negative_test", p_card: null, p_reason: null, p_input: {} }],
   ["board_jobs", {}],
   ["board_roles", {}],
+  // agent-workflows (docs/specs/agent-workflows.md): drafts and the ranking, the service role's
+  // alone. Each names no draft, no role and no run, and records nothing.
+  ["card_from_draft", { p_fields: {}, p_role: null }],
+  ["record_card_draft", { p_run: null, p_role: null, p_fields: {}, p_maker_ref: "" }],
+  ["approve_card_draft", { p_draft: NO_CARD, p_approver_role: NO_CARD, p_grader_ref: "", p_verdict: {} }],
+  ["withdraw_card_draft", { p_draft: NO_CARD, p_reason_codes: [] }],
+  ["card_rank_problem", { c: {} }],
+  ["rankable_cards", {}],
+  ["card_ranking_places", { p_order: [] }],
+  ["apply_card_ranking", { p_run: NO_CARD, p_order: [] }],
 ];
 
 // The one function anon runs on purpose: the cards policy calls it as the caller

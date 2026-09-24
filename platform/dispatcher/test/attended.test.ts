@@ -383,6 +383,28 @@ describe('the attended sandbox', () => {
     expect(permissions.deny).toEqual([...HOME_DENY.map((rel) => `Read(~/${rel})`), 'Read(//Users/board/peanutgallery/.env*)', 'Read(//Users/board/peanutgallery/platform/dispatcher/**)', 'Edit(//Users/board/peanutgallery/.git/**)']);
   });
 
+  // On the Mac host the dispatcher runs from its code clone, whose .env holds the service-role key, the
+  // studio key and the GitHub tokens, and does git in a separate work clone; the role jobs' adapter
+  // runs there (main.ts), so the code clone, the host's env folder, the dumps and every .env file under
+  // the home folder are denied too.
+  it('denies the Read, Glob and Grep tools the code clone, the host env folder, the dumps and every .env file under the home folder', () => {
+    const host = { ...paths, worktree: '/Users/board/peanutgallery-host/work-worktrees/job-1a2b3c4d', repoRoot: '/Users/board/peanutgallery-host/work', codeRoot: '/Users/board/peanutgallery-host/code' };
+    const { permissions } = attendedSettings(host, asIs) as { permissions: { deny: string[] } };
+    for (const rule of [
+      'Read(//Users/board/peanutgallery-host/code/.env*)',
+      'Read(//Users/board/peanutgallery-host/code/platform/dispatcher/**)',
+      'Read(//Users/board/peanutgallery-host/work/.env*)',
+      'Read(//Users/board/peanutgallery-host/work/platform/dispatcher/**)',
+      'Read(~/peanutgallery-host/env/**)',
+      'Read(~/peanutgallery-dumps/**)',
+      'Read(~/**/.env)',
+      'Read(~/**/.env.*)',
+      'Read(~/**/*.env)',
+    ]) {
+      expect(permissions.deny, rule).toContain(rule);
+    }
+  });
+
   it('resolves a path through its symlinks, keeping a tail that does not exist yet', () => {
     const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'backseat-realpath-')));
     try {

@@ -31,7 +31,7 @@ function settlementNote(amount: number | null, currency: string | null): string 
  * page, and plain words while it is not (at the first factor Cards is not shown; at the second, while
  * the cards read is loading or has failed), so no link ever points at nothing.
  */
-function ToCard({ id, listed, children }: { id: string; listed: ReadonlySet<string>; children: string }) {
+function ToCard({ id, listed, children }: { id: string; listed: Pick<ReadonlySet<string>, 'has'>; children: string }) {
   return listed.has(id) ? <a href={`#card-${id}`}>{children}</a> : <>{children}</>;
 }
 
@@ -51,7 +51,7 @@ function Item({
 }: {
   item: NeedsItem;
   canRecord: boolean;
-  listedCards: ReadonlySet<string>;
+  listedCards: Pick<ReadonlySet<string>, 'has'>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   if (item.kind === 'dispute') {
@@ -185,7 +185,7 @@ export function NeedsYou({
 }: {
   client: SupabaseClient;
   canRecord: boolean;
-  listedCards: ReadonlySet<string>;
+  listedCards: Pick<ReadonlySet<string>, 'has'>;
   onFillCredit: (draft: CreditDraft) => void;
 }) {
   const [data, setData] = useState<NeedsYouData | null>(null);

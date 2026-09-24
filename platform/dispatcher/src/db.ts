@@ -184,6 +184,42 @@ export interface SpendTotals {
   tierUsd: number;
 }
 
+// A card on now or next as the role jobs read it (docs/specs/agent-workflows.md). The handlers pass it
+// through a typed reduction before any prompt sees it: a community-sourced card keeps its id, stage,
+// horizon, bucket and funded amount only.
+export interface OpenCardRow {
+  id: string;
+  source: string;
+  bucket: string;
+  lane: string;
+  folder: string;
+  stage: string;
+  horizon: string;
+  rank: number | null;
+  title: string;
+  summary: string | null;
+  funding_target_usd: number;
+  funded_usd: number;
+}
+
+// The card fields a draft carries into record_card_draft: the card as approval inserts it, apart
+// from what approval sets itself (20260924400000_agent_workflows.sql).
+export interface DraftFields {
+  title: string;
+  summary: string;
+  intent: string;
+  acceptance_test: string;
+  lane: CardLane;
+  executor_role_id: string | null;
+  estimate_usd: number;
+}
+
+export interface RankingMove {
+  card_id: string;
+  from: number | null;
+  to: number;
+}
+
 // Why the studio is paused (studio_state.pause_reason): Console credit needed, the usage tier cap,
 // an incident (a failed revert), or the board's own pause.
 export type PauseReason = 'awaiting_credit' | 'spend_limit' | 'incident' | 'board';
@@ -245,6 +281,17 @@ export interface Db {
   jobs(): Promise<Job[]>;
   // A role's pause and state, read each watch.
   roleState(roleId: string): Promise<{ paused: boolean; state: string }>;
+  // The role jobs (docs/specs/agent-workflows.md): cards on now and next at the open stages and
+  // funded, for the ranking and the Designer's context.
+  openCards(): Promise<OpenCardRow[]>;
+  // The cards a ranking may name (rankable_cards): on now, open for funding, and holding no money on
+  // their bar or on hold, by the one test apply_card_ranking refuses on; in funding order.
+  rankableCards(): Promise<string[]>;
+  recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string): Promise<{ id: string; content_sha256: string }>;
+  // The card id; the approval's verdict carries the grader's reason codes.
+  approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>): Promise<string>;
+  withdrawCardDraft(draftId: string, reasonCodes: readonly string[]): Promise<void>;
+  applyCardRanking(runId: string, order: readonly string[]): Promise<{ moves: RankingMove[]; unapplied: number }>;
 }
 
 type Row = Record<string, unknown>;
@@ -649,6 +696,68 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       if (error || !data) fail('role state', error);
       const row = data as Row;
       return { paused: row.paused === true, state: text(row, 'state') };
+    },
+
+    async openCards() {
+      const { data, error } = await client
+        .from('cards')
+        .select('id, source, bucket, lane, folder, stage, horizon, rank, title, summary, funding_target_usd, funded_usd')
+        .in('horizon', ['now', 'next'])
+        .in('stage', ['proposed', 'designing', 'voted', 'funded'])
+        .order('horizon', { ascending: true })
+        .order('rank', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+        .limit(200);
+      if (error) fail('cards open', error);
+      return rows(data).map((row) => ({
+        id: text(row, 'id'),
+        source: text(row, 'source'),
+        bucket: text(row, 'bucket'),
+        lane: text(row, 'lane'),
+        folder: text(row, 'folder'),
+        stage: text(row, 'stage'),
+        horizon: text(row, 'horizon'),
+        rank: row.rank === null || row.rank === undefined ? null : num(row, 'rank'),
+        title: text(row, 'title'),
+        summary: optionalText(row, 'summary'),
+        funding_target_usd: num(row, 'funding_target_usd'),
+        funded_usd: num(row, 'funded_usd'),
+      }));
+    },
+
+    async rankableCards() {
+      const { data, error } = await client.rpc('rankable_cards');
+      if (error || !Array.isArray(data)) fail('rankable_cards', error);
+      return (data as unknown[]).map((id) => String(id));
+    },
+
+    async recordCardDraft(runId, roleId, fields, makerRef) {
+      const { data, error } = await client.rpc('record_card_draft', { p_run: runId, p_role: roleId, p_fields: fields, p_maker_ref: makerRef });
+      if (error || !data) fail('record_card_draft', error);
+      const row = data as Row;
+      return { id: text(row, 'id'), content_sha256: text(row, 'content_sha256') };
+    },
+
+    async approveCardDraft(draftId, approverRoleId, graderRef, verdict) {
+      const { data, error } = await client.rpc('approve_card_draft', { p_draft: draftId, p_approver_role: approverRoleId, p_grader_ref: graderRef, p_verdict: verdict });
+      if (error || !data) fail('approve_card_draft', error);
+      return String(data);
+    },
+
+    async withdrawCardDraft(draftId, reasonCodes) {
+      const { error } = await client.rpc('withdraw_card_draft', { p_draft: draftId, p_reason_codes: [...reasonCodes] });
+      if (error) fail('withdraw_card_draft', error);
+    },
+
+    async applyCardRanking(runId, order) {
+      const { data, error } = await client.rpc('apply_card_ranking', { p_run: runId, p_order: [...order] });
+      if (error || !data) fail('apply_card_ranking', error);
+      const row = data as Row;
+      const moves = Array.isArray(row.moves) ? (row.moves as Row[]) : [];
+      return {
+        moves: moves.map((move) => ({ card_id: text(move, 'card_id'), from: move.from === null || move.from === undefined ? null : num(move, 'from'), to: num(move, 'to') })),
+        unapplied: num(row, 'unapplied'),
+      };
     },
 
   };

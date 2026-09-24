@@ -278,7 +278,7 @@ describe('createSupabaseSource.load', () => {
     const cards = query(fake.queries, 'cards');
     // horizon and rank must stay in the anon column grant on cards (20260922000300_backlog.sql).
     expect(CARD_COLUMNS).toBe(
-      'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at',
+      'id,title,summary,intent,source,stage,shape,bucket,folder,horizon,rank,executor_role_id,drafter_role_id,funding_target_usd,funded_usd,created_at,updated_at,live_at',
     );
     expect(cards.select).toBe(CARD_COLUMNS);
     expect([...CARD_STAGES]).toEqual(['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'live']);
@@ -353,6 +353,7 @@ describe('createSupabaseSource.load', () => {
         horizon: 'now',
         rank: 2,
         executor_role_id: 'r1',
+        drafter_role_id: null,
         funding_target_usd: 100,
         funded_usd: 25,
         spent_usd: 0.42,

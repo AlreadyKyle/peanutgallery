@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ranking.schema.json",
+  "title": "Ranking",
+  "description": "The Studio Head's answer to a Rank now run: the rankable cards in the order they should be funded, first first, each with one reason code. Only cards the prompt marks rankable may appear; the cards named trade the ranks they already hold, in this order, and at most ten ranks change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["order"],
+  "properties": {
+    "order": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["card_id", "reason_code"],
+        "properties": {
+          "card_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+          "reason_code": {
+            "enum": ["player_visible", "small_and_ready", "unblocks_others", "balances_the_game", "fixes_a_problem", "keeps_its_place"],
+            "description": "player_visible: a player sees it early; small_and_ready: cheap and ready to build; unblocks_others: another card needs it first; balances_the_game: it evens out the numbers; fixes_a_problem: it fixes something broken; keeps_its_place: no reason to move it."
+          }
+        }
+      }
+    }
+  }
+}
