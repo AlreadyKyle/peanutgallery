@@ -14,6 +14,51 @@ export type SnapshotDocuments = { live: Record<string, unknown>; cards: Record<s
 
 const OPEN_OR_PAUSED = ['proposed', 'designing', 'voted', 'funded', 'building', 'gated', 'paused'];
 
+const READ_TOOLS = ['read', 'grep', 'glob', 'ls'];
+const EDIT_TOOLS = ['edit', 'write', 'multiedit', 'notebookedit'];
+const STEP_KEYS: Record<string, string> = {
+  smoke_pass: 'smoke_passed',
+  requeue: 'requeued',
+  infrastructure: 'paused_infra',
+  patch_reused: 'patch_reused',
+  dealt: 'dealt',
+  ceiling_top_up: 'topped_up',
+  resume_rule: 'resumed',
+  ranked: 'ranked',
+};
+const TYPE_KEYS: Record<string, string> = {
+  start: 'started',
+  tool_result: 'none',
+  gate_pass: 'gate_passed',
+  gate_fail: 'gate_failed',
+  ship: 'shipped',
+  revert: 'reverted',
+  error: 'stopped',
+};
+
+/**
+ * public.event_line_key in TypeScript, for fixtures (docs/specs/supporter-pages.md): a fixture event
+ * may carry its tool `name` or message `step` in `payload`, or give its `line_key` outright.
+ */
+export function lineKeyOf(type: string, payload: Record<string, unknown> = {}): string {
+  if (type === 'tool_call') {
+    const name = String(payload.name ?? '').toLowerCase();
+    if (READ_TOOLS.includes(name)) return 'read';
+    if (EDIT_TOOLS.includes(name)) return 'edited';
+    if (name === 'bash') return 'ran';
+    if (name === 'submit_patch') return 'submitted';
+    return 'used_tool';
+  }
+  if (type === 'message') return STEP_KEYS[String(payload.step ?? '')] ?? 'none';
+  return TYPE_KEYS[type] ?? 'other';
+}
+
+/** A fixture event's line key: its own, else the one its type and payload give. */
+export function eventLineKey(event: Record<string, unknown>): string {
+  if (typeof event.line_key === 'string') return event.line_key;
+  return lineKeyOf(text(event.type), (event.payload as Record<string, unknown> | undefined) ?? {});
+}
+
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 /** A numeric string as the JSON number jsonb gives for a numeric column; anything else as it is, so a malformed figure stays malformed. */
 const figure = (value: unknown): unknown =>
@@ -96,20 +141,30 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
     money: studio.money,
     stopped: studio.stopped === null ? null : studio.stopped.slice(0, 12),
     cards: liveCards,
+    // The newest 20 with a public line; key none never reaches the document.
     events: [...studio.events]
+      .filter((event) => eventLineKey(event) !== 'none')
       .sort(desc('created_at'))
       .slice(0, 20)
-      .map(({ id, card_id, role_id, type, created_at, step, usd }) => ({
-        id,
-        card_id,
-        role_id,
-        type,
-        created_at,
-        step: step ?? null,
-        usd: usd === undefined || usd === null ? null : Number(usd),
-        card_title: card_id === null ? null : (titles.get(card_id) ?? null),
+      .map((event) => ({
+        id: event.id,
+        card_id: event.card_id,
+        role_id: event.role_id,
+        type: event.type,
+        created_at: event.created_at,
+        step: event.step ?? null,
+        usd: event.usd === undefined || event.usd === null ? null : Number(event.usd),
+        card_title: event.card_id === null ? null : (titles.get(event.card_id) ?? null),
+        line_key: eventLineKey(event),
       })),
     deploys: studio.deploys.slice(0, 10).map(({ id, folder, sha, is_green, created_at }) => ({ id, folder, sha, is_green, created_at })),
+    role_stats: studio.roles.map((role) => ({
+      role_id: role.id,
+      spent_usd: 0,
+      spent_7d_usd: 0,
+      shipped_cards: 0,
+      ...(studio.roleStats?.[text(role.id)] ?? {}),
+    })),
   };
   const cards = {
     cards: listed,
@@ -117,4 +172,56 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
     terms: studio.terms ?? POSTED_TERMS,
   };
   return { live, cards };
+}
+
+/**
+ * A card's /api/card/:id document built from the fixture the way site_card() builds it
+ * (docs/specs/supporter-pages.md), or null when the fixture has no card at the id: the card's
+ * columns, its funding, cost, first 24 supporters and their count, its newest 200 lines with a key
+ * (oldest first) and their count, its milestones, the roles on its lines and its stopped row.
+ */
+export function toCardDetail(studio: StudioFixture, id: string): Record<string, unknown> | null {
+  const own = studio.cardDetails?.[id];
+  if (own !== undefined) return own;
+  const known = new Set(studio.cards.map((card) => card.id));
+  const table = [...studio.cards, ...(studio.stopped ?? []).filter((row) => !known.has(row.card_id)).map(stoppedAsCard)];
+  const card = table.find((row) => row.id === id);
+  if (card === undefined) return null;
+  const funding = studio.funding.find((row) => row.card_id === id);
+  const stoppedRow = (studio.stopped ?? []).find((row) => row.card_id === id) ?? null;
+  const spent = studio.spend.find((row) => row.card_id === id)?.spent_usd ?? stoppedRow?.spent_usd ?? 0;
+  const supporters = [...(studio.supporters?.[id] ?? [])].sort((a, b) => a.number - b.number);
+  const events = studio.events
+    .filter((event) => event.card_id === id)
+    .sort((a, b) => text(a.created_at).localeCompare(text(b.created_at)) || text(a.id).localeCompare(text(b.id)));
+  const lined = events.filter((event) => eventLineKey(event) !== 'none');
+  const gate = [...events].reverse().find((event) => event.type === 'gate_pass' || event.type === 'gate_fail');
+  const roleIds = new Set([card.executor_role_id, ...lined.map((event) => event.role_id)].filter((value): value is string => typeof value === 'string'));
+  return {
+    card: {
+      commit_sha: null,
+      failing_check: null,
+      acceptance_test: null,
+      opens_at: null,
+      board_vetoed: false,
+      board_veto_reason: null,
+      drafter_role_id: null,
+      ...card,
+    },
+    funding: funding === undefined ? null : { contributors: Number(funding.contributors), credited_usd: funding.credited_usd, on_card_usd: card.funded_usd },
+    spent_usd: spent,
+    supporters: supporters.slice(0, 24),
+    supporter_count: supporters.length,
+    lines: lined.slice(-200).map((event) => ({ role_id: event.role_id, line_key: eventLineKey(event), created_at: event.created_at })),
+    line_count: lined.length,
+    milestones: {
+      created_at: card.created_at,
+      started_at: events.find((event) => event.type === 'start')?.created_at ?? null,
+      gate_at: gate?.created_at ?? null,
+      gate: gate === undefined ? null : gate.type === 'gate_pass' ? 'passed' : 'failed',
+      live_at: card.live_at ?? null,
+    },
+    roles: studio.roles.filter((role) => roleIds.has(text(role.id))).map((role) => ({ id: role.id, name: role.name, title: role.title })),
+    stopped: stoppedRow,
+  };
 }

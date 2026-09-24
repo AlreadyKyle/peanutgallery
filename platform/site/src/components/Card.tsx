@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { categoryOf, faceOf, sourceLabel, type Face } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
@@ -59,13 +60,23 @@ export type CardFaceProps = {
   changed?: readonly SpecRow[];
   /** The title takes focus from script (the fund grid's Show all moves focus to it). */
   focusable?: boolean;
+  /**
+   * A building or checks face links the card's own page, "Watch how it's built", in live mode
+   * (docs/specs/supporter-pages.md). The card's own page draws its face with this off.
+   */
+  watch?: boolean;
+  /**
+   * A hidden copy that only holds a slot's height (Replay.tsx): its title carries no id, so the id the
+   * visible face's links point at stays unique.
+   */
+  ghost?: boolean;
 };
 
 /**
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
@@ -78,7 +89,7 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         <SuitTag suit={categoryOf(card)} />
         <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
-      <h3 id={titleId} tabIndex={focusable ? -1 : undefined}>
+      <h3 id={ghost ? undefined : titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}
       </h3>
       {/* The byline shares the summary's block, so a card keeps its four parts and a card no agent
@@ -95,7 +106,8 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         {shown === 'rejected' ? (
           <>
             {reason === undefined ? null : <p className="card-meta">{reason}</p>}
-            <p className="card-meta">{legal.notBuiltMoney}</p>
+            {/* A real card's own page says where its money went, card by card, below the face. */}
+            {mode === 'sample' ? <p className="card-meta">{legal.notBuiltMoney}</p> : null}
           </>
         ) : shown === 'live' ? (
           <>
@@ -115,6 +127,13 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         ) : (
           <CardMoney card={card} snapshot={snapshot} titleId={titleId} who={whoOn(card, snapshot)} mode={mode} changed={changed} />
         )}
+        {watch && mode === 'live' && (shown === 'building' || shown === 'checks') ? (
+          <p className="card-watch">
+            <Link to={`/card/${card.id}`} aria-describedby={titleId}>
+              {copy.cardPage.watchBuilt}
+            </Link>
+          </p>
+        ) : null}
         {mode === 'example' ? null : <Brief intent={card.intent} />}
       </div>
     </li>

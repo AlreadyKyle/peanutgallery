@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
@@ -70,10 +71,13 @@ function sourceOf(value: Snapshot): StudioSource {
 }
 
 function renderLedger(source: StudioSource | null) {
+  // Stopped rows link each card's own page, so the ledger renders inside a router.
   return render(
-    <SourceProvider source={source}>
-      <Ledger />
-    </SourceProvider>,
+    <MemoryRouter>
+      <SourceProvider source={source}>
+        <Ledger />
+      </SourceProvider>
+    </MemoryRouter>,
   );
 }
 

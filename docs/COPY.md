@@ -55,6 +55,12 @@ The site is a quiet, precise table with real cards on it. The words match: plain
 - **Inside the font.** Every character in `copy.ts` and `legal.ts` is inside the font subset `platform/site/scripts/fonts.sh` cuts: Basic Latin, Latin-1, U+2010 to U+2027 and U+2212. Arrows are glyphs, never characters. **(tested)**
 - **No origin story for the name**, and no theatre, balcony, curtain or seat imagery in words either.
 
+## Supporters and agent steps
+
+- **A supporter is a number.** "Supporter 12", or "Founding supporter 3" for a first payment before Go live; never a name, an email, an amount or a time beside it. A card lists the first 24 in number order, then "and n more", or says "No supporters yet." (`legal.ts`)
+- **Agent steps are fixed lines.** Each event says one line from its key in `copy.eventLines` ("read a file", "ran a command", "handed in its change", "passed the checks"), a run by the same agent on the same card collapses into one with a count ("Builder A read 12 files"), and a step with no line never shows. No path, command, message or tool output is ever quoted.
+- **/thanks says what the payment did, in its own words** (`legal.thanks`): "Recording your payment…" while it waits, then "Thank you" with "You are Supporter 12." and one state line per card reached ("Open for funding", "Funded and waiting for the agents.", "Being built now.", "Being checked.", "Live."), and the held, waiting, reversed and terms lines. The board's test payment and a visit with no session get a plain thank-you.
+
 ## Still true
 
 These carry over from the design guide:

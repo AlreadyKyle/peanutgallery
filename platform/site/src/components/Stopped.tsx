@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import { formatDate, formatInteger, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
@@ -5,7 +6,8 @@ import type { Snapshot, StoppedCard } from '../lib/source';
 
 // Kernel (docs/specs/money-surfaces.md): /ledger's Stopped band, the one public list of rejected and
 // paused cards (R14, L02), from public_stopped_cards. Rows, never card faces (DESIGN.md, Rows): the
-// date it stopped in the rail, then its title, why in plain words and its money. A paused card keeps
+// date it stopped in the rail, then its title linking the card's own page (docs/specs/supporter-pages.md),
+// why in plain words and its money. A paused card keeps
 // its money; a card that didn't ship says who funded it and where its unspent money went. Each list
 // is drawn only with rows, and the component draws nothing with none.
 
@@ -49,23 +51,44 @@ function PausedTag() {
   );
 }
 
-function StoppedRow({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
+/**
+ * A stopped card's reason and money trail: why it stopped, what it spent, who funded it and where its
+ * unspent money went (or that a paused card keeps its money). /ledger's row and the card's own page
+ * (docs/specs/supporter-pages.md) say it in the same words.
+ */
+export function StoppedFacts({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
   const spent = `${formatUsd(card.spent_usd)} ${legal.spent}`;
   const paused = card.stage === 'paused';
   const funded = paused ? null : fundedBy(card, snapshot);
   const moved = paused ? null : movedLine(card);
   return (
+    <>
+      <p data-stopped="reason">{stopReason(card)}</p>
+      <p className="row-meta">
+        {paused ? <PausedTag /> : null}
+        <span className="card-meta" data-stopped="money">
+          {[spent, funded].filter((part): part is string => part !== null).join(' · ')}
+        </span>
+      </p>
+      {paused ? <p className="muted">{legal.pausedMoneyStays}</p> : null}
+      {moved === null ? null : (
+        <p className="muted" data-stopped="moved">
+          {moved}
+        </p>
+      )}
+    </>
+  );
+}
+
+function StoppedRow({ card, snapshot }: { card: StoppedCard; snapshot: Snapshot }) {
+  return (
     <li data-card={card.card_id}>
       <span className="row-time">{formatDate(card.stopped_at)}</span>
       <div className="row-body">
-        <h4 className="row-title">{card.title}</h4>
-        <p>{stopReason(card)}</p>
-        <p className="row-meta">
-          {paused ? <PausedTag /> : null}
-          <span className="card-meta">{[spent, funded].filter((part): part is string => part !== null).join(' · ')}</span>
-        </p>
-        {paused ? <p className="muted">{legal.pausedMoneyStays}</p> : null}
-        {moved === null ? null : <p className="muted">{moved}</p>}
+        <h4 className="row-title">
+          <Link to={`/card/${card.card_id}`}>{card.title}</Link>
+        </h4>
+        <StoppedFacts card={card} snapshot={snapshot} />
       </div>
     </li>
   );

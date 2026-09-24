@@ -16,7 +16,7 @@ import { siteEnv } from '../lib/env';
 import { formatDateTime, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
 import { deal, flip, fundTick, slam } from '../lib/motion';
-import { runsCards } from '../lib/roster';
+import { teamStrip } from '../lib/roster';
 import type { Card, Role, Snapshot } from '../lib/source';
 import { useStudio } from '../lib/studio';
 
@@ -714,7 +714,7 @@ function PaperBand() {
 // ---------------------------------------------------------------- band 3: ink
 
 function InkBand({ studio }: { studio: ReturnType<typeof useStudio> }) {
-  const roles = studio.state === 'ready' ? studio.snapshot.roles.filter((role) => runsCards(role)).slice(0, 3) : [];
+  const roles = studio.state === 'ready' ? teamStrip(studio.snapshot) : [];
   return (
     <div className="band">
       <section className="section" aria-labelledby="guide-ink">

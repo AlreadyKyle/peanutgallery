@@ -71,6 +71,11 @@ describe('the public site kernel imports only kernel code', () => {
       'components/MoneyIn.tsx',
       'components/Stopped.tsx',
       'components/PausedNotice.tsx',
+      'pages/Thanks.tsx',
+      'lib/thanks.ts',
+      'lib/card-source.ts',
+      'lib/lines.ts',
+      'components/Supporters.tsx',
     ]) {
       expect(kernelSiteFiles, file).toContain(`${SITE_SRC}/${file}`);
     }

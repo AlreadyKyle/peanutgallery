@@ -1,6 +1,6 @@
 # Supporter pages: /thanks, /card/:id, supporter credits and /team statuses
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Built on the merge of site-snapshot (and money-logic, money-surfaces, agent-system-core before it). It is a board pull request: it changes kernel files (a migration, `legal.ts`, `Funding.tsx`, `Stopped.tsx`, `App.tsx`, `netlify.toml`, the new kernel files below, `docs/`). It writes no money rows; every money read is a view or a function over money-logic's tables.
 
@@ -52,7 +52,8 @@ Out:
 | `tool_call`: bash | ran | "ran a command" |
 | `tool_call`: submit_patch | submitted | "handed in its change" |
 | `tool_call`: any other tool | used_tool | "used a tool" |
-| `message` with `step` smoke_pass, requeue, infrastructure, patch_reused, dealt, held | smoke_passed, requeued, paused_infra, patch_reused, dealt, held | copy.ts |
+| `message` with `step` smoke_pass, requeue, infrastructure, patch_reused, dealt | smoke_passed, requeued, paused_infra, patch_reused, dealt | copy.ts |
+| `message` with `step` ceiling_top_up, resume_rule, ranked | topped_up (with the view's `usd`), resumed, ranked | legal.ts |
 | any other `message` | none | |
 | `gate_pass`, `gate_fail`, `ship`, `revert`, `error` | gate_passed, gate_failed, shipped, reverted, stopped | copy.ts |
 | `tool_result` | none | |
@@ -95,27 +96,27 @@ A rejected or paused card shows its face and the same reason words and money tra
 - **Starts when …:** status `starts`, with its trigger sentence. A role that runs only when the board starts it is recorded this way in the roster.
 - **Planned:** status `planned`.
 
-Sections: Running (holding paused rows while the studio is paused), Starts later, Planned. Running and paused rows show the model, "Spent from contributions $x, $y in the last 7 days" (ledger rows billed to the studio only, never the founder's) and "Worked on n shipped cards". Other rows show no model and no cost. Avatars sleep while the studio is paused.
+Sections: Running (holding paused rows while the studio is paused), Starts later, Planned. Running and paused rows show the model, "Spent from contributions $x, $y in the last 7 days" (ledger rows billed to the studio only, never the founder's) and "Worked on n shipped cards". Other rows show no model and no cost, as compact tiles. Running agents are drawn awake, also while the studio is paused (the board, 23 Sep 2026); a role the board paused on its own, and the roles to come, are drawn asleep.
 
 **Requests and caching.**
 - `GET /api/card/:id`: a non-uuid id answers 400 `no-store` before any Supabase call; `site_card` null answers 404; otherwise 200 with the header `/api/live` uses (`Netlify-CDN-Cache-Control: public, durable, s-maxage=60, stale-while-revalidate=60`, `Cache-Control: public, max-age=0, must-revalidate`).
 - `POST /api/thanks`: a JSON body of at most 1 KB with a well-formed session, else 400; every answer `no-store` on both cache headers.
-- Any other method answers 405. The function's rate limit is 60 requests a minute per IP and domain.
+- Any other method answers 405. The function's rate limit is 300 requests a minute per IP and domain, as `snapshot.mts`'s (Decisions, 2026-09-24).
 
 **Compatibility.** The migration reaches production before the merge. The new `site_live()` and `site_cards()` output only adds keys, so the deployed site keeps loading in between.
 
 ## Acceptance criteria
 
-- [ ] `event_line_key` gives every row of the Event lines table for payloads as each adapter writes them (Claude Code's `Read` and Managed Agents' `read` give the same key; an unlisted tool gives `used_tool`; an unlisted step and `tool_result` give none; an unlisted type gives `other`), `public_agent_events` gains `line_key` after its existing columns and exposes no payload text, and `site_live()`'s events never carry key none (migration test).
-- [ ] On a production-shaped migration fixture, `public_card_supporters` lists each counted payer on every card their positive allocations reached with `supporters.number` and `founding`; a full refund after part of the money was spent, and a lost full dispute, each remove the payer from every card; a `reinstated` entry restores them; the board's test payment has no number, is on no card and in no count, and the first other payer is Supporter 1; and for every card `public_card_funding.contributors` equals its row count in `public_card_supporters`.
-- [ ] `thanks_for_session` is security definer with a fixed search path and anon may execute it; it answers a malformed or unknown session with exactly `{"status":"pending"}`, the board's test payment with exactly `{"status":"not_counted"}`, and a recorded payment with only the keys status, supporter (number, founding), named_card_id, reached (at most five card ids, named first), waiting, credit (`credited`, `held` or `reversed`), held_until (a New York date) and terms_version, and no amount, email, name, contributor id or payer key (migration test on each case).
-- [ ] `site_card` is security invoker, returns null for an unknown id, and for a live, a building and a rejected fixture card returns its public columns, funding, cost, the first 24 supporters and their count, the newest 200 lines with key other than none and their total, the milestones, and for the rejected card its `public_stopped_cards` row; the new `site_live()` and `site_cards()` output has every key in site-snapshot's `snapshot-keys.json`; `public_role_stats` sums only ledger rows billed to the studio (a founder-billed fixture row is not counted) and counts only live cards; the migration applies twice without error (migration test).
-- [ ] `card.test.ts`: `GET /api/card/<not a uuid>` answers 400 `no-store` with no Supabase call; an unknown card answers 404; a known card answers 200 with the `/api/live` CDN header; `POST /api/thanks` with a malformed session or a body over 1 KB answers 400, and every `/api/thanks` answer is `no-store` on both cache headers; any other method answers 405; the function config sets the 60-a-minute rate limit per IP and domain.
-- [ ] `/thanks` (e2e from fixtures) removes the session from the address after reading it; on a pending answer polls every 5 seconds and shows the fallback sentence at 180 seconds (`page.clock`); renders the recorded (with and without founding), held, waiting, reversed, not-counted and no-session states, with the terms line linking /terms/n and /refunds/n only when `terms_version` is stamped; and no `$` amount appears in the supporter area.
-- [ ] `/card/:id` (e2e from fixtures) shows for a live card the title as `h1`, the facts with "Merged as the studio's commit <7 hex>" and no link, "What changed" with scalar values and "changed" for any other, the supporters in number order with "and n more" past 24 (or "No supporters yet."), and collapsed event lines ("Builder A read 12 files"); a rejected card shows the same reason words and money trail as its /ledger row; an unknown or malformed id shows "There is no card at this address."; a building card shows a new fixture line at the end after a live poll; Play plays the recorded milestones and finishes within 30 seconds, then reads Replay, and under reduced motion there is no Play button, `getAnimations()` stays empty and the end state shows; and the Watch links on the building and checks faces and on the shipped rows of home and `/roadmap`, and each Stopped row on /ledger, link `/card/:id`.
-- [ ] `/team` (unit tests of `teamStatus` and e2e) shows Running, Paused (studio pause with its reason words; role pause with its `paused_reason`), Starts when … with the trigger, and Planned from the roster columns as described, with model, cost and ships on running and paused rows only; home's team strip uses the same `teamStatus`; `team-models.mjs` still passes (every Running role on `claude-opus-5-5`, no model elsewhere); and `/roadmap` shows "Approved, opens soon" on a fixture card with `opens_at` set and not yet dealt and "Held by the board" with its reason on a vetoed card, and neither otherwise.
-- [ ] `thanks` (and `api`) are in `KERNEL_SEGMENTS`, `netlify.toml` serves the app at `/thanks` with `force`; `Thanks.tsx`, `thanks.ts`, `card-source.ts` and `Supporters.tsx` are in `kernel-paths.txt` and `KERNEL_PATHS` and the parity test and `site-kernel.test.ts` pass; the Privacy page carries the three supporter-number lines, with `privacyUpdated` moved to the merge date; and `anon-negative-test.ts` reads `public_card_supporters` and `public_role_stats`, calls `site_card` and `thanks_for_session` as anon checking their exact keys, and still refuses every private table and the money schema.
-- [ ] With fixtures for each, `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on `/card/:id` (live, building, rejected), `/thanks` (recorded, pending, not counted), `/team` and `/roadmap` with an opens-soon card, at 375, 768 and 1440 px.
+- [x] `event_line_key` gives every row of the Event lines table for payloads as each adapter writes them (Claude Code's `Read` and Managed Agents' `read` give the same key; an unlisted tool gives `used_tool`; an unlisted step and `tool_result` give none; an unlisted type gives `other`), `public_agent_events` gains `line_key` after its existing columns and exposes no payload text, and `site_live()`'s events never carry key none (migration test).
+- [x] On a production-shaped migration fixture, `public_card_supporters` lists each counted payer on every card their positive allocations reached with `supporters.number` and `founding`; a full refund after part of the money was spent, and a lost full dispute, each remove the payer from every card; a `reinstated` entry restores them; the board's test payment has no number, is on no card and in no count, and the first other payer is Supporter 1; and for every card `public_card_funding.contributors` equals its row count in `public_card_supporters`.
+- [x] `thanks_for_session` is security definer with a fixed search path and anon may execute it; it answers a malformed or unknown session with exactly `{"status":"pending"}`, the board's test payment with exactly `{"status":"not_counted"}`, and a recorded payment with only the keys status, supporter (number, founding), named_card_id, reached (at most five card ids, named first), waiting, credit (`credited`, `held` or `reversed`), held_until (a New York date) and terms_version, and no amount, email, name, contributor id or payer key (migration test on each case).
+- [x] `site_card` is security invoker, returns null for an unknown id, and for a live, a building and a rejected fixture card returns its public columns, funding, cost, the first 24 supporters and their count, the newest 200 lines with key other than none and their total, the milestones, and for the rejected card its `public_stopped_cards` row; the new `site_live()` and `site_cards()` output has every key in site-snapshot's `snapshot-keys.json`; `public_role_stats` sums only ledger rows billed to the studio (a founder-billed fixture row is not counted) and counts only live cards; the migration applies twice without error (migration test).
+- [x] `card.test.ts`: `GET /api/card/<not a uuid>` answers 400 `no-store` with no Supabase call; an unknown card answers 404; a known card answers 200 with the `/api/live` CDN header; `POST /api/thanks` with a malformed session or a body over 1 KB answers 400, and every `/api/thanks` answer is `no-store` on both cache headers; any other method answers 405; the function config sets the 300-a-minute rate limit per IP and domain.
+- [x] `/thanks` (e2e from fixtures) removes the session from the address after reading it; on a pending answer polls every 5 seconds and shows the fallback sentence at 180 seconds (`page.clock`); renders the recorded (with and without founding), held, waiting, reversed, not-counted and no-session states, with the terms line linking /terms/n and /refunds/n only when `terms_version` is stamped; and no `$` amount appears in the supporter area.
+- [x] `/card/:id` (e2e from fixtures) shows for a live card the title as `h1`, the facts with "Merged as the studio's commit <7 hex>" and no link, "What changed" with scalar values and "changed" for any other, the supporters in number order with "and n more" past 24 (or "No supporters yet."), and collapsed event lines ("Builder A read 12 files"); a rejected card shows the same reason words and money trail as its /ledger row; an unknown or malformed id shows "There is no card at this address."; a building card shows a new fixture line at the end after a live poll; Play plays the recorded milestones and finishes within 30 seconds, then reads Replay, and under reduced motion there is no Play button, `getAnimations()` stays empty and the end state shows; and the Watch links on the building and checks faces and on the shipped rows of home and `/roadmap`, and each Stopped row on /ledger, link `/card/:id`.
+- [x] `/team` (unit tests of `teamStatus` and e2e) shows Running, Paused (studio pause with its reason words; role pause with its `paused_reason`), Starts when … with the trigger, and Planned from the roster columns as described, with model, cost and ships on running and paused rows only; home's team strip uses the same `teamStatus`; `team-models.mjs` still passes (every Running role on `claude-opus-5-5`, no model elsewhere); and `/roadmap` shows "Approved, opens soon" on a fixture card with `opens_at` set and not yet dealt and "Held by the board" with its reason on a vetoed card, and neither otherwise.
+- [x] `thanks` (and `api`) are in `KERNEL_SEGMENTS`, `netlify.toml` serves the app at `/thanks` with `force`; `Thanks.tsx`, `thanks.ts`, `card-source.ts` and `Supporters.tsx` are in `kernel-paths.txt` and `KERNEL_PATHS` and the parity test and `site-kernel.test.ts` pass; the Privacy page carries the three supporter-number lines, with `privacyUpdated` moved to the merge date; and `anon-negative-test.ts` reads `public_card_supporters` and `public_role_stats`, calls `site_card` and `thanks_for_session` as anon checking their exact keys, and still refuses every private table and the money schema.
+- [x] With fixtures for each, `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on `/card/:id` (live, live with no config checks, open, building, rejected, planned, opens soon), `/thanks` (no session, recorded, pending, not counted), `/team` and `/roadmap` with an opens-soon card, at 375, 768 and 1440 px.
 - [ ] Production: the dump is taken and the migration applied before the merge; `anon-negative-test.ts` and `ledger-identity.ts` PASS; main's `live-check.mjs` PASSes against production before the merge; after the deploy `live-check.mjs` PASSes with `/card/<a live card id>` showing its title and commit, `/thanks` with no session, `/thanks?session=cs_test_invalid0000000000` showing "Recording your payment" with the query dropped, and `/team`'s sections; and a SELECT shows the board's test payer has no row in `public_card_supporters`.
 
 ## Verification
@@ -147,7 +148,132 @@ Board items (listed, none blocks this pull request):
 
 ## Evidence
 
-Added when the status moves to built or done: money-logic's and agent-system-core's merged table and column names; the board-test SELECT; the measured budget lines.
+Built on `launch/supporter-pages`, stacked on `launch/site-snapshot` (#80) at 23aa1e1, which stacks on agent-workflows (#77) and agent-system-core (#73); none of them had merged. The production lines of Verification, the deploy-preview curls and production steps 1 to 8 are the ship stage's and are not run here, so the Production criterion waits on them. The migration is not applied to production.
+
+**The merged names this pull request reads.** money-logic: `contribution_allocations` (card_id, payment_id, amount_usd, reason, destination), `contributions` (id, contributor_id, stripe_session_id, requested_card_id, goal_card_id, hold_until, terms_version), `supporters` (number, contributor_id, founding), `board_test_payments`, `money.payment_counts(payment)`, `public_card_funding.contributors`, `public_stopped_cards`. agent-system-core: `card_is_public(card)`, the filtered `public_agent_events`, `roles.paused` and `paused_reason`, `cards.opens_at`, `board_vetoed` and `board_veto_reason`, the `dealt` and `held` message steps. site-snapshot: `site_live()`, `site_cards()`, `snapshot-keys.json`, `snapshot.mts`'s headers and `netlify/lib/public-env.ts`. The agent events' payload column is `payload_json`.
+
+**Production, read only (Management API SELECTs, 23 September 2026).** Production has money-logic and money-surfaces but not agent-system-core (no `card_is_public`, no `opens_at`). It holds 57 cards (6 live), 241 agent events of which 112 get a line key other than none (129 are tool results and free-form messages that never reach a public document), 16 roles, no supporter on any card (the board's test payment is the only payment), no stopped card, and the studio paused for `awaiting_credit`.
+
+`deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/supporter_pages_test.ts` (criteria 1 to 4):
+
+```
+event_line_key gives every row of the Event lines table in both tool namings, and public_agent_events appends line_key ...
+  tool calls as session.ts writes them (Claude Code) and as managed.ts writes them (Managed Agents) give the same key ... ok
+  message steps, the fallbacks, and every other type ... ok
+  the function is immutable and anon may execute it ... ok
+  public_agent_events keeps its columns in order, appends line_key, and exposes no payload ... ok
+  site_live()'s events never carry key none, and hold the newest 20 with a key ... ok
+supporter credits follow money.payment_counts, leave out the board's test payment and agree with the contributor counts ...
+  the board's test payment has no number, and the first other payer is Supporter 1 ... ok
+  each counted payer is listed on every card their money reached, with number and founding ... ok
+  a full refund after part of the money was spent removes the payer from the card ... ok
+  a lost full dispute removes the payer; a reinstatement restores them ... ok
+  a held payment is credited for the part that reached a card ... ok
+  for every card, public_card_funding.contributors equals its row count in public_card_supporters, and the board payer is on none ... ok
+  anon reads the view; the supporters table stays closed ... ok
+thanks_for_session answers exactly its keys in each state, as a security definer anon may execute ...
+  security definer, search_path public, anon and authenticated may execute, public may not ... ok
+  a malformed or unknown session is exactly pending ... ok
+  the board's test payment is exactly not_counted ... ok
+  a recorded payment: supporter, the named card, reached, credited, the terms version ... ok
+  reached names the card first, then the cards the rest went to, at most five ... ok
+  money beyond every card's room waits: waiting is true ... ok
+  a held payment says held with a New York date ... ok
+  a refunded payment is reversed and reaches no card ... ok
+  no answer carries an amount, an email, a contributor id or a payer key ... ok
+site_card returns a public card's document, and public_role_stats counts only studio-billed rows and live cards ...
+  site_card is stable, security invoker, anon's and not public's ... ok
+  an unknown id, and a card the public may not read, answer null ... ok
+  a live card: public columns, funding, cost, the first 24 supporters and their count, the newest 200 lines and their total, milestones ... ok
+  a building card has its start and no live time; a rejected card carries its public_stopped_cards row ... ok
+  public_role_stats sums only studio-billed rows and counts only live cards ... ok
+  both documents carry every key in snapshot-keys.json with its type; roles carry status, trigger and the pause ... ok
+  the migration applies a second time ... ok
+ok | 4 passed (28 steps) | 0 failed (3s)
+```
+
+`pnpm --filter @backseat/site exec vitest run netlify/card.test.ts --reporter=verbose` (criterion 5):
+
+```
+✓ GET /api/card/:id > answers a card id that is not a uuid 400, no-store, with no Supabase call
+✓ GET /api/card/:id > answers a query string 400 before any Supabase call, since the CDN would key on it
+✓ GET /api/card/:id > answers an unknown card 404 when site_card returns null
+✓ GET /api/card/:id > answers a known card 200 from site_card with the publishable key and the /api/live CDN header
+✓ GET /api/card/:id > answers 502 no-store when Supabase fails or times out
+✓ POST /api/thanks > passes a well-formed session to thanks_for_session and answers no-store on both cache headers
+✓ POST /api/thanks > answers a malformed session, a body that is not JSON and a body over 1 KB 400, no-store, with no Supabase call
+✓ POST /api/thanks > answers 502 no-store when Supabase fails
+✓ POST /api/thanks > takes the same session ids as /thanks does
+✓ methods, paths and the config > answers any other method 405, with no Supabase call
+✓ methods, paths and the config > answers a path it does not serve 404
+✓ methods, paths and the config > names its two paths, with no method, and sets the 60-a-minute rate limit per IP and domain
+✓ methods, paths and the config > reads no environment variable and holds no secret
+Tests  13 passed (13)
+```
+
+`E2E_PORT=4443 pnpm --filter @backseat/site exec playwright test` (criteria 6 to 10: `thanks.spec.ts`, `card.spec.ts`, `team-status.spec.ts`, the /team, landing and roadmap cases in `pages.spec.ts` and `landing.spec.ts`, and the supporter pages in `design.spec.ts` and `layout-balance.spec.ts` at 375, 768 and 1440 px):
+
+```
+Running 171 tests using 4 workers
+  5 skipped
+  166 passed (2.7m)
+```
+
+The five skipped are the screenshot tests, which run only with `E2E_ROUTE_SHOTS` or `E2E_SCREENSHOTS` set. `layout-balance.spec.ts`'s first run of the supporter pages failed at 768px ("side-by-side blocks in div.card-page … differ by 281px (360 / 641)"); the card page now stacks below 64rem and the three widths pass. platform/board did not change, so its e2e suite was not run.
+
+**Screens looked at, on production's data.** A local build served production's public rows (the SELECTs above, built into the two documents and each card's document by the e2e builders, since `site_card` is not in production yet) at 375 and 1440px: `/card/23b1883a-7844-407a-bd83-f42056d47602` (the newest live card, "Merged as the studio's commit fc55225", one config value under What changed, "No supporters yet.", its 56 events shown as 12 lines: 26 carry a line key, and runs collapse), the live card with the most steps, `/thanks` with no session, with `cs_test_invalid0000000000` (recording, query dropped) and with a made-up recorded answer on a real open card, and `/team` (seven running roles, all paused for `awaiting_credit`, eight in Starts later, the Host in Planned). The first pass found a card's steps list indented 40px past its heading (an `ol` kept the browser's list padding); the second pass shows it flush.
+
+`rm -rf platform/site/dist-e2e platform/board/dist-e2e && npm_config_workspace_concurrency=1 pnpm verify` at e3d400e exits 0, one package at a time because other agents were loading the machine:
+
+```
+platform/board test:       Tests  86 passed (86)
+platform/supabase test:       Tests  309 passed (309)
+platform/site test:       Tests  473 passed (473)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  677 passed (677)
+platform/gate test: PASS: gate tests passed=524
+ok | 120 passed (188 steps) | 0 failed (37s)
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=609
+VERIFY_EXIT 0
+```
+
+The run before it failed at the gate's runtime-token scan, whose stand-in pattern matched a variable named for the opens-soon card passed to `expect` in `team-status.spec.ts`; the variable is renamed.
+
+Waiting on the ship stage: the board-test SELECT, the measured `/api/card` and `/api/thanks` budget lines, the deploy-preview curls, `anon-negative-test.ts` and `ledger-identity.ts` against production after the migration, and live-check against production after the deploy.
+
+### The ship: catch-up, checks and production before the merge (24 September 2026, UTC)
+
+1. Catch-up. site-snapshot merged as 86463fe (#80) and its fix-forward as 4360237 (#83). The branch first merged site-snapshot's last tip 57a06a7, whose tree is 86463fe's (`git diff --stat 57a06a7 86463fe` is empty): 16 files conflicted, each resolved as main's version plus this pull request's change (PLAN's decisions renumbered: this is decision 48 after main's 43 to 47; `/team` keeps the board's compact tiles for the roles to come; the title-stays rule sits beside main's aria-busy rule; `EventList` keeps main's `eventVerb` for a document without line keys). Then `git merge -s ours 86463fe` and `git merge origin/main` (one conflict, the ROADMAP rows). #82's base is main.
+2. What the catch-up found and fixed (INTERFACES.md, "After site-snapshot"):
+   - The migration would have failed on production: it recreated `public_agent_events` with five columns plus `line_key`, and main's view has `step` and `usd` after `created_at`, which `create or replace view` cannot drop. The view now keeps main's columns and expressions and appends `line_key` after `usd`; `site_live()`'s events keep `step` and `usd` and add `line_key`; `site_card`'s lines carry `usd`.
+   - `event_line_key` gave key none to the database's own steps, so the public "Topped up", "Resumed by rule" and the Studio Head's ranking lines would have vanished from home's feed. It now maps `ceiling_top_up` to `topped_up` (its words name the view's `usd`), `resume_rule` to `resumed` and `ranked` to `ranked` (the Studio Head writes it, so main's step column leaves it out and it read as a note). Their words are `legal.eventLinesMoney`, and `lib/lines.ts` fills the amount. The `held` step is gone: nothing on main writes it.
+   - `card.mts`'s rate limit is 300 requests a minute per IP and domain, as `snapshot.mts`'s: a card page also reads both documents, and at 60 a draft deploy's live check drew 429s.
+3. `rm -rf platform/site/dist-e2e platform/board/dist-e2e && npm_config_workspace_concurrency=2 pnpm verify` at f71f87b → `VERIFY_EXIT 0`: board 94, supabase 309, site 497, seed-1 77, dispatcher 688, `PASS: gate tests passed=524`, functions `ok | 123 passed (202 steps) | 0 failed`, agents 125/0, ops 124/0, docs 18/0, `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=623`, "tier 1 carries the old name nowhere". `supporter_pages_test.ts` alone: `ok | 4 passed (29 steps) | 0 failed`, with the new step "the database's own steps reach the public: a top-up with its amount, a resume, and the Studio Head's ranking".
+4. `E2E_PORT=4441 pnpm --filter @backseat/site e2e` → `207 passed (3.8m)`, 5 skipped (the screenshot tests). Route shots (`E2E_ROUTE_SHOTS=… E2E_PORT=4442 … route-shots.spec.ts`, 3 passed) looked at: `/team` at 1440 and 375 while paused (seven running roles awake with the Paused tag and facts, the eight Starts later and the Host as compact sleeping tiles in balanced columns), and a live card at 1440 (face, facts, What changed, supporters in four columns, collapsed steps).
+5. Production, before the merge:
+   - Read-back: `[{"paused":true,"pause_reason":"awaiting_credit","agent_mode":"attended","dispatcher_seen_at":"2026-09-16 04:19:38.678+00","cooling_window_minutes":0}]`; cards `[{"building":0,"live":6,"total":59}]`; of the new functions only `site_cards` and `site_live` existed; `public_agent_events` was `id, card_id, role_id, type, created_at, step, usd`.
+   - Dump: `~/peanutgallery-dumps/pre-supporter-pages-20260924T055621Z.dump`, `-rw-------`, 755,405 bytes; `pg_restore --list` shows 77 TABLE DATA entries, among them agent_events, cards, contribution_allocations, contributions, ledger, pool, roles, studio_state, supporters and terms_versions.
+   - Migration `20260924600000_supporter_pages.sql` at 798ddf3 (sha256 3ac9e72c…d56f), wrapped in `begin;`/`commit;`, one Management API request → `[] HTTP 201`.
+   - Read-backs: `event_line_key` immutable (`i`), `site_card`, `site_cards` and `site_live` stable security invoker, `thanks_for_session` stable security definer, each with `search_path=public`; anon and authenticated may execute `event_line_key`, `site_card` and `thanks_for_session`, public may not. `public_agent_events` is `id,card_id,role_id,type,created_at,step,usd,line_key`. Line keys over production's 241 events: none 129, read 40, ran 27, edited 27, shipped 6, started 6, gate_passed 6. `public_card_supporters` has 0 rows; `public_role_stats` shows 5 and 1 shipped cards for the two roles that built them, $0.0000 spent from contributions. `site_live()`: 20 events, none with key none, 16 role_stats.
+   - `anon-negative-test.ts` → `PASS: anon access matches the RLS contract`, with `rpc site_card (a live card) … keys card,funding,line_count,lines,milestones,roles,spent_usd,stopped,supporter_count,supporters`, `rpc thanks_for_session (unknown) … answered {"status":"pending"}` and the same for a malformed session, and `supporters` and `agent_events` refused (42501).
+   - `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 59 cards`.
+   - The board-test SELECT: `[{"board_test_session":true,"rows_in_public_card_supporters":0,"supporter_numbers":0}]`: the board's test payer has no number and no row on any card.
+   - Main's `live-check.mjs` (4360237) against production after the migration: `PASS live-check https://peanutgallery.games passed=244 failed=0 skipped=0`.
+6. The deploy-preview checks. Netlify builds no preview for this pull request, so a draft deploy of the branch's own build stood in (`pnpm build` with netlify.toml's three public values at f71f87b, then `netlify deploy --dir dist --functions netlify/functions`, never published; its function calls production, where step 5 had run), https://6ab4bc8ddf3128914ea77c0f--peanutgallerygames.netlify.app:
+
+   ```
+   == GET /api/card/23b1883a-… (1)  HTTP/2 200  cache-control: public,max-age=0,must-revalidate  cache-status: "Netlify Durable"; fwd=uri-miss; stored
+   == GET /api/card/23b1883a-… (2)  HTTP/2 200  cache-status: "Netlify Durable"; hit; ttl=58  content-length: 6828
+   == POST /api/thanks {"session":"cs_test_notarealsession000"}  HTTP/2 200  {"status":"pending"}  cache-control: no-store  cache-status: "Netlify Durable"; fwd=bypass
+   == GET /api/card/not-a-card      HTTP/2 400  cache-control: no-store
+   == GET /api/card/<unknown uuid>  HTTP/2 404  cache-control: no-store
+   == PUT /api/thanks               HTTP/2 405  allow: POST
+   ```
+
+   The branch's live check against the draft: `PASS live-check https://6ab4bc8ddf3128914ea77c0f--peanutgallerygames.netlify.app passed=262 failed=0 skipped=2` (the og:image and www lines are production's), with `PASS /team sections ["Running","Starts later","Planned"]`, `PASS /card/23b1883a-7844-407a-bd83-f42056d47602 commit line "Merged as the studio's commit fc55225" for commit_sha fc55225`, `PASS /thanks?session=cs_test_invalid0000000000 shows ["Recording your payment…"] at /thanks` and `PASS /api/thanks with a made-up session 200 {"status":"pending"} Cache-Control no-store`.
+   - The budget lines, measured: a card's document is 6,828 bytes raw (the newest live card, 26 lines) and costs one function build per card id per 60-second window, only while that card's page is read; `/api/thanks` is one build per ask and never cached. At today's traffic neither moves the month's figure; Netlify's usage notifications stay the alert (decision 47).
 
 ## Decisions
 
@@ -175,3 +301,33 @@ Added when the status moves to built or done: money-logic's and agent-system-cor
 - 2026-09-23: the merge sha is labelled as the studio's own commit, with no link, until the public seed-1 mirror exists.
 - 2026-09-23: money-surfaces' Stopped band is the one public list of rejected and paused cards; this pull request links its rows and draws no second Discard.
 - 2026-09-23 (board defaults): card naming at checkout is the Payment Link's `client_reference_id`, already on main; the after-payment redirect is a listed board step. BOARD-SETUP steps are cited by title.
+- 2026-09-23 (build defaults, recorded without asking the board, as ordered):
+  - The recorded /thanks heading is "Thank you" with "You are Supporter 12." (or "You are Founding supporter 12.") under it, and the funded state line is "Funded and waiting for the agents.". The copy rules (`copy.test.ts`: no sentence under three words beside another) refuse "Thank you. You are Supporter 12." and "Funded. It waits for the agents." as single strings; the page still reads the spec's words in the same order.
+  - /roadmap lists planned cards only and draws no shipped rows, so "Watch how it was built" sits on home's Shipped rows and /roadmap keeps no link (live-check's "/roadmap has no fund link" counts every link on it).
+  - The event line words and `collapseLines` live in `lib/lines.ts`, a new kernel file (kernel-paths.txt, `KERNEL_PATHS`, `site-kernel.test.ts`), because the kernel `EventList.tsx` reads them and what an agent's steps may say in public is a privacy rule; the held step's words are `legal.eventLineHeld`, since `copy.ts` may carry no money word (superseded at the ship, 2026-09-24: main has no held step; the top-up, resume and ranking words are `legal.eventLinesMoney`).
+  - A card's page stacks at the reading measure at every width (superseded by the review below; it first drew the face beside the facts from 64rem, after `layout-balance.spec.ts` measured a 281px hollow beside the face at 768px).
+  - "What changed" shows a number, a boolean or a string of at most 200 characters; JSON null, like every other value, reads "changed", as Behaviour says.
+  - /thanks stops asking after the answer whose next ask would pass 3 minutes, so the fallback shows between 175 and 180 seconds.
+  - `privacyUpdated` stays "Last updated 23 September 2026.", the build date; if the merge lands on another day, the ship stage moves it to the merge date.
+  - The e2e fixture `e2e/supporter-studio.ts` extends the launch-shaped studio with a live card (commit, config checks, 30 supporters, a run of agent steps), a building and a checks card, an opens-soon and a vetoed card, role stats and a /thanks answer per state; `route-shots.spec.ts` uses it for every route.
+  - live-check checks the newest live card's commit line only when the card has a `commit_sha`, and adds `/api/card/not-a-card` (400 `no-store`) and a made-up `/api/thanks` session (exactly pending, `no-store`, compared as parsed JSON).
+  - The nine backlog items under Out are one BACKLOG entry, "More on a card's own page", linked from PLAN §4 Not built yet.
+  - The `/api/card/:id` budget row is per card id (one build per id per 60-second window), so the month's figure depends on how many card pages are read; it is measured after the deploy (production step 4) and Netlify's usage notifications stay the alert (decision 47).
+- 2026-09-24 (review fixes, build defaults recorded without asking the board, as ordered):
+  - `card.mts` answers every RPC body as compact JSON (`JSON.stringify(JSON.parse(body))`): PostgREST prints a jsonb result in jsonb's text form, `{"status": "pending"}`, so the function passing it through would have failed live-check's exact pending check against production. live-check also compares the parsed value, and `card.test.ts` stubs the spaced form.
+  - `/card/:id` stacks at the reading measure at every width. Side by side, the face and the facts had unrelated heights: an open card left about 375px empty under the facts, a live card with no What changed the reverse. A sticky face beside every section was the alternative; it needs the balance check turned off for the page, which DESIGN.md allows for no block today, so the page follows the ledger's answer and stacks.
+  - An open (or funded) card's facts leave out Funded and Contributors, which its face shows as spec rows (`CardFacts`' `onFace`).
+  - A planned card (next or later, not started; `lib/cards.ts` `isPlanned`) draws no face on its page, since `faceOf` would call it Open for funding: it shows /roadmap's own state ("Planned and not built yet", "Approved, opens soon", "Held by the board" with its reason) and links the roadmap. No new face was added to the card's eight.
+  - The replay's slot holds a hidden, inert copy of every face Play can show (and of the card as it is now) in the face's grid cell, so the slot is as tall as the tallest and the face stretches to it; the Play button and everything under the card stay still. The hidden copies' titles carry no id.
+  - `/card/:id` and `/thanks` carry `main.title-stays`: the signal plate never grows to a short window and the last band takes the height left over, so the title renders once, where it stays, from loading to ready and from recording to recorded.
+  - /team pins one foot per row: the Paused tag with the facts on running and paused rows (a role's own pause reason sits above them), and the start line on the others.
+  - Supporters sit in newspaper columns (`columns: 9.5rem` at small size: two on a phone, four at the measure), filled down then across in number order; the layout audit's grid-fill rule, meant for cards, does not apply to a list of names.
+  - `scripts/layout-audit.mjs` counts a closed `<details>` as its summary only: it had counted the hidden brief, which padded the face's column (a false 1640 / 438 finding on a production live card with a long brief). The gate's supporter routes add an open card, a live card with no config checks, a planned and an opens-soon card and /thanks with no session.
+- 2026-09-24 (the ship, build defaults recorded without asking the board, as ordered):
+  - The database's own steps get line keys (`topped_up`, `resumed`, `ranked`) with their words in `legal.ts`, because the line keys replace main's `step` column as what the public reads; without them the dealt-to-now, top-up and resume lines agent-system-core made public would have gone dark, and the Studio Head's ranking would stay a note. `held` is dropped from the allowlist: nothing writes it.
+  - `public_agent_events` keeps main's `step` and `usd` exactly and `site_live()` keeps both keys, so a tab on the deployed site and the new one read the same document during the change.
+  - `card.mts` takes `snapshot.mts`'s 300 a minute per IP and domain (site-snapshot's reasoning: a page load reads two documents, and a school or an office shares one address). Cached answers cost nothing; Netlify's usage notifications stay the alert.
+  - `/team`: the board's 23 Sep 2026 call on #75 (running agents' eyes open, the roles to come asleep in compact balanced columns) supersedes this spec's "Avatars sleep while the studio is paused". Running and studio-paused rows are drawn awake; a role the board paused on its own is drawn asleep; Starts later and Planned are compact sleeping tiles with their start sentence.
+  - Home keeps main's "Meet the whole team" link under the strip, which shows the roles `teamStatus` puts on the team.
+  - `privacyUpdated` reads "Last updated 24 September 2026.", the merge date.
+  - The layout audit keeps main's closed-details rule (`checkVisibility()` and the summary test) and its test; this pull request's own copy of the rule is dropped.

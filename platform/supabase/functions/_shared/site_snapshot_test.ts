@@ -230,7 +230,8 @@ Deno.test("with 1,100 live cards and cards on every other stage, both documents 
     await s.insertCards("live", 1100, "2026-01-01T00:00:00Z");
     await s.insertCards("rejected", 60, "2026-02-01T00:00:00Z");
     for (const stage of ["proposed", "designing", "voted", "funded", "building", "gated", "paused"]) await s.insertCards(stage, 2, "2026-03-01T00:00:00Z");
-    for (let k = 0; k < 25; k += 1) await s.db.query(`insert into public.agent_events (role_id, type, created_at) values ($1, 'message', now() - make_interval(mins => $2))`, [s.roleId, k]);
+    // Events with a public line (supporter-pages leaves a message with no step out of the documents).
+    for (let k = 0; k < 25; k += 1) await s.db.query(`insert into public.agent_events (role_id, type, created_at) values ($1, 'start', now() - make_interval(mins => $2))`, [s.roleId, k]);
     for (let k = 0; k < 12; k += 1) await s.db.query(`insert into public.deploys (folder, sha, is_green, created_at) values ('seed-1', $1, true, now() - make_interval(mins => $2))`, [`sha${k}`, k]);
 
     const expected = async (stage: string, order: string, limit: number | null) =>

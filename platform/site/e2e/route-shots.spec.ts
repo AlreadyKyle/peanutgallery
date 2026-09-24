@@ -1,10 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from './fixtures';
-import { LIVE_STUDIO } from './live-studio';
+import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Full-page screenshots of every public route at 375, 768 and 1440px with reduced motion, on the
-// live-shaped fixture, for a design review (docs/specs/home-and-design.md). Set E2E_ROUTE_SHOTS to a
+// live-shaped fixture (supporter-studio.ts), for a design review (docs/specs/home-and-design.md). Set E2E_ROUTE_SHOTS to a
 // folder to save them; without it the test is skipped.
 const SHOTS = process.env.E2E_ROUTE_SHOTS ?? '';
 const ROUTES: [string, string][] = [
@@ -20,9 +20,11 @@ const ROUTES: [string, string][] = [
   ['contact', '/contact'],
   ['not-found', '/no-such-page'],
   ['guide', '/design-kit-7q4m'],
+  ...SUPPORTER_ROUTES,
 ];
 
-test.use({ studio: LIVE_STUDIO });
+// The launch-shaped studio with the supporter pages' cards, supporters and /thanks answers.
+test.use({ studio: SUPPORTER_STUDIO });
 
 test.describe('route screenshots', () => {
   test.skip(SHOTS === '', 'set E2E_ROUTE_SHOTS to save them');

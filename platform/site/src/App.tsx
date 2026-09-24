@@ -10,17 +10,19 @@ import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
+import { Thanks } from './pages/Thanks';
 import { pageNav, pageRoutes, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
-// the Contribute, Ledger and legal pages, each Terms and Refunds version among them. The card lane's pages come from routes.tsx and never take one of these paths.
+// the Contribute, Ledger, legal and /thanks pages, each Terms and Refunds version among them. The card lane's pages come from routes.tsx and never take one of these paths.
 
 /**
- * First path segments only the kernel uses; /board is here so it stays the not found page, and /api
- * is the snapshot function's (netlify/functions/snapshot.mts, docs/specs/site-snapshot.md).
+ * First path segments only the kernel uses; /board is here so it stays the not found page, /api is
+ * the site's functions' (netlify/functions, docs/specs/site-snapshot.md), and /thanks is where
+ * Stripe's redirect lands (docs/specs/supporter-pages.md).
  */
-export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api'];
+export const KERNEL_SEGMENTS: readonly string[] = ['contribute', 'ledger', 'terms', 'privacy', 'refunds', 'contact', 'board', 'api', 'thanks'];
 
 /**
  * The card lane's routes this frame mounts: the landing at /, and pages whose first path segment is
@@ -69,6 +71,7 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
           <Route path="/refunds" element={<Refunds />} />
           <Route path="/refunds/:version" element={<RefundsVersion />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/thanks" element={<Thanks />} />
           {cardRoutes(pageRoutes).map((route) => (
             <Route key={route.path} path={route.path} element={route.element} />
           ))}

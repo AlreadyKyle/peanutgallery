@@ -3,26 +3,26 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
-import { formatDate } from '../lib/format';
 import type { Card, Role, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { Team } from './Team';
 
 const team = copy.team;
 
-const ROLES: [string, boolean, string][] = [
-  ['Studio Head', true, 'claude-opus-5-5'],
-  ['Game Director', true, 'claude-opus-5-5'],
-  ['Builder A', true, 'claude-sonnet-5'],
-  ['Builder B', true, 'claude-sonnet-5'],
-  ['Platform Builder', true, 'claude-sonnet-5'],
-  ['QA', true, 'claude-sonnet-5'],
-  ['Host', false, 'claude-haiku-4-5'],
-  ['Biz Dev', false, 'claude-sonnet-5'],
-  ['Community', false, 'claude-sonnet-5'],
+// title, write access, model, roster status, trigger.
+const ROLES: [string, boolean, string, string, string | null][] = [
+  ['Studio Head', true, 'claude-opus-5-5', 'running', null],
+  ['Game Director', true, 'claude-opus-5-5', 'running', null],
+  ['Builder A', true, 'claude-opus-5-5', 'running', null],
+  ['Builder B', true, 'claude-opus-5-5', 'running', null],
+  ['Platform Builder', true, 'claude-opus-5-5', 'running', null],
+  ['QA', true, 'claude-opus-5-5', 'running', null],
+  ['Host', false, 'claude-haiku-4-5', 'planned', 'No trigger is set yet; the Host waits on the stream.'],
+  ['Biz Dev', false, 'claude-opus-5-5', 'starts', 'Starts last, once every other role is built.'],
+  ['Community', false, 'claude-opus-5-5', 'starts', 'Starts once a named moderator is in place.'],
 ];
 
-function role([title, write_access, model]: [string, boolean, string]): Role {
+function role([title, write_access, model, status, trigger]: [string, boolean, string, string, string | null]): Role {
   return {
     id: `r-${title.toLowerCase().replace(/\s+/g, '-')}`,
     name: title,
@@ -33,6 +33,10 @@ function role([title, write_access, model]: [string, boolean, string]): Role {
     write_access,
     state: 'active',
     hired_at: '2026-09-14T00:00:00Z',
+    status,
+    trigger,
+    paused: false,
+    paused_reason: null,
   };
 }
 
@@ -70,6 +74,10 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     events: [],
     deploys: [],
     roles: ROLES.map(role),
+    roleStats: {
+      'r-builder-a': { spent_usd: 1.5, spent_7d_usd: 0.25, shipped_cards: 2 },
+      'r-qa': { spent_usd: 0, spent_7d_usd: 0, shipped_cards: 1 },
+    },
     cardTitles: {},
     missing: [],
     ...overrides,
@@ -104,58 +112,76 @@ afterEach(() => {
   cleanup();
 });
 
+const facts = (model: string, total: string, week: string, ships: string) =>
+  `${model} · ${legal.teamSpent.replace('{total}', total).replace('{week}', week)} · ${ships}`;
+
 describe('Team', () => {
-  it('splits the roles into running and building no cards from facts, not labels', async () => {
+  it('puts the roles in Running, Starts later and Planned from the roster columns', async () => {
     renderTeam(sourceOf(snapshot()));
     const running = await screen.findByRole('region', { name: team.running });
-    expect(names(running)).toEqual(['Builder A', 'Builder B', 'QA']);
-    const waiting = screen.getByRole('region', { name: team.notRunning });
-    expect(names(waiting)).toEqual(['Studio Head', 'Game Director', 'Platform Builder', 'Host', 'Biz Dev', 'Community']);
-    expect(within(waiting).getByRole('link', { name: team.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+    expect(names(running)).toEqual(['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'QA']);
+    const starts = screen.getByRole('region', { name: team.startsLater });
+    expect(names(starts)).toEqual(['Platform Builder', 'Biz Dev', 'Community']);
+    const planned = screen.getByRole('region', { name: team.planned });
+    expect(names(planned)).toEqual(['Host']);
+    expect(within(planned).getByRole('link', { name: team.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+    expect(box('Builder A').getAttribute('data-status')).toBe('running');
+    expect(box('Biz Dev').getAttribute('data-status')).toBe('starts');
+    expect(box('Host').getAttribute('data-status')).toBe('planned');
   });
 
-  // The Studio Head ranks, the Game Designer drafts and the Game Director grades when the board asks
-  // (docs/specs/agent-workflows.md), so the section they sit in never says its roles have no job.
-  it('says the roles that build no cards include ones that rank, draft or grade when the board asks', async () => {
-    renderTeam(sourceOf(snapshot()));
-    const waiting = await screen.findByRole('region', { name: team.notRunning });
-    expect(team.notRunning).toBe('Not building cards');
-    expect(waiting.textContent).toContain('Some rank, draft or grade cards when the board asks');
-    expect(waiting.textContent).not.toMatch(/these roles have no job|not running/i);
-  });
-
-  it('gives a running role its model, hired date, live cards shipped and what it changes', async () => {
+  it('gives a running role its model, its cost from contributions and the shipped cards it worked on', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
-    const hired = `${team.hired} ${formatDate('2026-09-14T00:00:00Z')}`;
-    expect(within(box('Builder A')).getByText(`claude-sonnet-5 · ${hired} · 2 cards shipped · changes the game`)).toBeTruthy();
-    expect(within(box('QA')).getByText(`claude-sonnet-5 · ${hired} · 1 card shipped · changes the game`)).toBeTruthy();
-    // A card still building is not shipped.
-    expect(within(box('Builder B')).getByText(`claude-sonnet-5 · ${hired} · 0 cards shipped · changes the game`)).toBeTruthy();
+    expect(within(box('Builder A')).getByText(facts('claude-opus-5-5', '$1.50', '$0.25', 'Worked on 2 shipped cards'))).toBeTruthy();
+    expect(within(box('QA')).getByText(facts('claude-opus-5-5', '$0.00', '$0.00', 'Worked on 1 shipped card'))).toBeTruthy();
+    // A role with no stats row has spent nothing from contributions and shipped nothing.
     expect(within(box('Builder A')).getByText(team.aiAgent)).toBeTruthy();
     expect(within(box('Builder A')).getByText('Builder A does its job.')).toBeTruthy();
   });
 
-  it('shows no model or hired date for a role that does not run, so the director model claims nothing', async () => {
+  it('shows the trigger and no model or cost on a role that does not run', async () => {
     renderTeam(sourceOf(snapshot()));
-    await screen.findByRole('region', { name: team.notRunning });
-    // The Not building cards heading says it once; a row adds a reason only when a closed lane is it.
-    for (const name of ['Studio Head', 'Game Director', 'Host', 'Biz Dev', 'Community']) {
-      expect(within(box(name)).queryByText(team.notRunning, { exact: false })).toBeNull();
-      expect(box(name).querySelector('.card-meta')).toBeNull();
+    await screen.findByRole('region', { name: team.startsLater });
+    expect(within(box('Biz Dev')).getByText('Starts last, once every other role is built.')).toBeTruthy();
+    expect(within(box('Platform Builder')).getByText(team.laneClosed)).toBeTruthy();
+    expect(within(box('Host')).getByText('No trigger is set yet; the Host waits on the stream.')).toBeTruthy();
+    for (const name of ['Platform Builder', 'Biz Dev', 'Community', 'Host']) {
+      expect(within(box(name)).queryByText(/claude-/)).toBeNull();
+      expect(within(box(name)).queryByText(/Spent from contributions/)).toBeNull();
     }
-    expect(within(box('Platform Builder')).getByText(team.siteClosed)).toBeTruthy();
-    expect(screen.queryByText(/claude-opus-5-5/)).toBeNull();
-    expect(screen.queryByText(/claude-haiku/)).toBeNull();
   });
 
   it('runs the Platform Builder once the studio says the platform code lane is open', async () => {
     renderTeam(sourceOf(snapshot({ platformLaneOpen: true })));
     const running = await screen.findByRole('region', { name: team.running });
-    expect(names(running)).toEqual(['Builder A', 'Builder B', 'Platform Builder', 'QA']);
-    const hired = `${team.hired} ${formatDate('2026-09-14T00:00:00Z')}`;
-    expect(within(box('Platform Builder')).getByText(`claude-sonnet-5 · ${hired} · 0 cards shipped · changes the site`)).toBeTruthy();
-    expect(screen.queryByText(team.siteClosed, { exact: false })).toBeNull();
+    expect(names(running)).toContain('Platform Builder');
+    expect(screen.queryByText(team.laneClosed)).toBeNull();
+  });
+
+  it("while the studio is paused keeps the running roles in Running as paused, says the reason once, and draws them awake", async () => {
+    renderTeam(sourceOf(snapshot({ paused: true, pauseReason: 'awaiting_credit' })));
+    const running = await screen.findByRole('region', { name: team.running });
+    expect(names(running)).toEqual(['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'QA']);
+    expect(within(running).getAllByText(legal.pauseReasons.awaiting_credit!, { exact: false })).toHaveLength(1);
+    for (const name of names(running)) {
+      expect(box(name).getAttribute('data-status')).toBe('paused');
+      expect(within(box(name)).getByText(team.statusPaused)).toBeTruthy();
+    }
+    expect(within(box('Builder A')).getByText(facts('claude-opus-5-5', '$1.50', '$0.25', 'Worked on 2 shipped cards'))).toBeTruthy();
+    const poses = [...running.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
+    expect(new Set(poses)).toEqual(new Set(['awake']));
+  });
+
+  it("shows a paused role with its own reason while the rest run, awake", async () => {
+    const roles = ROLES.map(role).map((r) => (r.title === 'QA' ? { ...r, paused: true, paused_reason: 'Waiting on a fix to its tools.' } : r));
+    renderTeam(sourceOf(snapshot({ roles })));
+    await screen.findByRole('region', { name: team.running });
+    expect(box('QA').getAttribute('data-status')).toBe('paused');
+    expect(within(box('QA')).getByText('Waiting on a fix to its tools.')).toBeTruthy();
+    expect(box('Builder A').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('awake');
+    expect(box('QA').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
+    expect(box('Biz Dev').querySelector('svg.avatar')?.getAttribute('data-pose')).toBe('asleep');
   });
 
   it('draws every agent with an avatar named by its species note, and shows no scorecards', async () => {
@@ -169,15 +195,16 @@ describe('Team', () => {
 
   it('leaves out a retired role and a blank description, and names a role whose name differs from its title', async () => {
     const roles = [
-      { ...role(['Builder A', true, 'claude-sonnet-5']), name: 'Pip', description: '  ' },
-      { ...role(['Builder B', true, 'claude-sonnet-5']), state: 'retired' },
+      { ...role(['Builder A', true, 'claude-opus-5-5', 'running', null]), name: 'Pip', description: '  ' },
+      { ...role(['Builder B', true, 'claude-opus-5-5', 'running', null]), state: 'retired' },
     ];
     renderTeam(sourceOf(snapshot({ roles })));
     await screen.findByRole('region', { name: team.running });
     expect(within(box('Pip')).getByText(`${team.aiAgent} · Builder A`)).toBeTruthy();
     expect(box('Pip').querySelectorAll('p')).toHaveLength(2);
     expect(screen.queryByRole('heading', { level: 3, name: 'Builder B' })).toBeNull();
-    expect(screen.queryByRole('region', { name: team.notRunning })).toBeNull();
+    expect(screen.queryByRole('region', { name: team.startsLater })).toBeNull();
+    expect(screen.queryByRole('region', { name: team.planned })).toBeNull();
   });
 
   it('says the team is unavailable when the roles did not load, and loading before', async () => {
@@ -189,14 +216,15 @@ describe('Team', () => {
     expect(screen.getByText(legal.meterUnavailable)).toBeTruthy();
   });
 
-  it('draws running agents awake and the roles still to come asleep, whether or not the studio is paused', async () => {
+  it('draws the Running section awake and the roles still to come asleep, whether or not the studio is paused', async () => {
     const poses = (region: HTMLElement) => [...region.querySelectorAll('svg.avatar')].map((svg) => svg.getAttribute('data-pose'));
     for (const paused of [true, false]) {
       renderTeam(sourceOf(snapshot({ paused })));
       const running = await screen.findByRole('region', { name: team.running });
-      const waiting = screen.getByRole('region', { name: team.notRunning });
       expect(new Set(poses(running))).toEqual(new Set(['awake']));
-      expect(new Set(poses(waiting))).toEqual(new Set(['asleep']));
+      for (const name of [team.startsLater, team.planned]) {
+        expect(new Set(poses(screen.getByRole('region', { name })))).toEqual(new Set(['asleep']));
+      }
       cleanup();
     }
   });

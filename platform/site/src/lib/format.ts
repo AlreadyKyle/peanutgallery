@@ -56,6 +56,18 @@ const dateOnly = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
+const dayUtc = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+
+/**
+ * A calendar day written as YYYY-MM-DD (a hold's New York end date, docs/specs/supporter-pages.md),
+ * as that day wherever the reader is: "7 Oct 2026".
+ */
+export function formatDay(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(date.getTime())) return day;
+  return threeLetterMonth(dayUtc, date);
+}
+
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isFinite(date.getTime()) ? threeLetterMonth(dateOnly, date) : iso;

@@ -1,9 +1,10 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
 import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
+import type { CardDetail } from '../lib/card-source';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
 import { LinkedText } from './TextPage';
@@ -223,6 +224,40 @@ export function SplitStats() {
       <Stat label={rows.studio} description={rows.studioNote} value={formatUsd(split.studio)} />
       <Stat label={rows.incident} description={rows.incidentNote} value={formatUsd(split.incident)} />
       <Stat label={rows.credit} description={rows.creditNote} value={formatUsd(split.credit)} />
+    </dl>
+  );
+}
+
+/**
+ * The money facts on a card's own page (docs/specs/supporter-pages.md): Funded $x of $y (the money
+ * from payments that count that reached it, else what is on its bar), Contributors n (the same count
+ * as the supporters list) and what studio-billed work on it cost. The page adds its other facts
+ * (time to live, the commit, the gate) as `children`, in the same list. `onFace` leaves out Funded and
+ * Contributors when the card's face above already shows them as its spec rows (an open or funded
+ * card), so no figure is said twice.
+ */
+export function CardFacts({ detail, onFace = false, children }: { detail: CardDetail; onFace?: boolean; children?: ReactNode }) {
+  const card = detail.card;
+  const funded = detail.funding === null ? card.funded_usd : Math.max(detail.funding.credited_usd, 0);
+  return (
+    <dl className="facts">
+      {card.funding_target_usd > 0 && !onFace ? (
+        <div data-fact="funded">
+          <dt>{legal.fundedLabel}</dt>
+          <dd>{`${formatUsd(funded)} of ${formatUsd(card.funding_target_usd)}`}</dd>
+        </div>
+      ) : null}
+      {onFace ? null : (
+        <div data-fact="contributors">
+          <dt>{legal.contributorsLabel}</dt>
+          <dd>{formatInteger(detail.funding?.contributors ?? 0)}</dd>
+        </div>
+      )}
+      <div data-fact="cost">
+        <dt>{legal.costLabel}</dt>
+        <dd>{formatUsd(detail.spent_usd)}</dd>
+      </div>
+      {children}
     </dl>
   );
 }

@@ -243,8 +243,15 @@ describe('BuildingNow and QueuedList', () => {
       card({ id: 'a', title: 'Building one', stage: 'building', spent_usd: 0.42 }),
       card({ id: 'b', title: 'Gated one', stage: 'gated', source: 'agent' }),
     ];
-    render(<BuildingNow cards={building} snapshot={snapshot(building)} />);
+    render(
+      <MemoryRouter>
+        <BuildingNow cards={building} snapshot={snapshot(building)} />
+      </MemoryRouter>,
+    );
     expect(paragraph(`${copy.sources.board} · $0.42 ${legal.spentSoFar}`)).toBeTruthy();
+    // The building and checks faces each link their card's own page.
+    expect(within(boxFor('Building one')).getByRole('link', { name: copy.cardPage.watchBuilt }).getAttribute('href')).toBe('/card/a');
+    expect(within(boxFor('Gated one')).getByRole('link', { name: copy.cardPage.watchBuilt }).getAttribute('href')).toBe('/card/b');
     expect(within(boxFor('Gated one')).getByText(copy.statusGated)).toBeTruthy();
     // No studio-billed spend yet (or founder-billed work, which is never published): no cost shown.
     expect(within(boxFor('Gated one')).getByText(copy.sources.agent).textContent).toBe(copy.sources.agent);

@@ -2,6 +2,7 @@ import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
 import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
+import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 
 // Layout balance (DESIGN.md, No dead space; docs/specs/home-and-design.md): on every public route,
 // with realistic data, nothing leaves dead space. scripts/layout-audit.mjs holds the checks: no
@@ -39,6 +40,10 @@ function auditRoutes(label: string, studio: StudioFixture, widths: readonly numb
 // The studio as production has it at launch, with long lists: six open cards, six shipped, twenty
 // agent actions, ten deploys and every role.
 auditRoutes('the launch-shaped studio', LIVE_STUDIO, [320, 375, 768, 1024, 1440]);
+// The supporter pages (docs/specs/supporter-pages.md): /card/:id live, building and rejected, /thanks
+// recorded, pending and not counted, /team with every running role paused and /roadmap with an
+// opens-soon and a held card.
+auditRoutes('the supporter pages', SUPPORTER_STUDIO, [375, 768, 1440], SUPPORTER_ROUTES.map(([, path]) => path));
 // The default fixture: a building-free studio with a picked card, a queued card and two shipped.
 auditRoutes('the default fixture', DEFAULT_STUDIO, [375, 768, 1440]);
 // Nothing loaded that could be empty: no roles (home draws no team strip), no actions, no deploys.

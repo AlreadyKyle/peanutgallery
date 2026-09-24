@@ -287,6 +287,7 @@ Deno.test("migrations on PGlite", {
         "20260924300000_agent_system_core.sql",
         "20260924400000_agent_workflows.sql",
         "20260924500000_site_snapshot.sql",
+        "20260924600000_supporter_pages.sql",
         "20260925000000_terms_version_3.sql",
       ]);
       for (const m of migrations) {
@@ -356,8 +357,10 @@ Deno.test("migrations on PGlite", {
         "public_agent_events",
         "public_card_funding",
         "public_card_spend",
+        "public_card_supporters",
         "public_ledger_totals",
         "public_money",
+        "public_role_stats",
         "public_roles",
         "public_stopped_cards",
         "public_studio",
@@ -2021,15 +2024,18 @@ Deno.test("migrations on PGlite", {
           [oneoffCardId, roleId],
         );
         const event = await row(`select * from public.public_agent_events`);
+        // supporter-pages.md: line_key, a fixed key from the type, tool name and step, never the payload.
         assertEquals(Object.keys(event).sort(), [
           "card_id",
           "created_at",
           "id",
+          "line_key",
           "role_id",
           "step",
           "type",
           "usd",
         ]);
+        assertEquals((event as { line_key: string }).line_key, "started");
         // step and usd name only what the database did to a card; a role's line carries neither.
         assertEquals([event.step, event.usd], [null, null]);
       },
@@ -2046,8 +2052,10 @@ Deno.test("migrations on PGlite", {
           "public_agent_events",
           "public_card_funding",
           "public_card_spend",
+          "public_card_supporters",
           "public_ledger_totals",
           "public_money",
+          "public_role_stats",
           "public_roles",
           "public_stopped_cards",
           "public_studio",
@@ -2109,7 +2117,7 @@ Deno.test("migrations on PGlite", {
           await rows(
             `select view_name from information_schema.view_table_usage where table_schema = 'public' and table_name = 'cards' order by 1`,
           ),
-          [{ view_name: "dispatcher_cards" }, { view_name: "public_stopped_cards" }],
+          [{ view_name: "dispatcher_cards" }, { view_name: "public_role_stats" }, { view_name: "public_stopped_cards" }],
         );
         for (const grantee of ["anon", "authenticated"]) {
           assertEquals((await row<{ has: boolean }>(`select has_table_privilege($1, 'public.dispatcher_cards', 'SELECT') as has`, [grantee])).has, false, grantee);
@@ -2119,6 +2127,12 @@ Deno.test("migrations on PGlite", {
         );
         assert(read.length > 0, "public_stopped_cards reads cards columns");
         for (const { column_name } of read) assert(PUBLIC_CARD_COLUMNS.includes(column_name), `public_stopped_cards reads ${column_name}`);
+        // public_role_stats (supporter-pages.md) counts a role's live cards from public columns only.
+        const stats = await rows<{ column_name: string }>(
+          `select distinct column_name from information_schema.view_column_usage where view_name = 'public_role_stats' and table_name = 'cards' order by 1`,
+        );
+        assertEquals(stats.map((c) => c.column_name), ["executor_role_id", "id", "stage"]);
+        for (const { column_name } of stats) assert(PUBLIC_CARD_COLUMNS.includes(column_name), `public_role_stats reads ${column_name}`);
       },
     );
 
@@ -4063,8 +4077,9 @@ Deno.test("migrations on PGlite", {
         ];
         // A policy's functions run as the caller, so anon and authenticated execute the one
         // the cards policy calls (agent-system-core.md), and the public site's two documents,
-        // which run as the caller too (site-snapshot.md).
-        const everyone = ["card_is_public", "site_cards", "site_live"];
+        // which run as the caller too (site-snapshot.md). supporter-pages adds the event line
+        // helper public_agent_events calls, a card's own document and the /thanks answer.
+        const everyone = ["card_is_public", "event_line_key", "site_card", "site_cards", "site_live", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [
@@ -4107,7 +4122,7 @@ Deno.test("migrations on PGlite", {
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["refuse_money_change", "set_live_at", "set_updated_at", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["event_line_key", "refuse_money_change", "set_live_at", "set_updated_at", "site_card", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
       },
     );
 
