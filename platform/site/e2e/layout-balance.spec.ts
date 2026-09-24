@@ -68,6 +68,15 @@ auditRoutes(
   [768, 1024, 1440],
   ['/', '/contribute'],
 );
+// An open card the Game Designer drafted: its byline takes the card's own track (styles.css, the card
+// subgrid), so it sits on no bar and the cards beside it keep their bars in line with no hollow.
+const designer = LIVE_STUDIO.roles.find((role) => role.title === 'Game Designer')!;
+auditRoutes(
+  'home with an open card an agent drafted',
+  { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card === open[0] ? { ...card, source: 'agent', drafter_role_id: designer.id } : card)) },
+  [768, 1024, 1440],
+  ['/', '/roadmap'],
+);
 auditRoutes(
   'home with a card that has no brief',
   { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card === open[1] ? { ...card, intent: '' } : card)) },
