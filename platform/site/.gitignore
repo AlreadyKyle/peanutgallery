@@ -4,3 +4,7 @@ e2e-screenshots/
 
 # Local Netlify folder
 .netlify
+
+# A build given an absolute --outDir once wrote version.json under a copy of that path here
+# (vite.config.ts now resolves outDir as Vite does); nothing under private/ is ever source.
+/private/

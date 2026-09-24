@@ -217,8 +217,11 @@ type JsonType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null';
 type KeySpec = Record<string, string | readonly string[]>;
 type Doc = Record<string, unknown>;
 
-/** The keys each document must carry and their JSON types; the Deno migration test checks SQL against it. */
-export const REQUIRED_KEYS: { live: KeySpec; cards: KeySpec } = SNAPSHOT_KEYS;
+/**
+ * The keys each document must carry and their JSON types, and the keys of each card in the live
+ * document's map (live_card); the Deno migration test checks the SQL against it.
+ */
+export const REQUIRED_KEYS: { live: KeySpec; live_card: KeySpec; cards: KeySpec } = SNAPSHOT_KEYS;
 
 function jsonType(value: unknown): JsonType {
   if (value === null) return 'null';
@@ -279,9 +282,9 @@ function poolFrom(row: unknown): Pool | null {
   };
 }
 
-/** A card with no horizon read (a row from before the column existed) is on horizon now. */
 function horizonFrom(value: unknown): Horizon {
-  return value === 'next' || value === 'later' ? value : 'now';
+  if (!(HORIZONS as readonly unknown[]).includes(value)) throw new Error(`Malformed horizon: ${String(value)}`);
+  return value as Horizon;
 }
 
 function rankFrom(value: unknown): number | null {
@@ -289,20 +292,33 @@ function rankFrom(value: unknown): number | null {
   return money(value);
 }
 
-type LiveCard = { stage: string; funded_usd: number; spent_usd: number; funding: CardFunding | null };
+/** A card's state from the live document's map: every column that moves as the card travels. */
+type LiveCard = Pick<Card, 'stage' | 'horizon' | 'rank' | 'executor_role_id' | 'funding_target_usd' | 'funded_usd' | 'spent_usd' | 'live_at' | 'updated_at'> & {
+  funding: CardFunding | null;
+};
 
-function liveCardFrom(value: unknown): LiveCard {
-  if (!isDoc(value)) throw new Error('Malformed live card');
-  const counted = value.contributors !== null && value.contributors !== undefined;
+function liveCardFrom(id: string, value: unknown): LiveCard {
+  const entry = checked(`/api/live cards.${id}`, value, REQUIRED_KEYS.live_card);
   return {
-    stage: text(value, 'stage'),
-    funded_usd: money(value.funded_usd),
-    spent_usd: money(value.spent_usd ?? 0),
-    funding: counted ? { contributors: money(value.contributors), credited_usd: money(value.credited_usd) } : null,
+    stage: text(entry, 'stage'),
+    horizon: horizonFrom(entry.horizon),
+    rank: rankFrom(entry.rank),
+    executor_role_id: textOrNull(entry, 'executor_role_id'),
+    funding_target_usd: money(entry.funding_target_usd),
+    funded_usd: money(entry.funded_usd),
+    spent_usd: money(entry.spent_usd),
+    live_at: textOrNull(entry, 'live_at'),
+    updated_at: text(entry, 'updated_at'),
+    funding: entry.contributors === null ? null : { contributors: money(entry.contributors), credited_usd: money(entry.credited_usd) },
   };
 }
 
-/** A card from the card document, with the stage, bar and spend the live document carries now. */
+/**
+ * A card: its words from the card document, and everything that moves from the live document (its
+ * stage, horizon, rank, builder, target, bar, spend, ship time and last change). The card document
+ * runs up to about fifteen minutes behind and the live document about three, so a card that ships
+ * or is dealt to now shows its new stage with its ship time, horizon and target, never a mix.
+ */
 function cardFrom(row: Doc, live: LiveCard): Card {
   return {
     id: text(row, 'id'),
@@ -314,16 +330,16 @@ function cardFrom(row: Doc, live: LiveCard): Card {
     shape: text(row, 'shape'),
     bucket: text(row, 'bucket'),
     folder: text(row, 'folder'),
-    horizon: horizonFrom(row.horizon),
-    rank: rankFrom(row.rank),
-    executor_role_id: textOrNull(row, 'executor_role_id'),
+    horizon: live.horizon,
+    rank: live.rank,
+    executor_role_id: live.executor_role_id,
     drafter_role_id: textOrNull(row, 'drafter_role_id'),
-    funding_target_usd: money(row.funding_target_usd),
+    funding_target_usd: live.funding_target_usd,
     funded_usd: live.funded_usd,
     spent_usd: live.spent_usd,
     created_at: text(row, 'created_at'),
-    updated_at: text(row, 'updated_at'),
-    live_at: textOrNull(row, 'live_at'),
+    updated_at: live.updated_at,
+    live_at: live.live_at,
   };
 }
 
@@ -396,7 +412,7 @@ function totalsFrom(row: Doc): LedgerTotals {
 export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const live = checked('/api/live', liveDoc, REQUIRED_KEYS.live);
   const text_ = checked('/api/cards', cardsDoc, REQUIRED_KEYS.cards);
-  const liveCards = new Map(Object.entries(live.cards as Doc).map(([id, value]) => [id, liveCardFrom(value)]));
+  const liveCards = new Map(Object.entries(live.cards as Doc).map(([id, value]) => [id, liveCardFrom(id, value)]));
   const missing = new Set<Enrichment>();
 
   // A card in the card document but not in the live map is not shown; nor is a paused or rejected

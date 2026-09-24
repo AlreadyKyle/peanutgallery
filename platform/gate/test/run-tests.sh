@@ -770,6 +770,17 @@ for file in platform/site/netlify/functions/x.mts platform/site/netlify/function
 done
 printf 'platform/site/src/pages/Landing.tsx\nplatform/site/netlify-notes.md\n' > "$T/kernel-netlify-near.txt"
 expect "kernel-guard: a name that only starts like the site's netlify folder passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-netlify-near.txt"
+# Netlify also deploys functions, edge functions, headers and forced redirects from a site's .netlify
+# folder, and functions and edge functions from its netlify folder by default, whatever .gitignore
+# says: both names are kernel at any depth, in the public site and in the game.
+for file in platform/site/.netlify/v1/config.json platform/site/.netlify/v1/functions/x.mjs platform/site/.netlify/v1/edge-functions/x.ts \
+  platform/site/.netlify/functions-internal/x.mjs platform/site/.netlify/edge-functions/x.ts platform/site/.netlify/deploy/v1/config.json \
+  seed-1/.netlify/v1/config.json seed-1/netlify/functions/x.mjs seed-1/netlify/edge-functions/x.ts seed-1/.Netlify/v1/functions/x.mjs; do
+  printf 'platform/site/src/pages/Landing.tsx\n%s\n' "$file" > "$T/kernel-dot-netlify.txt"
+  expect "kernel-guard: $file is kernel by name" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-dot-netlify.txt"
+done
+printf 'platform/site/src/pages/Landing.tsx\nseed-1/render/netlify.ts\nseed-1/content/.netlify.json\n' > "$T/kernel-dot-netlify-near.txt"
+expect "kernel-guard: names that only resemble Netlify's folders pass" 0 '^PASS: kernel-guard files=3$' -- bash "$KERNEL" "$T/kernel-dot-netlify-near.txt"
 printf 'seed-1/config/spawn-table.json\nseed-1/content/a\tb.json\n' > "$T/kernel-tab.txt"
 expect "kernel-guard: a tab in a listed name fails" 1 '^FAIL: kernel-guard path=seed-1/content/a.b\.json$' -- bash "$KERNEL" "$T/kernel-tab.txt"
 printf 'seed-1/content/a\001b.json\n' > "$T/kernel-control.txt"

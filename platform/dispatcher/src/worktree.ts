@@ -227,8 +227,10 @@ export const KERNEL_PATHS: readonly string[] = [
 // File and folder names no agent may create or change at any depth: Claude Code loads a nested
 // CLAUDE.md or .claude folder into later sessions, a nested package, test or deploy config can
 // override the one the gate relies on, and a build tool loads its config (PostCSS, Babel, env files)
-// from the folder it builds, running the code in it. The same list is platform/gate/kernel-names.txt;
-// a test keeps the two equal. * matches any run of characters within one path segment.
+// from the folder it builds, running the code in it. Netlify deploys functions, edge functions, headers
+// and forced redirects from a site's netlify and .netlify folders. The same list is
+// platform/gate/kernel-names.txt; a test keeps the two equal. * matches any run of characters within
+// one path segment.
 export const KERNEL_NAMES: readonly string[] = [
   '.claude',
   'CLAUDE.md',
@@ -257,6 +259,8 @@ export const KERNEL_NAMES: readonly string[] = [
   'netlify.toml',
   '_headers',
   '_redirects',
+  '.netlify',
+  'netlify',
 ];
 
 // Names hold letters, digits, dot, underscore, hyphen and * only (the test checks), so the dot is

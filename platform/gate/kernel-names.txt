@@ -3,6 +3,9 @@
 # path is kernel when any of its segments matches: Claude Code loads a nested CLAUDE.md or .claude
 # folder into later sessions, a nested test, package or deploy config can override the one the gate
 # relies on, and a build tool loads its config file from the folder it builds, running the code in it.
+# Netlify deploys functions, edge functions, headers and forced redirects from a site's netlify folder
+# (its default functions and edge functions folders) and its .netlify folder (the frameworks API's
+# functions, edge functions and config.json), whatever .gitignore says (docs/specs/site-snapshot.md).
 .claude
 CLAUDE.md
 CLAUDE.local.md
@@ -30,3 +33,5 @@ babel.config.*
 netlify.toml
 _headers
 _redirects
+.netlify
+netlify

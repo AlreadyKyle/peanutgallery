@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_STUDIO, fundingOrder, moneyRow, type StudioFixture } from '../../e2e/studio-fixture';
 import { toDocuments } from '../../e2e/snapshot-documents';
+import { fundableCards, groupCards, plannedCards } from './cards';
 import SNAPSHOT_KEYS from './snapshot-keys.json';
 import {
   CARDS_MAX_AGE_MS,
@@ -97,10 +98,84 @@ describe('createSnapshotSource.load', () => {
   it('takes each card’s stage, bar and spend from the live map, which moves each minute', () => {
     const docs = toDocuments(DEFAULT_STUDIO);
     const id = String(DEFAULT_STUDIO.cards[0]!.id);
-    (docs.live.cards as Record<string, Record<string, unknown>>)[id] = { stage: 'building', funded_usd: 1.5, spent_usd: 0.25, contributors: 4, credited_usd: 1.5 };
+    const map = docs.live.cards as Record<string, Record<string, unknown>>;
+    map[id] = { ...map[id], stage: 'building', funded_usd: 1.5, spent_usd: 0.25, contributors: 4, credited_usd: 1.5 };
     const card = snapshotFrom(docs.live, docs.cards).cards.find((c) => c.id === id)!;
     expect([card.stage, card.funded_usd, card.spent_usd]).toEqual(['building', 1.5, 0.25]);
     expect(snapshotFrom(docs.live, docs.cards).funding[id]).toEqual({ contributors: 4, credited_usd: 1.5 });
+  });
+
+  it('shows a card that just shipped with its ship time from the live map while the card document still says building', async () => {
+    // The card document was built before the ship (CDN 300 seconds, stale 300 more); the live
+    // document after it (60 seconds). The card shows live, shipped when the live map says, and first
+    // among the shipped cards, not live with the building row's times.
+    const building = DEFAULT_STUDIO.cards.find((card) => card.stage === 'funded')!;
+    const before = toDocuments(studioWith({ cards: DEFAULT_STUDIO.cards.map((card) => (card === building ? { ...card, stage: 'building' } : card)) }));
+    const shipped = { ...building, stage: 'live', live_at: '2026-09-23T12:00:00Z', updated_at: '2026-09-23T12:00:00Z' };
+    const after = toDocuments(studioWith({ cards: DEFAULT_STUDIO.cards.map((card) => (card === building ? shipped : card)) }));
+    const card = snapshotFrom(after.live, before.cards).cards.find((c) => c.id === building.id)!;
+    expect([card.stage, card.live_at, card.updated_at]).toEqual(['live', '2026-09-23T12:00:00Z', '2026-09-23T12:00:00Z']);
+    const shippedTitles = groupCards(snapshotFrom(after.live, before.cards).cards).shipped.map((c) => c.title);
+    expect(shippedTitles[0]).toBe(building.title);
+    // The same through the source: the held card document is fresh enough, so it is not read again.
+    let docs = before;
+    const { fetchFn, calls } = serving(() => docs);
+    const source = createSnapshotSource({ fetchFn, now: () => 0 });
+    await source.load();
+    docs = { live: after.live, cards: before.cards };
+    const loaded = await source.load();
+    expect(calls.filter((url) => url === CARDS_URL)).toHaveLength(1);
+    expect(loaded.cards.find((c) => c.id === building.id)?.live_at).toBe('2026-09-23T12:00:00Z');
+  });
+
+  it('moves a card the board deals from next to now into the fund group with its target, as funding_order lists it', () => {
+    // The deal sets horizon, rank, target and builder in one write (set_card_horizon); the card
+    // document still has the card on next with no target.
+    const planned = DEFAULT_STUDIO.cards.find((card) => card.horizon === 'next')!;
+    const dealt = { ...planned, horizon: 'now', rank: 1, funding_target_usd: '4.0000', executor_role_id: 'r-builder-a' };
+    const before = toDocuments(DEFAULT_STUDIO);
+    const after = toDocuments(
+      studioWith({
+        cards: DEFAULT_STUDIO.cards.map((card) => (card === planned ? dealt : card)),
+        money: moneyRow({ funding_order: fundingOrder([planned.id]) }),
+      }),
+    );
+    const snapshot = snapshotFrom(after.live, before.cards);
+    const card = snapshot.cards.find((c) => c.id === planned.id)!;
+    expect([card.horizon, card.rank, card.funding_target_usd, card.executor_role_id]).toEqual(['now', 1, 4, 'r-builder-a']);
+    expect(groupCards(snapshot.cards).fund.map((c) => c.id)).toContain(planned.id);
+    expect(plannedCards(snapshot.cards).next.map((c) => c.id)).not.toContain(planned.id);
+    expect(fundableCards(snapshot).map((c) => c.id)).toEqual([planned.id]);
+  });
+
+  it('takes nothing that moves from the card document: only a card’s words, source, shape, folder, drafter and creation', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const scrambled = (docs.cards.cards as Record<string, unknown>[]).map((row) => ({
+      ...row,
+      stage: 'proposed',
+      horizon: 'later',
+      rank: 99,
+      executor_role_id: 'r-stale',
+      funding_target_usd: 999,
+      funded_usd: 999,
+      live_at: '2000-01-01T00:00:00Z',
+      updated_at: '2000-01-01T00:00:00Z',
+    }));
+    expect(snapshotFrom(docs.live, { ...docs.cards, cards: scrambled })).toEqual(golden);
+  });
+
+  it('rejects a live map card missing a key or holding one of the wrong JSON type', () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const id = String(DEFAULT_STUDIO.cards[0]!.id);
+    const map = docs.live.cards as Record<string, Record<string, unknown>>;
+    for (const key of Object.keys(REQUIRED_KEYS.live_card)) {
+      const entry = { ...map[id] };
+      delete entry[key];
+      expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: entry } }, docs.cards), key).toThrow(`/api/live cards.${id} has no ${key}`);
+    }
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: { ...map[id], live_at: 5 } } }, docs.cards)).toThrow(`/api/live cards.${id}.live_at is number`);
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: { ...map[id], horizon: 'soon' } } }, docs.cards)).toThrow('Malformed horizon: soon');
+    expect(() => snapshotFrom({ ...docs.live, cards: { ...map, [id]: 'live' } }, docs.cards)).toThrow(`/api/live cards.${id} is not a JSON object`);
   });
 
   it('lists paused and rejected cards only through stopped, as the pages do today', () => {
@@ -169,7 +244,8 @@ describe('createSnapshotSource.load', () => {
     ];
     for (const fields of cases) {
       const docs = toDocuments(studioWith(fields));
-      expect(() => snapshotFrom(docs.live, docs.cards), JSON.stringify(fields)).toThrow(/Malformed/);
+      // A card's figure in the live map that is not a number fails its type check; any other, money().
+      expect(() => snapshotFrom(docs.live, docs.cards), JSON.stringify(fields)).toThrow(/Malformed|is string, not number/);
     }
   });
 
@@ -179,13 +255,14 @@ describe('createSnapshotSource.load', () => {
     expect(snapshotFrom(docs.live, docs.cards).money?.funding_order).toEqual(order.map(({ card_id }) => ({ card_id, room_usd: 1 })));
   });
 
-  it('reads a card with no horizon as horizon now, keeps next and later, and reads the pause and the lane only when true', () => {
+  it('reads each card’s horizon and rank from the live map, and the pause and the lane only when true', () => {
     const base = DEFAULT_STUDIO.cards[0]!;
     const docs = toDocuments(
       studioWith({
         cards: [
-          { ...base, id: 'old', horizon: null, rank: null },
+          { ...base, id: 'a', horizon: 'now', rank: null },
           { ...base, id: 'n', horizon: 'next', rank: '3', created_at: '2026-09-15T00:01:00Z' },
+          { ...base, id: 'l', horizon: 'later', rank: 1, created_at: '2026-09-15T00:02:00Z' },
         ],
         paused: true,
         pauseReason: 'awaiting_credit',
@@ -193,8 +270,9 @@ describe('createSnapshotSource.load', () => {
     );
     const snapshot = snapshotFrom(docs.live, docs.cards);
     expect(snapshot.cards.map((card) => [card.id, card.horizon, card.rank])).toEqual([
-      ['old', 'now', null],
+      ['a', 'now', null],
       ['n', 'next', 3],
+      ['l', 'later', 1],
     ]);
     expect([snapshot.paused, snapshot.pauseReason, snapshot.platformLaneOpen]).toEqual([true, 'awaiting_credit', false]);
     const open = { ...docs.live, studio: { launched_at: null, paused: false, platform_lane_open: true, pause_reason: 'board' } };
@@ -234,6 +312,19 @@ describe('createSnapshotSource.load', () => {
   it('requires the keys snapshot-keys.json lists, which the Deno migration test checks against the SQL', () => {
     expect(REQUIRED_KEYS).toEqual(SNAPSHOT_KEYS);
     expect(Object.keys(SNAPSHOT_KEYS.live).sort()).toEqual(['built_at', 'cards', 'deploys', 'events', 'money', 'pool', 'stopped', 'studio', 'totals']);
+    expect(Object.keys(SNAPSHOT_KEYS.live_card).sort()).toEqual([
+      'contributors',
+      'credited_usd',
+      'executor_role_id',
+      'funded_usd',
+      'funding_target_usd',
+      'horizon',
+      'live_at',
+      'rank',
+      'spent_usd',
+      'stage',
+      'updated_at',
+    ]);
     expect(Object.keys(SNAPSHOT_KEYS.cards).sort()).toEqual(['cards', 'roles', 'terms']);
   });
 });
