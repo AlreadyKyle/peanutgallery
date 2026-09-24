@@ -192,7 +192,7 @@ describe('createSnapshotSource.load', () => {
       live_at: '2000-01-01T00:00:00Z',
       updated_at: '2000-01-01T00:00:00Z',
     }));
-    expect(snapshotFrom(docs.live, { ...docs.cards, cards: scrambled })).toEqual(golden);
+    expect(beforeSupporterPages(snapshotFrom(docs.live, { ...docs.cards, cards: scrambled }))).toEqual(golden);
   });
 
   it('rejects a live map card missing a key or holding one of the wrong JSON type', () => {

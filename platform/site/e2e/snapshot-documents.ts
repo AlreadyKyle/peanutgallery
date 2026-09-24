@@ -192,7 +192,7 @@ export function toCardDetail(studio: StudioFixture, id: string): Record<string, 
     .sort((a, b) => text(a.created_at).localeCompare(text(b.created_at)) || text(a.id).localeCompare(text(b.id)));
   const lined = events.filter((event) => eventLineKey(event) !== 'none');
   const gate = [...events].reverse().find((event) => event.type === 'gate_pass' || event.type === 'gate_fail');
-  const roleIds = new Set([card.executor_role_id, ...lined.map((event) => event.role_id)].filter((value) => typeof value === 'string'));
+  const roleIds = new Set([card.executor_role_id, ...lined.map((event) => event.role_id)].filter((value): value is string => typeof value === 'string'));
   return {
     card: {
       commit_sha: null,
@@ -217,7 +217,7 @@ export function toCardDetail(studio: StudioFixture, id: string): Record<string, 
       gate: gate === undefined ? null : gate.type === 'gate_pass' ? 'passed' : 'failed',
       live_at: card.live_at ?? null,
     },
-    roles: studio.roles.filter((role) => roleIds.has(role.id)).map((role) => ({ id: role.id, name: role.name, title: role.title })),
+    roles: studio.roles.filter((role) => roleIds.has(text(role.id))).map((role) => ({ id: role.id, name: role.name, title: role.title })),
     stopped: stoppedRow,
   };
 }
