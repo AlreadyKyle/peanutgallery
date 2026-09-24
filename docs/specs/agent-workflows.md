@@ -232,7 +232,41 @@ With the fifth, empty track put back (`span 5`, the bottom block on row 5), the 
 
 The gate at the review fixes' head sha did not start: GitHub refused the jobs, saying the account's recent payments failed or its spending limit needs raising. That is the board's (GitHub Billing & plans); the local `pnpm verify` and gate dry runs above pass, and the gate reruns once billing is fixed.
 
-Production (the ship stage, after the production steps): the pre-migration dump's size, `anon-negative-test.ts` and `ledger-identity.ts` PASS and `select public.ledger_identity()` are quoted in the pull request when run.
+After merging main at ff512b9 (agent-system-core as merged, the rename and the local gate; resolved against agent-system-core's last merged tip, beeb790, as the base, with agent workflows as PLAN decision 46) and the minor findings (Decisions, 2026-09-24), `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify` exits 0 (`EXIT 0`, run with `npm_config_workspace_concurrency=2`):
+
+```
+platform/board test:       Tests  94 passed (94)
+platform/site test:       Tests  436 passed (436)
+platform/supabase test:       Tests  304 passed (304)
+seed-1 test:       Tests  77 passed (77)
+platform/dispatcher test:       Tests  687 passed (687)
+platform/gate test: PASS: gate tests passed=508
+ok | 115 passed (161 steps) | 0 failed
+GATE PASS folder=seed-1 lane=code
+GATE PASS folder=platform lane=code
+PASS: secret-scan files=592
+tier 1 carries the old name nowhere
+```
+
+`pnpm test:agents`: `ℹ tests 125`, `ℹ pass 125`, `ℹ fail 0` (the earlier "124" was misquoted; the suite ran 125). `pnpm test:docs`: `ℹ tests 18`, `ℹ pass 18`. `pnpm test:functions`, `agent_workflows_test.ts`: `ok | 8 passed (18 steps) | 0 failed`, the new steps among them:
+
+```
+  approval is refused, writing no card, unless the grader's own verdict is approved ... ok
+  each refusal names the card, and a refused ranking writes nothing; rankable_cards lists the cards it accepts ... ok
+```
+
+The second now puts a board-vetoed card back on now: `rankable_cards` leaves it out and `apply_card_ranking` refuses it with "Card … takes no money". The new dispatcher tests: `role-session.test.ts` "runs on the model its role resolves to when the session starts, as card sessions do, not a stale roles.model"; `role-model.test.ts` "refuses a role a role job runs whose resolved model has no price, the Game Director without write access included"; `job-handlers.test.ts` "sends back a draft whose text is blank or whose estimate rounds to nothing as the schema check, before record_card_draft could refuse it"; `typed-output.test.ts` refuses a blank title, summary and acceptance test and an estimate of 0.00004. The board's `Board.test.tsx` names moved cards by title with a link to `#card-<id>`, else "card 33333333", and reads "Sent back to revise: unclear text"; the site's `EventList.test.tsx` reads a `ranked` step as "ranked the cards open for funding"; `Roadmap.test.tsx` checks the lede's two paths; `Landing.test.tsx` checks that home draws no live-updates row without a snapshot.
+
+`BOARD_E2E_PORT=4420 pnpm --filter @backseat/board e2e`: `7 passed (5.4s)`, the ranking's output reading "Bigger pockets for the gatherers: from no rank to rank 1" (a link to its row) and "card 11111111: from rank 4 to rank 2". The full-page screenshots at 375 and 1440 were looked at: the Jobs section's run output sits as numbered lines under each run, in the section's rhythm. `E2E_PORT=4421 pnpm --filter @backseat/site e2e`: `162 passed (3.3m)`, `5 skipped`, the agent-card, 16px gap and /team tests among them.
+
+### Production, before the merge (24 September 2026, UTC)
+
+1. `select paused, pause_reason, agent_mode, dispatcher_seen_at, cooling_window_minutes from public.studio_state` → `[{"paused":true,"pause_reason":"awaiting_credit","agent_mode":"attended","dispatcher_seen_at":"2026-09-16 04:19:38.678+00","cooling_window_minutes":0}]`; 0 cards building of 57; `to_regclass('public.card_drafts')` → null and `jobs` held 0 rows, so nothing of this migration was there.
+2. The dump: `pg_dump "$BACKUP_DB_URL" -Fc` → `~/peanutgallery-dumps/pre-agent-workflows-20260924T042751Z.dump`, mode `-rw-------`, 728,474 bytes; `pg_restore --list` reads 77 TABLE DATA entries, `cards`, `card_approvals`, `contributions`, `contribution_allocations`, `jobs`, `job_runs`, `ledger` and `roles` among them.
+3. `20260924400000_agent_workflows.sql` at 345a006 (sha256 2920663b…05f9), wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`.
+4. Read-backs: `card_drafts` exists with row security on and 0 rows; the nine functions (`apply_card_ranking`, `approve_card_draft`, `card_from_draft`, `card_rank_problem`, `card_ranking_places`, `cards_agent_text_guard`, `rankable_cards`, `record_card_draft`, `withdraw_card_draft`) exist; `approve_card_draft`'s arguments read `p_draft uuid, p_approver_role uuid, p_grader_ref text, p_verdict jsonb` (no default); anon may not select `card_drafts` or execute `apply_card_ranking`, authenticated may not execute `approve_card_draft`, the service role may; the jobs read `[{"name":"draft_card","role":"Game Designer","calls_model":true,"runs_when_paused":true},{"name":"studio_ranking","role":"Studio Head","calls_model":true,"runs_when_paused":true}]`; `rankable_cards()` lists 6 of the 12 cards on now; `public.ledger_identity() ->> 'holds'` → `"true"`. `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` (`card_drafts` and all eight new functions refused with 42501); `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards`.
+
+The gate, the merge and the steps after it are recorded by the next pull request that touches the specs.
 
 ## Decisions
 
