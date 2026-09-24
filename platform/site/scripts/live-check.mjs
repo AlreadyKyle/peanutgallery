@@ -263,7 +263,12 @@ try {
     const reports = await watchPolicy(page);
     const errors = [];
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
+      if (message.type() !== 'error') return;
+      // A local preview has no snapshot function, so the browser logs each /api read's 404; with
+      // --allow-no-data those are the missing data, not a page error.
+      const from = message.location()?.url ?? '';
+      if (allowNoData && from !== '' && new URL(from).pathname.startsWith('/api/')) return;
+      errors.push(message.text());
     });
     page.on('pageerror', (error) => errors.push(String(error)));
     // The page reads only its own origin (docs/specs/site-snapshot.md): no Supabase request, no socket.
@@ -336,7 +341,8 @@ try {
 
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
-  check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
+  if (!hasData) noData(`landing h2 order ${JSON.stringify(h2)}`);
+  else check(JSON.stringify(h2) === JSON.stringify(expected), `landing h2 order ${JSON.stringify(h2)}`);
 
   const topContribute = page.getByRole('banner').getByRole('link', { name: 'Contribute', exact: true });
   if ((await topContribute.count()) === 0) {

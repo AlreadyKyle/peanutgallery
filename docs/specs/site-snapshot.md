@@ -1,6 +1,6 @@
 # F1: the public snapshot from the site's own origin, and stale tabs reload on navigation
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Series position: after agent-workflows, before supporter-pages (the order is in `docs/ROADMAP.md`, "The launch series"). It is a board pull request: it adds a kernel path (`platform/site/netlify`) and changes legal-copy's kernel `terms.ts`.
 
@@ -19,12 +19,12 @@ Series position: after agent-workflows, before supporter-pages (the order is in 
 
 In:
 - **SQL.** Migration `20260924500000_site_snapshot.sql` (after agent-workflows'; bumped at build, keeping the series' order, if main holds a later file): `public.site_live()` and `public.site_cards()`, each `language sql stable security invoker set search_path = public`, execute revoked from public and granted to anon, authenticated and service_role. They read only what anon already reads.
-- **One Netlify Function.** `platform/site/netlify/functions/snapshot.mts` answers `GET /api/live` and `GET /api/cards`; `platform/site/netlify/lib/public-env.ts` holds the Supabase URL and publishable key as constants. Unit tests beside them.
+- **One Netlify Function.** `platform/site/netlify/functions/snapshot.mts` answers `GET /api/live` and `GET /api/cards`; `platform/site/netlify/lib/public-env.ts` holds the Supabase URL and publishable key as constants. Unit tests beside them in `platform/site/netlify/snapshot.test.ts`, outside `functions/`, since Netlify deploys every file in that folder as a function.
 - **`platform/site/netlify.toml`:** `[functions] directory = "netlify/functions"`; `/assets/*` served `public, max-age=31536000, immutable`; `connect-src 'self'` in both the enforced and report-only policies; the `VITE_SUPABASE_*` build values removed.
 - **The client.** `src/lib/source.ts` rewritten as `createSnapshotSource` reading the two documents, with `src/lib/snapshot-keys.json` listing the keys it requires; `studio.tsx` polls only while visible; `supabase.ts` keeps only `clearStoredSessions`, `STORED_SESSION_KEY` and `errorMessage`; `env.ts` loses the Supabase values; `payment.ts` loses `isOpenForFunding`, and `canFund` stays only for sample and example cards, as money-surfaces left it; `terms.ts` (legal-copy, kernel) reads posted versions from the card document; `@supabase/supabase-js` leaves the site's `package.json` and the lockfile; `App.tsx` calls the freshness check on each route change and adds `api` to `KERNEL_SEGMENTS`.
 - **Stale tabs.** `src/lib/freshness.ts`: `watchForNewBuild` returns `{ check, stop }`.
-- **Kernel lists.** `platform/site/netlify` joins `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` in `platform/dispatcher/src/worktree.ts`; `site-kernel.test.ts` drops `@supabase/supabase-js` from the allowed packages.
-- **Fixtures.** `toDocuments(fixture)` in `platform/site/e2e/snapshot-documents.ts` turns the shared studio fixture into the two documents; `e2e/fixtures.ts` serves `/api/live` and `/api/cards` from it and fails any request to the Supabase host.
+- **Kernel lists.** `platform/site/netlify` and `platform/site/src/lib/snapshot-keys.json` (which the kernel `source.ts` imports) join `platform/gate/kernel-paths.txt` and `KERNEL_PATHS` in `platform/dispatcher/src/worktree.ts`; `site-kernel.test.ts` drops `@supabase/supabase-js` from the allowed packages.
+- **Fixtures.** The shared studio fixture moves to `platform/site/e2e/studio-fixture.ts` (no Playwright import, so the unit tests read it too); `toDocuments(fixture)` in `platform/site/e2e/snapshot-documents.ts` turns it into the two documents; `e2e/fixtures.ts` serves `/api/live` and `/api/cards` from it and fails any request to the Supabase host.
 - **Checks.** `live-check.mjs` reads the site's own `/api` responses; `anon-negative-test.ts` calls the two functions as anon.
 - **Docs.** PLAN §6 (the public site reads cached documents from its own origin and opens no Realtime connection) and Appendix A (the functions, the RPCs, and a "Public site function budget" table that later pull requests add their rows to); `platform/site/DESIGN.md` (live figures run up to about three minutes behind); `docs/ROADMAP.md`; BOARD-SETUP: a "Pause when the board site is down" section and a budget note under "Netlify plan check"; a pointer from `docs/specs/stale-tab.md`; `scripts/rename.mjs` tiers for any new file that names the studio or its domain.
 
@@ -43,7 +43,7 @@ Out, and what each waits on:
   - `built_at`, `pool`, `totals`;
   - `studio`: the `public_studio` row (with money-logic's `pause_reason`);
   - `money`: the `public_money` row (money-logic), which carries `funding_order`; `stopped`: the newest 12 `public_stopped_cards` rows;
-  - `cards`: a map from card id to its stage and the funding figures the pages read today (`public_card_funding`), over the listed set below;
+  - `cards`: a map from card id to its stage, its bar (`funded_usd`), its spend (`public_card_spend`) and the funding figures the pages read today (`public_card_funding`: contributors and credited_usd, null for a card no payment reached), over the listed set below;
   - `events`: the 20 newest `public_agent_events` rows, each with its card's title; `deploys`: the 10 newest.
 - `GET /api/cards` returns `site_cards()`, the text that rarely moves:
   - `cards`: every column of `cards` anon may select, for the listed set;
@@ -61,7 +61,8 @@ Out, and what each waits on:
 
 **The client.**
 - It loads `/api/live` every 60 seconds, only while `document.visibilityState` is `visible`, and at once on a return to the tab. A hidden tab makes no request.
-- It loads `/api/cards` on the first load, when the live map names a card it does not hold, and when its copy is more than 5 minutes old. A card in the card document but absent from the live map is not shown.
+- It loads `/api/cards` on the first load (alongside `/api/live`), when the live map names a card it does not hold, and when its copy is more than 5 minutes old. A card in the card document but absent from the live map is not shown, and a card's stage, bar and spend come from the live map. Paused and rejected cards reach the pages through `stopped` only, as they do today; the documents carry them for later pages.
+- A tab opened hidden loads nothing until it is first shown.
 - It builds the same `Snapshot` the pages read today, so no page changes. It ignores keys it does not know, so a later migration can add keys before its site change merges. A missing required key or a wrong JSON type rejects the load; a null `money` or `stopped` marks that part missing, which keeps money-surfaces' "Not available right now" states. Every figure goes through `money()`; a rejected load leaves the page's last figures marked stale and never shows zero.
 - A failed load is retried after 60 seconds, doubling to at most 10 minutes, and a success resets it. Each request aborts after 10 seconds.
 - Figures and stages run up to about three minutes behind the database (60 seconds fresh, 60 stale while one revalidation runs, 60 until the next poll); card text up to about fifteen minutes, by the same arithmetic at 300 seconds.
@@ -97,8 +98,8 @@ Out, and what each waits on:
 
 - `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`
 - `E2E_PORT=4391 pnpm --filter @backseat/site e2e` (includes `layout-balance.spec.ts` and `design.spec.ts` on every route, unchanged)
-- `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts`
-- BOARD-SETUP's pause statement, run on a local database: quote `studio_state` before and after, next to `set_paused(true)`'s effect.
+- `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/site_snapshot_test.ts platform/supabase/functions/_shared/migration_test.ts` (the site-snapshot migration's own test file, as the series' other migrations have, and the migration list and function privileges in `migration_test.ts`)
+- BOARD-SETUP's pause statement, run on a local database (PGlite, in `site_snapshot_test.ts`, which reads the statement from `docs/BOARD-SETUP.md`): quote `studio_state` before and after, next to `set_paused(true)`'s effect.
 - On the deploy preview, only after production steps 1 to 3 (a preview's function calls production): `curl -s -D - -o /dev/null <preview>/api/live` twice within 60 seconds, then `/api/cards`, `/api/live?x=1`, `curl -X POST` on `/api/live`, and `curl -sI` on one `/assets/*.js`, quoting each status, `Cache-Status` and `Cache-Control`.
 - Production, after the steps below:
   - `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts`;
