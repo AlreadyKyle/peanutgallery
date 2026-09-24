@@ -1,6 +1,6 @@
 # Agent system core: approvals, dealing after the cooling window, board and role controls, and the job queue
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Series position: after money-surfaces, before agent-workflows (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). It changes kernel files only and needs money-logic merged first: its money tests run against money-logic's waterfall, hold and refund functions.
 
@@ -203,7 +203,19 @@ The fixture answers the cards read with the undealt card only for the board memb
 3. `20260924300000_agent_system_core.sql` at 88649bb (sha256 4d7cc78c…8b0f), wrapped in `begin; … commit;`, one request to the Management API query endpoint: `HTTP 201 []`.
 4. Read-backs: `select cooling_window_minutes from public.studio_state` → `[{"cooling_window_minutes":0}]`; `select count(*) from public.cards where not public.card_is_public(id)` → `[{"hidden":0}]`; `public.ledger_identity() ->> 'holds'` → `"true"`; `card_approvals`, `jobs`, `job_runs`, `dispatcher_cards` and `dispatcher_card_spend` exist; `dispatcher_cards` reads 57 rows for 57 cards; the policies read `cards_public_read` `card_is_public(id)`, `cards_board_read` `is_board_member()` and `ledger_public_read` `((billed_to = ANY (ARRAY['studio'::ledger_billing, 'overhead'::ledger_billing])) AND ((card_id IS NULL) OR card_is_public(card_id)))`; `public_agent_events` has the columns id, card_id, role_id, type, created_at, step, usd. `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` → `PASS: anon access matches the RLS contract` (card_approvals, jobs, dispatcher_cards and dispatcher_card_spend refused with 42501, `card_is_public (intentionally callable)` answering false, `cards(agent-written without an approval)` empty); `scripts/ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards`. The live site kept working throughout: its events read names only columns the view still has.
 
-Steps 5 to 9 run after the merge; the next pull request that touches the specs records their output here, as this one did for local-gate.
+### The gate, the merge and production after it (24 September 2026, UTC; recorded by agent-workflows)
+
+5. The gate at the head sha, on the board's Mac (`scripts/local-gate.sh`, PLAN.md §10 decision 44): `LOCAL GATE PASS pr=73 head=f458a003d6f682af526e010ed61d7e9574a2835b base=b2d5126e42ce8b081d2c777cd4ce9853d7776739 merge=d548fb61b921c6e6ed4b3bad3afd4d2c565f49ca seed=true platform=true lane=code site=true functions=true log=/Users/kylesmith/peanutgallery-launch/gate-logs/pr73-f458a00.log`. The log shows gate tests 508, functions `107 passed (143 steps)`, site e2e `148 passed`, board e2e `7 passed`, GATE PASS for the build and the bot, and the commit status `local-gate success`.
+6. The merge: origin/main was b2d5126, the PASS line's base; `gh pr merge 73 --squash --match-head-commit f458a00…` with the PASS line in the body → `MERGED` as ff512b9114dc59fe64a5f561cd5ca95eaae40403.
+7. After the merge, from main (production steps 5, 6, 8 and 9; step 7 is below):
+   - Step 5, the roles: `pnpm --filter @backseat/supabase seed` → `roles: 16 upserted`; the read-back shows each role's class, and `write_access` is true only for Builder A, Builder B, the Platform Builder, QA and the Studio Head.
+   - Step 6, the backlog: the `file-backlog` dry run listed the two removals, "Handling a dispute the studio wins" and "Split aggregate on the meter"; `--apply` → `done: 2 inserted, 37 updated, 2 removed, 6 unchanged, 0 skipped`.
+   - `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` and `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards`, again after the merge.
+   - Step 8: both Netlify sites (the public site and the board's) published ff512b9, and `node platform/site/scripts/live-check.mjs` → `PASS live-check https://peanutgallery.games passed=236 failed=0 skipped=0`; the live page's build sha reads ff512b9114dc59fe64a5f561cd5ca95eaae40403. Live screenshots of home and /ledger at 375 and 1440 were looked at: the event list renders from the new select.
+   - Step 9: `docs/SYSTEM.md` is published as a private page for the board (https://claude.ai/artifact/JMy2LBnN8f1yA8vVJPUEhS).
+8. Step 7, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `docs/BOARD-SETUP.md`. Installing it runs main, which carries this change, so nothing is left to redeploy.
+
+Every Verification line is now run and quoted: `pnpm verify`, the function, dispatcher, supabase and ops tests and the board e2e above; the gate at the head sha (5); and production (the dump's size, both scripts' PASS lines, the cooling window 0, no hidden card, the backlog's removal list and count, the live check).
 
 ## Decisions
 
