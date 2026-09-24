@@ -159,3 +159,55 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
   };
   return { live, cards };
 }
+
+/**
+ * A card's /api/card/:id document built from the fixture the way site_card() builds it
+ * (docs/specs/supporter-pages.md), or null when the fixture has no card at the id: the card's
+ * columns, its funding, cost, first 24 supporters and their count, its newest 200 lines with a key
+ * (oldest first) and their count, its milestones, the roles on its lines and its stopped row.
+ */
+export function toCardDetail(studio: StudioFixture, id: string): Record<string, unknown> | null {
+  const own = studio.cardDetails?.[id];
+  if (own !== undefined) return own;
+  const known = new Set(studio.cards.map((card) => card.id));
+  const table = [...studio.cards, ...(studio.stopped ?? []).filter((row) => !known.has(row.card_id)).map(stoppedAsCard)];
+  const card = table.find((row) => row.id === id);
+  if (card === undefined) return null;
+  const funding = studio.funding.find((row) => row.card_id === id);
+  const stoppedRow = (studio.stopped ?? []).find((row) => row.card_id === id) ?? null;
+  const spent = studio.spend.find((row) => row.card_id === id)?.spent_usd ?? stoppedRow?.spent_usd ?? 0;
+  const supporters = [...(studio.supporters?.[id] ?? [])].sort((a, b) => a.number - b.number);
+  const events = studio.events
+    .filter((event) => event.card_id === id)
+    .sort((a, b) => text(a.created_at).localeCompare(text(b.created_at)) || text(a.id).localeCompare(text(b.id)));
+  const lined = events.filter((event) => eventLineKey(event) !== 'none');
+  const gate = [...events].reverse().find((event) => event.type === 'gate_pass' || event.type === 'gate_fail');
+  const roleIds = new Set([card.executor_role_id, ...lined.map((event) => event.role_id)].filter((value) => typeof value === 'string'));
+  return {
+    card: {
+      commit_sha: null,
+      failing_check: null,
+      acceptance_test: null,
+      opens_at: null,
+      board_vetoed: false,
+      board_veto_reason: null,
+      drafter_role_id: null,
+      ...card,
+    },
+    funding: funding === undefined ? null : { contributors: Number(funding.contributors), credited_usd: funding.credited_usd, on_card_usd: card.funded_usd },
+    spent_usd: spent,
+    supporters: supporters.slice(0, 24),
+    supporter_count: supporters.length,
+    lines: lined.slice(-200).map((event) => ({ role_id: event.role_id, line_key: eventLineKey(event), created_at: event.created_at })),
+    line_count: lined.length,
+    milestones: {
+      created_at: card.created_at,
+      started_at: events.find((event) => event.type === 'start')?.created_at ?? null,
+      gate_at: gate?.created_at ?? null,
+      gate: gate === undefined ? null : gate.type === 'gate_pass' ? 'passed' : 'failed',
+      live_at: card.live_at ?? null,
+    },
+    roles: studio.roles.filter((role) => roleIds.has(role.id)).map((role) => ({ id: role.id, name: role.name, title: role.title })),
+    stopped: stoppedRow,
+  };
+}

@@ -27,7 +27,9 @@ export type StudioFixture = {
   stopped: Record<string, unknown>[] | null;
   /** public_role_stats by role id; a role left out has spent nothing and shipped nothing. */
   roleStats?: Record<string, { spent_usd?: number | string; spent_7d_usd?: number | string; shipped_cards?: number }>;
-  /** /api/card/:id documents by card id (card-documents.ts builds them); an id left out is built from the fixture. */
+  /** public_card_supporters by card id, in any order; a card left out has none. */
+  supporters?: Record<string, { number: number; founding: boolean }[]>;
+  /** /api/card/:id documents by card id; an id left out is built from the fixture (snapshot-documents.ts toCardDetail). */
   cardDetails?: Record<string, Record<string, unknown>>;
   /** /api/thanks answers by session id; a session left out answers {"status":"pending"}. */
   thanks?: Record<string, Record<string, unknown>>;
