@@ -287,6 +287,15 @@ describe('createSnapshotSource.load', () => {
     expect(Object.keys(snapshot.events[0]!).sort()).toEqual(['card_id', 'created_at', 'id', 'role_id', 'type']);
   });
 
+  it("keeps a line's step and amount, which the pages turn into what the database did to a card", () => {
+    const docs = toDocuments(DEFAULT_STUDIO);
+    const events = docs.live.events as Record<string, unknown>[];
+    const live = { ...docs.live, events: [{ ...events[0]!, role_id: null, type: 'message', step: 'ceiling_top_up', usd: 2.5 }, ...events.slice(1)] };
+    const [first] = snapshotFrom(live, docs.cards).events;
+    expect([first!.step, first!.usd]).toEqual(['ceiling_top_up', 2.5]);
+    expect(() => snapshotFrom({ ...docs.live, events: [{ ...events[0]!, usd: 'x' }] }, docs.cards)).toThrow('Malformed');
+  });
+
   it('rejects when a document answers other than 200', async () => {
     for (const url of [LIVE_URL, CARDS_URL]) {
       const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO), { [url]: 502 });

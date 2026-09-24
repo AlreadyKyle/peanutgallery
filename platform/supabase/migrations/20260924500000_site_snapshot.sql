@@ -129,10 +129,10 @@ as $$
     'events', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', e.id, 'card_id', e.card_id, 'role_id', e.role_id, 'type', e.type,
-        'created_at', e.created_at, 'card_title', c.title
+        'created_at', e.created_at, 'step', e.step, 'usd', e.usd, 'card_title', c.title
       ) order by e.created_at desc, e.id desc)
       from (
-        select id, card_id, role_id, type, created_at from public.public_agent_events
+        select id, card_id, role_id, type, created_at, step, usd from public.public_agent_events
         order by created_at desc, id desc
         limit 20
       ) e

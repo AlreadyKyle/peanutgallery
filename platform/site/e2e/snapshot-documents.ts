@@ -99,12 +99,14 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
     events: [...studio.events]
       .sort(desc('created_at'))
       .slice(0, 20)
-      .map(({ id, card_id, role_id, type, created_at }) => ({
+      .map(({ id, card_id, role_id, type, created_at, step, usd }) => ({
         id,
         card_id,
         role_id,
         type,
         created_at,
+        step: step ?? null,
+        usd: usd === undefined || usd === null ? null : Number(usd),
         card_title: card_id === null ? null : (titles.get(card_id) ?? null),
       })),
     deploys: studio.deploys.slice(0, 10).map(({ id, folder, sha, is_green, created_at }) => ({ id, folder, sha, is_green, created_at })),
