@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
+import { DISCORD_KEYS, DISCORD_WEBHOOK, FORBIDDEN_KEYS, MANAGED_KEYS, NOT_COPIED, OPERATOR_KEYS, OPTIONAL_KEYS } from '../dispatcher-env.mjs';
 import { VPS_JOBS } from '../jobs/lib.mjs';
 // The jobs' own tests (the Controller, the quota check and their env rules) and the Mac host's
 // (docs/specs/mac-host.md) run with these.
@@ -282,16 +282,69 @@ describe('provision.sh env file checks', () => {
   });
 });
 
+// docs/specs/studio-reports.md: the Discord webhooks, copied when set, left out when unset, and
+// refused, naming the key only, when not a Discord webhook address.
+describe('the Discord webhooks in the dispatcher env file', () => {
+  const TOKEN = 'tokFIXTURE_part-9';
+  const SHIPS = `https://discord.com/api/webhooks/111/${TOKEN}`;
+  const WEEKLY = `https://canary.discordapp.com/api/webhooks/222/${TOKEN}`;
+
+  test('copies each key when set, and omits it when unset', () => {
+    const run = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, DISCORD_WEBHOOK_SHIPS: SHIPS, DISCORD_WEBHOOK_WEEKLY: WEEKLY }) });
+    assert.equal(run.status, 0, run.output);
+    const written = new Map(parseEnvFile(readFileSync(run.out, 'utf8')));
+    assert.equal(written.get('DISCORD_WEBHOOK_SHIPS'), SHIPS);
+    assert.equal(written.get('DISCORD_WEBHOOK_WEEKLY'), WEEKLY);
+    assert.ok(!run.output.includes(TOKEN), 'the output names keys only');
+    const check = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'check_env_lines "$ENV_TO_CHECK"', { ENV_TO_CHECK: run.out });
+    assert.equal(check.status, 0, `${check.stdout}${check.stderr}`);
+    const only = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, DISCORD_WEBHOOK_SHIPS: SHIPS, DISCORD_WEBHOOK_WEEKLY: '' }) });
+    const keys = parseEnvFile(readFileSync(only.out, 'utf8')).map(([key]) => key);
+    assert.ok(keys.includes('DISCORD_WEBHOOK_SHIPS') && !keys.includes('DISCORD_WEBHOOK_WEEKLY'), keys.join(','));
+    const none = makeEnv();
+    assert.ok(!parseEnvFile(readFileSync(none.out, 'utf8')).some(([key]) => key.startsWith('DISCORD_')));
+  });
+
+  test('refuses a value that is not a Discord webhook address, naming the key and never the value', () => {
+    for (const key of DISCORD_KEYS) {
+      for (const bad of [`http://discord.com/api/webhooks/1/${TOKEN}`, `https://discord.com.evil.test/api/webhooks/1/${TOKEN}`, `https://discord.com/api/webhooks/1/${TOKEN}?x=1`]) {
+        const run = makeEnv({ dotenv: dotenvText({ ...MAC_DOTENV, [key]: bad }) });
+        assert.equal(run.status, 1, bad);
+        assert.ok(run.stderr.includes(`${key} must be a Discord webhook address`), run.output);
+        assert.ok(!run.output.includes(TOKEN) && !run.output.includes('evil'), 'the refusal names the key only');
+        assert.ok(!existsSync(run.out), 'nothing is written');
+      }
+    }
+  });
+
+  test("provision.sh's check_env_lines (install.sh's check on the Mac) refuses a bad address by key only", () => {
+    const made = makeEnv();
+    const file = path.join(scratch, `discord-${runs++}.env`);
+    writeFileSync(file, `${readFileSync(made.out, 'utf8')}DISCORD_WEBHOOK_WEEKLY=https://evil.test/api/webhooks/1/${TOKEN}\n`);
+    const check = callFunction('provision.sh', 'PROVISION_SOURCE_ONLY', 'check_env_lines "$ENV_TO_CHECK"', { ENV_TO_CHECK: file });
+    assert.equal(check.status, 1);
+    assert.equal(check.stdout.trim(), 'DISCORD_WEBHOOK_WEEKLY must be a Discord webhook address');
+  });
+
+  test("uses the dispatcher's own pattern", () => {
+    const config = read('platform/dispatcher/src/config.ts');
+    const pattern = /export const DISCORD_WEBHOOK = (\/.+\/);/.exec(config)?.[1];
+    assert.equal(pattern, String(DISCORD_WEBHOOK));
+    const shell = /local discord_re='([^']+)'/.exec(read('platform/ops/provision.sh'))?.[1];
+    assert.equal(shell, DISCORD_WEBHOOK.source.replaceAll('\\/', '/'));
+  });
+});
+
 describe('dispatcher-env.mjs key lists', () => {
   test('account for every variable config.ts reads', () => {
     const config = read('platform/dispatcher/src/config.ts');
     const read_ = new Set([
-      ...[...config.matchAll(/(?:requireEnv|optionalEnv|numberEnv|positiveIntegerEnv|optionalHttpsUrlEnv)\(env, '([A-Z_]+)'/g)].map((match) => match[1]),
+      ...[...config.matchAll(/(?:requireEnv|optionalEnv|numberEnv|positiveIntegerEnv|optionalHttpsUrlEnv|discordWebhookEnv)\(env, '([A-Z_]+)'/g)].map((match) => match[1]),
       ...[...config.matchAll(/const (?:STUDIO|FOUNDER)_KEY = '([A-Z_]+)'/g)].map((match) => match[1]),
     ]);
     const made = makeEnv();
     const written = new Set(parseEnvFile(readFileSync(made.out, 'utf8')).map(([key]) => key));
-    const accounted = new Set([...written, ...OPTIONAL_KEYS, ...Object.keys(NOT_COPIED)]);
+    const accounted = new Set([...written, ...OPTIONAL_KEYS, ...DISCORD_KEYS, ...Object.keys(NOT_COPIED)]);
     for (const name of read_) assert.ok(accounted.has(name), `${name} is read by config.ts but neither written nor listed in NOT_COPIED`);
     for (const name of FORBIDDEN_KEYS) assert.ok(!written.has(name), `${name} is never written`);
     assert.deepEqual(OPERATOR_KEYS, ['VPS_GITHUB_TOKEN', 'GITHUB_READ_TOKEN', 'HEALTHCHECK_URL', 'NTFY_TOPIC_URL']);
