@@ -4,7 +4,8 @@ import { Avatar } from './Avatar';
 
 /**
  * The team strip: borderless links, each an agent's avatar beside its name and one-line job, linking
- * to its row on /team. Never `li.agent` (a row there) and never a bordered tile (DESIGN.md, The team).
+ * to its box on /team, three equal columns from 48rem. Never `li.agent` (a box there) (DESIGN.md,
+ * The team).
  */
 export function TeamStrip({ roles, asleep }: { roles: readonly Role[]; asleep: boolean }) {
   return (

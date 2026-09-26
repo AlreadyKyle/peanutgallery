@@ -229,10 +229,23 @@ describe('Team', () => {
     }
   });
 
-  it('lists each agent as a plain row, never a card', async () => {
+  it('draws every section as the same team grid of agent boxes, never a card (the board, 26 Sep 2026)', async () => {
     renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
     expect(document.querySelectorAll('li.card')).toHaveLength(0);
     expect(document.querySelectorAll('li.agent').length).toBe(ROLES.length);
+    expect(document.querySelectorAll('.team-coming, .agent-coming')).toHaveLength(0);
+    for (const name of [team.running, team.startsLater, team.planned]) {
+      const lists = screen.getByRole('region', { name }).querySelectorAll('ul');
+      expect(lists).toHaveLength(1);
+      expect(lists[0]!.className).toBe('team-grid');
+      expect([...lists[0]!.children].every((li) => li.tagName === 'LI' && li.className === 'agent')).toBe(true);
+    }
+    // A role still to come has the same parts as a running one: the avatar, the name, "AI agent",
+    // the description and its foot.
+    for (const name of ['Biz Dev', 'Host']) {
+      expect(within(box(name)).getByText(team.aiAgent)).toBeTruthy();
+      expect(box(name).querySelector(':scope > .agent-foot')).not.toBeNull();
+    }
   });
 });

@@ -34,18 +34,20 @@ test.describe('while the studio is paused', () => {
   });
 });
 
-test.describe('the rows of each section', () => {
+test.describe('the boxes of each section', () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
-  test('end their feet together and line up their Paused tags across each row', async ({ page }) => {
+  test('end their feet together and line up their Paused tags across each row, in all three sections', async ({ page }) => {
     for (const width of [768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/team');
       await expect(page.locator('li.agent').first()).toBeVisible();
       // Rows of agents side by side, grouped by where each starts; within a row, each foot line's top.
       const misaligned = await page.evaluate(() => {
-        const out: string[] = [];
-        for (const grid of document.querySelectorAll('.team-grid')) {
+        const grids = document.querySelectorAll('.team-grid');
+        // Running, Starts later and Planned: every section is a team grid of boxes.
+        const out: string[] = grids.length === 3 ? [] : [`${grids.length} team grids`];
+        for (const grid of grids) {
           const rows = new Map<number, Element[]>();
           for (const agent of grid.querySelectorAll(':scope > li.agent')) {
             const top = Math.round(agent.getBoundingClientRect().top);
@@ -66,6 +68,44 @@ test.describe('the rows of each section', () => {
         return out;
       });
       expect(misaligned, `${width}px`).toEqual([]);
+    }
+  });
+});
+
+// The board, 26 Sep 2026 (PLAN §10 decision 49): every member of the team in the same box, one to a
+// grid cell. One width for every box on the page at every breakpoint; from 768px every box in a
+// section as tall as the tallest in it. The default fixture draws all three sections.
+test.describe('every member of the team', () => {
+  test.use({ studio: DEFAULT_STUDIO });
+
+  test('sits in one box size: one width on the page, one height in each section from 768px', async ({ page }) => {
+    for (const width of [375, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/team');
+      await expect(page.locator('li.agent').first()).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const sections = await page.evaluate(() =>
+        [...document.querySelectorAll('main section')]
+          .filter((section) => section.querySelector('li.agent') !== null)
+          .map((section) => ({
+            heading: section.querySelector('h2')?.textContent ?? '',
+            lists: [...section.querySelectorAll('ul')].map((ul) => ul.className),
+            boxes: [...section.querySelectorAll('li.agent')].map((li) => {
+              const r = li.getBoundingClientRect();
+              return { width: r.width, height: r.height, parent: li.parentElement?.className ?? '' };
+            }),
+          })),
+      );
+      expect(sections.map((section) => section.heading), `${width}px`).toEqual(['Running', 'Starts later', 'Planned']);
+      const widths = sections.flatMap((section) => section.boxes.map((b) => b.width));
+      expect(Math.max(...widths) - Math.min(...widths), `${width}px box widths ${widths.join(', ')}`).toBeLessThanOrEqual(1);
+      for (const section of sections) {
+        expect(section.lists, `${section.heading} at ${width}px`).toEqual(['team-grid']);
+        expect(new Set(section.boxes.map((b) => b.parent)), `${section.heading} at ${width}px`).toEqual(new Set(['team-grid']));
+        if (width < 768) continue;
+        const heights = section.boxes.map((b) => b.height);
+        expect(Math.max(...heights) - Math.min(...heights), `${section.heading} at ${width}px heights ${heights.join(', ')}`).toBeLessThanOrEqual(1);
+      }
     }
   });
 });

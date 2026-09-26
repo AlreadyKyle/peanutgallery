@@ -27,25 +27,32 @@ export function roleFacts(role: Role, snapshot: Snapshot): string {
   return [role.model, spent, ships].filter((part) => part !== '').join(' · ');
 }
 
+/**
+ * One member of the team, in the same box in every section (the board, 26 Sep 2026; PLAN §10
+ * decision 49): the avatar beside the name and "AI agent", the description, then the foot.
+ */
 function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; snapshot: Snapshot }) {
   const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
-  // The studio's pause is said once, above the list; a role's own pause, on its row.
+  // The studio's pause is said once, above the list; a role's own pause, on its box.
   const why = status.kind === 'paused' ? (status.by === 'role' ? status.sentence : null) : status.sentence;
+  const coming = !onTheTeam(status);
   return (
     <li className="agent" id={`agent-${role.id}`} data-status={status.kind}>
       {/* Awake while the studio is paused (the board, 23 Sep 2026: running agents have their eyes
-          open); asleep only when the board has paused this one agent. */}
-      <Avatar note={role.species_note} asleep={status.kind === 'paused' && status.by === 'role'} />
+          open); asleep when the board has paused this one agent, and every role still to come
+          (the board's #75 call), with its smaller avatar. */}
+      <Avatar note={role.species_note} asleep={coming || (status.kind === 'paused' && status.by === 'role')} size={coming ? 56 : 96} />
       <h3 id={`role-${role.id}`}>{role.name}</h3>
       <p className="agent-kind">{kind}</p>
       {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      {/* The row's foot is pinned to its bottom, so it lines up across a row: on a running or paused
-          row the Paused tag and the facts (a role's own reason sits above them), on any other row
-          when it starts. */}
-      {onTheTeam(status) ? (
+      {/* The box's foot is pinned to its bottom, so it lines up across a row: on a running or paused
+          box the facts, then the Paused tag last, so the tags line up however many lines the facts
+          wrap to (a role's own reason sits above the foot); on any other box when it starts. */}
+      {!coming ? (
         <>
           {why === null ? null : <p className="muted agent-status">{why}</p>}
           <div className="agent-foot">
+            <p className="card-meta">{roleFacts(role, snapshot)}</p>
             {status.kind === 'paused' ? (
               <p className="row-meta">
                 <span className="tag" data-state="paused">
@@ -54,7 +61,6 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
                 </span>
               </p>
             ) : null}
-            <p className="card-meta">{roleFacts(role, snapshot)}</p>
           </div>
         </>
       ) : why === null ? null : (
@@ -62,21 +68,6 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
           <p className="muted agent-status">{why}</p>
         </div>
       )}
-    </li>
-  );
-}
-
-/**
- * A role that does not run yet, as a compact tile: its avatar asleep, its name, its job and when it
- * starts (the board, 23 Sep 2026: the roles still to come asleep, in compact balanced columns).
- */
-function ComingTile({ role, status }: { role: Role; status: TeamStatus }) {
-  return (
-    <li className="agent agent-coming" id={`agent-${role.id}`} data-status={status.kind}>
-      <Avatar note={role.species_note} asleep size={56} />
-      <h3 id={`role-${role.id}`}>{role.name}</h3>
-      {role.description === null || role.description.trim() === '' ? null : <p>{role.description}</p>}
-      {status.sentence === null ? null : <p className="agent-status">{status.sentence}</p>}
     </li>
   );
 }
@@ -90,7 +81,6 @@ function Section({ id, heading, intro, rows, snapshot, link = false }: {
   link?: boolean;
 }) {
   if (rows.length === 0) return null;
-  const running = rows.every(({ status }) => onTheTeam(status));
   return (
     <section className="section" aria-labelledby={id}>
       <h2 id={id}>{heading}</h2>
@@ -103,19 +93,11 @@ function Section({ id, heading, intro, rows, snapshot, link = false }: {
           </>
         ) : null}
       </p>
-      {running ? (
-        <ul className="team-grid">
-          {rows.map(({ role, status }) => (
-            <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
-          ))}
-        </ul>
-      ) : (
-        <ul className="team-coming">
-          {rows.map(({ role, status }) => (
-            <ComingTile key={role.id} role={role} status={status} />
-          ))}
-        </ul>
-      )}
+      <ul className="team-grid">
+        {rows.map(({ role, status }) => (
+          <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -146,8 +128,9 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
  * Meet the team: every active role from public_roles in three sections from the roster's own columns
  * (lib/roster.ts teamStatus): Running (with the paused rows while the studio or the role is paused),
  * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
- * the shipped cards; the rest show when they start. Two bands: the heading on the signal plate, and
- * every agent row on paper (DESIGN.md, Bands).
+ * the shipped cards; the rest show when they start. Every section is the same grid of the same boxes,
+ * one to a cell. Two bands: the heading on the signal plate, and every agent box on paper (DESIGN.md,
+ * Bands).
  */
 export function Team() {
   const studio = useStudio();

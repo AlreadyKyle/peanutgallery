@@ -1251,16 +1251,12 @@ button.link:hover:not(:disabled) {
   margin: 0;
 }
 
-.example .card-grid {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-/* The team: one plain row per agent (never a bordered tile, which would read as a card). On a
-   phone the avatar floats beside the name and the text wraps under it, so a long roster stays short
-   and no empty column runs down beside the text; from 48rem it sits on top. */
+/* The team: every member, running or still to come, in the same box, one to a grid cell (the board,
+   26 Sep 2026; PLAN §10 decision 49). A box is a 1px hairline and the standard radius, never a
+   card's 2px ink edge. From 48rem every box in a section is as tall as the tallest (Grid cells, below). */
 .team-grid {
   display: grid;
-  gap: var(--space-4) var(--space-3);
+  gap: var(--space-3);
   margin: 0 0 var(--space-2);
 }
 
@@ -1271,25 +1267,36 @@ button.link:hover:not(:disabled) {
   gap: var(--space-1);
 }
 
+/* The avatar sits beside the name and the "AI agent" line; the description and the foot run the
+   full width of the box. The third row takes the spare height, so the foot ends at the box's bottom. */
 .agent {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto 1fr auto;
   column-gap: var(--space-2);
   align-content: start;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
 }
 
-.agent > :not(.avatar) {
-  grid-column: 2;
+.agent > * {
+  grid-column: 1 / -1;
 }
 
 .agent > .avatar {
-  grid-row: 1 / -1;
+  grid-column: 1;
+  grid-row: 1 / span 2;
   margin: 0;
 }
 
-/* The Paused tag and the facts line sit together at the bottom of each row (.agent-foot), so the tags
-   and the lines align across a row of agents. */
+.agent > h3,
+.agent > .agent-kind {
+  grid-column: 2;
+}
+
+/* The facts line and, under it, the Paused tag sit together at the bottom of each box (.agent-foot),
+   so the last lines and the tags align across a row of boxes however far the facts wrap. */
 .agent-foot {
   margin-top: auto;
   padding-top: var(--space-1);
@@ -1320,38 +1327,10 @@ button.link:hover:not(:disabled) {
   font-weight: var(--weight-strong);
 }
 
-/* The roles still to come: equal compact tiles, each a small sleeping avatar beside the name and
-   the job in small type, flowing down balanced columns (CSS columns), so no row is left part-empty
-   however many roles there are. */
-.team-coming {
-  columns: 16rem 3;
-  column-gap: var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.team-coming > li {
-  break-inside: avoid;
-  margin-bottom: var(--space-3);
-}
-
-.agent-coming {
-  grid-template-rows: auto 1fr auto;
-}
-
-.agent-coming .avatar {
+/* A role still to come keeps its smaller, sleeping avatar in the same box. */
+.agent[data-status='starts'] .avatar,
+.agent[data-status='planned'] .avatar {
   width: 3.5rem;
-}
-
-.agent-coming h3 {
-  font-size: var(--size-body);
-}
-
-.agent-coming p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--size-small);
 }
 
 /* The team strip: borderless links, avatar beside the name and job. */
@@ -1695,8 +1674,6 @@ input[type='radio'] {
 }
 
 .demo .card-grid {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 24rem;
   margin: 0;
 }
 
@@ -1817,12 +1794,6 @@ input[type='radio'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* The team strip: one row, one column per member. */
-  .team-strip {
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-  }
-
   .show-all {
     display: none;
   }
@@ -1866,28 +1837,27 @@ input[type='radio'] {
   }
 }
 
-/* The fill rule: a card grid (and the team's grid and any .fill-grid) never leaves an empty cell and
-   never hides a real card. Two columns from 48rem are four tracks, three from 72rem are six (below
-   72rem a third column squeezes card text until a short card is left hollow beside a long one); an
-   odd last card at two columns takes the row, and at three columns the last two or four share their
-   rows in halves. One card keeps the reading measure. The order (the money's order) never changes. */
-@media (min-width: 48rem) and (max-width: 71.99rem) {
+/* Grid cells (the board, 26 Sep 2026; PLAN §10 decision 49): a grid of like items (the card grids,
+   the team's grid and any .fill-grid) puts one item in each cell, so every item in a grid is one
+   width. One column on a phone, two from 48rem, three from 72rem (below 72rem a third column squeezes
+   card text until a short card is left hollow beside a long one). Nothing spans two columns and a
+   lone item is one cell wide; rows fill from the left and the last may be part-empty. The order (the
+   money's order) never changes. Only the team's rows are 1fr, so every box in a section is as tall as
+   the tallest: a card takes four subgrid rows of its own, which 1fr would stretch. The team strip is
+   three equal columns however many members it shows. */
+@media (min-width: 48rem) {
   .card-grid,
   .team-grid,
   .fill-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .card-grid > *,
-  .team-grid > *,
-  .fill-grid > * {
-    grid-column: span 2;
+  .team-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .card-grid:has(> :last-child:nth-child(2n + 3)) > :last-child,
-  .team-grid:has(> :last-child:nth-child(2n + 3)) > :last-child,
-  .fill-grid:has(> :last-child:nth-child(2n + 3)) > :last-child {
-    grid-column: span 4;
+  .team-grid {
+    grid-auto-rows: 1fr;
   }
 }
 
@@ -1895,37 +1865,22 @@ input[type='radio'] {
   .card-grid,
   .team-grid,
   .fill-grid {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-
-  .card-grid > *,
-  .team-grid > *,
-  .fill-grid > * {
-    grid-column: span 2;
-  }
-
-  .card-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
-  .team-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
-  .fill-grid:has(> :last-child:nth-child(3n + 2)) > :nth-last-child(-n + 2),
-  .card-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4),
-  .team-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4),
-  .fill-grid:has(> :last-child:nth-child(3n + 4)) > :nth-last-child(-n + 4) {
-    grid-column: span 3;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 48rem) {
-  .card-grid:has(> :only-child),
-  .team-grid:has(> :only-child),
-  .fill-grid:has(> :only-child) {
-    grid-template-columns: minmax(0, var(--measure));
-  }
+/* A lone example card (/how-it-works and the guide's demos) is one three-column cell wide, and the
+   dashed frame around an example card hugs it, so its edge sits one padding outside the card and no
+   empty column runs down beside the card inside the frame. On a phone the frame is the full width
+   and the card fills it. */
+.example .card-grid,
+.demo .card-grid {
+  grid-template-columns: minmax(0, 23rem);
+}
 
-  .card-grid:has(> :only-child) > *,
-  .team-grid:has(> :only-child) > * > *,
-  .fill-grid:has(> :only-child) > * {
-    grid-column: auto;
-  }
+.example:has(> .card-grid) {
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Supporter pages (docs/specs/supporter-pages.md) ------------------------------------------- */
