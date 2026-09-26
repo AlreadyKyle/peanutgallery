@@ -192,7 +192,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **Buttons.** `.button` is the primary (filled from `--primary-*`), `.button-secondary` the outline, `.button-block` full width, `.btn-coin` Contribute (coin fill, ink text and edge, `--coin-hover` on hover and press: coin-down on paper and ink, coin-up on signal), `.button-quiet` the "Up to date" state. All 600, at least 44px, `--radius`. **Pressed** (`aria-pressed="true"`): a 3px `currentColor` border plus the check glyph, in every mode, never `var(--ink)` **(tested, e2e)**.
 
-**Filter chips** (`FilterChip`). `role="group"` of `button.filter`: the suit tile and label (or All) and a muted count; the pressed chip adds the check glyph and a 3px border. The studio chip shows only while a card is in it; a pressed chip that empties falls back to All.
+**Filter chips** (`FilterChip`). `role="group"` of `button.filter`: the suit tile and label (or All) and a muted count; the pressed chip adds the check glyph and a 3px border. The studio chip shows only while a card is in it; a pressed chip that empties falls back to All. Below 30rem three chips stack one to a line, each at its own width; two share a line.
 
 **The change rule.** A changed figure or row gets `.changed`: `box-shadow: inset 3px 0 0 currentColor` until the next poll, no layout (rows keep a constant 0.5rem inset for it). `currentColor`, never ink: paper on signal and in an ink band, ink on paper and on the work face **(tested, e2e)**. Forced colours drop it; the announcer carries funded and shipped.
 
@@ -247,7 +247,7 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 
 ## Breakpoints
 
-- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
+- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width, three or more filter chips stack one to a line at their own width, and the footer's links sit in three equal columns, one to a cell (two full rows of six), so no link or chip is left alone on a wrapped line. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
 - Fluid, with no breakpoint: `--size-h1`, `--size-h2` and `--band-pad` grow with the viewport.
 - From 48rem: two-column card and team grids and the guide's demo grids; rail rows put their time in the rail; the team strip is three equal columns.
 - From 64rem: the page links sit in the top bar and Menu goes; home's Shipped and Planned next sit side by side.
@@ -266,6 +266,7 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 - **Card rows**, from 768px: bottoms, titles and funding bars line up, the hollow above a card's bottom block is at most 80px, and the corner index never wraps.
 - **Rhythm:** a heading sits at least as far below the block before it as that block sits below its own predecessor, so a caption line stays with what it captions and never reads as the start of the next section.
 - **Buttons** keep their label on one line; no glyph under 32px wide is left alone on a wrapped line; the top bar is one row of at most 61px from 360 to 390px.
+- **Orphans** (the review of 26 September 2026: the footer's Discord link alone on a line at 330 to 440px): at any width, no list item, link or button sits alone on a wrapped line of a row whose other lines hold two or more. A row stacked one to a line is a column, and a meta line of text pieces wraps as prose does. The fix is a grid, one item to a cell, or a column, never a stretched item.
 
 The audit bites: `e2e/layout-balance.spec.ts` plants each kind of gap in a page and expects a finding for each, and run on the site before this change it finds the pitch beside the Right now panel 166px apart and Funding beside the Ledger 1,414px apart.
 

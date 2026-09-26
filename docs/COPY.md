@@ -65,7 +65,7 @@ The site is a quiet, precise table with real cards on it. The words match: plain
 
 - **/reports** (`docs/specs/studio-reports.md`): each report in the kernel's fixed template (`legal.reportFacts`): "Week of 14 Sep 2026", then Cards shipped, Spent from contributions, New supporters and Open for funding, the shipped cards with "$0.29 from contributions · funded by Supporter 1, Founding supporter 2 and 3 more", and First in line to fund. With none yet: "No weekly report yet. A report is published after a week in which a card shipped."
 - **A ship post:** "Shipped: <title>. Built by <role> for $0.29 from contributions, funded by Supporter 3, Founding supporter 1 and 2 more. Watch how it was built: <site>/card/<id>". At $0.00 from contributions the cost clause is left out, and with no supporter the funded clause.
-- **A weekly post:** "This week at Mob Machine: 2 cards shipped (<title>, <title>). 6 cards are open for funding. Read the report: <site>/reports".
+- **A weekly post:** "The week of 14 September at Mob Machine: 2 cards shipped (<title>, <title>). 6 cards were open for funding when the report was published. Read the report: <site>/reports". It names its week, never "this week", and the open count is the report's own; with none, "No card was open for funding when the report was published." It is posted only during the week after the report's week, and a report found later is recorded stale and never posted.
 - Both are fixed templates with the titles escaped, in the dispatcher (`platform/dispatcher/src/outbound.ts`); no model writes them.
 
 ## Still true

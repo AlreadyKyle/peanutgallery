@@ -325,7 +325,10 @@ prints it.
    `install.sh` carry them to the Mac host.
 
 A card that went live more than 6 hours before the lane is switched on is never posted, and only the
-newest weekly report is, so switching it on does not flood the channels.
+newest weekly report is, so switching it on does not flood the channels. A report is posted only
+during the week after its own: once the next New York week has ended it is recorded as stale and never
+posted, so switching the lane on, or resuming after a long pause, never announces an old week. The
+post names its week ("The week of 14 September at Mob Machine: …").
 
 **Unblocks:** ship posts and the weekly report. The first ship post needs a running dispatcher.
 
