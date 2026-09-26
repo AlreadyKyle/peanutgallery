@@ -52,7 +52,7 @@ Out:
 
 ## Verification
 
-- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`
+- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify` (with `EVAL_BASE` set to the base while the branch is stacked)
 - `E2E_PORT=4490 pnpm --filter @backseat/site e2e` (the existing suite: axe at 375 and 1440 px, no sideways scroll from 320 to 1440 px and at 375 px with 200% text, and `layout-balance.spec.ts`, all run after the text changes)
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts`
 - `git grep -n -i "free games" -- platform/site seed-1/content docs/PLAN.md` (no match outside history notes)
@@ -78,7 +78,55 @@ Out:
 
 ## Evidence
 
-Added when the status moves to built: each Behaviour item marked done here, done earlier (with its commit) or not needed; the board marker of every BACKLOG entry and the resulting /roadmap grouping of production's planned cards; a before-and-after table of every changed string on the landing page and /how-it-works; the Multiverse and Star Citizen retrievals; the fee constant evaluated at $1.00 beside the one recorded fee ($0.2662 on $1.00), with any gap explained.
+Built on `launch/agent-upkeep` (bc265ef), 26 September 2026. The Production criterion and its lines wait on the ship stage.
+
+**Behaviour items.**
+1. One game: done here. `pitchTitle`, the footer, `index.html`'s three tags, `og.png` (re-rendered by `node platform/site/scripts/og-image.mjs`: `wrote platform/site/public/og.png 1200x630 39347 bytes`), PLAN §2's pitch line and §10 decision 54.
+2. Star Citizen and Multiverse: done here (PLAN §2, §9; retrievals below). No launch draft or `docs/specs/announcement.md` quotes either (`git grep -n -i 'star citizen\|multiverse'` finds only PLAN §2 and §9 outside this spec).
+3. Who runs it: done here (`legal.whoRuns`, `components/WhoRuns.tsx` on /how-it-works and at the foot of /team; `copy.howItWorksPage.code` and `agents`).
+4. The $5 example: done here. money-logic had not rewritten it: the base still showed "A $10.00 contribution after Stripe's fee".
+5. The roadmap: done here (migration, parser, `file-backlog`, `Roadmap.tsx`).
+6. The lane line: done earlier, 90be039 (#82, supporter-pages): `copy.team.laneClosed` "Starts when the board opens the studio code lane."
+7. The new pages: done here. Read /thanks, /card/:id, /reports, /team, /roadmap's labels and /ledger's Money in and Stopped bands; three strings were not true and changed (below); the rest pass `copy.test.ts` unchanged. `seed-1/content/strings.json` and the Discord templates (`platform/dispatcher/src/outbound.ts` `shipText`, `weeklyText`) needed no change.
+
+**Before and after, the landing page.**
+
+| String | Before | After |
+|---|---|---|
+| `pitchTitle` (h1; `description`, `og:description`, `og:image:alt`; `og.png`) | Watch AI agents build a game studio and free games. | Watch AI agents build a game studio and its free game, Dust. |
+| `pitchBody` | Fund the card you want built next. | unchanged |
+| `footer` (every page) | AI agents build free games you can play in a browser. | AI agents build Dust, a free game you can play in a browser. |
+| `fundIntro` | Fund a card to grow the studio and its games. When a card's bar fills, the agents build it. | Fund a card to grow Dust and the studio. When a card's bar fills, the agents build it. |
+
+**Before and after, /how-it-works.**
+
+| String | Before | After |
+|---|---|---|
+| Step 2's example caption | A $10.00 contribution after Stripe's fee, with the default split. | $5.00 paid, with the default split. |
+| Its rows | Held in reserve $1.00 (10% of the $10.00.) · Studio's share $1.80 (20% of the $9.00 left.) · Emergency fund $0.36 (5% of the agents' $7.20, until the fund holds $500.) · Agent credit $6.84 (What reaches the card's bar and the meter.) | Paid $5.00 (What the supporter pays at checkout.) · Stripe's fee (about) $0.46 (2.9% plus CA$0.30, and 2% to convert US dollars; 0.8% more for a card from outside Canada.) · Held in reserve $0.45 (10% of the $4.54 left after Stripe's fee.) · Studio's share $0.82 (20% of the $4.09 left after the reserve.) · Emergency fund $0.16 (5% of the agents' $3.27, until the fund holds $500.) · Agent credit $3.11 (What the agents can spend on cards.) |
+| After the rows | none | The agent credit then goes, in this order: 1. The card the supporter picked, if any, up to its target. 2. Then the next cards in line, each up to its target. 3. Then Not on a card yet, where it waits for the next card to open. |
+| Where the money goes, fifth paragraph | Money given with no card, or beyond a card's target, waits in Not on a card yet for the next card to open. | Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits in Not on a card yet for the next card to open. |
+| Who runs it (new band) | none | Mob Machine is run by AI agents and a human board: Kyle Smith. · The board can pause the agents, cancel, veto or move a card, and change the spending caps. · The board files the cards: every entry on the roadmap and every card it opens for funding. When the board asks, the Game Designer, an AI agent, drafts a game card, and the Game Director, another agent, grades it before it can open. · The board also has standing duties: six items, PLAN §4 The Board's list. · If the board does none of them, the studio pauses or stays as it is. |
+| What code does and what the agents do (new) | none | Code with no AI in it runs the studio: the dispatcher schedules the cards and keeps the agents within their budgets; the gate runs the tests and the other automated checks on every change; a card's change goes live only when the gate passes it; if the bot that plays the game finds a problem after a change goes live, the change is rolled back. The AI agents do the creative work: they design, build and review the cards. |
+
+Also changed: /ledger's Not on a card yet description ("Money given with no card, or beyond a card's target, waiting for the next card to open." became "Agent credit that no open card could take, waiting for the next card to open."), /thanks' Discord button ("Get told when it ships" became "Follow the studio on Discord") and /roadmap's lede, horizon lines and group lines.
+
+**The fee.** Stripe Canada's pricing page (https://stripe.com/en-ca/pricing), read 26 September 2026: "2.9% + CA$0.30 per successful transaction for domestic cards", "+ 0.8% for international cards", "+ 2% if currency conversion is required". The Bank of Canada's daily average (https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json), read the same day: 2026-09-25 `1.4145`, 2026-09-14 `1.3909`, 2026-09-15 `1.3917`. `STRIPE_EXAMPLE_FEE` at $1.00: `exampleFee(1)` = 0.049 + 0.2121 = **$0.2611**. The one recorded fee, production's only contribution (read-only query): `{"amount_usd":"1.0000","net_usd":"0.7338","fee_usd":"0.2662","created_at":"2026-09-15 01:29:42.613755+00"}`, **$0.2662**. The gap, $0.0051, is the exchange rate: that payment was made on 14 September in Toronto, when CA$0.30 was $0.2157 at the Bank of Canada's 1.3909, which gives $0.2647; the last $0.0015 is Stripe's own rate against the Bank of Canada's daily average. The domestic rate fits it: with the 0.8% for a card from outside Canada the constant would give $0.2727, further off. At $5.00 the fee is $0.4571, shown as about $0.46.
+
+**Multiverse.** https://multiversegames.ai/, read 26 September 2026: headline "Games made by the minds they're about."; "Twelve games. Built by AI agents. Open source. Pay what you want."; 12 titles listed; "MIT License"; "The Pixel Office shows you who's online, what they're building". On 23 September its headline said nine and it listed 11; on 26 September both say twelve. A count on another studio's page goes stale, so PLAN §2 states none.
+
+**Star Citizen.** https://en.wikipedia.org/wiki/Star_Citizen, read 26 September 2026: "began crowdfunding in 2012"; "As of May 2026, combined crowdfunding and early access sales had passed US$1 billion"; "no projected date for the end of early access in Star Citizen has been announced"; the Persistent Universe "was made available for testing to pre-purchasers in 2015". So "over $1B in 14 years without a 1.0 release". (The Massively OP source answered 403 to a fetch and is kept as the existing citation.)
+
+**Board markers.** All 54 entries `board: yes` (the rule and the two seed-1 cases are in Decisions). Next: Voter identity for free votes; Free voting on open cards; Studio Head drafts cards from the roadmap; Studio Head triages board notes. Later: the other 50, in file order from Refund and dispute fee rows on the ledger to Builder replay set.
+
+**Production's /roadmap after `file-backlog --apply`.** Production holds 47 planned cards, every one a backlog entry (read-only query, 26 September 2026); the file's other 7 (Mockup and design-system cards, Post-ship grade and monthly design audit, Follow-up drafts from open visual criteria, The Janitor's docs pass, Monthly security audit, Visual replay set, Builder replay set) are inserted by design-review's and agent-upkeep's own `file-backlog` runs, or by this one's if those have not run, so this dry run shows only in-place updates once they have. With every entry marked, Next draws only its closed board-work disclosure (4 cards) and Later only its own (43 cards, 50 once the 7 are filed); For players and The studio are not drawn until a game or studio card is planned. Drawn by this branch's build against production's own `/api/live` and `/api/cards`, each card's `board_work` set from the file, into `~/peanutgallery-launch/shots/build/copy-pass/` (`prod-{home,how-it-works,team,roadmap,roadmap-open,thanks}-{375,768,1440}.png`): the layout audit is clean on all 18 (`prod-report-pass1.txt`: `pass 1 /roadmap (board work open) 375: audit clean`, and the same line for every route and width). One screenshot pass.
+
+**Verification.**
+- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && EVAL_BASE=bc265efb1336c2bcc8fc5cf93d81c1d7d668ab1d pnpm verify`, exit 0 (`EVAL_BASE` is this stacked branch's base; against `origin/main` the eval rule sees design-review's prompt changes, which are not this branch's): `platform/board` `Tests  103 passed (103)`; `platform/supabase` `Tests  324 passed (324)`; `platform/site` `Tests  526 passed (526)`; `seed-1` `Tests  77 passed (77)`; `platform/dispatcher` `Tests  827 passed (827)`; `PASS: gate tests passed=639`; `test:agents` `ℹ pass 142`, `ℹ fail 0`; `test:ops` `ℹ pass 135`, `ℹ fail 0`; functions `ok | 130 passed (239 steps) | 0 failed`; `GATE PASS folder=seed-1 lane=code`; `GATE PASS folder=platform lane=code`; `PASS: secret-scan files=680`; `test:docs` `ℹ pass 22`, `ℹ fail 0`; `test:rename` `ℹ pass 8`, `ℹ fail 0`, `tier 1 carries the old name nowhere`.
+- `E2E_PORT=4490 pnpm --filter @backseat/site e2e` (axe at 375 and 1440, sideways scroll from 320 to 1440 and at 375 with 200% text, `layout-balance.spec.ts`): `222 passed (4.0m)`, `8 skipped`. An earlier run failed two checks on the fee row ("about $0.46" as the figure: a 176px balance gap at 320px and sideways scroll at 200% text); "about" moved into the label and both pass.
+- `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts`: `ok | 3 passed (71 steps) | 0 failed`.
+- `git grep -n -i "free games" -- platform/site seed-1/content docs/PLAN.md`: only `copy.test.ts`'s own two assertions that the phrase is absent.
+- Production (waits on the ship stage): `anon-negative-test.ts`, `ledger-identity.ts`, `file-backlog` dry run then `--apply`, the live check.
 
 ## Decisions
 
@@ -86,7 +134,7 @@ Added when the status moves to built: each Behaviour item marked done here, done
 - 2026-09-23, reconciled with the series: the migration is `20260925000000_board_work.sql` (built as `20260925400000_board_work.sql`, below). It re-creates `site_cards()` (site-snapshot's plain function, as supporter-pages last re-created it; there is no `site_cards_body()`), keeping every key and adding `board_work`, and extends the cards column grant from the latest list on main. Every BACKLOG entry in the file at build gets its `board:` bullet, and the parser then requires it, so no later pull request adds an entry without one. The PLAN §10 decision takes the next free number at build.
 - 2026-09-23: the copy pass runs last, after the supporter loop. Home-and-design's share of the pass stands and is recorded item by item, not redone.
 - 2026-09-23: only the pitch's first sentence changes, from "free games" to one named game (PG-16). "Fund the card you want built next." is the board's line under §10 decision 21 and stays. "A game studio" stays, because no decision dropped it. "Watch" stays, because the card page and its replay exist; "in minutes" waits for a measured median.
-- 2026-09-23: PLAN §2 states no Multiverse game count, because its own site's headline and list disagree.
+- 2026-09-23: PLAN §2 states no Multiverse game count, because its own site's headline and list disagree. (At build its headline and list both say twelve; the count still moves, so none is stated.)
 - 2026-09-23: the Stripe fee in the example is labelled "about" and taken from Stripe Canada's published pricing with currency conversion, because the account is Canadian and charges USD. No Stripe account data is read; Stripe access is the board's only.
 - 2026-09-23: the roadmap groups by folder and an explicit board-work marker, never by bucket (PLAN §4 Work). Board work is never a funded card, and saying so is the truthful form of PG-21. The marker lives in BACKLOG.md so the board changes an entry by editing one line.
 - 2026-09-23: the board line says what the board files (the roadmap and board work), because it files the roadmap through `file-backlog`. (Superseded at build, below: PLAN §4 Who files cards has the board file every card.)
