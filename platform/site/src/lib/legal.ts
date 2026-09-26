@@ -321,6 +321,19 @@ export const legal = {
   foundingSupporter: 'Founding supporter {n}',
   supportersMore: 'and {n} more',
   supportersNone: 'No supporters yet.',
+  // /reports' fixed facts template (docs/specs/studio-reports.md, kernel ReportFacts.tsx): each weekly
+  // report's figures, from public records only. Here, not in copy.ts, because they name money.
+  reportFacts: {
+    weekOf: 'Week of {day}',
+    shipped: 'Cards shipped',
+    spent: 'Spent from contributions',
+    newSupporters: 'New supporters',
+    open: 'Open for funding when published',
+    shippedHeading: 'Shipped that week',
+    cost: '{usd} from contributions',
+    fundedBy: 'funded by {names}',
+    firstInLine: 'First in line to fund when published',
+  },
   // /team's running and paused rows: what the role's work paid for with contributions has cost. Only
   // rows billed to the studio count; founder-billed work stays private (PLAN.md §4 The Board).
   teamSpent: 'Spent from contributions {total}, {week} in the last 7 days',

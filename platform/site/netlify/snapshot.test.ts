@@ -54,6 +54,40 @@ describe('the snapshot function', () => {
     expect(calls[0]!.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/site_cards`);
   });
 
+  it('answers /api/reports from site_reports, cached an hour on the CDN with 10 minutes stale, and revalidated by the browser', async () => {
+    const body = '{"reports":[{"week_start":"2026-09-14","published_at":"2026-09-21T04:07:00+00:00","facts":{}}]}';
+    const calls = stubFetch(ok(body));
+    const response = await get('/api/reports');
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(body);
+    expect(response.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
+    expect(response.headers.get('Netlify-CDN-Cache-Control')).toBe('public, durable, s-maxage=3600, stale-while-revalidate=600');
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=0, must-revalidate');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/site_reports`);
+    expect(calls[0]!.init.method).toBe('POST');
+    expect(calls[0]!.init.body).toBe('{}');
+    expect((calls[0]!.init.headers as Record<string, string>).apikey).toBe(SUPABASE_PUBLISHABLE_KEY);
+  });
+
+  it('answers /api/reports with a query 400 and a POST 405, before any Supabase call, and 502 when Supabase fails', async () => {
+    const calls = stubFetch(ok());
+    for (const path of ['/api/reports?x=1', '/api/reports?p_limit=1000']) {
+      const response = await get(path);
+      expect(response.status, path).toBe(400);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Netlify-CDN-Cache-Control')).toBe('no-store');
+    }
+    const post = await get('/api/reports', 'POST');
+    expect(post.status).toBe(405);
+    expect(post.headers.get('Allow')).toBe('GET');
+    expect(calls).toHaveLength(0);
+    stubFetch(() => Promise.resolve(new Response('{"message":"boom"}', { status: 500 })));
+    const failed = await get('/api/reports');
+    expect(failed.status).toBe(502);
+    expect(failed.headers.get('Netlify-CDN-Cache-Control')).toBe('no-store');
+  });
+
   it('answers any query string 400 with no-store, before any Supabase call', async () => {
     const calls = stubFetch(ok());
     for (const path of ['/api/live?x=1', '/api/cards?v=abc', '/api/live?']) {
@@ -121,7 +155,7 @@ describe('the snapshot function', () => {
 
   it('names its paths only, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
-      path: ['/api/live', '/api/cards'],
+      path: ['/api/live', '/api/cards', '/api/reports'],
       rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');

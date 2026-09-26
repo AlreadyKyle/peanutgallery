@@ -207,6 +207,9 @@ function SiteFooter() {
         </p>
         <ul className="footer-links">
           <li>
+            <Link to="/reports">{copy.reportsNav}</Link>
+          </li>
+          <li>
             <Link to="/terms">{legal.footerLinks.terms}</Link>
           </li>
           <li>

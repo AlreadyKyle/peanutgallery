@@ -20,6 +20,8 @@ export const copy = {
   howItWorksNav: 'How it works',
   teamNav: 'Team',
   roadmapNav: 'Roadmap',
+  // The footer's link to /reports (docs/specs/studio-reports.md).
+  reportsNav: 'Weekly reports',
   fullLedger: 'Full ledger',
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',
@@ -152,6 +154,15 @@ export const copy = {
   // Who a line names when no agent wrote it: the dispatcher or the database.
   eventStudio: 'The studio',
   // A card's own page (docs/specs/supporter-pages.md).
+  // /reports (docs/specs/studio-reports.md): the weekly reports, newest first, each in the kernel's
+  // fixed template (ReportFacts.tsx), whose words are legal.reports.
+  reports: {
+    title: 'Weekly reports',
+    lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. A week in which no card shipped has no report.',
+    loading: 'Loading the reports.',
+    unavailable: 'The reports could not be loaded right now.',
+    empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
+  },
   cardPage: {
     back: 'All cards',
     cardTitle: 'A card',

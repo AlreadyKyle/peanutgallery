@@ -76,6 +76,8 @@ describe('the public site kernel imports only kernel code', () => {
       'lib/card-source.ts',
       'lib/lines.ts',
       'components/Supporters.tsx',
+      'lib/reports-source.ts',
+      'components/ReportFacts.tsx',
     ]) {
       expect(kernelSiteFiles, file).toContain(`${SITE_SRC}/${file}`);
     }

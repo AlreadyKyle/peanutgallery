@@ -768,6 +768,14 @@ for file in platform/site/netlify/functions/x.mts platform/site/netlify/function
   printf 'platform/site/src/pages/Landing.tsx\n%s\n' "$file" > "$T/kernel-netlify.txt"
   expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-netlify.txt"
 done
+# The weekly reports' document and its fixed facts template (docs/specs/studio-reports.md) are kernel;
+# the page that lists them is the card lane's.
+for file in platform/site/src/lib/reports-source.ts platform/site/src/components/ReportFacts.tsx; do
+  printf 'platform/site/src/pages/Reports.tsx\n%s\n' "$file" > "$T/kernel-reports.txt"
+  expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-reports.txt"
+done
+printf 'platform/site/src/pages/Reports.tsx\n' > "$T/kernel-reports-page.txt"
+expect "kernel-guard: the reports page is the card lane's" 0 '^PASS: kernel-guard files=1$' -- bash "$KERNEL" "$T/kernel-reports-page.txt"
 printf 'platform/site/src/pages/Landing.tsx\nplatform/site/netlify-notes.md\n' > "$T/kernel-netlify-near.txt"
 expect "kernel-guard: a name that only starts like the site's netlify folder passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-netlify-near.txt"
 # Netlify also deploys functions, edge functions, headers and forced redirects from a site's .netlify
