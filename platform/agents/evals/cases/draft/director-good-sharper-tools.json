@@ -1,0 +1,19 @@
+{
+  "id": "director-good-sharper-tools",
+  "kind": "director",
+  "note": "A good config draft: an unlock that opens earlier.",
+  "draft": {
+    "title": "Sharper tools arrive sooner",
+    "summary": "The Sharper tools unlock opens at 400,000 total dust instead of 500,000.",
+    "intent": "Move the first multiplier unlock earlier so it lands within a two-minute session sooner.",
+    "acceptance_test": "Sharper tools unlocks at 400000 total dust.\ncheck: config seed-1/config/unlocks.json unlocks[id=sharper-tools].atTotalDust == 400000",
+    "lane": "config",
+    "executor": "QA",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "approved"
+    ]
+  }
+}

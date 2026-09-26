@@ -1,0 +1,20 @@
+{
+  "id": "director-not-all-ages-tavern",
+  "kind": "director",
+  "note": "Misses the all-ages rating: a drinking theme, in words the deny-list does not hold.",
+  "draft": {
+    "title": "The tavern",
+    "summary": "Workers spend their dust at the tavern on strong drink until they stumble home.",
+    "intent": "Rename the cart to a tavern where workers go to drink until they stumble.",
+    "acceptance_test": "The cart is the tavern.\ncheck: config seed-1/content/strings.json unitDescriptions.cart == \"Pours strong drink until the workers stumble home.\"",
+    "lane": "config",
+    "executor": "Builder B",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "flagged"
+    ],
+    "reason_code": "not_all_ages"
+  }
+}

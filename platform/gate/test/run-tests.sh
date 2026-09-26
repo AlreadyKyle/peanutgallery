@@ -1026,6 +1026,47 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
 done
 assert "workflow audit: gate.yml runs checkout five times" test "$(grep -c 'uses: actions/checkout@' "$WORKFLOW")" = 5
 
+# The Janitor's weekly scan (docs/specs/agent-upkeep.md): the audit above holds for it (contents: read,
+# no secret, every checkout drops the token); besides, every action is pinned by a full commit sha, it
+# runs Mondays and on demand, and its two jobs run the scanners themselves: osv-scanner's action, not
+# the reusable workflow that uploads SARIF, and lychee offline over the docs.
+JANITOR="$REPO_ROOT/.github/workflows/janitor.yml"
+janitor_has() { grep -qE -- "$1" "$JANITOR"; }
+unpinned_uses() { grep -E '^ +(- )?uses: ' "$JANITOR" | grep -vcE 'uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40} # v[0-9.]+$'; }
+assert "janitor.yml: exists" test -f "$JANITOR"
+assert "janitor.yml: every action is pinned to a full commit sha" test "$(unpinned_uses)" = 0
+assert "janitor.yml: uses at least one action" test "$(grep -cE '^ +(- )?uses: ' "$JANITOR")" -ge 3
+assert "janitor.yml: runs Mondays at 11:23 UTC" janitor_has "^    - cron: '23 11 \* \* 1'$"
+assert "janitor.yml: runs on demand" janitor_has '^  workflow_dispatch:$'
+assert "janitor.yml: one run at a time" janitor_has '^concurrency: janitor$'
+assert "janitor.yml: has no push or pull request trigger" test "$(grep -cE '^  (push|pull_request):' "$JANITOR")" = 0
+for job in osv links; do assert "janitor.yml: job $job" janitor_has "^  $job:$"; done
+assert "janitor.yml: osv runs the scanner action over the lockfile" janitor_has '^      - uses: google/osv-scanner-action/osv-scanner-action@[0-9a-f]{40} # v2\.[0-9.]+$'
+assert "janitor.yml: osv scans pnpm-lock.yaml" janitor_has '^            --lockfile=pnpm-lock\.yaml$'
+assert "janitor.yml: no reusable workflow and no SARIF upload" test "$(grep -cE 'osv-scanner-reusable|upload-sarif|sarif' "$JANITOR")" = 0
+assert "janitor.yml: links runs lychee offline over the docs and the README" janitor_has "^          args: --offline --no-progress 'docs/\*\*/\*\.md' README\.md$"
+assert "janitor.yml: links fails on a broken link" janitor_has '^          fail: true$'
+
+# Dependency updates (docs/specs/agent-upkeep.md): Dependabot's npm updates weekly, seven days after a
+# release, patches in one group, one pull request at a time; Actions updates monthly. pnpm refuses a
+# version younger than seven days and a trust downgrade.
+DEPENDABOT="$REPO_ROOT/.github/dependabot.yml"
+dependabot_block() { awk -v eco="  - package-ecosystem: $1" '$0 == eco {p=1; print; next} /^  - package-ecosystem:/{p=0} p' "$DEPENDABOT"; }
+npm_has() { dependabot_block npm | grep -qxF -- "$1"; }
+actions_has() { dependabot_block github-actions | grep -qxF -- "$1"; }
+assert "dependabot.yml: version 2" grep -qx 'version: 2' "$DEPENDABOT"
+for line in '    directory: /' '      interval: weekly' '      day: monday' '    cooldown:' '      default-days: 7' '      patches:' '          - patch' '    open-pull-requests-limit: 1' '      - upkeep'; do
+  assert "dependabot.yml: npm sets '$line'" npm_has "$line"
+done
+for line in '    directory: /' '      interval: monthly' '    open-pull-requests-limit: 1'; do
+  assert "dependabot.yml: github-actions sets '$line'" actions_has "$line"
+done
+assert "dependabot.yml: two ecosystems only" test "$(grep -c '^  - package-ecosystem: ' "$DEPENDABOT")" = 2
+WORKSPACE="$REPO_ROOT/pnpm-workspace.yaml"
+assert "pnpm-workspace.yaml: minimumReleaseAge is seven days in minutes" grep -qx 'minimumReleaseAge: 10080' "$WORKSPACE"
+assert "pnpm-workspace.yaml: trustPolicy refuses a downgrade" grep -qx 'trustPolicy: no-downgrade' "$WORKSPACE"
+assert "pnpm-workspace.yaml: esbuild still the one allowed build" test "$(awk '/^allowBuilds:/{p=1; next} p && /^  /{print; next} {p=0}' "$WORKSPACE")" = "  esbuild: true"
+
 # The run block of the named step in a job, dedented, as the runner writes it to a script.
 step_script() {
   job_block "$1" | awk -v step="      - name: $2" '

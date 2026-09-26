@@ -124,7 +124,7 @@ if [ "$PLATFORM" = true ] || [ "$SITE" = true ] || [ "$FUNCTIONS" = true ]; then
   # gate.yml runs the platform job when detect selects platform; site and functions imply it.
   step "platform: typecheck and tests" bash platform/gate/ship-gate.sh --phase checks --folder platform
   step "platform: gate tests" pnpm --filter @backseat/gate test
-  step "platform: agent role spec tests" pnpm test:agents
+  step "platform: agent role spec tests" env EVAL_BASE="$BASE" pnpm test:agents
   step "platform: ops tests" pnpm test:ops
   step "platform: docs tests" pnpm test:docs
   if [ "$FUNCTIONS" = true ]; then step "platform: stripe webhook function tests" pnpm test:functions; fi

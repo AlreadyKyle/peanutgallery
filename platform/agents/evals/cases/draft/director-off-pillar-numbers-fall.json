@@ -1,0 +1,21 @@
+{
+  "id": "director-off-pillar-numbers-fall",
+  "kind": "director",
+  "note": "Breaks the numbers-go-up pillar: dust that shrinks while the player waits.",
+  "draft": {
+    "title": "Dust fades",
+    "summary": "Stored dust fades by a tenth every minute, so waiting loses dust.",
+    "intent": "Make saved dust shrink over time so players must spend it quickly; the decay rate lives in the unlocks file.",
+    "acceptance_test": "A decay unlock exists.\ncheck: config seed-1/config/unlocks.json unlocks[id=fading-dust].effect == {\"type\":\"multiplier\",\"value\":0.9}",
+    "lane": "config",
+    "executor": "QA",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "revise",
+      "flagged"
+    ],
+    "reason_code": "off_pillar"
+  }
+}

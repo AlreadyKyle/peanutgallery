@@ -12,7 +12,8 @@
     "gate:dry-run": "bash platform/gate/ship-gate.sh --dry-run --folder seed-1 --lane code && bash platform/gate/ship-gate.sh --dry-run --folder platform --lane code",
     "secret-scan": "bash platform/gate/secret-scan.sh --tracked",
     "verify": "pnpm typecheck && pnpm test && pnpm test:agents && pnpm test:ops && pnpm test:functions && pnpm gate:dry-run && pnpm secret-scan && pnpm test:docs && pnpm test:rename",
-    "test:agents": "node --test platform/agents/specs.test.mjs",
+    "test:agents": "node --test platform/agents/specs.test.mjs platform/agents/evals.test.mjs",
+    "eval:replay": "pnpm --filter @backseat/dispatcher exec tsx src/evals/replay.ts",
     "test:ops": "node --test platform/ops/test/ops.test.mjs",
     "test:docs": "node --test docs/docs.test.mjs",
     "test:rename": "node --test scripts/rename.test.mjs && node scripts/rename.mjs --check"
