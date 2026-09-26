@@ -317,6 +317,12 @@ section > h3 {
   align-self: flex-start;
 }
 
+/* A line after a form, such as the two-factor status under Verify, sits the form's 16 px below it,
+   so the focused button's ring never runs into it. */
+.stack + p {
+  margin-top: var(--space-2);
+}
+
 /* A row of a hairline list starts at its rule's padding, the same above and below its content. */
 .board-cards > li > .stack {
   margin-top: 0;

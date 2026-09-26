@@ -191,11 +191,12 @@ function SupplyItem({ client, supply, canRecord }: { client: SupabaseClient; sup
           <button type="submit" aria-disabled={busy}>
             Draft to the floor
           </button>
+          {/* Inside the form, as on every board form, so its 16 px gap clears the button's focus ring. */}
+          {message === '' ? null : <p role="status">{message}</p>}
         </form>
       ) : (
         <p>Verify your second factor, then draft to the floor from here.</p>
       )}
-      {message === '' ? null : <p role="status">{message}</p>}
     </li>
   );
 }
