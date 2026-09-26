@@ -2,12 +2,12 @@
 // card that went live in the last 6 hours, and one to the weekly lane for the newest published report
 // while its week is still the last one ended in New York, each posted at most once. A report found
 // after the next week has ended is recorded 'skipped' as 'stale' and never posted, so switching the
-// lane on, or resuming after a long pause, never announces an old week. Before a post the (kind, ref) row is inserted as 'sending', so the
-// primary key refuses a second claim; after it the row becomes 'posted' or 'failed'. Any existing row
-// is never posted again, so a timeout, an error or a crash mid-request loses that post rather than
-// doubling it. While the studio is paused or the kill switch has fired nothing is posted, and a ship
-// found then is recorded 'skipped' so it is never posted after resuming. With both lanes unset the lane
-// makes no query and no request.
+// lane on, or resuming after a long pause, never announces an old week. Before a post the (kind, ref)
+// row is inserted as 'sending', so the primary key refuses a second claim; after it the row becomes
+// 'posted' or 'failed'. Any existing row is never posted again, so a timeout, an error or a crash
+// mid-request loses that post rather than doubling it. While the studio is paused or the kill switch
+// has fired nothing is posted, and a ship found then is recorded 'skipped' so it is never posted after
+// resuming. With both lanes unset the lane makes no query and no request.
 import type { DiscordPoster } from './discord.js';
 import { escapeDiscord, fitPost } from './discord.js';
 import type { OutboundDb, ReportPost, ShipPost } from './db.js';
