@@ -9,5 +9,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["sim", "render", "bots", "tests", "scripts", "vite.config.ts"]
+  "include": ["sim", "render", "bots", "tests", "scripts", "e2e", "vite.config.ts", "playwright.config.ts"]
 }
