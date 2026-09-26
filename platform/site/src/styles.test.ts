@@ -443,15 +443,50 @@ describe('bands', () => {
 });
 
 describe('no dead space (DESIGN.md)', () => {
-  it('fills every row of a card grid, a team grid and a fill grid: two columns from 48rem, three from 72rem, never a hidden card', () => {
-    const fill = rules(styles).filter((rule) => /grid-column:\s*span [34]/.test(rule.body));
-    expect(fill.length).toBeGreaterThanOrEqual(2);
-    for (const rule of fill) for (const s of selectorsOf(rule)) expect(s).toMatch(/:has\(> :last-child:nth-child\((2n \+ 3|3n \+ 2|3n \+ 4)\)\)/);
-    expect(styles).toMatch(/@media \(min-width: 72rem\) \{\s*\.card-grid,/);
+  // Grid cells (the board, 26 Sep 2026; PLAN §10 decision 49): one item in each cell, no spans.
+  const GRIDS = ['.card-grid', '.team-grid', '.fill-grid'];
+  const namesGrid = (rule: Rule) => selectorsOf(rule).some((s) => GRIDS.some((grid) => s.includes(grid)));
+
+  it('puts one item in each cell of a card grid, a team grid and a fill grid: no span and no only-child exception', () => {
+    const gridRules = ALL_RULES.filter(namesGrid);
+    expect(gridRules.length).toBeGreaterThan(0);
+    for (const rule of gridRules) {
+      expect(rule.body, rule.selector).not.toMatch(/grid-column:\s*span|grid-column-end:\s*span|grid-column:\s*\d+\s*\/\s*(-|span)/);
+      expect(rule.selector).not.toMatch(/:only-child/);
+    }
   });
 
-  it('draws the team strip as one row, one column per member, from 48rem', () => {
-    expect(ALL_RULES.find((rule) => rule.selector === '.team-strip' && rule.media.includes('48rem'))?.body).toMatch(/grid-auto-flow:\s*column/);
+  it('draws two equal columns from 48rem and three from 72rem for the card, team and fill grids', () => {
+    const block = (width: string) => ALL_RULES.find((rule) => rule.media === `@media (min-width: ${width})` && selectorsOf(rule).join('|') === GRIDS.join('|'));
+    expect(block('48rem')?.body).toMatch(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(block('72rem')?.body).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+    // No other width's rule sets their columns.
+    const columns = ALL_RULES.filter((rule) => rule.media !== '' && namesGrid(rule) && /grid-template-columns/.test(rule.body));
+    expect(columns.map((rule) => rule.media).sort()).toEqual(['@media (min-width: 48rem)', '@media (min-width: 72rem)']);
+  });
+
+  it('makes the team rows 1fr from 48rem, and never a card grid (its cards take four subgrid rows)', () => {
+    const autoRows = ALL_RULES.filter((rule) => /grid-auto-rows:\s*1fr/.test(rule.body));
+    expect(autoRows.map((rule) => [rule.selector, rule.media])).toEqual([['.team-grid', '@media (min-width: 48rem)']]);
+    expect(ALL_RULES.filter((rule) => selectorsOf(rule).some((s) => s.includes('.card-grid')) && /grid-auto-rows/.test(rule.body))).toEqual([]);
+  });
+
+  it('draws the team strip as three equal columns from 48rem, however many members it shows', () => {
+    const strip = ALL_RULES.find((rule) => rule.selector === '.team-strip' && rule.media.includes('48rem'))?.body;
+    expect(strip).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(strip).not.toMatch(/grid-auto-flow/);
+  });
+
+  it('boxes each team member with a hairline edge and the standard radius, never a card edge', () => {
+    const agent = ALL_RULES.find((rule) => rule.selector === '.agent' && rule.media === '')?.body;
+    expect(agent).toMatch(/border:\s*1px solid var\(--hairline\)/);
+    expect(agent).toMatch(/border-radius:\s*var\(--radius\);/);
+    expect(agent).toMatch(/padding:\s*var\(--space-3\)/);
+    expect(styles).not.toMatch(/\.team-coming|\.agent-coming/);
+  });
+
+  it('draws a lone example card one three-column cell wide', () => {
+    expect(ALL_RULES.find((rule) => selectorsOf(rule).join('|') === '.example .card-grid|.demo .card-grid')?.body).toMatch(/grid-template-columns:\s*minmax\(0, 23rem\)/);
   });
 
   it('lets one block of a pair take the row alone, so nothing leaves an empty column', () => {
