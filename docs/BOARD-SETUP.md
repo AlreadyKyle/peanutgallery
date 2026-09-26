@@ -682,10 +682,11 @@ yours.
   changes the pitch to "Watch AI agents build a game studio and its free game, Dust.", names you on
   /how-it-works and at the foot of /team as the human board with your standing duties, and marks
   every `docs/BACKLOG.md` entry `board: yes` or `board: no`. Every entry today is board work (each
-  lands in kernel paths), so /roadmap shows them in a closed "Board work on how the studio runs
-  (not funded by cards)" disclosure. To override any wording, or any entry's marker, edit that one
-  line in a pull request; after a marker change, run `pnpm --filter @backseat/supabase file-backlog`
-  as a dry run, then with `--apply`. The Terms' Ontario address and phone stay legal-copy's item.
+  lands in kernel paths), so each /roadmap band shows them open under "Board work on how the studio
+  runs (not funded by cards)" and a line saying no card for players or the studio is there yet; once
+  such a card is planned, board work folds into a closed disclosure beside it. To override any
+  wording, or any entry's marker, edit that one line in a pull request; after a marker change, run
+  `pnpm --filter @backseat/supabase file-backlog` as a dry run, then with `--apply`. The Terms' Ontario address and phone stay legal-copy's item.
   The /thanks button now reads "Follow the studio on Discord": it promises no ship posts, which
   start only once you set `DISCORD_WEBHOOK_SHIPS` (above).
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
