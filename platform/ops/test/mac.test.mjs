@@ -867,3 +867,94 @@ describe("make-jobs-env.sh for the Mac host", () => {
     assert.match(relative.stderr, /BACKUP_DIR must be an absolute path to a folder/);
   });
 });
+
+// ---------------------------------------------------------------- pin-claude-code.sh
+
+// docs/specs/agent-upkeep.md: the board's one sudo script. id, sudo, chown and claude are fakes on
+// PATH, so it runs as the test's user, "as root", against a temporary managed-settings folder.
+describe('pin-claude-code.sh', () => {
+  const PIN = JSON.parse(read('platform/ops/mac/claude-code-pin.json'));
+
+  function pinRun({ uid = '0', sudoUser = 'board', version = PIN.version, settings } = {}) {
+    const root = fresh('pin');
+    const bin = path.join(root, 'bin');
+    mkdirSync(bin);
+    const log = path.join(root, 'log');
+    const managed = path.join(root, 'ClaudeCode');
+    fake(bin, 'id', `[ "$1" = -u ] && echo ${uid}`);
+    // sudo -u <user> <command...>: records the user and runs the command as the test's user.
+    fake(bin, 'sudo', `[ "$1" = -u ] || exit 64; echo "sudo -u $2" >> "${log}"; shift 2; exec "$@"`);
+    fake(bin, 'chown', `echo "chown $*" >> "${log}"`);
+    fake(bin, 'claude', `[ "$1" = --version ] && echo "${version} (Claude Code)"`);
+    if (settings !== undefined) {
+      mkdirSync(managed);
+      writeFileSync(path.join(managed, 'managed-settings.json'), settings);
+    }
+    const env = { PATH: `${bin}:${path.dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, CLAUDE_MANAGED_DIR: managed };
+    if (sudoUser !== null) env.SUDO_USER = sudoUser;
+    const run = spawnSync(BASH, [path.join(MAC_DIR, 'pin-claude-code.sh')], { env, encoding: 'utf8' });
+    const file = path.join(managed, 'managed-settings.json');
+    return { run, log: lines(log), file, written: existsSync(file) ? readFileSync(file, 'utf8') : null, managed };
+  }
+
+  test('refuses to run as a non-root user, and writes nothing', () => {
+    const { run, written } = pinRun({ uid: '501' });
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /^FAIL: run it as root/);
+    assert.equal(written, null);
+  });
+
+  test('refuses to run as root with no sudo user, since the version is read as the board', () => {
+    const { run, written } = pinRun({ sudoUser: null });
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /run it with sudo from your own account/);
+    assert.equal(written, null);
+  });
+
+  test('refuses an installed version other than the pin, and leaves the settings as they were', () => {
+    const before = '{"permissions":{"deny":["WebFetch"]}}\n';
+    const { run, written, log } = pinRun({ version: '9.9.9', settings: before });
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, new RegExp(`Claude Code 9\\.9\\.9 is installed but the pin is ${PIN.version.replaceAll('.', '\\.')}`));
+    assert.equal(written, before);
+    assert.deepEqual(log, ['sudo -u board']);
+  });
+
+  test('as root on the pinned version, sets env.DISABLE_AUTOUPDATER to "1", keeps every other key, root-owned at 0644', () => {
+    const before = { permissions: { deny: ['WebFetch'] }, env: { KEEP_ME: 'yes', DISABLE_AUTOUPDATER: '0' }, model: 'x' };
+    const { run, written, file, log, managed } = pinRun({ settings: JSON.stringify(before) });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(run.stdout, `PASS: claude-code pinned ${PIN.version}\n`);
+    assert.deepEqual(JSON.parse(written), { permissions: { deny: ['WebFetch'] }, env: { KEEP_ME: 'yes', DISABLE_AUTOUPDATER: '1' }, model: 'x' });
+    assert.equal(statSync(file).mode & 0o777, 0o644);
+    assert.equal(log[0], 'sudo -u board');
+    assert.match(log[1], /^chown root:wheel .*\.managed-settings\./);
+    assert.deepEqual(readdirSync(managed), ['managed-settings.json'], 'no temporary file is left');
+  });
+
+  test('creates the managed settings when there are none, and runs twice to the same file', () => {
+    const first = pinRun();
+    assert.equal(first.run.status, 0, first.run.stderr);
+    assert.deepEqual(JSON.parse(first.written), { env: { DISABLE_AUTOUPDATER: '1' } });
+    const again = pinRun({ settings: first.written });
+    assert.equal(again.run.status, 0, again.run.stderr);
+    assert.equal(again.written, first.written);
+  });
+
+  test('refuses settings that are not a JSON object, and leaves them as they were', () => {
+    for (const before of ['not json', '[1]', '{"env":"x"}']) {
+      const { run, written, managed } = pinRun({ settings: before });
+      assert.equal(run.status, 1, before);
+      assert.match(run.stderr, /could not be read as JSON; it is left as it was/);
+      assert.equal(written, before);
+      assert.deepEqual(readdirSync(managed), ['managed-settings.json'], 'no temporary file is left');
+    }
+  });
+
+  test("the pin file's sandbox_check is a PASS line on the pin's version", () => {
+    assert.deepEqual(Object.keys(PIN).sort(), ['sandbox_check', 'version']);
+    assert.match(PIN.version, /^\d+\.\d+\.\d+$/);
+    assert.ok(PIN.sandbox_check.includes('PASS'), PIN.sandbox_check);
+    assert.ok(PIN.sandbox_check.includes(PIN.version), PIN.sandbox_check);
+  });
+});
