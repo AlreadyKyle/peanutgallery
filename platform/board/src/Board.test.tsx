@@ -1169,7 +1169,7 @@ describe('Board card supply (docs/specs/studio-reports.md)', () => {
     fireEvent.submit(form);
     await flush();
     expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
-      { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: OPEN_CARDS.map((c) => c.id) } },
+      { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0, big_min_usd: 5, small_max_usd: 2 }, open_cards: OPEN_CARDS.map((c) => c.id) } },
     ]);
     expect(within(form).getByRole('status').textContent).toMatch(/^Queued\./);
   });

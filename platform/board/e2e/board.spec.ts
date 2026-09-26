@@ -614,7 +614,7 @@ test('the card supply: the line, Card supply is short, and Draft to the floor qu
   expect(bodies.filter((b) => b.path === '/rest/v1/rpc/enqueue_manual_job')).toEqual(
     widths.map(() => ({
       path: '/rest/v1/rpc/enqueue_manual_job',
-      body: { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: SUPPLY_CARDS.map((c) => c.id) } },
+      body: { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0, big_min_usd: 5, small_max_usd: 2 }, open_cards: SUPPLY_CARDS.map((c) => c.id) } },
     })),
   );
   expect(reports).toEqual([]);

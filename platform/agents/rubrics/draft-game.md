@@ -16,7 +16,7 @@ Games meet an ESRB E / PEGI 3 bar: no sexual content, nudity or suggestive theme
 2. The all-ages rating, in every field: title, summary, intent and acceptance test. A draft that misses it is not_all_ages, and it is flagged.
 3. One small change: one mechanic, number or piece of content that a builder can make in one short session. More than that is not_one_small_change.
 4. A summary its check lines back: the public summary promises nothing the `check:` lines do not prove. Otherwise summary_not_backed.
-5. A plausible estimate. The estimate is also the funding target, set by the five-times rule in `docs/specs/launch-cards.md`: five times the highest measured cost for the card's lane, rounded up to the next 50 cents, which is $0.50 for a config card and $1.50 for a code card at the measured costs. An estimate far from that for a change this size is estimate_implausible.
+5. A plausible estimate. The estimate is also the funding target, set by the five-times rule in `docs/specs/launch-cards.md`: five times the change's expected cost, rounded up to the next 50 cents. At the measured costs a change the size of the launch cards is $0.50 for a config card and $1.50 for a code card; a bigger change within one mechanic costs more, so its estimate is higher. An estimate far from that for a change this size, either way, or one padded to reach a round figure, is estimate_implausible.
 6. Plain text a player and a builder read the same way. Otherwise unclear_text.
 7. Not a copy of an open card the prompt lists. Otherwise duplicate_card, and it is flagged.
 8. Nothing that touches the kernel or needs art other than procedural or vector art. Otherwise breaks_kernel_or_art_policy, and it is flagged.

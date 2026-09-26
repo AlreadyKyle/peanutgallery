@@ -493,7 +493,7 @@ function Glyphs() {
     <section className="section" aria-labelledby="guide-glyphs">
       <h2 id="guide-glyphs">{guide.glyphsHeading}</h2>
       <p className="prose">{guide.glyphsIntro}</p>
-      <ul className="glyph-list">
+      <ul className="glyph-list fill-grid">
         {FACES.map((face) => (
           <li key={face} className="tag" data-state={face}>
             <Glyph name={STATE_TAGS[face].glyph} />
