@@ -66,11 +66,12 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
   const s = await studio();
   try {
     await t.step("the migration applies a second time, and a Janitor role row is picked up for both jobs", async () => {
-      assertEquals(s.migrations.at(-1)?.name, MIGRATION);
+      // A later migration (copy-pass's board_work) may follow this one, so it is found by name.
+      assert(s.migrations.some((m) => m.name === MIGRATION), `${MIGRATION} is among the migrations`);
       const janitor = (await s.row<{ id: string }>(
         `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path) values ('Janitor', 'Janitor', 'A short orange creature.', 'model-id', 0, 'tidy', 'platform/agents/prompts/janitor.md') returning id`,
       )).id;
-      await s.db.exec(s.migrations.at(-1)!.sql);
+      await s.db.exec(s.migrations.find((m) => m.name === MIGRATION)!.sql);
       const jobs = await s.rows<{ name: string; role_id: string; calls_model: boolean; runs_when_paused: boolean }>(
         `select name, role_id, calls_model, runs_when_paused from public.jobs where name in ('janitor', 'upkeep_merge') order by name`,
       );
@@ -141,9 +142,9 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
         {
           what: "function body",
           change: `create or replace function public.close_finding(p_fingerprint text) returns boolean language plpgsql security definer set search_path = public as $$ begin return false; end; $$`,
-          undo: s.migrations.at(-1)!.sql.slice(
-            s.migrations.at(-1)!.sql.indexOf("create or replace function public.close_finding"),
-            s.migrations.at(-1)!.sql.indexOf("-- c. schema_fingerprint"),
+          undo: s.migrations.find((m) => m.name === MIGRATION)!.sql.slice(
+            s.migrations.find((m) => m.name === MIGRATION)!.sql.indexOf("create or replace function public.close_finding"),
+            s.migrations.find((m) => m.name === MIGRATION)!.sql.indexOf("-- c. schema_fingerprint"),
           ),
           key: "function:public.close_finding(p_fingerprint text)",
         },
