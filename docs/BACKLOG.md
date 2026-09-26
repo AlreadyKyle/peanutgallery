@@ -53,14 +53,6 @@ everything else, in the order the board would take it.
 - summary: The Studio Head reads each note from the board and turns it into a draft card, a scheduled item or a discard, with a reason.
 - intent: Board notes are the one free text a role with write access may read. Triage runs at the top of every hour and at planning, links the note to its outcome, and shows the reason only on /board; a discarded note stays discarded unless the board files it as a directive. Notes are stored today and nothing reads them. It is not built yet.
 
-### The Monday report
-- bucket: agents
-- folder: platform
-- horizon: next
-- rank: 5
-- summary: A weekly public report from the Studio Head on what shipped, what it cost and what comes next.
-- intent: A scheduled Studio Head session writes the report from the ledger, the shipped cards and the efficiency figures, adds one line from each running agent, and posts it on the site. It is the studio's regular appointment for supporters. It is not built yet.
-
 ## Later
 
 ### Refund and dispute fee rows on the ledger
@@ -133,7 +125,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 9
 - summary: A public chart of what a shipped card costs and how often work passes the checks first time, over time.
-- intent: Computed from the ledger and the gate results over trailing windows, shown on the site and in the Monday report. It is not built yet.
+- intent: Computed from the ledger and the gate results over trailing windows, shown on the site and in the weekly report. It is not built yet.
 
 ### In-game bug button and QA reproductions
 - bucket: qa
@@ -284,8 +276,8 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: later
 - rank: 28
-- summary: A bot that posts what shipped and a daily ledger summary to the studio's Discord server.
-- intent: Posts from the ledger and the pipeline's events only, and reads nothing back into any agent with write access. The site links the Discord server today. It is not built yet.
+- summary: A bot for the studio's Discord server that takes part: polls, buttons and fixed commands.
+- intent: Inbound Discord only: polls and buttons counted by fixed rules, and fixed commands that answer with public figures. Nothing a member types reaches an agent with write access. The outbound ship and weekly posts are built (docs/specs/studio-reports.md). It is not built yet.
 
 ### Twitch channel and stream scenes
 - bucket: platform

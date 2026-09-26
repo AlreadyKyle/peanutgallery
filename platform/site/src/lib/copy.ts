@@ -158,7 +158,7 @@ export const copy = {
   // fixed template (ReportFacts.tsx), whose words are legal.reports.
   reports: {
     title: 'Weekly reports',
-    lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. A week in which no card shipped has no report.',
+    lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. The open cards are counted as the report is published. A week in which no card shipped has no report.',
     loading: 'Loading the reports.',
     unavailable: 'The reports could not be loaded right now.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',

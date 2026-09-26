@@ -328,11 +328,11 @@ export const legal = {
     shipped: 'Cards shipped',
     spent: 'Spent from contributions',
     newSupporters: 'New supporters',
-    open: 'Open for funding when published',
+    open: 'Open for funding',
     shippedHeading: 'Shipped that week',
     cost: '{usd} from contributions',
     fundedBy: 'funded by {names}',
-    firstInLine: 'First in line to fund when published',
+    firstInLine: 'First in line to fund',
   },
   // /team's running and paused rows: what the role's work paid for with contributions has cost. Only
   // rows billed to the studio count; founder-billed work stays private (PLAN.md §4 The Board).
