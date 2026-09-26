@@ -393,16 +393,30 @@ pull request adds them as a new Terms version.
 
 **Tell me:** the address and phone to publish, or "leave it out".
 
-### 11. Pin Claude Code (when I ask, after the sandbox fix passes)
+### 11. Pin Claude Code (2 minutes, free; nothing waits on it)
 
-Run the one `sudo` command I give you, which writes the version pin to Claude Code's managed
-settings, and enter your Mac password. Claude Code on the Mac is 2.1.280, and the attended sandbox
-check passes on it (see **Done**); it is pinned only after `sandbox:check --positive` passes on the
-pinned version.
+The agent-upkeep pull request (`docs/specs/agent-upkeep.md`) pins Claude Code at 2.1.283, the
+version the Mac updated itself to, on which the attended sandbox check passed in both layouts on
+26 September 2026. Attended sessions now run only on the pinned version: on any other, a card pauses
+with `cli_version` and a role job fails, and the daily check lists it in Needs you. Until you run
+this, Claude Code keeps updating itself, and each update pauses attended sessions until I run the
+sandbox check on the new version and move the pin in a pull request you merge.
 
-**Unblocks:** attended builds on a known-good version.
+In Terminal on the Mac:
 
-**Tell me:** "Claude Code is pinned."
+```sh
+cd ~/GitHub/peanutgallery && sudo bash platform/ops/mac/pin-claude-code.sh
+```
+
+Enter your Mac password. It checks that `claude --version` is the pinned version, then turns Claude
+Code's auto-updater off in `/Library/Application Support/ClaudeCode/managed-settings.json`, keeping
+anything else in that file, and prints `PASS: claude-code pinned 2.1.283`. If it prints a FAIL line
+saying another version is installed, send me the line: I check the new version and move the pin
+first.
+
+**Unblocks:** attended builds that stay on a checked version.
+
+**Tell me:** "Claude Code is pinned", with the PASS line.
 
 ---
 
@@ -680,6 +694,34 @@ yours.
   about 400 MB; grow the Anthropic tier. Actions minutes have already run short: see **GitHub
   Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
+- **The Janitor and dependency updates (nothing to do now).** The agent-upkeep pull request
+  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings show in Needs you under
+  Findings and reach ntfy once each, and Dependabot. Four things to know, none blocking:
+  1. The weekly scan (`janitor.yml`, osv-scanner and an offline link check) runs on Actions
+     minutes, so its first run waits for Actions (see **GitHub Actions minutes**). Until it has run,
+     the daily check has no scan result to list.
+  2. Dependabot opens its pull requests on GitHub's own runners, which may use Actions minutes too.
+     A patch update merges by itself only on a green gate at its head, so while Actions is off every
+     Dependabot pull request waits for you, like any other non-card pull request. Merging one
+     yourself, or closing it, is your call; nothing waits on it.
+  3. Only if the first Dependabot run cannot read pnpm 11's lockfile (I will quote its log): decide
+     whether to install the free Renovate GitHub app. It grants repository permissions, so it is
+     yours to decide, and a pull request adds its settings then. Doing nothing leaves dependency
+     updates to your merges, and the weekly osv-scanner still reports vulnerabilities.
+  4. Optional: GitHub → the repository → **Settings** → **General** → tick **Automatically delete
+     head branches**, so merged card and Dependabot branches are removed.
+- **The first replay eval run (optional, at the Mac, on your Max plan).** The replay
+  eval set (`platform/agents/evals/`) checks a change to a role prompt, rubric, agent definition or
+  schema against what the roles did before. It has no result or baseline yet: at k = 3 its run is 30 to 42
+  Game Director and Game Designer sessions on Opus, so I did not run it on your plan without you. Until it runs, the gate refuses any pull request that changes those files; nothing in the
+  launch series changes them. When you want it, at the Mac:
+
+  ```sh
+  cd ~/GitHub/peanutgallery && pnpm eval:replay -- --set draft --k 3
+  ```
+
+  Then I open a pull request with its result and `baseline.json` set from it, with the reason, for
+  you to merge.
 
 ---
 
@@ -733,11 +775,12 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
   cards included, merges on the Actions gate again.
 
   **Tell me:** "Actions is back" and which of the three.
-- **Claude Code on the Mac: 2.1.280 or newer.** Attended sessions need it, because 2.1.139 refuses
-  `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision 36).
+- **Claude Code on the Mac: the pinned version.** Attended sessions need 2.1.280 or newer, because
+  2.1.139 refuses `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision
+  36), and they run only on the version in `platform/ops/mac/claude-code-pin.json` (2.1.283 now).
   `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
-  (`pnpm --filter @backseat/dispatcher sandbox:check --positive`) on a new version before any card
-  runs on it.
+  (`pnpm --filter @backseat/dispatcher sandbox:check --positive`) on a new version and move the pin
+  in a pull request you merge, before any card runs on it.
 - **HST review at $15k.** When cumulative contributions reach $15,000, review GST/HST
   registration. Registration is required past the $30,000 small-supplier threshold, and Stripe tiers
   with named benefits are sales, so register before tiers ship (`docs/PLAN.md` §5 Canada admin). An
@@ -795,6 +838,8 @@ enough:
 - Reviewing HST registration at $15k.
 - The Netlify plan, its usage notifications, and any paid plan after an overrun.
 - Bringing GitHub Actions minutes back: waiting for the reset, a public repository, or a budget.
+- Pinning Claude Code with `sudo`, and the first replay eval run on your plan.
+- Installing Renovate, only if Dependabot cannot read the lockfile.
 
 ---
 
