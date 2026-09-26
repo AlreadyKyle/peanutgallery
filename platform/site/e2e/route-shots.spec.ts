@@ -17,6 +17,10 @@ import { SUPPORTER_STUDIO } from './supporter-studio';
 // stale line instead of the fixture's figures, or is still loading.
 const SHOTS = process.env.E2E_ROUTE_SHOTS ?? '';
 const WIDTHS = [375, 768, 1440];
+// Every page's clock reads the fixture's build time, a minute after it, so a page that shows a time
+// from the clock (the guide's sample rows) draws the same frame on the base and on the change, and
+// the frames job reports only what the change drew differently. Timers keep running.
+const SHOT_TIME = new Date('2026-09-22T12:01:00Z');
 
 // What a data route shows in place of its figures when a document did not load (StaleNotice and the
 // pages' unavailable states).
@@ -68,6 +72,7 @@ test.describe('route screenshots', () => {
       test.setTimeout(180_000);
       mkdirSync(SHOTS, { recursive: true });
       const refused = await refuseOtherOrigins(page);
+      await page.clock.setFixedTime(SHOT_TIME);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width, height: 900 });
       for (const [name, path] of ROUTES) {
@@ -87,6 +92,7 @@ test.describe('route screenshots, no report yet', () => {
     test(`/reports with none at ${width}px`, async ({ page }) => {
       mkdirSync(SHOTS, { recursive: true });
       const refused = await refuseOtherOrigins(page);
+      await page.clock.setFixedTime(SHOT_TIME);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.setViewportSize({ width, height: 900 });
       await readyForShot(page, '/reports');
