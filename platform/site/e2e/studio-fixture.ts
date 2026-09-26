@@ -33,6 +33,8 @@ export type StudioFixture = {
   cardDetails?: Record<string, Record<string, unknown>>;
   /** /api/thanks answers by session id; a session left out answers {"status":"pending"}. */
   thanks?: Record<string, Record<string, unknown>>;
+  /** site_reports()' reports, newest first (docs/specs/studio-reports.md); none when left out. */
+  reports?: Record<string, unknown>[];
 };
 
 /** A public_money row: every figure zero, nothing reconciled and an empty order, with `fields` over it. */

@@ -78,6 +78,55 @@ const planned = [
 ];
 
 const lastShipped = live.at(-1)!;
+
+/**
+ * Two weekly reports in site_reports()' shape (docs/specs/studio-reports.md), newest first: the week the
+ * first four live cards shipped, with costs and supporters by number, and an earlier week with the
+ * other two, one of them founder-billed with no supporter. Fixture data.
+ */
+function liveReports(): Record<string, unknown>[] {
+  const shipped = (card: Record<string, unknown>, cost: string, supporters: { number: number; founding: boolean }[], count = supporters.length, liveAt = String(card.live_at)) => ({
+    id: card.id,
+    title: card.title,
+    folder: card.folder,
+    live_at: liveAt,
+    cost_usd: cost,
+    supporters,
+    supporter_count: count,
+  });
+  const firsts = open.slice(0, 3).map((card) => ({ id: card.id, title: card.title }));
+  return [
+    {
+      week_start: '2026-09-14',
+      published_at: '2026-09-21T04:07:00+00:00',
+      facts: {
+        shipped_count: 4,
+        shipped: [
+          shipped(live[0]!, '0.2900', [{ number: 1, founding: true }, { number: 2, founding: true }, { number: 5, founding: false }, { number: 8, founding: false }], 6),
+          shipped(live[1]!, '0.4100', [{ number: 3, founding: true }]),
+          shipped(live[2]!, '0.0000', []),
+          shipped(live[3]!, '1.1200', [{ number: 4, founding: true }, { number: 6, founding: false }]),
+        ],
+        open_count: open.length,
+        open_first: firsts,
+        new_supporters: 6,
+        spend_usd: '1.8200',
+      },
+    },
+    {
+      week_start: '2026-09-07',
+      published_at: '2026-09-14T04:07:00+00:00',
+      facts: {
+        shipped_count: 2,
+        shipped: [shipped(live[4]!, '0.0000', [], 0, '2026-09-09T14:00:00Z'), shipped(live[5]!, '0.3300', [{ number: 1, founding: true }], 1, '2026-09-11T16:30:00Z')],
+        open_count: 3,
+        open_first: firsts,
+        new_supporters: 1,
+        spend_usd: '0.3300',
+      },
+    },
+  ];
+}
 const VERBS = ['ship', 'gate_pass', 'message', 'tool_result', 'tool_call'];
 const events = Array.from({ length: 20 }, (_, i) => ({
   id: `le${i}`,
@@ -155,4 +204,5 @@ export const LIVE_STUDIO: StudioFixture = {
     funding_order: fundingOrder(open.map((card) => card.id)),
   }),
   stopped,
+  reports: liveReports(),
 };

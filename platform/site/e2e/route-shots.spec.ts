@@ -14,6 +14,7 @@ const ROUTES: [string, string][] = [
   ['how-it-works', '/how-it-works'],
   ['team', '/team'],
   ['roadmap', '/roadmap'],
+  ['reports', '/reports'],
   ['terms', '/terms'],
   ['privacy', '/privacy'],
   ['refunds', '/refunds'],
@@ -41,6 +42,23 @@ test.describe('route screenshots', () => {
         await page.waitForTimeout(300);
         await page.screenshot({ path: join(SHOTS, `${name}-${width}.png`), fullPage: true });
       }
+    });
+  }
+});
+
+// /reports before the first report (docs/specs/studio-reports.md): its empty state.
+test.describe('route screenshots, no report yet', () => {
+  test.skip(SHOTS === '', 'set E2E_ROUTE_SHOTS to save them');
+  test.use({ studio: { ...SUPPORTER_STUDIO, reports: [] } });
+  for (const width of [375, 768, 1440]) {
+    test(`/reports with none at ${width}px`, async ({ page }) => {
+      mkdirSync(SHOTS, { recursive: true });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/reports');
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({ path: join(SHOTS, `reports-empty-${width}.png`), fullPage: true });
     });
   }
 });

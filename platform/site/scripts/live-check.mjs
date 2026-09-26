@@ -6,11 +6,12 @@
 // baseUrl defaults to https://peanutgallery.games. Both forms work: the @playwright/test import
 // resolves from this file's folder, so the working directory does not matter.
 //
-// Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the four text
-// pages, Terms and Refunds version 1, /thanks and a missing page) at 375px and 1440px: status 200, one h1, no horizontal overflow, the
+// Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the weekly
+// reports, the four text pages, Terms and Refunds version 1, /thanks and a missing page) at 375px and
+// 1440px: status 200, one h1, no horizontal overflow, the
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
-// footer's Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
+// footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
 // Policy report. The landing's h2 order, read from the page: Building now, the team, Shipped and
 // Planned next appear only when there is something to show. The status line, the pool figure, the
 // shipped rows, the fund links, the category filters and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
@@ -34,7 +35,8 @@
 // The site's own documents (docs/specs/site-snapshot.md): no page requests the Supabase host or opens
 // a WebSocket, on any route; /api/live answers 200 JSON with every key in snapshot-keys.json and a
 // browser Cache-Control of max-age=0, a second read within 60 seconds is a CDN hit (production),
-// /api/cards answers 200, /api/live?x=1 answers 400, and one /assets/*.js is immutable.
+// /api/cards answers 200, /api/live?x=1 answers 400, /api/reports answers 200 with its reports list
+// and /api/reports?x=1 400 (docs/specs/studio-reports.md), and one /assets/*.js is immutable.
 // Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
@@ -86,6 +88,7 @@ const ROUTES = [
   '/how-it-works',
   '/team',
   '/roadmap',
+  '/reports',
   '/terms',
   '/terms/1',
   '/privacy',
@@ -96,6 +99,7 @@ const ROUTES = [
   '/no-such-page',
 ];
 const FOOTER_LINKS = [
+  ['Weekly reports', '/reports'],
   ['Terms', '/terms'],
   ['Privacy', '/privacy'],
   ['Refunds', '/refunds'],
@@ -318,7 +322,7 @@ try {
         const link = footer.getByRole('link', { name, exact: true });
         links.push((await link.count()) === 1 && (await link.getAttribute('href')) === href);
       }
-      check(links.every(Boolean), `${width}px ${path} footer links Terms, Privacy, Refunds, Contact`);
+      check(links.every(Boolean), `${width}px ${path} footer links Weekly reports, Terms, Privacy, Refunds, Contact`);
       const grounds = await page.evaluate(() =>
         [document.querySelector('.topbar'), ...document.querySelectorAll('main > .band'), document.querySelector('.site-footer')].map((el) => (el === null ? '' : getComputedStyle(el).backgroundColor)),
       );
@@ -672,6 +676,16 @@ try {
       const cardsDoc = await cards.json().catch(() => null);
       const cardsWrong = cardsDoc === null ? ['not JSON'] : keysOk(cardsDoc, SNAPSHOT_KEYS.cards);
       check(cards.status === 200 && cardsWrong.length === 0, `/api/cards ${cards.status}${cardsWrong.length === 0 ? ', every key in snapshot-keys.json' : `: missing or wrong ${cardsWrong.join(', ')}`}`);
+      // The weekly reports (docs/specs/studio-reports.md): 200 with its one key, cached an hour on the
+      // CDN, and a query refused before any read.
+      const reportsAnswer = await fetch(`${BASE}/api/reports`);
+      const reportsDoc = await reportsAnswer.json().catch(() => null);
+      check(
+        reportsAnswer.status === 200 && reportsDoc !== null && Array.isArray(reportsDoc.reports),
+        `/api/reports ${reportsAnswer.status}${reportsDoc !== null && Array.isArray(reportsDoc.reports) ? `, ${reportsDoc.reports.length} report(s)` : ': no reports list'}`,
+      );
+      const reportsQuery = await fetch(`${BASE}/api/reports?x=1`);
+      check(reportsQuery.status === 400, `/api/reports?x=1 ${reportsQuery.status}`);
       const query = await fetch(`${BASE}/api/live?x=1`);
       check(query.status === 400 && (query.headers.get('cache-control') ?? '') === 'no-store', `/api/live?x=1 ${query.status} Cache-Control ${query.headers.get('cache-control')}`);
       // The card function (docs/specs/supporter-pages.md): a malformed id is a 400 before any read, and
