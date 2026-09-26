@@ -362,8 +362,8 @@ describe('the two jobs on the queue', () => {
     return { state, run };
   }
 
-  it('registers both handlers', () => {
-    expect(Object.keys(HANDLERS).sort()).toEqual(['draft_card', 'studio_ranking']);
+  it('registers the two role jobs and the Janitor\'s two code jobs (docs/specs/agent-upkeep.md)', () => {
+    expect(Object.keys(HANDLERS).sort()).toEqual(['draft_card', 'janitor', 'studio_ranking', 'upkeep_merge']);
   });
 
   for (const mode of ['attended', 'unattended'] as const) {

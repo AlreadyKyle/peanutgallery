@@ -28,6 +28,7 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
 import { scanPublicText } from './public-text.js';
 import { AGENTS_DIR, TypedOutput } from './typed-output.js';
@@ -148,6 +149,8 @@ async function main(): Promise<void> {
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
   const jobState: JobState = { running: null };
+  // The Janitor's two code jobs (docs/specs/agent-upkeep.md).
+  const upkeep = upkeepDeps(config, mainGate);
   const workflow: WorkflowDeps = {
     roleAdapter,
     typed,
@@ -199,6 +202,7 @@ async function main(): Promise<void> {
         state: jobState,
         stopSignal: stop.signal,
         workflow,
+        upkeep,
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),

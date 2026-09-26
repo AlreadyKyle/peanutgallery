@@ -447,6 +447,7 @@ export async function revertMerge(opts: GitHubOptions, mergeSha: string, message
 
 export interface AuthorPull {
   number: number;
+  title: string;
   headSha: string;
   headRef: string;
   baseRef: string;
@@ -468,6 +469,7 @@ export async function openPullsByAuthor(opts: GitHubOptions, login: string): Pro
       const base = isRecord(pull.base) ? pull.base : {};
       return {
         number: Number(pull.number),
+        title: String(pull.title ?? ''),
         headSha: String(head.sha ?? ''),
         headRef: String(head.ref ?? ''),
         baseRef: String(base.ref ?? ''),
