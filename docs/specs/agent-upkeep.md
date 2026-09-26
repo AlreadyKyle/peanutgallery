@@ -118,6 +118,26 @@ The check is on at merge: the gate fails a pull request that changes a role prom
   - the conclusion of the first `janitor.yml` run on main, quoted;
   - the first `janitor` run's findings, quoted, with zero schema findings.
 
+## Production steps
+
+The migration is additive (the `findings` table, four service-role functions, two `jobs` rows, two pg_cron schedules, and `public_roles` created again with `code_only` appended) and must be live before the merge, because the site on the new code reads `public_roles.code_only` and the board site reads `findings`.
+
+1. Read first, through the Management API query endpoint: `studio_state` still paused; `findings`, `record_finding`, `close_finding`, `schema_fingerprint`, `producer_signals`, the `janitor` and `upkeep_merge` jobs and their schedules absent; the Janitor's `roles` row present, since the job rows take its id; `public_roles`' columns exactly the migration's list without `code_only`, and no view depending on it.
+2. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" -Fc` into `~/peanutgallery-dumps/pre-agent-upkeep-<UTC>.dump`, `chmod 600`, quote the size and `pg_restore --list`. `BACKUP_DB_URL` is never printed.
+3. Apply `20260925300000_agent_upkeep.sql` through the Management API query endpoint, wrapped in `begin;`/`commit;`, one request (the migration history repair has not run, so never `supabase db push`). It is re-runnable; re-apply it if the SQL changes before the merge.
+4. Read back: `findings` with RLS on, its grants and its board-read policy; execute on the four functions for `service_role` only; the two job rows (the Janitor's, `calls_model` false, `runs_when_paused` true) and their schedules (`0 8 * * *` and `15 * * * *`); `public_roles.code_only` true for the Janitor only; `select public.ledger_identity()`; from the branch `anon-negative-test.ts` and `ledger-identity.ts` PASS; and the daily check's schema comparison run read-only, `schema-fingerprint.ts` on production against `--pglite` on the branch, with zero differences.
+5. Merge on the local gate's PASS at the head sha.
+6. After the merge: re-seed the roles (`pnpm --filter @backseat/supabase seed`, from a checkout equal to the merge) so the Janitor's row is running with its new description, and read it back; `file-backlog` as a dry run, then `--apply` (the four new BACKLOG entries); wait for both sites to publish the merge and purge the CDN; the live check; /team at 375 and 1440, looked at, with the Janitor under Running as code.
+7. No function deploy: only Deno test files under `platform/supabase/functions` change. The Mac dispatcher is not installed yet (no launchd job on this Mac), so nothing is redeployed, and the first `janitor` and `upkeep_merge` runs wait for it: pg_cron queues them, and `enqueue_job_run` holds at most one queued scheduled run per job, so nothing piles up.
+
+Board items (listed, never blocking; `docs/BOARD-SETUP.md` has each):
+- Run `sudo bash platform/ops/mac/pin-claude-code.sh` once at the Mac, so Claude Code stops updating itself. Until then a self-update pauses attended sessions with `cli_version` until the pin moves in a board pull request.
+- The first replay eval run (optional, at the Mac, on the Max plan) and `baseline.json` from it. Until then the gate refuses a change to a role prompt, rubric, agent definition or schema under `platform/agents/`.
+- The first `janitor.yml` run waits on GitHub Actions minutes: while Actions has none, its Monday run fails before any job runs, which the daily check records as one `scan:run` finding.
+- Dependabot's pull requests wait for the board while Actions is off, since `upkeep_merge` merges only on a green gate at the head. Renovate only if Dependabot cannot read pnpm 11's lockfile. "Automatically delete head branches" is optional.
+- The first `janitor` run's findings wait on the dispatcher running on the Mac host.
+- No Stripe, Console or spending step.
+
 ## Evidence
 
 Built on `launch/design-review` (04c97f4, then merged with its 1117f73), 26 September 2026. The production lines wait on the ship stage.
