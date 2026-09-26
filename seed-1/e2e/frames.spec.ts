@@ -39,7 +39,11 @@ interface Drawn {
 }
 
 // One draw in a fresh browser context: the save in local storage, a paused page clock, the page
-// loaded, the canvas awaited, then 3 seconds of game time.
+// loaded, the canvas awaited, the game loop awaited, then 3 seconds of game time. Phaser starts its
+// loop only once its built-in textures have decoded, which takes real time, so the clock runs only
+// after the page has asked for its first animation frame: otherwise a slow decode would start the
+// loop partway through the 3 seconds and the game would draw a frame's worth less. The frame count
+// is read by a wrapper around the page clock's own requestAnimationFrame; the game sees no change.
 async function draw(browser: Browser, baseURL: string, save: string, viewport: { width: number; height: number }): Promise<Drawn> {
   const context = await browser.newContext({ baseURL, viewport });
   const page = await context.newPage();
@@ -55,9 +59,23 @@ async function draw(browser: Browser, baseURL: string, save: string, viewport: {
   await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [SAVE_KEY!, save] as const);
   await page.clock.install({ time: START });
   await page.clock.pauseAt(START + 1_000);
+  await page.addInitScript(() => {
+    const request = window.requestAnimationFrame.bind(window);
+    const counted = window as unknown as { framesRequested: number };
+    counted.framesRequested = 0;
+    window.requestAnimationFrame = (callback) => {
+      counted.framesRequested += 1;
+      return request(callback);
+    };
+  });
   await page.goto('/');
   const canvas = page.locator('#game canvas');
   await canvas.waitFor();
+  await page.waitForFunction(() => (window as unknown as { framesRequested: number }).framesRequested > 0);
+  // The paused clock stopped a few real milliseconds into the document, a different few each time,
+  // and Phaser took its start time there. A jump to a fixed time makes the first frame's gap over
+  // 200 ms, which Phaser replaces with its steady step, so every draw runs the same frames.
+  await page.clock.pauseAt(START + 2_000);
   await page.clock.runFor(RUN_MS);
   const drawn = { canvas: await canvas.screenshot(), page: await page.screenshot({ fullPage: true }), refused };
   await context.close();
