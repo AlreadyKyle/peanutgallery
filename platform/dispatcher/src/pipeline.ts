@@ -18,6 +18,16 @@
 // main may then still carry the failed change. An API error that says the Console credit ran out, or
 // that the organisation reached its usage tier's monthly cap, pauses the studio and the card.
 //
+// A card whose green gate run uploaded design-frames with changed frames is visual
+// (docs/specs/design-review.md): before the merge lock, a Director reviews its frames (visual-review.ts)
+// while a board member is signed in, and the card waits at gated until one is. All pass records a
+// visual approval and merges; a revise moves the card back to building for a revision session given
+// only the failing criteria, frame names and reason codes, and only what the claim's budget still
+// holds, which is squashed with the change into one commit on the base and gated again, at most twice
+// (cards.review_rounds); after two rounds an
+// all-ages revise rejects the card as a gate failure does, and any other open criterion merges with
+// its verdict recorded. A review that cannot give a verdict is an infrastructure stop.
+//
 // A stop the card did not cause is never a rejection (docs/specs/money-safety.md): a gate that never
 // started or never finished, one GitHub cancelled or could not start, a failure main already had at the
 // card's base, a pull request that never showed the pushed sha, GitHub, git or Netlify not answering,
@@ -59,6 +69,7 @@ import {
   type GitHubOptions,
   type PollOptions,
 } from './github.js';
+import { fetchFrames, FramesError, type Frames } from './frames.js';
 import { applyStoredPatch, type PatchStore } from './patch.js';
 import { haltDispatcher, haltReason } from './halt.js';
 import { mergeLock } from './lock.js';
@@ -66,6 +77,7 @@ import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
 import { resolveRoleModel } from './role-model.js';
 import { runAgentSession, type SessionOutcome } from './session.js';
+import { decideReview, revisionAddendum, runVisualReview, type VisualReviewDeps } from './visual-review.js';
 import { mergedServedFiles, runSmoke, SMOKE_GATE_TIMEOUT_MS, type SmokeResult } from './smoke.js';
 import { retry } from './time.js';
 import {
@@ -74,6 +86,7 @@ import {
   commitTitle,
   commitTrailers,
   createWorktree,
+  git,
   GIT_TIMEOUT_MS,
   gitAuthEnv,
   headSha,
@@ -118,6 +131,14 @@ export interface PipelineDeps {
   // Infrastructure stops in a row per card, shared by every pipeline this process runs; a gate pass
   // clears the card's count.
   infraStops?: Map<string, number>;
+  // The Directors' visual review (docs/specs/design-review.md); without it no card is reviewed.
+  visual?: PipelineVisual;
+}
+
+export interface PipelineVisual {
+  review: VisualReviewDeps;
+  // The folder each review's frames are unpacked into, one subfolder per review, removed after it.
+  framesRoot: string;
 }
 
 export const GATE_TIMEOUT_MS = 20 * 60_000;
@@ -323,22 +344,29 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     const before = await snapshotGitState(config.repoRoot, worktree.path);
     phase = 'building';
     const reused = await reuseStoredPatch(card, worktree, allowed, deps);
+    const maker: Maker = { ref: null };
     const sessionError = reused
       ? null
       : await agentSession(card, role, worktree, deps).then(
-          () => null,
+          (sessionId) => {
+            maker.ref = sessionRef(sessionId);
+            return null;
+          },
           (error: unknown) => error,
         );
     // Checked before any git runs again, whatever the session's outcome.
     await assertGitTrusted(card, worktree.path, before, deps, 'after the session');
     if (sessionError) throw sessionError;
     await postCheck(worktree, checks);
-    const commit = await commitAndOpenPullRequest(card, role, worktree, before, allowed, checks, deps);
+    const built = await commitAndOpenPullRequest(card, role, worktree, before, allowed, checks, deps);
     await finalize(card, deps, 'gated', null).catch((error: unknown) => {
-      if (error instanceof StageMoved) error.pr = commit.prNumber;
+      if (error instanceof StageMoved) error.pr = built.prNumber;
       throw error;
     });
-    await waitForGatePass(card, role, commit, deps);
+    await waitForGatePass(card, role, built, deps);
+    const commit = await visualReview({ card, role, worktree, before, allowed, checks, maker }, built, deps);
+    // No further session runs for the card, so the rest of its budget is no longer held from others.
+    deps.budgets?.close(card.id);
     const roleId = role.id;
     await mergeLock.run(async () => {
       await confirmMergeable(card, commit, deps);
@@ -600,7 +628,9 @@ async function reuseStoredPatch(card: Card, worktree: Worktree, allowed: readonl
   return true;
 }
 
-async function agentSession(card: Card, role: Role, worktree: Worktree, deps: PipelineDeps): Promise<void> {
+// The session's id when it completed (the maker ref of a visual approval), or null when its init line
+// named none. promptAddendum is a visual revision's typed feedback.
+async function agentSession(card: Card, role: Role, worktree: Worktree, deps: PipelineDeps, promptAddendum?: string): Promise<string | null> {
   const studio = await deps.db.getStudioState();
   const budgets = deps.budgets;
   const run = await runAgentSession(card, role, worktree.path, studio, {
@@ -616,12 +646,15 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     log: deps.log,
     stopSignal: deps.stopSignal,
     now: deps.now,
-    budgetUsd: budgets?.budgetFor(card.id),
+    // What the claim's budget still holds after the card's earlier sessions (budgets.ts), so a visual
+    // revision spends only what the throttle sized the claim for.
+    budgetUsd: budgets?.nextSession(card.id),
     onSpend: budgets ? (usd) => budgets.record(card.id, usd) : undefined,
     resolveModel: (r) => resolveRoleModel(r, deps.config).model,
+    ...(promptAddendum ? { promptAddendum } : {}),
   });
   deps.log.info('pipeline', `session for card ${card.id} ended`, { outcome: run.outcome, turns: run.turns, detail: run.detail });
-  if (run.outcome === 'completed') return;
+  if (run.outcome === 'completed') return run.sessionId ?? null;
   if (run.outcome === 'adapter_paused') throw new CardStop('paused', run.failingCheck ?? 'adapter', run.detail);
   if (run.outcome === 'insufficient_balance') throw new Requeue(['building'], 'insufficient_balance', run.detail, false);
   // A paused executor role is not the card's fault: the card goes back to funded with no rejection,
@@ -654,6 +687,150 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   if (run.outcome === 'refused') throw new CardStop('rejected', 'tool_allowlist', run.detail);
   await deps.db.insertEvent(card.id, role.id, 'error', { step: 'session', message: run.detail });
   throw new CardStop('rejected', 'session', run.detail);
+}
+
+// The builder session a visual approval names as its maker: claude:<session id>, the form a role
+// session's grader ref takes, so the two can be compared.
+interface Maker {
+  ref: string | null;
+}
+
+function sessionRef(sessionId: string | null): string | null {
+  return sessionId ? `claude:${sessionId}` : null;
+}
+
+interface Building {
+  card: Card;
+  role: Role;
+  worktree: Worktree;
+  before: string;
+  allowed: readonly string[];
+  checks: readonly ConfigCheck[];
+  maker: Maker;
+}
+
+// The frames of the gate run that passed on sha, or null; a malformed or expired artifact stops the
+// card as infrastructure, never as its failure.
+async function framesFor(sha: string, dir: string, deps: PipelineDeps): Promise<Frames | null> {
+  try {
+    return await requesting(deps, () => fetchFrames(githubOptions(deps), sha, dir));
+  } catch (error) {
+    if (error instanceof FramesError) throw new InfraStop('frames', error.message, false);
+    throw new InfraStop('outage', `the frames read: ${errorMessage(error)}`, false);
+  }
+}
+
+// The Directors' visual review, between the green gate and the merge lock (see the head of this
+// file). Returns the commit to merge: the first one, or the last revision's after its gate passed.
+async function visualReview(building: Building, first: CommitInfo, deps: PipelineDeps): Promise<CommitInfo> {
+  const visual = deps.visual;
+  if (!visual) return first;
+  const { card, role } = building;
+  let commit = first;
+  // Rounds used survive a restart: they are read from the card, never counted here from zero.
+  let rounds = (await deps.db.getCard(card.id))?.review_rounds ?? card.review_rounds;
+  for (let review = 1; ; review += 1) {
+    const dir = path.join(visual.framesRoot, `frames-${shortId(card.id)}-${commit.sha.slice(0, 8)}`);
+    await rm(dir, { recursive: true, force: true });
+    try {
+      const frames = await framesFor(commit.sha, dir, deps);
+      if (!frames || frames.changed.length === 0) {
+        deps.log.info('pipeline', `card ${card.id} draws nothing differently; no visual review`, { sha: commit.sha, artifact: frames !== null });
+        return commit;
+      }
+      const outcome = await runVisualReview({ card, frames, sha: commit.sha, gateUrl: null, review }, visual.review);
+      stopCheck(deps, 'while the visual review waited or ran');
+      if (outcome.kind === 'stopped') throw new CardStop('paused', 'dispatcher_stopped', 'dispatcher stopped during the visual review');
+      if (outcome.kind === 'failed') throw new InfraStop('visual_review', outcome.reason, false);
+      const { verdict, director } = outcome;
+      const decision = decideReview(verdict, rounds);
+      await deps.db.insertEvent(card.id, director.id, 'message', { step: 'visual_review', decision, review, rounds_used: rounds, sha: commit.sha, grader_ref: outcome.ref, criteria: verdict.criteria });
+      deps.log.info('pipeline', `card ${card.id} visual review: ${decision}`, { review, rounds, director: director.name });
+      if (decision === 'reject') {
+        throw new CardStop('rejected', 'visual_review:all_ages', `after ${rounds} revise rounds the ${director.name} still found the frames not suitable for all ages`);
+      }
+      if (decision === 'merge' || decision === 'merge_open') {
+        if (building.maker.ref !== null && building.maker.ref === outcome.ref) throw new InfraStop('visual_review', 'the review session is the builder session', false);
+        await deps.db.recordVisualApproval({
+          cardId: card.id,
+          verdict: { ...verdict, decision, review, sha: commit.sha },
+          approverRoleId: director.id,
+          makerRoleId: role.id,
+          makerRef: building.maker.ref,
+          graderRef: outcome.ref,
+        });
+        return commit;
+      }
+      await revisionMayStart(building, deps);
+      rounds = await deps.db.recordReviewRound(card.id);
+      commit = await revise(building, commit, revisionAddendum(verdict, rounds), deps);
+      await waitForGatePass(card, role, commit, deps);
+    } finally {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+}
+
+// A revision starts only as a claim would: not while the board has agents paused (the card pauses),
+// not while the executor role is paused (back to funded, as a paused executor is never the card's
+// fault), and not once the claim's throttle budget is spent (back to funded, so the tick sizes a new
+// budget from the money there is then). Each stop comes before the round is counted, and the card
+// keeps its first change's stored patch, so a later claim re-gates it with no session.
+async function revisionMayStart(building: Building, deps: PipelineDeps): Promise<void> {
+  const { card, role } = building;
+  if ((await deps.db.getStudioState()).paused) throw new CardStop('paused', 'paused_by_board', 'the board paused agents, so the visual revision did not start');
+  if ((await deps.db.roleState(role.id)).paused) {
+    throw new Requeue(['gated'], 'role_paused', `the executor role ${role.name} is paused, so the visual revision did not start`, false);
+  }
+  const left = deps.budgets?.remaining().get(card.id);
+  if (left !== undefined && left <= 0) {
+    throw new Requeue(['gated'], 'insufficient_balance', "the claim's session budget is spent, so the visual revision did not start", false);
+  }
+}
+
+// A visual revision: the card goes back to building, the builder's new session works on the card's
+// commit in the card's own mode, inside its ceiling (the card's spend read fresh) and, unattended,
+// inside what the claim's throttle budget still holds after the first session (budgets.ts), and the
+// change and the revision become one commit on the base, pushed to the same branch and pull request.
+// It starts only as a claim would (revisionMayStart). No stored patch survives a revision, whatever
+// stops it: the revision session's accepted patch is made against the card's commit, not main, so it
+// is discarded as soon as the session settles, and a later re-queue never rebuilds the revision alone.
+async function revise(building: Building, commit: CommitInfo, addendum: string, deps: PipelineDeps): Promise<CommitInfo> {
+  const { card, role, worktree, before, allowed, checks, maker } = building;
+  if (!(await deps.db.updateCardIf(card.id, ['gated'], { stage: 'building', failing_check: null }))) {
+    const current = await deps.db.getCard(card.id).catch(() => null);
+    const moved = new StageMoved(`the card is ${current?.stage ?? 'gone'}, not gated, so its visual revision did not start; the dispatcher left it as it is.`);
+    moved.pr = commit.prNumber;
+    throw moved;
+  }
+  await deps.patches?.discard(card.id);
+  const current = (await deps.db.getCard(card.id)) ?? card;
+  const sessionError = await agentSession(current, role, worktree, deps, addendum).then(
+    (sessionId) => {
+      maker.ref = sessionRef(sessionId);
+      return null;
+    },
+    (error: unknown) => error,
+  );
+  // The revision is in the worktree now, or the session stopped; either way its stored patch goes. One
+  // that cannot be discarded is refused at the next claim, since its base is not on main (patch.ts).
+  if (deps.patches) {
+    const patches = deps.patches;
+    await attempt(deps, `card ${card.id} revision patch discard`, () => patches.discard(card.id));
+  }
+  await assertGitTrusted(card, worktree.path, before, deps, 'after the revision session');
+  if (sessionError) throw sessionError;
+  const head = await headSha(worktree.path);
+  if (head !== commit.sha) throw new CardStop('rejected', 'history', `the revision session moved HEAD from ${commit.sha} to ${head}`);
+  await assertGitTrusted(card, worktree.path, before, deps, 'before the revision is squashed');
+  await git(['reset', '--quiet', '--soft', worktree.baseSha], worktree.path);
+  await postCheck(worktree, checks);
+  const revised = await commitAndOpenPullRequest(current, role, worktree, before, allowed, checks, deps);
+  await finalize(card, deps, 'gated', null).catch((error: unknown) => {
+    if (error instanceof StageMoved) error.pr = revised.prNumber;
+    throw error;
+  });
+  return revised;
 }
 
 async function postCheck(worktree: Worktree, checks: readonly ConfigCheck[]): Promise<void> {

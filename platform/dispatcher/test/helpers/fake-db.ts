@@ -23,6 +23,7 @@ import type {
   Role,
   StudioState,
   UsageInput,
+  VisualApprovalInput,
 } from '../../src/db.js';
 import { round4 } from '../../src/pricing.js';
 
@@ -57,6 +58,7 @@ export function card(overrides: Partial<Card> = {}): Card {
     approved: false,
     board_vetoed: false,
     executor_paused: false,
+    review_rounds: 0,
     ...overrides,
   };
 }
@@ -435,6 +437,26 @@ export class FakeDb implements Db {
     draft.grader_ref = graderRef;
     draft.card_id = cardId;
     return cardId;
+  }
+  // The visual review (docs/specs/design-review.md): record_review_round on the card's own count, and
+  // the visual approvals record_card_approval wrote, refused as Postgres refuses them for a grader
+  // ref equal to the maker ref, one already used, or an approver who executes the card.
+  approvals: Array<VisualApprovalInput & { kind: 'visual' }> = [];
+  async recordReviewRound(cardId: string) {
+    const found = this.cards.find((c) => c.id === cardId);
+    if (!found) throw new Error(`db record_review_round: Card ${cardId} does not exist`);
+    found.review_rounds += 1;
+    return found.review_rounds;
+  }
+  async recordVisualApproval(input: VisualApprovalInput) {
+    const found = this.cards.find((c) => c.id === input.cardId);
+    if (!found) throw new Error(`db record_card_approval: Card ${input.cardId} does not exist`);
+    if (input.graderRef.trim() === '') throw new Error('db record_card_approval: A grader ref is required');
+    if (input.makerRef !== null && input.graderRef.trim() === input.makerRef.trim()) throw new Error('db record_card_approval: The grader ref must differ from the maker ref');
+    if (this.approvals.some((a) => a.graderRef === input.graderRef)) throw new Error(`db record_card_approval: The grader ref ${input.graderRef} is already used`);
+    if (input.approverRoleId === found.executor_role_id) throw new Error("db record_card_approval: The approver cannot be the card's proposer, drafter or executor");
+    this.approvals.push({ ...input, kind: 'visual' });
+    return `approval-${this.approvals.length}`;
   }
   async withdrawCardDraft(draftId: string, reasonCodes: readonly string[]) {
     if (this.rpcError.withdrawCardDraft) throw this.rpcError.withdrawCardDraft;

@@ -1,5 +1,6 @@
 // One attended role-job session (docs/specs/agent-workflows.md): the Studio Head's ranking, a Game
-// Designer round or a Game Director grade. It runs through the attended adapter (claude -p on the
+// Designer round or a Game Director grade, and a Director's visual review of a card's frames
+// (docs/specs/design-review.md). It runs through the attended adapter (claude -p on the
 // founder's plan) in either studio mode, so no role job spends studio or supporter money:
 // - the session holds exactly its role spec's tools, which may only be Read, Glob, Grep and Bash
 //   (Bash as the folder's package scripts), never Write, Edit, a web tool, an MCP tool or a
@@ -58,6 +59,9 @@ export interface RoleSessionRequest {
   // Unique within the run: designer-1, director-1, head-1.
   label: string;
   worktree: string;
+  // Where the role's prompt_path is read from; the worktree when unset. The visual review works in a
+  // folder of frames, so its Director's prompt is read from the dispatcher's own checkout.
+  promptRoot?: string;
   prompt: string;
   schema: SchemaName;
   budgetUsd: number;
@@ -88,7 +92,7 @@ export function roleSessionSpec(request: RoleSessionRequest, maxTurns: number, s
     cardId: `job-${request.runId}`,
     worktree: request.worktree,
     prompt: request.prompt,
-    systemPromptFile: rolePromptFile(request.role, request.worktree),
+    systemPromptFile: rolePromptFile(request.role, request.promptRoot ?? request.worktree),
     model,
     roleTools: roleTools(request.role).filter((tool) => scripts || !isBash(tool)),
     folder: 'seed-1',

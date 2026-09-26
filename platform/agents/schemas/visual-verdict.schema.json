@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "visual-verdict.schema.json",
+  "title": "Visual verdict",
+  "description": "A Director's review of the frames a visual card changed, against rubrics/visual.md: one verdict per criterion, pass or revise, the changed frame it rests on and one reason code from that criterion's closed list. pass carries meets. Codes: intent: misses_intent (the after frames do not show what the card says), worse_than_before (it makes something else worse than the before frame); fit: off_tokens (a colour, type or spacing outside DESIGN.md's tokens), colour_only_suit (a suit or state told by colour alone), motion_without_event (motion no event caused); legibility: dead_space, stray_gap, unbalanced_columns, cramped, overlap, truncation (text or a control cut off), hierarchy (the eye does not land on what matters first); all_ages: rating_concern (misses the all-ages rating), gambling_cue_near_money (chips, dice or chance next to money), cah_tone (Cards Against Humanity's tone).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "criteria"
+  ],
+  "properties": {
+    "criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intent",
+        "fit",
+        "legibility",
+        "all_ages"
+      ],
+      "properties": {
+        "intent": {
+          "$ref": "#/$defs/intent"
+        },
+        "fit": {
+          "$ref": "#/$defs/fit"
+        },
+        "legibility": {
+          "$ref": "#/$defs/legibility"
+        },
+        "all_ages": {
+          "$ref": "#/$defs/all_ages"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "frame",
+        "reason_code"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "pass",
+            "revise"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "reason_code": {
+          "enum": [
+            "meets",
+            "misses_intent",
+            "worse_than_before"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "meets"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "revise"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "const": "meets"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "fit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "frame",
+        "reason_code"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "pass",
+            "revise"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "reason_code": {
+          "enum": [
+            "meets",
+            "off_tokens",
+            "colour_only_suit",
+            "motion_without_event"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "meets"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "revise"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "const": "meets"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "legibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "frame",
+        "reason_code"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "pass",
+            "revise"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "reason_code": {
+          "enum": [
+            "meets",
+            "dead_space",
+            "stray_gap",
+            "unbalanced_columns",
+            "cramped",
+            "overlap",
+            "truncation",
+            "hierarchy"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "meets"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "revise"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "const": "meets"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "all_ages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "frame",
+        "reason_code"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "pass",
+            "revise"
+          ]
+        },
+        "frame": {
+          "$ref": "#/$defs/frame"
+        },
+        "reason_code": {
+          "enum": [
+            "meets",
+            "rating_concern",
+            "gambling_cue_near_money",
+            "cah_tone"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "pass"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "meets"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verdict": {
+                "const": "revise"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "not": {
+                  "const": "meets"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "frame": {
+      "type": "string",
+      "pattern": "^(site|game)/[a-z0-9]+(-[a-z0-9]+)*\\.png$",
+      "description": "The changed frame the criterion rests on, as changed.txt names it under its side: site/home-375.png or game/game-600.png."
+    }
+  }
+}

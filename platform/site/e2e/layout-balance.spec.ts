@@ -2,7 +2,8 @@ import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
 import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
-import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
+import { PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
+import { SUPPORTER_STUDIO } from './supporter-studio';
 
 // Layout balance (DESIGN.md, No dead space; docs/specs/home-and-design.md): on every public route,
 // with realistic data, nothing leaves dead space. scripts/layout-audit.mjs holds the checks: no
@@ -11,9 +12,9 @@ import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 // framed card or row that fills its frame to within 2px, card rows that line up with no hollow over
 // 80px, headings spaced from the block above at least as far as that block from its own, buttons on
 // one line, no orphaned glyph and a one-row top bar.
-// /reports: two reports on the launch-shaped studio, none (the empty state) on the default fixture
-// (docs/specs/studio-reports.md).
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
+// The routes are the kernel list (routes.ts). /reports: two reports on the launch-shaped studio, none
+// (the empty state) on the default fixture (docs/specs/studio-reports.md).
+const ROUTES = PAGE_PATHS;
 
 async function audit(page: Page, path: string): Promise<string[]> {
   await page.goto(path);

@@ -18,12 +18,12 @@ import { createAlerter } from './alert.js';
 import { createDiscordPoster } from './discord.js';
 import { SessionBudgets } from './budgets.js';
 import { loadConfig } from './config.js';
-import { createSupabaseDb, type Card, type Db } from './db.js';
+import { createSupabaseDb, type Card, type Db, type Role } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
 import { gateStatus, mainHead } from './github.js';
 import { createLogger, errorMessage } from './log.js';
 import { createSupabasePatchStore } from './patch.js';
-import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
+import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps, type PipelineVisual } from './pipeline.js';
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
@@ -72,7 +72,38 @@ async function main(): Promise<void> {
   const running = new Map<string, Date>();
   const now = () => new Date();
   const budgets = new SessionBudgets();
-  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches, infraStops: new Map() };
+  // The role jobs and the Directors' visual review run attended through claude -p on the founder's
+  // plan in either studio mode (docs/specs/agent-workflows.md, docs/specs/design-review.md), so an
+  // unattended process keeps an attended adapter for them. Its Read, Glob and Grep deny rules name the
+  // code clone too, whose .env holds the dispatcher's keys, and there its sessions hold no Bash
+  // (role-session.ts), since the host runs no agent-written code.
+  const roleAdapter = adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot });
+  const typed = new TypedOutput();
+  const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
+  const visual: PipelineVisual = {
+    framesRoot: config.worktreeRoot,
+    review: {
+      db,
+      session: {
+        adapter: roleAdapter,
+        typed,
+        priceTable: config.priceTable,
+        resolveModel,
+        maxTurns: config.sessionMaxTurns,
+        maxMs: config.sessionMaxMinutes * 60_000,
+        boardSessionTtlMin: config.boardSessionTtlMin,
+        watchIntervalMs: config.tickMs,
+        log,
+        stopSignal: stop.signal,
+        now,
+      },
+      rubric: () => readFile(path.join(AGENTS_DIR, 'rubrics', 'visual.md'), 'utf8'),
+      promptRoot: config.codeRoot,
+      budgetUsd: config.cardMaxUsd,
+      waitIntervalMs: config.tickMs,
+    },
+  };
+  const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches, infraStops: new Map(), visual };
   const github = { token: config.githubToken, repo: config.githubRepo };
   const mainGate = async () => {
     const sha = await mainHead(github);
@@ -108,15 +139,11 @@ async function main(): Promise<void> {
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
   const jobState: JobState = { running: null };
-  // The role jobs run attended through claude -p on the founder's plan in either studio mode
-  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them. Its
-  // Read, Glob and Grep deny rules name the code clone too, whose .env holds the dispatcher's keys, and
-  // there its sessions hold no Bash (role-session.ts), since the host runs no agent-written code.
   const workflow: WorkflowDeps = {
-    roleAdapter: adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot }),
-    typed: new TypedOutput(),
+    roleAdapter,
+    typed,
     priceTable: config.priceTable,
-    resolveModel: (role) => resolveRoleModel(role, config).model,
+    resolveModel,
     sessionMaxTurns: config.sessionMaxTurns,
     sessionMaxMs: config.sessionMaxMinutes * 60_000,
     boardSessionTtlMin: config.boardSessionTtlMin,

@@ -129,7 +129,7 @@ describe('runAgentSession metering', () => {
       await emit(usageEvent(2, 200));
       await emit(usageEvent(3, 0, 'builder-class', { input_tokens: 0 }));
     });
-    expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 3 turns', turns: 3 });
+    expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 3 turns', turns: 3, sessionId: 'session-1' });
     expect(db.ledger.map((row) => row.usd)).toEqual([0.0045, 0.006]);
     expect(db.ledger[0]).toMatchObject({ billed_to: 'founder', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 100 });
     expect(db.cards[0]?.actual_usd).toBe(0.0105);
@@ -676,7 +676,7 @@ describe('runAgentSession watch', () => {
       {},
       { mode: 'unattended' },
     );
-    expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 1 turns', turns: 1 });
+    expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 1 turns', turns: 1, sessionId: 'session-1' });
     expect(db.ledger).toHaveLength(1);
     expect(db.events[0]?.payload).toMatchObject({ mode: 'unattended', api_key_source: 'ANTHROPIC_API_KEY' });
   });

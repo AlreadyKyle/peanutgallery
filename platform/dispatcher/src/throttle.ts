@@ -8,10 +8,12 @@
 // which also counts founder-billed turns. Every card other than the candidate X holds money:
 // - a proposed, designing, voted, funded or paused card holds the unspent part of its bar,
 //   max(funded_c − spent_c, 0), whatever its horizon;
-// - a building card holds what its session may still spend, max(budget_c − session_spent_c, 0), from
+// - a building card holds what its sessions may still spend, max(budget_c − sessions_spent_c, 0), from
 //   the running sessions' meters (budgets.ts), or its whole remaining ceiling when this process is not
 //   running it;
-// - a gated, live or rejected card holds nothing.
+// - a gated card this process still runs holds the same, since a visual revision may still spend it
+//   (docs/specs/design-review.md), until the pipeline closes its budget;
+// - any other gated card, and a live or rejected card, holds nothing.
 // available_X = balance − studio reserve − Σ holds of the other cards; an S1 card may add the incident
 // reserve. X starts when what it still needs, max(estimate_X − spent_X, 0), fits available_X, what is
 // left of the daily cap, what is left of the monthly cap, what is left under the usage tier's monthly
@@ -163,7 +165,7 @@ export interface MoneyState {
   // Console credit bought, and every studio and overhead ledger row ever written against it.
   creditPurchasedUsd: number;
   creditSpentUsd: number;
-  // Every card that can hold money: the hold stages and building.
+  // Every card that can hold money: the hold stages, building and gated.
   cards: readonly MoneyCard[];
   // spent_c: each card's studio-billed ledger sum.
   spent: ReadonlyMap<string, number>;
@@ -174,17 +176,21 @@ export interface MoneyState {
 export function holdUsd(card: MoneyCard, state: Pick<MoneyState, 'spent' | 'running' | 'cardMaxUsd'>): number {
   const spent = state.spent.get(card.id) ?? 0;
   if (HOLD_STAGES.includes(card.stage)) return Math.max(0, round4(card.funded_usd - spent));
+  const left = state.running.get(card.id);
   if (card.stage === 'building') {
-    const left = state.running.get(card.id);
     return left !== undefined ? Math.max(0, left) : Math.max(0, round4(ceilingUsd(card.estimate_usd, state.cardMaxUsd) - card.actual_usd));
   }
+  if (card.stage === 'gated' && left !== undefined) return Math.max(0, left);
   return 0;
 }
 
-// What the building cards' sessions may still spend, which the daily cap, the monthly cap and the
+// The stages whose cards' sessions may still spend: building, and gated while a revision may follow.
+export const RUNNING_STAGES: readonly string[] = ['building', 'gated'];
+
+// What the running cards' sessions may still spend, which the daily cap, the monthly cap and the
 // Console credit must still cover.
 export function runningHoldUsd(state: MoneyState): number {
-  return round4(state.cards.filter((card) => card.stage === 'building').reduce((total, card) => total + holdUsd(card, state), 0));
+  return round4(state.cards.filter((card) => RUNNING_STAGES.includes(card.stage)).reduce((total, card) => total + holdUsd(card, state), 0));
 }
 
 export interface MoneyBounds {

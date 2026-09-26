@@ -8,12 +8,14 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "e2e": "tsx e2e/frame-states.ts node_modules/.cache/frame-states.json && E2E_FRAME_STATES=node_modules/.cache/frame-states.json playwright test",
     "bot": "tsx bots/cli.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.23.13",
     "typescript": "^5.9.0",

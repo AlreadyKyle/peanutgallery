@@ -5,13 +5,14 @@ import type { Locator, Page } from '@playwright/test';
 import { E2E_ORIGIN } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
-import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
+import { GUIDE, PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
+import { SUPPORTER_STUDIO } from './supporter-studio';
 
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
-// reduced motion and accessibility. The guide is the design-system pull request's mockup.
-const GUIDE = '/design-kit-7q4m';
-// /reports on the default fixture, which has no report: its empty state (docs/specs/studio-reports.md).
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', GUIDE];
+// reduced motion and accessibility. The guide is the design-system pull request's mockup. The routes
+// are the kernel list (routes.ts); /reports on the default fixture, which has no report, is its empty
+// state (docs/specs/studio-reports.md).
+const ROUTES = PAGE_PATHS;
 const WIDTHS = [320, 360, 375, 390, 768, 1024, 1440];
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';

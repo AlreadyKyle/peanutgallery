@@ -10,12 +10,12 @@ Sixteen roles, one role spec each in `platform/agents/` (a JSON file and a promp
 |---|---|---|---|---|---|---|---|
 | Studio Head | planner | running |  | ranks the open cards on now when the board presses Rank now (`studio_ranking`); drafting from the roadmap is backlog | Read, Glob, Grep | read the repository and typed card fields; order cards that hold no money | change the repository; rank a card holding money; read a community card's text |
 | Game Designer | planner | running |  | drafts a new seed-1 game card when the board presses Draft a game card (`draft_card`) | Read, Glob, Grep, Bash (seed-1's package scripts, in a scratch checkout of main; no Bash when the dispatcher runs unattended, since no agent-written code runs on its host) | propose card drafts as one typed object | approve a card; change the repository; read a community card's text |
-| Game Director | reviewer | running |  | grades each game draft against the pillars and the all-ages rating, in a session of its own (`draft_card`) | Read, Glob, Grep | approve, send back or flag a draft it did not make; set its stance on a card | change the repository; grade a card it proposed, drafted or would build |
+| Game Director | reviewer | running |  | grades each game draft against the pillars and the all-ages rating, in a session of its own (`draft_card`); reviews a seed-1 card's changed frames after its gate passes (the visual review) | Read, Glob, Grep | approve, send back or flag a draft it did not make; pass or send back a card's frames; set its stance on a card | change the repository; grade a card it proposed, drafted or would build |
 | Builder A | writer | running |  | builds funded game cards in `seed-1/` | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a kernel path; approve a card; read public text |
 | Builder B | writer | running |  | builds funded game cards in `seed-1/` | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a kernel path; approve a card; read public text |
 | QA | writer | running |  | reproduces and fixes bugs in Dust; verifies another role's build | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths; record a qa_verify approval of a card it did not build | verify its own build; touch a kernel path |
 | Platform Builder | writer | running |  | builds studio cards in `platform/site/` outside the kernel paths, once the board opens the code lane | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a money, legal or board surface; approve a card |
-| Platform Director | reviewer | running |  | grades site cards against `platform/site/DESIGN.md` and writes their check lines (not built yet: `specs/design-review.md`) | Read, Glob, Grep | grade a site card it did not build | change the repository; grade its own change |
+| Platform Director | reviewer | running |  | reviews a platform/site card's changed frames after its gate passes, against `platform/site/DESIGN.md` (the visual review); grading site card drafts and writing their check lines wait on studio card drafting, a backlog entry | Read, Glob, Grep | pass or send back the frames of a site card it did not build | change the repository; grade its own change |
 | Head of Finance | read_only | starts | Starts at the cutover, once the first Stripe payout has bought Console credit. | explains the ledger and each credit purchase | none | read the books | move money; change anything |
 | Janitor | read_only | starts | Starts once its code checks are built and run clean; the docs pass comes after them. | finds drift between the docs, the code and the cards (not built yet: `specs/agent-upkeep.md`) | none | read the repository; file findings | change anything |
 | Tech Artist | writer | starts | Starts at the first visual card after launch. | keeps the game's look as code | none | build visual cards once the board grants tools | read public text |
@@ -55,7 +55,9 @@ filed by the board ────────────────────�
 drafted by an agent ─► approved ─► waits on next until opens_at ─► dealt to now
                                         (the cooling window)
 proposed on now ─► funded (bar full) ─► building ─► gated ─► live
-                                           │
+                                           │          │
+                                           │          └─► visual review (frames changed): pass ─► live;
+                                           │              revise ─► building again, at most twice
                                            ├─► paused at its ceiling ─► resumed by rule once, or by the board
                                            └─► rejected, with the failing check
 vetoed by the board ─► never dealt or run; one on now with no money moves to next
@@ -89,6 +91,14 @@ Both are board-queued at /board and run attended through `claude -p` on the foun
 - **Typed fields only.** A card a supporter or the community proposed reaches both roles as its id, stage, horizon, bucket and funded amount: both are planners with write access, and no role with write access reads public free text.
 - **The public-text filter.** Every agent-written string a stranger can read is scanned by the gate's own `platform/gate/banned-phrases.sh`, every list and trademarks included, and then by its `secret-scan.sh`, before it is written; a hit, or a scan that cannot run, refuses the write. The site shows "Written by the <role>, an AI agent" beside agent-written card text.
 
+## The visual review
+
+Built by `docs/specs/design-review.md`. The files that set the look are board-only (`platform/gate/design-paths.txt`: the tokens, the Card, the glyphs, motion, the route list, the site's public and brand files, the game's favicon): the dispatcher refuses a card that changes one before any gate run, and the gate's kernel guard fails a card branch that does, so a new page or screen is a board pull request. The site's design suite (`platform/site/e2e`) and seed-1's frame spec (`seed-1/e2e`) are kernel, so no card can weaken what checks it.
+
+- **Frames.** A change to a render path (`changed-paths.sh` `render=true`) runs the gate's `frames` job, which screenshots every route in `platform/site/e2e/routes.ts` at 375, 768 and 1440 and the game's canvas at four fixed states and its page at 375, on the change and on the base, and uploads the frames that differ as before and after pairs with `changed.txt` (`design-frames`, kept one day). No card code runs in Node there: the specs and everything they import are kernel, and the game's states are made from the base's sim before the change is drawn.
+- **The review.** After a card's gate passes, the dispatcher reads the passing run's `design-frames`. With changed frames, the card waits at gated until a board member is signed in at /board, then one attended session runs, through `claude -p` on the founder's plan and billed to the founder with the Director's role, never to the card: the Game Director for a seed-1 card, the Platform Director for a platform/site card. It holds the Director's role spec tools (Read, Glob and Grep; no Bash, Write, Edit, web or MCP tool, no fallback model), works in the frames folder, reads `platform/agents/rubrics/visual.md`, and answers with one object valid against `platform/agents/schemas/visual-verdict.schema.json`: for intent, fit, legibility and all_ages, pass or revise, the changed frame it rests on and a reason code from a closed list. Anything else is an infrastructure stop, with nothing recorded.
+- **The end rule.** All pass records a `visual` approval (the Director approves, the builder's session is the maker, the review session the grader, refused when they are the same) and merges on the green gate. A revise, while fewer than two rounds are used, moves the card back to building: `record_review_round` counts the round in `cards.review_rounds`, and the builder revises in a new session, in the card's own mode and inside its ceiling, given only the failing criteria, frame names and reason codes; the revision and the change become one commit on the base, gated and reviewed again. After two rounds an all-ages revise rejects the card (`visual_review:all_ages`), which moves its unspent money as a gate rejection does; any other open criterion merges with its final verdict on the approval row. The count lives in Postgres, so a restart never resets it.
+
 ## The job queue
 
 A job is a name, a role, whether it calls a model, and whether it runs while the studio is paused (`jobs`). A run (`job_runs`) is queued by the board (Run now, with typed input), by pg_cron through `enqueue_job_run`, or by an event, and each has an origin: board, schedule, event or operator. A run queued by a board-origin run is board origin. A key makes each enqueue happen once, and a job holds at most one queued scheduled run. pg_cron runs in UTC.
@@ -113,6 +123,7 @@ Built by `docs/specs/studio-reports.md`; no model writes or reads any of it.
 | A card session, unattended | the card's money, from the pool, within its ceiling and the caps |
 | A card session, attended | the founder's plan, billed to the founder on the ledger |
 | A role job that calls a model | the board's Max plan, attended only: board-origin, while a board member is signed in, billed to the founder, until an operations budget exists |
+| A Director's visual review of a card's frames | the board's Max plan, attended only, while a board member is signed in, billed to the founder with the Director's role, never to the card |
 | A role job that runs code only | nothing: it makes no model call |
 | The unattended startup probe | overhead, from the studio share |
 

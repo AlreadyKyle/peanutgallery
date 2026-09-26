@@ -22,6 +22,8 @@ import {
   GIT_TIMEOUT_MS,
   gitArgs,
   gitAuthEnv,
+  DESIGN_PATHS,
+  isDesignPath,
   isKernelPath,
   KERNEL_NAMES,
   KERNEL_PATHS,
@@ -75,6 +77,52 @@ describe('pure helpers', () => {
 
   it('keeps the kernel list equal to the gate file', () => {
     expect([...KERNEL_PATHS]).toEqual(gateList('kernel-paths.txt'));
+  });
+
+  it('keeps the design paths equal to the gate file', () => {
+    expect([...DESIGN_PATHS]).toEqual(gateList('design-paths.txt'));
+  });
+
+  it('refuses a change to a board-only design file in the card lanes, before any gate run', () => {
+    const site = lanePaths('platform', 'code');
+    const seed = lanePaths('seed-1', 'code');
+    for (const file of [
+      'platform/site/src/tokens.css',
+      'platform/site/src/components/Card.tsx',
+      'platform/site/src/components/Glyph.tsx',
+      'platform/site/src/lib/motion.ts',
+      'platform/site/src/routes.tsx',
+      'platform/site/public/og.png',
+      'platform/site/public/fonts/x.woff2',
+      'platform/site/brand/mark.svg',
+      'Platform/Site/src/Routes.tsx',
+    ]) {
+      expect(isDesignPath(file), file).toBe(true);
+      expect(outsideLane([file, 'platform/site/src/pages/Landing.tsx'], site), file).toEqual([file]);
+    }
+    expect(outsideLane(['seed-1/render/favicon.svg', 'seed-1/render/scene.ts'], seed)).toEqual(['seed-1/render/favicon.svg']);
+    for (const file of ['platform/site/src/tokens.css.md', 'platform/site/publicity.ts', 'platform/site/brands/x.svg', 'seed-1/render/favicon.ts', 'platform/site/src/lib/motions.ts']) {
+      expect(isDesignPath(file), file).toBe(false);
+    }
+    // Design files are board work, not kernel: the site kernel import rule does not reach them.
+    for (const file of DESIGN_PATHS) expect(isKernelPath(file), file).toBe(false);
+    expect(protectedPaths(site)).toEqual(expect.arrayContaining(['platform/site/src/routes.tsx', 'platform/site/public', 'platform/site/brand']));
+    expect(protectedPaths(seed)).toEqual(expect.arrayContaining(['seed-1/render/favicon.svg', 'seed-1/e2e', 'seed-1/playwright.config.ts']));
+  });
+
+  it('makes the design checks kernel', () => {
+    for (const file of [
+      'platform/site/e2e/design.spec.ts',
+      'platform/site/e2e/routes.ts',
+      'platform/site/src/styles.test.ts',
+      'platform/site/src/lib/copy.test.ts',
+      'platform/site/src/lib/contrast.ts',
+      'platform/site/src/lib/colour.ts',
+      'seed-1/e2e/frames.spec.ts',
+      'seed-1/playwright.config.ts',
+    ]) {
+      expect(isKernelPath(file), file).toBe(true);
+    }
   });
 
   it('keeps the kernel names equal to the gate file, with * as the only wildcard', () => {
@@ -198,7 +246,8 @@ describe('pure helpers', () => {
       'seed-1/content/environment.json',
       'seed-1/sim/hashing.ts',
       'seed-1/render/postcss.ts',
-      // The site's pages, their routes, copy, cards, headers and styles stay in the platform code lane.
+      // The site's pages, copy, cards, headers and styles stay in the platform code lane; the route list is
+      // not kernel but a board-only design file (DESIGN_PATHS).
       'platform/site/src/pages/Landing.tsx',
       'platform/site/src/pages/HowItWorks.tsx',
       'platform/site/src/routes.tsx',
@@ -248,7 +297,7 @@ describe('pure helpers', () => {
       'seed-1/render/.claude/settings.json',
       'seed-1/vitest.config.ts',
     ]);
-    expect(outsideLane(['platform/site/src/CLAUDE.md', 'platform/site/src/routes.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/src/CLAUDE.md']);
+    expect(outsideLane(['platform/site/src/CLAUDE.md', 'platform/site/src/pages/Team.tsx'], lanePaths('platform', 'code'))).toEqual(['platform/site/src/CLAUDE.md']);
     expect(protectedPaths(lanePaths('seed-1', 'config'))).toEqual([]);
     expect(protectedPaths(lanePaths('seed-1', 'code'))).toContain('seed-1/sim/invariants.ts');
   });

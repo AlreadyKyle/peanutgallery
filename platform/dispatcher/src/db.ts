@@ -64,6 +64,20 @@ export interface Card {
   approved: boolean;
   board_vetoed: boolean;
   executor_paused: boolean;
+  // The visual review's revise rounds used (docs/specs/design-review.md), counted in Postgres by
+  // record_review_round so the cap holds across a restart; 0 on a database without the column.
+  review_rounds: number;
+}
+
+// A visual approval (record_card_approval, kind visual; docs/specs/design-review.md): the Director
+// approves, the builder's session made it, the review session graded it.
+export interface VisualApprovalInput {
+  cardId: string;
+  verdict: Record<string, unknown>;
+  approverRoleId: string;
+  makerRoleId: string | null;
+  makerRef: string | null;
+  graderRef: string;
 }
 
 export interface Role {
@@ -329,6 +343,12 @@ export interface Db extends OutboundDb {
   // The card id; the approval's verdict carries the grader's reason codes.
   approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>): Promise<string>;
   withdrawCardDraft(draftId: string, reasonCodes: readonly string[]): Promise<void>;
+  // The visual review (docs/specs/design-review.md): one more revise round on the card, returning the
+  // new count (record_review_round); and the visual approval at the card's current content hash
+  // (card_content_hash, then record_card_approval), which Postgres refuses when the grader ref equals
+  // the maker ref. The approval's id.
+  recordReviewRound(cardId: string): Promise<number>;
+  recordVisualApproval(input: VisualApprovalInput): Promise<string>;
   applyCardRanking(runId: string, order: readonly string[]): Promise<{ moves: RankingMove[]; unapplied: number }>;
 }
 
@@ -381,6 +401,7 @@ export function toCard(row: Row): Card {
     approved: row.approved === true,
     board_vetoed: row.board_vetoed === true,
     executor_paused: row.executor_paused === true,
+    review_rounds: num(row, 'review_rounds'),
   };
 }
 
@@ -779,6 +800,30 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async approveCardDraft(draftId, approverRoleId, graderRef, verdict) {
       const { data, error } = await client.rpc('approve_card_draft', { p_draft: draftId, p_approver_role: approverRoleId, p_grader_ref: graderRef, p_verdict: verdict });
       if (error || !data) fail('approve_card_draft', error);
+      return String(data);
+    },
+
+    async recordReviewRound(cardId) {
+      const { data, error } = await client.rpc('record_review_round', { p_card: cardId });
+      if (error || data === null || data === undefined) fail('record_review_round', error);
+      return Number(data);
+    },
+
+    async recordVisualApproval(input) {
+      const hash = await client.rpc('card_content_hash', { p_card: input.cardId });
+      if (hash.error || typeof hash.data !== 'string') fail('card_content_hash', hash.error);
+      const { data, error } = await client.rpc('record_card_approval', {
+        p_card: input.cardId,
+        p_kind: 'visual',
+        p_verdict: input.verdict,
+        p_approver_role: input.approverRoleId,
+        p_maker_role: input.makerRoleId,
+        p_maker_ref: input.makerRef,
+        p_grader_ref: input.graderRef,
+        p_content_sha256: hash.data,
+        p_job_run: null,
+      });
+      if (error || !data) fail('record_card_approval', error);
       return String(data);
     },
 

@@ -18,6 +18,7 @@ import { errorMessage, type Logger } from './log.js';
 import { runnableInOrder } from './select.js';
 import {
   HOLD_STAGES,
+  RUNNING_STAGES,
   canStart,
   concurrency,
   newYorkDate,
@@ -146,7 +147,7 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   }
   const boardSessionActive = await checkBoardSession(deps);
   const pool = await deps.db.getPool();
-  const cards = await deps.db.listCardsInStages([...HOLD_STAGES, 'building']);
+  const cards = await deps.db.listCardsInStages([...HOLD_STAGES, ...RUNNING_STAGES]);
   const runnable = runnableInOrder(cards, studio.platform_lane_open);
   const decision = canStart({
     paused: studio.paused,

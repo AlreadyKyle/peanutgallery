@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isKernelPath } from '../src/worktree.js';
+import { runtimeImports } from './helpers/imports.js';
 
 // The public site's kernel files must not take their data, their routes or their rendering from a
 // file a card can change (docs/specs/board-site.md). This test lives in the dispatcher, a kernel
@@ -14,7 +15,7 @@ const CARD_LANE_IMPORTS: Record<string, string> = {
   'platform/site/src/components/PageHeader.tsx': 'the h1, the lede and the tab title, from the strings the page passes',
   'platform/site/src/styles.css': "the site's styles, imported once by main.tsx",
   'platform/site/src/lib/freshness.ts': 'reloads a tab restored, returned to or moved to another page when a newer build is live (main.tsx)',
-  'platform/site/src/routes.tsx': "the card lane's own pages and top bar links, which App.tsx filters (App.tsx)",
+  'platform/site/src/routes.tsx': "the pages App.tsx does not route itself and their top bar links, which App.tsx filters (App.tsx); a board-only design file (platform/gate/design-paths.txt)",
 };
 const PACKAGES = new Set(['react', 'react-dom', 'react-dom/client', 'react-router-dom']);
 
@@ -23,19 +24,6 @@ function filesUnder(dir: string): string[] {
     const rel = `${dir}/${name}`;
     return statSync(path.join(REPO, rel)).isDirectory() ? filesUnder(rel) : [rel];
   });
-}
-
-/** Every module a file loads at run time: static imports and re-exports that are not type-only, side-effect imports and dynamic imports. */
-export function runtimeImports(text: string): string[] {
-  const out: string[] = [];
-  for (const match of text.matchAll(/^\s*(import|export)\s+(type\s+)?([^'";]*?)\s+from\s+['"]([^'"]+)['"]/gm)) {
-    const typeOnly = match[2] !== undefined || /^\{\s*(type\s+[A-Za-z_$][\w$]*\s*,?\s*)+\}$/.test(match[3]!.trim());
-    if (!typeOnly) out.push(match[4]!);
-  }
-  for (const match of text.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)) out.push(match[1]!);
-  for (const match of text.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) out.push(match[1]!);
-  for (const match of text.matchAll(/\bimport\s*\(\s*[^'"\s)]/g)) out.push(`<computed import at ${match.index}>`);
-  return out;
 }
 
 function resolveRelative(from: string, specifier: string): string {

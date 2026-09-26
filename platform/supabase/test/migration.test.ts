@@ -2402,3 +2402,54 @@ describe("studio-reports migration", () => {
     expect(block("SNAPSHOT_RPCS")).toContain('["site_reports", ["reports"]]');
   });
 });
+
+// docs/specs/design-review.md: the Directors' visual review counts its revise rounds on the card.
+const DESIGN_REVIEW_FILE = "20260925200000_design_review.sql";
+const designReviewSql = launchFile(DESIGN_REVIEW_FILE);
+
+describe("design-review migration", () => {
+  it("comes straight after studio-reports, sets a lock timeout first and reloads the schema last", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(DESIGN_REVIEW_FILE);
+    expect(names[at - 1]).toBe(REPORTS_SUPPLY_FILE);
+    expect(withoutComments(designReviewSql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(designReviewSql).split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("adds cards.review_rounds, never negative, and grants it to no API role", () => {
+    const body = withoutComments(designReviewSql);
+    expect(body).toContain("alter table public.cards add column if not exists review_rounds integer not null default 0;");
+    expect(body).toContain("check (review_rounds >= 0)");
+    expect(body).not.toMatch(/grant [a-z, ()_]+ on (table )?public\.cards/);
+  });
+
+  it("makes record_review_round security definer with search_path public, for the service role alone", () => {
+    expect(functionBlockIn(designReviewSql, "record_review_round")).toContain(
+      "create or replace function public.record_review_round(p_card uuid) returns integer\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $$",
+    );
+    const body = withoutComments(designReviewSql);
+    expect(body).toContain("revoke all on function public.record_review_round(uuid) from public, anon, authenticated;");
+    expect(body).toContain("grant execute on function public.record_review_round(uuid) to service_role;");
+  });
+
+  it("drops and creates dispatcher_cards again with review_rounds, and repeats its revoke and grant", () => {
+    const body = withoutComments(designReviewSql);
+    expect(body).toContain("drop view if exists public.dispatcher_cards;");
+    expect(body).toContain("    coalesce(r.paused, false) as executor_paused,\n    c.review_rounds\n  from public.cards c");
+    expect(body).toContain("revoke all on table public.dispatcher_cards from anon, authenticated, service_role;");
+    expect(body).toContain("grant select on public.dispatcher_cards to service_role;");
+  });
+
+  it("adds none of the objects the trimmed spec removed", () => {
+    for (const removed of ["public_card_verdicts", "site_card", "file_finding_card", "platform_audit", "post_ship_review", "review_unknown_used", "card_kind", "mockup_card_id", "p_unknown"]) {
+      expect(withoutComments(designReviewSql)).not.toContain(removed);
+    }
+  });
+
+  it("is probed by anon-negative-test: record_review_round refused, cards.review_rounds withheld", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const start = script.indexOf("const RPC_PROBES");
+    expect(script.slice(start, script.indexOf("];", start))).toContain('["record_review_round", { p_card: NO_CARD }]');
+    expect(script).toContain('const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "review_rounds", "*"];');
+  });
+});

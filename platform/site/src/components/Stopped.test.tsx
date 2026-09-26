@@ -119,19 +119,20 @@ describe('Stopped', () => {
     // The failing_check codes a rejected or paused card can carry, read by hand from
     // platform/dispatcher/src (pipeline.ts's CardStop and InfraStop, PAUSING_OUTCOMES and the gate's
     // infrastructure checks; worktree.ts's commit checks; credit.ts's REFUSAL_CHECK; recovery.ts;
-    // adapters/managed.ts's SessionPaused) and the board's cancel (cancelled_by_board). A code added
+    // adapters/managed.ts's SessionPaused; the visual review's, docs/specs/design-review.md) and the
+    // board's cancel (cancelled_by_board). A code added
     // later shows its stage's fallback until it gets words here.
     const rejected = [
       'git_tamper', 'acceptance_grammar', 'lane_unsupported', 'acceptance_already_true', 'tool_allowlist', 'session',
       'acceptance', 'history', 'lane_violation', 'file_mode', 'no_changes', 'gate', 'merge', 'deploy', 'smoke',
-      'dispatcher_error', 'cancelled_by_board',
+      'dispatcher_error', 'cancelled_by_board', 'visual_review:all_ages',
     ];
     const paused = [
       'patch_conflict', 'adapter', 'console_credit', 'usage_tier_cap', 'ceiling', 'budget', 'turn_cap', 'board_session',
       'paused_by_board', 'unknown_model', 'wall_clock', 'dispatcher_stopped', 'horizon', 'vetoed', 'dispatcher_error',
       'outage', 'pr_head', 'gate_missing', 'gate_pending', 'gate_infrastructure', 'main_red', 'deploy_timeout',
       'post_merge_outage', 'dispatcher_restart', 'session_unsettled', 'managed_api', 'stream_lost', 'card_spend',
-      'read_token', 'repo_skills', 'system_prompt', 'ledger',
+      'read_token', 'repo_skills', 'system_prompt', 'ledger', 'visual_review', 'frames',
     ];
     for (const code of rejected) expect(stopReason({ stage: 'rejected', failing_check: code }), code).not.toBe(legal.rejectedFallback);
     for (const code of paused) expect(stopReason({ stage: 'paused', failing_check: code }), code).not.toBe(legal.pausedFallback);

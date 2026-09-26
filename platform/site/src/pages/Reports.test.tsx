@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { reportsDoc } from '../lib/reports.test-fixture';
 import { Reports } from './Reports';
 
@@ -50,6 +51,6 @@ describe('/reports', () => {
   it('says the reports could not be loaded when the document fails', async () => {
     serve(502, { error: 'x' });
     draw();
-    await waitFor(() => expect(screen.getByText(copy.reports.unavailable)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(legal.reportsUnavailable)).toBeTruthy());
   });
 });

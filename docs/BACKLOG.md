@@ -396,5 +396,29 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: later
 - rank: 43
-- summary: A card's page gains link previews, its design frames, a Play this version link, a Share button and more of the agents' steps.
-- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones. Left for later: a link preview per card, the design review's frames, a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, supporter names chosen by supporters (free text, so it needs moderation first), the hand-off lines (Drafted by, Approved by) and ranking moves, the value a config change replaced, and a Share button. It is not built yet.
+- summary: A card's page gains link previews, its design frames and verdicts, a Play this version link, a Share button and more of the agents' steps.
+- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones. Left for later: a link preview per card, the design review's frames and the Director's verdicts (kept private in card_approvals today), a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, supporter names chosen by supporters (free text, so it needs moderation first), the hand-off lines (Drafted by, Approved by) and ranking moves, the value a config change replaced, and a Share button. It is not built yet.
+
+### Mockup and design-system cards
+- bucket: studio
+- folder: platform
+- horizon: later
+- rank: 44
+- summary: A card can change a page, a screen or the design system once the board has seen a mockup of it.
+- intent: Today the files that set the look (platform/gate/design-paths.txt: the tokens, the Card, the glyphs, motion, the route list, the site's public and brand files and the game's favicon) are board-only, so a new page, a new screen or a design-system change is a board pull request. Mockup and design-system cards would add their own branch lanes, a seed-1 guide page, the draft fields for what a card adds and surfaces, and a card kind with a link from a built card to the mockup it follows. They wait on the first card that needs one. It is not built yet.
+
+### Post-ship grade and monthly design audit
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 45
+- summary: The Directors grade each visual card after it ships and audit the live site and game once a month.
+- intent: Today a Director reviews a visual card's frames once, before it merges, attended on the founder's plan. Grading what shipped and a monthly audit of main's frames, each finding filed as a card, would run unattended, so they wait on an operations percentage to pay for them, which does not exist. It is not built yet.
+
+### Follow-up drafts from open visual criteria
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 46
+- summary: A card that shipped with a design criterion still open gets a draft card to fix it.
+- intent: Today a visual card still open on intent, fit or legibility after two revise rounds ships with the Director's verdict recorded, and nothing follows it up. A follow-up would draft a card from the open criteria, frame names and reason codes, graded like any draft. It waits on studio card drafting. It is not built yet.

@@ -171,6 +171,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/ops',
   'platform/supabase',
   'platform/site/build-sha.ts',
+  'platform/site/e2e',
   'platform/site/index.html',
   'platform/site/netlify',
   'platform/site/netlify.toml',
@@ -196,6 +197,9 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/components/Supporters.tsx',
   'platform/site/src/components/TextPage.tsx',
   'platform/site/src/lib/card-source.ts',
+  'platform/site/src/lib/colour.ts',
+  'platform/site/src/lib/contrast.ts',
+  'platform/site/src/lib/copy.test.ts',
   'platform/site/src/lib/lines.ts',
   'platform/site/src/lib/env.ts',
   'platform/site/src/lib/format.ts',
@@ -215,12 +219,16 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/pages/Ledger.tsx',
   'platform/site/src/pages/Legal.tsx',
   'platform/site/src/pages/Thanks.tsx',
+  'platform/site/src/routes.test.ts',
+  'platform/site/src/styles.test.ts',
   'platform/site/vite.config.ts',
   'seed-1/CLAUDE.md',
   'seed-1/bots',
+  'seed-1/e2e',
   'seed-1/index.html',
   'seed-1/netlify.toml',
   'seed-1/package.json',
+  'seed-1/playwright.config.ts',
   'seed-1/scripts',
   'seed-1/sim/hash.ts',
   'seed-1/sim/invariants.ts',
@@ -230,6 +238,23 @@ export const KERNEL_PATHS: readonly string[] = [
   'seed-1/tests/timeline.test.ts',
   'seed-1/tsconfig.json',
   'seed-1/vite.config.ts',
+];
+
+// The board-only design files (docs/specs/design-review.md): the tokens, the Card, the glyphs, motion,
+// the route list, the public site's public assets and brand files, and the game's favicon. No card
+// may change one; the dispatcher refuses such a change before any gate run, as it refuses a kernel
+// path, and the gate's kernel-guard.sh fails a card branch that does. They are not kernel: the site
+// kernel import rule (test/site-kernel.test.ts) does not apply to them. The same list is
+// platform/gate/design-paths.txt; a test keeps the two equal.
+export const DESIGN_PATHS: readonly string[] = [
+  'platform/site/src/tokens.css',
+  'platform/site/src/components/Card.tsx',
+  'platform/site/src/components/Glyph.tsx',
+  'platform/site/src/lib/motion.ts',
+  'platform/site/src/routes.tsx',
+  'platform/site/public',
+  'platform/site/brand',
+  'seed-1/render/favicon.svg',
 ];
 
 // File and folder names no agent may create or change at any depth: Claude Code loads a nested
@@ -304,17 +329,23 @@ export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
   return folder === 'seed-1' ? [...CONFIG_LANE_PATHS] : [];
 }
 
-// The kernel paths that lie inside the allowed paths, named in the session prompt.
-export function protectedPaths(allowed: readonly string[]): string[] {
-  return KERNEL_PATHS.filter((kernel) => allowed.some((dir) => under(kernel, dir)));
+// A board-only design file, or a file under a design folder; case is ignored, as for kernel paths.
+export function isDesignPath(file: string): boolean {
+  const lower = file.toLowerCase();
+  return DESIGN_PATHS.some((design) => under(lower, design.toLowerCase()));
 }
 
-// Files outside the allowed paths, kernel files inside them, and, when the allowed paths are the
-// config lane's, any file that is not .json.
+// The kernel and design paths that lie inside the allowed paths, named in the session prompt.
+export function protectedPaths(allowed: readonly string[]): string[] {
+  return [...KERNEL_PATHS, ...DESIGN_PATHS].filter((locked) => allowed.some((dir) => under(locked, dir)));
+}
+
+// Files outside the allowed paths, kernel and design files inside them, and, when the allowed paths
+// are the config lane's, any file that is not .json.
 export function outsideLane(files: readonly string[], allowed: readonly string[]): string[] {
   const configLane = allowed.length > 0 && allowed.every((dir) => CONFIG_LANE_PATHS.includes(dir));
   return files.filter(
-    (file) => !allowed.some((dir) => under(file, dir)) || isKernelPath(file) || (configLane && !file.endsWith(CONFIG_LANE_EXTENSION)),
+    (file) => !allowed.some((dir) => under(file, dir)) || isKernelPath(file) || isDesignPath(file) || (configLane && !file.endsWith(CONFIG_LANE_EXTENSION)),
   );
 }
 

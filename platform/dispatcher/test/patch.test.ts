@@ -227,6 +227,19 @@ describe('applyStoredPatch', () => {
     expect(raw(['status', '--porcelain', '--untracked-files=all'])).toBe('');
   });
 
+  it('discards, without applying, a stored patch whose base is not on main, as a visual revision stores against the card commit', async () => {
+    for (const offMain of [raw(['commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit']).trim(), 'a'.repeat(40), 'not-a-sha']) {
+      const store = new MemoryStore();
+      // The revision's hunks apply at main too, so only the base shows it is half the change.
+      const patch = await configEdit();
+      await store.save(storedPatch('card-1', offMain, patch, 'Gatherer base cost 10 to 11', 'sesn_revision'));
+      const outcome = await applyStoredPatch(store, 'card-1', repo, CONFIG_LANE);
+      expect(outcome).toMatchObject({ kind: 'conflict', sha256: patchSha256(patch), detail: expect.stringMatching(/is not on main/) });
+      expect(store.rows).toEqual([]);
+      expect(raw(['status', '--porcelain', '--untracked-files=all'])).toBe('');
+    }
+  });
+
   it('discards a stored patch that no longer applies, so the next claim runs a session', async () => {
     const store = new MemoryStore();
     const patch = await configEdit();
