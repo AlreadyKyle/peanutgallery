@@ -6,14 +6,16 @@
 // lock, then deploys and smoke-tests both sites; each fixture that breaks exactly one condition is
 // refused naming it; a pull request behind main gets one "@dependabot rebase"; nothing happens while
 // the studio is paused or main is red; a failed smoke restores the site and reverts main.
+import { readFileSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { stringify as stringifyYaml } from 'yaml';
 import type { AgentAdapter } from '../src/adapters/types.js';
 import type { PinState } from '../src/cli-pin.js';
 import type { GateStatus } from '../src/github.js';
 import { janitor, schemaFindings } from '../src/job-handlers/janitor.js';
-import { isPatchBump, lockfileChanges, packageJsonChanges, upkeepMerge, type Decision } from '../src/job-handlers/upkeep-merge.js';
-import type { UpkeepDeps } from '../src/job-handlers/upkeep.js';
+import { isPatchBump, lockfileChanges, neverList, packageJsonChanges, upkeepMerge, type Decision } from '../src/job-handlers/upkeep-merge.js';
+import { fingerprintEnv, migrationsFingerprintRunner, type UpkeepDeps } from '../src/job-handlers/upkeep.js';
 import { skipReason, type JobContext } from '../src/jobs.js';
 import { mergeLock } from '../src/lock.js';
 import { createLogger } from '../src/log.js';
@@ -230,8 +232,33 @@ const MERGE = 'd'.repeat(40);
 const SITE = { platform: 'https://platform.local', seed: 'https://seed.local' };
 const SERVED = new TextEncoder().encode('{"cost":10}\n');
 
-const lock = (packages: string[]) =>
-  ["lockfileVersion: '9.0'", '', 'importers:', '  .: {}', '', 'packages:', '', ...packages.flatMap((p) => [`  '${p}':`, '    resolution: {integrity: sha512-x}', '']), 'snapshots: {}', ''].join('\n');
+// A v9 lockfile: the dispatcher's importer (yaml and supabase-js, and tsx as its dev dependency), each package, and a
+// snapshot for each, with the dependencies SNAPSHOT_DEPS gives it at any version.
+const SNAPSHOT_DEPS: Record<string, Record<string, string>> = {
+  tsx: { esbuild: '0.28.2', 'get-tsconfig': '4.10.0' },
+  '@supabase/supabase-js': { '@supabase/auth-js': '2.116.0' },
+  '@scope/tool': { 'deep-helper': '1.0.0' },
+};
+const DISPATCHER_IMPORTER = {
+  dependencies: { yaml: { specifier: '2.9.1', version: '2.9.1' }, '@supabase/supabase-js': { specifier: '^2.116.0', version: '2.116.0' } },
+  devDependencies: { tsx: { specifier: '^4.23.13', version: '4.23.13' } },
+};
+const lock = (packages: string[], importer: Record<string, unknown> = DISPATCHER_IMPORTER) =>
+  stringifyYaml({
+    lockfileVersion: '9.0',
+    importers: { '.': {}, 'platform/dispatcher': importer },
+    packages: Object.fromEntries(packages.map((p) => [p, { resolution: { integrity: 'sha512-x' } }])),
+    snapshots: Object.fromEntries(
+      packages.map((p) => {
+        const deps = SNAPSHOT_DEPS[p.slice(0, p.lastIndexOf('@'))];
+        return [p, deps ? { dependencies: deps } : {}];
+      }),
+    ),
+  });
+// Every package main's lockfile names: the site's left-pad and @scope/tool (with its own dependency),
+// and the dispatcher's closure.
+const BASE_PACKAGES = ['left-pad@1.3.0', '@scope/tool@2.4.1', 'deep-helper@1.0.0', 'yaml@2.9.1', 'tsx@4.23.13', 'esbuild@0.28.2', 'get-tsconfig@4.10.0', '@supabase/supabase-js@2.116.0', '@supabase/auth-js@2.116.0', '@electric-sql/pglite@0.3.7'];
+const withPackages = (...swaps: Array<[string, string]>) => BASE_PACKAGES.map((p) => swaps.find(([from]) => from === p)?.[1] ?? p);
 
 interface MergeFixture {
   verified: boolean;
@@ -256,9 +283,8 @@ function mergeFixture(): MergeFixture {
     contents: {
       [`platform/site/package.json@${MAIN}`]: JSON.stringify({ name: '@backseat/site', dependencies: { 'left-pad': '^1.3.0' }, devDependencies: { typescript: '^5.9.0' } }),
       [`platform/site/package.json@${HEAD}`]: JSON.stringify({ name: '@backseat/site', dependencies: { 'left-pad': '^1.3.1' }, devDependencies: { typescript: '^5.9.0' } }),
-      [`pnpm-lock.yaml@${MAIN}`]: lock(['left-pad@1.3.0', '@scope/tool@2.4.1', 'yaml@2.9.1']),
-      [`pnpm-lock.yaml@${HEAD}`]: lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.1']),
-      [`platform/dispatcher/package.json@${MAIN}`]: JSON.stringify({ dependencies: { yaml: '2.9.1', dotenv: '^17.4.2' } }),
+      [`pnpm-lock.yaml@${MAIN}`]: lock(BASE_PACKAGES),
+      [`pnpm-lock.yaml@${HEAD}`]: lock(withPackages(['left-pad@1.3.0', 'left-pad@1.3.1'])),
     },
     published: { 'left-pad@1.3.1': new Date(NOW.getTime() - 9 * DAY).toISOString() },
     behind: 0,
@@ -397,17 +423,26 @@ describe('upkeep_merge', () => {
       'semver_patch',
       /changes name, which is not a dependency version/,
     ],
-    ['a lockfile minor bump', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.4.0', '@scope/tool@2.4.1', 'yaml@2.9.1'])), 'semver_patch', /left-pad@1\.4\.0, which is not a patch/],
-    ['a new package in the lockfile', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.1', 'evil@1.0.0'])), 'new_package', /adds the package evil/],
-    [
-      "a patch to one of the dispatcher's runtime dependencies",
+    ['a lockfile minor bump', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(withPackages(['left-pad@1.3.0', 'left-pad@1.4.0']))), 'semver_patch', /left-pad@1\.4\.0, which is not a patch/],
+    ['a new package in the lockfile', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock([...withPackages(['left-pad@1.3.0', 'left-pad@1.3.1']), 'evil@1.0.0'])), 'new_package', /adds the package evil/],
+    ...(
+      [
+        ["one of the dispatcher's runtime dependencies", 'yaml@2.9.1', 'yaml@2.9.2', /^yaml is on the never list$/],
+        ['tsx, the dev dependency the dispatcher runs under', 'tsx@4.23.13', 'tsx@4.23.14', /^tsx is on the never list$/],
+        ["a package in a runtime dependency's closure", '@supabase/auth-js@2.116.0', '@supabase/auth-js@2.116.1', /^@supabase\/auth-js is on the never list$/],
+        ["a package in tsx's closure", 'get-tsconfig@4.10.0', 'get-tsconfig@4.10.1', /^get-tsconfig is on the never list$/],
+        ['PGlite, which the daily check runs on the host', '@electric-sql/pglite@0.3.7', '@electric-sql/pglite@0.3.8', /^@electric-sql\/pglite is on the never list$/],
+      ] as const
+    ).map(([name, from, to, detail]): [string, (f: MergeFixture) => void, string, RegExp] => [
+      `a patch to ${name}`,
       (f) => {
-        f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.2']);
-        f.published['yaml@2.9.2'] = new Date(NOW.getTime() - 30 * DAY).toISOString();
+        f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(withPackages(['left-pad@1.3.0', 'left-pad@1.3.1'], [from, to]));
+        f.published[to] = new Date(NOW.getTime() - 30 * DAY).toISOString();
       },
       'never_list',
-      /yaml is on the never list/,
-    ],
+      detail,
+    ]),
+    ['a lockfile with no dispatcher importer', (f) => (f.contents[`pnpm-lock.yaml@${MAIN}`] = lock(BASE_PACKAGES).replace('platform/dispatcher:', 'platform/other:')), 'never_list', /names no platform\/dispatcher importer/],
     ['a version less than seven days old', (f) => (f.published['left-pad@1.3.1'] = new Date(NOW.getTime() - 2 * DAY).toISOString()), 'release_age', /left-pad@1\.3\.1 was published .*, less than seven days ago/],
     ['a version the registry does not list', (f) => delete f.published['left-pad@1.3.1'], 'release_age', /does not list left-pad@1\.3\.1/],
     ['no gate run at the head sha', (f) => (f.headGate = { status: 200, json: { workflow_runs: [] } }), 'gate', /is missing/],
@@ -438,7 +473,6 @@ describe('upkeep_merge', () => {
     f.mergeBase = OLD_MAIN;
     f.contents[`platform/site/package.json@${OLD_MAIN}`] = f.contents[`platform/site/package.json@${MAIN}`]!;
     f.contents[`pnpm-lock.yaml@${OLD_MAIN}`] = f.contents[`pnpm-lock.yaml@${MAIN}`]!;
-    f.contents[`platform/dispatcher/package.json@${OLD_MAIN}`] = f.contents[`platform/dispatcher/package.json@${MAIN}`]!;
     const first = await decide(f);
     expect(first.output.decisions).toEqual([{ pr: 7, result: 'rebase_requested', detail: expect.stringMatching(/commented @dependabot rebase/) }]);
     expect(first.posted).toEqual(['@dependabot rebase']);
@@ -492,5 +526,49 @@ describe('the merge policy helpers', () => {
     expect(packageJsonChanges('p', '{"dependencies":{"a":"^1.0.0"}}', '{"dependencies":{"a":"^1.0.1"}}')).toEqual({ ok: true, changes: [{ name: 'a', from: '^1.0.0', to: '^1.0.1' }] });
     expect(packageJsonChanges('p', '{"dependencies":{"a":"^1.0.0"}}', '{"dependencies":{"a":"^1.0.0","b":"1.0.0"}}')).toMatchObject({ ok: false });
     expect(lockfileChanges(lock(['a@1.0.0', '@s/b@2.0.0']), lock(['a@1.0.1', '@s/b@2.0.0']))).toEqual({ ok: true, change: { added: [{ name: 'a', version: '1.0.1' }], changedNames: ['a'] } });
+  });
+
+  it("builds the never list from the lockfile's closure of the dispatcher, dev dependencies and workspace links included, and PGlite's", () => {
+    const text = stringifyYaml({
+      lockfileVersion: '9.0',
+      importers: {
+        'platform/dispatcher': { dependencies: { a: { specifier: '^1.0.0', version: '1.0.0' }, '@backseat/lib': { specifier: 'workspace:*', version: 'link:../lib' } }, devDependencies: { tsx: { specifier: '^4.0.0', version: '4.0.0' } } },
+        'platform/lib': { dependencies: { c: { specifier: '1.0.0', version: '1.0.0' } } },
+        'platform/site': { dependencies: { react: { specifier: '19.0.0', version: '19.0.0' } } },
+      },
+      snapshots: {
+        'a@1.0.0': { dependencies: { b: '2.0.0(peer@1.0.0)', 'string-width-cjs': 'string-width@4.2.3' } },
+        'b@2.0.0(peer@1.0.0)': { optionalDependencies: { fsevents: '2.3.3' } },
+        'string-width@4.2.3': {},
+        'fsevents@2.3.3': {},
+        'c@1.0.0': {},
+        'tsx@4.0.0': { dependencies: { 'get-tsconfig': '4.10.0' } },
+        'get-tsconfig@4.10.0': {},
+        '@electric-sql/pglite@0.3.7': { dependencies: { d: '1.0.0' } },
+        'd@1.0.0': {},
+        'react@19.0.0': {},
+      },
+    });
+    expect([...neverList(text)].sort()).toEqual(
+      ['@backseat/lib', '@electric-sql/pglite', 'a', 'b', 'c', 'd', 'esbuild', 'fsevents', 'get-tsconfig', 'pnpm', 'string-width', 'string-width-cjs', 'tsx', 'vite'].sort(),
+    );
+    expect(() => neverList(stringifyYaml({ lockfileVersion: '9.0', importers: { '.': {} } }))).toThrow(/names no platform\/dispatcher importer/);
+    // The repository's own lockfile: the dispatcher's loader, a package deep in its runtime closure,
+    // and PGlite are in; the site's React is not.
+    const repo = neverList(readFileSync(new URL('../../../pnpm-lock.yaml', import.meta.url), 'utf8'));
+    expect(['tsx', 'esbuild', '@supabase/auth-js', 'fast-deep-equal', '@electric-sql/pglite', 'vite', 'pnpm'].filter((name) => !repo.has(name))).toEqual([]);
+    expect(repo.has('react')).toBe(false);
+  });
+
+  it('runs the schema fingerprint with none of the dispatcher\'s secrets in its environment', async () => {
+    const env = { PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', SUPABASE_SERVICE_ROLE_KEY: 'service', GITHUB_TOKEN: 'gh', NETLIFY_AUTH_TOKEN: 'netlify', STUDIO_ANTHROPIC_API_KEY: 'anthropic' };
+    expect(fingerprintEnv(env)).toEqual({ PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', TSX_DISABLE_CACHE: '1' });
+    let seen: NodeJS.ProcessEnv | null = null;
+    const run = migrationsFingerprintRunner('/code', async (_file, _args, options) => {
+      seen = options.env;
+      return { stdout: 'noise\n{"table:public.cards":"abc"}\n' };
+    }, env);
+    expect(await run()).toEqual({ 'table:public.cards': 'abc' });
+    expect(seen).toEqual({ PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', TSX_DISABLE_CACHE: '1' });
   });
 });

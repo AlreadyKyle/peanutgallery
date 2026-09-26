@@ -54,7 +54,7 @@ Each hour pg_cron queues `upkeep_merge`. It skips while the studio is paused or 
 - The diff touches only `package.json` version strings and `pnpm-lock.yaml`.
 - Each change is a semver patch of an existing dependency, and no package is added to the lockfile.
 - Every version the lockfile adds or changes is at least seven days old on the npm registry.
-- No changed package is on the never list: the dispatcher's runtime dependencies, esbuild, vite and pnpm.
+- No changed package is on the never list: every package in the lockfile's dependency closure of the dispatcher's importer, dev dependencies included (so tsx, its loader), and of `@electric-sql/pglite`, which the daily check runs on the host, in the lockfile before or after the change; and esbuild, vite and pnpm.
 - The pull request's base is main's head. If it is not, the job comments `@dependabot rebase` once and waits.
 - The gate is green at the pull request's exact head sha.
 

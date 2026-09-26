@@ -8,8 +8,10 @@
 //   a patch of the same major and minor; every version the lockfile adds is a patch of a version of
 //   the same package it had;
 // - new_package: the lockfile names no package it did not name before;
-// - never_list: no changed package is one of the dispatcher's runtime dependencies, esbuild, vite or
-//   pnpm;
+// - never_list: no changed package is one the host runs with the dispatcher's secrets: anything in the
+//   lockfile's dependency closure of the platform/dispatcher importer (dependencies and dev
+//   dependencies, so tsx, its loader, is in), of @electric-sql/pglite (the daily check's schema
+//   fingerprint), esbuild, vite or pnpm, in the lockfile before or after the change;
 // - release_age: every version the lockfile adds is at least seven days old on the npm registry;
 // - base: the pull request is built on main's head; if not, it comments "@dependabot rebase" once for
 //   that head commit and waits;
@@ -21,6 +23,7 @@
 // green deploy and reverts the merge on main, and a revert that fails pauses the studio. The gate's
 // payment-host scan is what stops a patch that rewrites the payment link. Every decision, naming the
 // condition that failed, is in the run's output; every other pull request waits for the board.
+import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { CardFolder } from '../adapters/types.js';
 import {
@@ -54,7 +57,10 @@ export const LOCKFILE = 'pnpm-lock.yaml';
 export const REBASE_COMMENT = '@dependabot rebase';
 export const RELEASE_AGE_MS = 7 * 24 * 60 * 60_000;
 export const NEVER_ALWAYS: readonly string[] = ['esbuild', 'vite', 'pnpm'];
-export const DISPATCHER_PACKAGE = 'platform/dispatcher/package.json';
+// The lockfile importer the dispatcher runs from, and the packages the host runs beside it: the daily
+// check runs PGlite through tsx (upkeep.ts migrationsFingerprintRunner).
+export const DISPATCHER_IMPORTER = 'platform/dispatcher';
+export const HOST_PACKAGES: readonly string[] = ['@electric-sql/pglite'];
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const;
 // Both sites a lockfile change builds that the dispatcher deploys and smoke-tests (the board's site
 // builds too, and is kernel).
@@ -122,20 +128,90 @@ export function packageJsonChanges(file: string, baseText: string, headText: str
   return { ok: true, changes };
 }
 
+// A lockfile package or snapshot key's package name: name@version, then any (peer) suffix.
+function keyName(key: string): string | null {
+  const bare = key.replace(/\(.*$/, '');
+  const at = bare.lastIndexOf('@');
+  return at <= 0 ? null : bare.slice(0, at);
+}
+
 // A lockfile's packages, as name to versions. A v9 key is name@version; a scoped name starts with @.
 export function lockPackages(text: string): Map<string, Set<string>> {
   const doc = parseYaml(text) as { packages?: Record<string, unknown> } | null;
   const out = new Map<string, Set<string>>();
   for (const key of Object.keys(doc?.packages ?? {})) {
-    const bare = key.replace(/\(.*$/, '');
-    const at = bare.lastIndexOf('@');
-    if (at <= 0) continue;
-    const name = bare.slice(0, at);
-    const version = bare.slice(at + 1);
+    const name = keyName(key);
+    if (name === null) continue;
+    const version = key.replace(/\(.*$/, '').slice(name.length + 1);
     if (!out.has(name)) out.set(name, new Set());
     out.get(name)!.add(version);
   }
   return out;
+}
+
+type DependencyMap = Record<string, unknown>;
+const LOCK_DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies'] as const;
+
+// The never list from one lockfile: every package name in the dependency closure of the dispatcher's
+// importer, its dev dependencies included, and of the host packages, plus NEVER_ALWAYS. A workspace
+// link is followed into its importer. Throws when the lockfile names no dispatcher importer, so the
+// caller refuses rather than merging with an empty list.
+export function neverList(text: string): Set<string> {
+  const doc = parseYaml(text) as { importers?: Record<string, DependencyMap | null>; snapshots?: Record<string, DependencyMap | null> } | null;
+  const importers = doc?.importers ?? {};
+  const snapshots = doc?.snapshots ?? {};
+  if (!importers[DISPATCHER_IMPORTER]) throw new Error(`${LOCKFILE} names no ${DISPATCHER_IMPORTER} importer`);
+  const names = new Set<string>(NEVER_ALWAYS);
+  const seenKeys = new Set<string>();
+  const seenImporters = new Set<string>();
+  const keys: string[] = [];
+  const importerQueue: string[] = [DISPATCHER_IMPORTER];
+  // A dependency of an importer or a snapshot: name to version, or to an aliased name@version, or to
+  // link:<path> for a workspace package.
+  const follow = (from: string | null, name: string, version: unknown) => {
+    names.add(name);
+    if (typeof version !== 'string') return;
+    if (version.startsWith('link:')) {
+      if (from !== null) importerQueue.push(path.posix.normalize(path.posix.join(from, version.slice('link:'.length))));
+      return;
+    }
+    const key = Object.hasOwn(snapshots, `${name}@${version}`) ? `${name}@${version}` : version;
+    if (!Object.hasOwn(snapshots, key)) return;
+    const real = keyName(key);
+    if (real) names.add(real);
+    keys.push(key);
+  };
+  const fields = (entry: DependencyMap | null | undefined, from: string | null) => {
+    for (const field of LOCK_DEPENDENCY_FIELDS) {
+      const deps = entry?.[field];
+      if (typeof deps !== 'object' || deps === null) continue;
+      for (const [name, value] of Object.entries(deps as DependencyMap)) {
+        // An importer's entry is { specifier, version }; a snapshot's is the version itself.
+        follow(from, name, typeof value === 'object' && value !== null ? (value as { version?: unknown }).version : value);
+      }
+    }
+  };
+  for (const key of Object.keys(snapshots)) {
+    const name = keyName(key);
+    if (name !== null && HOST_PACKAGES.includes(name)) {
+      names.add(name);
+      keys.push(key);
+    }
+  }
+  while (importerQueue.length > 0 || keys.length > 0) {
+    const importer = importerQueue.pop();
+    if (importer !== undefined) {
+      if (seenImporters.has(importer)) continue;
+      seenImporters.add(importer);
+      fields(importers[importer], importer);
+      continue;
+    }
+    const key = keys.pop()!;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    fields(snapshots[key], null);
+  }
+  return names;
 }
 
 export interface LockChange {
@@ -219,14 +295,26 @@ async function evaluate(pull: AuthorPull, mainSha: string, deps: UpkeepDeps, git
     direct.push(...result.changes);
   }
   let lock: LockChange = { added: [], changedNames: [] };
-  if (range.files.some((f) => f.path === LOCKFILE)) {
+  const lockChanged = range.files.some((f) => f.path === LOCKFILE);
+  if (lockChanged) {
     const result = lockfileChanges(await read(LOCKFILE, mergeBase), await read(LOCKFILE, pull.headSha));
     if (!result.ok) return refuse(result.condition, result.detail);
     lock = result.change;
   }
 
-  const dispatcherPackage = JSON.parse(await read(DISPATCHER_PACKAGE, mergeBase)) as { dependencies?: Record<string, string> };
-  const never = new Set([...Object.keys(dispatcherPackage.dependencies ?? {}), ...NEVER_ALWAYS]);
+  // The never list is read from the lockfile before and after the change, so a patch cannot move a
+  // package into the dispatcher's closure and out of the list's reach.
+  const never = new Set<string>();
+  const lockTexts = [await read(LOCKFILE, mergeBase), ...(lockChanged ? [await read(LOCKFILE, pull.headSha)] : [])];
+  for (const text of lockTexts) {
+    let names: Set<string>;
+    try {
+      names = neverList(text);
+    } catch (error) {
+      return refuse('never_list', `the never list could not be read: ${errorMessage(error)}`);
+    }
+    for (const name of names) never.add(name);
+  }
   const touched = [...new Set([...direct.map((c) => c.name), ...lock.changedNames])].sort();
   const forbidden = touched.filter((name) => never.has(name));
   if (forbidden.length > 0) return refuse('never_list', `${forbidden.join(', ')} ${forbidden.length === 1 ? 'is' : 'are'} on the never list`);
