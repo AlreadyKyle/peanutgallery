@@ -62,7 +62,7 @@ The job compares each frame byte for byte with the base's and uploads every fram
 - [x] `E2E_PORT=4391 pnpm --filter @backseat/site e2e`, `pnpm --filter @backseat/seed-1 test` and `pnpm --filter @backseat/seed-1 e2e` (run on ports 4472 and 4470)
 - [x] Locally: `E2E_ROUTE_SHOTS=/tmp/frames E2E_PORT=4391 pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts`, with the frame count quoted and the frames looked at.
 - [ ] On this pull request's own gate run: the `frames` job passes and the `design-frames` artifact list is quoted (`gh api repos/AlreadyKyle/peanutgallery/actions/runs/<id>/artifacts`). Waits on GitHub Actions minutes (board): Actions is off and `local-gate.sh` cannot run the job (Decisions).
-- [ ] The gate green at the pull request's head sha (the ship stage's local gate).
+- [x] The gate green at the pull request's head sha (the ship stage's local gate).
 - [x] Production, after the production steps: the pre-migration dump's size quoted; `anon-negative-test.ts` and `ledger-identity.ts` PASS, with `select public.ledger_identity()` read back (the ship stage).
 
 ## Production steps
@@ -116,8 +116,16 @@ After the review fixes (9593bf9: the frames job runs no card code in Node; 28a61
   - From the branch: `anon-negative-test.ts` → `PASS: anon access matches the RLS contract`, with `cards(review_rounds) expected refused actual refused 42501 permission denied for table cards` and `rpc record_review_round expected refused actual refused 42501 permission denied for function record_review_round`; `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 59 cards`.
 - `file-backlog` as a dry run from the branch: `would insert "Mockup and design-system cards" (later 44, platform, studio)`, `"Post-ship grade and monthly design audit" (later 45, platform, agents)`, `"Follow-up drafts from open visual criteria" (later 46, platform, agents)`, `would update "More on a card's own page" (…): summary, intent`, `3 would be inserted, 1 would be updated, 0 would be removed, 46 unchanged, 0 skipped`. `--apply` runs after the merge (step 6).
 
-Waits on the ship stage: step 5 (the local gate at the head and the merge) and step 6 (the re-seed, `file-backlog --apply`, both sites on the merge, the live check and /team looked at). The `frames` job's own run waits on GitHub Actions minutes (board).
-
+**The ship stage, after the merge (26 September 2026).** Every Verification line is now run and quoted except the `frames` job's own run on Actions, which waits on GitHub Actions minutes (board), so the Status stays built.
+- Production step 5: `LOCAL GATE PASS pr=86 head=a29a393c5f27ae2ec0ee10b67942fc82d01713a2 base=b65858cf9cdc83385d7cbde8c18dc1dc740aa4b4 merge=0ecf5c3b8618b9cf782ec581f781f8c4ed66e74c seed=true platform=true lane=code site=true functions=true log=/Users/kylesmith/.local-gate/gate-logs/pr86-a29a393.log` (site e2e 223 passed, board e2e 9 passed), from main's clean checkout at `b65858c`; `git ls-remote` still showed main at `b65858c`; #87 was retargeted to main first; `gh pr merge 86 --squash --match-head-commit a29a393…` merged it as `a4419b7` at 21:28:58Z. The remote branch was deleted by hand after checking no pull request was based on it.
+- Production step 6, from the worktree, byte-identical to `a4419b7` (empty diff):
+  - `pnpm --filter @backseat/supabase seed`: `roles: 16 upserted`, board users `1 already in Supabase Auth, 0 created`. The Platform Director's row reads "Looks at how each site card's change draws the site before it merges, against the studio's design standards.", model `claude-opus-5-5`, tools Read, Glob, Grep.
+  - `file-backlog --apply`: `done: 3 inserted, 1 updated, 0 removed, 46 unchanged, 0 skipped`.
+  - Both Netlify sites published `a4419b7` (public 21:29:20Z, board 21:29:38Z); `https://peanutgallery.games/version.json` → `{"sha":"a4419b789a4d4d5d1f8237edf4eecaaf806eaa83",...}`. The CDN was purged (`netlify api purgeCache` → `""`), and `/api/cards` carries the new role text and the three new planned cards.
+  - No function deploy: only Deno test files under `functions` changed. The Mac dispatcher is not installed (no launchd job), so nothing was redeployed (step 7).
+  - `node platform/site/scripts/live-check.mjs` from main's checkout at `a4419b7`: `PASS live-check https://peanutgallery.games passed=278 failed=0 skipped=0`; after the merge, `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` and `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 62 cards`.
+  - /team at 375 and 1440, looked at: every box 368px wide at 1440, the lone last box in Running and in Planned one cell wide (correct under the grid order); 335px boxes at 375 with no overflow; the Platform Director's box shows the new description. Screens: `/Users/kylesmith/peanutgallery-launch/shots/live/design-review/team-1440-a4419b7.png`, `team-375-a4419b7.png`, `team-pd-375-a4419b7.png` and `team-pd-1440-a4419b7.png`.
+- Left, and what it waits on: the `frames` job's first run and its `design-frames` artifact list wait on GitHub Actions minutes (board); the first live visual review waits on the first seed-1 card that changes `seed-1/render/` with the board signed in at /board.
 
 ## Decisions
 
