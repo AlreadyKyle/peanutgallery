@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
 
-export const SCHEMA_NAMES = ['card-draft', 'ranking', 'draft-verdict'] as const;
+export const SCHEMA_NAMES = ['card-draft', 'ranking', 'draft-verdict', 'visual-verdict'] as const;
 export type SchemaName = (typeof SCHEMA_NAMES)[number];
 
 // platform/agents in the checkout this file runs from.

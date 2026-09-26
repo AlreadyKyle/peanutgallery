@@ -133,6 +133,78 @@ export async function gateStatus(opts: GitHubOptions, sha: string): Promise<Gate
   return { state: 'pass' };
 }
 
+// The newest gate workflow run on the sha that completed with success, or null when there is none:
+// the run whose artifacts the visual review reads (docs/specs/design-review.md).
+export interface GateRun {
+  id: number;
+  htmlUrl: string | null;
+}
+
+export async function gateRunForSha(opts: GitHubOptions, sha: string): Promise<GateRun | null> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/runs?head_sha=${sha}&per_page=50`);
+  if (result.status !== 200 || !isRecord(result.json)) {
+    throw new Error(`github workflow runs: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  const all = Array.isArray(result.json.workflow_runs) ? result.json.workflow_runs.filter(isRecord) : [];
+  const passed = all.filter((run) => isGateWorkflowRun(run) && run.status === 'completed' && run.conclusion === 'success' && typeof run.id === 'number');
+  if (passed.length === 0) return null;
+  const newest = passed.reduce((a, b) => ((b.id as number) > (a.id as number) ? b : a));
+  return { id: newest.id as number, htmlUrl: typeof newest.html_url === 'string' ? newest.html_url : null };
+}
+
+export interface RunArtifact {
+  id: number;
+  name: string;
+  expired: boolean;
+  sizeInBytes: number;
+}
+
+// A workflow run's artifacts (the first hundred; the gate uploads at most one).
+export async function listRunArtifacts(opts: GitHubOptions, runId: number): Promise<RunArtifact[]> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/runs/${runId}/artifacts?per_page=100`);
+  if (result.status !== 200 || !isRecord(result.json)) {
+    throw new Error(`github run artifacts: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  const artifacts = Array.isArray(result.json.artifacts) ? result.json.artifacts.filter(isRecord) : [];
+  return artifacts
+    .filter((artifact) => typeof artifact.id === 'number' && typeof artifact.name === 'string')
+    .map((artifact) => ({
+      id: artifact.id as number,
+      name: artifact.name as string,
+      expired: artifact.expired === true,
+      sizeInBytes: typeof artifact.size_in_bytes === 'number' ? artifact.size_in_bytes : 0,
+    }));
+}
+
+// An artifact's zip. GitHub answers the download with a 302 to a short-lived storage address, which
+// is fetched without the token, so the token never leaves api.github.com. A zip larger than maxBytes
+// is refused.
+export async function downloadArtifact(opts: GitHubOptions, id: number, maxBytes: number): Promise<Uint8Array> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  const first = await fetchFn(`${opts.apiBase ?? API_BASE}/repos/${opts.repo}/actions/artifacts/${id}/zip`, {
+    method: 'GET',
+    redirect: 'manual',
+    signal: requestSignal(opts.timeoutMs, opts.signal),
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'backseat-dispatcher',
+    },
+  });
+  const location = first.headers.get('location');
+  await first.body?.cancel().catch(() => undefined);
+  if (first.status !== 302 || !location) throw new Error(`github artifact ${id} download: http ${first.status}${location ? '' : ', no location'}`);
+  if (!location.startsWith('https://')) throw new Error(`github artifact ${id} download: the location is not https`);
+  const zip = await fetchFn(location, { method: 'GET', signal: requestSignal(opts.timeoutMs, opts.signal) });
+  if (zip.status !== 200) throw new Error(`github artifact ${id} download: storage answered http ${zip.status}`);
+  const declared = Number(zip.headers.get('content-length') ?? '0');
+  if (declared > maxBytes) throw new Error(`github artifact ${id} is ${declared} bytes, over the ${maxBytes}-byte limit`);
+  const bytes = new Uint8Array(await zip.arrayBuffer());
+  if (bytes.byteLength > maxBytes) throw new Error(`github artifact ${id} is ${bytes.byteLength} bytes, over the ${maxBytes}-byte limit`);
+  return bytes;
+}
+
 export interface PollOptions {
   timeoutMs: number;
   intervalMs: number;

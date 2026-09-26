@@ -53,6 +53,9 @@ export interface SessionRun {
   // With outcome adapter_paused: the failing check the card pauses with (adapters/types.ts
   // SessionPaused).
   failingCheck?: string;
+  // With outcome completed: the session id its init line reported, the maker ref of a visual
+  // approval (docs/specs/design-review.md); null when none was reported.
+  sessionId?: string | null;
 }
 
 export interface SessionDeps {
@@ -78,6 +81,8 @@ export interface SessionDeps {
   onSpend?: (usd: number) => void;
   // The model a role runs on (role-model.ts); roles.model, then fallbackModel, when unset.
   resolveModel?: (role: Role) => string;
+  // Added after the card's prompt: a visual revision's typed feedback (docs/specs/design-review.md).
+  promptAddendum?: string;
 }
 
 const PAYLOAD_LIMIT = 8000;
@@ -185,7 +190,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const spec: SessionSpec = {
     cardId: card.id,
     worktree,
-    prompt: sessionPrompt(card, lanePaths(card.folder, card.lane), ceiling),
+    prompt: [sessionPrompt(card, lanePaths(card.folder, card.lane), ceiling), ...(deps.promptAddendum ? ['', deps.promptAddendum] : [])].join('\n'),
     systemPromptFile: rolePromptFile(role, worktree),
     model,
     roleTools: roleTools(role),
@@ -268,9 +273,11 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   };
 
   let turns = 0;
+  let sessionId: string | null = null;
   const onEvent = async (event: AgentEvent) => {
     switch (event.type) {
       case 'start': {
+        sessionId = event.sessionId ?? null;
         // The refusal is decided, and the session interrupted, before anything is written.
         const refusal = startRefusal(deps.adapter.mode, event);
         adapterMetered = event.ledger === 'adapter';
@@ -379,7 +386,7 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   if (result.isError || result.exitCode !== 0) {
     return { outcome: 'error', detail: `session ended with ${result.endSubtype ?? 'no result'} (exit ${result.exitCode ?? 'signal'})`, turns: result.turns };
   }
-  return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns };
+  return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns, sessionId };
 }
 
 // Why the spend was recorded as the founder's rather than the mode's account, when it was.
