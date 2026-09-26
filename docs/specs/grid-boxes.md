@@ -99,6 +99,13 @@ Built on `launch/grid-boxes` from main at 90be039, run on 26 Sep 2026 in the ser
   ```
   Screenshots of /team and / at 375, 768 and 1440 on both are in the same folder, looked at: every box one width, a section's boxes one height, the last row part-empty and left-aligned, feet and Paused tags in line, the hairline edge visible on paper, the team strip three equal columns and the fund grid three cards to a row.
 
+- After the review's example-frame finding (26 Sep 2026, commit 6a87436 and the evidence commit after it): the new tests fail before the fix (`5 failed`: the example-card e2e at 768, 1024 and 1440 with `{"inner":670,"card":368}` and `{"inner":654,"card":368}`, and the layout audit on the default fixture at 768 and 1440 with `/how-it-works frame: 302px of empty column inside the right edge of figure.example "Quiet rooms: one more unlock"`) and pass after it. Then `pnpm verify`: `exit 0`, with `platform/site test: Tests  502 passed (502)`, `platform/dispatcher test: Tests  688 passed (688)`, `platform/supabase test: Tests  309 passed (309)`, `PASS: gate tests passed=524`, functions `ok | 123 passed (202 steps) | 0 failed`, `GATE PASS folder=seed-1 lane=code`. The site e2e (`E2E_PORT=4451`): `5 skipped` `214 passed (4.0m)`. The branch's build with production's `/api/live` and `/api/cards` (200) measures each /how-it-works example frame (`/Users/kylesmith/peanutgallery-launch/shots/build/grid-boxes/r1-fix/`, screenshots at 375, 768, 1024 and 1440, looked at: the dashed edge sits one padding outside the card):
+  ```
+  375: card frames 335, inner 301, card 301
+  768: card frames 402, inner 368, card 368 (the other four frames 704, inner 670)
+  1024 and 1440: card frames 418, inner 368, card 368 (the other four frames 704, inner 654)
+  ```
+
 ## Decisions
 
 - 2026-09-26: every grid of like items puts one item in each cell, with no spans and a part-empty last row allowed; /team members sit in identical boxes (board). It replaces the fill rule of `specs/home-and-design.md` and the gap audit (#76), and "never a bordered tile" in DESIGN.md.
