@@ -29,7 +29,7 @@ Out:
 2. **Team boxes.** Each `li.agent` is a box: a 1px hairline edge (`--hairline`), the standard radius (`--radius`) and `--space-3` padding. It is not a game card: a card keeps its 2px ink edge and `--radius-card`. The avatar sits beside the name and the "AI agent" line; the description and the foot (the facts line with the Paused tag under it, or the line saying when the role starts) run the full width of the box, and the foot is pinned to the bottom.
 3. **One box size.** All three sections of /team use the same grid, so every box on the page has the same width at every breakpoint. From 48rem every box in a section is as tall as the tallest box in that section (grid rows of `1fr`), so boxes in a section are identical in size. Heights are equal within a section, not across sections: a role still to come holds about half the lines of a running agent, and making it as tall would leave an empty half-box. Roles still to come keep the asleep pose and their smaller avatar.
 4. **The team strip** on home is three equal columns from 48rem, whether one, two or three members are shown.
-5. **Examples.** A lone example card (the design guide's `.example` and `.demo` grids) is one three-column cell wide (`minmax(0, 23rem)`).
+5. **Examples.** A lone example card (/how-it-works's `.example` and the design guide's `.demo` grids) is one three-column cell wide (`minmax(0, 23rem)`). The dashed `.example` frame around it hugs the card (`width: fit-content; max-width: 100%`), so the card fills the frame's inner width and no empty column runs beside it inside the dashed edge; on a phone the frame is the full width and the card fills it.
 
 ## Acceptance criteria
 
@@ -43,6 +43,7 @@ Out:
 - [x] The foot of every box lines up across a row (the existing foot-alignment e2e, now covering all three sections).
 - [x] The layout audit's "grid fill" check is replaced by "grid cells": it flags an item wider than one column (+1px) and a row whose first item starts more than 2px from the grid's content edge; a part-empty last row passes. Its self-test plants both violations and expects `grid cells:`, and a control page with four items in three columns yields no finding (e2e).
 - [x] The layout audit passes on home and /contribute with 1, 2, 4, 5 and 7 open cards at 768, 1024 and 1440 (existing e2e matrix).
+- [x] On /how-it-works each example card fills its dashed frame's inner width (±2px) and is at most 23rem wide at 375, 768, 1024 and 1440 (e2e). The layout audit gains a "frame" check: a box with an edge on every side that holds a card, a row or a box leaves no more than 2px empty inside its right edge; its self-test plants a half-empty example frame and expects `frame:`, and a hugging frame and a text-only box yield no finding (e2e).
 - [x] `DESIGN.md`, `platform/agents/prompts/platform-builder.md` (and `platform-director.md`, whose "an empty grid cell" stated it too) and the code comments state the new rule and no longer state the fill rule or "never a bordered tile".
 - [x] PLAN.md §10 records the board's order as decision 49.
 - [x] `pnpm verify` exits 0; the site e2e passes.
@@ -98,6 +99,13 @@ Built on `launch/grid-boxes` from main at 90be039, run on 26 Sep 2026 in the ser
   ```
   Screenshots of /team and / at 375, 768 and 1440 on both are in the same folder, looked at: every box one width, a section's boxes one height, the last row part-empty and left-aligned, feet and Paused tags in line, the hairline edge visible on paper, the team strip three equal columns and the fund grid three cards to a row.
 
+- After the review's example-frame finding (26 Sep 2026, commit 6a87436 and the evidence commit after it): the new tests fail before the fix (`5 failed`: the example-card e2e at 768, 1024 and 1440 with `{"inner":670,"card":368}` and `{"inner":654,"card":368}`, and the layout audit on the default fixture at 768 and 1440 with `/how-it-works frame: 302px of empty column inside the right edge of figure.example "Quiet rooms: one more unlock"`) and pass after it. Then `pnpm verify`: `exit 0`, with `platform/site test: Tests  502 passed (502)`, `platform/dispatcher test: Tests  688 passed (688)`, `platform/supabase test: Tests  309 passed (309)`, `PASS: gate tests passed=524`, functions `ok | 123 passed (202 steps) | 0 failed`, `GATE PASS folder=seed-1 lane=code`. The site e2e (`E2E_PORT=4451`): `5 skipped` `214 passed (4.0m)`. The branch's build with production's `/api/live` and `/api/cards` (200) measures each /how-it-works example frame (`/Users/kylesmith/peanutgallery-launch/shots/build/grid-boxes/r1-fix/`, screenshots at 375, 768, 1024 and 1440, looked at: the dashed edge sits one padding outside the card):
+  ```
+  375: card frames 335, inner 301, card 301
+  768: card frames 402, inner 368, card 368 (the other four frames 704, inner 670)
+  1024 and 1440: card frames 418, inner 368, card 368 (the other four frames 704, inner 654)
+  ```
+
 ## Decisions
 
 - 2026-09-26: every grid of like items puts one item in each cell, with no spans and a part-empty last row allowed; /team members sit in identical boxes (board). It replaces the fill rule of `specs/home-and-design.md` and the gap audit (#76), and "never a bordered tile" in DESIGN.md.
@@ -105,4 +113,5 @@ Built on `launch/grid-boxes` from main at 90be039, run on 26 Sep 2026 in the ser
 - 2026-09-26, at build: the Paused tag sits under the facts line in a box's foot (it sat above it). A facts line wraps to two or three lines depending on its figures, so with the foot pinned to the bottom a tag above it moved with the wrap (measured on the paused fixture at 1440: 1209, 1209 and 1232px); last in the foot, the tags line up across every row.
 - 2026-09-26, at build: a role still to come is the same component as a running one (`RoleRow`, with its avatar asleep and 56px), so the boxes share their parts; its name and description take the running box's type sizes, and only its avatar stays smaller (`.agent[data-status='starts'|'planned'] .avatar`).
 - 2026-09-26, at build: `platform/agents/prompts/platform-director.md` said dead space includes "an empty grid cell", which a part-empty last row now is by design; it now names a grid item stretched across more than one cell instead.
+- 2026-09-26, at review: capping the lone example card at `23rem` left its dashed frame at the full 704px measure, an empty column of about 290-300px beside the card inside the frame at 768, 1024 and 1440 (review finding, measured on the branch with production's documents). The frame now hugs the card (`.example:has(> .card-grid) { width: fit-content; max-width: 100%; }`), which keeps the card one cell wide as Behaviour 5 asks; widening the card back to the frame would have undone that. The layout audit's hollow check measures only vertical runs, so the audit gains a horizontal "frame" check (2px), and an e2e test measures the card against its frame. The guide's `.demo` has no frame, so its card needs no change.
 - 2026-09-26, at build: the team grid takes one `--space-3` gap both ways (it was `--space-4` between rows), since the boxes' edges now separate them; the guide's demo card loses its old `max-width: 24rem` for the shared `minmax(0, 23rem)` track.

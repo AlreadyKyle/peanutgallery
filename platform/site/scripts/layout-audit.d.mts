@@ -3,6 +3,7 @@ export declare const LIMITS: {
   readonly balanceShare: number;
   readonly hollow: number;
   readonly cardHollow: number;
+  readonly frame: number;
   readonly button: number;
   readonly topBar: number;
 };

@@ -1869,10 +1869,18 @@ input[type='radio'] {
   }
 }
 
-/* A lone example card (/how-it-works and the guide's demos) is one three-column cell wide. */
+/* A lone example card (/how-it-works and the guide's demos) is one three-column cell wide, and the
+   dashed frame around an example card hugs it, so its edge sits one padding outside the card and no
+   empty column runs down beside the card inside the frame. On a phone the frame is the full width
+   and the card fills it. */
 .example .card-grid,
 .demo .card-grid {
   grid-template-columns: minmax(0, 23rem);
+}
+
+.example:has(> .card-grid) {
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Supporter pages (docs/specs/supporter-pages.md) ------------------------------------------- */

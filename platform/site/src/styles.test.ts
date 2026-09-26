@@ -489,6 +489,12 @@ describe('no dead space (DESIGN.md)', () => {
     expect(ALL_RULES.find((rule) => selectorsOf(rule).join('|') === '.example .card-grid|.demo .card-grid')?.body).toMatch(/grid-template-columns:\s*minmax\(0, 23rem\)/);
   });
 
+  it('makes the dashed frame around an example card hug the card, so no empty column runs beside it', () => {
+    const frame = ALL_RULES.find((rule) => rule.selector === '.example:has(> .card-grid)' && rule.media === '')?.body;
+    expect(frame).toMatch(/width:\s*fit-content/);
+    expect(frame).toMatch(/max-width:\s*100%/);
+  });
+
   it('lets one block of a pair take the row alone, so nothing leaves an empty column', () => {
     expect(ALL_RULES.find((rule) => rule.selector === '.pair:has(> :only-child)')?.body).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
   });
