@@ -651,6 +651,16 @@ yours.
   ledger, never from supporters' or studio money. The first real Draft a game card run is
   launch-card-floor's drafting session: be signed in at /board for it. A drafted card waits out the
   cooling window before it is dealt to now; you can veto it there as with any card.
+- **The visual review (nothing to do now).** The design-review pull request
+  (`docs/specs/design-review.md`) makes the files that set the look yours: the tokens, the Card, the
+  glyphs, motion, the route list, the site's public and brand files and the game's favicon change
+  only by a pull request you merge, so a new page or screen is yours too. When a card's change draws
+  a page or the game differently, its gate draws before and after frames and a Director reviews them
+  once its gate is green, only while you are signed in at /board, on your Max plan, billed to you on
+  the ledger: be signed in when a visual card's gate turns green, or it waits at gated with its money
+  on its bar. The first seed-1 card that changes `seed-1/render/` after launch is the first live
+  review. The gate's `frames` job runs only on GitHub Actions, so it waits on Actions minutes (see
+  **GitHub Actions minutes**); the local gate cannot run it.
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
   HST threshold and income tax on the pool, and Ontario business-name registration for "Mob

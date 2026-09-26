@@ -506,7 +506,7 @@ test("docs/SYSTEM.md's role table equals the role specs' name, class, status and
 
 test('docs/SYSTEM.md marks what a later pull request builds as not built yet, naming its spec', () => {
   const text = read('docs', 'SYSTEM.md');
-  for (const spec of ['specs/agent-upkeep.md', 'specs/design-review.md']) {
+  for (const spec of ['specs/agent-upkeep.md']) {
     assert.match(text, new RegExp(`not built yet[^\\n]*\\x60${spec.replace('.', '\\.')}\\x60`, 'i'), `SYSTEM.md marks ${spec}'s part as not built yet`);
     assert.ok(existsSync(join(repoRoot, 'docs', spec)), `docs/${spec} exists`);
   }
@@ -517,6 +517,15 @@ test('docs/SYSTEM.md describes the weekly report and the outbound lane studio-re
   assert.match(text, /## The weekly report and the outbound lane/);
   for (const name of ['weekly-report', 'publish_weekly_report()', 'outbound_posts', 'card_supply()', 'DISCORD_WEBHOOK_SHIPS']) assert.ok(text.includes(name), `SYSTEM.md names ${name}`);
   assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/studio-reports\.md\x60/i);
+});
+
+test('docs/SYSTEM.md describes the visual review design-review built, and no longer marks it not built', () => {
+  const text = read('docs', 'SYSTEM.md');
+  assert.match(text, /## The visual review/);
+  for (const name of ['platform/gate/design-paths.txt', 'design-frames', 'record_review_round', 'cards.review_rounds', 'visual-verdict.schema.json', 'visual_review:all_ages']) {
+    assert.ok(text.includes(name), `SYSTEM.md names ${name}`);
+  }
+  assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/design-review\.md\x60/i);
 });
 
 test('docs/SYSTEM.md names the two role jobs agent-workflows built, and no longer marks them not built', () => {
