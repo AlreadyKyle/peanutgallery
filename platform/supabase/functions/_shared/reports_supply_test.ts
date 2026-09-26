@@ -1,5 +1,6 @@
 // The studio-reports migration on PGlite (docs/specs/studio-reports.md): publish_weekly_report's
-// refusals, its one row per week and its null for a week with no ship; the last ended New York week
+// refusals, its one row per week, its null for a week with no ship and, with no argument, the last
+// ended week, whatever the day the test runs; the last ended New York week
 // across both DST changes; a report's facts on a fixture with a founder-billed card, the board's test
 // payment and contributors with names and email-shaped ids, none of which reach the facts;
 // site_reports newest first; card_supply over the funding order with cards above, below and between
@@ -83,7 +84,7 @@ async function studio() {
     created += 1;
     return (await row<{ id: string }>(
       `insert into public.cards (bucket, source, shape, lane, folder, title, intent, funding_target_usd, stage, horizon, executor_role_id, board_vetoed, created_at)
-       values ('game', 'board', 'goal', 'config', 'seed-1', $1, 'An intent.', $2, $3::public.card_stage, 'now', $4, $5, timestamptz '2026-09-01T00:00:00Z' + make_interval(secs => $6)) returning id`,
+       values ('game', 'board', 'goal', 'config', 'seed-1', $1, 'An intent.', $2, $3::public.card_stage, 'now', $4, $5, timestamptz '2025-09-01T00:00:00Z' + make_interval(secs => $6)) returning id`,
       [title, target, extra.stage ?? "proposed", builder, extra.vetoed ?? false, created],
     )).id;
   };
@@ -112,9 +113,13 @@ async function studio() {
   return { db, row, rows, as, builder, card, pay, spend, rewrite, ship, publish, reportCount, migrations, close: () => db.close() };
 }
 
-// The Monday of a past week the fixtures ship in, and the Tuesday after it.
-const WEEK = "2026-09-14";
-const IN_WEEK = "2026-09-16T15:00:00Z";
+// The Monday of the week the fixtures ship in, and the Wednesday after it. Every fixture date is in
+// 2025, so none can be the last ended New York week the no-argument call takes: that one step ships
+// its own card in whatever week that is.
+const WEEK = "2025-09-15";
+const IN_WEEK = "2025-09-17T15:00:00Z";
+/** The last day any fixture ships on; the last ended week is always after it. */
+const LAST_FIXTURE_DAY = "2025-09-22";
 
 Deno.test("publish_weekly_report publishes an ended week with a ship once, and refuses the rest", OPTS, async (t) => {
   const s = await studio();
@@ -130,7 +135,7 @@ Deno.test("publish_weekly_report publishes an ended week with a ship once, and r
     });
 
     await t.step("a date that is not a Monday is refused", async () => {
-      await assertRejects(() => s.publish("2026-09-15"), Error, "is not a Monday");
+      await assertRejects(() => s.publish("2025-09-16"), Error, "is not a Monday");
     });
 
     await t.step("the week under way in New York is refused", async () => {
@@ -155,22 +160,35 @@ Deno.test("publish_weekly_report publishes an ended week with a ship once, and r
 
     await t.step("a card shipped just before the week's New York start or at its end belongs to the week beside it", async () => {
       const b = await s.card("Shipped Sunday night", 1);
-      // Monday 14 September 00:00 in New York is 04:00 UTC (daylight time).
-      await s.ship(b, "2026-09-14T03:59:59Z");
-      const facts = (await s.row<{ f: Doc }>(`select money.report_facts('2026-09-07') as f`)).f;
+      // Monday 15 September 2025 00:00 in New York is 04:00 UTC (daylight time).
+      await s.ship(b, "2025-09-15T03:59:59Z");
+      const facts = (await s.row<{ f: Doc }>(`select money.report_facts('2025-09-08') as f`)).f;
       assertEquals(facts.shipped_count, 1);
       assertEquals(((facts.shipped as Doc[])[0]!).title, "Shipped Sunday night");
-      await s.ship(b, "2026-09-21T04:00:00Z");
-      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts('2026-09-14') as f`)).f.shipped_count, 1);
-      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts('2026-09-21') as f`)).f.shipped_count, 1);
+      await s.ship(b, "2025-09-22T04:00:00Z");
+      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts('2025-09-08') as f`)).f.shipped_count, 0);
+      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts('2025-09-15') as f`)).f.shipped_count, 1);
+      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts('2025-09-22') as f`)).f.shipped_count, 1);
     });
 
-    await t.step("with no argument it takes the last ended week", async () => {
+    await t.step("with no argument it publishes the last ended New York week once, whatever today is", async () => {
       const last = (await s.row<{ d: string }>(`select money.last_ended_week(now())::text as d`)).d;
-      const r = await s.publish(null);
-      // The fixtures ship no card in the last ended week, so it gets no row.
-      if (last !== WEEK) assertEquals(r, null);
-      assertEquals(await s.rows(`select week_start from public.studio_reports where week_start = $1::date and $1::date <> $2::date`, [last, WEEK]), []);
+      assert(last > LAST_FIXTURE_DAY, `the last ended week ${last} holds a fixture`);
+      assertEquals((await s.row<{ f: Doc }>(`select money.report_facts($1::date) as f`, [last])).f.shipped_count, 0);
+      // A card gone live at Wednesday noon in New York of that week, inside it on any day of the year.
+      const c = await s.card("Shipped last week", 1);
+      const at = (await s.row<{ t: string }>(`select ((($1::date + 2)::timestamp + interval '12 hours') at time zone 'America/New_York')::text as t`, [last])).t;
+      await s.ship(c, at);
+      const before = await s.reportCount();
+      const first = await s.publish(null);
+      assertEquals(first?.week_start, last);
+      assertEquals((first?.facts as Doc).shipped_count, 1);
+      assertEquals(((first?.facts as Doc).shipped as Doc[]).map((x) => x.title), ["Shipped last week"]);
+      assertEquals(await s.reportCount(), before + 1);
+      const second = await s.publish(null);
+      assertEquals(second?.week_start, last);
+      assertEquals(second?.published_at, first?.published_at);
+      assertEquals(await s.reportCount(), before + 1);
     });
   } finally {
     await s.close();
@@ -215,14 +233,14 @@ Deno.test("a report's facts hold the public figures and none of the private ones
     await s.rewrite(`update public.supporters set created_at = '${IN_WEEK}'`);
     // A supporter from before the week.
     await s.pay("old", 0.5, open1, { contributor: "old@example.org", name: "Old Person" });
-    await s.rewrite(`update public.supporters set created_at = '2026-09-01T00:00:00Z' where contributor_id = 'old@example.org'`);
+    await s.rewrite(`update public.supporters set created_at = '2025-09-01T00:00:00Z' where contributor_id = 'old@example.org'`);
 
     await s.spend(shipped, 0.29, "studio", IN_WEEK);
     await s.spend(shipped, 7.77, "founder", IN_WEEK);
     await s.spend(founder, 4.44, "founder", IN_WEEK);
-    await s.spend(open1, 0.1, "studio", "2026-09-01T00:00:00Z");
-    await s.ship(shipped, "2026-09-16T12:00:00Z");
-    await s.ship(founder, "2026-09-17T12:00:00Z");
+    await s.spend(open1, 0.1, "studio", "2025-09-01T00:00:00Z");
+    await s.ship(shipped, "2025-09-17T12:00:00Z");
+    await s.ship(founder, "2025-09-18T12:00:00Z");
 
     const facts = (await s.publish(WEEK))!.facts as Doc;
 
@@ -231,7 +249,7 @@ Deno.test("a report's facts hold the public figures and none of the private ones
       assertEquals(cards.map((c) => c.title), ["A plant grows | faster", "A founder-billed ship"]);
       assertEquals(Object.keys(cards[0]!).sort(), ["cost_usd", "folder", "id", "live_at", "supporter_count", "supporters", "title"]);
       assertEquals(cards[0]!.folder, "seed-1");
-      assert(String(cards[0]!.live_at).startsWith("2026-09-16T12:00:00"), String(cards[0]!.live_at));
+      assert(String(cards[0]!.live_at).startsWith("2025-09-17T12:00:00"), String(cards[0]!.live_at));
       assertEquals(Number(cards[0]!.cost_usd), 0.29);
       assertEquals(Number(cards[1]!.cost_usd), 0);
       const supporters = cards[0]!.supporters as { number: number; founding: boolean }[];
@@ -264,12 +282,12 @@ Deno.test("a report's facts hold the public figures and none of the private ones
     });
 
     await t.step("site_reports gives the reports newest first, to anon", async () => {
-      await s.ship(open4, "2026-09-02T12:00:00Z");
-      await s.publish("2026-08-31");
+      await s.ship(open4, "2025-09-03T12:00:00Z");
+      await s.publish("2025-09-01");
       const doc = await s.as("anon", async () => (await s.row<{ d: Doc }>(`select public.site_reports() as d`)).d);
       assertEquals(Object.keys(doc), ["reports"]);
       const reports = doc.reports as Doc[];
-      assertEquals(reports.map((r) => r.week_start), [WEEK, "2026-08-31"]);
+      assertEquals(reports.map((r) => r.week_start), [WEEK, "2025-09-01"]);
       assertEquals(Object.keys(reports[0]!).sort(), ["facts", "published_at", "week_start"]);
       assertEquals((reports[0]!.facts as Doc).shipped_count, 2);
       const one = await s.as("anon", async () => (await s.row<{ d: Doc }>(`select public.site_reports(1) as d`)).d);

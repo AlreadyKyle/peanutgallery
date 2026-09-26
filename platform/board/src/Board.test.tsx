@@ -1152,7 +1152,8 @@ describe('Board card supply (docs/specs/studio-reports.md)', () => {
     const form = screen.getByRole('form', { name: 'Draft to the floor' });
     fireEvent.submit(form);
     await flush();
-    expect(within(inbox).getByText('A reason is required.')).toBeTruthy();
+    // The status line is inside the form, whose 16 px gap clears the focused button's ring.
+    expect(within(form).getByRole('status').textContent).toBe('A reason is required.');
     expect(callsNamed('enqueue_manual_job')).toHaveLength(0);
     fireEvent.change(within(form).getByLabelText('Reason'), { target: { value: 'No big card open' } });
     fireEvent.submit(form);
@@ -1160,7 +1161,7 @@ describe('Board card supply (docs/specs/studio-reports.md)', () => {
     expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
       { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: OPEN_CARDS.map((c) => c.id) } },
     ]);
-    expect(within(inbox).getByText(/^Queued\./)).toBeTruthy();
+    expect(within(form).getByRole('status').textContent).toMatch(/^Queued\./);
   });
 
   it('asks for the second factor before drafting to the floor', async () => {
