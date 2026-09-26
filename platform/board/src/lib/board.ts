@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { toNumber } from './format';
+import { formatUsd, toNumber } from './format';
 
 // Every board RPC the board's own site calls (docs/specs/board-site.md). This app is kernel: no card
 // may change a file under platform/board, and nothing here imports from the public site.
@@ -440,6 +440,100 @@ export async function enqueueManualJob(
   const id = unwrap<string>(await client.rpc('enqueue_manual_job', { p_job: job.name, p_card: job.card_id, p_reason: job.reason, p_input: job.input }));
   if (id === null) throw new Error('enqueue_manual_job returned no run id');
   return id;
+}
+
+/**
+ * The card supply against the floor (card_supply, docs/specs/studio-reports.md): the cards open for
+ * funding (the set in the public funding order), the big ones (target at or above big_min_usd) and the
+ * small ones (under small_max_usd), each floor from studio_state, each shortfall, and the open cards in
+ * funding order.
+ */
+export type CardSupply = {
+  open: number;
+  big: number;
+  small: number;
+  floor_open: number;
+  floor_big: number;
+  floor_small: number;
+  big_min_usd: number;
+  small_max_usd: number;
+  short_open: number;
+  short_big: number;
+  short_small: number;
+  open_cards: { id: string; title: string; target_usd: number }[];
+};
+
+/** Reads what card_supply returns; throws on a missing or malformed figure. */
+export function supplyFrom(raw: unknown): CardSupply {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('card_supply returned nothing');
+  const row = raw as Record<string, unknown>;
+  const figure = (key: string): number => {
+    const value = row[key];
+    const n = typeof value === 'number' || typeof value === 'string' ? toNumber(value) : null;
+    if (n === null) throw new Error(`card_supply returned no ${key}`);
+    return n;
+  };
+  const cards = Array.isArray(row.open_cards) ? row.open_cards : [];
+  return {
+    open: figure('open'),
+    big: figure('big'),
+    small: figure('small'),
+    floor_open: figure('floor_open'),
+    floor_big: figure('floor_big'),
+    floor_small: figure('floor_small'),
+    big_min_usd: figure('big_min_usd'),
+    small_max_usd: figure('small_max_usd'),
+    short_open: figure('short_open'),
+    short_big: figure('short_big'),
+    short_small: figure('short_small'),
+    open_cards: cards
+      .filter((card): card is Record<string, unknown> => typeof card === 'object' && card !== null && typeof (card as { id?: unknown }).id === 'string')
+      .map((card) => ({ id: String(card.id), title: typeof card.title === 'string' ? card.title : String(card.id), target_usd: toNumber(card.target_usd as number | string) ?? 0 })),
+  };
+}
+
+/** The supply as the page holds it: the last read, its error, and a reread. */
+export type SupplyLoad = { supply: CardSupply | null; loadError: string; refresh: () => Promise<void> };
+
+export async function fetchCardSupply(client: SupabaseClient): Promise<CardSupply> {
+  return supplyFrom(unwrap(await client.rpc('card_supply')));
+}
+
+/** A whole-dollar threshold as "$5", any other as "$2.50". */
+function threshold(usd: number): string {
+  return Number.isInteger(usd) ? `$${usd}` : formatUsd(usd);
+}
+
+/** "Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1". */
+export function supplyLine(supply: CardSupply): string {
+  return [
+    `Open cards: ${supply.open} of a floor of ${supply.floor_open}`,
+    `${threshold(supply.big_min_usd)} or more: ${supply.big} of ${supply.floor_big}`,
+    `under ${threshold(supply.small_max_usd)}: ${supply.small} of ${supply.floor_small}`,
+  ].join(' · ');
+}
+
+/** True while any shortfall is above 0. */
+export function supplyShort(supply: CardSupply): boolean {
+  return supply.short_open > 0 || supply.short_big > 0 || supply.short_small > 0;
+}
+
+/**
+ * Draft to the floor's typed input for draft_card: the shortfalls, and the open cards by id so the
+ * Designer drafts no copy of one (the handler reads their typed fields itself). At most 80 ids, so the
+ * input stays under enqueue_manual_job's 4 KB.
+ */
+export const DRAFT_TO_FLOOR_MAX_CARDS = 80;
+export function draftToFloorInput(supply: CardSupply): { floor: { short_open: number; short_big: number; short_small: number }; open_cards: string[] } {
+  return {
+    floor: { short_open: supply.short_open, short_big: supply.short_big, short_small: supply.short_small },
+    open_cards: supply.open_cards.slice(0, DRAFT_TO_FLOOR_MAX_CARDS).map((card) => card.id),
+  };
+}
+
+/** Draft to the floor: one board-origin draft_card run with the floor's input, at the second factor; the run's id. */
+export async function draftToFloor(client: SupabaseClient, reason: string, supply: CardSupply): Promise<string> {
+  return enqueueManualJob(client, { name: 'draft_card', card_id: null, reason, input: draftToFloorInput(supply) });
 }
 
 export type JobRunRow = {
