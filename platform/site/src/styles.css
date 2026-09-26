@@ -934,6 +934,16 @@ button.link:hover:not(:disabled) {
   padding: calc(0.25em - 2px) calc(0.875em - 2px);
 }
 
+/* Below 30rem three filters no longer fit on one line, and a wrapped row left the last alone on a line
+   of its own. Three or more stack one to a line instead, each as wide as its label (a chip stretched
+   to a column's width would leave an empty strip inside its edge); two still share a line. */
+@media (max-width: 29.99rem) {
+  .filters:has(> :nth-child(3)) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 .filter-count {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
@@ -1441,6 +1451,19 @@ main > .band:nth-child(2n + 3) .avatar {
   min-height: var(--target);
 }
 
+/* Below 30rem the footer's links no longer fit on one line, and a wrapped row left the last one alone
+   on a line of its own (Discord at 375px, 26 Sep 2026). They sit in a grid of three equal columns
+   instead, one link to a cell, as wide as the footer: two full rows of the six, and a part-empty last
+   row when there are fewer, as every grid of like items has (PLAN.md §10 decision 49). A column is
+   never narrower than its longest link, so no label breaks at 320px. */
+@media (max-width: 29.99rem) {
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+    flex-basis: 100%;
+  }
+}
+
 /* Forms ------------------------------------------------------------------ */
 
 .stack {
@@ -1637,9 +1660,10 @@ input[type='radio'] {
   margin: 0;
 }
 
+/* The guide's glyph legend is a grid of like items (.fill-grid's columns), so no tag is left alone on
+   a wrapped line. */
 .glyph-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-1) var(--space-3);
   font-size: var(--size-small);
 }
