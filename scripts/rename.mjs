@@ -101,6 +101,7 @@ export const TIERS = {
     'platform/ops/test/mac.test.mjs',
     'platform/ops/test/ops.test.mjs',
     'platform/supabase/functions/_shared/agent_system_test.ts',
+    'platform/supabase/functions/_shared/agent_upkeep_test.ts',
     'platform/supabase/functions/_shared/agent_workflows_test.ts',
     'platform/supabase/functions/_shared/handler_test.ts',
     'platform/supabase/functions/_shared/migration_test.ts',

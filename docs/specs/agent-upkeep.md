@@ -1,6 +1,6 @@
 # Agent upkeep: drift checks, Dependabot with a safe patch merge, the Claude Code pin and the replay eval set
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Series position: after design-review, before copy-pass (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). It changes kernel files only. No job here calls a model; the eval runner calls one only when a person runs it at the Mac, on the founder's plan.
 
@@ -17,7 +17,7 @@ In:
 - A `findings` table with `record_finding` and `close_finding`, and a Findings list in Needs you. Trimmed agent-system-core left these to the first pull request that files a finding.
 - Dependency updates: `.github/dependabot.yml`, pnpm's release-age and trust settings, and the dispatcher's `upkeep_merge` job, which merges a Dependabot patch only when every R23 condition holds.
 - The Claude Code pin: the pin file, the board's one `sudo` script, and the attended adapter refusing a CLI that differs from the pin.
-- The replay eval set: frozen cases, an attended runner, the first result and baseline, and a gate rule for changes to prompts, rubrics, agent definitions and schemas.
+- The replay eval set: frozen cases, an attended runner, and a gate rule for changes to prompts, rubrics, agent definitions and schemas. The first result and the baseline from it are the board's first attended run (Decisions).
 - The Janitor's role spec moves to running, as code only.
 - Docs: SYSTEM.md, PLAN, BOARD-SETUP's pin step, the Needs you copy for non-card pull requests, and ROADMAP.
 
@@ -27,6 +27,7 @@ Out, and what each waits on:
 - Renovate: only if the first Dependabot run cannot read pnpm 11's lockfile and the board installs the app. Its config comes with that choice.
 - Producer signals as inputs to the Studio Head's ranking: not built. The ranking is board-queued, and the board reads the signals in Needs you.
 - The builder replay set: BACKLOG, after launch (A6). HR: waits on scorecards and this eval set.
+- The first replay run, and `baseline.json` from it: an optional board item (`docs/BOARD-SETUP.md`), run attended at the Mac on the founder's plan. Until it runs, the gate refuses a change to a guarded path.
 
 ## Behaviour
 
@@ -70,7 +71,7 @@ There is no visual set: design-review keeps no rubric example images, so a visua
 
 `pnpm eval:replay -- --set draft --k 3` runs attended only. It deletes the studio and Anthropic API keys from its own environment, so it can only use the founder's Max login. It refuses when CI, GITHUB_ACTIONS or unattended mode is set, and it writes nothing to the database. It runs each case k times. It then writes `platform/agents/evals/results/<UTC stamp>.json` with the commit, the CLI version, the model ids and pass^k per set. It exits non-zero when a set falls below `baseline.json`.
 
-This pull request runs each set once and sets the baseline from that run, so the check is on at merge. After that, the gate fails a pull request that changes a role prompt, rubric, agent definition or schema under `platform/agents/` unless it adds a result file with every set at or above its baseline. A baseline moves only in a board pull request that gives the reason. The model ids live in `.env`, so the daily check compares them with the newest result.
+The check is on at merge: the gate fails a pull request that changes a role prompt, rubric, agent definition or schema under `platform/agents/` unless it adds a result file with every set at or above its baseline. The first run, and the baseline set from it, is the board's, at the Mac; until it exists, such a change fails, so the check fails closed. A baseline moves only in a board pull request that gives the reason. The model ids live in `.env`, so the daily check compares them with the newest result.
 
 ## Acceptance criteria
 
@@ -97,16 +98,19 @@ This pull request runs each set once and sets the baseline from that run, so the
   - writes a result with pass^k per set, the model ids and the CLI version;
   - exits non-zero below the baseline.
 
-  At merge, the repository holds a first result for each set and a `baseline.json` taken from it. The gate fails a fixture change to a prompt, rubric, agent definition or schema under `platform/agents/` that has no new result, or whose new result is below the baseline. It passes the same change when a new result is at or above the baseline.
+  The gate fails a fixture change to a prompt, rubric, agent definition or schema under `platform/agents/` that has no new result, or whose new result is below the baseline. It passes the same change when a new result is at or above the baseline, and fails it while no baseline exists.
 
 ## Verification
 
 - `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`
 - `pnpm --filter @backseat/dispatcher test`, `pnpm --filter @backseat/supabase test`, `pnpm test:functions`, `pnpm test:ops` and `pnpm test:agents`
-- `E2E_PORT=4393 pnpm --filter @backseat/board e2e`, which covers the Findings list and the non-card line.
+- `BOARD_E2E_PORT=4393 pnpm --filter @backseat/board e2e`, which covers the Findings list and the non-card line, and `E2E_PORT=4391 pnpm --filter @backseat/site e2e`, since /team now shows the Janitor running.
+- `bash platform/gate/test/run-tests.sh`, which audits `janitor.yml`, `dependabot.yml` and `pnpm-workspace.yaml`.
 - `pnpm --filter @backseat/supabase exec tsx scripts/schema-fingerprint.ts --pglite` locally, with the object count quoted.
-- `pnpm eval:replay -- --set draft --k 3`, run attended on the founder's plan, with its pass^k quoted. This run writes the first result.
-- The gate green at the pull request's head sha.
+- `CI=1 pnpm eval:replay -- --set draft --k 3` and `AGENT_MODE=unattended pnpm eval:replay -- --set draft --k 3`, each refused before any session.
+- `sandbox:check --positive` on the installed Claude Code, in both layouts, before the pin records its version.
+- (optional board item) `pnpm eval:replay -- --set draft --k 3`, run attended on the founder's plan, with its pass^k quoted. This run writes the first result.
+- The gate green at the pull request's head sha (the local gate while Actions is off, PLAN §10 decision 44).
 - Production, after the production steps:
   - the size of the pre-migration dump, quoted;
   - `anon-negative-test.ts` and `ledger-identity.ts` PASS, with `select public.ledger_identity()` read back;
@@ -131,7 +135,7 @@ Added when the status moves to built or done.
   - Cut, because agent-workflows' trim removed `job:dry-run`: both `job:dry-run` verification lines. Handler tests and the first real runs replace them.
   - Kept whole: every Problem outcome; R23's full merge policy at the exact head sha on a green gate, with the gate's payment-host scan and the card's deploy, smoke and rollback; RLS and service-role-only functions; the dump before the production write; `anon-negative-test` and the ledger identity.
 - 2026-09-23, reconciled with the series (these override any line that disagrees):
-  - The migration is `20260924900000_agent_upkeep.sql`, after design-review's. Bump it, keeping the series' order, if main holds a later file.
+  - The migration is `20260924900000_agent_upkeep.sql`, after design-review's. Bump it, keeping the series' order, if main holds a later file. (Built as `20260925300000_agent_upkeep.sql`: see the build decisions below.)
   - This pull request creates `findings`, `record_finding`, `close_finding` and Needs you's Findings list, which trimmed agent-system-core left to the first pull request that files a finding. design-review's trimmed spec files no findings, so this pull request creates them.
   - Both jobs are scheduled by pg_cron through agent-system-core's `enqueue_job_run`, and the board can queue either with Run now.
   - Nothing here extends agent-workflows' ranking inputs or calls design-review's `file_finding_card`.
