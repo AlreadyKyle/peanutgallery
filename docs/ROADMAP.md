@@ -129,7 +129,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 9 | `specs/studio-reports.md` | built | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 10 | `specs/design-review.md` | built | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
 | 11 | `specs/agent-upkeep.md` | built | drift checks, Dependabot with a safe patch merge, the Claude Code pin, the replay eval set |
-| 12 | `specs/copy-pass.md` | agreed | every public string after the supporter loop; the board-work marker on /roadmap |
+| 12 | `specs/copy-pass.md` | built | every public string after the supporter loop; the board-work marker on /roadmap |
 | 13 | `specs/launch-card-floor.md` | agreed | the first open cards, drafted and graded in one attended production session |
 
 ### Draft

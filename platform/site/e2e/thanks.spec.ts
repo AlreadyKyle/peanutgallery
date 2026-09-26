@@ -112,7 +112,7 @@ test('a recorded payment names the supporter, the cards it reached (named first)
   // Follow along: the named card and the Discord invite with its age line.
   const follow = page.getByRole('region', { name: 'Follow along' });
   await expect(follow.getByRole('link', { name: 'Watch this card' })).toHaveAttribute('href', `/card/${BUILDING_CARD_ID}`);
-  await expect(follow.getByRole('link', { name: 'Get told when it ships' })).toHaveAttribute('href', DISCORD_INVITE);
+  await expect(follow.getByRole('link', { name: 'Follow the studio on Discord' })).toHaveAttribute('href', DISCORD_INVITE);
   await expect(follow).toContainText('Discord is for ages 13 and over.');
   // The studio is paused in this fixture: the paused notice shows under the heading.
   await expect(page.locator('main > .band').first()).toContainText('paused');

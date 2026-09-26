@@ -178,19 +178,20 @@ describe('How it works', () => {
     const rows = [...example.querySelectorAll('.stat')].map((row) => [row.querySelector('.stat-label')?.textContent, row.querySelector('dd')?.textContent]);
     expect(rows).toEqual([
       [money.exampleRows.paid, formatUsd(worked.paid)],
-      [money.exampleRows.fee, `about ${formatUsd(worked.fee)}`],
+      [money.exampleRows.fee, formatUsd(worked.fee)],
       [money.exampleRows.reserve, formatUsd(worked.reserve)],
       [money.exampleRows.studio, formatUsd(worked.studio)],
       [money.exampleRows.incident, formatUsd(worked.incident)],
       [money.exampleRows.credit, formatUsd(worked.credit)],
     ]);
-    expect(rows.map(([, value]) => value)).toEqual(['$5.00', 'about $0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
+    expect(rows.map(([, value]) => value)).toEqual(['$5.00', '$0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
+    expect(money.exampleRows.fee).toBe("Stripe's fee (about)");
     const notes = [...example.querySelectorAll('.stat-description')].map((note) => note.textContent);
     expect(notes).toContain("10% of the $4.54 left after Stripe's fee.");
     expect(notes).toContain('20% of the $4.09 left after the reserve.');
     expect(notes).toContain("5% of the agents' $3.27, until the fund holds $500.");
     // The fee names Stripe Canada's pricing: the rate, the fixed fee, conversion and the card surcharge.
-    expect(money.exampleRows.feeNote).toMatch(/2\.9% plus CA\$0\.30.*2% to convert US dollars.*0\.8% more/);
+    expect(money.exampleRows.feeNote).toMatch(/2\.9% plus CA\$0\.30.*2% to convert US dollars.*0\.8% more for a card from outside Canada/);
     // Then the waterfall's order, and no operations step.
     expect([...example.querySelectorAll('ol.example-order li')].map((li) => li.textContent)).toEqual([...money.exampleOrder]);
     expect(money.exampleOrder[0]).toMatch(/^The card the supporter picked/);

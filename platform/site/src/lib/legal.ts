@@ -170,9 +170,8 @@ export const legal = {
     exampleRows: {
       paid: 'Paid',
       paidNote: 'What the supporter pays at checkout.',
-      fee: "Stripe's fee",
-      feeNote: "Stripe Canada's card fee: 2.9% plus CA$0.30, and 2% to convert US dollars. A card issued outside Canada pays 0.8% more.",
-      feeValue: 'about {usd}',
+      fee: "Stripe's fee (about)",
+      feeNote: '2.9% plus CA$0.30, and 2% to convert US dollars; 0.8% more for a card from outside Canada.',
       reserve: 'Held in reserve',
       reserveNote: "10% of the {net} left after Stripe's fee.",
       studio: "Studio's share",
@@ -419,7 +418,9 @@ export const legal = {
     terms: 'Your contribution is under version {n} of the {terms}, including the {refunds}.',
     followHeading: 'Follow along',
     watchCard: 'Watch this card',
-    discord: 'Get told when it ships',
+    // Says what the link does: the Discord invite. Ship posts start only once the board sets the
+    // ships webhook (docs/BOARD-SETUP.md), so the button promises none (docs/specs/copy-pass.md).
+    discord: 'Follow the studio on Discord',
     discordAge: 'Discord is for ages 13 and over.',
   },
   pausedFallback: 'It stopped on a check the board is looking into.',

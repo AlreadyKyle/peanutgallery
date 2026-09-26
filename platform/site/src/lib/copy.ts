@@ -39,7 +39,7 @@ export const copy = {
   now: 'Building now',
   fund: "Fund what's next",
   fundIntro:
-    "Fund a card to grow the studio and its games. When a card's bar fills, the agents build it.",
+    "Fund a card to grow Dust and the studio. When a card's bar fills, the agents build it.",
   // A phone shows the first three cards of the grid until the viewer asks for the rest.
   showAllCards: 'Show all {n} cards',
   queued: 'Queued',

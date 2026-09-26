@@ -226,7 +226,7 @@ export function PaidExample() {
     <>
       <dl className="stats">
         <Stat label={rows.paid} description={rows.paidNote} value={formatUsd(worked.paid)} />
-        <Stat label={rows.fee} description={rows.feeNote} value={rows.feeValue.replace('{usd}', formatUsd(worked.fee))} />
+        <Stat label={rows.fee} description={rows.feeNote} value={formatUsd(worked.fee)} />
         <Stat label={rows.reserve} description={rows.reserveNote.replace('{net}', formatUsd(worked.net))} value={formatUsd(worked.reserve)} />
         <Stat label={rows.studio} description={rows.studioNote.replace('{rest}', formatUsd(worked.remainder))} value={formatUsd(worked.studio)} />
         <Stat label={rows.incident} description={rows.incidentNote.replace('{agents}', formatUsd(worked.agents))} value={formatUsd(worked.incident)} />
