@@ -12,17 +12,17 @@ import {
   assertNotEquals,
   assertRejects,
 } from "jsr:@std/assert@1";
+import { migrationOrder, PGCRYPTO_LINE, SHIM } from "../../lib/pglite-migrations.ts";
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
-const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
 
-/** Every migrations/*.sql, sorted by name; the 14-digit stamp orders them. */
+/** Every migrations/*.sql, in the order they apply (lib/pglite-migrations.ts). */
 async function readMigrations(): Promise<{ name: string; sql: string }[]> {
-  const names: string[] = [];
+  const files: string[] = [];
   for await (const entry of Deno.readDir(MIGRATIONS_DIR)) {
-    if (entry.isFile && entry.name.endsWith(".sql")) names.push(entry.name);
+    if (entry.isFile) files.push(entry.name);
   }
-  names.sort();
+  const names = migrationOrder(files);
   const migrations: { name: string; sql: string }[] = [];
   for (const name of names) {
     migrations.push({
@@ -32,26 +32,6 @@ async function readMigrations(): Promise<{ name: string; sql: string }[]> {
   }
   return migrations;
 }
-
-const SHIM = `
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin bypassrls;
-create role supabase_auth_admin nologin;
-grant usage on schema public to anon, authenticated, service_role;
-alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
-create schema auth;
-create table auth.users (id uuid primary key default gen_random_uuid(), email text);
-create or replace function auth.email() returns text language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.email', true), '')
-$$;
-create or replace function auth.jwt() returns jsonb language sql stable as $$
-  select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-$$;
-create publication supabase_realtime;
-`;
 
 /** Every cards column anon and authenticated may select, sorted. */
 const PUBLIC_CARD_COLUMNS = [
@@ -291,6 +271,7 @@ Deno.test("migrations on PGlite", {
         "20260925000000_terms_version_3.sql",
         "20260925100000_reports_supply.sql",
         "20260925200000_design_review.sql",
+        "20260925300000_agent_upkeep.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -335,6 +316,7 @@ Deno.test("migrations on PGlite", {
         "decisions",
         "deploys",
         "dispatcher_lease",
+        "findings",
         "images",
         "job_runs",
         "jobs",
@@ -2072,7 +2054,12 @@ Deno.test("migrations on PGlite", {
             `select table_name, privilege_type from information_schema.role_table_grants where grantee = $1 and table_schema = 'public' order by 1, 2`,
             [grantee],
           );
-          assertEquals(grants, expected, grantee);
+          // agent-upkeep's findings (docs/specs/agent-upkeep.md): authenticated selects it, and its
+          // policy lets only a board member read a row.
+          const want = grantee === "authenticated"
+            ? [...expected, { table_name: "findings", privilege_type: "SELECT" }].sort((a, b) => a.table_name.localeCompare(b.table_name))
+            : expected;
+          assertEquals(grants, want, grantee);
           // cards is granted column by column. actual_usd counts founder-billed
           // turns, and severity and priority mark incidents, which stay private
           // until post-mortem.
@@ -4058,6 +4045,7 @@ Deno.test("migrations on PGlite", {
           "card_ready_problem",
           "claim_dispatcher_lease",
           "claim_job_run",
+          "close_finding",
           "controller_figures",
           "credit_held_contributions",
           "deal_due_cards",
@@ -4066,11 +4054,13 @@ Deno.test("migrations on PGlite", {
           "finish_job_run",
           "ledger_identity",
           "ops_database_size",
+          "producer_signals",
           "publish_weekly_report",
           "rankable_cards",
           "record_card_approval",
           "record_card_draft",
           "record_dispute_reinstated",
+          "record_finding",
           "record_review_round",
           "record_stripe_fee",
           "record_usage",
@@ -4078,6 +4068,7 @@ Deno.test("migrations on PGlite", {
           "resume_card_by_rule",
           "resume_due_by_rule",
           "reverse_contribution",
+          "schema_fingerprint",
           "studio_spend_totals",
           "terms_version_at",
           "waterfall_sweep",
@@ -4127,11 +4118,12 @@ Deno.test("migrations on PGlite", {
         // rights and the column grants do not limit it. The four trigger functions,
         // terms_version_at, which only the service role and security definer
         // functions call, and the site's two documents, which read as anon under
-        // anon's own grants, run with the caller's rights.
+        // anon's own grants, run with the caller's rights. agent-upkeep's two reads, which only
+        // the service role executes, do too: schema_fingerprint reads only the catalogs.
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["event_line_key", "refuse_money_change", "set_live_at", "set_updated_at", "site_card", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["event_line_key", "producer_signals", "refuse_money_change", "schema_fingerprint", "set_live_at", "set_updated_at", "site_card", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
       },
     );
 

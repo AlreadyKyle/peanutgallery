@@ -46,6 +46,8 @@ const PRIVATE_TABLES = [
   // site_reports(), and the dispatcher's Discord outbox.
   "studio_reports",
   "outbound_posts",
+  // agent-upkeep (docs/specs/agent-upkeep.md): the Janitor's findings, read only by a board member.
+  "findings",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -160,6 +162,13 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   // design-review (docs/specs/design-review.md): the visual review's round count, the service
   // role's alone; the card named does not exist, so even a wrong grant counts nothing.
   ["record_review_round", { p_card: NO_CARD }],
+  // agent-upkeep (docs/specs/agent-upkeep.md): the Janitor's four functions, the service role's
+  // alone. record_finding refuses the kind named and close_finding names no finding, so even a wrong
+  // grant writes nothing; the other two only read.
+  ["record_finding", { p_fingerprint: "anon-probe", p_kind: "not-a-kind", p_subject: "anon-probe", p_detail: {} }],
+  ["close_finding", { p_fingerprint: "anon-probe:no-such-finding" }],
+  ["schema_fingerprint", {}],
+  ["producer_signals", {}],
 ];
 
 // The one function anon runs on purpose: the cards policy calls it as the caller
