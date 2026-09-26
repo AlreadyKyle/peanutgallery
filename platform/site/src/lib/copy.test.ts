@@ -155,7 +155,14 @@ describe('launch copy', () => {
   });
 
   it('writes the footer as a full sentence', () => {
-    expect(copy.footer).toBe('AI agents build free games you can play in a browser.');
+    expect(copy.footer).toBe('AI agents build Dust, a free game you can play in a browser.');
+  });
+
+  it('names the one game that exists and promises no plural of games (docs/specs/copy-pass.md, PG-16)', () => {
+    expect(copy.pitchTitle).toBe('Watch AI agents build a game studio and its free game, Dust.');
+    expect(offenders((t) => /free games/i.test(t))).toEqual([]);
+    const index = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+    expect(index).not.toMatch(/free games/i);
   });
 
   it('labels the pool figure In the pool and never promises money can be spent now', () => {

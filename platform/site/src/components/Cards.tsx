@@ -217,19 +217,25 @@ export function plannedState(card: Card): { label: string; reason: string | null
   return { label: copy.roadmap.planned, reason: null };
 }
 
-/** A planned card as a rail row: its suit in the rail, then its title, and on /roadmap its summary and state. */
-export function PlannedRow({ card, detail = false, byline = null }: { card: Card; detail?: boolean; byline?: string | null }) {
+/**
+ * A planned card as a rail row: its suit in the rail, then its title, and on /roadmap its summary and
+ * state. /roadmap's rows sit under a group heading (h4) whose intro says planned once, so a row shows
+ * its state only when it is approved and opening soon or held by the board (docs/specs/copy-pass.md).
+ */
+export function PlannedRow({ card, detail = false, byline = null, level = 3 }: { card: Card; detail?: boolean; byline?: string | null; level?: 3 | 4 }) {
   const state = plannedState(card);
+  const Title = level === 4 ? 'h4' : 'h3';
+  const label = detail && state.label !== copy.roadmap.planned ? state.label : null;
   return (
     <li data-card={card.id}>
       <span className="row-rail">
         <SuitTag suit={categoryOf(card)} />
       </span>
       <div className="row-body">
-        <h3 className="row-title">{card.title}</h3>
+        <Title className="row-title">{card.title}</Title>
         {!detail || blank(card.summary) ? null : <p>{card.summary}</p>}
         {detail && byline ? <p className="card-meta card-byline">{byline}</p> : null}
-        {detail ? <p className="card-meta">{state.label}</p> : null}
+        {label === null ? null : <p className="card-meta">{label}</p>}
         {detail && state.reason !== null ? <p className="muted">{state.reason}</p> : null}
       </div>
     </li>

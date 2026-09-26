@@ -161,17 +161,33 @@ export const legal = {
         body: ['Once it is live, the card is listed under Shipped with what it cost and how many people funded it.'],
       },
     ],
-    splitCaption: "A $10.00 contribution after Stripe's fee, with the default split.",
-    splitRows: {
+    // The worked example under Contribute and choose the split (docs/specs/copy-pass.md): $5.00 paid
+    // with the default split, every figure from payment.ts exampleFromPaid ({net}, {rest} and {agents}
+    // are its figures), then where the agent credit goes, in the waterfall's order
+    // (docs/specs/money-logic.md). The fee is labelled about: a real fee moves with the card and the
+    // day's exchange rate.
+    exampleCaption: '$5.00 paid, with the default split.',
+    exampleRows: {
+      paid: 'Paid',
+      paidNote: 'What the supporter pays at checkout.',
+      fee: "Stripe's fee",
+      feeNote: "Stripe Canada's card fee: 2.9% plus CA$0.30, and 2% to convert US dollars. A card issued outside Canada pays 0.8% more.",
+      feeValue: 'about {usd}',
       reserve: 'Held in reserve',
-      reserveNote: '10% of the $10.00.',
+      reserveNote: "10% of the {net} left after Stripe's fee.",
       studio: "Studio's share",
-      studioNote: '20% of the $9.00 left.',
+      studioNote: '20% of the {rest} left after the reserve.',
       incident: 'Emergency fund',
-      incidentNote: "5% of the agents' $7.20, until the fund holds $500.",
+      incidentNote: "5% of the agents' {agents}, until the fund holds $500.",
       credit: 'Agent credit',
-      creditNote: "What reaches the card's bar and the meter.",
+      creditNote: 'What the agents can spend on cards.',
     },
+    exampleOrderIntro: 'The agent credit then goes, in this order:',
+    exampleOrder: [
+      'The card the supporter picked, if any, up to its target.',
+      'Then the next cards in line, each up to its target.',
+      'Then Not on a card yet, where it waits for the next card to open.',
+    ],
     sections: [
       {
         heading: 'Where the money goes',
@@ -180,7 +196,7 @@ export const legal = {
           "The split you choose at checkout divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
           "5% of the agents' share goes to an emergency fund for urgent bug fixes, until the fund holds $500. The rest is agent credit.",
           'Agent credit pays for model usage on funded cards, within daily and per-card caps. Money a card does not use stays with the agents and pays for later cards.',
-          `Money given with no card, or beyond a card's target, waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
+          `Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
           "The studio pays for the agents' model usage with contributions once Stripe has paid them out to the studio.",
         ],
       },
@@ -209,7 +225,7 @@ export const legal = {
   waterfallLine: "Anything beyond a card's target funds the next cards in line.",
   // /ledger's Funding band: money on no card yet, the shortfall and the board's test payment.
   notOnCard: 'Not on a card yet',
-  describeNotOnCard: "Money given with no card, or beyond a card's target, waiting for the next card to open.",
+  describeNotOnCard: 'Agent credit that no open card could take, waiting for the next card to open.',
   notOnCardTopUp: CEILING_TOP_UP,
   shortBy: 'Waiting cards are short by {usd} until new money arrives.',
   // {usd} is public_money.board_test_usd: the part of the board's test payment that sits in the pool
@@ -352,6 +368,28 @@ export const legal = {
     resumed: { one: 'resumed the card by rule after its spending limit' },
     ranked: { one: 'ranked the cards open for funding' },
   } as Record<string, { one: string; many?: string }>,
+  // /how-it-works' Who runs it, repeated at the foot of /team (docs/specs/copy-pass.md): the board by
+  // name, what it can do, what it files (PLAN.md §4 Who files cards) and its standing duties as
+  // PLAN.md §4 The Board lists them. Here, not in copy.ts, because the duties name money. No line says
+  // the board's actions are published: no public list of them exists. {email} is the contact address.
+  whoRuns: {
+    heading: 'Who runs it',
+    paragraphs: [
+      'Mob Machine is run by AI agents and a human board: Kyle Smith.',
+      'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
+      'The board files the cards: every entry on the roadmap and every card it opens for funding. When the board asks, the Game Designer, an AI agent, drafts a game card, and the Game Director, another agent, grades it before it can open.',
+    ],
+    dutiesIntro: 'The board also has standing duties:',
+    duties: [
+      "After each Stripe payout, buy the agents' model credit and raise the amount Stripe holds back from payouts to the figure the studio's books set.",
+      'Refund any request sent to {email} within 14 days of the contribution.',
+      "Answer any bank dispute before Stripe's deadline.",
+      'Turn emergency fund money into model credit when an urgent fix needs it.',
+      "Review and merge every change to the fixed rules and the studio's own code, except a dependency patch that passes the automatic merge rules.",
+      'Add the price of each new model the agents use.',
+    ],
+    dutiesOutro: 'If the board does none of them, the studio pauses or stays as it is.',
+  },
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
   thanks: {

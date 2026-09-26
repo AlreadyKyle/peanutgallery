@@ -150,10 +150,10 @@ const CARDS = [
   card({ title: 'Save progress and resume on reload', summary: 'Your progress is kept between visits.', stage: 'live', shape: 'oneoff', executor_role_id: roleId('Builder A'), live_at: '2026-09-15T08:00:00Z' }),
   card({ title: 'The unlock list fits any number of unlocks', summary: 'The unlock list scrolls instead of overflowing.', stage: 'live', shape: 'oneoff', executor_role_id: roleId('Builder A'), live_at: '2026-09-15T10:00:00Z' }),
   card({ title: 'Choose the next card without paying', summary: 'Supporters pick what is built next without paying.', folder: 'platform', bucket: 'studio', horizon: 'next', rank: 1 }),
-  card({ title: 'The Studio Head drafts cards from the roadmap', summary: 'New cards drafted by an agent for the board to approve.', folder: 'platform', bucket: 'agents', horizon: 'next', rank: 2 }),
+  card({ title: 'The Studio Head drafts cards from the roadmap', summary: 'New cards drafted by an agent for the board to approve.', folder: 'platform', bucket: 'agents', horizon: 'next', rank: 2, board_work: true }),
   card({ title: 'Board on its own site', summary: 'The board signs in on a separate site built only from kernel files.', folder: 'platform', bucket: 'platform', horizon: 'next', rank: 3 }),
   card({ title: 'A second area in Dust', summary: 'A new place to explore once the first one is done.', horizon: 'later', rank: 1 }),
-  card({ title: 'Image adapter for studio pictures', summary: 'Episode thumbnails and lore cards, reviewed by the board first.', folder: 'platform', bucket: 'studio', horizon: 'later', rank: 2 }),
+  card({ title: 'Image adapter for studio pictures', summary: 'Episode thumbnails and lore cards, reviewed by the board first.', folder: 'platform', bucket: 'studio', horizon: 'later', rank: 2, board_work: true }),
 ];
 
 export const DEFAULT_STUDIO: StudioFixture = {

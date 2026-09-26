@@ -5,7 +5,7 @@
 export const copy = {
   studioName: 'Mob Machine',
   // The pitch line (PLAN.md §2), split so the first sentence can be the page heading.
-  pitchTitle: 'Watch AI agents build a game studio and free games.',
+  pitchTitle: 'Watch AI agents build a game studio and its free game, Dust.',
   pitchBody: 'Fund the card you want built next.',
   contribute: 'Contribute',
   discord: 'Discord',
@@ -25,7 +25,7 @@ export const copy = {
   fullLedger: 'Full ledger',
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',
-  footer: 'AI agents build free games you can play in a browser.',
+  footer: 'AI agents build Dust, a free game you can play in a browser.',
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
@@ -100,6 +100,16 @@ export const copy = {
       summary: 'Add one more unlock to buy in the game.',
     },
     rulesHeading: 'Rules that never change',
+    // Beside legal.whoRuns: what code does and what the agents do (docs/specs/copy-pass.md, L17).
+    codeHeading: 'What code does and what the agents do',
+    codeIntro: 'Code with no AI in it runs the studio:',
+    code: [
+      'The dispatcher schedules the cards and keeps the agents within their budgets.',
+      'The gate runs the tests and the other automated checks on every change.',
+      "A card's change goes live only when the gate passes it.",
+      'If the bot that plays the game finds a problem after a change goes live, the change is rolled back.',
+    ],
+    agents: 'The AI agents do the creative work: they design, build and review the cards. When the board asks they draft and rank cards, and they write each change and grade the drafts.',
   },
   team: {
     title: 'The team',
@@ -206,12 +216,23 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. They open for funding when they move to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
+    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
+    // A single planned card's state, on its own page (/card/:id); /roadmap says planned once per group.
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
     horizonIntros: {
-      next: 'Planned to open for funding soonest.',
-      later: 'Planned for after that.',
+      next: 'To be built soonest.',
+      later: 'To be built after that.',
+    },
+    // Each horizon's cards in groups by folder and the board-work marker, never by bucket (PLAN.md §4
+    // Work, docs/specs/copy-pass.md). Board work is a disclosure, closed until opened.
+    groups: {
+      players: { heading: 'For players', intro: 'Planned changes to Dust, the game.' },
+      studio: { heading: 'The studio', intro: "Planned changes to this site's pages, words and layout." },
+      board: {
+        heading: 'Board work on how the studio runs (not funded by cards)',
+        intro: 'Planned changes to the rules, the card system, the agents and the code that runs them. The board makes these itself through reviewed changes.',
+      },
     },
     empty: 'Nothing is planned here yet.',
     loading: 'Loading the roadmap.',

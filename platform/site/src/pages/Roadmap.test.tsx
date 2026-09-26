@@ -5,7 +5,7 @@ import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
-import { Roadmap } from './Roadmap';
+import { Roadmap, roadmapGroup } from './Roadmap';
 
 const roadmap = copy.roadmap;
 
@@ -37,6 +37,8 @@ const cards = [
   card({ id: 'n2', title: 'Free picks', summary: 'Choose the next card without paying.', rank: 2 }),
   card({ id: 'n1', title: 'Card drafting', rank: 1 }),
   card({ id: 'ns', title: 'Board on its own site', folder: 'platform', bucket: 'studio', rank: 3 }),
+  card({ id: 'nb', title: 'Voter identity', folder: 'platform', bucket: 'platform', rank: 4, board_work: true }),
+  card({ id: 'nq', title: 'A bug button', folder: 'seed-1', bucket: 'qa', rank: 5, board_work: true }),
   card({ id: 'l1', title: 'Seasons', horizon: 'later' }),
   card({ id: 'now1', title: 'Open now', horizon: 'now', funding_target_usd: 3 }),
 ];
@@ -101,26 +103,79 @@ describe('Roadmap', () => {
     const next = await screen.findByRole('region', { name: roadmap.horizons.next });
     const bylines = next.querySelectorAll('.card-byline');
     expect([...bylines].map((b) => b.textContent)).toEqual(['Written by the Game Designer, an AI agent']);
-    expect(bylines[0]!.closest('li')!.querySelector('h3')!.textContent).toBe('Gatherers cost 11');
+    expect(bylines[0]!.closest('li')!.querySelector('h4')!.textContent).toBe('Gatherers cost 11');
   });
 
-  it('lists next and later cards by horizon in rank order as rail rows, the suit in the rail, each labelled planned', async () => {
-    renderRoadmap(sourceOf(cards));
+  it('groups each horizon by folder and the board-work marker, never by bucket (docs/specs/copy-pass.md)', () => {
+    expect(roadmapGroup(card({ folder: 'seed-1', bucket: 'platform' }))).toBe('players');
+    expect(roadmapGroup(card({ folder: 'platform', bucket: 'game' }))).toBe('studio');
+    expect(roadmapGroup(card({ folder: 'seed-1', board_work: true }))).toBe('board');
+    expect(roadmapGroup(card({ folder: 'platform', board_work: true }))).toBe('board');
+    expect(roadmapGroup(card({ folder: 'platform', board_work: false }))).toBe('studio');
+  });
+
+  it('lists each horizon as For players, The studio and a closed board-work disclosure, in rank order as rail rows with the suit in the rail', async () => {
+    const { container } = renderRoadmap(sourceOf(cards));
     const next = await screen.findByRole('region', { name: roadmap.horizons.next });
     expect(within(next).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
-      'Card drafting',
-      'Free picks',
-      'Board on its own site',
+      roadmap.groups.players.heading,
+      roadmap.groups.studio.heading,
+      roadmap.groups.board.heading,
     ]);
+    const players = within(next).getByRole('region', { name: roadmap.groups.players.heading });
+    expect(within(players).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Card drafting', 'Free picks']);
+    const studio = within(next).getByRole('region', { name: roadmap.groups.studio.heading });
+    expect(within(studio).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Board on its own site']);
+    // Board work, whatever its folder, sits in a native disclosure that starts closed.
+    const board = next.querySelector('details[data-group="board"]') as HTMLDetailsElement;
+    expect(board.open).toBe(false);
+    expect(board.querySelector('summary')!.textContent).toBe(roadmap.groups.board.heading);
+    expect([...board.querySelectorAll('h4')].map((h) => h.textContent)).toEqual(['Voter identity', 'A bug button']);
     expect([...next.querySelectorAll('li .row-rail [data-suit]')].map((tag) => tag.textContent)).toEqual([
       copy.categories.game,
       copy.categories.game,
       copy.categories.studio,
+      copy.categories.studio,
+      copy.categories.game,
     ]);
     expect(within(next).getByText('Choose the next card without paying.')).toBeTruthy();
-    expect(within(next).getAllByText(roadmap.planned)).toHaveLength(3);
+    // Later has only a card for players, so it draws no studio group and no disclosure.
     const later = screen.getByRole('region', { name: roadmap.horizons.later });
-    expect(within(later).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Seasons']);
+    expect(within(later).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([roadmap.groups.players.heading]);
+    expect(within(later).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Seasons']);
+    expect(later.querySelector('details')).toBeNull();
+    expect(container.querySelectorAll('.roadmap-group')).toHaveLength(4);
+  });
+
+  it('says planned once per group and not funded by cards only of board work', async () => {
+    const { container } = renderRoadmap(sourceOf(cards));
+    await screen.findByRole('region', { name: roadmap.horizons.next });
+    for (const group of container.querySelectorAll('.roadmap-group')) {
+      expect(group.textContent!.match(/planned/gi) ?? []).toHaveLength(1);
+      const isBoard = group.getAttribute('data-group') === 'board';
+      expect(/not funded by cards/.test(group.textContent!)).toBe(isBoard);
+    }
+    // The row labels are gone; the page says planned only in the group lines.
+    expect(screen.queryByText(roadmap.planned)).toBeNull();
+    const main = container.querySelector('main')!;
+    expect((main.textContent!.match(/not funded by cards/g) ?? []).length).toBe(1);
+    for (const band of container.querySelectorAll('main > .band:not(:first-child)')) {
+      const outsideGroups = [...band.querySelectorAll('.section > p')].map((p) => p.textContent).join(' ');
+      expect(outsideGroups).not.toMatch(/planned/i);
+    }
+  });
+
+  it("keeps supporter-pages' opens-soon and held labels on the cards they apply to", async () => {
+    const soon = card({ id: 's1', title: 'Soon', source: 'agent', opens_at: '2026-09-27T00:00:00Z', rank: 6 });
+    const held = card({ id: 'h1', title: 'Held', rank: 7, board_vetoed: true, board_veto_reason: 'Not now.' });
+    renderRoadmap(sourceOf([...cards, soon, held]));
+    const next = await screen.findByRole('region', { name: roadmap.horizons.next });
+    const row = (id: string) => next.querySelector(`li[data-card="${id}"]`)!;
+    expect(row('s1').textContent).toContain(roadmap.opensSoon);
+    expect(row('h1').textContent).toContain(legal.heldByBoard);
+    expect(row('h1').textContent).toContain('Not now.');
+    expect(row('n1').textContent).not.toContain(roadmap.opensSoon);
+    expect(row('n1').textContent).not.toContain(legal.heldByBoard);
   });
 
   it('never shows a card on horizon now, a bar, a status or a fund link', async () => {

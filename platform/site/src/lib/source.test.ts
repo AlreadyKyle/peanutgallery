@@ -39,14 +39,15 @@ const golden = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/__fixture
 
 /**
  * The Snapshot without what supporter-pages added (docs/specs/supporter-pages.md): role stats, the
- * roster's status, trigger and pause, a card's dealing and veto, and each event's line key. The
- * golden was captured before them, so it cannot hold them; they are checked on their own below.
+ * roster's status, trigger and pause, a card's dealing and veto, and each event's line key; and
+ * copy-pass's board-work marker. The golden was captured before them, so it cannot hold them; they
+ * are checked on their own below.
  */
 function beforeSupporterPages(snapshot: Snapshot): unknown {
   const { roleStats: _stats, ...rest } = snapshot;
   return {
     ...rest,
-    cards: rest.cards.map(({ opens_at: _o, board_vetoed: _v, board_veto_reason: _r, ...card }) => card),
+    cards: rest.cards.map(({ opens_at: _o, board_vetoed: _v, board_veto_reason: _r, board_work: _w, ...card }) => card),
     roles: rest.roles.map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, ...role }) => role),
     events: rest.events.map(({ line_key: _k, ...event }) => event),
   };
@@ -72,6 +73,17 @@ describe('the golden snapshot', () => {
     const biz = snapshot.roles.find((role) => role.title === 'Biz Dev')!;
     expect([biz.status, biz.trigger]).toEqual(['starts', 'Starts last, once every other role in the launch roster is built.']);
     expect(snapshot.cards.every((card) => card.board_vetoed === false && card.opens_at === null)).toBe(true);
+  });
+
+  it("reads each card's board-work marker, and a card document without one as not board work (copy-pass)", async () => {
+    const marked = new Set(DEFAULT_STUDIO.cards.filter((card) => card.board_work === true).map((card) => String(card.id)));
+    expect(marked.size).toBeGreaterThan(0);
+    const { fetchFn } = serving(() => toDocuments(DEFAULT_STUDIO));
+    const snapshot = await createSnapshotSource({ fetchFn }).load();
+    expect(new Set(snapshot.cards.filter((card) => card.board_work === true).map((card) => card.id))).toEqual(marked);
+    const unmarked = serving(() => toDocuments({ ...DEFAULT_STUDIO, cards: DEFAULT_STUDIO.cards.map(({ board_work: _w, ...card }) => card) }));
+    const plain = await createSnapshotSource({ fetchFn: unmarked.fetchFn }).load();
+    expect(plain.cards.every((card) => card.board_work === false)).toBe(true);
   });
 });
 

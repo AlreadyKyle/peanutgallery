@@ -248,4 +248,18 @@ describe('Team', () => {
       expect(box(name).querySelector(':scope > .agent-foot')).not.toBeNull();
     }
   });
+
+  it('repeats the board block at its foot, after every section, in its own band (docs/specs/copy-pass.md)', async () => {
+    const { container } = renderTeam(sourceOf(snapshot()));
+    await screen.findByRole('region', { name: team.running });
+    const who = screen.getByRole('region', { name: legal.whoRuns.heading });
+    expect(who.textContent).toContain('Mob Machine is run by AI agents and a human board: Kyle Smith.');
+    expect(within(who).getAllByRole('listitem')).toHaveLength(legal.whoRuns.duties.length);
+    expect(who.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
+    const bands = [...container.querySelectorAll('main > .band')];
+    expect(bands).toHaveLength(3);
+    expect(bands.at(-1)!.contains(who)).toBe(true);
+    expect(bands[1]!.querySelector('.agent')).not.toBeNull();
+    expect(bands.at(-1)!.querySelector('.agent')).toBeNull();
+  });
 });

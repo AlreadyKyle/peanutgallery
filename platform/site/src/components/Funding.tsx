@@ -3,7 +3,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
-import { canFund, DEFAULT_STUDIO_PCT, exampleSplit, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
+import { canFund, DEFAULT_STUDIO_PCT, exampleFromPaid, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
 import type { CardDetail } from '../lib/card-source';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
@@ -11,7 +11,7 @@ import { LinkedText } from './TextPage';
 
 // A card's money: its funding bar and spec rows (and the "$0.00 of $3.00 · 0 contributors" line a
 // /contribute choice shows), what a building or shipped card has spent, the Fund this card link, the
-// coin mark, and the split example's figures.
+// coin mark, and the worked example's figures.
 // Kernel (docs/specs/board-site.md): the card's own layout (Card.tsx) places these and cannot change
 // a figure, the link or the card id it carries.
 
@@ -211,20 +211,34 @@ export function splitSentence(): string {
     .replace('{studio}', String(DEFAULT_STUDIO_PCT));
 }
 
-// The split example's contribution after Stripe's fee: its rows' notes in legal.ts are worked for it.
-const SPLIT_EXAMPLE_NET_USD = 10;
+// The worked example's payment, the checkout's $5 default (docs/specs/copy-pass.md).
+export const EXAMPLE_PAID_USD = 5;
 
-/** The default split of a $10.00 contribution after Stripe's fee, as figures, for /how-it-works. */
-export function SplitStats() {
-  const split = exampleSplit(SPLIT_EXAMPLE_NET_USD);
-  const rows = legal.howMoneyMoves.splitRows;
+/**
+ * /how-it-works' worked example: $5.00 paid, Stripe's fee (about, from payment.ts STRIPE_EXAMPLE_FEE),
+ * the reserve, the studio's share at the default split, the emergency fund and the agent credit, each
+ * from exampleFromPaid, then the waterfall's order the agent credit follows.
+ */
+export function PaidExample() {
+  const worked = exampleFromPaid(EXAMPLE_PAID_USD);
+  const rows = legal.howMoneyMoves.exampleRows;
   return (
-    <dl className="stats">
-      <Stat label={rows.reserve} description={rows.reserveNote} value={formatUsd(split.reserve)} />
-      <Stat label={rows.studio} description={rows.studioNote} value={formatUsd(split.studio)} />
-      <Stat label={rows.incident} description={rows.incidentNote} value={formatUsd(split.incident)} />
-      <Stat label={rows.credit} description={rows.creditNote} value={formatUsd(split.credit)} />
-    </dl>
+    <>
+      <dl className="stats">
+        <Stat label={rows.paid} description={rows.paidNote} value={formatUsd(worked.paid)} />
+        <Stat label={rows.fee} description={rows.feeNote} value={rows.feeValue.replace('{usd}', formatUsd(worked.fee))} />
+        <Stat label={rows.reserve} description={rows.reserveNote.replace('{net}', formatUsd(worked.net))} value={formatUsd(worked.reserve)} />
+        <Stat label={rows.studio} description={rows.studioNote.replace('{rest}', formatUsd(worked.remainder))} value={formatUsd(worked.studio)} />
+        <Stat label={rows.incident} description={rows.incidentNote.replace('{agents}', formatUsd(worked.agents))} value={formatUsd(worked.incident)} />
+        <Stat label={rows.credit} description={rows.creditNote} value={formatUsd(worked.credit)} />
+      </dl>
+      <p className="example-order-intro">{legal.howMoneyMoves.exampleOrderIntro}</p>
+      <ol className="example-order">
+        {legal.howMoneyMoves.exampleOrder.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+    </>
   );
 }
 
