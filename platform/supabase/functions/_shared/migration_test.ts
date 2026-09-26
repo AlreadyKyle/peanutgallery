@@ -290,6 +290,7 @@ Deno.test("migrations on PGlite", {
         "20260924600000_supporter_pages.sql",
         "20260925000000_terms_version_3.sql",
         "20260925100000_reports_supply.sql",
+        "20260925200000_design_review.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -2105,7 +2106,8 @@ Deno.test("migrations on PGlite", {
              order by 1`,
             [grantee],
           );
-          assertEquals(withheld.map((c) => c.column_name), ["actual_usd", "priority", "severity"], grantee);
+          // design-review's review_rounds is the dispatcher's own count (docs/specs/design-review.md).
+          assertEquals(withheld.map((c) => c.column_name), ["actual_usd", "priority", "review_rounds", "severity"], grantee);
         }
         const acl = await row<{ acl: string }>(
           `select relacl::text as acl from pg_class where oid = 'public.cards'::regclass`,
@@ -4069,6 +4071,7 @@ Deno.test("migrations on PGlite", {
           "record_card_approval",
           "record_card_draft",
           "record_dispute_reinstated",
+          "record_review_round",
           "record_stripe_fee",
           "record_usage",
           "release_dispatcher_lease",

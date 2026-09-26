@@ -70,11 +70,12 @@ const PUBLIC_RELATIONS = [
 
 // cards is granted column by column (docs/specs/card-columns-and-open-funding.md).
 // The site's columns, horizon and rank included, are readable. actual_usd,
-// severity and priority are withheld, and so is select=*, which names them;
+// severity, priority and design-review's review_rounds are withheld, and so is
+// select=*, which names them;
 // each must be refused with Postgres's permission error, 42501, not some other
 // failure.
 const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank,opens_at,board_vetoed,drafter_role_id";
-const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "*"];
+const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "review_rounds", "*"];
 const PERMISSION_DENIED = "42501";
 
 // public_studio shows whether the studio is paused, why (docs/specs/money-logic.md)
@@ -156,6 +157,9 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   // anything; and the board's supply count, which only reads.
   ["publish_weekly_report", { p_week_start: "2000-01-04" }],
   ["card_supply", {}],
+  // design-review (docs/specs/design-review.md): the visual review's round count, the service
+  // role's alone; the card named does not exist, so even a wrong grant counts nothing.
+  ["record_review_round", { p_card: NO_CARD }],
 ];
 
 // The one function anon runs on purpose: the cards policy calls it as the caller
