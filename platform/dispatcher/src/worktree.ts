@@ -219,6 +219,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/pages/Ledger.tsx',
   'platform/site/src/pages/Legal.tsx',
   'platform/site/src/pages/Thanks.tsx',
+  'platform/site/src/routes.test.ts',
   'platform/site/src/styles.test.ts',
   'platform/site/vite.config.ts',
   'seed-1/CLAUDE.md',
