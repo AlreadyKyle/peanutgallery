@@ -148,7 +148,7 @@ describe('tick', () => {
     expect(await tick(deps(db, started))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
   });
 
-  it('holds what a building session may still spend, and nothing for a gated card, in unattended mode', async () => {
+  it('holds what a building session may still spend, and nothing for a gated card it does not run, in unattended mode', async () => {
     const db = new FakeDb();
     db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
@@ -159,6 +159,21 @@ describe('tick', () => {
     budgets.record('a', 3);
     expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
     expect(budgets.budgetFor('b')).toBe(3);
+    expect(db.stagesRead.at(-1)).toEqual(['proposed', 'designing', 'voted', 'funded', 'paused', 'building', 'gated']);
+  });
+
+  // docs/specs/design-review.md: a gated card may still start a visual revision on its claim's budget.
+  it('holds what a gated card it still runs may spend on a revision, until the pipeline closes the budget', async () => {
+    const db = new FakeDb();
+    db.studio.agent_mode = 'unattended';
+    db.pool.balance_usd = 5;
+    const budgets = new SessionBudgets();
+    budgets.start('g', 5);
+    budgets.record('g', 1);
+    db.cards = [card({ id: 'g', stage: 'gated', estimate_usd: 4 }), card({ id: 'b', estimate_usd: 2 })];
+    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2 }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
+    budgets.close('g');
+    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
   });
 
   it('starts a runnable card in unattended mode with a pool under the hourly rate', async () => {

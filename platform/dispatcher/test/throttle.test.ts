@@ -195,8 +195,12 @@ describe('holdUsd', () => {
     expect(holdUsd(moneyCard({ id: 'b', stage: 'building' }), state)).toBe(3);
     expect(holdUsd(moneyCard({ id: 'c', stage: 'building', estimate_usd: 10, actual_usd: 2 }), state)).toBe(13);
   });
-  it('holds nothing for a gated, live or rejected card', () => {
+  it('holds nothing for a gated card this process does not run, or a live or rejected card', () => {
     for (const stage of ['gated', 'live', 'rejected']) expect(holdUsd(moneyCard({ id: 'a', stage }), state)).toBe(0);
+    for (const stage of ['live', 'rejected']) expect(holdUsd(moneyCard({ id: 'b', stage }), state)).toBe(0);
+  });
+  it('holds what a gated card this process still runs may spend on a visual revision', () => {
+    expect(holdUsd(moneyCard({ id: 'b', stage: 'gated' }), state)).toBe(3);
   });
   it('reads spend from the studio-billed sum, so founder-billed turns in actual_usd free no bar money', () => {
     expect(holdUsd(moneyCard({ id: 'f', stage: 'paused', funded_usd: 5, actual_usd: 5 }), state)).toBe(5);
@@ -230,10 +234,21 @@ describe('planStart', () => {
     expect(plan).toMatchObject({ ok: true, budgetUsd: 10, bounds: { availableUsd: 10 } });
   });
 
-  it('holds nothing for a gated card, so its finished session frees the pool', () => {
+  it('holds nothing for a gated card whose pipeline has closed its budget, so its finished session frees the pool', () => {
     const gated = moneyCard({ id: 'g', stage: 'gated' });
     const x = moneyCard({ id: 'x' });
     expect(planStart(money({ balanceUsd: 10, cards: [gated, x] }), x)).toMatchObject({ ok: true, budgetUsd: 10 });
+    expect(planStart(money({ balanceUsd: 10, cards: [gated, x], running: new Map([['g', 0]]) }), x)).toMatchObject({ ok: true, budgetUsd: 10 });
+  });
+
+  // docs/specs/design-review.md: a visual revision spends from the claim's budget, so while the card
+  // waits at gated its unspent budget stays held from the pool, the caps and the credit.
+  it('holds a gated card budget that a revision may still spend, from the pool and from every cap', () => {
+    const gated = moneyCard({ id: 'g', stage: 'gated' });
+    const x = moneyCard({ id: 'x', estimate_usd: 2, funded_usd: 2 });
+    const plan = planStart(money({ balanceUsd: 20, dailyCapUsd: 10, spentTodayUsd: 5, cards: [gated, x], running: new Map([['g', 3]]) }), x);
+    expect(plan).toMatchObject({ ok: true, budgetUsd: 2, bounds: { availableUsd: 17, dailyUsd: 2 } });
+    expect(planStart(money({ balanceUsd: 20, dailyCapUsd: 10, spentTodayUsd: 5, cards: [gated, x], running: new Map([['g', 4]]) }), x)).toMatchObject({ ok: false, reason: 'daily_cap' });
   });
 
   it('counts a building card as what its session may still spend, which shrinks as it spends', () => {

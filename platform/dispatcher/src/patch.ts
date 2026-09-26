@@ -214,9 +214,23 @@ export function createSupabasePatchStore(url: string, serviceRoleKey: string, fe
 
 export type StoredPatchOutcome = { kind: 'none' } | { kind: 'applied'; sha256: string; baseSha: string; files: string[] } | { kind: 'conflict'; sha256: string; detail: string };
 
+// Whether base is the worktree's HEAD or one of its ancestors: a stored patch is a whole change only
+// when it was made against main as it was. A visual revision's patch is made against the card's own
+// commit (docs/specs/design-review.md), which main never holds, and applied alone at main it would be
+// half the change. A sha the repository does not have counts as not an ancestor.
+export async function baseOnMain(worktree: string, base: string): Promise<boolean> {
+  if (!/^[0-9a-f]{40}$/.test(base)) return false;
+  try {
+    await git(['merge-base', '--is-ancestor', base, 'HEAD'], worktree);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // The pipeline's hook before a session: a card with a stored patch is rebuilt from it at the new base
-// and runs no session. A patch that no longer applies, or that a check refuses, is discarded so the
-// board's next resume runs a new session; the pipeline pauses the card.
+// and runs no session. A patch whose base is not on main, that no longer applies, or that a check
+// refuses, is discarded so the board's next resume runs a new session; the pipeline pauses the card.
 export async function applyStoredPatch(store: PatchStore, cardId: string, worktree: string, allowed: readonly string[]): Promise<StoredPatchOutcome> {
   const stored = await store.latest(cardId);
   if (!stored) return { kind: 'none' };
@@ -225,6 +239,10 @@ export async function applyStoredPatch(store: PatchStore, cardId: string, worktr
   if (sha256 !== stored.sha256) {
     await store.discard(cardId);
     return { kind: 'conflict', sha256, detail: `the stored text hashes to ${sha256}, not the recorded ${stored.sha256}` };
+  }
+  if (!(await baseOnMain(worktree, stored.baseSha))) {
+    await store.discard(cardId);
+    return { kind: 'conflict', sha256, detail: `its base ${stored.baseSha.slice(0, 12)} is not on main, so it is not the whole change` };
   }
   const check = await validateAndApply(worktree, bytes, allowed);
   if (check.ok) return { kind: 'applied', sha256, baseSha: stored.baseSha, files: check.files };
