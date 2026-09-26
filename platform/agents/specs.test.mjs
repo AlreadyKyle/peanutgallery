@@ -284,6 +284,51 @@ test('rubrics/draft-game.md carries the seven pillars and the all-ages rating ve
   assert.ok(readFileSync(join(repoRoot, 'platform/agents/prompts/game-director.md'), 'utf8').includes('platform/agents/rubrics/draft-game.md'));
 });
 
+// docs/specs/design-review.md: both Directors run the visual review, answering one visual-verdict
+// object against rubrics/visual.md, whose criteria are the schema's, each with its own closed list of
+// reason codes; a pass carries meets, and a frame is named by its side and file name.
+const VISUAL_SCHEMA = 'platform/agents/schemas/visual-verdict.schema.json';
+const VISUAL_RUBRIC = 'platform/agents/rubrics/visual.md';
+
+test('both Directors name the visual-verdict schema and the visual rubric, and hold only Read, Glob and Grep', () => {
+  for (const role of ['game-director', 'platform-director']) {
+    const spec = specs.find(({ file }) => file === `${role}.json`).spec;
+    const prompt = readPrompt(spec);
+    assert.ok(prompt.includes(VISUAL_SCHEMA), `${role}.md names ${VISUAL_SCHEMA}`);
+    assert.ok(prompt.includes(VISUAL_RUBRIC), `${role}.md names ${VISUAL_RUBRIC}`);
+    assert.deepEqual(spec.tools, READ_SET, `${role} holds only Read, Glob and Grep`);
+  }
+});
+
+test("the visual verdict's criteria equal the rubric's headings, and each criterion's reason codes are the rubric's", () => {
+  const schema = JSON.parse(readFileSync(join(repoRoot, VISUAL_SCHEMA), 'utf8'));
+  assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  assert.equal(schema.additionalProperties, false);
+  const criteria = schema.properties.criteria;
+  assert.equal(criteria.additionalProperties, false);
+  assert.deepEqual(criteria.required, ['intent', 'fit', 'legibility', 'all_ages']);
+  const rubric = readFileSync(join(repoRoot, VISUAL_RUBRIC), 'utf8');
+  const section = rubric.slice(rubric.indexOf('## The criteria'), rubric.indexOf('## The verdict'));
+  const headings = [...section.matchAll(/^### (\S+)$/gm)].map((match) => match[1]);
+  assert.deepEqual(headings, criteria.required);
+  for (const name of criteria.required) {
+    const def = schema.$defs[name];
+    assert.equal(def.additionalProperties, false, `${name} allows no other keys`);
+    assert.deepEqual(def.required, ['verdict', 'frame', 'reason_code']);
+    assert.deepEqual(def.properties.verdict.enum, ['pass', 'revise']);
+    const codes = def.properties.reason_code.enum;
+    assert.equal(codes[0], 'meets', `${name}: a pass carries meets`);
+    const text = section.slice(section.indexOf(`### ${name}`)).split('\n### ')[0];
+    for (const code of codes.slice(1)) assert.ok(text.includes(code), `the rubric's ${name} names ${code}`);
+  }
+  assert.match('site/home-375.png', new RegExp(schema.$defs.frame.pattern));
+  assert.match('game/game-21600.png', new RegExp(schema.$defs.frame.pattern));
+  assert.doesNotMatch('../home-375.png', new RegExp(schema.$defs.frame.pattern));
+  for (const line of ['Compare each .before.png with its .after.png', 'never measure sizes, spacing or counts', 'Answer with one visual-verdict object']) {
+    assert.ok(rubric.includes(line), `the rubric says: ${line}`);
+  }
+});
+
 for (const role of ['biz-dev', 'community']) {
   test(`${role}.md proposes nothing for a board review, names no Reddit or X, puts nothing on the ledger page and says it is not running yet`, () => {
     const prompt = readFileSync(join(repoRoot, 'platform', 'agents', 'prompts', `${role}.md`), 'utf8');
