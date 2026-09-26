@@ -83,7 +83,7 @@ The check is on at merge: the gate fails a pull request that changes a role prom
   - each failed job in the newest completed `janitor.yml` run on main;
   - each producer signal, on its fixture.
 
-  `janitor.yml` has `contents: read`, references no secret and pins every action by sha. A second run records nothing new and sends nothing. A passing check closes its finding. The job runs while the studio is paused and writes only findings and its job run. `findings` and both finding RPCs are closed to anon, and only board members can read findings. The Janitor's role spec is running, with class read_only and no tools, and /team shows it running. (Dispatcher, migration and board tests, with a fixture for each check.)
+  `janitor.yml` has `contents: read`, references no secret and pins every action by sha. A second run records nothing new and sends nothing. A passing check closes its finding. The job runs while the studio is paused and writes only findings and its job run. `findings` and both finding RPCs are closed to anon, and only board members can read findings. The Janitor's role spec is running, with class read_only and no tools, and /team shows it running as code: `public_roles.code_only` is true for it, and its box names no model or cost and takes no Paused tag while the studio is paused. (Dispatcher, migration and board tests, with a fixture for each check.)
 - [x] Dependency updates:
   - `dependabot.yml` sets npm updates weekly, with `cooldown.default-days: 7`, one patch group and `open-pull-requests-limit: 1`, and GitHub Actions updates monthly.
   - `pnpm-workspace.yaml` sets `minimumReleaseAge: 10080` and `trustPolicy: no-downgrade`, and `pnpm install --frozen-lockfile` passes.
