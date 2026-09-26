@@ -194,7 +194,7 @@ test('passes a grid whose last row is part-empty', async ({ page }) => {
 // A link or chip alone on a wrapped line (the footer's Discord at 375px, the review of 26 Sep 2026):
 // six 46px-plus links in a 335px row leave the last on a line of its own, which the old 32px rule let
 // through. A row stacked one link to a line is a column, a line of text pieces (spans) wraps as prose
-// does, and the same links in a grid of three columns, one to a cell, draw nothing.
+// does, and the same links in a grid of equal columns, one to a cell, draw nothing.
 test('finds a link alone on a wrapped line, and passes a column, a line of text and a grid', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   // Six 50px links: five and their gaps fill 314px, so in a 320px row the sixth wraps alone.
@@ -210,8 +210,8 @@ test('finds a link alone on a wrapped line, and passes a column, a line of text 
   // Three 150px pieces of a meta line wrap two and one, as text does.
   await page.setContent(html(`<p style="display:flex;flex-wrap:wrap;gap:0 8px;margin:0;max-width:320px">${'<span style="width:150px">A piece of the meta line</span>'.repeat(3)}</p>`));
   expect(await found(['orphan:'])).toEqual([]);
-  // The footer's fix: three columns, one link to a cell, two full rows.
-  await page.setContent(html(ul('display:grid;grid-template-columns:repeat(3,minmax(max-content,1fr));max-width:320px')));
+  // The footer's fix: equal columns, one link to a cell.
+  await page.setContent(html(ul('display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));max-width:320px')));
   expect(await found(['orphan:', 'grid cells:'])).toEqual([]);
 });
 

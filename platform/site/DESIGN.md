@@ -247,7 +247,7 @@ Only `transform` and `opacity` move. Every `transition` and `animation` lives in
 
 ## Breakpoints
 
-- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width, three or more filter chips stack one to a line at their own width, and the footer's links sit in three equal columns, one to a cell (two full rows of six), so no link or chip is left alone on a wrapped line. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
+- Below 22.5rem: Play moves into the Menu. Below 30rem the live-updates row stacks full width, three or more filter chips stack one to a line at their own width, and the footer's links sit in equal columns of at least 6.5rem, one to a cell (three at 375px, two full rows of six; two at 320px; one with 200% text), so no link or chip is left alone on a wrapped line. Below 32rem the wordmark is read out but not drawn; the mark stands for it.
 - Fluid, with no breakpoint: `--size-h1`, `--size-h2` and `--band-pad` grow with the viewport.
 - From 48rem: two-column card and team grids and the guide's demo grids; rail rows put their time in the rail; the team strip is three equal columns.
 - From 64rem: the page links sit in the top bar and Menu goes; home's Shipped and Planned next sit side by side.

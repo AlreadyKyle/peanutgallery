@@ -1452,14 +1452,16 @@ main > .band:nth-child(2n + 3) .avatar {
 }
 
 /* Below 30rem the footer's links no longer fit on one line, and a wrapped row left the last one alone
-   on a line of its own (Discord at 375px, 26 Sep 2026). They sit in a grid of three equal columns
-   instead, one link to a cell, as wide as the footer: two full rows of the six, and a part-empty last
-   row when there are fewer, as every grid of like items has (PLAN.md §10 decision 49). A column is
-   never narrower than its longest link, so no label breaks at 320px. */
+   on a line of its own (Discord at 375px, 26 Sep 2026). They sit in equal columns instead, one link to
+   a cell, as wide as the footer: three from 344px of footer (two full rows of the six), two below
+   (three full rows at 320px), and a part-empty last row when there are fewer. A column is at least
+   6.5rem, wider than the longest link at any text size, so no label breaks and 200% text stacks them
+   in one column rather than scrolling sideways. */
 @media (max-width: 29.99rem) {
   .footer-links {
     display: grid;
-    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    gap: var(--space-1);
     flex-basis: 100%;
   }
 }
