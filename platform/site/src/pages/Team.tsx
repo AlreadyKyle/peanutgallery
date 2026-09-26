@@ -32,12 +32,15 @@ export function roleFacts(role: Role, snapshot: Snapshot): string {
  * decision 49): the avatar beside the name and "AI agent", the description, then the foot.
  */
 function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; snapshot: Snapshot }) {
-  const kind = role.title === role.name ? team.aiAgent : `${team.aiAgent} · ${role.title}`;
+  // A code-only role (the Janitor) is no AI agent and calls no model, so its box says so in place of
+  // the model and its cost.
+  const agent = role.code_only === true ? team.codeOnly : team.aiAgent;
+  const kind = role.title === role.name ? agent : `${agent} · ${role.title}`;
   // The studio's pause is said once, above the list; a role's own pause, on its box.
   const why = status.kind === 'paused' ? (status.by === 'role' ? status.sentence : null) : status.sentence;
   const coming = !onTheTeam(status);
   return (
-    <li className="agent" id={`agent-${role.id}`} data-status={status.kind}>
+    <li className="agent" id={`agent-${role.id}`} data-status={status.kind} data-kind={role.code_only === true ? 'code' : undefined}>
       {/* Awake while the studio is paused (the board, 23 Sep 2026: running agents have their eyes
           open); asleep when the board has paused this one agent, and every role still to come
           (the board's #75 call), with its smaller avatar. */}
@@ -52,7 +55,7 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
         <>
           {why === null ? null : <p className="muted agent-status">{why}</p>}
           <div className="agent-foot">
-            <p className="card-meta">{roleFacts(role, snapshot)}</p>
+            <p className="card-meta">{role.code_only === true ? team.codeOnlyFacts : roleFacts(role, snapshot)}</p>
             {status.kind === 'paused' ? (
               <p className="row-meta">
                 <span className="tag" data-state="paused">
@@ -128,7 +131,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
  * Meet the team: every active role from public_roles in three sections from the roster's own columns
  * (lib/roster.ts teamStatus): Running (with the paused rows while the studio or the role is paused),
  * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
- * the shipped cards; the rest show when they start. Every section is the same grid of the same boxes,
+ * the shipped cards, or, for a code-only role, that it calls no model; the rest show when they start. Every section is the same grid of the same boxes,
  * one to a cell. Two bands: the heading on the signal plate, and every agent box on paper (DESIGN.md,
  * Bands).
  */

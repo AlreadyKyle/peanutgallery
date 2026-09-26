@@ -20,9 +20,12 @@
 -- while the studio is paused, and still settles a merge it left pending),
 -- queued by pg_cron through enqueue_job_run.
 --
+-- public_roles gains code_only, read from jobs: a role whose jobs are all
+-- code and run while the studio is paused, and that builds no card.
+--
 -- Re-runnable: the table and index are created if missing, the policy is
--- dropped and created again, the functions are replaced, the job rows upsert,
--- and cron.schedule with a job name replaces the existing job.
+-- dropped and created again, the functions and the view are replaced, the job
+-- rows upsert, and cron.schedule with a job name replaces the existing job.
 
 set lock_timeout = '5s';
 
@@ -301,5 +304,24 @@ begin
   perform cron.schedule('janitor', '0 8 * * *', $c$select public.enqueue_job_run('janitor', 'schedule')$c$);
   perform cron.schedule('upkeep_merge', '15 * * * *', $c$select public.enqueue_job_run('upkeep_merge', 'schedule')$c$);
 end $$;
+
+-- g. public_roles gains code_only ----------------------------------------------------
+-- A role whose work is code only: it has a job, none of its jobs calls a
+-- model, every one runs while the studio is paused, and it has no write
+-- access, so it builds no card. /team shows it as code, with no model line
+-- and no Paused tag while the studio is paused. It is read from jobs, so no
+-- role spec key or seed column carries it. The view is recreated with every
+-- column it had, in order, and code_only last.
+
+create or replace view public.public_roles with (security_invoker = false) as
+  select r.id, r.name, r.title, r.description, r.species_note, r.avatar_url, r.model, r.write_access, r.state, r.hired_at, r.status, r.trigger,
+    r.agent_class, r.paused, r.paused_reason,
+    (not r.write_access
+      and exists (select 1 from public.jobs j where j.role_id = r.id)
+      and not exists (select 1 from public.jobs j where j.role_id = r.id and (j.calls_model or not j.runs_when_paused))) as code_only
+  from public.roles r;
+
+revoke all on table public.public_roles from anon, authenticated;
+grant select on public.public_roles to anon, authenticated;
 
 notify pgrst, 'reload schema';

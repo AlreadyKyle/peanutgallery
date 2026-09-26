@@ -10,6 +10,8 @@
 //   quiet studio.
 // - findings and the four functions are closed to anon; only a board member reads a finding, and
 //   only the service role executes the functions.
+// - public_roles' code_only is true for a role whose jobs are all code and run while the studio is
+//   paused and that has no write access (the Janitor), and false once any of that changes.
 
 import { PGlite } from "npm:@electric-sql/pglite@0.3.7";
 import { assert, assertEquals, assertNotEquals, assertRejects } from "jsr:@std/assert@1";
@@ -82,6 +84,31 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
       const queued = await s.row<{ r: { created: boolean } }>(`select public.enqueue_job_run('janitor', 'schedule') as r`);
       assertEquals(queued.r.created, true);
       assertEquals((await s.row<{ r: { created: boolean } }>(`select public.enqueue_job_run('upkeep_merge', 'schedule') as r`)).r.created, true);
+    });
+
+    await t.step("public_roles says code_only for a role whose jobs are all code and run while the studio is paused, and that builds no card", async () => {
+      const head = (await s.row<{ id: string }>(
+        `insert into public.roles (name, title, species_note, model, budget_share, voice, prompt_path) values ('Studio Head', 'Studio Head', 'A tall grey creature.', 'model-id', 0, 'calm', 'platform/agents/prompts/studio-head.md') returning id`,
+      )).id;
+      const codeOnly = async () =>
+        Object.fromEntries((await s.as("anon", () => s.rows<{ name: string; code_only: boolean }>(`select name, code_only from public.public_roles`))).map((r) => [r.name, r.code_only]));
+      // The Janitor's two jobs are code and run while paused; a role with no job is not code only.
+      assertEquals(await codeOnly(), { Janitor: true, "Studio Head": false });
+      await s.db.query(`update public.jobs set role_id = $1 where name = 'studio_ranking'`, [head]);
+      assertEquals((await s.row<{ calls_model: boolean }>(`select calls_model from public.jobs where name = 'studio_ranking'`)).calls_model, true);
+      assertEquals(await codeOnly(), { Janitor: true, "Studio Head": false });
+      // A job that stops while the studio is paused, a model-calling job or write access each end it.
+      await s.db.query(`update public.jobs set runs_when_paused = false where name = 'upkeep_merge'`);
+      assertEquals((await codeOnly()).Janitor, false);
+      await s.db.query(`update public.jobs set runs_when_paused = true, calls_model = true where name = 'upkeep_merge'`);
+      assertEquals((await codeOnly()).Janitor, false);
+      await s.db.query(`update public.jobs set calls_model = false where name = 'upkeep_merge'`);
+      await s.db.query(`update public.roles set write_access = true where name = 'Janitor'`);
+      assertEquals((await codeOnly()).Janitor, false);
+      await s.db.query(`update public.roles set write_access = false where name = 'Janitor'`);
+      await s.db.query(`update public.jobs set role_id = null where name = 'studio_ranking'`);
+      await s.db.query(`delete from public.roles where id = $1`, [head]);
+      assertEquals(await codeOnly(), { Janitor: true });
     });
 
     await t.step("record_finding returns true when new, false while open, and true again after close_finding", async () => {

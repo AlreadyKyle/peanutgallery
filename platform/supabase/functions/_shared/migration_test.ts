@@ -2279,6 +2279,7 @@ Deno.test("migrations on PGlite", {
               "agent_class",
               "paused",
               "paused_reason",
+              "code_only",
             ]);
             assertEquals(roles[0]!.description, "Builds funded game cards as small, tested changes to Dust.");
             for (const table of ["roles", "dispatcher_lease", "card_patches", "board_actions", "credit_purchases"]) {

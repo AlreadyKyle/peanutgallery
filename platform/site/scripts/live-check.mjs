@@ -565,8 +565,11 @@ try {
     const later = [page.getByRole('region', { name: 'Starts later', exact: true }), page.getByRole('region', { name: 'Planned', exact: true })];
     const sections = await page.getByRole('main').locator('section h2').allTextContents();
     check(sections[0] === 'Running' && sections.every((name) => ['Running', 'Starts later', 'Planned'].includes(name)), `/team sections ${JSON.stringify(sections)}`);
-    const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
+    const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
     check(models.ok, models.message);
+    // A code-only role (the Janitor, docs/specs/agent-upkeep.md) calls no model, so it names none.
+    const codeModels = await running.locator('li.agent[data-kind="code"]').getByText(/\bclaude-/).count();
+    check(codeModels === 0, `/team shows no model for a code-only role (${codeModels} found)`);
     let waitingModels = 0;
     for (const region of later) waitingModels += (await region.count()) === 0 ? 0 : await region.getByText(/\bclaude-/).count();
     check(waitingModels === 0, `/team shows no model for a role that does not run (${waitingModels} found)`);
