@@ -15,7 +15,9 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 }
 
 // The roles the roster marks running whose lane is open, in /team's order (by title).
-const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Platform Director', 'QA', 'Studio Head'];
+const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA', 'Studio Head'];
+// The running roles that run on a model: all but the code-only Janitor.
+const MODEL_ROLES = RUNNING_ROLES.filter((title) => title !== 'Janitor');
 
 async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
@@ -95,7 +97,6 @@ for (const viewport of WIDTHS) {
         'Head of Finance',
         'Head of Product',
         'HR',
-        'Janitor',
         'Platform Builder',
         'Tech Artist',
       ]);
@@ -107,8 +108,12 @@ for (const viewport of WIDTHS) {
       for (const role of DEFAULT_STUDIO.roles) {
         await expect(page.getByRole('img', { name: String(role.species_note) })).toBeVisible();
       }
-      // A running role shows its model, its cost from contributions and its ships; a role that does not run shows none.
-      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(RUNNING_ROLES.length);
+      // A running role shows its model, its cost from contributions and its ships; a role that does not run shows none,
+      // and nor does the code-only Janitor, which says it calls no model.
+      await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(MODEL_ROLES.length);
+      await expect(running.locator('#agent-r-janitor')).toHaveAttribute('data-kind', 'code');
+      await expect(running.locator('#agent-r-janitor .agent-kind')).toHaveText('Code only');
+      await expect(running.locator('#agent-r-janitor .card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
       await expect(running.locator('#agent-r-builder-a .card-meta')).toHaveText(
         'claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 0 shipped cards',
       );
@@ -118,8 +123,8 @@ for (const viewport of WIDTHS) {
         await expect(region.locator('.card-meta')).toHaveCount(0);
       }
       // The check scripts/live-check.mjs runs on production, on the same locators.
-      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
-      expect(models).toEqual({ ok: true, message: `/team ${RUNNING_ROLES.length} running roles, each on ${RUNNING_MODEL}: ${Array(RUNNING_ROLES.length).fill(RUNNING_MODEL).join(', ')}` });
+      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
+      expect(models).toEqual({ ok: true, message: `/team ${MODEL_ROLES.length} running roles, each on ${RUNNING_MODEL}: ${Array(MODEL_ROLES.length).fill(RUNNING_MODEL).join(', ')}` });
       // Nothing is paused: every avatar is awake and no row says Paused.
       await expect(page.locator('svg.avatar[data-pose="asleep"]')).toHaveCount(DEFAULT_STUDIO.roles.length - RUNNING_ROLES.length);
       await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
@@ -194,7 +199,7 @@ test.describe('the production /team model check', () => {
       await page.goto('/team');
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
-      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
+      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
       expect(models.ok).toBe(false);
       expect(models.message).toContain('claude-sonnet-5, claude-sonnet-5');
     });
@@ -210,7 +215,7 @@ test.describe('the production /team model check', () => {
       await expect(page.getByRole('region', { name: 'Starts later', exact: true })).toBeVisible();
       const running = page.getByRole('region', { name: 'Running', exact: true });
       await expect(running).toHaveCount(0);
-      const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
+      const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
       expect(models).toEqual({ ok: false, message: `/team 0 running roles, each on ${RUNNING_MODEL}: none` });
     });
   });

@@ -225,6 +225,18 @@ const SUPPLY = {
   open_cards: SUPPLY_CARDS,
 };
 
+// The Janitor's open findings (docs/specs/agent-upkeep.md), as the findings table gives a board member.
+const FINDINGS = [
+  {
+    fingerprint: 'scan:links',
+    kind: 'scan',
+    subject: "The weekly scan's links job failed (failure)",
+    detail: { run: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/12', conclusion: 'failure' },
+    opened_at: '2026-09-25T11:30:00Z',
+    last_seen_at: '2026-09-26T08:00:00Z',
+  },
+];
+
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
@@ -291,6 +303,8 @@ async function answerSupabase(
       }
       case '/rest/v1/public_roles':
         return json(PUBLIC_ROLES);
+      case '/rest/v1/findings':
+        return json(FINDINGS);
       case '/rest/v1/cards': {
         // Only the board member's own token reads the undealt card, as cards_board_read allows.
         const bearer = route.request().headers()['authorization'] ?? '';
@@ -343,6 +357,12 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   // Cards is shown only at the second factor, so the ceiling pause names the second factor and links nowhere.
   await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or cancel it, under Cards.', { exact: false })).toBeVisible();
   await expect(inbox.locator('a[href^="#"]')).toHaveCount(0);
+  // The Janitor's findings, and the line for pull requests not from a card branch (docs/specs/agent-upkeep.md).
+  await expect(inbox.getByRole('heading', { level: 3, name: 'Findings' })).toBeVisible();
+  await expect(inbox.getByText("Weekly scan: The weekly scan's links job failed (failure).")).toBeVisible();
+  await expect(inbox.getByRole('link', { name: FINDINGS[0]!.detail.run })).toHaveAttribute('href', FINDINGS[0]!.detail.run);
+  await expect(inbox.getByText('Dependency patch updates that pass the merge policy merge by themselves.', { exact: false })).toBeVisible();
+  if (process.env.BOARD_E2E_SHOTS) await inbox.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/needs-findings-375.png` });
   // Needs you is the first section on the page, above the two-factor step.
   const sections = await page.locator('main section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
   expect(sections[0]).toBe('Needs you');
@@ -369,6 +389,7 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   if (process.env.BOARD_E2E_SHOTS) await twoFactor.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/two-factor-status-375.png` });
 
   expect(seen).toContain('POST /rest/v1/rpc/board_needs_you');
+  expect(seen).toContain('GET /rest/v1/findings');
   expect(seen).toContain('POST /auth/v1/factors');
   expect(reports).toEqual([]);
 });

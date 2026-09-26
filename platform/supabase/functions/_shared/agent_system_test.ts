@@ -832,7 +832,8 @@ Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
         select 'tidy_up', 'old-' || g, 'operator', 'skipped', 'old', now() - interval '1 day' from generate_series(1, 5) g`);
       await s.signInAs(BOARD_EMAIL, "aal1");
       const jobs = (await s.row<{ j: { name: string; runs: { id: string; status: string }[] }[] }>(`select public.board_jobs() as j`)).j;
-      assertEquals(jobs.map((j) => j.name), ["draft_card", "studio_ranking", "tidy_up"]);
+      // The migrations register draft_card and studio_ranking (agent-workflows), janitor and upkeep_merge (agent-upkeep).
+      assertEquals(jobs.map((j) => j.name), ["draft_card", "janitor", "studio_ranking", "tidy_up", "upkeep_merge"]);
       const tidy = jobs.find((j) => j.name === "tidy_up")!;
       assertEquals(tidy.runs.length, 10);
       // Nine runs from this test, then the newest of the five old ones.

@@ -398,7 +398,7 @@
       "id": "r-janitor",
       "name": "Janitor",
       "title": "Janitor",
-      "description": "Finds drift between the docs, the code and the cards, through code checks and a docs pass, and files it as cards.",
+      "description": "Checks the database, the models, Claude Code and the dependencies against what the code says, every day and with code only, and lists each difference for the board.",
       "species_note": "A short orange creature with long legs and one large eye.",
       "model": "claude-opus-5-5",
       "write_access": false,

@@ -19,6 +19,7 @@ import type { AgentAdapter, AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Db, Job, JobRun, Role, StudioState } from './db.js';
 import { HANDLERS } from './job-handlers/index.js';
+import type { UpkeepDeps } from './job-handlers/upkeep.js';
 import type { WorkflowDeps } from './job-handlers/workflow.js';
 import { errorMessage, type Logger } from './log.js';
 
@@ -41,6 +42,8 @@ export interface JobContext {
   now: () => Date;
   // What the role jobs run with (docs/specs/agent-workflows.md); absent where none is configured.
   workflow?: WorkflowDeps;
+  // What the Janitor's code jobs run with (docs/specs/agent-upkeep.md); absent where none is configured.
+  upkeep?: UpkeepDeps;
 }
 
 // A handler returns the run's output, a JSON object, or nothing.
@@ -75,6 +78,7 @@ export interface JobTickDeps {
   stopSignal: AbortSignal;
   handlers?: Readonly<Record<string, JobHandler>>;
   workflow?: WorkflowDeps;
+  upkeep?: UpkeepDeps;
 }
 
 export type JobTickOutcome =
@@ -191,6 +195,7 @@ function start(deps: JobTickDeps, run: JobRun, job: Job, role: Role | null): voi
         stopSignal: stop.signal,
         now: deps.now,
         ...(deps.workflow ? { workflow: deps.workflow } : {}),
+        ...(deps.upkeep ? { upkeep: deps.upkeep } : {}),
       });
       const stopped = stopReason();
       if (stopped) await finish('failed', stopped, output ?? null);

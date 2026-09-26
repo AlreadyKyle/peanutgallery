@@ -39,15 +39,16 @@ const golden = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/__fixture
 
 /**
  * The Snapshot without what supporter-pages added (docs/specs/supporter-pages.md): role stats, the
- * roster's status, trigger and pause, a card's dealing and veto, and each event's line key. The
- * golden was captured before them, so it cannot hold them; they are checked on their own below.
+ * roster's status, trigger and pause, a card's dealing and veto, and each event's line key; and
+ * agent-upkeep's code_only. The golden was captured before them, so it cannot hold them; they are
+ * checked on their own below.
  */
 function beforeSupporterPages(snapshot: Snapshot): unknown {
   const { roleStats: _stats, ...rest } = snapshot;
   return {
     ...rest,
     cards: rest.cards.map(({ opens_at: _o, board_vetoed: _v, board_veto_reason: _r, ...card }) => card),
-    roles: rest.roles.map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, ...role }) => role),
+    roles: rest.roles.map(({ status: _s, trigger: _t, paused: _p, paused_reason: _pr, code_only: _c, ...role }) => role),
     events: rest.events.map(({ line_key: _k, ...event }) => event),
   };
 }

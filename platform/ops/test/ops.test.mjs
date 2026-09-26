@@ -470,6 +470,7 @@ describe('shell scripts', () => {
       'mac/deploy.sh',
       'mac/install.sh',
       'mac/lib.sh',
+      'mac/pin-claude-code.sh',
       'mac/run-dispatcher.sh',
       'mac/run-job.sh',
       'mac/uninstall.sh',

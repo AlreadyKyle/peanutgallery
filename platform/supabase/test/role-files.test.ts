@@ -24,8 +24,9 @@ describe("readRoleSpecs against platform/agents", () => {
   it("carries each role's place in the launch roster, with a trigger for every role that is not running", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     const byStatus = (status: string) => specs.filter((s) => s.status === status).map((s) => s.name).sort();
-    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Platform Builder", "Platform Director", "QA", "Studio Head"]);
-    expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Janitor", "Tech Artist"]);
+    // The Janitor runs, as code only (docs/specs/agent-upkeep.md).
+    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA", "Studio Head"]);
+    expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
     expect(byStatus("planned")).toEqual(["Host"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/cutover/);

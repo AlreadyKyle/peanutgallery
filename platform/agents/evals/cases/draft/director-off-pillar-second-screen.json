@@ -1,0 +1,21 @@
+{
+  "id": "director-off-pillar-second-screen",
+  "kind": "director",
+  "note": "Breaks the one-screen pillar: a second page to switch to.",
+  "draft": {
+    "title": "A map screen",
+    "summary": "A Map tab opens a second screen that shows where each unit works.",
+    "intent": "Add a separate map screen players switch to from a new tab, with its own label.",
+    "acceptance_test": "The strings name the map tab.\ncheck: config seed-1/content/strings.json labels.mapTab == \"Map\"",
+    "lane": "config",
+    "executor": "Builder B",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "revise",
+      "flagged"
+    ],
+    "reason_code": "off_pillar"
+  }
+}

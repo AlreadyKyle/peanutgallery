@@ -7,3 +7,8 @@ packages:
   - seed-1
 allowBuilds:
   esbuild: true
+# Supply-chain settings (docs/specs/agent-upkeep.md): pnpm resolves no version published less than
+# seven days ago (10080 minutes), and refuses a version whose publishing trust is weaker than an
+# earlier one's.
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade

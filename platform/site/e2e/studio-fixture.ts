@@ -91,6 +91,9 @@ type RoleSpec = {
   trigger?: string;
 };
 
+// The roles public_roles marks code_only (20260925300000_agent_upkeep.sql).
+const CODE_ONLY_ROLES: readonly string[] = ['Janitor'];
+
 function roleId(title: string): string {
   return `r-${title.toLowerCase().replace(/[^a-z]+/g, '-')}`;
 }
@@ -115,6 +118,8 @@ function rolesFromSpecs(): Record<string, unknown>[] {
       trigger: spec.trigger ?? null,
       paused: false,
       paused_reason: null,
+      // public_roles reads it from jobs: the Janitor's two jobs are code and run while paused.
+      code_only: CODE_ONLY_ROLES.includes(spec.title),
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 }

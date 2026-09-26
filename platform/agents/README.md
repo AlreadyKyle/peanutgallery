@@ -4,7 +4,7 @@ Roles are data. Each of the sixteen roles in the roster is one JSON file in this
 
 Files: `studio-head.json`, `game-designer.json`, `game-director.json`, `builder-a.json`, `builder-b.json`, `qa.json`, `platform-builder.json`, `platform-director.json`, `head-of-finance.json`, `janitor.json`, `tech-artist.json`, `hr.json`, `head-of-product.json`, `biz-dev.json`, `community.json`, `host.json`, and `prompts/<same name>.md`. The jobs' typed answers are JSON Schemas under `schemas/` (a card draft, a ranking and a draft verdict), which the dispatcher validates each session's final message against, and the Game Director's grading rubric is `rubrics/draft-game.md` (`docs/specs/agent-workflows.md`).
 
-Each role's `status` is its place in the launch roster: `running` for the roles that run at launch (Studio Head, Game Designer, Game Director, Builder A, Builder B, QA, Platform Builder and Platform Director), `starts` for a role that starts on a named trigger, and `planned` for one with no trigger yet. A role that is not `running` carries its `trigger`, one sentence saying when it starts. `running` names the roster, not what runs today. A description states the role's job only; whether it runs is a fact the site derives and says once, as the heading the role sits under on /team. The Scout was renamed Biz Dev on 23 September 2026, with the same job and guardrails; migration `20260923000200_rename_biz_dev.sql` renamed its row in place.
+Each role's `status` is its place in the launch roster: `running` for the roles that run at launch (Studio Head, Game Designer, Game Director, Builder A, Builder B, QA, Platform Builder, Platform Director, and the Janitor, whose daily checks run as code: `docs/specs/agent-upkeep.md`; its model-written docs pass is a backlog entry, so its prompt still says it is not running yet), `starts` for a role that starts on a named trigger, and `planned` for one with no trigger yet. A role that is not `running` carries its `trigger`, one sentence saying when it starts. `running` names the roster, not what runs today. A description states the role's job only; whether it runs is a fact the site derives and says once, as the heading the role sits under on /team. The Scout was renamed Biz Dev on 23 September 2026, with the same job and guardrails; migration `20260923000200_rename_biz_dev.sql` renamed its row in place.
 
 ## Schema
 
@@ -51,7 +51,7 @@ Three rules hold across files and are not expressible in the schema: `write_acce
 | platform-builder | MODEL_BUILDER | 0.15 | cautious | write set | first_pass_rate, cost_per_ship | writer | true | running |
 | platform-director | MODEL_DIRECTOR | 0 | exacting | read set | first_pass_rate, reopen_rate | reviewer | false | running |
 | head-of-finance | MODEL_DIRECTOR | 0 | careful | none | estimate_accuracy, cost_per_ship | read_only | false | starts |
-| janitor | MODEL_BUILDER | 0 | tidy | none | first_pass_rate, cost_per_ship | read_only | false | starts |
+| janitor | MODEL_BUILDER | 0 | tidy | none | first_pass_rate, cost_per_ship | read_only | false | running |
 | tech-artist | MODEL_BUILDER | 0 | vivid | none | first_pass_rate, cost_per_ship | writer | false | starts |
 | hr | MODEL_DIRECTOR | 0 | fair | none | estimate_accuracy, cost_per_ship | planner | false | starts |
 | head-of-product | MODEL_DIRECTOR | 0 | candid | none | first_pass_rate, cost_per_ship | web_only | false | starts |

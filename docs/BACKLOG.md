@@ -422,3 +422,35 @@ everything else, in the order the board would take it.
 - rank: 46
 - summary: A card that shipped with a design criterion still open gets a draft card to fix it.
 - intent: Today a visual card still open on intent, fit or legibility after two revise rounds ships with the Director's verdict recorded, and nothing follows it up. A follow-up would draft a card from the open criteria, frame names and reason codes, graded like any draft. It waits on studio card drafting. It is not built yet.
+
+### The Janitor's docs pass
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 47
+- summary: The Janitor reads the docs and specs against the code and lists each place they no longer say what the code does.
+- intent: Today the Janitor runs as code only: its daily check compares the schema, the models, the Claude Code pin and the weekly scan, and lists findings for the board. A model-written docs pass would read the docs, the specs and the roadmap against the code, each difference a finding for the board. It is a model role job, so it waits on an operations percentage to pay for it, which does not exist. It is not built yet.
+
+### Monthly security audit
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 48
+- summary: Once a month the Janitor reviews the kernel's security, from row-level security to the gate, and lists what it finds for the board.
+- intent: A monthly Janitor mode, the Security Auditor, would read the migrations' grants and policies, the gate, the dispatcher's sandbox and the workflows, and list each weakness as a finding for the board. It is a model role job, so it waits on an operations percentage to pay for it, which does not exist. It is not built yet.
+
+### Visual replay set
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 49
+- summary: Frozen before and after frames from real visual reviews, replayed so a change to the visual rubric is checked like the draft set.
+- intent: The replay eval set has one set today, draft: frozen drafts for the Game Director and a Game Designer run from empty input. A visual set would freeze frame pairs from real visual reviews with the verdict each should get, replayed attended through the Directors with the visual rubric, pass^k per set against its baseline. The visual review keeps no rubric example images, so it waits on real reviews to freeze. It is not built yet.
+
+### Builder replay set
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 50
+- summary: Frozen cards replayed through the builders, with the gate as the grader, so a change to a builder's prompt is checked before it merges.
+- intent: The replay eval set covers the Game Designer and the Game Director today. A builder set would freeze funded cards with their acceptance tests and replay them through Builder A, Builder B, QA and the Platform Builder in scratch worktrees, the gate and the card's check lines grading each run, pass^k against a baseline. It waits on launch, since the first real cards are its cases, and HR waits on it. It is not built yet.

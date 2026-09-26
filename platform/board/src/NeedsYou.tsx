@@ -9,9 +9,12 @@ import {
   STRIPE_DISPUTES_URL,
   STRIPE_PAYOUT_SETTINGS_URL,
   dueItems,
+  fetchFindings,
   fetchNeedsYou,
   purchasedSinceRun,
   type CreditDraft,
+  type Finding,
+  type FindingKind,
   type NeedsItem,
   type NeedsYouData,
   type RuleBlockedWhy,
@@ -21,6 +24,9 @@ import { errorMessage } from './lib/supabase';
 // The inbox reloads once a minute; the Controller writes its figures once a day.
 export const NEEDS_POLL_MS = 60_000;
 export const NOTHING_NEEDS_YOU = 'Nothing needs you.';
+/** The non-card pull requests (docs/specs/agent-upkeep.md): upkeep_merge merges the patch updates that pass the policy. */
+export const NON_CARD_PULLS_LINE =
+  'Dependency patch updates that pass the merge policy merge by themselves. Every other pull request that is not from a card branch waits for your merge:';
 
 function settlementNote(amount: number | null, currency: string | null): string {
   if (amount === null || currency === null || currency.toLowerCase() === 'usd') return '';
@@ -201,6 +207,56 @@ function SupplyItem({ client, supply, canRecord }: { client: SupabaseClient; sup
   );
 }
 
+/** A finding's kind, as the board reads it. */
+export const FINDING_KIND_WORDS: Record<FindingKind, string> = {
+  schema: 'Schema drift',
+  model: 'Model',
+  cli: 'Claude Code pin',
+  scan: 'Weekly scan',
+  producer: 'Producer signal',
+};
+
+/** A detail value that is a GitHub address (the weekly scan's run and job) is a link; the rest is text. */
+function DetailValue({ value }: { value: string }) {
+  return /^https:\/\/github\.com\/[^\s]+$/.test(value) ? <a href={value}>{value}</a> : <>{value}</>;
+}
+
+/**
+ * The Janitor's open findings (docs/specs/agent-upkeep.md): what its daily check found, oldest first,
+ * each with its kind, subject, figures and when it opened. They are the board's to read and act on; a
+ * finding changes nothing and files no card, and the check closes it once it passes.
+ */
+function FindingsList({ findings }: { findings: Finding[] }) {
+  return (
+    <>
+      <h3>Findings</h3>
+      <p className="muted">The Janitor's daily check lists each difference here and closes it once the check passes.</p>
+      <ul className="needs findings">
+        {findings.map((finding) => (
+          <li key={finding.fingerprint} data-finding={finding.kind}>
+            <p>
+              <strong>
+                {FINDING_KIND_WORDS[finding.kind]}: {finding.subject}.
+              </strong>{' '}
+              Opened {formatDateTime(finding.opened_at)}
+              {finding.last_seen_at === finding.opened_at ? '' : `, last seen ${formatDateTime(finding.last_seen_at)}`}.
+            </p>
+            {finding.detail.length === 0 ? null : (
+              <ul className="finding-detail">
+                {finding.detail.map(([key, value]) => (
+                  <li key={key}>
+                    {key.replaceAll('_', ' ')}: <DetailValue value={value} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function ControllerLine({ data }: { data: NeedsYouData }) {
   const run = data.controller;
   if (run === null) {
@@ -249,7 +305,9 @@ export function NeedsYou({
   supply?: SupplyLoad;
 }) {
   const [data, setData] = useState<NeedsYouData | null>(null);
+  const [findings, setFindings] = useState<Finding[]>([]);
   const [loadError, setLoadError] = useState('');
+  const [findingsError, setFindingsError] = useState('');
 
   useEffect(() => {
     let live = true;
@@ -262,6 +320,16 @@ export function NeedsYou({
         })
         .catch((error: unknown) => {
           if (live) setLoadError(errorMessage(error));
+        });
+      // The findings load on their own, so a failed read of them never hides a duty.
+      fetchFindings(client)
+        .then((open) => {
+          if (!live) return;
+          setFindings(open);
+          setFindingsError('');
+        })
+        .catch((error: unknown) => {
+          if (live) setFindingsError(`Findings: ${errorMessage(error)}`);
         });
     };
     load();
@@ -282,7 +350,7 @@ export function NeedsYou({
         <p role="status">{loadError === '' ? 'Loading what needs you.' : loadError}</p>
       ) : (
         <>
-          {items.length === 0 && !short ? (
+          {items.length === 0 && !short && findings.length === 0 ? (
             <p>{NOTHING_NEEDS_YOU}</p>
           ) : (
             <ul className="needs">
@@ -299,6 +367,8 @@ export function NeedsYou({
             </ul>
           )}
           <ControllerLine data={data} />
+          {findings.length === 0 ? null : <FindingsList findings={findings} />}
+          {findingsError === '' ? null : <p className="error">{findingsError}</p>}
           {loadError === '' ? null : <p className="error">{loadError}</p>}
         </>
       )}
@@ -309,7 +379,7 @@ export function NeedsYou({
           within 14 days of the contribution.
         </li>
         <li>
-          Every pull request that is not from a card branch waits for your merge:{' '}
+          {NON_CARD_PULLS_LINE}{' '}
           <a href={BOARD_PULLS_URL}>open pull requests not from a card branch</a>.
         </li>
       </ul>

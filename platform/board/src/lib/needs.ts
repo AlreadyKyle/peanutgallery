@@ -7,10 +7,11 @@ import { toNumber } from './format';
 // under the list, never a count.
 
 /**
- * The repository's open pull requests from any branch but a card branch: the ones only the board
- * merges. The dispatcher merges only the card/* branches it opens, on a green gate; every other pull
- * request (board work, HR's text changes, the Claude Code pin, a dependency update) changes a kernel
- * path or is the board's to judge. GitHub's head: qualifier matches the start of the branch name, so
+ * The repository's open pull requests from any branch but a card branch. The dispatcher merges the
+ * card/* branches it opens, on a green gate, and a Dependabot patch update that passes every condition
+ * of the merge policy (upkeep_merge, docs/specs/agent-upkeep.md); every other pull request (board
+ * work, HR's text changes, the Claude Code pin, any other dependency update) changes a kernel path or
+ * is the board's to judge. GitHub's head: qualifier matches the start of the branch name, so
  * -head:card/ leaves out exactly the card branches, and no one has to remember to label anything.
  */
 export const BOARD_PULLS_URL = 'https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F';
@@ -205,4 +206,58 @@ export function dueItems(data: NeedsYouData): NeedsItem[] {
     });
   }
   return items;
+}
+
+/** What a Janitor check found (docs/specs/agent-upkeep.md): drift in the schema, the models, the Claude
+ * Code pin or the weekly scan, or a producer signal. */
+export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer';
+const FINDING_KINDS: readonly FindingKind[] = ['schema', 'model', 'cli', 'scan', 'producer'];
+
+/** One open finding: the Janitor's daily check opened it, and closes it when the check passes. */
+export type Finding = {
+  fingerprint: string;
+  kind: FindingKind;
+  subject: string;
+  /** The check's figures, flat: each value a string, number, boolean or null. */
+  detail: Array<[string, string]>;
+  opened_at: string;
+  last_seen_at: string;
+};
+
+export const FINDING_COLUMNS = 'fingerprint,kind,subject,detail,opened_at,last_seen_at';
+
+function detailFrom(value: unknown): Array<[string, string]> {
+  const row = record(value);
+  if (row === null) return [];
+  return Object.entries(row)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([key, v]): [string, string] => [key, typeof v === 'object' ? JSON.stringify(v) : String(v)]);
+}
+
+/** Reads the findings rows, keeping only well-formed ones, oldest first. */
+export function findingsFrom(rows: unknown): Finding[] {
+  if (!Array.isArray(rows)) return [];
+  const out: Finding[] = [];
+  for (const raw of rows) {
+    const row = record(raw);
+    const fingerprint = text(row?.fingerprint);
+    const subject = text(row?.subject);
+    const opened = text(row?.opened_at);
+    const kind = FINDING_KINDS.find((k) => k === row?.kind);
+    if (row === null || fingerprint === null || subject === null || opened === null || kind === undefined) continue;
+    out.push({ fingerprint, kind, subject, detail: detailFrom(row.detail), opened_at: opened, last_seen_at: text(row.last_seen_at) ?? opened });
+  }
+  return out.sort((a, b) => a.opened_at.localeCompare(b.opened_at));
+}
+
+/** The open findings. RLS lets only a board member read them; nothing but the dispatcher writes them. */
+export async function fetchFindings(client: SupabaseClient): Promise<Finding[]> {
+  const { data, error } = await client
+    .from('findings')
+    .select(FINDING_COLUMNS)
+    .is('closed_at', null)
+    .order('opened_at', { ascending: true })
+    .returns<Record<string, unknown>[]>();
+  if (error) throw new Error(error.message);
+  return findingsFrom(data);
 }

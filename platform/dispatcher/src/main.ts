@@ -13,6 +13,7 @@ import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { readFile } from 'node:fs/promises';
 import { AttendedAdapter } from './adapters/attended.js';
+import { defaultCliPin } from './cli-pin.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
 import { createDiscordPoster } from './discord.js';
@@ -27,6 +28,8 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
+import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
 import { scanPublicText } from './public-text.js';
 import { AGENTS_DIR, TypedOutput } from './typed-output.js';
@@ -77,7 +80,10 @@ async function main(): Promise<void> {
   // unattended process keeps an attended adapter for them. Its Read, Glob and Grep deny rules name the
   // code clone too, whose .env holds the dispatcher's keys, and there its sessions hold no Bash
   // (role-session.ts), since the host runs no agent-written code.
-  const roleAdapter = adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot });
+  const roleAdapter =
+    adapter.mode === 'attended'
+      ? adapter
+      : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
   const visual: PipelineVisual = {
@@ -126,6 +132,12 @@ async function main(): Promise<void> {
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
   await failStaleJobRuns(db, leaseHolder, log);
   await startupChecks({ db, adapter, config, log });
+  // The Claude Code pin (cli-pin.ts): in attended mode the tick claims no card while the CLI is off
+  // it, and every attended session, role jobs included, checks it again before it starts.
+  const cliPin = defaultCliPin(config.codeRoot, config.claudeBin);
+  const pin = await cliPin.state();
+  if (pin.ok) log.info('main', 'claude code is on its pin', { version: pin.version });
+  else log.warn('main', 'claude code is not on its pin; no card is claimed and attended sessions refuse to start', { installed: pin.installed, pinned: pin.pinned, detail: pin.detail });
   const managed = adapter.managed;
   await recoverOrphans({
     db,
@@ -138,7 +150,11 @@ async function main(): Promise<void> {
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
+  // A dependency merge upkeep_merge left without a verdict is verified by a run queued now.
+  await queuePendingUpkeep(db, alert, log);
   const jobState: JobState = { running: null };
+  // The Janitor's two code jobs (docs/specs/agent-upkeep.md).
+  const upkeep = upkeepDeps(config, mainGate);
   const workflow: WorkflowDeps = {
     roleAdapter,
     typed,
@@ -176,6 +192,8 @@ async function main(): Promise<void> {
     alert,
     runCard: (card: Card) => runCardPipeline(card, pipeline),
     mainGate,
+    // An attended card session runs on this host's Claude Code: nothing is claimed off its pin.
+    ...(adapter.mode === 'attended' ? { cliPin: () => cliPin.state() } : {}),
     jobTick: () =>
       jobTick({
         db,
@@ -190,6 +208,7 @@ async function main(): Promise<void> {
         state: jobState,
         stopSignal: stop.signal,
         workflow,
+        upkeep,
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),

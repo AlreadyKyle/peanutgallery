@@ -7,6 +7,7 @@ import type { DispatcherConfig } from '../config.js';
 import type { Db } from '../db.js';
 import type { Logger } from '../log.js';
 import type { PatchStore } from '../patch.js';
+import { defaultCliPin } from '../cli-pin.js';
 import { AttendedAdapter } from './attended.js';
 import { ManagedAdapter } from './managed.js';
 import { sdkManagedClient, type ManagedClient } from './managed-client.js';
@@ -48,5 +49,5 @@ export function createAdapter(config: DispatcherConfig, deps?: AdapterDeps): Age
       fetchFn: deps.fetchFn,
     });
   }
-  return new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot });
+  return new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
 }

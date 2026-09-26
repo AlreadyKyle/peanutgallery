@@ -1,0 +1,19 @@
+{
+  "id": "director-good-cart-rate",
+  "kind": "director",
+  "note": "A good config draft: one number, backed by its check line, at the config lane's five-times estimate.",
+  "draft": {
+    "title": "Carts haul a little faster",
+    "summary": "Each cart hauls 1.6 dust a second instead of 1.5.",
+    "intent": "Raise the cart's rate from 1.5 to 1.6 so the second unit pays back sooner.",
+    "acceptance_test": "The cart's rate is 1.6.\ncheck: config seed-1/config/spawn-table.json rows[id=cart].rate == 1.6",
+    "lane": "config",
+    "executor": "Builder A",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "approved"
+    ]
+  }
+}

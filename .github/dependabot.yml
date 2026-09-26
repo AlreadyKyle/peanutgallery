@@ -1,0 +1,27 @@
+# Dependency updates (docs/specs/agent-upkeep.md). npm weekly, once a release is seven days old, with
+# every patch update in one group and at most one open pull request; the dispatcher's upkeep_merge
+# merges a patch group only when every condition of the merge policy holds, and every other update
+# waits for the board. GitHub Actions updates monthly, always for the board.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      patches:
+        update-types:
+          - patch
+    open-pull-requests-limit: 1
+    labels:
+      - upkeep
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels:
+      - upkeep

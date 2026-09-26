@@ -1,0 +1,19 @@
+{
+  "id": "director-good-gatherer-text",
+  "kind": "director",
+  "note": "A good content draft: one line of all-ages text.",
+  "draft": {
+    "title": "Gatherers sweep",
+    "summary": "The gatherer's description reads: Sweeps dust into tidy piles.",
+    "intent": "Give the first unit a friendlier line of text players read in the first minute.",
+    "acceptance_test": "The gatherer's description is new.\ncheck: config seed-1/content/strings.json unitDescriptions.gatherer == \"Sweeps dust into tidy piles.\"",
+    "lane": "config",
+    "executor": "Builder A",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "approved"
+    ]
+  }
+}

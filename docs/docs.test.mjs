@@ -504,12 +504,22 @@ test("docs/SYSTEM.md's role table equals the role specs' name, class, status and
   assert.deepEqual([...systemRoleRows()].sort(byName), [...specs].sort(byName));
 });
 
-test('docs/SYSTEM.md marks what a later pull request builds as not built yet, naming its spec', () => {
+test('docs/SYSTEM.md marks as not built yet only a part whose spec exists and is not built', () => {
   const text = read('docs', 'SYSTEM.md');
-  for (const spec of ['specs/agent-upkeep.md']) {
-    assert.match(text, new RegExp(`not built yet[^\\n]*\\x60${spec.replace('.', '\\.')}\\x60`, 'i'), `SYSTEM.md marks ${spec}'s part as not built yet`);
+  for (const match of text.matchAll(/not built yet[^\n]*?\x60(specs\/[a-z0-9-]+\.md)\x60/gi)) {
+    const spec = match[1];
     assert.ok(existsSync(join(repoRoot, 'docs', spec)), `docs/${spec} exists`);
+    assert.doesNotMatch(read('docs', spec), /^Status: (built|done)\b/m, `SYSTEM.md marks ${spec}'s part as not built yet, but the spec is built`);
   }
+});
+
+test('docs/SYSTEM.md describes the Janitor and dependency upkeep agent-upkeep built, and no longer marks them not built', () => {
+  const text = read('docs', 'SYSTEM.md');
+  assert.match(text, /## The Janitor and dependency upkeep/);
+  for (const name of ['`janitor`', '`upkeep_merge`', '`findings`', '`record_finding`', '`schema_fingerprint()`', '`producer_signals()`', 'janitor.yml', 'dependabot.yml', 'minimumReleaseAge', 'claude-code-pin.json', 'pin-claude-code.sh', 'eval:replay', 'baseline.json']) {
+    assert.ok(text.includes(name), `SYSTEM.md names ${name}`);
+  }
+  assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/agent-upkeep\.md\x60/i);
 });
 
 test('docs/SYSTEM.md describes the weekly report and the outbound lane studio-reports built, and no longer marks them not built', () => {

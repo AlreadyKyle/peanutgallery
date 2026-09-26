@@ -81,6 +81,12 @@ describe('teamStatus', () => {
     expect(teamStatus(role('HR', { status: 'starts', trigger: 'Starts later.' }), paused).kind).toBe('starts');
   });
 
+  it('keeps a code-only role running through a studio pause, since its jobs run then; its own pause still shows', () => {
+    const janitor = role('Janitor', { write_access: false, code_only: true });
+    expect(teamStatus(janitor, snapshot({ paused: true, pauseReason: 'awaiting_credit' }))).toEqual({ kind: 'running', sentence: null });
+    expect(teamStatus({ ...janitor, paused: true }, snapshot({ paused: true }))).toEqual({ kind: 'paused', sentence: copy.team.rolePaused, by: 'role' });
+  });
+
   it("pauses a role the board paused, with its own reason, before the studio's", () => {
     const own = role('Builder B', { paused: true, paused_reason: 'Waiting on a fix to its tools.' });
     expect(teamStatus(own, snapshot())).toEqual({ kind: 'paused', sentence: 'Waiting on a fix to its tools.', by: 'role' });

@@ -1,0 +1,46 @@
+# The Janitor's weekly scan (docs/specs/agent-upkeep.md): two standard scanners on main, each its own
+# job, so the dispatcher's daily janitor check records each failed job as a finding for the board.
+# - osv: osv-scanner over pnpm-lock.yaml, failing on a known vulnerability. It uses the scanner action
+#   itself, not the reusable workflow, so it uploads no SARIF and needs no security-events permission
+#   (code scanning is a paid feature on a private repository).
+# - links: lychee, offline, over the docs and the README, failing on a link to a file that does not
+#   exist: the docs checked against the code, with no network and so no transient failures.
+# Read-only, no secret, and every action pinned to a full commit sha (the tag it was is in the comment).
+name: janitor
+
+on:
+  schedule:
+    - cron: '23 11 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: janitor
+
+jobs:
+  osv:
+    name: osv
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+
+  links:
+    name: links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --offline --no-progress 'docs/**/*.md' README.md
+          fail: true

@@ -192,7 +192,10 @@ jobs:
       # The rest of pnpm verify: the checks phase runs the dispatcher, supabase and site tests only.
       - name: Gate tests
         run: pnpm --filter @backseat/gate test
+      # The eval rule compares the change with the commit detect compared (docs/specs/agent-upkeep.md).
       - name: Agent role spec tests
+        env:
+          EVAL_BASE: ${{ needs.detect.outputs.base }}
         run: pnpm test:agents
       - name: Ops tests
         run: pnpm test:ops

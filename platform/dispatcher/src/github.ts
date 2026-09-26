@@ -440,3 +440,147 @@ export async function revertMerge(opts: GitHubOptions, mergeSha: string, message
   }
   return { ok: true, sha };
 }
+
+// What the Janitor's upkeep jobs read (docs/specs/agent-upkeep.md): the open pull requests one author
+// opened, a file at a commit, a commit's verification, the newest completed run of a workflow on a
+// branch and that run's jobs, and a comment.
+
+export interface AuthorPull {
+  number: number;
+  title: string;
+  headSha: string;
+  headRef: string;
+  baseRef: string;
+  createdAt: string;
+  htmlUrl: string | null;
+}
+
+// The open pull requests the login opened, oldest first (the first hundred open pull requests).
+export async function openPullsByAuthor(opts: GitHubOptions, login: string): Promise<AuthorPull[]> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/pulls?state=open&sort=created&direction=asc&per_page=100`);
+  if (result.status !== 200 || !Array.isArray(result.json)) {
+    throw new Error(`github open pull requests: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  return result.json
+    .filter(isRecord)
+    .filter((pull) => isRecord(pull.user) && pull.user.login === login)
+    .map((pull) => {
+      const head = isRecord(pull.head) ? pull.head : {};
+      const base = isRecord(pull.base) ? pull.base : {};
+      return {
+        number: Number(pull.number),
+        title: String(pull.title ?? ''),
+        headSha: String(head.sha ?? ''),
+        headRef: String(head.ref ?? ''),
+        baseRef: String(base.ref ?? ''),
+        createdAt: String(pull.created_at ?? ''),
+        htmlUrl: typeof pull.html_url === 'string' ? pull.html_url : null,
+      };
+    })
+    .filter((pull) => Number.isInteger(pull.number) && pull.headSha !== '')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.number - b.number);
+}
+
+// A file's text at a commit, or null when the commit has no such file. The raw media type returns
+// the bytes themselves, whatever the file's size.
+export async function fileAtRef(opts: GitHubOptions, file: string, ref: string): Promise<string | null> {
+  const fetchFn = opts.fetchFn ?? fetch;
+  const route = file.split('/').map(encodeURIComponent).join('/');
+  const response = await fetchFn(`${opts.apiBase ?? API_BASE}/repos/${opts.repo}/contents/${route}?ref=${encodeURIComponent(ref)}`, {
+    method: 'GET',
+    signal: requestSignal(opts.timeoutMs, opts.signal),
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      Accept: 'application/vnd.github.raw+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'backseat-dispatcher',
+    },
+  });
+  const body = await response.text();
+  if (response.status === 404) return null;
+  if (response.status !== 200) throw new Error(`github contents ${file}@${ref.slice(0, 12)}: http ${response.status}`);
+  return body;
+}
+
+export interface CommitInfoRemote {
+  verified: boolean;
+  reason: string | null;
+  // The committer date, which moves when the commit is rewritten, as a rebase does.
+  committedAt: string | null;
+}
+
+export async function commitInfo(opts: GitHubOptions, sha: string): Promise<CommitInfoRemote> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/commits/${sha}`);
+  if (result.status !== 200 || !isRecord(result.json) || !isRecord(result.json.commit)) {
+    throw new Error(`github commit ${sha.slice(0, 12)}: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  const commit = result.json.commit;
+  const verification = isRecord(commit.verification) ? commit.verification : {};
+  const committer = isRecord(commit.committer) ? commit.committer : {};
+  return {
+    verified: verification.verified === true,
+    reason: typeof verification.reason === 'string' ? verification.reason : null,
+    committedAt: typeof committer.date === 'string' ? committer.date : null,
+  };
+}
+
+export interface WorkflowRunSummary {
+  id: number;
+  htmlUrl: string | null;
+  headSha: string;
+  conclusion: string | null;
+}
+
+// The newest completed run of a workflow file on a branch, or null when it has none.
+export async function latestCompletedRun(opts: GitHubOptions, workflowFile: string, branch: string): Promise<WorkflowRunSummary | null> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?branch=${encodeURIComponent(branch)}&status=completed&per_page=1`);
+  if (result.status === 404) return null;
+  if (result.status !== 200 || !isRecord(result.json)) {
+    throw new Error(`github ${workflowFile} runs: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  const run = (Array.isArray(result.json.workflow_runs) ? result.json.workflow_runs : []).find(isRecord);
+  if (!run || typeof run.id !== 'number') return null;
+  return {
+    id: run.id,
+    htmlUrl: typeof run.html_url === 'string' ? run.html_url : null,
+    headSha: String(run.head_sha ?? ''),
+    conclusion: typeof run.conclusion === 'string' ? run.conclusion : null,
+  };
+}
+
+export interface RunJob {
+  name: string;
+  conclusion: string | null;
+  htmlUrl: string | null;
+}
+
+export async function runJobs(opts: GitHubOptions, runId: number): Promise<RunJob[]> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/actions/runs/${runId}/jobs?per_page=100`);
+  if (result.status !== 200 || !isRecord(result.json)) {
+    throw new Error(`github run ${runId} jobs: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  return (Array.isArray(result.json.jobs) ? result.json.jobs : []).filter(isRecord).map((job) => ({
+    name: String(job.name ?? ''),
+    conclusion: typeof job.conclusion === 'string' ? job.conclusion : null,
+    htmlUrl: typeof job.html_url === 'string' ? job.html_url : null,
+  }));
+}
+
+export interface IssueComment {
+  body: string;
+  createdAt: string;
+}
+
+// A pull request's comments (the first hundred).
+export async function pullComments(opts: GitHubOptions, number: number): Promise<IssueComment[]> {
+  const result = await request(opts, 'GET', `/repos/${opts.repo}/issues/${number}/comments?per_page=100`);
+  if (result.status !== 200 || !Array.isArray(result.json)) {
+    throw new Error(`github comments on ${number}: http ${result.status} ${apiMessage(result.json)}`.trim());
+  }
+  return result.json.filter(isRecord).map((comment) => ({ body: String(comment.body ?? ''), createdAt: String(comment.created_at ?? '') }));
+}
+
+export async function commentOnPull(opts: GitHubOptions, number: number, body: string): Promise<void> {
+  const result = await request(opts, 'POST', `/repos/${opts.repo}/issues/${number}/comments`, { body });
+  if (result.status !== 201) throw new Error(`github comment on ${number}: http ${result.status} ${apiMessage(result.json)}`.trim());
+}

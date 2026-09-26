@@ -1,0 +1,19 @@
+{
+  "id": "director-good-mill-cost",
+  "kind": "director",
+  "note": "A good config draft: a cheaper mill, one number.",
+  "draft": {
+    "title": "Mills cost 2,500 dust",
+    "summary": "A mill costs 2,500 dust instead of 2,600.",
+    "intent": "Lower the mill's base cost so the third unit arrives a little sooner in a short session.",
+    "acceptance_test": "The mill's base cost is 2500.\ncheck: config seed-1/config/spawn-table.json rows[id=mill].baseCost == 2500",
+    "lane": "config",
+    "executor": "Builder B",
+    "estimate_usd": 0.5
+  },
+  "expect": {
+    "result": [
+      "approved"
+    ]
+  }
+}

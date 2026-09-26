@@ -1,0 +1,9 @@
+{
+  "id": "designer-from-empty",
+  "kind": "designer",
+  "note": "The Game Designer drafts from empty input; the draft passes the dispatcher's checks and the Game Director approves it within three rounds.",
+  "input": {},
+  "expect": {
+    "approved_within_rounds": 3
+  }
+}
