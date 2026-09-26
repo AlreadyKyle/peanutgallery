@@ -1600,9 +1600,9 @@ describe('the visual review', () => {
   const ALL_AGES = { all_ages: { verdict: 'revise' as const, frame: 'site/home-375.png', reason_code: 'rating_concern' } };
 
   // The remote with a gate run that has an id, and the artifact routes; artifact null uploads none.
-  function visualRemote(artifact: Uint8Array | null = FRAMES_ZIP) {
+  function visualRemote(artifact: Uint8Array | null = FRAMES_ZIP, over: Remote = {}) {
     const green = { status: 200, json: { workflow_runs: [{ id: 77, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'success' }] } };
-    const base = remote({ gate: green });
+    const base = remote({ gate: green, ...over });
     const frameCalls: string[] = [];
     const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -1795,5 +1795,144 @@ describe('the visual review', () => {
     expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
     // Postgres refuses it too.
     await expect(db.recordVisualApproval({ cardId: c.id, verdict: {}, approverRoleId: director.id, makerRoleId: null, makerRef: 'claude:x', graderRef: 'claude:x' })).rejects.toThrow(/must differ/);
+  });
+
+  // A builder that stores each patch it hands back against its session's base, as the managed adapter
+  // does (adapters/managed.ts): main for a fresh session, the card's commit for a revision. A fresh
+  // session names the page; a revision only adds a file, whose hunk would apply at main as well.
+  function storingBuilder(patches: PatchStore, cardId: string, options: { mode?: 'attended' | 'unattended'; outputTokens?: number; afterFirst?: () => void } = {}) {
+    let session = 0;
+    const adapter = new FakeAdapter(
+      async (spec, emit) => {
+        session += 1;
+        await emit(startEvent(undefined, options.mode === 'unattended' ? 'ANTHROPIC_API_KEY' : 'none'));
+        const revising = spec.prompt.includes('Visual review: revision');
+        if (revising) await writeFile(path.join(spec.worktree, 'platform', 'site', 'revision.html'), `<p>revision ${session}</p>\n`, 'utf8');
+        else await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), `<title>Mob Machine ${session}</title>\n`, 'utf8');
+        await emit(usageEvent(1, session === 1 ? (options.outputTokens ?? 100) : 100));
+        const run = (args: string[]) => execFileSync('git', args, { cwd: spec.worktree, stdio: 'pipe' }).toString();
+        const base = run(['rev-parse', 'HEAD']).trim();
+        run(['add', '-A']);
+        const diff = run(['diff', '--cached', '--no-renames', '--full-index', base]);
+        run(['reset', '-q']);
+        await patches.save(storedPatch(cardId, base, Buffer.from(diff), null, `sesn_${session}`));
+        if (session === 1) options.afterFirst?.();
+      },
+      { mode: options.mode ?? 'attended' },
+    );
+    return { adapter, sessions: () => session };
+  }
+
+  it('keeps no revision patch after a push outage, so the card pauses and a later claim builds the whole change', async () => {
+    const { db, c } = setupDb();
+    const patches = new MemoryPatchStore();
+    const build = storingBuilder(patches, c.id);
+    let opened = 0;
+    // The revision's pull request request fails: GitHub is down after the revision session ran.
+    const { fetchFn } = visualRemote(FRAMES_ZIP, { created: (head) => (++opened === 1 ? { status: 201, json: { number: 5, head: { sha: head } } } : { status: 502, json: { message: 'Bad gateway' } }) });
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY))]);
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, review.adapter, fetchFn, alert), patches, infraStops: new Map() });
+    expect(build.sessions()).toBe(2);
+    // The revision's patch was made against the card's commit; it is gone, and so is the first one.
+    expect(patches.rows).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'outage', review_rounds: 1 });
+    expect(alert.messages.at(-1)).toMatch(/no stored patch to re-gate/);
+
+    // The board resumes it and it is claimed again: a session builds the whole change, never the revision alone.
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    const again = visualRemote();
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, reviewer([JSON.stringify(verdict())]).adapter, again.fetchFn), patches, infraStops: new Map() });
+    expect(db.events.some((e) => e.payload.step === 'patch_reused')).toBe(false);
+    expect(build.sessions()).toBe(3);
+    expect(db.cards[0]).toMatchObject({ stage: 'live' });
+    expect(await branchTitle()).toBe('<title>Mob Machine 3</title>');
+  });
+
+  it('refuses a revision patch left in the store, whose base is the card commit, instead of merging the revision alone', async () => {
+    const { db, c } = setupDb();
+    const store = new MemoryPatchStore();
+    // The discard after the revision session fails, so the revision's patch is still stored.
+    let discards = 0;
+    const patches: PatchStore = {
+      save: (patch) => store.save(patch),
+      latest: (cardId) => store.latest(cardId),
+      discard: async (cardId) => {
+        if (++discards === 2) throw new Error('db card_patches delete: timeout');
+        await store.discard(cardId);
+      },
+    };
+    const build = storingBuilder(patches, c.id);
+    let opened = 0;
+    const { fetchFn } = visualRemote(FRAMES_ZIP, { created: (head) => (++opened === 1 ? { status: 201, json: { number: 5, head: { sha: head } } } : { status: 502, json: { message: 'Bad gateway' } }) });
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, reviewer([JSON.stringify(verdict(LEGIBILITY))]).adapter, fetchFn), patches, infraStops: new Map() });
+    expect(store.rows).toHaveLength(1);
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'outage' });
+
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    const alert = new RecordingAlerter();
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, reviewer([JSON.stringify(verdict())]).adapter, visualRemote().fetchFn, alert), patches, infraStops: new Map() });
+    expect(build.sessions()).toBe(2);
+    expect(store.rows).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'patch_conflict' });
+    expect(alert.messages.at(-1)).toMatch(/is not on main/);
+  });
+
+  it("gives a revision only what the claim's budget still holds after the first session, under a binding cap", async () => {
+    const { db, c } = setupDb({ estimate_usd: 10 });
+    // The throttle sized the claim at $3 (a cap bound it), well under the $15 ceiling.
+    const budgets = new SessionBudgets();
+    budgets.start(c.id, 3);
+    const build = storingBuilder(new MemoryPatchStore(), c.id, { mode: 'unattended', outputTokens: 100_000 });
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY)), JSON.stringify(verdict())]);
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), budgets });
+    expect(db.cards[0]).toMatchObject({ stage: 'live', review_rounds: 1 });
+    const [first, revision] = build.adapter.specs;
+    expect(first?.maxBudgetUsd).toBe(3);
+    // The first session spent about $1.50 of it (1,000 input and 100,000 output tokens at $3 and $15
+    // a million); the revision may spend the rest, not $3 again.
+    expect(revision?.maxBudgetUsd).toBeGreaterThan(1.45);
+    expect(revision?.maxBudgetUsd).toBeLessThan(1.5);
+    // Once no session can run, the rest of the budget is no longer held from other cards.
+    expect(budgets.remaining().get(c.id)).toBe(0);
+  });
+
+  it("sends the card back to funded with its first patch, and counts no round, when the claim's budget is spent", async () => {
+    const { db, c } = setupDb({ estimate_usd: 10 });
+    const budgets = new SessionBudgets();
+    budgets.start(c.id, 3);
+    const patches = new MemoryPatchStore();
+    // The first session's meter reached the whole budget as it finished.
+    const build = storingBuilder(patches, c.id, { mode: 'unattended', afterFirst: () => budgets.record(c.id, 3) });
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY))]);
+    await runCardPipeline(c, { ...visualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), budgets, patches });
+    expect(build.sessions()).toBe(1);
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'insufficient_balance', review_rounds: 0 });
+    expect(patches.rows.map((row) => row.baseSha)).toEqual([initialSha]);
+  });
+
+  it('starts no revision while the board has agents paused or the executor is paused, and counts no round', async () => {
+    for (const [pause, stage, check] of [
+      [(db: FakeDb) => void (db.studio.paused = true), 'paused', 'paused_by_board'],
+      [(db: FakeDb) => void (db.roles[0]!.paused = true), 'funded', 'role_paused'],
+    ] as const) {
+      await git(['update-ref', 'refs/heads/main', initialSha], origin);
+      const { db, c } = setupDb();
+      const build = builder();
+      // The board pauses while the Director is reviewing.
+      const review = new FakeAdapter(
+        async (_spec, emit) => {
+          await emit({ type: 'start', sessionId: 'review-1', model: 'builder-class', tools: READ_SET, apiKeySource: 'none' });
+          await emit(usageEvent(1, 50));
+          pause(db);
+        },
+        { result: () => JSON.stringify(verdict(LEGIBILITY)) },
+      );
+      await runCardPipeline(c, visualDeps(db, build.adapter, review, visualRemote().fetchFn));
+      expect(build.sessions()).toBe(1);
+      expect(db.cards[0]).toMatchObject({ stage, failing_check: check, review_rounds: 0 });
+    }
   });
 });

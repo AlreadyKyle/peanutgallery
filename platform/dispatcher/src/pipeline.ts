@@ -22,8 +22,9 @@
 // (docs/specs/design-review.md): before the merge lock, a Director reviews its frames (visual-review.ts)
 // while a board member is signed in, and the card waits at gated until one is. All pass records a
 // visual approval and merges; a revise moves the card back to building for a revision session given
-// only the failing criteria, frame names and reason codes, which is squashed with the change into one
-// commit on the base and gated again, at most twice (cards.review_rounds); after two rounds an
+// only the failing criteria, frame names and reason codes, and only what the claim's budget still
+// holds, which is squashed with the change into one commit on the base and gated again, at most twice
+// (cards.review_rounds); after two rounds an
 // all-ages revise rejects the card as a gate failure does, and any other open criterion merges with
 // its verdict recorded. A review that cannot give a verdict is an infrastructure stop.
 //
@@ -364,6 +365,8 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     });
     await waitForGatePass(card, role, built, deps);
     const commit = await visualReview({ card, role, worktree, before, allowed, checks, maker }, built, deps);
+    // No further session runs for the card, so the rest of its budget is no longer held from others.
+    deps.budgets?.close(card.id);
     const roleId = role.id;
     await mergeLock.run(async () => {
       await confirmMergeable(card, commit, deps);
@@ -643,7 +646,9 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     log: deps.log,
     stopSignal: deps.stopSignal,
     now: deps.now,
-    budgetUsd: budgets?.budgetFor(card.id),
+    // What the claim's budget still holds after the card's earlier sessions (budgets.ts), so a visual
+    // revision spends only what the throttle sized the claim for.
+    budgetUsd: budgets?.nextSession(card.id),
     onSpend: budgets ? (usd) => budgets.record(card.id, usd) : undefined,
     resolveModel: (r) => resolveRoleModel(r, deps.config).model,
     ...(promptAddendum ? { promptAddendum } : {}),
@@ -756,6 +761,7 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
         });
         return commit;
       }
+      await revisionMayStart(building, deps);
       rounds = await deps.db.recordReviewRound(card.id);
       commit = await revise(building, commit, revisionAddendum(verdict, rounds), deps);
       await waitForGatePass(card, role, commit, deps);
@@ -765,10 +771,30 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
   }
 }
 
+// A revision starts only as a claim would: not while the board has agents paused (the card pauses),
+// not while the executor role is paused (back to funded, as a paused executor is never the card's
+// fault), and not once the claim's throttle budget is spent (back to funded, so the tick sizes a new
+// budget from the money there is then). Each stop comes before the round is counted, and the card
+// keeps its first change's stored patch, so a later claim re-gates it with no session.
+async function revisionMayStart(building: Building, deps: PipelineDeps): Promise<void> {
+  const { card, role } = building;
+  if ((await deps.db.getStudioState()).paused) throw new CardStop('paused', 'paused_by_board', 'the board paused agents, so the visual revision did not start');
+  if ((await deps.db.roleState(role.id)).paused) {
+    throw new Requeue(['gated'], 'role_paused', `the executor role ${role.name} is paused, so the visual revision did not start`, false);
+  }
+  const left = deps.budgets?.remaining().get(card.id);
+  if (left !== undefined && left <= 0) {
+    throw new Requeue(['gated'], 'insufficient_balance', "the claim's session budget is spent, so the visual revision did not start", false);
+  }
+}
+
 // A visual revision: the card goes back to building, the builder's new session works on the card's
-// commit in the card's own mode and inside its ceiling (the card's spend read fresh), and the change
-// and the revision become one commit on the base, pushed to the same branch and pull request. No
-// stored patch survives a revision, so a later re-queue never rebuilds half the change.
+// commit in the card's own mode, inside its ceiling (the card's spend read fresh) and, unattended,
+// inside what the claim's throttle budget still holds after the first session (budgets.ts), and the
+// change and the revision become one commit on the base, pushed to the same branch and pull request.
+// It starts only as a claim would (revisionMayStart). No stored patch survives a revision, whatever
+// stops it: the revision session's accepted patch is made against the card's commit, not main, so it
+// is discarded as soon as the session settles, and a later re-queue never rebuilds the revision alone.
 async function revise(building: Building, commit: CommitInfo, addendum: string, deps: PipelineDeps): Promise<CommitInfo> {
   const { card, role, worktree, before, allowed, checks, maker } = building;
   if (!(await deps.db.updateCardIf(card.id, ['gated'], { stage: 'building', failing_check: null }))) {
@@ -786,6 +812,12 @@ async function revise(building: Building, commit: CommitInfo, addendum: string, 
     },
     (error: unknown) => error,
   );
+  // The revision is in the worktree now, or the session stopped; either way its stored patch goes. One
+  // that cannot be discarded is refused at the next claim, since its base is not on main (patch.ts).
+  if (deps.patches) {
+    const patches = deps.patches;
+    await attempt(deps, `card ${card.id} revision patch discard`, () => patches.discard(card.id));
+  }
   await assertGitTrusted(card, worktree.path, before, deps, 'after the revision session');
   if (sessionError) throw sessionError;
   const head = await headSha(worktree.path);
@@ -794,7 +826,6 @@ async function revise(building: Building, commit: CommitInfo, addendum: string, 
   await git(['reset', '--quiet', '--soft', worktree.baseSha], worktree.path);
   await postCheck(worktree, checks);
   const revised = await commitAndOpenPullRequest(current, role, worktree, before, allowed, checks, deps);
-  await deps.patches?.discard(card.id);
   await finalize(card, deps, 'gated', null).catch((error: unknown) => {
     if (error instanceof StageMoved) error.pr = revised.prNumber;
     throw error;

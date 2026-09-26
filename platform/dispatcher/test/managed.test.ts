@@ -627,11 +627,11 @@ describe('a session the dispatcher stops reading', () => {
 describe('orphan sessions', () => {
   // A card session a crashed dispatcher left running: two requests metered by nobody, and a patch the
   // agent submitted that no one answered.
-  async function orphan(h: Harness, patch: Buffer, options: { submitted?: boolean } = {}): Promise<FakeSession> {
+  async function orphan(h: Harness, patch: Buffer, options: { submitted?: boolean; baseSha?: string } = {}): Promise<FakeSession> {
     await h.client.sessions.create({
       agent: { type: 'agent_with_overrides', id: AGENT_ID, version: 3, model: { id: 'builder-class' } },
       environment_id: ENVIRONMENT_ID,
-      metadata: { purpose: 'card', card_id: card().id, role_id: 'role-builder-a', base_sha: base, run: 'r1' },
+      metadata: { purpose: 'card', card_id: card().id, role_id: 'role-builder-a', base_sha: options.baseSha ?? base, run: 'r1' },
     });
     const session = h.client.last;
     h.client.addOutput(session.id, 'card.patch', patch);
@@ -726,6 +726,22 @@ describe('orphan sessions', () => {
     expect(events).toEqual([{ type: 'message', text: expect.stringMatching(/^the patch an earlier session submitted \(sha256 [0-9a-f]{64}\) was applied; no new session: seed-1\/config\/spawn-table\.json$/) }]);
     expect(await readFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), 'utf8')).toContain('"baseCost": 11');
     expect(ledgerTotal(h.db)).toBe(0.07);
+  });
+
+  // A dispatcher that stopped during a visual revision (docs/specs/design-review.md) leaves an orphan
+  // whose base is the card's own commit: its patch is only the revision, never applied at main.
+  it("refuses an orphan's patch made against a commit main does not hold, and starts no session", async () => {
+    const h = harness();
+    const patch = await costPatch();
+    const cardCommit = await git(['commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit'], repo);
+    const session = await orphan(h, patch, { baseSha: cardCommit });
+    const error = await run(h).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SessionPaused);
+    expect(error).toMatchObject({ failingCheck: 'patch_conflict', message: expect.stringMatching(/is not on main/) });
+    expect(session.archived).toBe(true);
+    expect(h.client.sessions_).toEqual([session]);
+    expect(h.store.rows).toEqual([]);
+    expect(await readFile(path.join(repo, 'seed-1', 'config', 'spawn-table.json'), 'utf8')).not.toContain('"baseCost": 11');
   });
 });
 
