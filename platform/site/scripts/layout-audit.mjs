@@ -15,6 +15,9 @@
 // - grid cells: a grid of like items in two or more columns puts one item in each cell: no item is
 //   wider than one column and every row starts at the grid's content edge; a part-empty last row is
 //   fine (the board, 26 Sep 2026; PLAN §10 decision 49);
+// - frame: a box with an edge on every side that holds a card, a row or a box is filled by it: its
+//   content ends within 2px of the frame's inner right edge, so no empty column runs beside a card
+//   inside a dashed example frame;
 // - cards, from 768px: across a row of cards the bottoms, titles and funding bars line up, the space
 //   above a card's pinned bottom block (its hollow) is at most 80px, the bottom block ends at the
 //   card's inner edge, and the corner index stays on one line;
@@ -30,6 +33,7 @@ export const LIMITS = {
   balanceShare: 0.35,
   hollow: 240,
   cardHollow: 80,
+  frame: 2,
   button: 47,
   topBar: 61,
 };
@@ -240,6 +244,39 @@ export function auditLayout(limits) {
     const widest = Math.max(...gaps);
     if (widest > limits.hollow) out.push(`hollow: ${Math.round(widest)}px of empty space in band ${index + 1} (${name(band)})`);
   });
+
+  // Frames: a box drawn with an edge on every side that holds a block with an edge or a fill of its
+  // own (a card, a row, a box) is filled by what it holds: its content reaches within the limit of
+  // its inner right edge, so no empty column runs down beside a card inside a dashed example frame.
+  // The hollow check only measures vertical runs, so it cannot see this. A frame that holds only
+  // text, glyphs and inline chips is not checked: a line of prose ends where it ends. Nor is a frame
+  // under 96px wide: a chip or a colour swatch centres its mark by design.
+  const BLOCKS = new Set(['block', 'flow-root', 'grid', 'flex', 'list-item', 'table']);
+  const edged = (cs) => ['Top', 'Right', 'Bottom', 'Left'].every((side) => parseFloat(cs[`border${side}Width`]) > 0 && cs[`border${side}Style`] !== 'none' && !transparent(cs[`border${side}Color`]));
+  for (const frame of document.body.querySelectorAll('*')) {
+    if (!inFlow(frame) || REPLACED.has(frame.tagName) || ignored(frame)) continue;
+    const fcs = style(frame);
+    if (!edged(fcs) || box(frame).width < 96) continue;
+    const holds = [...frame.querySelectorAll('*')].some((el) => {
+      if (!extent.get(el) || REPLACED.has(el.tagName)) return false;
+      const cs = style(el);
+      return BLOCKS.has(cs.display) && paints(el, cs);
+    });
+    if (!holds) continue;
+    let content = null;
+    for (const child of frame.childNodes) {
+      if (child.nodeType === Node.ELEMENT_NODE && inFlow(child)) content = union(content, extent.get(child));
+      else if (child.nodeType === Node.TEXT_NODE && child.textContent.trim() !== '') {
+        const range = document.createRange();
+        range.selectNodeContents(child);
+        for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) content = union(content, rectOf(r));
+      }
+    }
+    if (content === null) continue;
+    const inner = box(frame).right - parseFloat(fcs.borderRightWidth) - parseFloat(fcs.paddingRight);
+    const empty = inner - content.right;
+    if (empty > limits.frame) out.push(`frame: ${Math.round(empty)}px of empty column inside the right edge of ${name(frame)}`);
+  }
 
   // Cards, per grid and per row, from 768px.
   if (vw >= 768) {

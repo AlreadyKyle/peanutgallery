@@ -22,6 +22,28 @@ async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page).toHaveTitle(`${title} · Mob Machine`);
 }
 
+// /how-it-works steps 1 and 3 draw one example card in a dashed frame. The card is one three-column
+// cell wide (at most 23rem, docs/specs/grid-boxes.md Behaviour 5) and the frame hugs it, so the card
+// fills the frame's inner width and no empty column runs beside it inside the dashed edge.
+for (const width of [375, 768, 1024, 1440]) {
+  test(`/how-it-works: each example card fills its dashed frame at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/how-it-works');
+    const frames = page.locator('figure.example:has(> ul.card-grid)');
+    await expect(frames).toHaveCount(2);
+    for (const frame of await frames.all()) {
+      const measure = await frame.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        const b = el.getBoundingClientRect();
+        const inner = b.width - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        return { inner, card: el.querySelector('li.card')!.getBoundingClientRect().width };
+      });
+      expect(Math.abs(measure.inner - measure.card), JSON.stringify(measure)).toBeLessThanOrEqual(2);
+      expect(measure.card).toBeLessThanOrEqual(368.5);
+    }
+  });
+}
+
 for (const viewport of WIDTHS) {
   test.describe(`at ${viewport.width} px`, () => {
     test.use({ viewport });

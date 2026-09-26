@@ -7,9 +7,10 @@ import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 // Layout balance (DESIGN.md, No dead space; docs/specs/home-and-design.md): on every public route,
 // with realistic data, nothing leaves dead space. scripts/layout-audit.mjs holds the checks: no
 // element past the viewport, no seam between bands, side-by-side blocks within max(160px, 35%) of
-// each other, no run of empty space over 240px inside a band, grids with one item in each cell, card
-// rows that line up with no hollow over 80px, headings spaced from the block above at least as far as that
-// block from its own, buttons on one line, no orphaned glyph and a one-row top bar.
+// each other, no run of empty space over 240px inside a band, grids with one item in each cell, a
+// framed card or row that fills its frame to within 2px, card rows that line up with no hollow over
+// 80px, headings spaced from the block above at least as far as that block from its own, buttons on
+// one line, no orphaned glyph and a one-row top bar.
 const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
 
 async function audit(page: Page, path: string): Promise<string[]> {
@@ -155,13 +156,19 @@ test('finds each planted gap', async ({ page }) => {
           <li style="border:2px solid #111;height:80px;grid-column-start:2">Three, starting a row in its second column</li>
         </ul>
         <p style="width:1400px">A line wider than the page.</p>
+        <figure style="margin:0;padding:16px;border:1px dashed #111;max-width:704px">
+          <figcaption>Example with made-up figures</figcaption>
+          <ul style="display:grid;grid-template-columns:minmax(0,368px);list-style:none;margin:0;padding:0">
+            <li style="border:2px solid #111;height:80px">A lone card half the frame's width</li>
+          </ul>
+        </figure>
       </div>
     </main>
     <div style="height:20px"></div>
     <footer class="site-footer" style="height:60px;background:#111"></footer>
   </body></html>`);
   const findings = await page.evaluate(auditLayout, LIMITS);
-  for (const kind of ['balance:', 'hollow:', 'grid cells:', 'overflow:', 'seam:', 'rhythm:']) {
+  for (const kind of ['balance:', 'hollow:', 'grid cells:', 'frame:', 'overflow:', 'seam:', 'rhythm:']) {
     expect(findings.some((line) => line.startsWith(kind)), `${kind} in ${JSON.stringify(findings)}`).toBe(true);
   }
   // Both grid-cell faults are found: the item over two columns and the row that starts inside.
@@ -179,6 +186,23 @@ test('passes a grid whose last row is part-empty', async ({ page }) => {
       <li style="border:2px solid #111;height:80px">One</li><li style="border:2px solid #111;height:80px">Two</li>
       <li style="border:2px solid #111;height:80px">Three</li><li style="border:2px solid #111;height:80px">Four</li>
     </ul></body></html>`);
+  expect(await page.evaluate(auditLayout, LIMITS)).toEqual([]);
+});
+
+// A dashed frame that hugs its lone card (width: fit-content, as /how-it-works draws it) is filled
+// by it, and a bordered box that holds only a short line of text is not checked: prose ends where it
+// ends. Neither draws a frame finding.
+test('passes a frame its card fills and a box that holds only text', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.setContent(`<!doctype html><html><body style="margin:0;font:16px/1.5 sans-serif">
+    <figure style="margin:0;padding:16px;border:1px dashed #111;width:fit-content;max-width:704px">
+      <figcaption>Example with made-up figures</figcaption>
+      <ul style="display:grid;grid-template-columns:minmax(0,368px);list-style:none;margin:0;padding:0">
+        <li style="border:2px solid #111;height:80px">A lone card</li>
+      </ul>
+    </figure>
+    <p style="margin:24px 0 0;padding:16px;border:1px solid #111;max-width:704px">A short notice.</p>
+  </body></html>`);
   expect(await page.evaluate(auditLayout, LIMITS)).toEqual([]);
 });
 
