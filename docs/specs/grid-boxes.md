@@ -1,6 +1,6 @@
 # Grid boxes: one size for every item in a grid
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Series position: first in the rest of the launch series, before studio-reports (the order is in `docs/ROADMAP.md`, "The launch series"). The board ordered it on 26 September 2026. It is a board pull request: it changes the layout audit and site styles.
 
@@ -47,7 +47,7 @@ Out:
 - [x] `DESIGN.md`, `platform/agents/prompts/platform-builder.md` (and `platform-director.md`, whose "an empty grid cell" stated it too) and the code comments state the new rule and no longer state the fill rule or "never a bordered tile".
 - [x] PLAN.md §10 records the board's order as decision 49.
 - [x] `pnpm verify` exits 0; the site e2e passes.
-- [ ] Production: after the deploy, live /team measures one width for every box at 375, 768 and 1440 and equal heights within each section from 768; /, /contribute and /roadmap have no item wider than one column; `live-check.mjs` passes (the ship stage).
+- [x] Production: after the deploy, live /team measures one width for every box at 375, 768 and 1440 and equal heights within each section from 768; /, /contribute and /roadmap have no item wider than one column; `live-check.mjs` passes (the ship stage).
 
 ## Production steps
 
@@ -105,6 +105,25 @@ Built on `launch/grid-boxes` from main at 90be039, run on 26 Sep 2026 in the ser
   768: card frames 402, inner 368, card 368 (the other four frames 704, inner 670)
   1024 and 1440: card frames 418, inner 368, card 368 (the other four frames 704, inner 654)
   ```
+
+**Production (the ship stage, 26 Sep 2026).** Every Verification line is now run and quoted.
+- Local gate on the pull request's head, from main's checkout (log `~/.local-gate/gate-logs/pr84-f67299d.log`): `LOCAL GATE PASS pr=84 head=f67299d9ae057066977f4c83e27f65305e96fe6e base=90be039ac4fde31596e99dab8be180cd7a1cd8a2 merge=93be26f2544e7a990e715f2e98a1124b6962c6d4 seed=false platform=true lane=code site=true functions=false`.
+- Squash-merged as #84 at 2026-09-26T16:04:24Z, `747803aced9027b59c57ba8f09c454843c77d166`, the PASS line in the merge body; `launch/grid-boxes` deleted. No migration, no function, no board step.
+- Deploy: `curl -s https://peanutgallery.games/version.json` → `{"sha":"747803aced9027b59c57ba8f09c454843c77d166","builtAt":"2026-09-26T16:04:44.990Z"}`; the board site's build was correctly cancelled (no change there).
+- The headless measure of live production at 747803a (`/Users/kylesmith/peanutgallery-launch/shots/live/grid-boxes/live-measure.txt`):
+  ```
+  /team 375: width spread 0 | Running: 7 boxes, w 335 | Starts later: 8 boxes, w 335 | Planned: 1 boxes, w 335
+  /team 768: width spread 0 | Running: 7 boxes, w 352, h 344.3 (h spread 0) | Starts later: 8 boxes, w 352, h 291.5 (h spread 0) | Planned: 1 boxes, w 352, h 237.2
+  /team 1440: width spread 0 | Running: 7 boxes, w 368, h 317.1 (h spread 0) | Starts later: 8 boxes, w 368, h 269.1 (h spread 0) | Planned: 1 boxes, w 368, h 237.2
+  / 768: ul.card-grid.fund-grid: 2 col × 352px, 6 items w 352, wider than a column: 0 | ul.team-strip: 3 col × 226.7px, 3 items w 226.7, wider than a column: 0
+  / 1440: ul.card-grid.fund-grid: 3 col × 368px, 6 items w 368, wider than a column: 0 | ul.team-strip: 3 col × 368px, 3 items w 368, wider than a column: 0
+  /contribute 375, 768, 1440: ul.choices 1 col, 6 items, wider than a column: 0
+  /roadmap 375, 768, 1440: 0 grid list(s)
+  /how-it-works 375: ul.card-grid 1 col × 301px, 1 item w 301; 768 and 1440: 1 col × 368px, 1 item w 368; wider than a column: 0
+  MEASURE PASS
+  ```
+- Live screenshots, looked at: `/Users/kylesmith/peanutgallery-launch/shots/live/grid-boxes/team-375.png`, `team-1440.png`, `home-375.png`, `home-1440.png` (every box one width, the last row part-empty and left-aligned, the fund grid three to a row at 1440).
+- `node platform/site/scripts/live-check.mjs` from main's checkout at 747803a: `PASS live-check https://peanutgallery.games passed=264 failed=0 skipped=0`.
 
 ## Decisions
 
