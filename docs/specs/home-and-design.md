@@ -1,6 +1,6 @@
 # Home and design: the new home page, the colour system, the top bar and bands on every page
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 The home-and-design pull request of the approved v1 design direction, with the colour system the board ordered on top of it, and a layout audit so the site catches its own dead space. This is a board pull request: it changes kernel files, listed under Scope. Its mockup is the home page, and the design guide at `/design-kit-7q4m` shows every part and every colour.
 
@@ -74,7 +74,7 @@ One colour, one meaning: amber is money (Contribute, the funding bar, the coin m
 - [x] The guide shows every colour token and every pairing measured on the page, and the colour rules.
 - [x] `og.png` is re-rendered on the signal plate with the site's font.
 - [x] Budgets against `main`: JavaScript growth at most 14KB gzipped, CSS at most 8KB gzipped.
-- [ ] The production live check passes after the deploy (waits on the merge and Netlify's deploy).
+- [x] The production live check passes after the deploy (Evidence, the close-out).
 
 ## Verification
 
@@ -87,7 +87,19 @@ One colour, one meaning: amber is money (Contribute, the funding bar, the coin m
 
 ## Evidence
 
-Filled in below from the runs on the branch.
+The branch's runs were quoted in its pull request's body and not copied here before the merge; they are recorded here at the close-out (26 September 2026), with the lines the body did not carry run then.
+
+- Merged as 4e50e74, "Home and design: the new home page, colour system, top bar and bands on every page" (#64), `mergedAt=2026-09-23T19:26:22Z`, head 55aaf0c82c68bbdf80db6360eeeaf7b04ba7d16b.
+- `pnpm verify`, from #64's body: "exit 0 (site 334, board 67, supabase 267, dispatcher 619, seed-1 77, gate 504, both GATE PASS)".
+- `E2E_PORT=4442 pnpm --filter @backseat/site e2e`, from #64's body: "98 passed, 5 skipped (optional screenshot tests), layout balance included".
+- The board e2e line: the Actions gate on #64's head (run 35908373469, `pull_request`, `head_sha=55aaf0c82c68bbdf80db6360eeeaf7b04ba7d16b`, `conclusion=success`) ran it. Its platform job reads `Typecheck and tests=success`, `Gate tests=success`, `Docs tests=success`, `Build the site for the end-to-end suite=success`, `Site end-to-end=success` and `Board site end-to-end=success`; its build job `Build the sites and scan the builds=success`; and `gate=success`.
+- The budgets, measured at the close-out: the site built at 7540073 (#64's base, `4e50e74^`) and at 4e50e74, each with `netlify.toml`'s five public values, every file in `dist/assets` gzipped at level 9. JavaScript 161,241 to 167,291 bytes (+6,050, within 14KB); CSS 5,150 to 6,002 bytes (+852, within 8KB).
+- The live check against a local preview built with `netlify.toml`'s values: 4e50e74's own `scripts/live-check.mjs` against `vite preview` of 4e50e74's build on port 4440, reading production's data of 26 September 2026: `PASS live-check http://localhost:4440 passed=186 failed=0 skipped=5`, the skips being the two board-address lines (`BOARD_SITE_URL` not set), `/board status 200: a local server has no redirect rules`, the og:image host and `www redirect: production only`. Among the passes, `PASS 375px / bands signal, paper, then ink and paper: rgb(26, 47, 200) / …` and `no dead space` on each of the 22 route and width pairs it checks.
+- The live check against production after the deploy: every deploy since has passed it, and on `origin/main` at ed63326 (production's `version.json` serving that sha) `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs` prints `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`, exit 0.
+- Screenshots on production's data, looked at: the #64 branch's shots were not recorded, so at the close-out every public route (home, /contribute, /ledger, /how-it-works, /team, /roadmap, /reports, /terms, /privacy, /refunds, /contact, a live card's page, /thanks and a not found page) was drawn on production at 375, 768 and 1440 with reduced motion, 42 full-page shots, every page reading build ed6332648f4e7844aafe88c2a610a264cee91540 and none with sideways overflow. Looked at: each page opens on the black signal plate the top bar shares, the bands alternate, cards sit in the white second band in one, two and three columns, the team strip and Where the money goes sit on ink, and no page shows a hollow or an empty run beside a block. These are the pages as they stand after the later pull requests, which the live check and the layout audit hold to this spec's rules.
+- What Scope left out has shipped: the `/card/:id` replay and its Watch links with supporter-pages (#82, `specs/supporter-pages.md`), and the next card in line on `/contribute` with money-surfaces (#71, fix-forward #78, `specs/money-surfaces.md`); both are on the live site in the check above. The gate's design frames are design-review's line (`specs/design-review.md`), which waits on GitHub Actions minutes; they are not this spec's criterion. The planned titles that say "vote" (four in production's `/api/cards` today) are allowed on /roadmap and home's Planned next by ROADMAP criterion 4 and stay the board's to edit.
+
+Every Verification line is run and quoted. Status done.
 
 ## Decisions
 

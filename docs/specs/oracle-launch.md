@@ -1,6 +1,6 @@
 # Oracle launch: create the VPS from a script
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Superseded by `mac-host.md` for now: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), so this script is kept and not run. The planned host is Google Cloud (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud), which reuses `provision.sh` and the rest of the Ubuntu provisioning but not this launcher.
 
@@ -26,17 +26,18 @@ Out: the Oracle account itself (the board signs up; an agent may not create acco
 ## Acceptance criteria
 
 - [x] `oracle-launch.sh` passes `bash -n` and `shellcheck` in `pnpm test:ops`, and is executable in git.
-- [ ] A live run prints `RUNNING`, `ssh ubuntu@… ok`, `ssh root@… ok` and `VPS_IP=…`.
-- [ ] A second live run creates nothing and prints the same `VPS_IP`.
+- [ ] ~~A live run prints `RUNNING`, `ssh ubuntu@… ok`, `ssh root@… ok` and `VPS_IP=…`.~~ Superseded by `mac-host.md`: Oracle is dropped (PLAN.md §10 decision 38), so the script is never run.
+- [ ] ~~A second live run creates nothing and prints the same `VPS_IP`.~~ Superseded by `mac-host.md`: Oracle is dropped (PLAN.md §10 decision 38).
 
 ## Verification
 
 - `pnpm verify`
-- After the board's sign-in: `platform/ops/oracle-launch.sh`, run twice, both outputs quoted here.
+- ~~After the board's sign-in: `platform/ops/oracle-launch.sh`, run twice, both outputs quoted here.~~ Superseded by `mac-host.md`: Oracle is dropped (PLAN.md §10 decision 38), and the planned Google Cloud host does not use this launcher.
 
 ## Evidence
 
 - `pnpm test:ops`: 41 tests pass, shellcheck 0.11.0 installed on the Mac so the shellcheck test ran rather than skipped.
+- Close-out, 26 September 2026: `pnpm verify` on `origin/main` at ed63326 exits 0, its ops tests `pass 135` with "the Oracle instance" among them (`docs/specs/launch-hardening.md`, Evidence). The two live lines are struck through above, superseded by `mac-host.md`. Every Verification line that stands is run and quoted, so the status is done; the script stays in the repository, unrun.
 
 ## Decisions
 

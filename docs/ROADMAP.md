@@ -79,6 +79,17 @@ Every Verification line has been run and its output quoted.
 | `specs/metering-reconciliation.md` | done |
 | `specs/landing-copy-and-design.md` | done |
 | `specs/launch-pages.md` | done |
+| `specs/local-gate.md` | done |
+| `specs/gate-local-output.md` | done |
+| `specs/sweep-22-sep.md` | done |
+| `specs/opus-55.md` | done |
+| `specs/carry-over.md` | done |
+| `specs/launch-hardening.md` | done |
+| `specs/stale-tab.md` | done |
+| `specs/oracle-launch.md` | done |
+| `specs/design-system.md` | done |
+| `specs/home-and-design.md` | done |
+| `specs/machine-mark.md` | done |
 
 ### Built, live check pending
 
@@ -86,31 +97,21 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/launch-hardening.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/week1-runs.md` | built | criterion 6, a player's contribution credited (criterion 1 above) |
 | `specs/live-cut.md` | built | criterion 7, an unattended build, at the cutover |
 | `specs/unattended-mode.md` | built | the unattended probe and a funded card with no board session, at the cutover |
 | `specs/vps.md` | built | superseded by `specs/mac-host.md` for now (PLAN.md §10 decision 38); a server's cutover waits on the Google Cloud move in the backlog |
 | `specs/ops-separation.md` | built | the production steps, which need a server; the Mac host has its own (`specs/mac-host.md`) |
-| `specs/oracle-launch.md` | built | none: Oracle is dropped (PLAN.md §10 decision 38); the script is kept, unrun |
 | `specs/stripe-late-fee.md` | built | `charge.updated` crediting a fresh payment, on the next real contribution |
-| `specs/next-cards.md` | built | a real contribution moving a card's bar |
-| `specs/stale-tab.md` | built | a tab held open across a site deploy reloads into the new build |
-| `specs/gate-hardening.md` | built | two CI observations: the platform job's four new steps green, and a `card/*` pull request showing the detect guard before any install |
-| `specs/merge-safety.md` | built | the three live lines, which need a card merged through the dispatcher |
+| `specs/next-cards.md` | built | a real contribution moving a card's bar; the guarded select is struck through as superseded (the Week cards count 0) |
+| `specs/gate-hardening.md` | built | a `card/*` pull request showing the detect guard before any install, which waits on Actions minutes and the first card; the platform job's four new steps are recorded green (run 35129960581) |
+| `specs/merge-safety.md` | built | the first two live lines, which need a card merged through the dispatcher; the smoke bot's line is struck through, superseded by `specs/launch-managed.md` (smoke runs no card code) |
 | `specs/site-truth-pass.md` | built | /board two-factor enrolment watched in Chromium and Safari with DevTools open and no CSP report |
-| `specs/sweep-22-sep.md` | built | none named in the spec; moving it to done is a close-out check |
-| `specs/carry-over.md` | built | the production steps: migration `20260923000200`, the role re-seed, and the live check on production |
-| `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
-| `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the jobs' first runs (on the Mac host, `specs/mac-host.md`) and the backups repository, which waits on a new store |
+| `specs/money-safety.md` | built | the migration history repair, which needs `SUPABASE_DB_PASSWORD` from the board (`docs/BOARD-SETUP.md` step 25); the jobs' first runs on the Mac host (`specs/mac-host.md`); the backups repository, which waits on a new store; and the restore drill. The three migrations and the backup login are read back |
 | `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
-| `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
-| `specs/design-system.md` | built | the replay, the next-in-line sentence and the gate's design frames wait on supporter-loop, money-logic and agent-system; the bands on every page and the new home are `specs/home-and-design.md` |
-| `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
+| `specs/scale-launch.md` | built | the usage tier cap at the credit step, the Netlify plan (board step 8) and the studio daily credit limit (board step 18); the spend totals (0 = 0, every ledger row billed to the founder) and #66's docs-only gate run are recorded |
 | `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and the domain half, which waits on the board registering one |
-| `specs/machine-mark.md` | built | the live check on production after the deploy |
-| `specs/local-gate.md` | done | #81 merged as b2d5126 on its own local gate PASS line (head aed3776, base 5f40ab5), quoted in the merge body and in the spec's Evidence |
-| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
+| `specs/board-site.md` | built | Resend SMTP (board step 2), the board's first sign-in on its own site (board step 17; production shows none since the switch), then `platform_lane_open` (board step 26), and a moderator's first sign-in once one is named (board step 16). The migration, the site and its headers, Supabase Auth, the ended sessions and the live check are recorded |
 
 ### The launch series
 
@@ -124,7 +125,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 4 | `specs/agent-system-core.md` | done | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
 | 5 | `specs/agent-workflows.md` | done | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
 | 6 | `specs/site-snapshot.md` | done | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
-| 7 | `specs/supporter-pages.md` | built | /thanks, /card/:id with the replay, supporter credits, /team statuses |
+| 7 | `specs/supporter-pages.md` | done | /thanks, /card/:id with the replay, supporter credits, /team statuses |
 | 8 | `specs/grid-boxes.md` | done | one item in each cell of every grid, no stretched last row; /team members in identical boxes |
 | 9 | `specs/studio-reports.md` | done | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 10 | `specs/design-review.md` | built | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
@@ -132,12 +133,11 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 12 | `specs/copy-pass.md` | built | every public string after the supporter loop; the board-work marker on /roadmap |
 | 13 | `specs/launch-card-floor.md` | agreed | the first open cards, drafted and graded in one attended production session |
 
-### Draft
+### Agreed
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/announcement.md` | draft | the clip, the drafts and Go live, the last steps before the announcement |
-| `specs/gate-local-output.md` | built | none |
+| `specs/announcement.md` | agreed | the drafts are in `docs/launch/`; left: the clip, Go live, the link previews and the final check, after board section C |
 
 ## Standing facts for any session
 

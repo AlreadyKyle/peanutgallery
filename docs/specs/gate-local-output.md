@@ -1,6 +1,6 @@
 # The gate's scans skip the e2e runs' local output
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -36,6 +36,7 @@ Out: the payment-host scan and `runtime-token-deny-dist`, which already read onl
 - `bash platform/gate/test/run-tests.sh`: `PASS: gate tests passed=504`.
 - With `main`'s two scripts in place: `FAIL: gate tests failed=5 passed=499`; the five failures are the new tests, for example `FAIL tokens: the e2e runs' local builds and screenshots are not read: exit 1 (wanted 0), first line: FAIL: runtime-token-deny hits=4 first=platform/board/dist-e2e/assets/index-a1.js:1 pattern=object-object`.
 - Site e2e `28 passed`, board e2e `4 passed`; `ls -d platform/*/dist-e2e` printed both folders; then `pnpm verify` exited 0 with `PASS: runtime-token-deny files=146`, `GATE PASS folder=platform lane=code`, `GATE PASS folder=seed-1 lane=code`, site 209, board 67, supabase 267, seed-1 77, dispatcher 619, functions 82, docs 15.
+- Close-out, 26 September 2026: the pull request merged as 7540073, "Gate: the scans skip the e2e runs' local builds, and a tracked file in an output folder fails (#62)". `gh pr view 62` reads `state=MERGED mergedAt=2026-09-23T16:56:49Z mergeCommit=75400731b8757882787849263ac8c28b72f9a915`, and `git merge-base --is-ancestor 7540073 origin/main` holds. Every Verification line is run and quoted above: the gate suite, the same suite with `main`'s two scripts put back, and the two e2e runs followed by `pnpm verify` with both `dist-e2e` folders in place. Status done.
 
 ## Decisions
 

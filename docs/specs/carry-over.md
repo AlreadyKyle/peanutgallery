@@ -1,6 +1,6 @@
 # Carry-over fixes before the launch work
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -45,7 +45,7 @@ Out:
 - [x] `git grep -i scout` finds only the dated specs and the files that name the old name to rename it or to test that it is gone.
 - [x] Migration `20260923000200` renames the Scout's row in place, retires it beside an existing Biz Dev row, retitles its planned card, adds checked `status` and `trigger` columns and shows them in `public_roles`, and runs twice.
 - [x] The seven new role specs and prompts pass `specs.test.mjs`, every role carries its status and trigger, and the seed writes both.
-- [ ] Production: the migration applied, the roles re-seeded, and the live check PASS (waits on: the production steps below, after merge).
+- [x] Production: the migration applied, the roles re-seeded, and the live check PASS (Evidence, Production).
 
 ## Verification
 
@@ -99,6 +99,17 @@ Out:
 - Rename: `git grep -i -l scout` after this change lists `docs/PLAN.md` (the note that Biz Dev was the Scout), `docs/docs.test.mjs` (a comment), the four dated specs, `platform/agents/README.md` (the rename note), and the migration and its three tests.
 - Migration: the Deno test "the Biz Dev rename keeps the Scout's row and adds status and trigger" (three steps: the rename in place run twice, the planned card retitled and a funded one left alone, the Scout row retired beside an existing Biz Dev row) and the static tests in `migration.test.ts` "rename-biz-dev migration".
 - Roles: `specs.test.mjs` `117 pass, 0 fail`; `role-files.test.ts` "carries each role's place in the launch roster, with a trigger for every role that is not running"; `roles.test.ts` "requires a status from the roster, and a one-line trigger exactly when the role is not running".
+
+### Production (read back at the close-out, 26 September 2026)
+
+The production steps below ran with the launch series; what they left is read back here, read only.
+
+1. The migration: `public_roles` has the `status` and `trigger` columns, holds a Biz Dev row and no Scout row. `select name, status, trigger is not null from public.public_roles` returns 16 rows: running, with no trigger, Builder A, Builder B, Game Designer, Game Director, Janitor, Platform Builder, Platform Director, QA and Studio Head; starts, each with a trigger, Biz Dev, Community, Head of Finance, Head of Product, HR and Tech Artist; planned, with a trigger, the Host. The Janitor was re-seeded as running, as code only, by agent-upkeep (`specs/agent-upkeep.md`); Biz Dev's trigger reads "Starts last, once every other role in the launch roster is built."
+2. The re-seed: every role carries its status, and every role that is not running its one-sentence trigger, as above.
+3. `pnpm --filter @backseat/supabase file-backlog` as a dry run: `unchanged "Biz Dev agent for outside tools and trends"`. The entry matches the retitled card as it stands, so the dry run neither inserts nor updates it, and no second card would be filed.
+4. The live check on `origin/main` at ed63326: `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`, exit 0, with `PASS /team 7 running roles, each on claude-opus-5-5: claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5`, `PASS /team shows no model for a role that does not run (0 found)` and `PASS /team shows no model for a code-only role (0 found)`. Step 4 expected three running roles; seven run since agent-system-core re-seeded the roster, and the Platform Builder is drawn outside Running while the platform code lane is closed. The rule the step guards holds: every running role is on `claude-opus-5-5` and no other shows a model.
+
+Every Verification line is run and quoted. Status done.
 
 ## Production steps (need the board's allow)
 

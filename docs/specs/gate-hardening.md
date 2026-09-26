@@ -104,7 +104,7 @@ In each job, the card-branch step that restores `platform/gate` from the base co
 - The rename case in a temporary repository with `changed-paths.sh --list` and `kernel-guard.sh`, against the old gate and the new one.
 - The review's bypasses (non-ASCII paths, a lowercase `claude.md`, a symlink, a submodule) in a temporary repository, against the gate at 0e6502f and the new one.
 - `pnpm verify`
-- The first pull request after merge shows the four new steps green in the platform job.
+- The first pull request after merge shows the four new steps green in the platform job (run 35129960581, Evidence, 2026-09-26).
 
 ## Evidence
 
@@ -234,6 +234,19 @@ criterion a test can prove is ticked; the two pending lines are both CI observat
 - a `card/*` pull request showing the detect job's guard steps run before any install. No card has
   run since the merge, so no `card/*` pull request exists to read. This closes with the first
   unattended card.
+
+2026-09-26, the first pending line, read from the Actions API. The first pull request after f0ebbdc
+(PR 33, merged 2026-09-16T17:41:06Z) to run the gate was PR 35's branch `metering-reconciliation`, whose
+head 71e3b70 has f0ebbdc as an ancestor: run 35129960581 (`created_at=2026-09-16T17:43:37Z`,
+`conclusion=success`). Its platform job, in order: `Ship gate=success`, `Gate tests=success`,
+`Agent role spec tests=success`, `Ops tests=success`, `Run denoland/setup-deno@v2=success`,
+`Stripe webhook function tests=success`, then `Install Chromium for Playwright=success` and
+`Site end-to-end=success`. The four new steps ran green after the ship gate, with Deno set up by
+`denoland/setup-deno@v2`.
+
+The second line stays open: no `card/*` pull request has run since the merge, and none can run the
+gate until GitHub Actions minutes are back (`docs/BOARD-SETUP.md`, GitHub Actions minutes) and the first
+card is built. It closes with that card's gate run.
 
 ## Decisions
 
