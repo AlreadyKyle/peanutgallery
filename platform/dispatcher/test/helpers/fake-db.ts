@@ -14,6 +14,9 @@ import type {
   Job,
   JobRun,
   OpenCardRow,
+  PostKind,
+  ReportPost,
+  ShipPost,
   Pool,
   RankingMove,
   RecordUsageResult,
@@ -118,6 +121,33 @@ export interface FakeJobRun extends JobRun {
   holder: string | null;
 }
 
+// An outbound_posts row (20260925100000_reports_supply.sql).
+export interface FakePost {
+  kind: PostKind;
+  ref: string;
+  state: 'sending' | 'posted' | 'failed' | 'skipped';
+  status: number | null;
+  message_id: string | null;
+  skip_reason: string | null;
+}
+
+// A card gone live as the outbound lane reads it, with its live time.
+export function shipPost(overrides: Partial<ShipPost> = {}): ShipPost {
+  return {
+    id: '7d1e2f3a-4b5c-4d6e-8f90-a1b2c3d4e5f6',
+    title: 'Gatherers cost one more',
+    live_at: '2026-09-14T14:30:00.000Z',
+    role_name: 'Builder A',
+    cost_usd: 0.29,
+    supporters: [
+      { number: 1, founding: true },
+      { number: 3, founding: false },
+    ],
+    supporter_count: 4,
+    ...overrides,
+  };
+}
+
 export class FakeDb implements Db {
   studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500, anthropic_tier_cap_usd: null, platform_lane_open: false };
   pool: Pool = { balance_usd: 50, reserve_usd: 0, incident_reserve_usd: 0, daily_spent_usd: 0, day: '2026-09-14' };
@@ -158,6 +188,13 @@ export class FakeDb implements Db {
   draftCards: FakeDraftCard[] = [];
   rankings: Array<{ runId: string; order: string[]; moves: RankingMove[] }> = [];
   rpcError: Partial<Record<'recordCardDraft' | 'approveCardDraft' | 'withdrawCardDraft' | 'applyCardRanking', Error>> = {};
+  // The outbound lane (docs/specs/studio-reports.md): the kill switch, the cards gone live, the
+  // published reports newest first, the outbox rows and every outbox call, in order.
+  killSwitchFired = false;
+  liveCards: ShipPost[] = [];
+  reports: ReportPost[] = [];
+  posts: FakePost[] = [];
+  outboxCalls: string[] = [];
 
   async getStudioState() {
     return { ...this.studio };
@@ -428,6 +465,40 @@ export class FakeDb implements Db {
     });
     this.rankings.push({ runId, order: [...order], moves });
     return { moves, unapplied: 0 };
+  }
+  async postingStop() {
+    this.outboxCalls.push('postingStop');
+    if (this.killSwitchFired) return 'kill_switch' as const;
+    return this.studio.paused ? ('paused' as const) : null;
+  }
+  async unpostedShips(since: Date, limit: number) {
+    this.outboxCalls.push('unpostedShips');
+    const done = new Set(this.posts.filter((post) => post.kind === 'ship').map((post) => post.ref));
+    return this.liveCards
+      .filter((c) => Date.parse(c.live_at) >= since.getTime() && !done.has(c.id))
+      .sort((a, b) => Date.parse(a.live_at) - Date.parse(b.live_at))
+      .slice(0, limit)
+      .map((c) => ({ ...c, supporters: c.supporters.slice(0, 3) }));
+  }
+  async unpostedReport() {
+    this.outboxCalls.push('unpostedReport');
+    const newest = [...this.reports].sort((a, b) => b.week_start.localeCompare(a.week_start))[0];
+    if (!newest || this.posts.some((post) => post.kind === 'weekly' && post.ref === newest.week_start)) return null;
+    return { ...newest };
+  }
+  async claimPost(kind: PostKind, ref: string, state: 'sending' | 'skipped', skipReason: string | null) {
+    this.outboxCalls.push(`claim:${kind}:${ref}:${state}`);
+    if (this.posts.some((post) => post.kind === kind && post.ref === ref)) return false;
+    this.posts.push({ kind, ref, state, status: null, message_id: null, skip_reason: skipReason });
+    return true;
+  }
+  async finishPost(kind: PostKind, ref: string, result: { state: 'posted' | 'failed'; status: number | null; messageId: string | null }) {
+    this.outboxCalls.push(`finish:${kind}:${ref}:${result.state}`);
+    const post = this.posts.find((p) => p.kind === kind && p.ref === ref && p.state === 'sending');
+    if (!post) return;
+    post.state = result.state;
+    post.status = result.status;
+    post.message_id = result.messageId;
   }
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);

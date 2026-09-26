@@ -44,6 +44,9 @@ const config: DispatcherConfig = {
   studioAnthropicApiKey: 'studio-key',
   healthcheckUrl: null,
   ntfyTopicUrl: null,
+  discordWebhookShips: null,
+  discordWebhookWeekly: null,
+  publicSiteUrl: 'https://site.test',
 };
 
 // The managed controls, recording the order they run in; each step may be made to throw.

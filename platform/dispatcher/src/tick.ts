@@ -5,7 +5,9 @@
 // the background; then, however the card path ended, the job queue's tick (jobs.ts). The heartbeat
 // and the healthcheck ping follow a tick that completed while holding the lease, so a dispatcher
 // whose ticks keep failing, or that another dispatcher has locked out, stops pinging. A halted
-// dispatcher claims nothing, deals nothing, runs no job and does not ping.
+// dispatcher claims nothing, deals nothing, runs no job and does not ping. After the heartbeat, a tick
+// that holds the lease and is not halted runs the outbound lane (outbound.ts, docs/specs/studio-reports.md)
+// inside its own try/catch, so Discord can never delay a card or the heartbeat.
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
@@ -53,6 +55,8 @@ export interface TickDeps {
   mainGate?: () => Promise<{ sha: string; status: GateStatus }>;
   // The job queue's tick (jobs.ts), run after the card path on every tick that is not halted.
   jobTick?: () => Promise<unknown>;
+  // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
+  outbound?: () => Promise<unknown>;
 }
 
 // Each claim holds the lease this long; the tick renews it every DISPATCHER_TICK_MS, so it lapses only
@@ -90,7 +94,20 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   }
   await heartbeat(deps);
   if (!halted) await deps.alert.ping();
+  if (!halted) await runOutboundLane(deps);
   return outcome;
+}
+
+// A failed or slow Discord post is logged and never stops the tick.
+async function runOutboundLane(deps: TickDeps): Promise<void> {
+  if (!deps.outbound) return;
+  try {
+    const outcome = await deps.outbound();
+    const inert = typeof outcome === 'object' && outcome !== null && (outcome as { inert?: unknown }).inert === true;
+    if (!inert) deps.log.info('outbound', 'outbound tick', { outcome });
+  } catch (error) {
+    deps.log.warn('outbound', 'outbound tick failed', { error: errorMessage(error) });
+  }
 }
 
 // Dealing and resume by rule are the database's (deal_due_cards, resume_due_by_rule); each is

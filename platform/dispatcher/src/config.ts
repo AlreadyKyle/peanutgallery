@@ -47,6 +47,12 @@ export interface DispatcherConfig {
   // Optional board alerts: pinged every tick, and posted to when a card needs a human.
   healthcheckUrl: string | null;
   ntfyTopicUrl: string | null;
+  // The Discord webhooks the ship and weekly posts go to (docs/specs/studio-reports.md); null leaves
+  // that lane inert. Each address is a bearer secret: never logged or printed.
+  discordWebhookShips: string | null;
+  discordWebhookWeekly: string | null;
+  // The public site's origin, which the posts link to.
+  publicSiteUrl: string;
 }
 
 export interface ManagedConfig {
@@ -105,6 +111,35 @@ export function optionalHttpsUrlEnv(env: Env, name: string): string | null {
   }
   if (url.protocol !== 'https:') throw new ConfigError(`${name} must be an https URL`);
   return value;
+}
+
+// A Discord webhook address in any of Discord's forms. The token is the last part; a ConfigError names
+// the key only, never the value.
+export const DISCORD_WEBHOOK = /^https:\/\/((ptb|canary)[.])?discord(app)?[.]com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+$/;
+
+// Optional; unset or blank is null. Set, it must be a Discord webhook address.
+export function discordWebhookEnv(env: Env, name: string): string | null {
+  const value = env[name]?.trim();
+  if (!value) return null;
+  if (!DISCORD_WEBHOOK.test(value)) throw new ConfigError(`${name} must be a Discord webhook address (https://discord.com/api/webhooks/<id>/<token>)`);
+  return value;
+}
+
+export const DEFAULT_PUBLIC_SITE_URL = 'https://peanutgallery.games';
+
+// The public site's origin: https, with no path, query or fragment.
+export function publicSiteUrlEnv(env: Env): string {
+  const value = optionalEnv(env, 'PUBLIC_SITE_URL', DEFAULT_PUBLIC_SITE_URL);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ConfigError('PUBLIC_SITE_URL must be an https origin');
+  }
+  if (url.protocol !== 'https:' || url.pathname !== '/' || url.search !== '' || url.hash !== '' || url.username !== '' || url.password !== '') {
+    throw new ConfigError('PUBLIC_SITE_URL must be an https origin');
+  }
+  return url.origin;
 }
 
 export function agentModeEnv(env: Env): AgentMode {
@@ -270,5 +305,8 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     managed: managedEnv(env, agentMode, githubToken),
     healthcheckUrl: optionalHttpsUrlEnv(env, 'HEALTHCHECK_URL'),
     ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
+    discordWebhookShips: discordWebhookEnv(env, 'DISCORD_WEBHOOK_SHIPS'),
+    discordWebhookWeekly: discordWebhookEnv(env, 'DISCORD_WEBHOOK_WEEKLY'),
+    publicSiteUrl: publicSiteUrlEnv(env),
   };
 }

@@ -45,6 +45,10 @@ export const TIERS = {
     'platform/board/index.html',
     'platform/board/src/Board.test.tsx',
     'platform/board/src/Board.tsx',
+    // The Discord posts' username and the site origin they link to (docs/specs/studio-reports.md).
+    'platform/dispatcher/src/config.ts',
+    'platform/dispatcher/src/discord.ts',
+    'platform/dispatcher/test/config.test.ts',
     'platform/dispatcher/src/worktree.ts',
     'platform/ops/Dockerfile.dispatcher',
     'platform/site/DESIGN.md',
