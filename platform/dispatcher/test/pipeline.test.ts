@@ -14,10 +14,13 @@ import { storedPatch, type PatchStore, type StoredPatch } from '../src/patch.js'
 import { runCardPipeline, type PipelineDeps, type PipelineTimings } from '../src/pipeline.js';
 import { parsePriceTable } from '../src/pricing.js';
 import { tick } from '../src/tick.js';
+import { TypedOutput } from '../src/typed-output.js';
+import type { VisualVerdict } from '../src/visual-review.js';
+import { strToU8, zipSync } from 'fflate';
 import { AGENT_EMAIL, defaultGitRunner, git, setGitRunner, type GitCall } from '../src/worktree.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
-import { FakeDb, NOW, card } from './helpers/fake-db.js';
+import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
 import { githubGitRoute, type CompareFile } from './helpers/github-git.js';
 import { mockFetch, type FetchCall, type Reply } from './helpers/mock-fetch.js';
 
@@ -1578,3 +1581,219 @@ describe('a paid card and an infrastructure failure', () => {
   });
 });
 
+
+// The Directors' visual review (docs/specs/design-review.md), with fake GitHub (a gate run with an id,
+// its design-frames artifact and the storage download) and fake adapters for the builder and the
+// Platform Director.
+describe('the visual review', () => {
+  const READ_SET = ['Read', 'Glob', 'Grep'];
+  const director = role({ id: 'role-platform-director', name: 'Platform Director', title: 'Platform Director', model: 'builder-class', prompt_path: 'platform/agents/prompts/platform-director.md', tools_json: READ_SET, write_access: false, agent_class: 'reviewer' });
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7]);
+  const FRAMES_ZIP = zipSync({ 'site/changed.txt': strToU8('home-375.png\n'), 'site/home-375.before.png': PNG, 'site/home-375.after.png': PNG });
+  const NOTHING_CHANGED = zipSync({ 'site/changed.txt': strToU8('') });
+  const STORAGE = 'https://storage.example/frames.zip';
+  const typed = new TypedOutput();
+
+  const pass = { verdict: 'pass' as const, frame: 'site/home-375.png', reason_code: 'meets' };
+  const verdict = (over: Partial<VisualVerdict['criteria']> = {}): VisualVerdict => ({ criteria: { intent: pass, fit: pass, legibility: pass, all_ages: pass, ...over } });
+  const LEGIBILITY = { legibility: { verdict: 'revise' as const, frame: 'site/home-375.png', reason_code: 'dead_space' } };
+  const ALL_AGES = { all_ages: { verdict: 'revise' as const, frame: 'site/home-375.png', reason_code: 'rating_concern' } };
+
+  // The remote with a gate run that has an id, and the artifact routes; artifact null uploads none.
+  function visualRemote(artifact: Uint8Array | null = FRAMES_ZIP) {
+    const green = { status: 200, json: { workflow_runs: [{ id: 77, path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'success' }] } };
+    const base = remote({ gate: green });
+    const frameCalls: string[] = [];
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `${GITHUB}/actions/runs/77/artifacts?per_page=100`) {
+        frameCalls.push('artifacts');
+        const artifacts = artifact ? [{ id: 9, name: 'design-frames', expired: false, size_in_bytes: artifact.byteLength }] : [];
+        return new Response(JSON.stringify({ artifacts }), { status: 200 });
+      }
+      if (url === `${GITHUB}/actions/artifacts/9/zip`) return new Response(null, { status: 302, headers: { location: STORAGE } });
+      if (url === STORAGE) {
+        frameCalls.push('download');
+        return new Response(artifact, { status: 200 });
+      }
+      return base.fetchFn(input, init);
+    }) as typeof fetch;
+    return { ...base, fetchFn, frameCalls };
+  }
+
+  // The builder writes a new title each session, so a revision is a real change on the card's commit.
+  function builder() {
+    let session = 0;
+    const prompts: string[] = [];
+    const adapter = new FakeAdapter(async (spec, emit) => {
+      session += 1;
+      prompts.push(spec.prompt);
+      await emit(startEvent());
+      await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), `<title>Mob Machine ${session}</title>\n`, 'utf8');
+      await emit(usageEvent(1, 100));
+    });
+    return { adapter, prompts, sessions: () => session };
+  }
+
+  // The Director answers each review in turn; its session ids are review-1, review-2 and so on.
+  function reviewer(answers: string[], sessionId?: (n: number) => string) {
+    let n = 0;
+    const adapter = new FakeAdapter(
+      async (_spec, emit) => {
+        n += 1;
+        await emit({ type: 'start', sessionId: sessionId ? sessionId(n) : `review-${n}`, model: 'builder-class', tools: READ_SET, apiKeySource: 'none' });
+        await emit(usageEvent(1, 50));
+      },
+      { result: () => answers[Math.min(n, answers.length) - 1] ?? '' },
+    );
+    return { adapter, reviews: () => n };
+  }
+
+  function visualDeps(db: FakeDb, build: FakeAdapter, review: FakeAdapter, fetchFn: typeof fetch, alert = new RecordingAlerter()): PipelineDeps {
+    const stop = new AbortController();
+    const base = deps(db, build, fetchFn, stop, alert);
+    return {
+      ...base,
+      visual: {
+        framesRoot: path.join(dir, 'frames'),
+        review: {
+          db,
+          session: { adapter: review, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, boardSessionTtlMin: 3, watchIntervalMs: 5, log: silent, stopSignal: stop.signal, now: () => NOW, ledgerRetryMs: 1 },
+          rubric: async () => 'THE RUBRIC',
+          promptRoot: repo,
+          budgetUsd: 5,
+          waitIntervalMs: 5,
+        },
+      },
+    };
+  }
+
+  function setupDb(overrides: Parameters<typeof card>[0] = {}) {
+    const db = new FakeDb();
+    db.roles = [role(), director];
+    const c = platformCard({ id: '5a5a5a5a-0000-4000-8000-000000000001', ...overrides });
+    db.cards = [{ ...c, stage: 'building' }];
+    return { db, c };
+  }
+
+  const branchCommit = async () => git(['log', '--format=%P %s', '-1', 'card/5a5a5a5a-code'], origin);
+  const branchTitle = async () => git(['show', 'card/5a5a5a5a-code:platform/site/page.html'], origin);
+
+  it('merges a gate run with no design-frames, and one whose frames all match the base, with no review', async () => {
+    for (const artifact of [null, NOTHING_CHANGED]) {
+      await git(['update-ref', 'refs/heads/main', initialSha], origin);
+      const { db, c } = setupDb();
+      const { fetchFn } = visualRemote(artifact);
+      const review = reviewer([JSON.stringify(verdict())]);
+      await runCardPipeline(c, visualDeps(db, builder().adapter, review.adapter, fetchFn));
+      expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA, review_rounds: 0 });
+      expect(review.reviews()).toBe(0);
+      expect(db.approvals).toEqual([]);
+    }
+  });
+
+  it('records a visual approval, the builder as maker and the review as grader, and merges when all pass', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn, frameCalls, calls } = visualRemote();
+    const review = reviewer([JSON.stringify(verdict())]);
+    await runCardPipeline(c, visualDeps(db, builder().adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA, review_rounds: 0 });
+    expect(frameCalls).toEqual(['artifacts', 'download']);
+    expect(db.approvals).toEqual([
+      {
+        kind: 'visual',
+        cardId: c.id,
+        approverRoleId: director.id,
+        makerRoleId: 'role-builder-a',
+        makerRef: 'claude:session-1',
+        graderRef: 'claude:review-1',
+        verdict: { ...verdict(), decision: 'merge', review: 1, sha: expect.stringMatching(/^[0-9a-f]{40}$/) },
+      },
+    ]);
+    // The review's model calls are the founder's, with the Director's role, never the card's.
+    expect(db.ledger.filter((row) => row.role_id === director.id)).toEqual([expect.objectContaining({ billed_to: 'founder', card_id: null })]);
+    expect(db.events.find((e) => e.payload.step === 'visual_review')).toMatchObject({ role_id: director.id, payload: { decision: 'merge', review: 1, rounds_used: 0 } });
+    // The approval is written before the merge request.
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(true);
+    expect(review.adapter.specs[0]?.roleTools).toEqual(READ_SET);
+  });
+
+  it('revises once with only the typed feedback, squashes the revision into one commit on the base, gates it again and merges', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn } = visualRemote();
+    const build = builder();
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY)), JSON.stringify(verdict())]);
+    await runCardPipeline(c, visualDeps(db, build.adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA, review_rounds: 1 });
+    expect([build.sessions(), review.reviews()]).toEqual([2, 2]);
+    const addendum = build.prompts[1]!.slice(build.prompts[0]!.length);
+    expect(addendum.trim().split('\n')).toEqual([expect.stringContaining('revision 1 of 2'), '- legibility: dead_space (frame site/home-375.png)']);
+    expect(build.prompts[0]).not.toContain('Visual review');
+    // One commit on the base, holding the revision.
+    expect(await branchCommit()).toBe(`${initialSha} card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11`.replace('4c2f5a1e', '5a5a5a5a'));
+    expect(await branchTitle()).toBe('<title>Mob Machine 2</title>');
+    expect(db.events.filter((e) => e.type === 'gate_pass')).toHaveLength(2);
+    expect(db.approvals).toHaveLength(1);
+    expect(db.approvals[0]).toMatchObject({ graderRef: 'claude:review-2', makerRef: 'claude:session-1', verdict: { decision: 'merge', review: 2 } });
+  });
+
+  it('merges an open legibility criterion after two revise rounds, with its final verdict recorded', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn } = visualRemote();
+    const build = builder();
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY))]);
+    await runCardPipeline(c, visualDeps(db, build.adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA, review_rounds: 2 });
+    expect([build.sessions(), review.reviews()]).toEqual([3, 3]);
+    expect(db.approvals).toEqual([expect.objectContaining({ graderRef: 'claude:review-3', verdict: expect.objectContaining({ ...verdict(LEGIBILITY), decision: 'merge_open', review: 3 }) })]);
+  });
+
+  it('rejects the card through the gate-rejection path when all ages is still open after two rounds', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn, calls } = visualRemote();
+    const alert = new RecordingAlerter();
+    const review = reviewer([JSON.stringify(verdict(ALL_AGES))]);
+    await runCardPipeline(c, visualDeps(db, builder().adapter, review.adapter, fetchFn, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'visual_review:all_ages', review_rounds: 2 });
+    expect(review.reviews()).toBe(3);
+    expect(db.approvals).toEqual([]);
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    expect(alert.messages.at(-1)).toMatch(/rejected \(visual_review:all_ages\)/);
+  });
+
+  it('reads the rounds used from the card after a restart, so a card at the cap is not revised again', async () => {
+    const { db, c } = setupDb();
+    db.cards[0]!.review_rounds = 2;
+    const { fetchFn } = visualRemote();
+    const build = builder();
+    const review = reviewer([JSON.stringify(verdict(LEGIBILITY))]);
+    // The claim read the card before the restart's count; the pipeline reads it again.
+    await runCardPipeline({ ...c, review_rounds: 0 }, visualDeps(db, build.adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', review_rounds: 2 });
+    expect([build.sessions(), review.reviews()]).toEqual([1, 1]);
+    expect(db.approvals[0]).toMatchObject({ verdict: { decision: 'merge_open' } });
+  });
+
+  it('records nothing and does not merge when the final message is not one valid verdict', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn, calls } = visualRemote();
+    const review = reviewer(['The frames look fine to me.']);
+    await runCardPipeline(c, visualDeps(db, builder().adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'visual_review', review_rounds: 0 });
+    expect(db.approvals).toEqual([]);
+    expect(db.events.some((e) => e.payload.step === 'visual_review')).toBe(false);
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+  });
+
+  it('refuses the approval when the review session is the builder session, and does not merge', async () => {
+    const { db, c } = setupDb();
+    const { fetchFn, calls } = visualRemote();
+    const review = reviewer([JSON.stringify(verdict())], () => 'session-1');
+    await runCardPipeline(c, visualDeps(db, builder().adapter, review.adapter, fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'visual_review' });
+    expect(db.approvals).toEqual([]);
+    expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
+    // Postgres refuses it too.
+    await expect(db.recordVisualApproval({ cardId: c.id, verdict: {}, approverRoleId: director.id, makerRoleId: null, makerRef: 'claude:x', graderRef: 'claude:x' })).rejects.toThrow(/must differ/);
+  });
+});
