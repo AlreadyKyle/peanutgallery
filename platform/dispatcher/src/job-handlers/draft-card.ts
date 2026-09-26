@@ -23,8 +23,42 @@ export interface DraftVerdict {
   note?: string;
 }
 
-// The floor context studio-reports passes: a count, or named counts.
+// The floor context studio-reports passes: a count, or named numbers. Draft to the floor sends
+// {short_open, short_big, short_small, big_min_usd, small_max_usd}: the shortfalls and the sizes they
+// ask for, which designerPrompt spells out.
 export type Floor = number | Record<string, number>;
+
+const FLOOR_KEYS = ['short_open', 'short_big', 'short_small', 'big_min_usd', 'small_max_usd'] as const;
+type SupplyFloor = Record<(typeof FLOOR_KEYS)[number], number>;
+
+function usd(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function cards(n: number, what: string): string {
+  return `${n} ${what}${n === 1 ? '' : 's'}`;
+}
+
+// What the floor asks the Designer for. Draft to the floor's shortfalls become one line each, with the
+// target each size needs: a big card's target is at least big_min_usd (a bigger change, never a
+// padded target), a small card's is under small_max_usd. Any other floor is shown as given.
+export function floorLines(floor: Floor, cardMaxUsd: number): string[] {
+  const named = typeof floor === 'object' && FLOOR_KEYS.every((key) => typeof floor[key] === 'number');
+  if (!named) return [`The floor: ${JSON.stringify(floor)}.`];
+  const f = floor as SupplyFloor;
+  const asks: string[] = [];
+  if (f.short_big > 0) {
+    asks.push(
+      f.big_min_usd > cardMaxUsd
+        ? `- ${cards(f.short_big, 'big card')}, with a target of at least ${usd(f.big_min_usd)}: no draft can fill this, since the per-card maximum is ${usd(cardMaxUsd)}. Fill another shortfall.`
+        : `- ${cards(f.short_big, 'big card')}: a target of at least ${usd(f.big_min_usd)} and at most ${usd(cardMaxUsd)}. By the five-times rule that is a bigger change, with an expected cost of at least ${usd(f.big_min_usd / 5)}, still one mechanic, number or piece of content. Never pad a smaller change's target to reach it.`,
+    );
+  }
+  if (f.short_small > 0) asks.push(`- ${cards(f.short_small, 'small card')}: a target under ${usd(f.small_max_usd)}.`);
+  if (f.short_open > 0) asks.push(`- ${cards(f.short_open, 'more open card')}, of any size.`);
+  if (asks.length === 0) return ['The open cards meet the board\'s floor.'];
+  return ["The open cards are short of the board's floor. Draft one card that fills one of these shortfalls:", ...asks];
+}
 export interface DraftInput {
   floor: Floor | null;
   // The open cards the run names, by id; null for every open card.
@@ -87,11 +121,11 @@ export function designerPrompt(context: DesignerContext, typed: TypedOutput): st
     'The cards already open, as typed fields; do not draft a copy of one. A card whose source is community carries no text.',
     JSON.stringify(context.openCards, null, 2),
   ];
-  if (context.floor !== null) lines.push('', `The floor: ${JSON.stringify(context.floor)}.`);
+  if (context.floor !== null) lines.push('', ...floorLines(context.floor, context.cardMaxUsd));
   lines.push(
     '',
     `Executors: ${context.executors.join(', ')}. Name one of them as the executor.`,
-    `The estimate is also the funding target, at most $${context.cardMaxUsd}: five times the highest measured cost for the lane, rounded up to the next 50 cents, which is $0.50 for a config card and $1.50 for a code card.`,
+    `The estimate is also the funding target, at most $${context.cardMaxUsd}: five times the change's expected cost, rounded up to the next 50 cents. At the measured costs a change the size of the launch cards is $0.50 for a config card and $1.50 for a code card; a bigger change costs more, so its estimate is higher, and no estimate is padded to reach a figure.`,
   );
   if (context.feedback?.kind === 'refused') {
     lines.push('', `Your last draft was refused by the ${context.feedback.check} check: ${context.feedback.detail}`, 'It was:', JSON.stringify(context.feedback.draft, null, 2));

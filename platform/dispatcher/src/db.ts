@@ -267,7 +267,8 @@ export interface OutboundDb {
   postingStop(): Promise<'kill_switch' | 'paused' | null>;
   // Public cards live since `since` with no ship row, oldest first, at most `limit`.
   unpostedShips(since: Date, limit: number): Promise<ShipPost[]>;
-  // The newest studio_reports row when it has no weekly row; null otherwise.
+  // The newest studio_reports row when it has no weekly row; null otherwise. runOutbound decides whether
+  // it is still fresh enough to post.
   unpostedReport(): Promise<ReportPost | null>;
   // Inserts the (kind, ref) row in the state given; false when a row already holds it.
   claimPost(kind: PostKind, ref: string, state: 'sending' | 'skipped', skipReason: string | null, now: Date): Promise<boolean>;

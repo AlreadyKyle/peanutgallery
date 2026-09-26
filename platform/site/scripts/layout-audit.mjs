@@ -22,7 +22,9 @@
 //   above a card's pinned bottom block (its hollow) is at most 80px, the bottom block ends at the
 //   card's inner edge, and the corner index stays on one line;
 // - buttons: a button's label stays on one line (at most 47px tall);
-// - orphan: no glyph or chip narrower than 32px is left alone on a wrapped line of a flex row;
+// - orphan: no glyph or chip narrower than 32px is left alone on a wrapped line of a flex row, and
+//   no item of a wrapped row of links or chips (list items, links or buttons) sits alone on a line
+//   while another line holds two or more (the footer's Discord link at 375px, 26 Sep 2026);
 // - rhythm: a heading in main sits at least as far below the block before it as that block sits
 //   below its own predecessor, so no line reads as the caption of the section under it;
 // - top bar: at most 61px tall from 360px to 390px wide.
@@ -209,10 +211,19 @@ export function auditLayout(limits) {
       }
     }
 
-    // Orphans: a glyph or chip alone on a wrapped line of a flex row.
+    // Orphans: a glyph or chip alone on a wrapped line of a flex row; and, at any width, one item
+    // alone on a line of a wrapped row of links or chips (list items, links or buttons, all one kind
+    // of element) while another line holds two or more. A row that stacks one item to a line is a
+    // column, not an orphan, and a line of inline text pieces (spans) wraps as prose does.
     if (flexRow && cs.flexWrap === 'wrap' && rows.length > 1) {
+      const tags = new Set(items.map((item) => item.tagName));
+      const like = tags.size === 1 && ['LI', 'A', 'BUTTON'].includes([...tags][0]);
+      const crowded = rows.some((row) => row.items.length > 1);
       for (const row of rows) {
-        if (row.items.length === 1 && box(row.items[0]).width < 32) out.push(`orphan: a ${Math.round(box(row.items[0]).width)}px item alone on a line in ${name(container)}`);
+        if (row.items.length !== 1) continue;
+        const width = box(row.items[0]).width;
+        if (width < 32) out.push(`orphan: a ${Math.round(width)}px item alone on a line in ${name(container)}`);
+        else if (like && crowded) out.push(`orphan: ${name(row.items[0])} alone on a line of ${name(container)}`);
       }
     }
   }

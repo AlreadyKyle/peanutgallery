@@ -2,7 +2,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createDiscordPoster, MAX_CONTENT } from '../src/discord.js';
 import { createLogger } from '../src/log.js';
-import { MAX_POSTS_PER_TICK, runOutbound, shipText, weeklyText, type OutboundDeps } from '../src/outbound.js';
+import { lastEndedWeek, MAX_POSTS_PER_TICK, runOutbound, shipText, weeklyText, type OutboundDeps } from '../src/outbound.js';
 import { FakeDb, NOW, shipPost } from './helpers/fake-db.js';
 import { hangingFetch, mockFetch, type Route } from './helpers/mock-fetch.js';
 
@@ -139,8 +139,51 @@ describe('the outbound lane', () => {
     expect((await runOutbound(deps)).posted).toBe(1);
     await runOutbound(deps);
     expect(calls.map((call) => call.url)).toEqual([`${WEEKLY}?wait=true`]);
-    expect(contents(calls)).toEqual([`This week at Mob Machine: 2 cards shipped (A plant grows, Dust settles). 6 cards are open for funding. Read the report: ${SITE}/reports`]);
+    expect(contents(calls)).toEqual([
+      `The week of 7 September at Mob Machine: 2 cards shipped (A plant grows, Dust settles). 6 cards were open for funding when the report was published. Read the report: ${SITE}/reports`,
+    ]);
     expect(db.posts).toEqual([{ kind: 'weekly', ref: '2026-09-07', state: 'posted', status: 200, message_id: 'msg-1', skip_reason: null }]);
+  });
+
+  // The review of 26 September 2026: production held one report, the week of 14 September, and the
+  // lane would have posted it as this week's news whenever the webhook was set.
+  it('records a report older than the last ended New York week as skipped, stale, and never posts it', async () => {
+    const { db, deps, calls } = setup();
+    db.reports = [{ week_start: '2026-09-14', shipped_count: 6, shipped_titles: ['A', 'B', 'C', 'D', 'E', 'F'], open_count: 6 }];
+    deps.now = () => new Date('2026-11-02T15:00:00Z');
+    expect(await runOutbound(deps)).toEqual({ inert: false, posted: 0, failed: 0, skipped: 1 });
+    expect(calls).toEqual([]);
+    expect(db.posts).toEqual([{ kind: 'weekly', ref: '2026-09-14', state: 'skipped', status: null, message_id: null, skip_reason: 'stale' }]);
+    await runOutbound(deps);
+    expect(calls).toEqual([]);
+  });
+
+  it('posts a report until the next New York week ends, and not from its first minute', async () => {
+    const report = { week_start: '2026-09-07', shipped_count: 1, shipped_titles: ['A'], open_count: 6 };
+    // Sunday 20 September, 23:59 in New York: the week of 7 September is still the last one ended.
+    const fresh = setup();
+    fresh.db.reports = [report];
+    fresh.deps.now = () => new Date('2026-09-21T03:59:59Z');
+    expect((await runOutbound(fresh.deps)).posted).toBe(1);
+    // Monday 21 September, 00:00 in New York: the week of 14 September has ended.
+    const late = setup();
+    late.db.reports = [report];
+    late.deps.now = () => new Date('2026-09-21T04:00:00Z');
+    expect(await runOutbound(late.deps)).toEqual({ inert: false, posted: 0, failed: 0, skipped: 1 });
+    expect(late.calls).toEqual([]);
+    expect(late.db.posts[0]).toMatchObject({ state: 'skipped', skip_reason: 'stale' });
+  });
+
+  it('while paused leaves a stale report alone, and records it stale after resuming', async () => {
+    const { db, deps, calls } = setup();
+    db.reports = [{ week_start: '2026-08-31', shipped_count: 1, shipped_titles: ['A'], open_count: 6 }];
+    db.studio.paused = true;
+    expect(await runOutbound(deps)).toEqual({ inert: false, posted: 0, failed: 0, skipped: 0 });
+    expect(db.posts).toEqual([]);
+    db.studio.paused = false;
+    expect((await runOutbound(deps)).skipped).toBe(1);
+    expect(calls).toEqual([]);
+    expect(db.posts[0]).toMatchObject({ kind: 'weekly', ref: '2026-08-31', state: 'skipped', skip_reason: 'stale' });
   });
 
   it('makes at most five requests in one tick, and the rest go out on the next', async () => {
@@ -195,8 +238,34 @@ describe('the post texts', () => {
     expect(long.length).toBeLessThanOrEqual(MAX_CONTENT);
     expect(long.endsWith(`Watch how it was built: ${SITE}/card/${shipPost().id}`)).toBe(true);
     const weekly = weeklyText({ week_start: '2026-09-07', shipped_count: 1, shipped_titles: ['_one_'], open_count: 1 }, SITE);
-    expect(weekly).toBe(`This week at Mob Machine: 1 card shipped (\\_one\\_). 1 card is open for funding. Read the report: ${SITE}/reports`);
-    const many = weeklyText({ week_start: '2026-09-07', shipped_count: 7, shipped_titles: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], open_count: 0 }, SITE);
-    expect(many).toBe(`This week at Mob Machine: 7 cards shipped (a, b, c, d, e and 2 more). 0 cards are open for funding. Read the report: ${SITE}/reports`);
+    expect(weekly).toBe(
+      `The week of 7 September at Mob Machine: 1 card shipped (\\_one\\_). 1 card was open for funding when the report was published. Read the report: ${SITE}/reports`,
+    );
+    const many = weeklyText({ week_start: '2026-12-28', shipped_count: 7, shipped_titles: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], open_count: 0 }, SITE);
+    expect(many).toBe(
+      `The week of 28 December at Mob Machine: 7 cards shipped (a, b, c, d, e and 2 more). No card was open for funding when the report was published. Read the report: ${SITE}/reports`,
+    );
+  });
+
+  it('never says "this week": a weekly post names its week', () => {
+    expect(weeklyText({ week_start: '2026-09-14', shipped_count: 6, shipped_titles: [], open_count: 6 }, SITE)).toBe(
+      `The week of 14 September at Mob Machine: 6 cards shipped. 6 cards were open for funding when the report was published. Read the report: ${SITE}/reports`,
+    );
+  });
+});
+
+describe('the last ended New York week', () => {
+  it('is the Monday before last, turning at midnight New York time, as money.last_ended_week does', () => {
+    // Monday 14 September 2026, 11:00 in New York (the fixtures' NOW).
+    expect(lastEndedWeek(new Date('2026-09-14T15:00:00Z'))).toBe('2026-09-07');
+    // Monday 14 September, 00:30 UTC is still Sunday 13 September in New York.
+    expect(lastEndedWeek(new Date('2026-09-14T00:30:00Z'))).toBe('2026-08-31');
+    // Saturday 26 September 2026, the day of the review: production's week of 14 September.
+    expect(lastEndedWeek(new Date('2026-09-26T18:07:00Z'))).toBe('2026-09-14');
+    // Both daylight-saving changes: 1 November 2026 (UTC-4 to UTC-5) and 14 March 2027 (back).
+    expect(lastEndedWeek(new Date('2026-11-02T04:59:59Z'))).toBe('2026-10-19');
+    expect(lastEndedWeek(new Date('2026-11-02T05:00:00Z'))).toBe('2026-10-26');
+    expect(lastEndedWeek(new Date('2027-03-15T03:59:59Z'))).toBe('2027-03-01');
+    expect(lastEndedWeek(new Date('2027-03-15T04:00:00Z'))).toBe('2027-03-08');
   });
 });

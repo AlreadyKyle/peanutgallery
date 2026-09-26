@@ -287,7 +287,7 @@ describe('the card supply (docs/specs/studio-reports.md)', () => {
     expect(() => supplyFrom({ ...raw, short_big: undefined })).toThrow('card_supply returned no short_big');
   });
 
-  it('queues draft_card through enqueue_manual_job with the shortfalls and the open card ids, under 4 KB', async () => {
+  it('queues draft_card through enqueue_manual_job with the shortfalls, the sizes they ask for and the open card ids, under 4 KB', async () => {
     const calls: { name: string; args: Record<string, unknown> | undefined }[] = [];
     const client = {
       rpc: (name: string, args?: Record<string, unknown>) => {
@@ -301,9 +301,11 @@ describe('the card supply (docs/specs/studio-reports.md)', () => {
       { name: 'card_supply', args: undefined },
       {
         name: 'enqueue_manual_job',
-        args: { p_job: 'draft_card', p_card: null, p_reason: 'Short of a big card', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: raw.open_cards.map((c) => c.id) } },
+        args: { p_job: 'draft_card', p_card: null, p_reason: 'Short of a big card', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0, big_min_usd: 5, small_max_usd: 2 }, open_cards: raw.open_cards.map((c) => c.id) } },
       },
     ]);
+    // The Designer is told what big and small mean from studio_state's own thresholds, not a copy of $5 and $2.
+    expect(draftToFloorInput({ ...supply, big_min_usd: 7.5, small_max_usd: 2.25 }).floor).toEqual({ short_open: 0, short_big: 1, short_small: 0, big_min_usd: 7.5, small_max_usd: 2.25 });
     const many = { ...supply, open_cards: Array.from({ length: 200 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, title: 'x', target_usd: 1 })) };
     const input = draftToFloorInput(many);
     expect(input.open_cards).toHaveLength(DRAFT_TO_FLOOR_MAX_CARDS);
