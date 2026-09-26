@@ -192,7 +192,7 @@ export function CardPage() {
             {words.loading}
           </p>
         ) : state.state === 'error' ? (
-          <p className="muted">{words.unavailable}</p>
+          <p className="muted">{legal.cardUnavailable}</p>
         ) : (
           <Detail detail={state.detail} snapshot={withCard(snapshot, state.detail)} />
         )}

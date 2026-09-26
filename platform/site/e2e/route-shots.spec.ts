@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
-import { copy } from '../src/lib/copy';
 import { legal } from '../src/lib/legal';
 import { E2E_ORIGIN } from './fixture-env';
 import { expect, test } from './fixtures';
@@ -24,7 +23,8 @@ const SHOT_TIME = new Date('2026-09-22T12:01:00Z');
 
 // What a data route shows in place of its figures when a document did not load (StaleNotice and the
 // pages' unavailable states).
-const UNREADY_LINES = [legal.staleFigures, legal.meterUnavailable, legal.partUnavailable, copy.reports.unavailable, copy.cardPage.unavailable];
+// Kernel lines only: the frames job imports no card code into Node (docs/specs/design-review.md).
+const UNREADY_LINES = [legal.staleFigures, legal.meterUnavailable, legal.partUnavailable, legal.reportsUnavailable, legal.cardUnavailable];
 
 /**
  * Fails every request to an origin other than the preview's, and returns what was refused, so the

@@ -976,11 +976,28 @@ frames_has_no_cache() { ! job_block frames | grep -qE '^ +cache:'; }
 assert "workflow: the frames job runs when detect selects render" test "$(job_block frames | grep -c "^    if: needs.detect.outputs.render == 'true'$")" = 1
 assert "workflow: the frames job needs detect alone" test "$(job_block frames | grep -c '^    needs: detect$')" = 1
 assert "workflow: the frames job has a 25 minute timeout" test "$(job_block frames | grep -c '^    timeout-minutes: 25$')" = 1
-assert "workflow: the frames job restores every kernel file, installs, draws the change and then the base, keeps the differences and uploads them" order frames 'git checkout "$BASE" -- platform/gate' 'restore-kernel.sh "$BASE"' 'uses: pnpm/action-setup' 'run: pnpm install --frozen-lockfile --ignore-scripts' 'playwright install --with-deps chromium' 'draw "$GITHUB_WORKSPACE" "$RUNNER_TEMP/after"' 'git worktree add --detach "$RUNNER_TEMP/base" "$BASE"' 'draw "$RUNNER_TEMP/base" "$RUNNER_TEMP/before"' 'platform/gate/frames-diff.sh' 'uses: actions/upload-artifact@'
+assert "workflow: the frames job restores every kernel file, installs, copies frames-diff.sh out, makes the game's states on the base, draws the change and then the base, keeps the differences and uploads them" order frames 'git checkout "$BASE" -- platform/gate' 'restore-kernel.sh "$BASE"' 'uses: pnpm/action-setup' 'run: pnpm install --frozen-lockfile --ignore-scripts' 'playwright install --with-deps chromium' 'cp platform/gate/frames-diff.sh "$RUNNER_TEMP/gate/frames-diff.sh"' 'git worktree add --detach "$RUNNER_TEMP/base" "$BASE"' '(cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts)' '(cd "$RUNNER_TEMP/base" && pnpm --filter @backseat/seed-1 exec tsx e2e/frame-states.ts "$RUNNER_TEMP/frame-states.json")' 'draw "$GITHUB_WORKSPACE" "$RUNNER_TEMP/after"' 'draw "$RUNNER_TEMP/base" "$RUNNER_TEMP/before"' 'bash "$RUNNER_TEMP/gate/frames-diff.sh"' 'uses: actions/upload-artifact@'
 assert "workflow: the frames job restores kernel files on card branches only" order frames 'name: Restore every kernel file from the base commit on a card branch' "if: startsWith(github.head_ref, 'card/')" 'restore-kernel.sh "$BASE"'
 assert "workflow: the frames job runs no card tests" frames_runs_no_card_tests
 assert "workflow: the frames job uses no dependency cache" frames_has_no_cache
-assert "workflow: the frames job draws the site's routes and the game's states with the kernel specs" order frames 'E2E_ROUTE_SHOTS="$2/site" pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts' 'E2E_FRAMES="$2/game" pnpm --filter @backseat/seed-1 e2e'
+assert "workflow: the frames job draws the site's routes and the game's states with the kernel specs" order frames 'E2E_ROUTE_SHOTS="$2/site" pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts' 'E2E_FRAMES="$2/game" E2E_FRAME_STATES="$RUNNER_TEMP/frame-states.json" pnpm --filter @backseat/seed-1 exec playwright test'
+# No card code runs in Node in the frames job (docs/specs/design-review.md): the game's draw reads the
+# states the base made (E2E_FRAME_STATES) and runs Playwright itself, never a seed-1 script such as
+# e2e, which makes the states from the checkout's own sim; the change's own frame-states.ts runs only
+# off a card branch, on a base that has none; and the frames are kept by the frames-diff.sh copied
+# out before either draw.
+frames_seed_runs_only_kernel() {
+  local calls
+  calls=$(job_block frames | grep -oE 'pnpm --filter @backseat/seed-1 [a-z]+ [^ )"]+( [^ )"]+)?')
+  [ -n "$calls" ] && ! printf '%s\n' "$calls" | grep -vqxE 'pnpm --filter @backseat/seed-1 exec (playwright test|tsx e2e/frame-states\.ts)'
+}
+frames_change_states_off_card_branches() {
+  job_block frames | awk '/case "\$HEAD_REF" in card\/\*\) echo .*exit 1 ;; esac/ { c = NR } /^ +pnpm --filter @backseat\/seed-1 exec tsx e2e\/frame-states\.ts "\$RUNNER_TEMP\/frame-states\.json"$/ { n++; if (!c || c > NR) bad = 1 } END { exit (bad || n != 1) }'
+}
+assert "workflow: the frames job runs only Playwright and frame-states.ts in seed-1, never a package script" frames_seed_runs_only_kernel
+assert "workflow: the frames job's game draw reads its states from E2E_FRAME_STATES" test "$(job_block frames | grep -c 'E2E_FRAME_STATES="$RUNNER_TEMP/frame-states.json" pnpm --filter @backseat/seed-1 exec playwright test')" = 1
+assert "workflow: the frames job makes the states from the change only off a card branch" frames_change_states_off_card_branches
+assert "workflow: the frames job keeps the frames with the copy of frames-diff.sh, never the checkout's" test "$(job_block frames | grep -c 'bash platform/gate/frames-diff.sh')" = 0
 assert "workflow: the frames job pins upload-artifact by its commit sha" test "$(job_block frames | grep -cE '^      - uses: actions/upload-artifact@[0-9a-f]{40} # v[0-9.]+$')" = 1
 for line in 'name: design-frames' 'path: ${{ runner.temp }}/upload' 'retention-days: 1' 'if-no-files-found: error'; do
   assert "workflow: the frames artifact sets $line" test "$(job_block frames | grep -cxF "          $line")" = 1

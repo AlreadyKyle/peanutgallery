@@ -164,7 +164,6 @@ export const copy = {
     title: 'Weekly reports',
     lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. The open cards are counted as the report is published. A week in which no card shipped has no report.',
     loading: 'Loading the reports.',
-    unavailable: 'The reports could not be loaded right now.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
   cardPage: {
@@ -172,7 +171,6 @@ export const copy = {
     cardTitle: 'A card',
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
-    unavailable: 'This card could not be loaded right now.',
     factsHeading: 'The facts',
     timeToLive: 'Start to live',
     minutesOne: '1 minute',

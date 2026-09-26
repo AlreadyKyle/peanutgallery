@@ -2,6 +2,7 @@ import { MoreLink } from '../components/MoreLink';
 import { PageHeader } from '../components/PageHeader';
 import { ReportFacts } from '../components/ReportFacts';
 import { copy } from '../lib/copy';
+import { legal } from '../lib/legal';
 import { useReports } from '../lib/reports-source';
 
 // /reports (docs/specs/studio-reports.md), in the card lane: the weekly reports, newest first, each
@@ -26,7 +27,7 @@ export function Reports() {
             {words.loading}
           </p>
         ) : state.state === 'error' ? (
-          <p className="muted">{words.unavailable}</p>
+          <p className="muted">{legal.reportsUnavailable}</p>
         ) : state.reports.length === 0 ? (
           <div className="prose">
             <p>{words.empty}</p>

@@ -69,6 +69,11 @@ export const legal = {
   meterUnavailable: 'Figures are not available yet.',
   staleFigures: 'Could not refresh. These figures may be out of date.',
   partUnavailable: 'Not available right now.',
+  // What /reports and a card's page show when their document did not load. They sit here, beside the
+  // other unavailable lines, because the kernel route-shots spec refuses a frame that shows one and
+  // must read them without running card code (docs/specs/design-review.md).
+  reportsUnavailable: 'The reports could not be loaded right now.',
+  cardUnavailable: 'This card could not be loaded right now.',
   ledgerEmpty: 'No agent work recorded yet.',
   deploysEmpty: 'No deploys yet.',
   artPolicy: 'Art in the games and the agent avatars is drawn by code.',
