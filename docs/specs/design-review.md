@@ -56,18 +56,27 @@ The job compares each frame byte for byte with the base's and uploads every fram
 
 ## Verification
 
-- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`
-- `pnpm --filter @backseat/gate test` (the render flag and the design-paths guard)
-- `pnpm --filter @backseat/dispatcher test`, `pnpm test:functions` and `pnpm test:agents`
-- `E2E_PORT=4391 pnpm --filter @backseat/site e2e`, `pnpm --filter @backseat/seed-1 test` and `pnpm --filter @backseat/seed-1 e2e`
-- Locally: `E2E_ROUTE_SHOTS=/tmp/frames E2E_PORT=4391 pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts`, with the frame count quoted and the frames looked at.
-- On this pull request's own gate run: the `frames` job passes and the `design-frames` artifact list is quoted (`gh api repos/AlreadyKyle/peanutgallery/actions/runs/<id>/artifacts`).
-- The gate green at the pull request's head sha.
-- Production, after the production steps: the pre-migration dump's size quoted; `anon-negative-test.ts` and `ledger-identity.ts` PASS, with `select public.ledger_identity()` read back.
+- [x] `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`
+- [x] `pnpm --filter @backseat/gate test` (the render flag and the design-paths guard)
+- [x] `pnpm --filter @backseat/dispatcher test`, `pnpm test:functions` and `pnpm test:agents`
+- [x] `E2E_PORT=4391 pnpm --filter @backseat/site e2e`, `pnpm --filter @backseat/seed-1 test` and `pnpm --filter @backseat/seed-1 e2e` (run on ports 4472 and 4470)
+- [x] Locally: `E2E_ROUTE_SHOTS=/tmp/frames E2E_PORT=4391 pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts`, with the frame count quoted and the frames looked at.
+- [ ] On this pull request's own gate run: the `frames` job passes and the `design-frames` artifact list is quoted (`gh api repos/AlreadyKyle/peanutgallery/actions/runs/<id>/artifacts`). Waits on GitHub Actions minutes (board): Actions is off and `local-gate.sh` cannot run the job (Decisions).
+- [ ] The gate green at the pull request's head sha (the ship stage's local gate).
+- [ ] Production, after the production steps: the pre-migration dump's size quoted; `anon-negative-test.ts` and `ledger-identity.ts` PASS, with `select public.ledger_identity()` read back (the ship stage).
 
 ## Evidence
 
-Added when the status moves to built or done.
+Built on `launch/studio-reports` (base f93cc5a, then its f93fb8c merged in), 26 September 2026, in the worktree on ports 4470 to 4474.
+
+- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify`: exit 0. From its log: board `Tests  100 passed (100)`, supabase `Tests  322 passed (322)`, site `Tests  518 passed (518)`, seed-1 `Tests  77 passed (77)`, dispatcher `Test Files  45 passed (45)` and `Tests  765 passed (765)`, `PASS: gate tests passed=601`, agents `ℹ pass 127` / `ℹ fail 0`, functions `ok | 129 passed (230 steps) | 0 failed`, `PASS: headless-bot simulatedSeconds=36000 unlocks=13 finalTotalDust=210706643.11118117 stateHash=4b268106c8053ca8`, docs `ℹ pass 20`, and `tier 1 carries the old name nowhere`.
+- `deno test ... design_review_test.ts`: `ok | 1 passed (7 steps) | 0 failed`; `migration_test.ts`: `ok | 3 passed (71 steps) | 0 failed`.
+- Dispatcher, new files: `frames.test.ts` `Tests  15 passed (15)`, `visual-review.test.ts` `Tests  25 passed (25)`, and `pipeline.test.ts -t "the visual review"` `Tests  8 passed | 73 skipped (81)`.
+- `E2E_PORT=4472 pnpm --filter @backseat/site e2e`: `222 passed (3.9m)`, `8 skipped` (the screenshot tests that need `E2E_ROUTE_SHOTS` or `E2E_SCREENSHOTS`).
+- `E2E_ROUTE_SHOTS=<folder> E2E_PORT=4472 pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts`, twice: `9 passed (2.0m)` and `9 passed (1.9m)`, 87 frames each; `frames-diff.sh run1 run2 out` printed `frames: total=87 changed=0`. Before the page clock was pinned the same pair printed `frames: total=87 changed=3` (guide-375, guide-768 and guide-1440, whose sample rows showed 13:26 and 13:28). Looked at: home-1440 (Building now and Fund what's next, the second row part-empty as the grid order requires), team-768 (every member in the same box), and the guide and card frames; nothing broken.
+- `E2E_PORT=4470 E2E_FRAMES=<folder> pnpm --filter @backseat/seed-1 e2e`, three runs: `6 passed (28.7s)`, `6 passed (22.4s)`, `6 passed (23.2s)`; `frames-diff.sh` between runs 1 and 2 and runs 2 and 3: `frames: total=5 changed=0` both. Eight draws of each state in one run gave one hash each (`state 0 [ '42ddf2526066' ]`, `state 600 [ '4ddf2d5d0549' ]`, `state 3600 [ '0ecfee4146a6' ]`, `state 21600 [ '5cb579ae80a6' ]`); before the clock fix, six draws of 3,600 s gave three hashes, 15,880 against 15,881 dust.
+- A render change, proved on two local frame folders: with `seed-1/content/strings.json`'s strike label set to "Strike now" (then restored), the frames against run 1 gave `frames: total=5 changed=5` and `changed.txt` listing game-0.png, game-21600.png, game-3600.png, game-600.png and page-375.png, each as a `.before.png` and `.after.png`; game-600.after.png shows "Strike now" where page-375.before.png shows "Strike".
+
 
 ## Decisions
 
