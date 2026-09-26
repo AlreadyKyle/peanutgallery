@@ -40,6 +40,9 @@ const base: DispatcherConfig = {
   studioAnthropicApiKey: null,
   healthcheckUrl: null,
   ntfyTopicUrl: null,
+  discordWebhookShips: null,
+  discordWebhookWeekly: null,
+  publicSiteUrl: 'https://site.test',
 };
 
 describe('createAdapter', () => {

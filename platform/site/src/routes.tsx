@@ -4,6 +4,7 @@ import { CardPage } from './pages/CardPage';
 import { Guide, GUIDE_PATH } from './pages/Guide';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
+import { Reports } from './pages/Reports';
 import { Roadmap } from './pages/Roadmap';
 import { Team } from './pages/Team';
 
@@ -21,6 +22,8 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/roadmap', element: <Roadmap /> },
   // A card's own page (docs/specs/supporter-pages.md): the Watch links and /ledger's Stopped rows link it.
   { path: '/card/:id', element: <CardPage /> },
+  // The weekly reports (docs/specs/studio-reports.md), linked from the footer.
+  { path: '/reports', element: <Reports /> },
   // The design guide: unlisted (no top bar link, nothing links to it) and not indexed (DESIGN.md, Mockups).
   { path: GUIDE_PATH, element: <Guide /> },
 ];

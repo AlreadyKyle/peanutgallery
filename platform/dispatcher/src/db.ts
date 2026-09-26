@@ -224,7 +224,44 @@ export interface RankingMove {
 // an incident (a failed revert), or the board's own pause.
 export type PauseReason = 'awaiting_credit' | 'spend_limit' | 'incident' | 'board';
 
-export interface Db {
+// The Discord outbox (docs/specs/studio-reports.md): one outbound_posts row per (kind, ref), inserted
+// before a post so the primary key refuses a second claim, and never posted again whatever its state.
+export type PostKind = 'ship' | 'weekly';
+
+// A card that went live, with what its ship post names: the executor's name, its studio-billed cost
+// and its first supporters by number with their count (public_card_supporters).
+export interface ShipPost {
+  id: string;
+  title: string;
+  live_at: string;
+  role_name: string | null;
+  cost_usd: number;
+  supporters: { number: number; founding: boolean }[];
+  supporter_count: number;
+}
+
+// The newest published weekly report, with what its post names.
+export interface ReportPost {
+  week_start: string;
+  shipped_count: number;
+  shipped_titles: string[];
+  open_count: number;
+}
+
+export interface OutboundDb {
+  // Why nothing may be posted now: the kill switch has fired or the studio is paused; null otherwise.
+  postingStop(): Promise<'kill_switch' | 'paused' | null>;
+  // Public cards live since `since` with no ship row, oldest first, at most `limit`.
+  unpostedShips(since: Date, limit: number): Promise<ShipPost[]>;
+  // The newest studio_reports row when it has no weekly row; null otherwise.
+  unpostedReport(): Promise<ReportPost | null>;
+  // Inserts the (kind, ref) row in the state given; false when a row already holds it.
+  claimPost(kind: PostKind, ref: string, state: 'sending' | 'skipped', skipReason: string | null, now: Date): Promise<boolean>;
+  // A 'sending' row to 'posted' or 'failed', with Discord's status and message id.
+  finishPost(kind: PostKind, ref: string, result: { state: 'posted' | 'failed'; status: number | null; messageId: string | null }, now: Date): Promise<void>;
+}
+
+export interface Db extends OutboundDb {
   getStudioState(): Promise<StudioState>;
   // Pauses the studio, as the board's pause does, with the reason the public sees
   // (studio_state.pause_reason, docs/specs/money-logic.md); a studio already paused keeps who
@@ -760,5 +797,101 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       };
     },
 
+    async postingStop() {
+      const { data, error } = await client.from('studio_state').select('paused, kill_switch_fired_at').eq('id', 1).single();
+      if (error || !data) fail('studio_state posting', error);
+      const row = data as Row;
+      if (row.kill_switch_fired_at !== null && row.kill_switch_fired_at !== undefined) return 'kill_switch';
+      return row.paused === true ? 'paused' : null;
+    },
+
+    async unpostedShips(since, limit) {
+      const { data, error } = await client
+        .from('dispatcher_cards')
+        .select('id, title, live_at, executor_role_id, needs_approval, approved')
+        .eq('stage', 'live')
+        .gte('live_at', since.toISOString())
+        .order('live_at', { ascending: true })
+        .limit(50);
+      if (error) fail('dispatcher_cards live', error);
+      const live = rows(data).filter((row) => row.needs_approval !== true || row.approved === true);
+      if (live.length === 0) return [];
+      const posted = await client.from('outbound_posts').select('ref').eq('kind', 'ship').in('ref', live.map((row) => text(row, 'id')));
+      if (posted.error) fail('outbound_posts ships', posted.error);
+      const done = new Set(rows(posted.data).map((row) => text(row, 'ref')));
+      const todo = live.filter((row) => !done.has(text(row, 'id'))).slice(0, limit);
+      if (todo.length === 0) return [];
+      const ids = todo.map((row) => text(row, 'id'));
+      const roleIds = [...new Set(todo.map((row) => optionalText(row, 'executor_role_id')).filter((id): id is string => id !== null))];
+      const [roles, spend] = await Promise.all([
+        roleIds.length === 0 ? Promise.resolve({ data: [] as Row[], error: null }) : client.from('roles').select('id, name').in('id', roleIds),
+        client.from('dispatcher_card_spend').select('card_id, spent_usd').in('card_id', ids),
+      ]);
+      if (roles.error) fail('roles names', roles.error);
+      if (spend.error) fail('dispatcher_card_spend', spend.error);
+      const names = new Map(rows(roles.data).map((row) => [text(row, 'id'), text(row, 'name')]));
+      const cost = new Map(rows(spend.data).map((row) => [text(row, 'card_id'), num(row, 'spent_usd')]));
+      const posts: ShipPost[] = [];
+      for (const row of todo) {
+        const id = text(row, 'id');
+        const supporters = await client
+          .from('public_card_supporters')
+          .select('supporter_number, founding', { count: 'exact' })
+          .eq('card_id', id)
+          .order('supporter_number', { ascending: true })
+          .limit(3);
+        if (supporters.error) fail('public_card_supporters', supporters.error);
+        const roleId = optionalText(row, 'executor_role_id');
+        posts.push({
+          id,
+          title: text(row, 'title'),
+          live_at: text(row, 'live_at'),
+          role_name: roleId === null ? null : (names.get(roleId) ?? null),
+          cost_usd: cost.get(id) ?? 0,
+          supporters: rows(supporters.data).map((s) => ({ number: num(s, 'supporter_number'), founding: s.founding === true })),
+          supporter_count: supporters.count ?? rows(supporters.data).length,
+        });
+      }
+      return posts;
+    },
+
+    async unpostedReport() {
+      const { data, error } = await client.from('studio_reports').select('week_start, facts').order('week_start', { ascending: false }).limit(1);
+      if (error) fail('studio_reports newest', error);
+      const row = rows(data)[0];
+      if (!row) return null;
+      const week = text(row, 'week_start');
+      const posted = await client.from('outbound_posts').select('ref').eq('kind', 'weekly').eq('ref', week).limit(1);
+      if (posted.error) fail('outbound_posts weekly', posted.error);
+      if (rows(posted.data).length > 0) return null;
+      const facts = (typeof row.facts === 'object' && row.facts !== null ? row.facts : {}) as Row;
+      const shipped = Array.isArray(facts.shipped) ? (facts.shipped as Row[]) : [];
+      return {
+        week_start: week,
+        shipped_count: num(facts, 'shipped_count'),
+        shipped_titles: shipped.map((card) => text(card, 'title')),
+        open_count: num(facts, 'open_count'),
+      };
+    },
+
+    async claimPost(kind, ref, state, skipReason, now) {
+      const { error } = await client
+        .from('outbound_posts')
+        .insert({ kind, ref, state, skip_reason: skipReason, finished_at: state === 'skipped' ? now.toISOString() : null });
+      if (!error) return true;
+      // unique_violation: a row already holds (kind, ref).
+      if (error.code === '23505') return false;
+      fail('outbound_posts claim', error);
+    },
+
+    async finishPost(kind, ref, result, now) {
+      const { error } = await client
+        .from('outbound_posts')
+        .update({ state: result.state, status: result.status, message_id: result.messageId, finished_at: now.toISOString() })
+        .eq('kind', kind)
+        .eq('ref', ref)
+        .eq('state', 'sending');
+      if (error) fail('outbound_posts finish', error);
+    },
   };
 }

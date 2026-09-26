@@ -50,6 +50,9 @@ describe('loadConfig', () => {
       studioAnthropicApiKey: null,
       healthcheckUrl: null,
       ntfyTopicUrl: null,
+      discordWebhookShips: null,
+      discordWebhookWeekly: null,
+      publicSiteUrl: 'https://peanutgallery.games',
     });
     expect(Object.keys(config.priceTable)).toEqual(['builder-class']);
   });
@@ -255,5 +258,62 @@ describe('the managed agent settings', () => {
 
   it('are null and not required in attended mode', () => {
     expect(loadConfig(FULL, REPO).managed).toBeNull();
+  });
+});
+
+// docs/specs/studio-reports.md: the two Discord webhooks, optional and checked, and the site's origin.
+describe('the Discord webhooks and the public site', () => {
+  const TOKEN = 'tok-FIXTURE_SecretPart-0123';
+  const good = [
+    `https://discord.com/api/webhooks/123456789012345678/${TOKEN}`,
+    `https://discordapp.com/api/webhooks/123456789012345678/${TOKEN}`,
+    `https://ptb.discord.com/api/webhooks/1/${TOKEN}`,
+    `https://canary.discord.com/api/webhooks/42/${TOKEN}`,
+    `https://canary.discordapp.com/api/webhooks/42/${TOKEN}`,
+  ];
+  const bad = [
+    `http://discord.com/api/webhooks/1/${TOKEN}`,
+    `https://discord.com.evil.test/api/webhooks/1/${TOKEN}`,
+    `https://evil.test/https://discord.com/api/webhooks/1/${TOKEN}`,
+    `https://beta.discord.com/api/webhooks/1/${TOKEN}`,
+    `https://discord.com/api/webhooks/abc/${TOKEN}`,
+    `https://discord.com/api/webhooks/1/${TOKEN}?wait=true`,
+    `https://discord.com/api/webhooks/1/${TOKEN}/slack`,
+    `https://discord.com/api/webhooks/1/`,
+    `https://discord.com/api/webhooks/1/${TOKEN} extra`,
+  ];
+
+  for (const key of ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY'] as const) {
+    const field = key === 'DISCORD_WEBHOOK_SHIPS' ? 'discordWebhookShips' : 'discordWebhookWeekly';
+
+    it(`${key} is null when unset or blank, and read in each Discord form`, () => {
+      expect(loadConfig(FULL, REPO)[field]).toBeNull();
+      expect(loadConfig({ ...FULL, [key]: '  ' }, REPO)[field]).toBeNull();
+      for (const url of good) expect(loadConfig({ ...FULL, [key]: url }, REPO)[field], url).toBe(url);
+    });
+
+    it(`${key} that is not a Discord webhook address stops the process, naming the key and never the value`, () => {
+      for (const url of bad) {
+        let error: unknown = null;
+        try {
+          loadConfig({ ...FULL, [key]: url }, REPO);
+        } catch (caught) {
+          error = caught;
+        }
+        expect(error, url).toBeInstanceOf(ConfigError);
+        const message = (error as Error).message;
+        expect(message).toBe(`${key} must be a Discord webhook address (https://discord.com/api/webhooks/<id>/<token>)`);
+        expect(message).not.toContain(TOKEN);
+        expect(message).not.toContain('evil');
+      }
+    });
+  }
+
+  it('PUBLIC_SITE_URL defaults to the domain, takes an https origin, and refuses anything else', () => {
+    expect(loadConfig(FULL, REPO).publicSiteUrl).toBe('https://peanutgallery.games');
+    expect(loadConfig({ ...FULL, PUBLIC_SITE_URL: 'https://preview.site.test/' }, REPO).publicSiteUrl).toBe('https://preview.site.test');
+    for (const value of ['http://site.test', 'https://site.test/reports', 'https://site.test/?x=1', 'not a url', 'https://user:pw@site.test']) {
+      expect(() => loadConfig({ ...FULL, PUBLIC_SITE_URL: value }, REPO), value).toThrow(new ConfigError('PUBLIC_SITE_URL must be an https origin'));
+    }
   });
 });

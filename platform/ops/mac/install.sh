@@ -16,8 +16,9 @@
 #    caffeinate, launchctl and plutil.
 # 2. Creates ~/peanutgallery-host and its folders, 0700.
 # 3. Checks env/dispatcher.env with provision.sh's own rules (AGENT_MODE=unattended, every key the
-#    dispatcher needs, two different fine-grained GitHub tokens, none of the forbidden keys), and writes
-#    env/ntfy.url from its NTFY_TOPIC_URL.
+#    dispatcher needs, two different fine-grained GitHub tokens, none of the forbidden keys, and each
+#    Discord webhook that is set a Discord webhook address), and writes env/ntfy.url from its
+#    NTFY_TOPIC_URL.
 # 4. Clones code/ from main with the env file's token when it is missing, or refuses one that is dirty
 #    or holds git state a clone does not have. It never moves an existing code clone: deploy.sh does.
 # 5. Installs node_modules when the clone's commit has none installed yet, copies env/dispatcher.env

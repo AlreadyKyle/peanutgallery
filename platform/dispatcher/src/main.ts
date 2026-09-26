@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { AttendedAdapter } from './adapters/attended.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
+import { createDiscordPoster } from './discord.js';
 import { SessionBudgets } from './budgets.js';
 import { loadConfig } from './config.js';
 import { createSupabaseDb, type Card, type Db } from './db.js';
@@ -25,6 +26,7 @@ import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps } from './pipeline.js';
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
+import { runOutbound } from './outbound.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
 import { scanPublicText } from './public-text.js';
 import { AGENTS_DIR, TypedOutput } from './typed-output.js';
@@ -62,6 +64,7 @@ async function main(): Promise<void> {
   const config = loadConfig(process.env, CODE_ROOT);
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
+  const poster = createDiscordPoster({ ships: config.discordWebhookShips, weekly: config.discordWebhookWeekly, log });
   // Accepted managed-session patches, re-applied when their card re-queues; attended cards have none.
   const patches = config.agentMode === 'unattended' ? createSupabasePatchStore(config.supabaseUrl, config.supabaseServiceRoleKey) : null;
   const adapter = createAdapter(config, { db, alert, log, patches });
@@ -161,6 +164,8 @@ async function main(): Promise<void> {
         stopSignal: stop.signal,
         workflow,
       }),
+    // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
+    outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
   };
 
   while (!stop.signal.aborted) {

@@ -32,7 +32,14 @@ export const OPTIONAL_KEYS = [
   'BOARD_SESSION_TTL_MIN',
   'MODEL_DIRECTOR',
   'MODEL_HOST',
+  'PUBLIC_SITE_URL',
 ];
+
+// Copied from .env when set, and checked with the dispatcher's own pattern (config.ts): the Discord
+// webhooks the outbound lane posts to (docs/specs/studio-reports.md). Unset, a lane is inert. Each
+// address is a bearer secret, so a refusal names the key only.
+export const DISCORD_KEYS = ['DISCORD_WEBHOOK_SHIPS', 'DISCORD_WEBHOOK_WEEKLY'];
+export const DISCORD_WEBHOOK = /^https:\/\/((ptb|canary)[.])?discord(app)?[.]com\/api\/webhooks\/[0-9]+\/[A-Za-z0-9_-]+$/;
 
 // Optional models that, when set, need a row in PRICE_TABLE_JSON, as loadConfig requires.
 export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_HOST'];
@@ -154,6 +161,12 @@ export function dispatcherEnvEntries(dotenvText, operator) {
   for (const key of OPTIONAL_KEYS) {
     const value = fromDotenv(key);
     if (value) entries.push([key, value]);
+  }
+  for (const key of DISCORD_KEYS) {
+    const value = fromDotenv(key);
+    if (!value) continue;
+    if (DISCORD_WEBHOOK.test(value)) entries.push([key, value]);
+    else problems.push(`${key} must be a Discord webhook address (https://discord.com/api/webhooks/<id>/<token>)`);
   }
 
   // docker's env file has no quoting: a value is the rest of its line, taken literally.

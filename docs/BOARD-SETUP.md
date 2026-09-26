@@ -310,14 +310,24 @@ Under notification methods, confirm your email gets both checks.
 
 ### 7. Discord webhooks (10 minutes, free)
 
-**Why.** Ship posts and the weekly report go to Discord through webhooks, posted by code only.
+**Why.** Ship posts and the weekly report go to Discord through webhooks, posted by code only. The
+code is built (`docs/specs/studio-reports.md`) and inert until the addresses are set: with neither
+key in `.env` the dispatcher makes no request to Discord. A webhook address lets anyone who holds it
+post to the channel, so it goes in `.env` on the dispatcher's host only, never on Netlify, and nothing
+prints it.
 
 1. In your server's settings, go to Integrations → Webhooks and create one for a read-only `#ships`
    channel and one for `#weekly`.
-2. Put the URLs in `.env` as `DISCORD_WEBHOOK_SHIPS=…` and `DISCORD_WEBHOOK_WEEKLY=…`.
+2. Put the URLs in `.env` as `DISCORD_WEBHOOK_SHIPS=…` and `DISCORD_WEBHOOK_WEEKLY=…`. The dispatcher
+   refuses to start with a value that is not a Discord webhook address, naming the key only.
 3. Turn on AutoMod (Settings → Safety Setup).
+4. Restart the attended dispatcher so it reads them. At the cutover, `make-dispatcher-env.sh` and
+   `install.sh` carry them to the Mac host.
 
-**Unblocks:** ship posts and the weekly report.
+A card that went live more than 6 hours before the lane is switched on is never posted, and only the
+newest weekly report is, so switching it on does not flood the channels.
+
+**Unblocks:** ship posts and the weekly report. The first ship post needs a running dispatcher.
 
 **Tell me:** "Discord webhooks are in .env."
 
@@ -683,6 +693,11 @@ If you do none of them, the studio pauses or stays as it is. Nothing else waits 
   control, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
   money on; the inbox lists each one until then. Money it already spent stays on its bar, and a card
   that has shipped is left to the sweep.
+- **A card supply short of its floor** (`docs/specs/studio-reports.md`): fewer than 6 cards open for
+  funding, none of $5 or more, or none under $2. Press **Draft to the floor** with a reason at the
+  second factor and keep the board site open while the Game Designer drafts; each draft is checked,
+  graded and cooled like any card. The inbox lists it while the supply is short. Nothing drafts on
+  its own until an operations percentage exists. The floor's defaults change by a board pull request.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
   The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
   only those, so every other one waits for you.

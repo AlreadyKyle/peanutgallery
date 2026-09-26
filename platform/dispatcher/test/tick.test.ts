@@ -82,6 +82,50 @@ describe('tick: dealing, resume by rule and the job queue (docs/specs/agent-syst
   });
 });
 
+// docs/specs/studio-reports.md: Discord runs after the heartbeat, only with the lease and not halted,
+// and a throwing or hanging poster never touches the rest of the tick.
+describe('tick: the outbound lane', () => {
+  it('runs after the heartbeat, and a throwing poster leaves the card path, the jobs and the heartbeat unaffected', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const order: string[] = [];
+    const lines: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
+    const heartbeat = db.dispatcherHeartbeat.bind(db);
+    db.dispatcherHeartbeat = async (now: Date) => {
+      order.push('heartbeat');
+      await heartbeat(now);
+    };
+    const outbound = async () => {
+      order.push('outbound');
+      throw new Error('discord down');
+    };
+    const started: string[] = [];
+    expect(await tick(deps(db, started, { log, outbound, jobTick: async () => void order.push('jobs') }))).toEqual({ action: 'started', cardId: card().id });
+    expect(order).toEqual(['jobs', 'heartbeat', 'outbound']);
+    expect(db.heartbeats).toHaveLength(1);
+    const warnings = lines.map((line) => JSON.parse(line)).filter((line) => line.scope === 'outbound');
+    expect(warnings.map((line) => [line.level, line.msg, line.error])).toEqual([['warn', 'outbound tick failed', 'discord down']]);
+  });
+
+  it('does not run while halted or while another dispatcher holds the lease', async () => {
+    const db = new FakeDb();
+    let runs = 0;
+    const outbound = async () => void (runs += 1);
+    haltDispatcher('test halt');
+    try {
+      await tick(deps(db, [], { outbound }));
+    } finally {
+      resetHalt();
+    }
+    expect(runs).toBe(0);
+    await tick(deps(db, [], { outbound, leaseHolder: 'dispatcher-a' }));
+    expect(runs).toBe(1);
+    expect(await tick(deps(db, [], { outbound, leaseHolder: 'dispatcher-b' }))).toEqual({ action: 'sleep', reason: 'lease_held' });
+    expect(runs).toBe(1);
+  });
+});
+
 describe('tick', () => {
   it('claims a funded card exactly once when two ticks race', async () => {
     const db = new FakeDb();

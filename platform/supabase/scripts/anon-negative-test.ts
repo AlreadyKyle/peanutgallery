@@ -42,6 +42,10 @@ const PRIVATE_TABLES = [
   "dispatcher_cards",
   "dispatcher_card_spend",
   "card_drafts",
+  // studio-reports (docs/specs/studio-reports.md): the weekly reports, read only through
+  // site_reports(), and the dispatcher's Discord outbox.
+  "studio_reports",
+  "outbound_posts",
 ];
 
 const PUBLIC_RELATIONS = [
@@ -148,6 +152,10 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["rankable_cards", {}],
   ["card_ranking_places", { p_order: [] }],
   ["apply_card_ranking", { p_run: NO_CARD, p_order: [] }],
+  // studio-reports: the hourly publish, pg_cron's alone, with a Tuesday it refuses before it reads
+  // anything; and the board's supply count, which only reads.
+  ["publish_weekly_report", { p_week_start: "2000-01-04" }],
+  ["card_supply", {}],
 ];
 
 // The one function anon runs on purpose: the cards policy calls it as the caller
@@ -160,6 +168,8 @@ const CALLABLE_RPCS: Array<[string, Record<string, unknown>]> = [["card_is_publi
 const SNAPSHOT_RPCS: Array<[string, string[]]> = [
   ["site_live", ["built_at", "cards", "deploys", "events", "money", "pool", "role_stats", "stopped", "studio", "totals"]],
   ["site_cards", ["cards", "roles", "terms"]],
+  // studio-reports: /reports' document, published weekly reports only (docs/specs/studio-reports.md).
+  ["site_reports", ["reports"]],
 ];
 
 // supporter-pages (docs/specs/supporter-pages.md): a card's own document, null for a card that does

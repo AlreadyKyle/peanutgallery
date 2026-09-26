@@ -58,6 +58,9 @@ beforeAll(async () => {
     studioAnthropicApiKey: 'studio-key',
     healthcheckUrl: null,
     ntfyTopicUrl: null,
+    discordWebhookShips: null,
+    discordWebhookWeekly: null,
+    publicSiteUrl: 'https://site.test',
   };
 });
 

@@ -10,7 +10,8 @@ import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 // The design system (docs/specs/design-system.md): the guide page, the bands, the on-ink rules,
 // reduced motion and accessibility. The guide is the design-system pull request's mockup.
 const GUIDE = '/design-kit-7q4m';
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', GUIDE];
+// /reports on the default fixture, which has no report: its empty state (docs/specs/studio-reports.md).
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', GUIDE];
 const WIDTHS = [320, 360, 375, 390, 768, 1024, 1440];
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
@@ -320,6 +321,39 @@ test.describe('accessibility (axe, WCAG 2.2 AA)', () => {
       const results = await new AxeBuilder({ page }).include(band).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
       expect(results.violations.map((v) => v.id), band).toEqual([]);
     }
+  });
+});
+
+// /reports with two reports (docs/specs/studio-reports.md): the list, each through the kernel template.
+test.describe('the weekly reports', () => {
+  test.use({ studio: LIVE_STUDIO });
+
+  for (const width of [375, 768, 1440]) {
+    test(`list two reports with no axe violation, no sideways scroll and the bands at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await settle(page, '/reports');
+      await expect(page.locator('section[data-report]')).toHaveCount(2);
+      expect(await overflowsHorizontally(page)).toBe(false);
+      const drawn = await grounds(page);
+      expect(drawn).toEqual(expected(2));
+      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+      expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+    });
+  }
+
+  test('the footer links /reports, and with no report the page says so', async ({ page }) => {
+    await settle(page, '/');
+    await page.getByRole('contentinfo').getByRole('link', { name: 'Weekly reports' }).click();
+    await expect(page).toHaveURL(/\/reports$/);
+    await expect(page.locator('section[data-report]').first()).toBeVisible();
+  });
+});
+
+test.describe('the weekly reports, none yet', () => {
+  test('say no report yet and link the roadmap', async ({ page }) => {
+    await settle(page, '/reports');
+    await expect(page.getByText('No weekly report yet. A report is published after a week in which a card shipped.')).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '/roadmap');
   });
 });
 

@@ -1,8 +1,11 @@
-// Kernel (platform/gate/kernel-paths.txt; docs/specs/site-snapshot.md): the public site's two
+// Kernel (platform/gate/kernel-paths.txt; docs/specs/site-snapshot.md): the public site's
 // documents, served from its own origin and cached by Netlify's CDN.
 //
-//   GET /api/live   site_live(), the figures that move; the CDN keeps it 60 seconds
-//   GET /api/cards  site_cards(), the text that rarely moves; the CDN keeps it 300 seconds
+//   GET /api/live     site_live(), the figures that move; the CDN keeps it 60 seconds
+//   GET /api/cards    site_cards(), the text that rarely moves; the CDN keeps it 300 seconds
+//   GET /api/reports  site_reports(), the weekly reports (docs/specs/studio-reports.md), published at
+//                     most once a week; the CDN keeps it an hour and serves it stale 10 minutes more
+//                     while it rebuilds, so at most about 720 builds a month reach the database
 //
 // Each build is one call to Supabase's RPC endpoint with the publishable key, so the function reads
 // only what anon may read, and at most one build per window reaches the database whatever the
@@ -14,9 +17,11 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/public-env.ts';
 /** How long one RPC call may take before the function answers 502. */
 export const RPC_TIMEOUT_MS = 8_000;
 
-const DOCUMENTS: Record<string, { rpc: string; seconds: number }> = {
-  '/api/live': { rpc: 'site_live', seconds: 60 },
-  '/api/cards': { rpc: 'site_cards', seconds: 300 },
+// How long the CDN keeps each document (s-maxage) and serves it stale while it rebuilds.
+const DOCUMENTS: Record<string, { rpc: string; seconds: number; staleSeconds: number }> = {
+  '/api/live': { rpc: 'site_live', seconds: 60, staleSeconds: 60 },
+  '/api/cards': { rpc: 'site_cards', seconds: 300, staleSeconds: 300 },
+  '/api/reports': { rpc: 'site_reports', seconds: 3600, staleSeconds: 600 },
 };
 
 const JSON_TYPE = 'application/json; charset=utf-8';
@@ -49,7 +54,7 @@ export default async function snapshot(req: Request): Promise<Response> {
     const parsed: unknown = JSON.parse(body);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return refuse(502, 'The studio database did not answer');
     return answer(200, body, {
-      'Netlify-CDN-Cache-Control': `public, durable, s-maxage=${document.seconds}, stale-while-revalidate=${document.seconds}`,
+      'Netlify-CDN-Cache-Control': `public, durable, s-maxage=${document.seconds}, stale-while-revalidate=${document.staleSeconds}`,
       'Cache-Control': 'public, max-age=0, must-revalidate',
     });
   } catch {
@@ -66,10 +71,11 @@ type FunctionConfig = {
 
 // The paths only, with no method key, so a POST reaches the function and answers 405 instead of
 // falling through to the page rewrite. The rate limit is the first of the two code-based rules
-// legacy Free allows; supporter-pages takes the second. Every full page load reads both documents
+// legacy Free allows; supporter-pages takes the second, so /api/reports shares this one. Every full
+// page load reads both documents
 // (the Terms pages a third time), so 300 a minute is about 150 page loads from one address: a school
 // or an office behind one address, or the live check, stays under it, and a runaway loop does not.
 export const config: FunctionConfig = {
-  path: ['/api/live', '/api/cards'],
+  path: ['/api/live', '/api/cards', '/api/reports'],
   rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

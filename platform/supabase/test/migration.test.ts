@@ -2325,3 +2325,80 @@ describe("site-snapshot migration", () => {
     expect(block).toContain('["site_cards", ["cards", "roles", "terms"]]');
   });
 });
+
+// docs/specs/studio-reports.md: the weekly report, the Discord outbox and the card supply floor.
+const REPORTS_SUPPLY_FILE = "20260925100000_reports_supply.sql";
+const reportsSupplySql = launchFile(REPORTS_SUPPLY_FILE);
+
+describe("studio-reports migration", () => {
+  it("comes straight after terms version 3, sets a lock timeout first and reloads the schema last", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    const at = names.indexOf(REPORTS_SUPPLY_FILE);
+    expect(names[at - 1]).toBe(TERMS_VERSION_3_FILE);
+    expect(withoutComments(reportsSupplySql).split("\n")[0]).toBe(LOCK_TIMEOUT);
+    expect(withoutComments(reportsSupplySql).split("\n").at(-1)).toBe("notify pgrst, 'reload schema';");
+  });
+
+  it("makes each function security definer with search_path public", () => {
+    for (const [name, head] of [
+      ["publish_weekly_report", "create or replace function public.publish_weekly_report(p_week_start date default null) returns public.studio_reports\nlanguage plpgsql\nsecurity definer\nset search_path = public\nas $$"],
+      ["site_reports", "create or replace function public.site_reports(p_limit integer default 12) returns jsonb\nlanguage sql\nstable\nsecurity definer\nset search_path = public\nas $$"],
+      ["card_supply", "create or replace function public.card_supply() returns jsonb\nlanguage sql\nstable\nsecurity definer\nset search_path = public\nas $$"],
+    ] as const) {
+      expect(functionBlockIn(reportsSupplySql, name)).toContain(head);
+    }
+    expect(reportsSupplySql).toContain("create or replace function money.report_facts(p_week_start date) returns jsonb\nlanguage sql\nstable\nsecurity definer\nset search_path = public\nas $$");
+  });
+
+  it("grants site_reports to anon, publish_weekly_report to the service role alone, card_supply to the board's sign-in, and hides the helpers", () => {
+    const body = withoutComments(reportsSupplySql);
+    expect(body).toContain("revoke all on function public.site_reports(integer) from public;");
+    expect(body).toContain("grant execute on function public.site_reports(integer) to anon, authenticated, service_role;");
+    expect(body).toContain("revoke all on function public.publish_weekly_report(date) from public, anon, authenticated;");
+    expect(body).toContain("grant execute on function public.publish_weekly_report(date) to service_role;");
+    expect(body).toContain("revoke all on function public.card_supply() from public, anon;");
+    expect(body).toContain("grant execute on function public.card_supply() to authenticated, service_role;");
+    expect(body).toContain("revoke all on function money.report_facts(date) from public, anon, authenticated, service_role;");
+    expect(body).toContain("revoke all on function money.last_ended_week(timestamptz) from public, anon, authenticated, service_role;");
+  });
+
+  it("turns RLS on for both tables and gives no API grant beyond the service role's", () => {
+    const body = withoutComments(reportsSupplySql);
+    for (const table of ["studio_reports", "outbound_posts"]) {
+      expect(body).toContain(`alter table public.${table} enable row level security;`);
+      expect(body).toContain(`revoke all on public.${table} from anon, authenticated, service_role;`);
+    }
+    expect(body).toContain("grant select on public.studio_reports to service_role;");
+    expect(body).toContain("grant select, insert, update on public.outbound_posts to service_role;");
+    expect(body).toContain("primary key (kind, ref)");
+    expect(body).not.toMatch(/grant [a-z, ]+ on public\.(studio_reports|outbound_posts) to [a-z_, ]*(anon|authenticated)/);
+  });
+
+  it("schedules publish_weekly_report hourly with pg_cron, only where pg_cron ships", () => {
+    expect(reportsSupplySql).toContain(
+      "do $$\nbegin\n  if not exists (select 1 from pg_available_extensions where name = 'pg_cron') then\n    raise notice 'pg_cron is not available; publish_weekly_report is not scheduled';\n    return;\n  end if;\n  create extension if not exists pg_cron with schema pg_catalog;\n  perform cron.schedule('weekly-report', '7 * * * *', 'select public.publish_weekly_report()');\nend $$;",
+    );
+  });
+
+  it("adds none of the objects the trimmed spec removed, and leaves the board's own state reader alone", () => {
+    for (const removed of [
+      "set_report_note", "claim_outbound", "finish_outbound", "settle_unknown_outbound", "public_studio_reports", "weekly_report_facts",
+      "card_open_for_funding", "set_card_floor", "board_studio_state", "board_actions_action_check", "operations_", "notes",
+    ]) {
+      expect(withoutComments(reportsSupplySql)).not.toContain(removed);
+    }
+  });
+
+  it("is probed by anon-negative-test: the two tables and two functions refused, site_reports called with its key", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    expect(block("PRIVATE_TABLES")).toContain('"studio_reports"');
+    expect(block("PRIVATE_TABLES")).toContain('"outbound_posts"');
+    expect(block("RPC_PROBES")).toContain('["publish_weekly_report", { p_week_start: "2000-01-04" }]');
+    expect(block("RPC_PROBES")).toContain('["card_supply", {}]');
+    expect(block("SNAPSHOT_RPCS")).toContain('["site_reports", ["reports"]]');
+  });
+});

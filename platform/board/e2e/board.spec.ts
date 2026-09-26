@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { SUPABASE_URL } from './fixture-env';
 
 // vite preview sends netlify.toml's headers (vite.config.ts), so every page here loads under the
@@ -207,6 +207,24 @@ const JOBS = [
   },
 ];
 
+// card_supply (docs/specs/studio-reports.md), production's shape on 23 September 2026 (PG-10): six
+// open goal cards, all under $2 and none of $5 or more, so the supply is short of its one big card.
+const SUPPLY_CARDS = Array.from({ length: 6 }, (_, i) => ({ id: `d0000000-0000-4000-8000-00000000000${i}`, title: `Open card ${i}`, target_usd: '1.0000' }));
+const SUPPLY = {
+  open: 6,
+  big: 0,
+  small: 6,
+  floor_open: 6,
+  floor_big: 1,
+  floor_small: 1,
+  big_min_usd: '5.0000',
+  small_max_usd: '2.0000',
+  short_open: 0,
+  short_big: 1,
+  short_small: 0,
+  open_cards: SUPPLY_CARDS,
+};
+
 // A small SVG, as Supabase Auth returns it before supabase-js turns it into a data: URL.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="black"/></svg>';
 
@@ -244,6 +262,8 @@ async function answerSupabase(
         return json(studio);
       case '/rest/v1/rpc/board_needs_you':
         return json(needsYou);
+      case '/rest/v1/rpc/card_supply':
+        return json(SUPPLY);
       case '/rest/v1/rpc/board_roles':
         return json(roles);
       case '/rest/v1/rpc/set_role_pause': {
@@ -333,6 +353,20 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   expect(await qr.evaluate((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0)).toBe(true);
   expect(await qr.getAttribute('src')).toMatch(/^data:image\/svg\+xml;utf-8,<svg /);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+
+  // A code the fixtures refuse: the status line under the Verify form clears the focused button's ring.
+  const twoFactor = page.getByRole('region', { name: 'Two-factor sign-in' });
+  await twoFactor.getByLabel('6-digit code').fill('123456');
+  await page.keyboard.press('Tab');
+  const verify = twoFactor.getByRole('button', { name: 'Verify' });
+  await expect(verify).toBeFocused();
+  await page.keyboard.press('Enter');
+  const status = twoFactor.getByRole('status');
+  await expect(status).not.toHaveText('');
+  const ring = await ringClearance(verify, status);
+  expect(ring.visible).toBe(true);
+  expect(ring.clearance).toBeGreaterThanOrEqual(8);
+  if (process.env.BOARD_E2E_SHOTS) await twoFactor.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/two-factor-status-375.png` });
 
   expect(seen).toContain('POST /rest/v1/rpc/board_needs_you');
   expect(seen).toContain('POST /auth/v1/factors');
@@ -438,6 +472,24 @@ test('at the second factor the board sees and vetoes an undealt agent card, paus
 });
 
 /**
+ * The space between the bottom of a focused control's ring and the top of the line under it, and
+ * whether the ring shows (it does only when the control was reached from the keyboard).
+ */
+async function ringClearance(control: Locator, below: Locator): Promise<{ visible: boolean; clearance: number }> {
+  const under = (await below.boundingBox())!;
+  return control.evaluate(
+    (el, top) => {
+      const style = getComputedStyle(el);
+      return {
+        visible: el.matches(':focus-visible'),
+        clearance: Math.round((top - (el.getBoundingClientRect().bottom + parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth))) * 100) / 100,
+      };
+    },
+    under.y,
+  );
+}
+
+/**
  * Each pair of stacked controls placed straight in a section, and what follows them, with the space
  * between them: the forms' rhythm is 16 px. A subheading sits 8 px over its list by design.
  */
@@ -496,3 +548,68 @@ for (const [who, role, aal] of [
     expect(reports).toEqual([]);
   });
 }
+
+// docs/specs/studio-reports.md: the card supply floor on /board.
+test('the card supply: the line, Card supply is short, and Draft to the floor queues one draft_card run at the second factor alone, under the enforced policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  const widths = [375, 1440];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+
+    await expect(page.getByRole('region', { name: 'Studio status' }).getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeVisible();
+    const needs = page.getByRole('region', { name: 'Needs you' });
+    await expect(needs.getByText('Card supply is short.')).toBeVisible();
+    const floor = page.getByRole('form', { name: 'Draft to the floor' });
+    const button = floor.getByRole('button', { name: 'Draft to the floor' });
+    const status = floor.getByRole('status');
+    // From the keyboard with no reason: the status line under the button clears its focus ring.
+    await floor.getByLabel('Reason').focus();
+    await page.keyboard.press('Tab');
+    await expect(button).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(status).toHaveText('A reason is required.');
+    const required = await ringClearance(button, status);
+    expect(required.visible, `${width} px`).toBe(true);
+    expect(required.clearance, `${width} px`).toBeGreaterThanOrEqual(8);
+    if (process.env.BOARD_E2E_SHOTS) await needs.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/supply-required-${width}.png` });
+
+    await floor.getByLabel('Reason').fill('No big card open');
+    await floor.getByLabel('Reason').focus();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(status).toHaveText(/^Queued\. The Game Designer drafts while a board member is signed in here/);
+    const queued = await ringClearance(button, status);
+    expect(queued.visible, `${width} px`).toBe(true);
+    expect(queued.clearance, `${width} px`).toBeGreaterThanOrEqual(8);
+    if (process.env.BOARD_E2E_SHOTS) await needs.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/supply-queued-${width}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), `${width} px`).toBe(false);
+  }
+  // One draft_card run for each width's Draft to the floor, and none for the refused empty reason.
+  expect(bodies.filter((b) => b.path === '/rest/v1/rpc/enqueue_manual_job')).toEqual(
+    widths.map(() => ({
+      path: '/rest/v1/rpc/enqueue_manual_job',
+      body: { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: SUPPLY_CARDS.map((c) => c.id) } },
+    })),
+  );
+  expect(reports).toEqual([]);
+});
+
+test('at the first factor the supply item asks for the second factor and offers no Draft to the floor', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { bodies });
+  await signIn(page);
+  await page.goto('/');
+  const needs = page.getByRole('region', { name: 'Needs you' });
+  await expect(needs.getByText('Card supply is short.')).toBeVisible();
+  await expect(needs.getByText('Verify your second factor, then draft to the floor from here.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Draft to the floor' })).toHaveCount(0);
+  expect(bodies.filter((b) => b.path === '/rest/v1/rpc/enqueue_manual_job')).toEqual([]);
+  expect(reports).toEqual([]);
+});

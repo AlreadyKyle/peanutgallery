@@ -179,6 +179,16 @@ check_env_lines() {
       ;;
     esac
   done
+  # The optional Discord webhooks (docs/specs/studio-reports.md), with the dispatcher's own pattern.
+  # Each is a bearer secret, so only the key is named.
+  local discord_re='^https://((ptb|canary)[.])?discord(app)?[.]com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$'
+  for name in DISCORD_WEBHOOK_SHIPS DISCORD_WEBHOOK_WEEKLY; do
+    value=$(env_value "$name" "$file")
+    if [ -n "$value" ] && ! [[ "$value" =~ $discord_re ]]; then
+      echo "$name must be a Discord webhook address"
+      problems=1
+    fi
+  done
   return "$problems"
 }
 

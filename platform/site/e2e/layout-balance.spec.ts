@@ -11,7 +11,9 @@ import { SUPPORTER_ROUTES, SUPPORTER_STUDIO } from './supporter-studio';
 // framed card or row that fills its frame to within 2px, card rows that line up with no hollow over
 // 80px, headings spaced from the block above at least as far as that block from its own, buttons on
 // one line, no orphaned glyph and a one-row top bar.
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
+// /reports: two reports on the launch-shaped studio, none (the empty state) on the default fixture
+// (docs/specs/studio-reports.md).
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
 
 async function audit(page: Page, path: string): Promise<string[]> {
   await page.goto(path);

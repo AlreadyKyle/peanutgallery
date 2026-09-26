@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { draftToFloor, supplyLine, supplyShort, type SupplyLoad } from './lib/board';
 import { formatAmount, formatDateTime, formatDay, formatUsd } from './lib/format';
 import {
   CONSOLE_BILLING_URL,
@@ -144,6 +145,62 @@ function Item({
   );
 }
 
+/**
+ * The card supply is short of the floor (docs/specs/studio-reports.md): Draft to the floor queues one
+ * board-origin draft_card run with the shortfalls and the open cards, at the second factor, like every
+ * role job. It runs attended while a board member is signed in here.
+ */
+function SupplyItem({ client, supply, canRecord }: { client: SupabaseClient; supply: SupplyLoad; canRecord: boolean }) {
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const current = supply.supply;
+  if (current === null) return null;
+
+  async function draft(event: FormEvent) {
+    event.preventDefault();
+    if (busy || current === null) return;
+    if (reason.trim() === '') {
+      setMessage('A reason is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await draftToFloor(client, reason.trim(), current);
+      setMessage('Queued. The Game Designer drafts while a board member is signed in here; each draft is checked and graded like any card.');
+      setReason('');
+      await supply.refresh();
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li data-needs="supply">
+      <p>
+        <strong>Card supply is short.</strong> {supplyLine(current)}.
+      </p>
+      {canRecord ? (
+        <form className="stack" onSubmit={draft} aria-label="Draft to the floor">
+          <label>
+            Reason
+            <input value={reason} onChange={(event) => setReason(event.target.value)} />
+          </label>
+          <button type="submit" aria-disabled={busy}>
+            Draft to the floor
+          </button>
+          {/* Inside the form, as on every board form, so its 16 px gap clears the button's focus ring. */}
+          {message === '' ? null : <p role="status">{message}</p>}
+        </form>
+      ) : (
+        <p>Verify your second factor, then draft to the floor from here.</p>
+      )}
+    </li>
+  );
+}
+
 function ControllerLine({ data }: { data: NeedsYouData }) {
   const run = data.controller;
   if (run === null) {
@@ -182,11 +239,14 @@ export function NeedsYou({
   canRecord,
   listedCards,
   onFillCredit,
+  supply,
 }: {
   client: SupabaseClient;
   canRecord: boolean;
   listedCards: Pick<ReadonlySet<string>, 'has'>;
   onFillCredit: (draft: CreditDraft) => void;
+  /** The card supply (card_supply); short of the floor, it is an item here. Unset, no supply item. */
+  supply?: SupplyLoad;
 }) {
   const [data, setData] = useState<NeedsYouData | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -213,6 +273,7 @@ export function NeedsYou({
   }, [client]);
 
   const items = data === null ? [] : dueItems(data);
+  const short = supply !== undefined && supply.supply !== null && supplyShort(supply.supply);
 
   return (
     <section aria-label="Needs you">
@@ -221,10 +282,11 @@ export function NeedsYou({
         <p role="status">{loadError === '' ? 'Loading what needs you.' : loadError}</p>
       ) : (
         <>
-          {items.length === 0 ? (
+          {items.length === 0 && !short ? (
             <p>{NOTHING_NEEDS_YOU}</p>
           ) : (
             <ul className="needs">
+              {short && supply !== undefined ? <SupplyItem client={client} supply={supply} canRecord={canRecord} /> : null}
               {items.map((item) => (
                 <Item
                   key={item.kind === 'dispute' ? item.dispute : item.kind === 'credit' ? 'credit' : `${item.kind}-${item.card.id}`}

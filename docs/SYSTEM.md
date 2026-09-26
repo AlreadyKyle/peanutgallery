@@ -95,7 +95,16 @@ A job is a name, a role, whether it calls a model, and whether it runs while the
 
 Each dispatcher tick, after the card path, starts the oldest queued run that can start, one job at a time. A run that cannot start is finished as skipped with its reason: `role_paused`, `studio_paused` (unless the job runs while paused) or `not_board_origin` (a model-calling run the board did not queue). A board-origin model-calling run waits, queued, until a board member is signed in at /board; only the board, at the second factor, or a board-origin run queues a board-origin run. A running job stops at the next watch when its role pauses, when the studio pauses and the job does not run while it is paused, or, for a model-calling job, when no board member is signed in any more (`board_session_lapsed`). At startup, runs still marked running are finished as failed with `dispatcher_restart`.
 
-Two jobs are registered: `studio_ranking` and `draft_card`, manual only, each with its handler (above). Each later pull request adds its jobs with their handlers. Not built yet: the weekly report (`specs/studio-reports.md`) and the Janitor's drift checks (`specs/agent-upkeep.md`).
+Two jobs are registered: `studio_ranking` and `draft_card`, manual only, each with its handler (above). Each later pull request adds its jobs with their handlers. Not built yet: the Janitor's drift checks (`specs/agent-upkeep.md`). The weekly report is no job: pg_cron publishes it in SQL (below).
+
+## The weekly report and the outbound lane
+
+Built by `docs/specs/studio-reports.md`; no model writes or reads any of it.
+
+- **The weekly report.** pg_cron job `weekly-report` calls `publish_weekly_report()` at minute 7 of every hour (UTC). With no argument it takes the last ended New York week (Monday 00:00 to the next Monday 00:00, America/New_York), so the boundary is caught in both offsets. A week in which no card went live gets no row; any other gets one `studio_reports` row, once, whose facts SQL writes from public records: each shipped card's title, folder, live time, cost billed to the studio and supporters by number (the first 24 of `public_card_supporters` and a count), the number shipped, the cards in `money.funding_order()` and the first three, the new `supporters` rows and the week's studio-billed spend. `site_reports()` is its one public read, `/api/reports` on the site, `/reports` its page.
+- **The outbound lane.** Each dispatcher tick that holds the lease and is not halted runs `runOutbound` (`platform/dispatcher/src/outbound.ts`) after the heartbeat, inside its own try and catch. With neither `DISCORD_WEBHOOK_SHIPS` nor `DISCORD_WEBHOOK_WEEKLY` set it makes no query and no request. Otherwise it posts, to the ships lane, each public card live within the last 6 hours with no `outbound_posts` row, and to the weekly lane the newest report with none: it inserts the `(kind, ref)` row as `sending` first, so the primary key refuses a second claim, then `posted` with Discord's message id or `failed` with the status. A row is never posted again, whatever its state: a timeout, an error or a crash loses that post rather than doubling it. At most five posts a tick, each with a 10-second timeout. While the studio is paused or the kill switch has fired nothing is posted, and each ship found then is recorded `skipped`, never posted after resuming.
+- **Every post** is plain text of at most 2,000 characters from a fixed template, with the username "Mob Machine", no mention allowed (`allowed_mentions.parse` empty), Discord markdown and `@` escaped in every title, and `?wait=true`. A webhook address is a bearer secret: it lives only in the dispatcher host's `.env`, and no log line or error carries it, only the lane and the HTTP status.
+- **The card supply floor.** `card_supply()` counts the cards in `money.funding_order()` against `studio_state`'s floor (6 open, 1 of $5 or more, 1 under $2). /board shows the line; a shortfall is a Needs you item whose Draft to the floor queues `draft_card` with `{floor, open_cards}` through `enqueue_manual_job`, at the second factor, run attended like any role job.
 
 ## Who pays for what
 
@@ -117,6 +126,6 @@ No role job spends supporters' or studio money, and `record_usage` refuses a stu
 - Set the cooling window, from 0 to 10,080 minutes.
 - Edit a card and move it between horizons (`set_card_horizon`), which records a board approval of an agent card's new content.
 - Cancel a card, or resume a paused one with a new estimate.
-- Run a job now, with typed input; Rank now and Draft a game card queue the two role jobs.
+- Run a job now, with typed input; Rank now and Draft a game card queue the two role jobs, and Draft to the floor queues `draft_card` with the supply's shortfalls.
 - Set the caps and record Console credit purchases.
-- Needs you lists what waits on the board: disputes, S1 cards, credit to buy, the ceiling pauses the rule will not resume, and cards whose approval is not current holding money a cancel would move.
+- Needs you lists what waits on the board: disputes, S1 cards, credit to buy, the ceiling pauses the rule will not resume, cards whose approval is not current holding money a cancel would move, and a card supply short of its floor.

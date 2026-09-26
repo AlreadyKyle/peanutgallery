@@ -7,7 +7,14 @@ import {
   canUnveto,
   canVeto,
   cardRoleFolder,
+  draftToFloor,
+  draftToFloorInput,
+  DRAFT_TO_FLOOR_MAX_CARDS,
   enqueueManualJob,
+  fetchCardSupply,
+  supplyFrom,
+  supplyLine,
+  supplyShort,
   fetchBoardCards,
   fetchBoardJobs,
   fetchBoardRoles,
@@ -250,5 +257,56 @@ describe('the role jobs (docs/specs/agent-workflows.md)', () => {
     });
     expect(runOutputFrom('draft_card', null)).toBeNull();
     expect(runOutputFrom('weekly_report', { anything: 1 })).toBeNull();
+  });
+});
+
+describe('the card supply (docs/specs/studio-reports.md)', () => {
+  const raw = {
+    open: 6,
+    big: 0,
+    small: 6,
+    floor_open: 6,
+    floor_big: 1,
+    floor_small: 1,
+    big_min_usd: '5.0000',
+    small_max_usd: '2.0000',
+    short_open: 0,
+    short_big: 1,
+    short_small: 0,
+    open_cards: Array.from({ length: 6 }, (_, i) => ({ id: `card-${i}`, title: `Card ${i}`, target_usd: '1.0000' })),
+  };
+
+  it('reads card_supply, and writes the line the board reads', () => {
+    const supply = supplyFrom(raw);
+    expect(supplyLine(supply)).toBe('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1');
+    expect(supplyShort(supply)).toBe(true);
+    expect(supplyShort({ ...supply, short_big: 0 })).toBe(false);
+    expect(supplyLine({ ...supply, big_min_usd: 7.5, small_max_usd: 2.25 })).toBe('Open cards: 6 of a floor of 6 · $7.50 or more: 0 of 1 · under $2.25: 6 of 1');
+    expect(supply.open_cards[0]).toEqual({ id: 'card-0', title: 'Card 0', target_usd: 1 });
+    expect(() => supplyFrom(null)).toThrow('card_supply returned nothing');
+    expect(() => supplyFrom({ ...raw, short_big: undefined })).toThrow('card_supply returned no short_big');
+  });
+
+  it('queues draft_card through enqueue_manual_job with the shortfalls and the open card ids, under 4 KB', async () => {
+    const calls: { name: string; args: Record<string, unknown> | undefined }[] = [];
+    const client = {
+      rpc: (name: string, args?: Record<string, unknown>) => {
+        calls.push({ name, args });
+        return Promise.resolve({ data: name === 'card_supply' ? raw : 'run-9', error: null });
+      },
+    } as unknown as SupabaseClient;
+    const supply = await fetchCardSupply(client);
+    expect(await draftToFloor(client, 'Short of a big card', supply)).toBe('run-9');
+    expect(calls).toEqual([
+      { name: 'card_supply', args: undefined },
+      {
+        name: 'enqueue_manual_job',
+        args: { p_job: 'draft_card', p_card: null, p_reason: 'Short of a big card', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: raw.open_cards.map((c) => c.id) } },
+      },
+    ]);
+    const many = { ...supply, open_cards: Array.from({ length: 200 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, title: 'x', target_usd: 1 })) };
+    const input = draftToFloorInput(many);
+    expect(input.open_cards).toHaveLength(DRAFT_TO_FLOOR_MAX_CARDS);
+    expect(new TextEncoder().encode(JSON.stringify(input)).length).toBeLessThanOrEqual(JOB_INPUT_MAX_BYTES);
   });
 });

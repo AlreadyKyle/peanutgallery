@@ -17,6 +17,7 @@ import {
   fetchBoardRole,
   fetchBoardRoles,
   fetchCardRoles,
+  fetchCardSupply,
   fileCard,
   fileDirective,
   fileNote,
@@ -45,6 +46,7 @@ import {
   type PauseReason,
   setPaused,
   STUDIO_STATE_POLL_MS,
+  supplyLine,
   TOTP_CODE,
   twoFactorState,
   undealt,
@@ -56,6 +58,8 @@ import {
   type BoardRole,
   type BoardStudioState,
   type Caps,
+  type CardSupply,
+  type SupplyLoad,
   type Horizon,
   type NextCardStage,
   type Role,
@@ -66,7 +70,7 @@ import {
 import { formatClock, formatDateTime, formatUsd } from './lib/format';
 import type { CreditDraft } from './lib/needs';
 import { errorMessage, getClient } from './lib/supabase';
-import { NeedsYou } from './NeedsYou';
+import { NEEDS_POLL_MS, NeedsYou } from './NeedsYou';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
@@ -369,6 +373,37 @@ function useBoardStudioState(client: SupabaseClient): StudioLoad {
   return { state, loadError, refresh };
 }
 
+// The card supply against the floor (card_supply, docs/specs/studio-reports.md), read as often as
+// Needs you: the Studio section shows its line and Needs you its shortfall.
+function useCardSupply(client: SupabaseClient): SupplyLoad {
+  const [supply, setSupply] = useState<CardSupply | null>(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      setSupply(await fetchCardSupply(client));
+      setLoadError('');
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    }
+  }, [client]);
+
+  useEffect(() => {
+    let live = true;
+    const load = () => {
+      if (live) void refresh();
+    };
+    load();
+    const timer = setInterval(load, NEEDS_POLL_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [refresh]);
+
+  return { supply, loadError, refresh };
+}
+
 // The roles that build cards, loaded once for the card and directive forms. No other role builds a
 // card, so none is offered (lib/board.ts CARD_ROLE_FOLDERS): the Studio Head, the Game Designer and
 // the Game Director run Rank now and Draft a game card, and the Host, Biz Dev and the Community agent
@@ -406,6 +441,7 @@ function BoardControls({
   onVerified: (verified: boolean) => void;
 }) {
   const studio = useBoardStudioState(client);
+  const supply = useCardSupply(client);
   const [draft, setDraft] = useState<CreditDraft | null>(null);
   // The cards listed under Cards, id to title, which only the second factor shows; Needs you and the
   // role jobs' output link to these only.
@@ -419,11 +455,11 @@ function BoardControls({
 
   return (
     <>
-      <NeedsYou client={client} canRecord={secondFactor} listedCards={listedCards} onFillCredit={fillCredit} />
+      <NeedsYou client={client} canRecord={secondFactor} listedCards={listedCards} onFillCredit={fillCredit} supply={supply} />
       {secondFactor ? null : <TwoFactor client={client} onVerified={onVerified} />}
       {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
-      <StudioStatus client={client} studio={studio} canChange={secondFactor} />
+      <StudioStatus client={client} studio={studio} supply={supply} canChange={secondFactor} />
       <SessionStatus client={client} />
       <RolePauses client={client} canPause={secondFactor} canResume={secondFactor} />
       <JobsPanel client={client} canRun={secondFactor} cardTitles={listedCards} />
@@ -454,10 +490,12 @@ function SecondFactorForms({ client }: { client: SupabaseClient }) {
 function StudioStatus({
   client,
   studio,
+  supply,
   canChange,
 }: {
   client: SupabaseClient;
   studio: StudioLoad;
+  supply: SupplyLoad;
   canChange: boolean;
 }) {
   const { state, loadError, refresh } = studio;
@@ -531,6 +569,11 @@ function StudioStatus({
               : ` Usage tier cap ${formatUsd(state.anthropic_tier_cap_usd)}.`}
           </p>
           <p>Studio code lane: {state.platform_lane_open ? 'open' : 'closed'}.</p>
+          {supply.supply !== null ? (
+            <p data-supply="line">{supplyLine(supply.supply)}.</p>
+          ) : supply.loadError !== '' ? (
+            <p className="error">Card supply: {supply.loadError}</p>
+          ) : null}
           {canChange && state.launched_at === null ? (
             <button type="button" aria-disabled={busy} onClick={() => void goLive()}>
               Go live

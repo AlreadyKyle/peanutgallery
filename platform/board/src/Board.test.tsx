@@ -80,6 +80,8 @@ const fake = vi.hoisted(() => ({
   jobs: [] as Record<string, unknown>[],
   boardRoles: [] as Record<string, unknown>[],
   publicCards: [] as string[],
+  // card_supply (docs/specs/studio-reports.md); the default is at the floor, so nothing is short.
+  supply: null as Record<string, unknown> | null,
   // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
   held: null as string | null,
   release: () => {},
@@ -186,6 +188,7 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         board_heartbeat: fake.seenAt,
         board_studio_state: fake.studio,
         board_needs_you: fake.needs,
+        card_supply: fake.supply,
         set_launched: fake.launchedAt,
         set_agent_mode: null,
         set_paused: null,
@@ -345,6 +348,7 @@ beforeEach(() => {
   fake.signedOut = false;
   fake.otpCalls.length = 0;
   fake.needs = { ...EMPTY_NEEDS };
+  fake.supply = { ...AT_FLOOR };
   fake.roleRows = [...ROLE_ROWS];
   fake.seenAt = startedAt.toISOString();
   fake.launchedAt = startedAt.toISOString();
@@ -1105,6 +1109,81 @@ const RUN = {
   ],
   latest_payout: { id: 'po_123', arrival_date: '2026-09-23' },
 };
+
+// card_supply's answer with every floor met: six open cards, one of $5 or more and one under $2.
+const OPEN_CARDS = Array.from({ length: 6 }, (_, i) => ({ id: `0000000${i}-0000-4000-8000-000000000000`, title: `Open card ${i}`, target_usd: i === 0 ? '5.0000' : '1.0000' }));
+const AT_FLOOR = {
+  open: 6,
+  big: 1,
+  small: 5,
+  floor_open: 6,
+  floor_big: 1,
+  floor_small: 1,
+  big_min_usd: '5.0000',
+  small_max_usd: '2.0000',
+  short_open: 0,
+  short_big: 0,
+  short_small: 0,
+  open_cards: OPEN_CARDS,
+};
+// Production's shape on 23 September 2026 (PG-10): six small goal cards and none of $5 or more.
+const SHORT = { ...AT_FLOOR, big: 0, small: 6, short_big: 1, open_cards: OPEN_CARDS.map((c) => ({ ...c, target_usd: '1.0000' })) };
+
+describe('Board card supply (docs/specs/studio-reports.md)', () => {
+  it('shows the supply line under Studio, and nothing in Needs you at the floor', async () => {
+    await renderBoard();
+    await flush();
+    const studio = within(screen.getByRole('region', { name: 'Studio status' }));
+    expect(studio.getByText('Open cards: 6 of a floor of 6 · $5 or more: 1 of 1 · under $2: 5 of 1.')).toBeTruthy();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
+    expect(inbox.queryByText('Card supply is short.')).toBeNull();
+    expect(callsNamed('card_supply').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lists Card supply is short, and Draft to the floor queues one board-origin draft_card run with the floor and the open cards', async () => {
+    fake.supply = { ...SHORT };
+    await renderBoard();
+    await flush();
+    expect(within(screen.getByRole('region', { name: 'Studio status' })).getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeTruthy();
+    const inbox = screen.getByRole('region', { name: 'Needs you' });
+    expect(within(inbox).queryByText(NOTHING_NEEDS_YOU)).toBeNull();
+    expect(inbox.querySelector('ul.needs > li[data-needs="supply"] strong')?.textContent).toBe('Card supply is short.');
+    const form = screen.getByRole('form', { name: 'Draft to the floor' });
+    fireEvent.submit(form);
+    await flush();
+    // The status line is inside the form, whose 16 px gap clears the focused button's ring.
+    expect(within(form).getByRole('status').textContent).toBe('A reason is required.');
+    expect(callsNamed('enqueue_manual_job')).toHaveLength(0);
+    fireEvent.change(within(form).getByLabelText('Reason'), { target: { value: 'No big card open' } });
+    fireEvent.submit(form);
+    await flush();
+    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
+      { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0 }, open_cards: OPEN_CARDS.map((c) => c.id) } },
+    ]);
+    expect(within(form).getByRole('status').textContent).toMatch(/^Queued\./);
+  });
+
+  it('asks for the second factor before drafting to the floor', async () => {
+    fake.aal = 'aal1';
+    fake.supply = { ...SHORT };
+    await renderBoard();
+    await flush();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.getByText('Card supply is short.')).toBeTruthy();
+    expect(inbox.queryByRole('button', { name: 'Draft to the floor' })).toBeNull();
+    expect(inbox.getByText('Verify your second factor, then draft to the floor from here.')).toBeTruthy();
+    expect(callsNamed('enqueue_manual_job')).toHaveLength(0);
+  });
+
+  it('says so under Studio when card_supply fails, and lists no supply item', async () => {
+    fake.supply = null;
+    await renderBoard();
+    await flush();
+    expect(within(screen.getByRole('region', { name: 'Studio status' })).getByText('Card supply: card_supply returned nothing')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
+  });
+});
 
 describe('Board Needs you inbox', () => {
   it('is the first section, says nothing needs you, and keeps the standing duties when nothing is due', async () => {

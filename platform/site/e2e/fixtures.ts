@@ -9,7 +9,8 @@ export { expect };
 
 /**
  * Serves /api/live and /api/cards from the fixture, built the way site_live() and site_cards() build
- * them (snapshot-documents.ts), and /api/card/:id and /api/thanks as card.mts does. Any request to the Supabase host fails the test: the public site
+ * them (snapshot-documents.ts), /api/reports from its reports, and /api/card/:id and /api/thanks as
+ * card.mts does. Any request to the Supabase host fails the test: the public site
  * reads only its own origin (docs/specs/site-snapshot.md). The documents are rebuilt on each request,
  * so a test can change the fixture between loads.
  */
@@ -40,6 +41,12 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
     const detail = toCardDetail(studio, id.toLowerCase());
     if (detail === null) return route.fulfill({ status: 404, contentType: json, body: '{"error":"There is no card at this address"}' });
     return route.fulfill({ status: 200, contentType: json, body: JSON.stringify(detail) });
+  });
+  // /api/reports (docs/specs/studio-reports.md), as snapshot.mts answers it: GET only, no query.
+  await page.route(/\/api\/reports(\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fulfill({ status: 405, contentType: json, body: '{"error":"Only GET is allowed"}' });
+    if (new URL(route.request().url()).search !== '') return route.fulfill({ status: 400, contentType: json, body: '{"error":"No query string is allowed"}' });
+    return route.fulfill({ status: 200, contentType: json, body: JSON.stringify({ reports: studio.reports ?? [] }) });
   });
   await page.route(/\/api\/thanks(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'POST') return route.fulfill({ status: 405, contentType: json, body: '{"error":"Only POST is allowed"}' });
