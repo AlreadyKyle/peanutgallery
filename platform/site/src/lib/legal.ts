@@ -311,6 +311,10 @@ export const legal = {
     repo_skills: 'The code held files the agents may not load, so the agent was not started.',
     system_prompt: "The agent's instructions could not be put together, so it was not started.",
     ledger: 'The studio could not record what the agent spent, so the work stopped.',
+    // The Directors' visual review (docs/specs/design-review.md).
+    'visual_review:all_ages': 'A Director found the change was not suitable for all ages.',
+    visual_review: 'The design review could not give a verdict.',
+    frames: "The design review could not read the change's screenshots.",
   } as Record<string, string>,
   // A card's own page and its supporters (docs/specs/supporter-pages.md). A supporter shows only as
   // a number, in number order, with no amount, time or name.
