@@ -318,11 +318,13 @@ test('docs/PLAN.md numbers its decisions from 1 with no gaps, and the live docs 
 const BUCKETS = ['game', 'platform', 'qa', 'studio', 'budget', 'agents'];
 const FOLDERS = ['seed-1', 'platform'];
 const HORIZONS = ['next', 'later'];
-const KEYS = ['bucket', 'folder', 'horizon', 'rank', 'summary', 'intent'];
+const KEYS = ['bucket', 'folder', 'horizon', 'rank', 'summary', 'intent', 'board'];
+// The board-work marker (docs/specs/copy-pass.md): yes when the change lands in kernel paths.
+const BOARD_VALUES = ['yes', 'no'];
 
 // A local reading of docs/BACKLOG.md in the format platform/supabase/lib/backlog.ts parses: prose,
 // level-2 headings and fenced blocks are ignored; each level-3 heading is a card title, followed at
-// once by the six bullet lines in order. Returns { entries, problems }.
+// once by the seven bullet lines in order, the last the board-work marker. Returns { entries, problems }.
 function parseBacklogLocally(text) {
   const lines = text.split('\n');
   const entries = [];
@@ -350,18 +352,20 @@ function parseBacklogLocally(text) {
       values[key] = match[1].trim();
     }
     if (Object.keys(values).length !== KEYS.length) continue;
-    if (/^- [a-z_]+:/.test(lines[i + 1 + KEYS.length] ?? '')) problems.push(`${at}: a key follows intent`);
+    if (/^- [a-z_]+:/.test(lines[i + 1 + KEYS.length] ?? '')) problems.push(`${at}: a key follows board`);
     if (!BUCKETS.includes(values.bucket)) problems.push(`${at}: bucket "${values.bucket}"`);
     if (!FOLDERS.includes(values.folder)) problems.push(`${at}: folder "${values.folder}"`);
     if (!HORIZONS.includes(values.horizon)) problems.push(`${at}: horizon "${values.horizon}"`);
     if (!/^\d+$/.test(values.rank)) problems.push(`${at}: rank "${values.rank}"`);
+    if (!BOARD_VALUES.includes(values.board)) problems.push(`${at}: board "${values.board}" is not yes or no`);
     if (values.summary === '' || values.summary.length > 200) problems.push(`${at}: the summary has 1 to 200 characters`);
     if (/^[a-z]/.test(values.summary)) problems.push(`${at}: the summary starts in lower case`);
     for (const key of ['summary', 'intent']) {
       if (values[key].includes('—')) problems.push(`${at}: the ${key} uses an em dash`);
     }
     if (!/not built yet/i.test(values.intent)) problems.push(`${at}: the intent does not say it is not built yet`);
-    entries.push({ title, ...values, rank: Number(values.rank), line: i + 1 });
+    const { board, ...fields } = values;
+    entries.push({ title, ...fields, rank: Number(values.rank), board_work: board === 'yes', line: i + 1 });
   }
   const titles = new Set();
   const ranks = new Set();
@@ -408,13 +412,13 @@ test('docs/BACKLOG.md parses with the backlog script\'s parser to the same entri
         "import { readFileSync } from 'node:fs';",
         `import { parseBacklog } from ${JSON.stringify(pathToFileURL(DB_PARSER).href)};`,
         'const entries = parseBacklog(readFileSync(process.argv[2], "utf8"));',
-        'process.stdout.write(JSON.stringify(entries.map(({ title, bucket, folder, horizon, rank, summary, intent }) => ({ title, bucket, folder, horizon, rank, summary, intent }))));',
+        'process.stdout.write(JSON.stringify(entries.map(({ title, bucket, folder, horizon, rank, summary, intent, board_work }) => ({ title, bucket, folder, horizon, rank, summary, intent, board_work }))));',
       ].join('\n'),
     );
     const run = spawnSync(TSX, [script, join(docsDir, 'BACKLOG.md')], { cwd: repoRoot, encoding: 'utf8' });
     assert.equal(run.status, 0, `the backlog parser accepts docs/BACKLOG.md:\n${run.stdout}\n${run.stderr}`);
     const theirs = JSON.parse(run.stdout);
-    const ours = backlog.entries.map(({ title, bucket, folder, horizon, rank, summary, intent }) => ({ title, bucket, folder, horizon, rank, summary, intent }));
+    const ours = backlog.entries.map(({ title, bucket, folder, horizon, rank, summary, intent, board_work }) => ({ title, bucket, folder, horizon, rank, summary, intent, board_work }));
     assert.deepEqual(theirs, ours);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -527,6 +531,15 @@ test('docs/SYSTEM.md describes the weekly report and the outbound lane studio-re
   assert.match(text, /## The weekly report and the outbound lane/);
   for (const name of ['weekly-report', 'publish_weekly_report()', 'outbound_posts', 'card_supply()', 'DISCORD_WEBHOOK_SHIPS']) assert.ok(text.includes(name), `SYSTEM.md names ${name}`);
   assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/studio-reports\.md\x60/i);
+});
+
+test('docs/SYSTEM.md describes the board-work marker copy-pass built, and no longer marks it not built', () => {
+  const text = read('docs', 'SYSTEM.md');
+  for (const name of ['`cards.board_work`', '`board: yes`', '`file-backlog`']) assert.ok(text.includes(name), `SYSTEM.md names ${name}`);
+  assert.doesNotMatch(text, /not built yet[^\n]*\x60specs\/copy-pass\.md\x60/i);
+  // Every backlog entry carries the marker, and the parser refuses one without it.
+  assert.ok(backlog.entries.length > 0 && backlog.entries.every((entry) => typeof entry.board_work === 'boolean'));
+  assert.deepEqual(parseBacklogLocally('### A card\n- bucket: game\n- folder: seed-1\n- horizon: next\n- rank: 1\n- summary: A card.\n- intent: It is not built yet.\n').problems[0], 'docs/BACKLOG.md:1 "A card": line 8 should be "- board: <value>"');
 });
 
 test('docs/SYSTEM.md describes the visual review design-review built, and no longer marks it not built', () => {

@@ -39,6 +39,8 @@ const PUBLIC_CARD_COLUMNS = [
   "board_reason",
   "board_veto_reason",
   "board_vetoed",
+  // copy-pass (docs/specs/copy-pass.md): the board-work marker /roadmap groups by.
+  "board_work",
   "branch",
   "bucket",
   "check_author_role_id",
@@ -272,6 +274,7 @@ Deno.test("migrations on PGlite", {
         "20260925100000_reports_supply.sql",
         "20260925200000_design_review.sql",
         "20260925300000_agent_upkeep.sql",
+        "20260925400000_board_work.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

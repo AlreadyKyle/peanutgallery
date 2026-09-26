@@ -153,6 +153,16 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       for (const card of list) assertEquals(Object.keys(card).sort(), granted);
     });
 
+    await t.step("copy-pass's board_work is anon's to select and on every card: false by default, true once set", async () => {
+      const granted = await s.asAnon(async () => await s.rows<{ id: string; board_work: boolean }>(`select id, board_work from public.cards order by created_at`));
+      assertEquals(granted.map((r) => r.board_work), [false, false]);
+      assertEquals((await s.row<{ d: string }>(`select column_default as d from information_schema.columns where table_schema = 'public' and table_name = 'cards' and column_name = 'board_work'`)).d, "false");
+      await s.db.query(`update public.cards set board_work = true where id = $1`, [granted[0]!.id]);
+      const list = (await s.cards()).cards as Doc[];
+      assertEquals(list.map((c) => [c.id, c.board_work]), [[granted[0]!.id, true], [granted[1]!.id, false]]);
+      await s.db.exec(`update public.cards set board_work = false`);
+    });
+
     await t.step("every key in snapshot-keys.json is present with its JSON type, in both documents and every card of the live map", async () => {
       const spec = JSON.parse(await Deno.readTextFile(SNAPSHOT_KEYS)) as { live: KeySpec; live_card: KeySpec; cards: KeySpec };
       const liveDoc = await s.live();

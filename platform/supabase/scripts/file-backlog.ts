@@ -4,8 +4,9 @@
 //   pnpm --filter @backseat/supabase file-backlog -- --apply
 //   pnpm --filter @backseat/supabase file-backlog -- --file <path>
 // Each entry becomes a board goal card at stage proposed on its horizon (next
-// or later) with its rank, and no funding target, executor or acceptance test:
-// it is planned, not open for funding. The script matches cards by title, so
+// or later) with its rank, its board-work marker (cards.board_work, from the
+// entry's board: bullet, docs/specs/copy-pass.md), and no funding target,
+// executor or acceptance test: it is planned, not open for funding. The script matches cards by title, so
 // it can run again: an entry already filed is updated where the file changed,
 // and one the board has moved to now, or past proposed, is left alone, as is
 // one an agent drafted, one waiting to be dealt and one the board vetoed
@@ -64,7 +65,7 @@ async function main(): Promise<void> {
   const counts = backlogCounts(entries);
   const mode = apply ? "apply" : "dry run";
   console.log(
-    `${mode}: ${entries.length} backlog entries in ${file}: next ${counts.horizon.next}, later ${counts.horizon.later}; seed-1 ${counts.folder["seed-1"]}, platform ${counts.folder.platform}`,
+    `${mode}: ${entries.length} backlog entries in ${file}: next ${counts.horizon.next}, later ${counts.horizon.later}; seed-1 ${counts.folder["seed-1"]}, platform ${counts.folder.platform}; board work ${counts.board.yes}, not board work ${counts.board.no}`,
   );
 
   const db = serviceClient(loadRepoEnv());
@@ -94,7 +95,7 @@ async function main(): Promise<void> {
   for (const skip of plan.skipped) console.log(`skip "${skip.title}": ${skip.reason}`);
   for (const title of plan.unchanged) console.log(`unchanged "${title}"`);
   for (const row of plan.insert) {
-    console.log(`${apply ? "insert" : "would insert"} "${row.title}" (${row.horizon} ${row.rank}, ${row.folder}, ${row.bucket})`);
+    console.log(`${apply ? "insert" : "would insert"} "${row.title}" (${row.horizon} ${row.rank}, ${row.folder}, ${row.bucket}, board ${row.board_work ? "yes" : "no"})`);
   }
   for (const change of plan.update) {
     console.log(`${apply ? "update" : "would update"} "${change.title}" (${change.id}): ${Object.keys(change.patch).join(", ")}`);
