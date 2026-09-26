@@ -191,6 +191,30 @@ test('passes a grid whose last row is part-empty', async ({ page }) => {
   expect(await page.evaluate(auditLayout, LIMITS)).toEqual([]);
 });
 
+// A link or chip alone on a wrapped line (the footer's Discord at 375px, the review of 26 Sep 2026):
+// six 46px-plus links in a 335px row leave the last on a line of its own, which the old 32px rule let
+// through. A row stacked one link to a line is a column, a line of text pieces (spans) wraps as prose
+// does, and the same links in a grid of equal columns, one to a cell, draw nothing.
+test('finds a link alone on a wrapped line, and passes a column, a line of text and a grid', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 900 });
+  // Six 50px links: five and their gaps fill 314px, so in a 320px row the sixth wraps alone.
+  const links = ['Weekly reports', 'Terms', 'Privacy', 'Refunds', 'Contact', 'Discord'].map((word) => `<li style="width:50px;overflow:hidden"><a href="#" style="display:inline-flex;min-height:44px;align-items:center">${word}</a></li>`).join('');
+  const html = (body: string) => `<!doctype html><html><body style="margin:0;padding:0 20px;font:14px/1.5 sans-serif">${body}</body></html>`;
+  const ul = (style: string) => `<ul style="list-style:none;margin:0;padding:0;gap:8px 16px;${style}">${links}</ul>`;
+  const found = async (kinds: string[]) => (await page.evaluate(auditLayout, LIMITS)).filter((line) => kinds.some((kind) => line.startsWith(kind)));
+  await page.setContent(html(ul('display:flex;flex-wrap:wrap;max-width:320px')));
+  expect(await found(['orphan:'])).toEqual([expect.stringMatching(/^orphan: li "Discord" alone on a line of ul/)]);
+  // One link to a line is a column.
+  await page.setContent(html(ul('display:flex;flex-wrap:wrap;max-width:60px')));
+  expect(await found(['orphan:'])).toEqual([]);
+  // Three 150px pieces of a meta line wrap two and one, as text does.
+  await page.setContent(html(`<p style="display:flex;flex-wrap:wrap;gap:0 8px;margin:0;max-width:320px">${'<span style="width:150px">A piece of the meta line</span>'.repeat(3)}</p>`));
+  expect(await found(['orphan:'])).toEqual([]);
+  // The footer's fix: equal columns, one link to a cell.
+  await page.setContent(html(ul('display:grid;grid-template-columns:repeat(auto-fill,minmax(6.5rem,1fr));max-width:320px')));
+  expect(await found(['orphan:', 'grid cells:'])).toEqual([]);
+});
+
 // A dashed frame that hugs its lone card (width: fit-content, as /how-it-works draws it) is filled
 // by it, and a bordered box that holds only a short line of text is not checked: prose ends where it
 // ends. Neither draws a frame finding.
