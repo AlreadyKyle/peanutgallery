@@ -13,6 +13,7 @@ import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { readFile } from 'node:fs/promises';
 import { AttendedAdapter } from './adapters/attended.js';
+import { defaultCliPin } from './cli-pin.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
 import { createDiscordPoster } from './discord.js';
@@ -77,7 +78,10 @@ async function main(): Promise<void> {
   // unattended process keeps an attended adapter for them. Its Read, Glob and Grep deny rules name the
   // code clone too, whose .env holds the dispatcher's keys, and there its sessions hold no Bash
   // (role-session.ts), since the host runs no agent-written code.
-  const roleAdapter = adapter.mode === 'attended' ? adapter : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot });
+  const roleAdapter =
+    adapter.mode === 'attended'
+      ? adapter
+      : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
   const visual: PipelineVisual = {
@@ -126,6 +130,11 @@ async function main(): Promise<void> {
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
   await failStaleJobRuns(db, leaseHolder, log);
   await startupChecks({ db, adapter, config, log });
+  // The Claude Code pin (cli-pin.ts): every attended session, role jobs included, checks it; a
+  // mismatch here means those sessions pause until the board runs the pin or updates it.
+  const pin = await defaultCliPin(config.codeRoot, config.claudeBin).state();
+  if (pin.ok) log.info('main', 'claude code is on its pin', { version: pin.version });
+  else log.warn('main', 'claude code is not on its pin; attended sessions pause with cli_version', { installed: pin.installed, pinned: pin.pinned, detail: pin.detail });
   const managed = adapter.managed;
   await recoverOrphans({
     db,

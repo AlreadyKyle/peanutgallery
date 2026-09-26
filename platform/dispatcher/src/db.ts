@@ -69,6 +69,29 @@ export interface Card {
   review_rounds: number;
 }
 
+// The Janitor's findings (docs/specs/agent-upkeep.md): one row per check and subject, for the board.
+export type FindingKind = 'schema' | 'model' | 'cli' | 'scan' | 'producer';
+
+export interface Finding {
+  fingerprint: string;
+  kind: FindingKind;
+  subject: string;
+  detail: Record<string, unknown>;
+}
+
+export interface OpenFinding extends Finding {
+  opened_at: string;
+}
+
+// What producer_signals() names: a funded card left unclaimed, a card paused at its ceiling, or fewer
+// ships than half the week before.
+export interface ProducerSignal {
+  kind: 'unclaimed' | 'overrun' | 'throughput';
+  card_id: string | null;
+  executor: string | null;
+  figures: Record<string, unknown>;
+}
+
 // A visual approval (record_card_approval, kind visual; docs/specs/design-review.md): the Director
 // approves, the builder's session made it, the review session graded it.
 export interface VisualApprovalInput {
@@ -349,6 +372,14 @@ export interface Db extends OutboundDb {
   recordReviewRound(cardId: string): Promise<number>;
   recordVisualApproval(input: VisualApprovalInput): Promise<string>;
   applyCardRanking(runId: string, order: readonly string[]): Promise<{ moves: RankingMove[]; unapplied: number }>;
+  // The Janitor (docs/specs/agent-upkeep.md): record_finding is true when the finding is new or
+  // reopened, close_finding when an open one closed; the open findings; producer_signals(); and
+  // production's schema_fingerprint(), key to md5.
+  recordFinding(finding: Finding): Promise<boolean>;
+  closeFinding(fingerprint: string): Promise<boolean>;
+  openFindings(): Promise<OpenFinding[]>;
+  producerSignals(): Promise<ProducerSignal[]>;
+  schemaFingerprint(): Promise<Record<string, string>>;
 }
 
 type Row = Record<string, unknown>;
@@ -800,6 +831,52 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       const { data, error } = await client.rpc('approve_card_draft', { p_draft: draftId, p_approver_role: approverRoleId, p_grader_ref: graderRef, p_verdict: verdict });
       if (error || !data) fail('approve_card_draft', error);
       return String(data);
+    },
+
+    async recordFinding(finding) {
+      const { data, error } = await client.rpc('record_finding', {
+        p_fingerprint: finding.fingerprint,
+        p_kind: finding.kind,
+        p_subject: finding.subject,
+        p_detail: finding.detail,
+      });
+      if (error || typeof data !== 'boolean') fail('record_finding', error);
+      return data as boolean;
+    },
+
+    async closeFinding(fingerprint) {
+      const { data, error } = await client.rpc('close_finding', { p_fingerprint: fingerprint });
+      if (error || typeof data !== 'boolean') fail('close_finding', error);
+      return data as boolean;
+    },
+
+    async openFindings() {
+      const { data, error } = await client.from('findings').select('fingerprint, kind, subject, detail, opened_at').is('closed_at', null).order('opened_at');
+      if (error || !Array.isArray(data)) fail('findings', error);
+      return (data as Row[]).map((row) => ({
+        fingerprint: text(row, 'fingerprint'),
+        kind: text(row, 'kind') as FindingKind,
+        subject: text(row, 'subject'),
+        detail: typeof row.detail === 'object' && row.detail !== null ? (row.detail as Record<string, unknown>) : {},
+        opened_at: text(row, 'opened_at'),
+      }));
+    },
+
+    async producerSignals() {
+      const { data, error } = await client.rpc('producer_signals');
+      if (error || !Array.isArray(data)) fail('producer_signals', error);
+      return (data as Row[]).map((row) => ({
+        kind: text(row, 'kind') as ProducerSignal['kind'],
+        card_id: optionalText(row, 'card_id'),
+        executor: optionalText(row, 'executor'),
+        figures: typeof row.figures === 'object' && row.figures !== null ? (row.figures as Record<string, unknown>) : {},
+      }));
+    },
+
+    async schemaFingerprint() {
+      const { data, error } = await client.rpc('schema_fingerprint');
+      if (error || typeof data !== 'object' || data === null || Array.isArray(data)) fail('schema_fingerprint', error);
+      return data as Record<string, string>;
     },
 
     async recordReviewRound(cardId) {

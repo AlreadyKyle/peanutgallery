@@ -11,10 +11,13 @@ import type {
   DeployInput,
   DraftFields,
   EnqueueInput,
+  Finding,
   Job,
   JobRun,
   OpenCardRow,
+  OpenFinding,
   PostKind,
+  ProducerSignal,
   ReportPost,
   ShipPost,
   Pool,
@@ -525,5 +528,40 @@ export class FakeDb implements Db {
   async lastGreen(folder: Deploy['folder']): Promise<Deploy | null> {
     const green = this.deploys.filter((d) => d.folder === folder && d.is_green);
     return green.length > 0 ? { ...green[green.length - 1]! } : null;
+  }
+  // The Janitor (docs/specs/agent-upkeep.md): findings as record_finding and close_finding keep them,
+  // what producer_signals() and production's schema_fingerprint() answer, and every finding write.
+  findings: Array<OpenFinding & { closed_at: string | null }> = [];
+  findingWrites: string[] = [];
+  signals: ProducerSignal[] = [];
+  productionFingerprint: Record<string, string> = {};
+  async recordFinding(finding: Finding) {
+    this.findingWrites.push(`record:${finding.fingerprint}`);
+    const at = new Date(this.clock()).toISOString();
+    const found = this.findings.find((f) => f.fingerprint === finding.fingerprint);
+    if (!found) {
+      this.findings.push({ ...finding, detail: { ...finding.detail }, opened_at: at, closed_at: null });
+      return true;
+    }
+    const reopened = found.closed_at !== null;
+    Object.assign(found, { kind: finding.kind, subject: finding.subject, detail: { ...finding.detail } });
+    if (reopened) Object.assign(found, { opened_at: at, closed_at: null });
+    return reopened;
+  }
+  async closeFinding(fingerprint: string) {
+    this.findingWrites.push(`close:${fingerprint}`);
+    const found = this.findings.find((f) => f.fingerprint === fingerprint && f.closed_at === null);
+    if (!found) return false;
+    found.closed_at = new Date(this.clock()).toISOString();
+    return true;
+  }
+  async openFindings() {
+    return this.findings.filter((f) => f.closed_at === null).map(({ closed_at: _closed, ...f }) => ({ ...f, detail: { ...f.detail } }));
+  }
+  async producerSignals() {
+    return this.signals.map((signal) => ({ ...signal, figures: { ...signal.figures } }));
+  }
+  async schemaFingerprint() {
+    return { ...this.productionFingerprint };
   }
 }

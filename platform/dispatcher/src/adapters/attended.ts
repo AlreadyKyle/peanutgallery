@@ -29,8 +29,9 @@ import { existsSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { CLI_VERSION_CHECK, type CliPin } from '../cli-pin.js';
 import { absoluteRulePath, ClaudeCliAdapter, childEnv, type ClaudeCliOptions } from './claude-cli.js';
-import type { SessionSpec } from './types.js';
+import { SessionPaused, type EventSink, type RawLineSink, type SessionResult, type SessionSpec } from './types.js';
 
 const execFileAsync = promisify(execFile);
 // The install before a session, with its own timeout.
@@ -48,6 +49,10 @@ export interface AttendedOptions extends ClaudeCliOptions {
   uid?: number | string;
   // Installs the worktree's dependencies before the session; tests pass a stub.
   install?: Installer;
+  // The Claude Code pin (cli-pin.ts, docs/specs/agent-upkeep.md): before every session the installed
+  // version must equal it, or the session pauses with cli_version. The dispatcher's adapters carry it;
+  // the sandbox check, which is how a new version is checked, runs without it.
+  cliPin?: CliPin | null;
 }
 
 // pnpm install from the lockfile, offline first, with the session's allowlisted environment.
@@ -199,6 +204,7 @@ export class AttendedAdapter extends ClaudeCliAdapter {
   readonly mode = 'attended' as const;
   private readonly paths: Omit<SandboxPaths, 'worktree'>;
   private readonly install: Installer;
+  private readonly cliPin: CliPin | null;
 
   constructor(options: AttendedOptions) {
     super(options);
@@ -210,6 +216,17 @@ export class AttendedAdapter extends ClaudeCliAdapter {
       uid: options.uid ?? currentUid(),
     };
     this.install = options.install ?? pnpmInstall;
+    this.cliPin = options.cliPin ?? null;
+  }
+
+  // A CLI other than the pinned one never starts a session: the card pauses with cli_version and
+  // keeps its money, and a role job's session fails with the same words.
+  override async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal, onRawLine?: RawLineSink): Promise<SessionResult> {
+    if (this.cliPin) {
+      const pin = await this.cliPin.state();
+      if (!pin.ok) throw new SessionPaused(CLI_VERSION_CHECK, pin.detail);
+    }
+    return super.run(spec, onEvent, signal, onRawLine);
   }
 
   // The allowlisted environment, with git told to read no global or system configuration: the sandbox

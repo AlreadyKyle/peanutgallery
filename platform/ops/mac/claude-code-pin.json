@@ -1,0 +1,4 @@
+{
+  "version": "2.1.280",
+  "sandbox_check": "PASS: attended sandbox (sandbox:check --positive on Claude Code 2.1.280, both layouts; docs/specs/carry-over.md Evidence)"
+}
