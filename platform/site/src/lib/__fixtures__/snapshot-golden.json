@@ -420,7 +420,7 @@
       "id": "r-platform-director",
       "name": "Platform Director",
       "title": "Platform Director",
-      "description": "Grades site cards against the studio's design and copy standards before funding and after they ship, and audits the site.",
+      "description": "Looks at how each site card's change draws the site before it merges, against the studio's design standards.",
       "species_note": "A slim brown creature with two wide eyes and pointed ears.",
       "model": "claude-opus-5-5",
       "write_access": false,
