@@ -227,7 +227,8 @@ export const copy = {
       later: 'To be built after that.',
     },
     // Each horizon's cards in groups by folder and the board-work marker, never by bucket (PLAN.md §4
-    // Work, docs/specs/copy-pass.md). Board work is a disclosure, closed until opened.
+    // Work, docs/specs/copy-pass.md). Board work is a disclosure, closed until opened, unless it is all
+    // the horizon holds: then it is drawn open under boardOnly.
     groups: {
       players: { heading: 'For players', intro: 'Planned changes to Dust, the game.' },
       studio: { heading: 'The studio', intro: "Planned changes to this site's pages, words and layout." },
@@ -237,6 +238,7 @@ export const copy = {
       },
     },
     empty: 'Nothing is planned here yet.',
+    boardOnly: 'No card for players or the studio is here yet. The cards below are board work.',
     loading: 'Loading the roadmap.',
     // An approved agent card waiting to be dealt to now (opens_at set, not yet on now).
     opensSoon: 'Approved, opens soon',

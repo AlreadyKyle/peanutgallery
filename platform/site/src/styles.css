@@ -1118,8 +1118,9 @@ button.link:hover:not(:disabled) {
 }
 
 /* /roadmap: each horizon's cards in groups, for players, the studio, then board work in a closed
-   disclosure (docs/specs/copy-pass.md). A group's heading keeps more space above than below, like a
-   section's; the disclosure's summary is a 44px target around its heading. */
+   disclosure, drawn open as a plain group when it is all the horizon holds (docs/specs/copy-pass.md).
+   A group's heading keeps more space above than below, like a section's; the disclosure's summary is
+   a 44px target around its heading. */
 .roadmap-group {
   margin-top: var(--space-4);
 }

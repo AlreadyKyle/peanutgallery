@@ -33,13 +33,27 @@ function Rows({ cards, snapshot }: { cards: Card[]; snapshot: Snapshot }) {
 }
 
 /**
- * One group of a horizon: its heading, one line that says planned, and its rows. Board work is a
- * native disclosure, closed until the reader opens it, so it never reads as work supporters fund.
+ * One group of a horizon: its heading, one line that says planned, and its rows. Board work beside a
+ * group for players or the studio is a native disclosure, closed until the reader opens it, so it never
+ * reads as work supporters fund; when it is the horizon's only group it is drawn open like the others,
+ * since a band holding one closed summary reads as empty (docs/specs/copy-pass.md, Decisions).
  */
-function Group({ horizon, group, cards, snapshot }: { horizon: PlannedHorizon; group: RoadmapGroup; cards: Card[]; snapshot: Snapshot }) {
+function Group({
+  horizon,
+  group,
+  cards,
+  snapshot,
+  closed,
+}: {
+  horizon: PlannedHorizon;
+  group: RoadmapGroup;
+  cards: Card[];
+  snapshot: Snapshot;
+  closed: boolean;
+}) {
   const id = `roadmap-${horizon}-${group}`;
   const words = roadmap.groups[group];
-  if (group === 'board') {
+  if (closed) {
     return (
       <details className="roadmap-group roadmap-board" data-group={group}>
         <summary>
@@ -60,26 +74,34 @@ function Group({ horizon, group, cards, snapshot }: { horizon: PlannedHorizon; g
 }
 
 function Horizon({ horizon, cards, snapshot }: { horizon: PlannedHorizon; cards: Card[]; snapshot: Snapshot }) {
+  const groups = ROADMAP_GROUPS.map((group) => ({ group, cards: cards.filter((card) => roadmapGroup(card) === group) })).filter(
+    (entry) => entry.cards.length > 0,
+  );
+  const boardOnly = groups.length > 0 && groups.every((entry) => entry.group === 'board');
   return (
     <section className="section" aria-labelledby={`roadmap-${horizon}`}>
       <h2 id={`roadmap-${horizon}`}>{roadmap.horizons[horizon]}</h2>
       <p className="muted">{roadmap.horizonIntros[horizon]}</p>
-      {cards.length === 0 ? (
-        <p className="muted">{roadmap.empty}</p>
-      ) : (
-        ROADMAP_GROUPS.map((group) => {
-          const inGroup = cards.filter((card) => roadmapGroup(card) === group);
-          return inGroup.length === 0 ? null : <Group key={group} horizon={horizon} group={group} cards={inGroup} snapshot={snapshot} />;
-        })
-      )}
+      {groups.length === 0 ? <p className="muted">{roadmap.empty}</p> : null}
+      {boardOnly ? <p className="muted">{roadmap.boardOnly}</p> : null}
+      {groups.map((entry) => (
+        <Group
+          key={entry.group}
+          horizon={horizon}
+          group={entry.group}
+          cards={entry.cards}
+          snapshot={snapshot}
+          closed={entry.group === 'board' && !boardOnly}
+        />
+      ))}
     </section>
   );
 }
 
 /**
  * The roadmap: cards on horizon next and later, a band each (Next on paper, Later on ink). In each,
- * the cards for players, then the studio's, then board work in a closed disclosure; an empty group is
- * not drawn. Rail rows with the suit in the rail. It has no bars, no fund links and no status, because
+ * the cards for players, then the studio's, then board work in a closed disclosure, or open with a line
+ * that says so when board work is all the band holds; an empty group is not drawn. Rail rows with the suit in the rail. It has no bars, no fund links and no status, because
  * none of these cards takes money until the board moves it to horizon now, and board work never does.
  */
 export function Roadmap() {

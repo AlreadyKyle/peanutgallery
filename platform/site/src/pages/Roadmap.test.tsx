@@ -147,6 +147,39 @@ describe('Roadmap', () => {
     expect(container.querySelectorAll('.roadmap-group')).toHaveLength(4);
   });
 
+  it('draws board work open, under a line that says so, when it is all a horizon holds (production at launch)', async () => {
+    // Every BACKLOG entry is board: yes, so each band once held only a closed summary and read as empty.
+    const boardOnly = [
+      card({ id: 'b1', title: 'Voter identity', folder: 'platform', bucket: 'platform', rank: 1, board_work: true }),
+      card({ id: 'b2', title: 'A bug button', folder: 'seed-1', bucket: 'qa', rank: 2, board_work: true }),
+      card({ id: 'b3', title: 'Seasons', horizon: 'later', board_work: true }),
+    ];
+    const { container } = renderRoadmap(sourceOf(boardOnly));
+    for (const [name, titles] of [
+      [roadmap.horizons.next, ['Voter identity', 'A bug button']],
+      [roadmap.horizons.later, ['Seasons']],
+    ] as const) {
+      const horizon = await screen.findByRole('region', { name });
+      expect(horizon.querySelector('details')).toBeNull();
+      expect(within(horizon).getByText(roadmap.boardOnly)).toBeTruthy();
+      const board = within(horizon).getByRole('region', { name: roadmap.groups.board.heading });
+      expect(board.getAttribute('data-group')).toBe('board');
+      expect(within(board).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(titles);
+      expect(within(horizon).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([roadmap.groups.board.heading]);
+    }
+    // Still said once per band, and only of board work.
+    expect((container.querySelector('main')!.textContent!.match(/not funded by cards/g) ?? []).length).toBe(2);
+  });
+
+  it('says no card for players or the studio only when board work is all a horizon holds', async () => {
+    renderRoadmap(sourceOf(cards));
+    const next = await screen.findByRole('region', { name: roadmap.horizons.next });
+    expect(within(next).queryByText(roadmap.boardOnly)).toBeNull();
+    const later = screen.getByRole('region', { name: roadmap.horizons.later });
+    expect(within(later).queryByText(roadmap.boardOnly)).toBeNull();
+    expect(roadmap.boardOnly).not.toMatch(/planned|fund/i);
+  });
+
   it('says planned once per group and not funded by cards only of board work', async () => {
     const { container } = renderRoadmap(sourceOf(cards));
     await screen.findByRole('region', { name: roadmap.horizons.next });

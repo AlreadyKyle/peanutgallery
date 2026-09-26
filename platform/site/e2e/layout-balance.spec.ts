@@ -48,6 +48,14 @@ auditRoutes('the launch-shaped studio', LIVE_STUDIO, [320, 375, 768, 1024, 1440]
 // recorded, pending and not counted, /team with every running role paused and /roadmap with an
 // opens-soon and a held card.
 auditRoutes('the supporter pages', SUPPORTER_STUDIO, [375, 768, 1440], SUPPORTER_ROUTES.map(([, path]) => path));
+// /roadmap as production has it at launch: every planned card is board work (every BACKLOG entry is
+// board: yes), so each band holds only the board-work group, drawn open (docs/specs/copy-pass.md).
+auditRoutes(
+  'the roadmap with only board work planned',
+  { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card.horizon === 'next' || card.horizon === 'later' ? { ...card, board_work: true } : card)) },
+  [320, 375, 768, 1440],
+  ['/roadmap'],
+);
 // The default fixture: a building-free studio with a picked card, a queued card and two shipped.
 auditRoutes('the default fixture', DEFAULT_STUDIO, [375, 768, 1440]);
 // Nothing loaded that could be empty: no roles (home draws no team strip), no actions, no deploys.

@@ -137,7 +137,7 @@ Built by `docs/specs/studio-reports.md`; no model writes or reads any of it.
 | A Director's visual review of a card's frames | the board's Max plan, attended only, while a board member is signed in, billed to the founder with the Director's role, never to the card |
 | A role job that runs code only | nothing: it makes no model call |
 | The unattended startup probe | overhead, from the studio share |
-| Board work: a change that lands in kernel paths (`cards.board_work`, a `docs/BACKLOG.md` entry marked `board: yes`) | no card: the board makes it through a reviewed pull request, and /roadmap shows it apart, closed until opened (`docs/specs/copy-pass.md`) |
+| Board work: a change that lands in kernel paths (`cards.board_work`, a `docs/BACKLOG.md` entry marked `board: yes`) | no card: the board makes it through a reviewed pull request, and /roadmap shows it apart, closed until opened, or open under a line that says so when it is all a horizon holds (`docs/specs/copy-pass.md`) |
 
 No role job spends supporters' or studio money, and `record_usage` refuses a studio-billed ledger row that names no card.
 
