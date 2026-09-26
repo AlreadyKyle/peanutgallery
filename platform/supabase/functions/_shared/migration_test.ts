@@ -289,6 +289,7 @@ Deno.test("migrations on PGlite", {
         "20260924500000_site_snapshot.sql",
         "20260924600000_supporter_pages.sql",
         "20260925000000_terms_version_3.sql",
+        "20260925100000_reports_supply.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -337,11 +338,13 @@ Deno.test("migrations on PGlite", {
         "job_runs",
         "jobs",
         "ledger",
+        "outbound_posts",
         "pool",
         "roles",
         "scores",
         "standing_costs",
         "stream_state",
+        "studio_reports",
         "studio_state",
         "supporters",
         "terms_versions",
@@ -4017,6 +4020,7 @@ Deno.test("migrations on PGlite", {
           "board_roles",
           "board_studio_state",
           "cancel_card",
+          "card_supply",
           "enqueue_manual_job",
           "file_card",
           "file_directive",
@@ -4060,6 +4064,7 @@ Deno.test("migrations on PGlite", {
           "finish_job_run",
           "ledger_identity",
           "ops_database_size",
+          "publish_weekly_report",
           "rankable_cards",
           "record_card_approval",
           "record_card_draft",
@@ -4079,7 +4084,8 @@ Deno.test("migrations on PGlite", {
         // the cards policy calls (agent-system-core.md), and the public site's two documents,
         // which run as the caller too (site-snapshot.md). supporter-pages adds the event line
         // helper public_agent_events calls, a card's own document and the /thanks answer.
-        const everyone = ["card_is_public", "event_line_key", "site_card", "site_cards", "site_live", "thanks_for_session"];
+        // studio-reports adds the weekly reports' document (docs/specs/studio-reports.md).
+        const everyone = ["card_is_public", "event_line_key", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [
