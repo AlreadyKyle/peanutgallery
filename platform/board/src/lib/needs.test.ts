@@ -101,3 +101,20 @@ describe('rule_blocked and approval_void', () => {
     ]);
   });
 });
+
+describe('findingsFrom', () => {
+  it('keeps well-formed findings oldest first, flattens their detail and drops empty values', async () => {
+    const { findingsFrom } = await import('./needs');
+    const rows = [
+      { fingerprint: 'cli:version', kind: 'cli', subject: 'Claude Code 2.1.283 is installed but the pin is 2.1.280', detail: { installed: '2.1.283', pinned: '2.1.280', detail: '' }, opened_at: '2026-09-26T08:00:00Z', last_seen_at: null },
+      { fingerprint: 'producer:overrun:c1', kind: 'producer', subject: 'Card c1 paused at its ceiling', detail: { actual_usd: 6.5, figures: { a: 1 } }, opened_at: '2026-09-25T08:00:00Z', last_seen_at: '2026-09-26T08:00:00Z' },
+      { fingerprint: 'x', kind: 'model', subject: '', opened_at: '2026-09-25T08:00:00Z' },
+      { kind: 'model', subject: 'no fingerprint', opened_at: '2026-09-25T08:00:00Z' },
+    ];
+    expect(findingsFrom(rows)).toEqual([
+      { fingerprint: 'producer:overrun:c1', kind: 'producer', subject: 'Card c1 paused at its ceiling', detail: [['actual_usd', '6.5'], ['figures', '{"a":1}']], opened_at: '2026-09-25T08:00:00Z', last_seen_at: '2026-09-26T08:00:00Z' },
+      { fingerprint: 'cli:version', kind: 'cli', subject: 'Claude Code 2.1.283 is installed but the pin is 2.1.280', detail: [['installed', '2.1.283'], ['pinned', '2.1.280']], opened_at: '2026-09-26T08:00:00Z', last_seen_at: '2026-09-26T08:00:00Z' },
+    ]);
+    expect(findingsFrom(null)).toEqual([]);
+  });
+});

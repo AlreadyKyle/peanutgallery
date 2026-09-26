@@ -13,8 +13,8 @@ import {
   STUDIO_STATE_POLL_MS,
 } from './lib/board';
 import { formatClock, formatDateTime } from './lib/format';
-import { BOARD_PULLS_URL } from './lib/needs';
-import { NOTHING_NEEDS_YOU } from './NeedsYou';
+import { BOARD_PULLS_URL, FINDING_COLUMNS } from './lib/needs';
+import { NON_CARD_PULLS_LINE, NOTHING_NEEDS_YOU } from './NeedsYou';
 
 type RpcCall = { name: string; args: Record<string, unknown> | undefined };
 
@@ -82,6 +82,9 @@ const fake = vi.hoisted(() => ({
   publicCards: [] as string[],
   // card_supply (docs/specs/studio-reports.md); the default is at the floor, so nothing is short.
   supply: null as Record<string, unknown> | null,
+  // The open findings rows the board reads (docs/specs/agent-upkeep.md).
+  findings: [] as Record<string, unknown>[],
+  findingsError: null as string | null,
   // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
   held: null as string | null,
   release: () => {},
@@ -217,9 +220,14 @@ vi.mock('./lib/supabase', async (importOriginal) => {
           record.filters.push(`order ${column}`);
           return builder;
         },
+        is(column: string, value: null) {
+          record.filters.push(`is ${column} ${String(value)}`);
+          return builder;
+        },
         returns() {
+          if (table === 'findings' && fake.findingsError !== null) return Promise.resolve({ data: null, error: { message: fake.findingsError } });
           const cards = fake.cards.filter((c) => only === null || only.values.includes(String(c[only.column as keyof FakeCard])));
-          const data = table === 'cards' ? cards : table === 'public_roles' ? [...fake.roleRows] : [];
+          const data = table === 'cards' ? cards : table === 'public_roles' ? [...fake.roleRows] : table === 'findings' ? [...fake.findings] : [];
           return Promise.resolve({ data, error: null });
         },
       };
@@ -349,6 +357,8 @@ beforeEach(() => {
   fake.otpCalls.length = 0;
   fake.needs = { ...EMPTY_NEEDS };
   fake.supply = { ...AT_FLOOR };
+  fake.findings = [];
+  fake.findingsError = null;
   fake.roleRows = [...ROLE_ROWS];
   fake.seenAt = startedAt.toISOString();
   fake.launchedAt = startedAt.toISOString();
@@ -1195,6 +1205,12 @@ describe('Board Needs you inbox', () => {
     expect(within(inbox).getByRole('link', { name: "Stripe's disputes" }).getAttribute('href')).toBe('https://dashboard.stripe.com/disputes');
     expect(within(inbox).getByRole('link', { name: 'hello@clayhouse.studio' }).getAttribute('href')).toBe('mailto:hello@clayhouse.studio');
     expect(within(inbox).getByRole('link', { name: 'open pull requests not from a card branch' }).getAttribute('href')).toBe(BOARD_PULLS_URL);
+    // docs/specs/agent-upkeep.md: patch updates that pass the policy merge by themselves; every other non-card pull request waits.
+    expect(NON_CARD_PULLS_LINE).toBe(
+      'Dependency patch updates that pass the merge policy merge by themselves. Every other pull request that is not from a card branch waits for your merge:',
+    );
+    expect(within(inbox).getByText(NON_CARD_PULLS_LINE, { exact: false })).toBeTruthy();
+    expect(within(inbox).queryByRole('heading', { name: 'Findings' })).toBeNull();
     expect(BOARD_PULLS_URL).toBe('https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F');
     expect(decodeURIComponent(new URL(BOARD_PULLS_URL).searchParams.get('q') ?? '')).toBe('is:pr is:open -head:card/');
     expect(callsNamed('board_needs_you')).toEqual([{ name: 'board_needs_you', args: undefined }]);
@@ -1264,6 +1280,58 @@ describe('Board Needs you inbox', () => {
     const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
     expect(inbox.getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
     expect(inbox.getByText(/2 mismatches, named in its alert/)).toBeTruthy();
+  });
+
+  // docs/specs/agent-upkeep.md: the Janitor's open findings, oldest first, with kind, subject, figures and time.
+  it('lists the open findings with their kind, subject, detail and opened time, and then something needs the board', async () => {
+    fake.aal = 'aal1';
+    fake.findings = [
+      {
+        fingerprint: 'scan:osv',
+        kind: 'scan',
+        subject: "The weekly scan's osv job failed (failure)",
+        detail: { run: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7', conclusion: 'failure', job: null },
+        opened_at: '2026-09-25T08:00:00Z',
+        last_seen_at: '2026-09-26T08:00:00Z',
+      },
+      {
+        fingerprint: 'schema:table:public.findings',
+        kind: 'schema',
+        subject: 'table:public.findings is in the migrations but not in production',
+        detail: { object: 'table:public.findings', production: null, migrations: 'abc123' },
+        opened_at: '2026-09-24T08:00:00Z',
+        last_seen_at: '2026-09-24T08:00:00Z',
+      },
+      { fingerprint: 'bad', kind: 'gossip', subject: 'not a kind', detail: {}, opened_at: '2026-09-24T08:00:00Z' },
+    ];
+    await renderBoard();
+    const region = screen.getByRole('region', { name: 'Needs you' });
+    const inbox = within(region);
+    expect(inbox.queryByText(NOTHING_NEEDS_YOU)).toBeNull();
+    expect(inbox.getByRole('heading', { level: 3, name: 'Findings' })).toBeTruthy();
+    const items = region.querySelectorAll('ul.findings > li');
+    expect([...items].map((item) => item.querySelector('strong')?.textContent)).toEqual([
+      'Schema drift: table:public.findings is in the migrations but not in production.',
+      "Weekly scan: The weekly scan's osv job failed (failure).",
+    ]);
+    expect(items[0]?.textContent).toContain(`Opened ${formatDateTime('2026-09-24T08:00:00Z')}.`);
+    expect(items[1]?.textContent).toContain(`Opened ${formatDateTime('2026-09-25T08:00:00Z')}, last seen ${formatDateTime('2026-09-26T08:00:00Z')}.`);
+    expect([...(items[0]?.querySelectorAll('.finding-detail li') ?? [])].map((li) => li.textContent)).toEqual(['object: table:public.findings', 'migrations: abc123']);
+    expect(inbox.getByRole('link', { name: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7' }).getAttribute('href')).toBe(
+      'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7',
+    );
+    expect(fake.selects.filter((select) => select.table === 'findings')).toEqual([
+      { table: 'findings', columns: FINDING_COLUMNS, filters: ['is closed_at null', 'order opened_at'] },
+    ]);
+  });
+
+  it('keeps the duties when the findings cannot be read, and names the failure', async () => {
+    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
+    fake.findingsError = 'permission denied for table findings';
+    await renderBoard();
+    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
+    expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeTruthy();
+    expect(inbox.getByText('Findings: permission denied for table findings')).toBeTruthy();
   });
 
   it('shows the error when board_needs_you fails', async () => {

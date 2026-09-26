@@ -214,6 +214,19 @@ button.link:hover:not(:disabled, [aria-disabled='true']) {
   margin-top: var(--space-1);
 }
 
+/* A finding's figures under its line: small text, one per line, long addresses wrapping. */
+.findings p:not(:last-child) {
+  margin-bottom: var(--space-1);
+}
+
+.finding-detail {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--size-small);
+  color: var(--muted);
+}
+
 section > h3 {
   margin-top: var(--space-3);
   margin-bottom: var(--space-1);
