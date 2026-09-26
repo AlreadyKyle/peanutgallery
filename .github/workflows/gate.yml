@@ -269,15 +269,17 @@ jobs:
           LANE: ${{ needs.detect.outputs.lane }}
         run: bash platform/gate/ship-gate.sh --phase bot --folder seed-1 --lane "$LANE"
 
-  # What a change draws (docs/specs/design-review.md). A fresh runner that runs no card tests restores
-  # every kernel file from the base commit on a card branch, as the build job does, installs without
-  # lifecycle scripts, and runs the kernel screenshot specs twice: on the change, and on a worktree of
-  # the base (a side whose spec the base does not have yet is skipped there). The site's frames are
-  # every route in platform/site/e2e/routes.ts at 375, 768 and 1440 on the e2e fixture; the game's are
-  # the canvas at four fixed states and the page at 375. frames-diff.sh keeps each frame that differs
-  # from the base's, as a before and after pair with changed.txt, and they are uploaded as the
-  # design-frames artifact for a day: the dispatcher's visual review reads it. There is no dependency
-  # cache: a cache can be written by a run that ran card tests.
+  # What a change draws (docs/specs/design-review.md). A fresh runner that runs no card code in Node
+  # restores every kernel file from the base commit on a card branch, as the build job does, installs
+  # without lifecycle scripts, and runs the kernel screenshot specs twice: on the change, and on a
+  # worktree of the base (a side whose spec the base does not have yet is skipped there). The card's
+  # code runs only in the browser: the specs, their configs and every file they import are kernel, and
+  # the game's states are made from the base's sim. The site's frames are every route in
+  # platform/site/e2e/routes.ts at 375, 768 and 1440 on the e2e fixture; the game's are the canvas at
+  # four fixed states and the page at 375. frames-diff.sh, copied out before the draws, keeps each
+  # frame that differs from the base's, as a before and after pair with changed.txt, and they are
+  # uploaded as the design-frames artifact for a day: the dispatcher's visual review reads it. There is
+  # no dependency cache: a cache can be written by a run that ran card tests.
   frames:
     name: frames
     needs: detect
@@ -304,31 +306,55 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install Chromium for Playwright
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
-      - name: Draw the change and the base
+      - name: Make the game's states from the base before any of the change's code runs
         env:
           BASE: ${{ needs.detect.outputs.base }}
+          SEED: ${{ needs.detect.outputs.seed }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # The draws below run the kernel specs in Node, which import only kernel files
+          # (platform/dispatcher/test/frames-kernel.test.ts). The game's states come from the sim, which
+          # a card can change, so frame-states.ts runs on the base commit's worktree and the change's
+          # draw only reads the file (E2E_FRAME_STATES). frames-diff.sh is copied out first, so the
+          # frames are kept by the script the job started with.
+          mkdir -p "$RUNNER_TEMP/gate"
+          cp platform/gate/frames-diff.sh "$RUNNER_TEMP/gate/frames-diff.sh"
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts)
+          if [ "$SEED" = true ] && [ -f seed-1/e2e/frames.spec.ts ]; then
+            if [ -f "$RUNNER_TEMP/base/seed-1/e2e/frame-states.ts" ]; then
+              (cd "$RUNNER_TEMP/base" && pnpm --filter @backseat/seed-1 exec tsx e2e/frame-states.ts "$RUNNER_TEMP/frame-states.json")
+            else
+              # Only a board branch that adds the frame spec gets here: a card branch's kernel restore
+              # removes a frame spec its base does not have.
+              case "$HEAD_REF" in card/*) echo "the base has no frame states for a card branch"; exit 1 ;; esac
+              pnpm --filter @backseat/seed-1 exec tsx e2e/frame-states.ts "$RUNNER_TEMP/frame-states.json"
+            fi
+          fi
+      - name: Draw the change and the base
+        env:
           SITE: ${{ needs.detect.outputs.site }}
           SEED: ${{ needs.detect.outputs.seed }}
         run: |
           # draw <checkout> <frames folder>: the site's routes when detect selected the site, the
-          # game's states when it selected the seed, each only where the checkout has the spec.
+          # game's states when it selected the seed, each only where the checkout has the spec. The
+          # game's draw runs Playwright itself, not the e2e script, which would make the states from
+          # the checkout's own sim.
           draw() {
             if [ "$SITE" = true ] && [ -f "$1/platform/site/e2e/route-shots.spec.ts" ]; then
               (cd "$1" && E2E_ROUTE_SHOTS="$2/site" pnpm --filter @backseat/site exec playwright test e2e/route-shots.spec.ts)
             fi
             if [ "$SEED" = true ] && [ -f "$1/seed-1/e2e/frames.spec.ts" ]; then
-              (cd "$1" && E2E_FRAMES="$2/game" pnpm --filter @backseat/seed-1 e2e)
+              (cd "$1" && E2E_FRAMES="$2/game" E2E_FRAME_STATES="$RUNNER_TEMP/frame-states.json" pnpm --filter @backseat/seed-1 exec playwright test)
             fi
           }
           draw "$GITHUB_WORKSPACE" "$RUNNER_TEMP/after"
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
-          (cd "$RUNNER_TEMP/base" && pnpm install --frozen-lockfile --ignore-scripts)
           draw "$RUNNER_TEMP/base" "$RUNNER_TEMP/before"
       - name: Keep the frames that differ from the base
         run: |
           for side in site game; do
             if [ -d "$RUNNER_TEMP/after/$side" ]; then
-              bash platform/gate/frames-diff.sh "$RUNNER_TEMP/before/$side" "$RUNNER_TEMP/after/$side" "$RUNNER_TEMP/upload/$side"
+              bash "$RUNNER_TEMP/gate/frames-diff.sh" "$RUNNER_TEMP/before/$side" "$RUNNER_TEMP/after/$side" "$RUNNER_TEMP/upload/$side"
             fi
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

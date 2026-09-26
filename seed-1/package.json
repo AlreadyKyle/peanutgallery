@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "e2e": "playwright test",
+    "e2e": "tsx e2e/frame-states.ts node_modules/.cache/frame-states.json && E2E_FRAME_STATES=node_modules/.cache/frame-states.json playwright test",
     "bot": "tsx bots/cli.ts"
   },
   "dependencies": {
