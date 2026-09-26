@@ -184,6 +184,11 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
       await s.db.exec(`create table public.stray (id integer)`);
       assertEquals(changedKeys(before, await s.fingerprint()), ["table:public.stray"]);
       await s.db.exec(`drop table public.stray`);
+      // An event trigger function, such as the one Supabase's ensure_rls trigger puts in production's
+      // public schema, is not part of the app and is left out.
+      await s.db.exec(`create function public.rls_auto_enable() returns event_trigger language plpgsql as $$ begin null; end; $$`);
+      assertEquals(changedKeys(before, await s.fingerprint()), []);
+      await s.db.exec(`drop function public.rls_auto_enable()`);
     });
 
     await t.step("producer_signals is empty on a quiet studio", async () => {

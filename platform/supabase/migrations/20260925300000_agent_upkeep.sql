@@ -110,7 +110,9 @@ $$;
 -- Security invoker: it reads only the catalogs, which every role may read. Only
 -- grants to anon, authenticated and PUBLIC are fingerprinted, so the owner and
 -- the backup role, which differ between PGlite and production, do not count.
--- A null ACL is read as its default. Objects an extension owns are left out.
+-- A null ACL is read as its default. Objects an extension owns are left out, and so are event
+-- trigger functions: no migration makes one, and Supabase's own "ensure_rls" event trigger puts
+-- public.rls_auto_enable() in production, database-wide plumbing rather than part of the app.
 
 create or replace function public.schema_fingerprint() returns jsonb
 language sql
@@ -185,6 +187,7 @@ as $fp$
     from pg_proc p
     join app_ns n on n.oid = p.pronamespace
     where p.prokind in ('f', 'p')
+      and p.prorettype <> 'pg_catalog.event_trigger'::pg_catalog.regtype
       and p.oid not in (select objid from extension_objects)
     union all
     select 'trigger:' || n.nspname || '.' || c.relname || '.' || t.tgname, pg_get_triggerdef(t.oid)

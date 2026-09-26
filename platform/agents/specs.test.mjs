@@ -31,7 +31,7 @@ const LAUNCH_VALUES = {
   'platform-builder': { model: 'MODEL_BUILDER', budget_share: 0.15, voice: 'cautious', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship'], class: 'writer', status: 'running' },
   'platform-director': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'exacting', tools: READ_SET, metrics: ['first_pass_rate', 'reopen_rate'], class: 'reviewer', status: 'running' },
   'head-of-finance': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'careful', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'read_only', status: 'starts' },
-  janitor: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'tidy', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'read_only', status: 'starts' },
+  janitor: { model: 'MODEL_BUILDER', budget_share: 0, voice: 'tidy', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'read_only', status: 'running' },
   'tech-artist': { model: 'MODEL_BUILDER', budget_share: 0, voice: 'vivid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'writer', status: 'starts' },
   hr: { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'fair', tools: [], metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'starts' },
   'head-of-product': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'candid', tools: [], metrics: ['first_pass_rate', 'cost_per_ship'], class: 'web_only', status: 'starts' },
@@ -41,7 +41,7 @@ const LAUNCH_VALUES = {
 };
 
 // The roles that run at launch, from the launch plan's roster.
-const RUNNING = ['Studio Head', 'Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director'];
+const RUNNING = ['Studio Head', 'Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director', 'Janitor'];
 
 function readSchemaFromReadme() {
   const readme = readFileSync(join(agentsDir, 'README.md'), 'utf8');

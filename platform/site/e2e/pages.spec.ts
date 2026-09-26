@@ -15,7 +15,7 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 }
 
 // The roles the roster marks running whose lane is open, in /team's order (by title).
-const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Platform Director', 'QA', 'Studio Head'];
+const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA', 'Studio Head'];
 
 async function onlyOneH1(page: Page, title: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText([title]);
@@ -95,7 +95,6 @@ for (const viewport of WIDTHS) {
         'Head of Finance',
         'Head of Product',
         'HR',
-        'Janitor',
         'Platform Builder',
         'Tech Artist',
       ]);
