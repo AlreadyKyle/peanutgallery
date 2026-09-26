@@ -37,6 +37,10 @@ they were done under.
 - **D. Open topics.** Nothing waits on them.
 - **Rename to Mob Machine.** Its own short list, just below. Nothing in A to D waits on it.
 
+Step numbers never change, because the ROADMAP and the specs cite them. A step added later takes the
+next free number and sits in the section it belongs to: step 25 is in A and step 26 in B. A step that
+is finished or no longer needed stays under its number and says so.
+
 Where something below is already done, it says so and points at **Done**. On 23 September 2026 the
 host moved from Oracle to your Mac (`docs/PLAN.md` §10 decision 38), so the Oracle account and its
 sign-in are gone from this list, and the backup key is part of the Mac's step.
@@ -68,7 +72,8 @@ at https://peanutgallery.games/icon-512.png once the rename is deployed: the whi
 3. **Product catalog** → the product the Payment Link sells → **Edit product**. If its name or
    description still carries the old studio name, change it to Mob Machine and save. Expected:
    opening the Payment Link (the Contribute button on the site) shows the new words at checkout.
-4. Leave the Payment Link's after-payment redirect as it is: it changes with the domain (R6).
+4. The Payment Link's after-payment redirect is step 12's (/thanks is live); its domain changes with
+   R6.
 
 **Tell me:** "Stripe says Mob Machine."
 
@@ -134,8 +139,9 @@ live check against the new address.
 
 ### Handles
 
-When the Twitch channel in the backlog is made, take it under Mob Machine and tell me the handle, so
-it goes in the repository.
+The Twitch channel already exists, https://www.twitch.tv/peanut_gallery_games, taken under the old
+name before the rename; the stream that would use it is a backlog entry. Renaming it to Mob Machine
+is yours, whenever you choose. Tell me the new handle, so it goes in the repository.
 
 ### What I do after the merge, each with your allow
 
@@ -272,7 +278,11 @@ For each one:
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-vps&description=Mob+Machine+VPS+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    Add a line `VPS_GITHUB_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026** (see
-   **Done**); if it lacks Plan read, edit it and add it.
+   **Done**); if it lacks Plan read, edit it and add it. **It expires on 23 October 2026.** Before
+   then, regenerate it on GitHub (Settings → Developer settings → Fine-grained tokens → the token →
+   **Regenerate token**, which keeps its permissions) and replace the value in `.env.vps`. An expired
+   token stops the unattended dispatcher from reaching the repository. **Tell me:** "the host token is
+   regenerated."
 2. **The read token** (it mounts the repository into each Managed Agents session): Contents read
    only.
 
@@ -282,7 +292,9 @@ For each one:
    Before the cutover I prove it cannot write: a push with it must answer 403, and the unattended
    startup refuses to run otherwise.
 3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token, Actions
-   read and Plan read included. **Still to do.**
+   read and Plan read included. **Not needed while the Mac runs attended:** attended mode accepts the
+   gh sign-in token with a warning, and the unattended dispatcher on the Mac host uses the host's own
+   token (5.1), not this one. Optional hardening, whenever you choose:
 
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Mob+Machine+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
@@ -292,9 +304,9 @@ For each one:
    use; it just must not be the value in `.env`. Unattended mode refuses a token that is not
    fine-grained, and attended mode warns about one.
 
-**Unblocks:** unattended mode and the cutover.
+**Unblocks:** unattended mode and the cutover (5.1 and 5.2, both set). 5.3 unblocks nothing.
 
-**Tell me:** "the Mac token is set."
+**Tell me,** only if you make it: "the Mac token is set."
 
 ### 6. healthchecks.io (5 minutes, free)
 
@@ -379,22 +391,11 @@ is not subscribed yet, so an unattended failure would not reach you.
 
 **Tell me:** "subscribed to ntfy", then "the test alert arrived."
 
-### 10. Business contact for the Terms (no longer blocks)
+### 10. Business contact for the Terms: CLOSED 23 September 2026
 
-The legal-copy pull request shipped the Terms with your name, Kyle Smith, an individual in
-Ontario, and hello@clayhouse.studio, and no mailing address or phone, since none was given and none
-is invented (`docs/specs/legal-copy.md`). Ontario's rules for an internet agreement over $50 expect
-the supplier's address and phone as well. If a contribution over $50 counts as a consumer internet
-agreement, a supporter not given every required disclosure may cancel within 7 days, or within 30
-days when no copy of the agreement was delivered within 15 days. The full refund within 14 days
-covers most of that; the lawyer question in **D** settles whether the Act applies at all.
-
-Send me an address and phone to publish (they will be public, so chat is fine) and a later board
-pull request adds them as a new Terms version.
-
-**Unblocks:** nothing waits on it.
-
-**Tell me:** the address and phone to publish, or "leave it out".
+You decided on 23 September 2026 that the disclosures use hello@clayhouse.studio: the Terms name the
+operator, Kyle Smith, an individual in Ontario, and that address, and publish no mailing address or
+phone (`docs/PLAN.md` §10 decision 55). Nothing to do.
 
 ### 11. Pin Claude Code (2 minutes, free; nothing waits on it)
 
@@ -420,6 +421,28 @@ first.
 **Unblocks:** attended builds that stay on a checked version.
 
 **Tell me:** "Claude Code is pinned", with the PASS line.
+
+### 25. The database password, for the migration history repair (5 minutes, free)
+
+**Why.** Supabase keeps a list of the migrations it has applied, and the `supabase db push` command
+reads it. Production's list has one stray entry and none of the repository's migrations, because
+every migration so far went through the Management API's query endpoint, so `db push` would try to
+apply every file again (`docs/specs/money-safety.md`, production step 4). A one-time repair marks them
+applied; it needs the database owner's password, which is not on the Mac: `SUPABASE_DB_PASSWORD` in
+`.env` is empty. Nothing waits on it: migrations keep going through the query endpoint until then.
+
+1. Supabase dashboard → the project → **Project Settings** → **Database** → **Database password**. If
+   you do not have the password, **Reset database password** and copy the new one. Nothing in the
+   studio signs in with the owner's password (the backups use their own login), so a reset breaks
+   nothing.
+2. Put it in `.env` at the repository root, on the empty line `SUPABASE_DB_PASSWORD=`. Never in chat,
+   never in `.env.vps` or the host's env files, which refuse it.
+
+Then, with your allow, I link the project, mark every migration in the repository applied and the stray
+entry reverted, and quote `supabase migration list`; from then on migrations go through
+`supabase db push`, and the ROADMAP's standing fact changes with it.
+
+**Tell me:** "the database password is in .env."
 
 ---
 
@@ -462,12 +485,11 @@ No agent touches Stripe; these are yours.
   studio's and the emergency fund's shares); the line goes after the refund
   (`docs/specs/money-surfaces.md`). The fee Stripe keeps on the refund ($0.2662) is booked to the
   studio share automatically; there is nothing to record by hand.
-- **After-payment redirect.** Payment Link → After payment: redirect customers to
-  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Ready once I tell you /thanks
-  is live (`docs/specs/supporter-pages.md`); until then Stripe shows its own receipt page, and
-  /thanks works for anyone who opens it with a session id. After it is set, the next real payment
-  lands on /thanks with its supporter number and the cards it reached; tell me and I quote it in the
-  spec's Evidence.
+- **After-payment redirect: ready now.** /thanks is live (`docs/specs/supporter-pages.md`, done).
+  Payment Link → After payment: redirect customers to
+  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Until it is set Stripe shows its
+  own receipt page. After it is set, the next real payment lands on /thanks with its supporter number
+  and the cards it reached; tell me and I quote it.
 
 **Tell me:** "Stripe settings done", and Stripe's reply on the category when it comes.
 
@@ -480,15 +502,11 @@ changing webhook endpoints becomes a Dashboard step of yours.
 
 **Tell me:** "secret key rolled."
 
-### 14. Review the new Terms, Privacy and Refunds pages
+### 14. Review the new Terms, Privacy and Refunds pages: DONE 23 September 2026
 
-The legal-copy pull request posted Terms version 2: the refund policy, who may contribute, US
-dollars, a card that is not built, winding down, no cryptocurrency and the change rule, plus a new
-Privacy sentence (the studio stores no name). Read /terms, /refunds and /privacy yourself, as you
-did on 20 September 2026 (see **Done**). A change is a new version, never an edit to a posted one.
-Nothing waits on this.
-
-**Tell me:** "legal pages are fine", or what to change.
+You read /terms, /refunds and /privacy and approved them on 23 September 2026 (`docs/PLAN.md` §10
+decision 55). The Terms are at version 3 since the rename. A change is a new version, never an edit to
+a posted one: tell me what to change and a board pull request posts it.
 
 ### 15. Passkeys or hardware keys
 
@@ -518,10 +536,16 @@ They then have pause-only access and Discord moderation.
 ### 17. Sign in once on the board's own site
 
 The board has moved to its own site (`docs/specs/board-site.md`): a separate free Netlify site at
-its own `netlify.app` address, which I give you once it is created. Bookmark it; nothing on the
-public site links to it, and peanutgallery.games/board is now a plain not found page. Everyone is
-signed out at the switch. Sign in there by magic link; your authenticator app carries over, so enter
-its code as before. The first thing you see is the **Needs you** inbox, which is usually empty.
+its own `netlify.app` address. It is live, and its address is in `.env` as `BOARD_SITE_URL`
+(`grep BOARD_SITE_URL .env` in the Terminal tab shows it). Bookmark it; nothing on the public site
+links to it, and peanutgallery.games/board is now a plain not found page. Everyone was signed out at
+the switch. Sign in there by magic link; your authenticator app carries over, so enter its code as
+before. The first thing you see is the **Needs you** inbox, which is usually empty.
+
+**Still to do.** On 26 September 2026 production shows no sign-in since the switch: your last board
+heartbeat is from 20 September 2026 and no session exists. Until you sign in there, nothing that runs
+only while a board member is signed in can run: launch-card-floor's **Draft to the floor** session,
+the other role jobs and the visual review. Opening the platform code lane (step 26) waits on it too.
 
 **Tell me:** "signed in on the board site."
 
@@ -533,6 +557,21 @@ at most this much immediate agent credit per New York day, and credit above it i
 same form now takes the usage tier cap (step 22).
 
 **Tell me:** "keep $500", or the number you set.
+
+### 26. Open the platform code lane (after step 17)
+
+**Why.** The Platform Builder builds studio cards in `platform/site` only while
+`studio_state.platform_lane_open` is true, and it is false. It was kept closed until the board had its
+own site, so no card's code could share an origin with the board's controls
+(`docs/specs/board-site.md`, production step 12). Everything else it waits on holds: the board site
+and its headers, Supabase Auth on it with sign-ups off, the old sessions ended, and the live check.
+Your own sign-in there (step 17) is the last precondition. /team draws the Platform Builder outside
+Running until the lane opens.
+
+**Do this.** Once you have signed in on the board's site, tell me. I take a dump, set the flag with
+your allow, read it back, and check /team shows the Platform Builder under Running.
+
+**Tell me:** "open the platform lane", or "keep it closed".
 
 ---
 
@@ -647,8 +686,8 @@ closes live criterion 2.
 
 The first player-funded card ships, and its /card replay is the launch clip. You press **Go live**
 on the board's site; it works once and cannot be undone. Then you edit my drafts in `docs/launch/`
-so they sound like you, and post them in the order in `docs/specs/announcement.md`. The posting is
-yours.
+so they sound like you, put the clip's link in each, and post them in the order in
+`docs/launch/README.md`. The posting is yours.
 
 **Tell me:** "gone live".
 
@@ -665,9 +704,10 @@ yours.
 - **Rank now and Draft a game card (optional, when you want them).** The agent-workflows pull
   request (`docs/specs/agent-workflows.md`) adds both to the Jobs list on the board's site, at the
   second factor. Each runs only while you are signed in there, on your Max plan, billed to you on the
-  ledger, never from supporters' or studio money. The first real Draft a game card run is
-  launch-card-floor's drafting session: be signed in at /board for it. A drafted card waits out the
-  cooling window before it is dealt to now; you can veto it there as with any card.
+  ledger, never from supporters' or studio money. Launch-card-floor's drafting session is started with
+  **Draft to the floor** in Needs you (see **Your standing duties**), not Draft a game card: be signed
+  in at /board for it. A drafted card waits out the cooling window before it is dealt to now; you can
+  veto it there as with any card.
 - **The visual review (nothing to do now).** The design-review pull request
   (`docs/specs/design-review.md`) makes the files that set the look yours: the tokens, the Card, the
   glyphs, motion, the route list, the site's public and brand files and the game's favicon change
@@ -686,17 +726,12 @@ yours.
   runs (not funded by cards)" and a line saying no card for players or the studio is there yet; once
   such a card is planned, board work folds into a closed disclosure beside it. To override any
   wording, or any entry's marker, edit that one line in a pull request; after a marker change, run
-  `pnpm --filter @backseat/supabase file-backlog` as a dry run, then with `--apply`. The Terms' Ontario address and phone stay legal-copy's item.
+  `pnpm --filter @backseat/supabase file-backlog` as a dry run, then with `--apply`.
   The /thanks button now reads "Follow the studio on Discord": it promises no ship posts, which
   start only once you set `DISCORD_WEBHOOK_SHIPS` (above).
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
-  name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
-  HST threshold and income tax on the pool, and Ontario business-name registration for "Mob
-  Machine" ($60). I book nothing. The lawyer's questions on the legal pages
-  (`docs/specs/legal-copy.md`): whether a contribution is a consumer internet agreement under the
-  Consumer Protection Act, 2002; whether the Consumer Protection Act, 2023 is in force yet; whether
-  a copy of the agreement must be delivered within 15 days, and how; and the wording of the age
-  condition, the refund fallback when Stripe cannot refund, and the wind-down rule.
+  name to decision 35: one accountant session on the HST threshold and income tax on the pool, and
+  Ontario business-name registration for "Mob Machine" ($60). I book nothing.
 - **Kill-condition pivots.** "Keep the pivots", or the ones you want for a site-first studio (see
   **Open decisions**).
 - **A Google Cloud billing account,** whenever you choose, to move the dispatcher off your Mac (see
@@ -838,10 +873,12 @@ enough:
   backup check.
 - The backup key, and keeping it offline.
 - The Stripe read-only key, the Stripe settings, and rolling the secret key.
-- The Mac's fine-grained GitHub token.
+- Regenerating the host's GitHub token before it expires on 23 October 2026, and the Mac's optional
+  token.
+- The database password in `.env`, for the migration history repair.
 - The Discord webhooks and AutoMod.
 - Subscribing to the ntfy topic on your phone.
-- The business contact for the Terms, and reviewing the legal pages.
+- Signing in on the board's own site, and saying when to open the platform code lane.
 - Passkeys on every account.
 - Naming a moderator.
 - The call on how the first player arrives, and the share if you choose it.
@@ -908,18 +945,17 @@ Copy any of these back to me as you finish:
 - "Resend is verified and the key is in .env."
 - "the Mac is ready."
 - "Stripe read key is in .env."
-- "the Mac token is set."
+- "the host token is regenerated." (before 23 October 2026) / "the Mac token is set." (optional)
 - "both checks email me."
 - "Discord webhooks are in .env."
 - "legacy Free" / "credit-based Free"
 - "subscribed to ntfy." / "the test alert arrived."
-- the address and phone for the Terms, or "leave it out"
+- "the database password is in .env."
 - "Claude Code is pinned."
 - "Stripe settings done." / "secret key rolled."
-- "legal pages are fine"
 - "passkeys are on."
 - "moderator email is in .env."
-- "signed in on the board site."
+- "signed in on the board site." / "open the platform lane"
 - "keep $500" (or a number)
 - "ready for the restore drill."
 - "share quietly" / "announce first", then "shared"
