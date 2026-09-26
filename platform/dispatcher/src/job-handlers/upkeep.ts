@@ -7,7 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { defaultCliPin, type PinState } from '../cli-pin.js';
 import type { DispatcherConfig } from '../config.js';
-import type { GateStatus } from '../github.js';
+import { MERGE_STATE_INTERVAL_MS, MERGE_STATE_TIMEOUT_MS, type GateStatus } from '../github.js';
 import type { JobContext } from '../jobs.js';
 import { mergedServedFiles, type MergedFile } from '../smoke.js';
 import { gitAuthEnv } from '../worktree.js';
@@ -20,6 +20,9 @@ export interface UpkeepTimings {
   gateTimeoutMs: number;
   gateIntervalMs: number;
   retryDelayMs: number;
+  // How long a merge request whose answer was lost is read back before it is left pending.
+  mergeStateTimeoutMs: number;
+  mergeStateIntervalMs: number;
 }
 
 export interface UpkeepDeps {
@@ -48,6 +51,8 @@ export const UPKEEP_TIMINGS: UpkeepTimings = {
   gateTimeoutMs: 12 * 60_000,
   gateIntervalMs: 15_000,
   retryDelayMs: 1000,
+  mergeStateTimeoutMs: MERGE_STATE_TIMEOUT_MS,
+  mergeStateIntervalMs: MERGE_STATE_INTERVAL_MS,
 };
 
 export function requireUpkeep(context: JobContext): UpkeepDeps {

@@ -76,7 +76,7 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
       );
       assertEquals(jobs, [
         { name: "janitor", role_id: janitor, calls_model: false, runs_when_paused: true },
-        { name: "upkeep_merge", role_id: janitor, calls_model: false, runs_when_paused: false },
+        { name: "upkeep_merge", role_id: janitor, calls_model: false, runs_when_paused: true },
       ]);
       // pg_cron queues each through enqueue_job_run; PGlite has no pg_cron, so the call it makes runs here.
       const queued = await s.row<{ r: { created: boolean } }>(`select public.enqueue_job_run('janitor', 'schedule') as r`);

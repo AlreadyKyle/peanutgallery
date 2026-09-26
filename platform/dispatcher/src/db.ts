@@ -350,8 +350,13 @@ export interface Db extends OutboundDb {
   // Queued to running, only while holder holds the dispatcher lease.
   claimJobRun(runId: string, holder: string): Promise<boolean>;
   finishJobRun(runId: string, status: 'succeeded' | 'failed' | 'skipped', reason: string | null, output: Record<string, unknown> | null): Promise<void>;
-  // At startup: every run still marked running, finished as failed; how many.
+  // At startup: every run still marked running, finished as failed; how many. Their output stays.
   failRunningJobRuns(holder: string, reason: string): Promise<number>;
+  // A running run's output so far, written before its handler returns, so a record the run must not
+  // lose (upkeep_merge's pending merge) survives a stop or a crash. Throws when the run is not running.
+  noteJobRunOutput(runId: string, output: Record<string, unknown>): Promise<void>;
+  // The output of the newest run of a job whose output has the key (its value may be null), or null.
+  latestJobRunOutput(job: string, key: string): Promise<Record<string, unknown> | null>;
   jobs(): Promise<Job[]>;
   // A role's pause and state, read each watch.
   roleState(roleId: string): Promise<{ paused: boolean; state: string }>;
@@ -767,6 +772,27 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       const { data, error } = await client.rpc('fail_running_job_runs', { p_holder: holder, p_reason: reason });
       if (error) fail('fail_running_job_runs', error);
       return Number(data ?? 0);
+    },
+
+    async noteJobRunOutput(runId, output) {
+      const { data, error } = await client.from('job_runs').update({ output }).eq('id', runId).eq('status', 'running').select('id');
+      if (error) fail('job_runs output', error);
+      if (rows(data).length !== 1) throw new Error(`db job_runs output: job run ${runId} is not running`);
+    },
+
+    async latestJobRunOutput(job, key) {
+      // output->key is SQL null only when the key is absent; a JSON null value is kept.
+      const { data, error } = await client
+        .from('job_runs')
+        .select('output')
+        .eq('job_name', job)
+        .not(`output->${key}`, 'is', null)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(1);
+      if (error) fail('job_runs latest output', error);
+      const output = rows(data)[0]?.output;
+      return typeof output === 'object' && output !== null && !Array.isArray(output) ? (output as Record<string, unknown>) : null;
     },
 
     async jobs() {

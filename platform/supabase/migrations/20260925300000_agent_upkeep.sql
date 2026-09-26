@@ -15,9 +15,10 @@
 -- whitespace are collapsed before hashing. The dispatcher compares
 -- production's with PGlite's after every migration in its own checkout.
 -- producer_signals() is what a Producer would watch, as policy constants.
--- Two jobs, both the Janitor's and both code only: janitor daily (it runs while
--- the studio is paused) and upkeep_merge hourly (it does not), queued by
--- pg_cron through enqueue_job_run.
+-- Two jobs, both the Janitor's and both code only, and both run while the
+-- studio is paused: janitor daily and upkeep_merge hourly (which merges nothing
+-- while the studio is paused, and still settles a merge it left pending),
+-- queued by pg_cron through enqueue_job_run.
 --
 -- Re-runnable: the table and index are created if missing, the policy is
 -- dropped and created again, the functions are replaced, the job rows upsert,
@@ -272,17 +273,18 @@ grant execute on function public.schema_fingerprint() to service_role;
 grant execute on function public.producer_signals() to service_role;
 
 -- f. The two jobs, and their schedules --------------------------------------------------
--- Both the Janitor's and both code only. janitor only reads and records
--- findings, so it runs while the studio is paused; upkeep_merge merges, so it
--- does not. A database that does not ship pg_cron (PGlite in the tests) skips
--- the schedules.
+-- Both the Janitor's and both code only, and both run while the studio is
+-- paused: janitor only reads and records findings; upkeep_merge merges nothing
+-- while the studio is paused, but a merge it made is verified, or rolled back,
+-- through a pause, as a card's is. A database that does not ship pg_cron
+-- (PGlite in the tests) skips the schedules.
 
 insert into public.jobs (name, role_id, calls_model, runs_when_paused, description)
 values
   ('janitor', (select id from public.roles where name = 'Janitor'), false, true,
     'The daily drift check: schema, models, the Claude Code pin, the weekly scan and the producer signals, each difference a finding for the board.'),
-  ('upkeep_merge', (select id from public.roles where name = 'Janitor'), false, false,
-    'Merges a Dependabot patch update that passes every condition of the merge policy, at its head sha on a green gate, then deploys and smoke-tests it.')
+  ('upkeep_merge', (select id from public.roles where name = 'Janitor'), false, true,
+    'Merges a Dependabot patch update that passes every condition of the merge policy, at its head sha on a green gate, then deploys and smoke-tests it. It merges nothing while the studio is paused.')
 on conflict (name) do update
 set role_id = coalesce(excluded.role_id, public.jobs.role_id),
     calls_model = excluded.calls_model,

@@ -28,6 +28,7 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
 import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
 import { scanPublicText } from './public-text.js';
@@ -149,6 +150,8 @@ async function main(): Promise<void> {
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
+  // A dependency merge upkeep_merge left without a verdict is verified by a run queued now.
+  await queuePendingUpkeep(db, alert, log);
   const jobState: JobState = { running: null };
   // The Janitor's two code jobs (docs/specs/agent-upkeep.md).
   const upkeep = upkeepDeps(config, mainGate);
