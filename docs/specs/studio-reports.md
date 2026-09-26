@@ -128,6 +128,8 @@ Built 26 September 2026 on `launch/studio-reports`, stacked on `launch/grid-boxe
 - `node --test platform/ops/test/ops.test.mjs`: `ℹ pass 128`, `ℹ fail 0` (the Discord keys copied, omitted and refused by key only; `check_env_lines` refuses a bad address; one pattern in all three places; `after-restore.sql` schedules `weekly-report`).
 - Screenshots, looked at, in `/Users/kylesmith/peanutgallery-launch/shots/build/studio-reports/`: the branch build with production's own `/api/live` and `/api/cards` and `/api/reports` answered with the week of 14 September 2026 as the query above computes it, and with none: `prod-published /reports 375: audit clean`, `prod-published /reports 1440: audit clean`, `prod-empty /reports 375: audit clean`, `prod-empty /reports 1440: audit clean` (and home at both widths clean), no sideways scroll; the fixture's two reports and the empty state at 375, 768 and 1440 in `route-shots/`. The empty state reads as one block, its line with See the roadmap under it.
 
+**After merging `main` (grid-boxes #84, with its later layout checks) into the branch**, rerun at the merge: `pnpm verify` exit 0 (`platform/site test: Tests 515 passed (515)`, dispatcher 714, supabase 316, board 100, seed-1 77, `PASS: gate tests passed=527`, Deno `ok | 128 passed (223 steps) | 0 failed`, agents 125, ops 128, docs 19, rename 8 and `tier 1 carries the old name nowhere`); `E2E_PORT=4460 pnpm --filter @backseat/site e2e`: `219 passed (4.0m)`, `8 skipped` (the screenshot tests, without their folders).
+
 Waits on the ship stage: production steps 1 to 6 (the dump, the migration, the two probes, the preview curls, the merge and the live check, `file-backlog --apply`).
 
 ## Decisions
