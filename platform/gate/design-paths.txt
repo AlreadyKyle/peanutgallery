@@ -1,0 +1,17 @@
+# Board-only design files (docs/specs/design-review.md, PLAN.md §4 Work): the tokens, the Card, the
+# glyphs, motion, the route list, the public site's public assets and brand files, and the game's
+# favicon. They set the look, so a change to one is board work, made by a board pull request, which
+# the board sees before it merges; because routes.tsx is here, a new site page is one too. They are
+# not kernel (the kernel import rule of platform/dispatcher/test/site-kernel.test.ts does not apply to
+# them), but no card may change them: the dispatcher refuses a card that changes one before any gate
+# run (platform/dispatcher/src/worktree.ts DESIGN_PATHS, kept equal to this file by a test), and the
+# gate's kernel-guard.sh fails a card branch that does, with rule=design-path. One
+# repository-relative path per line; a folder covers everything under it.
+platform/site/src/tokens.css
+platform/site/src/components/Card.tsx
+platform/site/src/components/Glyph.tsx
+platform/site/src/lib/motion.ts
+platform/site/src/routes.tsx
+platform/site/public
+platform/site/brand
+seed-1/render/favicon.svg

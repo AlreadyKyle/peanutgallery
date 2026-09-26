@@ -8,9 +8,12 @@ import { Reports } from './pages/Reports';
 import { Roadmap } from './pages/Roadmap';
 import { Team } from './pages/Team';
 
-// The site's pages in the platform code lane and their links in the top bar: a card adds a page
-// here. App.tsx (kernel) mounts them beside the Contribute, Ledger and legal pages, which it routes
-// itself, and drops any page whose path is not a plain one of its own (docs/specs/board-site.md).
+// The site's pages in the platform code lane and their links in the top bar. This list is a
+// board-only design file (platform/gate/design-paths.txt, docs/specs/design-review.md): a new page is
+// board work, a board pull request the board sees before it merges, and no card may change this file.
+// App.tsx (kernel) mounts them beside the Contribute, Ledger and legal pages, which it routes itself,
+// and drops any page whose path is not a plain one of its own (docs/specs/board-site.md). Every path
+// here must be in the kernel route list platform/site/e2e/routes.ts (src/routes.test.ts).
 
 export type PageRoute = { readonly path: string; readonly element: ReactNode };
 export type NavItem = { readonly to: string; readonly label: string };

@@ -10,6 +10,7 @@
 # and new names, and a kernel file moved into a config folder is still seen. Submodule changes are
 # never ignored, whatever .gitmodules says.
 # Output: seed=true|false platform=true|false lane=config|code site=true|false functions=true|false
+#         render=true|false
 #   seed      a changed file lies under seed-1/, or outside seed-1/, platform/ and docs/ (a
 #             workspace-level change)
 #   platform  a changed file lies under platform/ or docs/, or is workspace-level. The docs tests, the
@@ -26,7 +27,13 @@
 #             platform/supabase/, or under platform/ outside the folders named below, or
 #             workspace-level. Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/,
 #             platform/site/ or platform/agents/ leave it false.
-# A path no rule names sets every flag, so a new folder is never skipped by mistake.
+#   render    what a page or the game draws may change, so the gate's frames job screenshots the base
+#             and the change (docs/specs/design-review.md): a changed file that is not a test
+#             (*.test.ts or *.test.tsx) under platform/site/src/, or any file under
+#             platform/site/public/, platform/site/e2e/, seed-1/render/ or seed-1/e2e/, or
+#             platform/site/index.html, seed-1/index.html or seed-1/content/strings.json. Any other
+#             change leaves it false.
+# A path no rule names sets every flag but render, so a new folder is never skipped by mistake.
 # --list prints the changed files, one per line, instead. Paths are not quoted for non-ASCII bytes;
 # git still quotes a path holding a tab, newline, double quote or backslash, and kernel-guard.sh
 # fails a quoted line.
@@ -198,10 +205,16 @@ SEED=false
 PLATFORM=false
 SITE=false
 FUNCTIONS=false
+RENDER=false
 LANE=code
 if [ -n "$FILES" ]; then
   LANE=config
   while IFS= read -r f; do
+    case "$f" in
+      platform/site/src/*.test.ts|platform/site/src/*.test.tsx) ;;
+      platform/site/src/*|platform/site/public/*|platform/site/e2e/*|seed-1/render/*|seed-1/e2e/*) RENDER=true ;;
+      platform/site/index.html|seed-1/index.html|seed-1/content/strings.json) RENDER=true ;;
+    esac
     case "$f" in
       seed-1/config/*.json|seed-1/content/*.json) SEED=true ;;
       seed-1/*) SEED=true; LANE=code ;;
@@ -215,4 +228,4 @@ if [ -n "$FILES" ]; then
 $FILES
 EOF_FILES
 fi
-echo "seed=$SEED platform=$PLATFORM lane=$LANE site=$SITE functions=$FUNCTIONS"
+echo "seed=$SEED platform=$PLATFORM lane=$LANE site=$SITE functions=$FUNCTIONS render=$RENDER"

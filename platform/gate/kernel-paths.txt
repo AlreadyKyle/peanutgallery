@@ -2,8 +2,11 @@
 # docs/specs/board-site.md, PLAN.md §4 Kernel). In platform/site that is the build and its entry
 # (index.html, main.tsx), the frame and routes of every page (App.tsx), the money (the Payment Link and
 # what reads, formats, states or shows money, and the snapshot every figure comes through, with the
-# Netlify Function that serves it, platform/site/netlify), the ledger and the legal pages; the whole
-# board site is kernel. A kernel file in platform/site/src imports only
+# Netlify Function that serves it, platform/site/netlify), the ledger and the legal pages, and the
+# design checks a card could otherwise switch off (the end-to-end suite and its fixtures in
+# platform/site/e2e, styles.test.ts with the colour and contrast maths it reads, copy.test.ts, and
+# seed-1's frame spec and its Playwright config; docs/specs/design-review.md); the whole board site is
+# kernel. The files that set the look are a separate, board-only list, design-paths.txt. A kernel file in platform/site/src imports only
 # kernel files, packages, copy.ts, PageHeader.tsx, styles.css, freshness.ts and routes.tsx
 # (platform/dispatcher/test/site-kernel.test.ts). One repository-relative path per line; a folder
 # covers everything under it. The dispatcher refuses a card that changes one, the gate fails a card
@@ -23,6 +26,7 @@ platform/gate
 platform/ops
 platform/supabase
 platform/site/build-sha.ts
+platform/site/e2e
 platform/site/index.html
 platform/site/netlify
 platform/site/netlify.toml
@@ -48,6 +52,9 @@ platform/site/src/components/Stopped.tsx
 platform/site/src/components/Supporters.tsx
 platform/site/src/components/TextPage.tsx
 platform/site/src/lib/card-source.ts
+platform/site/src/lib/colour.ts
+platform/site/src/lib/contrast.ts
+platform/site/src/lib/copy.test.ts
 platform/site/src/lib/lines.ts
 platform/site/src/lib/env.ts
 platform/site/src/lib/format.ts
@@ -67,12 +74,15 @@ platform/site/src/pages/Contribute.tsx
 platform/site/src/pages/Ledger.tsx
 platform/site/src/pages/Legal.tsx
 platform/site/src/pages/Thanks.tsx
+platform/site/src/styles.test.ts
 platform/site/vite.config.ts
 seed-1/CLAUDE.md
 seed-1/bots
+seed-1/e2e
 seed-1/index.html
 seed-1/netlify.toml
 seed-1/package.json
+seed-1/playwright.config.ts
 seed-1/scripts
 seed-1/sim/hash.ts
 seed-1/sim/invariants.ts
