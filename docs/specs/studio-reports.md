@@ -2,7 +2,7 @@
 
 Status: agreed. Card: none. Owner: board.
 
-Series position: after supporter-pages, before design-review (the order is in `docs/ROADMAP.md`, "The launch series"). The layout-balance pull request is dropped: home (#64) ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. It is the launch plan's Phase 2 "Reason to come back" (PG-13, L19) and "Card supply" (PG-10) lines. It is a board pull request: it changes kernel files (the dispatcher, the ops env tools, Supabase, the board site and the site's kernel files). Drafting the launch cards that fill the floor is `docs/specs/launch-card-floor.md`.
+Series position: after grid-boxes, before design-review (the order is in `docs/ROADMAP.md`, "The launch series"). The layout-balance pull request is dropped: home (#64) ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. It is the launch plan's Phase 2 "Reason to come back" (PG-13, L19) and "Card supply" (PG-10) lines. It is a board pull request: it changes kernel files (the dispatcher, the ops env tools, Supabase, the board site and the site's kernel files). Drafting the launch cards that fill the floor is `docs/specs/launch-card-floor.md`.
 
 ## Problem
 
