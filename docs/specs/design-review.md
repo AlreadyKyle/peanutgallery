@@ -65,6 +65,24 @@ The job compares each frame byte for byte with the base's and uploads every fram
 - [ ] The gate green at the pull request's head sha (the ship stage's local gate).
 - [ ] Production, after the production steps: the pre-migration dump's size quoted; `anon-negative-test.ts` and `ledger-identity.ts` PASS, with `select public.ledger_identity()` read back (the ship stage).
 
+## Production steps
+
+The migration is additive (a column with a default of 0, a service-role function, and the dispatcher's own view created again with the column appended) and must be live before the merge, because the dispatcher on the new code reads `dispatcher_cards.review_rounds`.
+
+1. Read first, through the Management API query endpoint: `studio_state` still paused; `cards.review_rounds` and `record_review_round(uuid)` absent; `dispatcher_cards`' columns exactly the migration's list without `review_rounds`, and nothing else depending on the view.
+2. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" -Fc` into `~/peanutgallery-dumps/pre-design-review-<UTC>.dump`, `chmod 600`, quote the size and `pg_restore --list`. `BACKUP_DB_URL` is never printed.
+3. Apply `20260925200000_design_review.sql` through the Management API query endpoint, wrapped in `begin;`/`commit;`, one request (the migration history repair has not run, so never `supabase db push`). Re-apply if the SQL changes before the merge.
+4. Read back: the column, the function's grants, `dispatcher_cards` with `review_rounds` last and its grants; `select public.ledger_identity()`; from the branch `anon-negative-test.ts` and `ledger-identity.ts` PASS.
+5. Merge on the local gate's PASS at the head sha.
+6. After the merge: re-seed the roles (`pnpm --filter @backseat/supabase seed`, from a checkout equal to the merge) so the Platform Director's description and prompt path are current, and read the row back; `file-backlog` as a dry run, then `--apply` (the three new BACKLOG entries, and "More on a card's own page" updated with the verdicts); wait for both sites to publish the merge; the live check; /team at 375 and 1440, looked at.
+7. The Mac dispatcher is not installed yet (no launchd job on this Mac), so nothing is redeployed; it runs this code from the cutover.
+
+Board items (listed, never blocking):
+- The gate's `frames` job and the `design-frames` artifact list wait on GitHub Actions minutes: the gate workflow stays disabled (the board's call) and `local-gate.sh` cannot run the job (Decisions). The first gate run on Actions with a render change is its proof.
+- Be signed in at /board when a visual card's gate turns green; its review waits for a board session and is billed to you. The first seed-1 card that changes `seed-1/render/` after launch is the first live review.
+- From this merge the design files (`platform/gate/design-paths.txt`) are yours to change, by pull request.
+- No Stripe, Console or spending step.
+
 ## Evidence
 
 Built on `launch/studio-reports` (base f93cc5a, then its f93fb8c merged in), 26 September 2026, in the worktree on ports 4470 to 4474.
