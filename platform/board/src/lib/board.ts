@@ -519,14 +519,22 @@ export function supplyShort(supply: CardSupply): boolean {
 }
 
 /**
- * Draft to the floor's typed input for draft_card: the shortfalls, and the open cards by id so the
- * Designer drafts no copy of one (the handler reads their typed fields itself). At most 80 ids, so the
- * input stays under enqueue_manual_job's 4 KB.
+ * Draft to the floor's typed input for draft_card: the shortfalls with the sizes they ask for (a big
+ * card's target is at least big_min_usd, a small card's under small_max_usd, which the Designer's
+ * prompt spells out), and the open cards by id so the Designer drafts no copy of one (the handler
+ * reads their typed fields itself). At most 80 ids, so the input stays under enqueue_manual_job's 4 KB.
  */
 export const DRAFT_TO_FLOOR_MAX_CARDS = 80;
-export function draftToFloorInput(supply: CardSupply): { floor: { short_open: number; short_big: number; short_small: number }; open_cards: string[] } {
+export type DraftFloor = { short_open: number; short_big: number; short_small: number; big_min_usd: number; small_max_usd: number };
+export function draftToFloorInput(supply: CardSupply): { floor: DraftFloor; open_cards: string[] } {
   return {
-    floor: { short_open: supply.short_open, short_big: supply.short_big, short_small: supply.short_small },
+    floor: {
+      short_open: supply.short_open,
+      short_big: supply.short_big,
+      short_small: supply.short_small,
+      big_min_usd: supply.big_min_usd,
+      small_max_usd: supply.small_max_usd,
+    },
     open_cards: supply.open_cards.slice(0, DRAFT_TO_FLOOR_MAX_CARDS).map((card) => card.id),
   };
 }

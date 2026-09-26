@@ -126,7 +126,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 6 | `specs/site-snapshot.md` | done | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
 | 7 | `specs/supporter-pages.md` | built | /thanks, /card/:id with the replay, supporter credits, /team statuses |
 | 8 | `specs/grid-boxes.md` | done | one item in each cell of every grid, no stretched last row; /team members in identical boxes |
-| 9 | `specs/studio-reports.md` | built | the weekly report, Discord ship and weekly posts, the card supply floor |
+| 9 | `specs/studio-reports.md` | done | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 10 | `specs/design-review.md` | built | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
 | 11 | `specs/agent-upkeep.md` | built | drift checks, Dependabot with a safe patch merge, the Claude Code pin, the replay eval set |
 | 12 | `specs/copy-pass.md` | agreed | every public string after the supporter loop; the board-work marker on /roadmap |

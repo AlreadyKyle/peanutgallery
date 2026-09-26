@@ -7,7 +7,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import type { AgentAdapter, SessionSpec } from '../src/adapters/types.js';
 import type { Job, JobOrigin, OpenCardRow, Role } from '../src/db.js';
-import { draftCard, parseDraftInput } from '../src/job-handlers/draft-card.js';
+import { draftCard, floorLines, parseDraftInput } from '../src/job-handlers/draft-card.js';
 import { HANDLERS } from '../src/job-handlers/index.js';
 import { studioRanking } from '../src/job-handlers/studio-ranking.js';
 import type { Workspace, WorkflowDeps } from '../src/job-handlers/workflow.js';
@@ -318,6 +318,31 @@ describe('draft_card', () => {
     expect(t.sessions[0]!.prompt).toContain(IDS.community);
     expect(t.sessions[0]!.prompt).not.toContain(IDS.b);
     expect(t.sessions[0]!.prompt).toContain('Executors: Builder A, Builder B, QA.');
+  });
+
+  // The review of 26 September 2026: Draft to the floor sent only the shortfalls, so the Designer was
+  // never told what "big" meant, and its prompt pinned every target at $0.50 or $1.50.
+  it("tells the Designer what Draft to the floor's shortfalls ask for: a big card's target of at least $5, a small card's under $2", async () => {
+    const floor = { short_open: 2, short_big: 1, short_small: 1, big_min_usd: 5, small_max_usd: 2 };
+    const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] }, 'draft_card', { floor, open_cards: [IDS.a] });
+    t.db.studio.card_max_usd = 25;
+    await draftCard(t.context);
+    const prompt = t.sessions[0]!.prompt;
+    expect(prompt).toContain("The open cards are short of the board's floor. Draft one card that fills one of these shortfalls:");
+    expect(prompt).toContain('- 1 big card: a target of at least $5.00 and at most $25.00. By the five-times rule that is a bigger change, with an expected cost of at least $1.00');
+    expect(prompt).toContain('Never pad a smaller change');
+    expect(prompt).toContain('- 1 small card: a target under $2.00.');
+    expect(prompt).toContain('- 2 more open cards, of any size.');
+    expect(prompt).toContain("five times the change's expected cost, rounded up to the next 50 cents");
+    expect(prompt).not.toContain('The floor: {');
+    // Only the shortfalls above 0 are named; a big card above the per-card maximum is said to be out of reach.
+    expect(floorLines({ ...floor, short_open: 0, short_small: 0 }, 25)).toEqual([
+      "The open cards are short of the board's floor. Draft one card that fills one of these shortfalls:",
+      '- 1 big card: a target of at least $5.00 and at most $25.00. By the five-times rule that is a bigger change, with an expected cost of at least $1.00, still one mechanic, number or piece of content. Never pad a smaller change\'s target to reach it.',
+    ]);
+    expect(floorLines({ ...floor, short_open: 0 }, 4)[1]).toBe('- 1 big card, with a target of at least $5.00: no draft can fill this, since the per-card maximum is $4.00. Fill another shortfall.');
+    expect(floorLines({ ...floor, short_open: 0, short_big: 0, short_small: 0 }, 25)).toEqual(["The open cards meet the board's floor."]);
+    expect(floorLines(3, 25)).toEqual(['The floor: 3.']);
   });
 
   it('refuses to start without an unpaused Game Director, or with input other than {} or {floor, open_cards}', async () => {

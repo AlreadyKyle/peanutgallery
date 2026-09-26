@@ -1,15 +1,18 @@
 // The outbound lane (docs/specs/studio-reports.md): each tick, a post to the ships lane for each public
-// card that went live in the last 6 hours, and one to the weekly lane for the newest published report,
-// each posted at most once. Before a post the (kind, ref) row is inserted as 'sending', so the
-// primary key refuses a second claim; after it the row becomes 'posted' or 'failed'. Any existing row
-// is never posted again, so a timeout, an error or a crash mid-request loses that post rather than
-// doubling it. While the studio is paused or the kill switch has fired nothing is posted, and a ship
-// found then is recorded 'skipped' so it is never posted after resuming. With both lanes unset the lane
-// makes no query and no request.
+// card that went live in the last 6 hours, and one to the weekly lane for the newest published report
+// while its week is still the last one ended in New York, each posted at most once. A report found
+// after the next week has ended is recorded 'skipped' as 'stale' and never posted, so switching the
+// lane on, or resuming after a long pause, never announces an old week. Before a post the (kind, ref)
+// row is inserted as 'sending', so the primary key refuses a second claim; after it the row becomes
+// 'posted' or 'failed'. Any existing row is never posted again, so a timeout, an error or a crash
+// mid-request loses that post rather than doubling it. While the studio is paused or the kill switch
+// has fired nothing is posted, and a ship found then is recorded 'skipped' so it is never posted after
+// resuming. With both lanes unset the lane makes no query and no request.
 import type { DiscordPoster } from './discord.js';
 import { escapeDiscord, fitPost } from './discord.js';
 import type { OutboundDb, ReportPost, ShipPost } from './db.js';
 import type { Logger } from './log.js';
+import { newYorkDate } from './throttle.js';
 
 export interface OutboundDeps {
   db: OutboundDb;
@@ -29,6 +32,23 @@ export const MAX_POSTS_PER_TICK = 5;
 export const SHIP_SUPPORTERS_NAMED = 3;
 // At most this many titles are named in a weekly post; the rest are "and n more".
 export const WEEKLY_TITLES_NAMED = 5;
+
+// The Monday (YYYY-MM-DD) of the last New York week that has ended at `now`: the same arithmetic as
+// the migration's money.last_ended_week, so a report is fresh for exactly the week after its own.
+export function lastEndedWeek(now: Date): string {
+  const [year, month, day] = newYorkDate(now).split('-').map(Number) as [number, number, number];
+  const today = Date.UTC(year, month - 1, day);
+  const isoDow = new Date(today).getUTCDay() || 7;
+  return new Date(today - (isoDow - 1 + 7) * 86_400_000).toISOString().slice(0, 10);
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// "2026-09-14" as "14 September".
+function weekDay(day: string): string {
+  const [, month, date] = day.split('-').map(Number) as [number, number, number];
+  return `${date} ${MONTHS[month - 1] ?? ''}`.trim();
+}
 
 export interface OutboundOutcome {
   inert: boolean;
@@ -65,15 +85,18 @@ export function shipText(card: ShipPost, siteUrl: string): string {
   return fitPost(head, ` Watch how it was built: ${siteUrl}/card/${card.id}`);
 }
 
-// "This week at Mob Machine: 2 cards shipped (<title>, <title>). 6 cards are open for funding. Read
-// the report: <site>/reports".
+// "The week of 14 September at Mob Machine: 2 cards shipped (<title>, <title>). 6 cards were open for
+// funding when the report was published. Read the report: <site>/reports". The week is named, not
+// "this week", and the open count is the report's own, counted as it was published.
 export function weeklyText(report: ReportPost, siteUrl: string): string {
   const titles = report.shipped_titles.slice(0, WEEKLY_TITLES_NAMED).map(escapeDiscord);
   const shipped = `${report.shipped_count} ${report.shipped_count === 1 ? 'card' : 'cards'} shipped`;
   const more = Math.max(0, report.shipped_count - titles.length);
   const list = titles.length > 0 ? ` (${titles.join(', ')}${more > 0 ? ` and ${more} more` : ''})` : '';
-  const open = `${report.open_count} ${report.open_count === 1 ? 'card is' : 'cards are'} open for funding`;
-  return fitPost(`This week at Mob Machine: ${shipped}${list}. ${open}.`, ` Read the report: ${siteUrl}/reports`);
+  const counted =
+    report.open_count === 0 ? 'No card was' : report.open_count === 1 ? '1 card was' : `${report.open_count} cards were`;
+  const open = `${counted} open for funding when the report was published`;
+  return fitPost(`The week of ${weekDay(report.week_start)} at Mob Machine: ${shipped}${list}. ${open}.`, ` Read the report: ${siteUrl}/reports`);
 }
 
 export async function runOutbound(deps: OutboundDeps): Promise<OutboundOutcome> {
@@ -114,7 +137,12 @@ export async function runOutbound(deps: OutboundDeps): Promise<OutboundOutcome> 
   }
   if (weekly && budget > 0) {
     const report = await deps.db.unpostedReport();
-    if (report !== null) await send('weekly', report.week_start, 'weekly', weeklyText(report, deps.siteUrl));
+    if (report !== null && report.week_start < lastEndedWeek(now)) {
+      // A newer week has ended since: the report is no longer this week's news.
+      if (await deps.db.claimPost('weekly', report.week_start, 'skipped', 'stale', now)) outcome.skipped += 1;
+    } else if (report !== null) {
+      await send('weekly', report.week_start, 'weekly', weeklyText(report, deps.siteUrl));
+    }
   }
   return outcome;
 }
