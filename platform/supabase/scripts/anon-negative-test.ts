@@ -71,12 +71,13 @@ const PUBLIC_RELATIONS = [
 ];
 
 // cards is granted column by column (docs/specs/card-columns-and-open-funding.md).
-// The site's columns, horizon and rank included, are readable. actual_usd,
+// The site's columns, horizon and rank included, and copy-pass's board_work
+// (docs/specs/copy-pass.md) are readable. actual_usd,
 // severity, priority and design-review's review_rounds are withheld, and so is
 // select=*, which names them;
 // each must be refused with Postgres's permission error, 42501, not some other
 // failure.
-const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank,opens_at,board_vetoed,drafter_role_id";
+const CARD_COLUMNS_READABLE = "id,title,stage,funded_usd,live_at,horizon,rank,opens_at,board_vetoed,drafter_role_id,board_work";
 const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "review_rounds", "*"];
 const PERMISSION_DENIED = "42501";
 

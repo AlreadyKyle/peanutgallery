@@ -56,6 +56,11 @@ export type Card = {
   /** The board has held the card back, with its reason; absent reads as not vetoed. */
   board_vetoed?: boolean;
   board_veto_reason?: string | null;
+  /**
+   * Board work (docs/specs/copy-pass.md, PLAN.md §4 Work): a change to how the studio runs, which the
+   * board makes itself and no card funds. /roadmap groups it apart. Absent reads as not board work.
+   */
+  board_work?: boolean;
 };
 
 export type CardFunding = {
@@ -385,6 +390,7 @@ function cardFrom(row: Doc, live: LiveCard): Card {
     opens_at: textOrNull(row, 'opens_at'),
     board_vetoed: row.board_vetoed === true,
     board_veto_reason: textOrNull(row, 'board_veto_reason'),
+    board_work: row.board_work === true,
   };
 }
 

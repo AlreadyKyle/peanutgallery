@@ -1127,6 +1127,37 @@ button.link:hover:not(:disabled) {
   text-wrap: pretty;
 }
 
+/* /roadmap: each horizon's cards in groups, for players, the studio, then board work in a closed
+   disclosure, drawn open as a plain group when it is all the horizon holds (docs/specs/copy-pass.md).
+   A group's heading keeps more space above than below, like a section's; the disclosure's summary is
+   a 44px target around its heading. */
+.roadmap-group {
+  margin-top: var(--space-4);
+}
+
+.roadmap-group > h3,
+.roadmap-board > summary {
+  margin-bottom: var(--space-1);
+}
+
+.roadmap-group > p {
+  max-width: var(--measure);
+}
+
+.roadmap-board > summary {
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
+  margin-top: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
+  cursor: pointer;
+}
+
+.roadmap-board > summary > h3 {
+  display: inline;
+}
+
+.roadmap-board:not([open]) > summary {
+  margin-bottom: 0;
+}
+
 /* A small muted label above a list of rows. */
 .rows-heading {
   margin: var(--space-3) 0 var(--space-1);
@@ -1259,6 +1290,26 @@ button.link:hover:not(:disabled) {
 .example .rows,
 .example .stats {
   margin: 0;
+}
+
+/* The worked example's order after its figures: where the agent credit goes, numbered like the
+   waterfall (docs/specs/copy-pass.md). */
+.example-order-intro {
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.example-order {
+  margin: 0;
+  padding-left: 1.4em;
+  list-style: decimal outside;
+}
+
+.example-order li {
+  padding-left: 0.2em;
+}
+
+.example-order li + li {
+  margin-top: var(--space-1);
 }
 
 /* The team: every member, running or still to come, in the same box, one to a grid cell (the board,

@@ -99,13 +99,40 @@ export const RESERVE_PCT = 10;
 export const DEFAULT_STUDIO_PCT = 20;
 export const INCIDENT_PCT = 5;
 
+/** To four decimal places, as the database's numeric(12,4) money columns hold it. */
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
 /** The worked split of a contribution after Stripe's fee, as apply_contribution computes it. */
 export function exampleSplit(net: number) {
-  const round = (value: number) => Math.round(value * 10_000) / 10_000;
-  const reserve = round((net * RESERVE_PCT) / 100);
-  const remainder = net - reserve;
-  const studio = round((remainder * DEFAULT_STUDIO_PCT) / 100);
-  const agents = remainder - studio;
-  const incident = round((agents * INCIDENT_PCT) / 100);
-  return { reserve, studio, agents, incident, credit: agents - incident };
+  const reserve = round4((net * RESERVE_PCT) / 100);
+  const remainder = round4(net - reserve);
+  const studio = round4((remainder * DEFAULT_STUDIO_PCT) / 100);
+  const agents = round4(remainder - studio);
+  const incident = round4((agents * INCIDENT_PCT) / 100);
+  return { reserve, remainder, studio, agents, incident, credit: round4(agents - incident) };
+}
+
+// Stripe's fee in /how-it-works' worked example (docs/specs/copy-pass.md), from Stripe Canada's
+// published card pricing, https://stripe.com/en-ca/pricing (read 26 September 2026): "2.9% + CA$0.30
+// per successful transaction for domestic cards" and "+ 2% if currency conversion is required", since
+// the studio's account is Canadian and charges US dollars. A card issued outside Canada adds "+ 0.8%
+// for international cards", which the page says beside the figure. The CA$0.30 is in US dollars at
+// the Bank of Canada's daily average for 25 September 2026, 1.4145 Canadian dollars to the US dollar
+// (https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json): 0.30 / 1.4145 = $0.2121. The page
+// labels the fee about, since a real fee moves with the card and the day's rate. No Stripe API is
+// read: Stripe access is the board's alone.
+export const STRIPE_EXAMPLE_FEE = { pct: 2.9, conversionPct: 2, fixedUsd: 0.2121 } as const;
+
+/** Stripe's fee on a payment of `paid` US dollars by STRIPE_EXAMPLE_FEE, to four decimal places. */
+export function exampleFee(paid: number): number {
+  return round4((paid * (STRIPE_EXAMPLE_FEE.pct + STRIPE_EXAMPLE_FEE.conversionPct)) / 100 + STRIPE_EXAMPLE_FEE.fixedUsd);
+}
+
+/** A payment of `paid` US dollars worked through: Stripe's fee by the example constant, then the default split. */
+export function exampleFromPaid(paid: number) {
+  const fee = exampleFee(paid);
+  const net = round4(paid - fee);
+  return { paid, fee, net, ...exampleSplit(net) };
 }

@@ -5,8 +5,9 @@ import { EventList } from '../components/EventList';
 import { Example } from '../components/Example';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
-import { SplitStats } from '../components/Funding';
+import { PaidExample } from '../components/Funding';
 import { LinkedText } from '../components/TextPage';
+import { WhoRuns } from '../components/WhoRuns';
 import { groupCards, fundingPlace } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
@@ -93,8 +94,8 @@ function PickVisual({ snapshot }: { snapshot: Snapshot | null }) {
 
 function SplitVisual() {
   return (
-    <Example real={false} caption={money.splitCaption}>
-      <SplitStats />
+    <Example real={false} caption={money.exampleCaption}>
+      <PaidExample />
     </Example>
   );
 }
@@ -177,11 +178,11 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
 /**
  * The whole path of a contribution: six steps, each a short text with the real component that shows
  * it under it, in example mode. A visual uses a real public record where one exists and made-up
- * figures, labelled so, where none does. Then where the money goes, holds and refunds, and the rules.
- * Three bands (DESIGN.md, Bands): the heading and the paused notice on the signal plate, the steps
- * and their examples on paper, and the money and the rules on ink. Each step stacks its text over its
- * example at every width, so a short text never floats beside a tall card. The all-ages line is in
- * every footer.
+ * figures, labelled so, where none does. Then where the money goes, holds and refunds, and the rules;
+ * then who runs the studio and what code and the agents each do. Four bands (DESIGN.md, Bands): the
+ * heading and the paused notice on the signal plate, the steps and their examples on paper, the money
+ * and the rules on ink, and who runs it on paper. Each step stacks its text over its example at every
+ * width, so a short text never floats beside a tall card. The all-ages line is in every footer.
  */
 export function HowItWorks() {
   const studio = useStudio();
@@ -229,6 +230,21 @@ export function HowItWorks() {
               ))}
             </ul>
             <p>{legal.artPolicy}</p>
+          </div>
+        </section>
+      </div>
+      <div className="band">
+        <WhoRuns id="how-who" />
+        <section className="section" aria-labelledby="how-code">
+          <h2 id="how-code">{page.codeHeading}</h2>
+          <div className="prose">
+            <p>{page.codeIntro}</p>
+            <ul className="rules">
+              {page.code.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p>{page.agents}</p>
           </div>
         </section>
       </div>

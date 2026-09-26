@@ -560,11 +560,16 @@ try {
     // At least one role runs and every role that runs shows claude-opus-5-5 (PLAN.md §10 decision
     // 36; team-models.mjs); a role that does not run shows no model, since none runs it. /team's
     // sections come from the roster's columns (lib/roster.ts teamStatus, docs/specs/supporter-pages.md):
-    // Running holds the running and paused rows, then Starts later and Planned.
+    // Running holds the running and paused rows, then Starts later and Planned; the board block,
+    // Who runs it, is last, in its own band (docs/specs/copy-pass.md).
     const running = page.getByRole('region', { name: 'Running', exact: true });
     const later = [page.getByRole('region', { name: 'Starts later', exact: true }), page.getByRole('region', { name: 'Planned', exact: true })];
     const sections = await page.getByRole('main').locator('section h2').allTextContents();
-    check(sections[0] === 'Running' && sections.every((name) => ['Running', 'Starts later', 'Planned'].includes(name)), `/team sections ${JSON.stringify(sections)}`);
+    const roster = sections.slice(0, -1);
+    check(
+      sections[0] === 'Running' && sections.at(-1) === 'Who runs it' && roster.every((name) => ['Running', 'Starts later', 'Planned'].includes(name)),
+      `/team sections ${JSON.stringify(sections)}`,
+    );
     const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
     check(models.ok, models.message);
     // A code-only role (the Janitor, docs/specs/agent-upkeep.md) calls no model, so it names none.

@@ -4,6 +4,7 @@ import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { pausedSentence } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
+import { WhoRuns } from '../components/WhoRuns';
 import { copy } from '../lib/copy';
 import { formatInteger, formatUsd } from '../lib/format';
 import { legal } from '../lib/legal';
@@ -131,9 +132,10 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
  * Meet the team: every active role from public_roles in three sections from the roster's own columns
  * (lib/roster.ts teamStatus): Running (with the paused rows while the studio or the role is paused),
  * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
- * the shipped cards, or, for a code-only role, that it calls no model; the rest show when they start. Every section is the same grid of the same boxes,
- * one to a cell. Two bands: the heading on the signal plate, and every agent box on paper (DESIGN.md,
- * Bands).
+ * the shipped cards, or, for a code-only role, that it calls no model; the rest show when they start.
+ * Every section is the same grid of the same boxes, one to a cell. Three bands: the heading on the
+ * signal plate, every agent box on paper (DESIGN.md, Bands), and who runs the studio on ink
+ * (docs/specs/copy-pass.md).
  */
 export function Team() {
   const studio = useStudio();
@@ -152,6 +154,9 @@ export function Team() {
         ) : null}
         {studio.state === 'unconfigured' || studio.state === 'error' ? <p className="muted">{unavailableLine(studio)}</p> : null}
         {studio.state === 'ready' ? <Roster snapshot={studio.snapshot} /> : null}
+      </div>
+      <div className="band">
+        <WhoRuns id="team-who" />
       </div>
     </main>
   );

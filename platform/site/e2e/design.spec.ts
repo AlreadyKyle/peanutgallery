@@ -287,7 +287,7 @@ test.describe('bands with empty data', () => {
   test('keep the order when home draws no team strip and /team has no Running list', async ({ page }) => {
     for (const [path, bands] of [
       ['/', 4],
-      ['/team', 2],
+      ['/team', 3],
     ] as const) {
       await settle(page, path);
       expect(await grounds(page), path).toEqual(expected(bands));

@@ -64,7 +64,15 @@ for (const viewport of WIDTHS) {
         'Where the money goes',
         'Holds and refunds',
         'Rules that never change',
+        'Who runs it',
+        'What code does and what the agents do',
       ]);
+      // The board by name, and the worked example from $5.00 paid (docs/specs/copy-pass.md).
+      await expect(page.getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Mob Machine is run by AI agents and a human board: Kyle Smith.');
+      const worked = main.locator('figure.example').nth(1);
+      await expect(worked.locator('figcaption')).toContainText('$5.00 paid, with the default split.');
+      await expect(worked.locator('.stat dd')).toHaveText(['$5.00', '$0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
+      await expect(worked.locator('ol.example-order li')).toHaveCount(3);
       const examples = main.locator('figure.example');
       await expect(examples).toHaveCount(6);
       for (const label of await examples.locator('figcaption').allTextContents()) expect(label).toMatch(/^Example/);
@@ -103,6 +111,9 @@ for (const viewport of WIDTHS) {
       await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when the board opens the studio code lane.');
       await expect(starts.locator('#agent-r-community')).toContainText('Starts once a named moderator is in place for the community channels.');
       await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host']);
+      // The board block sits at the foot, after every section (docs/specs/copy-pass.md).
+      await expect(page.getByRole('main').locator('section h2')).toHaveText(['Running', 'Starts later', 'Planned', 'Who runs it']);
+      await expect(page.locator('main > .band').last().getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Kyle Smith');
       const avatars = page.getByRole('main').getByRole('img');
       await expect(avatars).toHaveCount(DEFAULT_STUDIO.roles.length);
       for (const role of DEFAULT_STUDIO.roles) {
@@ -132,21 +143,29 @@ for (const viewport of WIDTHS) {
       await screenshot(page, 'team', viewport.width);
     });
 
-    test('/roadmap lists next and later cards as planned, with no bars or fund links', async ({ page }) => {
+    test('/roadmap lists next and later cards in groups by folder and board work, with no bars or fund links', async ({ page }) => {
       await page.goto('/roadmap');
       await onlyOneH1(page, 'Roadmap');
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Next', 'Later']);
-      await expect(page.getByRole('region', { name: 'Next', exact: true }).getByRole('heading', { level: 3 })).toHaveText([
+      const board = 'Board work on how the studio runs (not funded by cards)';
+      const next = page.getByRole('region', { name: 'Next', exact: true });
+      await expect(next.getByRole('heading', { level: 3 })).toHaveText(['The studio', board]);
+      await expect(next.getByRole('region', { name: 'The studio', exact: true }).getByRole('heading', { level: 4 })).toHaveText([
         'Choose the next card without paying',
-        'The Studio Head drafts cards from the roadmap',
         'Board on its own site',
       ]);
-      await expect(page.getByRole('region', { name: 'Later', exact: true }).getByRole('heading', { level: 3 })).toHaveText([
-        'A second area in Dust',
-        'Image adapter for studio pictures',
-      ]);
-      await expect(main.getByText('Planned and not built yet')).toHaveCount(5);
+      // Board work starts closed; opening it shows its cards (docs/specs/copy-pass.md).
+      const disclosure = next.locator('details[data-group="board"]');
+      await expect(disclosure).not.toHaveAttribute('open', /.*/);
+      await expect(disclosure.getByRole('heading', { level: 4 })).toBeHidden();
+      await disclosure.locator('summary').click();
+      await expect(disclosure.getByRole('heading', { level: 4 })).toHaveText(['The Studio Head drafts cards from the roadmap']);
+      const later = page.getByRole('region', { name: 'Later', exact: true });
+      await expect(later.getByRole('heading', { level: 3 })).toHaveText(['For players', board]);
+      await expect(later.getByRole('region', { name: 'For players', exact: true }).getByRole('heading', { level: 4 })).toHaveText(['A second area in Dust']);
+      await expect(main.getByText('Planned and not built yet')).toHaveCount(0);
+      await expect(main.getByText(/not funded by cards/)).toHaveCount(2);
       await expect(main.getByRole('progressbar')).toHaveCount(0);
       await expect(main.getByRole('link')).toHaveCount(0);
       await expect(main.getByText('Rename the Gatherer to Sweeper')).toHaveCount(0);
@@ -155,6 +174,42 @@ for (const viewport of WIDTHS) {
     });
   });
 }
+
+// /roadmap as production has it at launch: every BACKLOG entry is marked board: yes, so board work is
+// each band's only group. It is drawn open under a line that says so, never as a lone closed summary
+// in an otherwise empty band (docs/specs/copy-pass.md, Decisions).
+const BOARD_ONLY_STUDIO = {
+  ...DEFAULT_STUDIO,
+  cards: DEFAULT_STUDIO.cards.map((card) => (card.horizon === 'next' || card.horizon === 'later' ? { ...card, board_work: true } : card)),
+};
+test.describe('/roadmap with only board work planned', () => {
+  test.use({ studio: BOARD_ONLY_STUDIO });
+  for (const width of [320, 375, 768, 1440]) {
+    test(`draws each band's board work open under a line that says so at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/roadmap');
+      const main = page.getByRole('main');
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Next', 'Later']);
+      await expect(main.locator('details')).toHaveCount(0);
+      const board = 'Board work on how the studio runs (not funded by cards)';
+      for (const [name, titles] of [
+        ['Next', ['Choose the next card without paying', 'The Studio Head drafts cards from the roadmap', 'Board on its own site']],
+        ['Later', ['A second area in Dust', 'Image adapter for studio pictures']],
+      ] as const) {
+        const horizon = page.getByRole('region', { name, exact: true });
+        await expect(horizon.getByText('No card for players or the studio is here yet. The cards below are board work.')).toBeVisible();
+        await expect(horizon.getByRole('heading', { level: 3 })).toHaveText([board]);
+        const titlesShown = horizon.getByRole('region', { name: board, exact: true }).getByRole('heading', { level: 4 });
+        await expect(titlesShown).toHaveText([...titles]);
+        for (const title of await titlesShown.all()) await expect(title).toBeVisible();
+      }
+      await expect(main.getByText(/not funded by cards/)).toHaveCount(2);
+      await expect(main.getByRole('link')).toHaveCount(0);
+      expect(await overflowsHorizontally(page)).toBe(false);
+      await screenshot(page, 'roadmap-board-only', width);
+    });
+  }
+});
 
 // Every path to checkout states the agreement first (docs/specs/legal-copy.md): each Payment Link on
 // /, /roadmap and /contribute has the Terms, the Refunds page and the age condition in its own card,

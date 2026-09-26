@@ -3,20 +3,24 @@
 // The file's format, which docs/BACKLOG.md follows and this parser enforces:
 // free prose and "##" headings are ignored, and so is anything inside a fenced
 // code block. Each card is a level-3 heading "### <title>", followed (after
-// optional blank lines) by exactly these six bullet lines, in this order:
+// optional blank lines) by exactly these seven bullet lines, in this order:
 //   - bucket: game | platform | qa | studio | budget | agents
 //   - folder: seed-1 | platform
 //   - horizon: next | later
 //   - rank: a whole number, lower is sooner, unique within its horizon
 //   - summary: one line, at most 200 characters, sentence case, no em dash
 //   - intent: one paragraph on one line: what it is, why, and that it is not built yet
+//   - board: yes | no: yes when the change lands in kernel paths (the rules, the money, the card
+//     system, the dispatcher, the gate, the agents and their prompts), so the board makes it and no
+//     card funds it (PLAN.md §4 Work, docs/specs/copy-pass.md)
 // Titles are at most 80 characters and unique; the title is the upsert key.
 // Any other heading at level 3, key, order or value fails the parse.
 
 export const BUCKETS = ["game", "platform", "qa", "studio", "budget", "agents"] as const;
 export const FOLDERS = ["seed-1", "platform"] as const;
 export const HORIZONS = ["next", "later"] as const;
-export const KEYS = ["bucket", "folder", "horizon", "rank", "summary", "intent"] as const;
+export const KEYS = ["bucket", "folder", "horizon", "rank", "summary", "intent", "board"] as const;
+export const BOARD_VALUES = ["yes", "no"] as const;
 
 export const TITLE_MAX = 80;
 export const SUMMARY_MAX = 200;
@@ -33,6 +37,8 @@ export interface BacklogEntry {
   rank: number;
   summary: string;
   intent: string;
+  /** Board work: the board makes it and no card funds it (the entry's board: bullet). */
+  board_work: boolean;
   /** 1-based line of the heading, for messages. */
   line: number;
 }
@@ -91,12 +97,12 @@ export function parseBacklog(text: string): BacklogEntry[] {
       j += 1;
     }
     if (complete && j < lines.length && /^- [a-z_]+:/.test(lines[j]!)) {
-      problems.push(`line ${j + 1}: "${title}" has a key after intent: "${lines[j]}"`);
+      problems.push(`line ${j + 1}: "${title}" has a key after board: "${lines[j]}"`);
     }
     i = j - 1;
     if (!complete) continue;
 
-    const { bucket, folder, horizon, rank, summary, intent } = values as Record<(typeof KEYS)[number], string>;
+    const { bucket, folder, horizon, rank, summary, intent, board } = values as Record<(typeof KEYS)[number], string>;
     const where = `line ${at} "${title}"`;
     if (!oneOf(bucket, BUCKETS)) problems.push(`${where}: bucket "${bucket}" is not one of ${BUCKETS.join(", ")}`);
     if (!oneOf(folder, FOLDERS)) problems.push(`${where}: folder "${folder}" is not one of ${FOLDERS.join(", ")}`);
@@ -108,6 +114,7 @@ export function parseBacklog(text: string): BacklogEntry[] {
     if (summary.includes(EM_DASH)) problems.push(`${where}: the summary uses an em dash`);
     if (intent === "") problems.push(`${where}: the intent is empty`);
     if (intent.includes(EM_DASH)) problems.push(`${where}: the intent uses an em dash`);
+    if (!oneOf(board, BOARD_VALUES)) problems.push(`${where}: board "${board}" is not yes or no`);
 
     entries.push({
       title,
@@ -117,6 +124,7 @@ export function parseBacklog(text: string): BacklogEntry[] {
       rank: Number(rank),
       summary,
       intent,
+      board_work: board === "yes",
       line: at,
     });
   }
@@ -158,11 +166,12 @@ export interface ExistingCard {
   drafter_role_id: string | null;
   opens_at: string | null;
   board_vetoed: boolean;
+  board_work: boolean;
 }
 
 /** The columns file-backlog reads for ExistingCard. */
 export const EXISTING_CARD_COLUMNS =
-  "id, title, stage, horizon, rank, bucket, folder, summary, intent, source, funded_usd, funding_target_usd, executor_role_id, drafter_role_id, opens_at, board_vetoed";
+  "id, title, stage, horizon, rank, bucket, folder, summary, intent, source, funded_usd, funding_target_usd, executor_role_id, drafter_role_id, opens_at, board_vetoed, board_work";
 
 /** The row file-backlog inserts: a board goal card, proposed, off now, with no target, executor or acceptance test yet. */
 export interface BacklogInsert {
@@ -181,9 +190,10 @@ export interface BacklogInsert {
   estimate_usd: 0;
   priority: 100;
   confidence: "low";
+  board_work: boolean;
 }
 
-export type BacklogPatch = Partial<Pick<BacklogInsert, "bucket" | "folder" | "horizon" | "rank" | "summary" | "intent">>;
+export type BacklogPatch = Partial<Pick<BacklogInsert, "bucket" | "folder" | "horizon" | "rank" | "summary" | "intent" | "board_work">>;
 
 export interface BacklogPlan {
   insert: BacklogInsert[];
@@ -239,6 +249,7 @@ function insertRow(entry: BacklogEntry): BacklogInsert {
     estimate_usd: 0,
     priority: 100,
     confidence: "low",
+    board_work: entry.board_work,
   };
 }
 
@@ -276,6 +287,7 @@ export function planBacklog(entries: readonly BacklogEntry[], existing: readonly
     if (backlog.rank !== want.rank) patch.rank = want.rank;
     if (backlog.summary !== want.summary) patch.summary = want.summary;
     if (backlog.intent !== want.intent) patch.intent = want.intent;
+    if (backlog.board_work !== want.board_work) patch.board_work = want.board_work;
     if (Object.keys(patch).length === 0) plan.unchanged.push(entry.title);
     else plan.update.push({ id: backlog.id, title: entry.title, patch });
   }
@@ -289,13 +301,19 @@ export function planBacklog(entries: readonly BacklogEntry[], existing: readonly
   return plan;
 }
 
-/** Entry counts by horizon and by folder, for the dry run to quote against the file. */
-export function backlogCounts(entries: readonly BacklogEntry[]): { horizon: Record<BacklogHorizon, number>; folder: Record<Folder, number> } {
+/** Entry counts by horizon, by folder and by board-work marker, for the dry run to quote against the file. */
+export function backlogCounts(entries: readonly BacklogEntry[]): {
+  horizon: Record<BacklogHorizon, number>;
+  folder: Record<Folder, number>;
+  board: { yes: number; no: number };
+} {
   const horizon: Record<BacklogHorizon, number> = { next: 0, later: 0 };
   const folder: Record<Folder, number> = { "seed-1": 0, platform: 0 };
+  const board = { yes: 0, no: 0 };
   for (const entry of entries) {
     horizon[entry.horizon] += 1;
     folder[entry.folder] += 1;
+    board[entry.board_work ? "yes" : "no"] += 1;
   }
-  return { horizon, folder };
+  return { horizon, folder, board };
 }

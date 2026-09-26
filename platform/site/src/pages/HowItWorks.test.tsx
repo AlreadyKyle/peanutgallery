@@ -5,7 +5,9 @@ import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot, StudioSource } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
-import { exampleSplit } from '../lib/payment';
+import { EXAMPLE_PAID_USD } from '../components/Funding';
+import { exampleFee, exampleFromPaid, exampleSplit, STRIPE_EXAMPLE_FEE } from '../lib/payment';
+import { formatUsd } from '../lib/format';
 import { HowItWorks } from './HowItWorks';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
@@ -82,13 +84,15 @@ afterEach(() => {
 });
 
 describe('How it works', () => {
-  it('shows six steps, each beside a labelled example, then where the money goes, holds and refunds, and the rules', () => {
+  it('shows six steps, each beside a labelled example, then where the money goes, holds and refunds, the rules, who runs it and what code does', () => {
     renderPage(null);
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([page.title]);
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
       ...money.blocks.map((block) => block.heading),
       ...money.sections.map((section) => section.heading),
       page.rulesHeading,
+      legal.whoRuns.heading,
+      page.codeHeading,
     ]);
     expect(figures()).toHaveLength(6);
     for (const figure of figures()) expect(figure.querySelector('figcaption')?.textContent).toMatch(/^Example/);
@@ -101,7 +105,10 @@ describe('How it works', () => {
   it('says where money on no card waits, and the one case where it goes to a card that is not the next to open', () => {
     renderPage(null);
     const section = screen.getByRole('region', { name: 'Where the money goes' });
-    expect(within(section).getByText(/waits in Not on a card yet for the next card to open\./).textContent).toContain(legal.notOnCardTopUp);
+    const paragraph = within(section).getByText(/waits in Not on a card yet for the next card to open\./).textContent;
+    expect(paragraph).toContain(legal.notOnCardTopUp);
+    // The waterfall's order (docs/specs/money-logic.md): the next cards in line come before Not on a card yet.
+    expect(paragraph).toMatch(/goes to the next cards in line, each up to its target\. What no card can take waits in Not on a card yet/);
     // The resume rule's numbers (docs/specs/agent-system-core.md): once, first ceiling pause, 1.5 times the cost so far.
     expect(legal.notOnCardTopUp).toMatch(/spending limit for the first time/);
     expect(legal.notOnCardTopUp).toMatch(/once, to spend up to 1\.5 times what it has cost so far/);
@@ -150,14 +157,69 @@ describe('How it works', () => {
     expect(figures().every((figure) => figure.querySelector('figcaption')?.textContent?.startsWith('Example'))).toBe(true);
   });
 
-  it('works the split exactly as apply_contribution does, and the notes match the figures', () => {
-    expect(exampleSplit(10)).toEqual({ reserve: 1, studio: 1.8, agents: 7.2, incident: 0.36, credit: 6.84 });
+  it('works the split exactly as apply_contribution does', () => {
+    expect(exampleSplit(10)).toEqual({ reserve: 1, remainder: 9, studio: 1.8, agents: 7.2, incident: 0.36, credit: 6.84 });
+  });
+
+  it('starts the example at $5.00 paid, with every figure from payment.ts and the fee labelled about (docs/specs/copy-pass.md)', () => {
+    expect(EXAMPLE_PAID_USD).toBe(5);
+    // The fee: Stripe Canada's 2.9% and 2% conversion on the amount, and CA$0.30 in US dollars.
+    expect(STRIPE_EXAMPLE_FEE).toEqual({ pct: 2.9, conversionPct: 2, fixedUsd: 0.2121 });
+    expect(exampleFee(5)).toBe(0.4571);
+    expect(exampleFee(1)).toBe(0.2611);
+    const worked = exampleFromPaid(5);
+    expect(worked).toEqual({ paid: 5, fee: 0.4571, net: 4.5429, reserve: 0.4543, remainder: 4.0886, studio: 0.8177, agents: 3.2709, incident: 0.1635, credit: 3.1074 });
+    // Nothing is lost or made up: the parts add back to what was paid.
+    expect(Math.round((worked.fee + worked.reserve + worked.studio + worked.incident + worked.credit) * 10_000) / 10_000).toBe(5);
     renderPage(null);
-    const split = figures()[1]!;
-    expect(within(split).getByText(money.splitCaption)).toBeTruthy();
-    for (const amount of ['$1.00', '$1.80', '$0.36', '$6.84']) expect(within(split).getByText(amount)).toBeTruthy();
-    expect(money.splitRows.studioNote).toContain('$9.00');
-    expect(money.splitRows.incidentNote).toContain('$7.20');
+    const example = figures()[1]!;
+    expect(example.querySelector('figcaption')?.textContent).toBe(`${page.exampleMadeUp}${money.exampleCaption}`);
+    expect(money.exampleCaption).toMatch(/^\$5\.00 paid/);
+    const rows = [...example.querySelectorAll('.stat')].map((row) => [row.querySelector('.stat-label')?.textContent, row.querySelector('dd')?.textContent]);
+    expect(rows).toEqual([
+      [money.exampleRows.paid, formatUsd(worked.paid)],
+      [money.exampleRows.fee, formatUsd(worked.fee)],
+      [money.exampleRows.reserve, formatUsd(worked.reserve)],
+      [money.exampleRows.studio, formatUsd(worked.studio)],
+      [money.exampleRows.incident, formatUsd(worked.incident)],
+      [money.exampleRows.credit, formatUsd(worked.credit)],
+    ]);
+    expect(rows.map(([, value]) => value)).toEqual(['$5.00', '$0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
+    expect(money.exampleRows.fee).toBe("Stripe's fee (about)");
+    const notes = [...example.querySelectorAll('.stat-description')].map((note) => note.textContent);
+    expect(notes).toContain("10% of the $4.54 left after Stripe's fee.");
+    expect(notes).toContain('20% of the $4.09 left after the reserve.');
+    expect(notes).toContain("5% of the agents' $3.27, until the fund holds $500.");
+    // The fee names Stripe Canada's pricing: the rate, the fixed fee, conversion and the card surcharge.
+    expect(money.exampleRows.feeNote).toMatch(/2\.9% plus CA\$0\.30.*2% to convert US dollars.*0\.8% more for a card from outside Canada/);
+    // Then the waterfall's order, and no operations step.
+    expect([...example.querySelectorAll('ol.example-order li')].map((li) => li.textContent)).toEqual([...money.exampleOrder]);
+    expect(money.exampleOrder[0]).toMatch(/^The card the supporter picked/);
+    expect(money.exampleOrder[1]).toMatch(/next cards in line/);
+    expect(money.exampleOrder[2]).toMatch(/Not on a card yet/);
+    expect(example.textContent).not.toMatch(/operations/i);
+  });
+
+  it('names the board, what it can do, what it files and its standing duties, and what code and the agents do (docs/specs/copy-pass.md)', () => {
+    renderPage(null);
+    const who = screen.getByRole('region', { name: legal.whoRuns.heading });
+    const text = who.textContent ?? '';
+    expect(text).toContain('Mob Machine is run by AI agents and a human board: Kyle Smith.');
+    expect(text).toMatch(/pause the agents, cancel, veto or move a card, and change the spending caps/);
+    expect(text).toMatch(/The board files the cards: every entry on the roadmap and every card it opens for funding\./);
+    // PLAN.md §4 The Board's standing duties, one item each.
+    expect(within(who).getAllByRole('listitem')).toHaveLength(6);
+    for (const duty of [/model credit/, /within 14 days/, /bank dispute/, /emergency fund/, /merge/, /price of each new model/]) expect(text).toMatch(duty);
+    expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
+    const code = screen.getByRole('region', { name: page.codeHeading });
+    expect(within(code).getAllByRole('listitem').map((li) => li.textContent)).toEqual([...page.code]);
+    expect(code.textContent).toMatch(/dispatcher schedules the cards/);
+    expect(code.textContent).toMatch(/gate runs the tests/);
+    expect(code.textContent).toMatch(/goes live only when the gate passes it/);
+    expect(code.textContent).toMatch(/rolled back/);
+    expect(code.textContent).toMatch(/design, build and review the cards/);
+    // No public list of the board's actions exists, so nothing says they are published.
+    for (const region of [who, code]) expect(region.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
   });
 
   it('shows the paused notice while the board has paused the agents', async () => {

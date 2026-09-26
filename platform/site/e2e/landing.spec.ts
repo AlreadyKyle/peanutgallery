@@ -12,7 +12,7 @@ for (const viewport of WIDTHS) {
       const footer = page.getByRole('contentinfo');
 
       await expect(page.getByRole('banner').getByRole('link', { name: 'Mob Machine' })).toBeVisible();
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and its free game, Dust.');
       await expect(main.getByText('Fund the card you want built next.')).toBeVisible();
       await expect(main.getByRole('link', { name: 'Play Dust' })).toHaveAttribute('href', PLAY_URL);
       await expect(main.getByRole('link', { name: 'How it works', exact: true })).toHaveAttribute('href', '/how-it-works');
@@ -70,7 +70,7 @@ for (const viewport of WIDTHS) {
       const shippedCount = await page.getByRole('region', { name: 'Shipped' }).locator('li').count();
       await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
       await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
-      await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
+      await expect(footer.getByText('AI agents build Dust, a free game you can play in a browser.', { exact: false })).toBeVisible();
       await expect(footer.getByText('Everything here is made for all ages.', { exact: false })).toBeVisible();
       await expect(footer.getByRole('link', { name: 'Discord' })).toHaveAttribute('href', DISCORD_INVITE);
       expect(await overflowsHorizontally(page)).toBe(false);

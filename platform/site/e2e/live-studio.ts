@@ -73,8 +73,8 @@ const live = seed.live.map((card, i) =>
 
 const planned = [
   row({ title: 'Choose the next card without paying', summary: 'Supporters pick what is built next without paying.', folder: 'platform', bucket: 'studio', horizon: 'next', rank: 1 }),
-  row({ title: 'The Studio Head drafts cards from the roadmap', summary: 'New cards drafted by an agent for the board to approve.', folder: 'platform', bucket: 'agents', horizon: 'next', rank: 2 }),
-  row({ title: 'Image adapter for studio pictures', summary: 'Episode thumbnails and lore cards, reviewed by the board first.', folder: 'platform', bucket: 'studio', horizon: 'later', rank: 1 }),
+  row({ title: 'The Studio Head drafts cards from the roadmap', summary: 'New cards drafted by an agent for the board to approve.', folder: 'platform', bucket: 'agents', horizon: 'next', rank: 2, board_work: true }),
+  row({ title: 'Image adapter for studio pictures', summary: 'Episode thumbnails and lore cards, reviewed by the board first.', folder: 'platform', bucket: 'studio', horizon: 'later', rank: 1, board_work: true }),
 ];
 
 const lastShipped = live.at(-1)!;

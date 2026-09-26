@@ -678,6 +678,17 @@ yours.
   on its bar. The first seed-1 card that changes `seed-1/render/` after launch is the first live
   review. The gate's `frames` job runs only on GitHub Actions, so it waits on Actions minutes (see
   **GitHub Actions minutes**); the local gate cannot run it.
+- **The copy pass (nothing to do now).** The copy-pass pull request (`docs/specs/copy-pass.md`)
+  changes the pitch to "Watch AI agents build a game studio and its free game, Dust.", names you on
+  /how-it-works and at the foot of /team as the human board with your standing duties, and marks
+  every `docs/BACKLOG.md` entry `board: yes` or `board: no`. Every entry today is board work (each
+  lands in kernel paths), so each /roadmap band shows them open under "Board work on how the studio
+  runs (not funded by cards)" and a line saying no card for players or the studio is there yet; once
+  such a card is planned, board work folds into a closed disclosure beside it. To override any
+  wording, or any entry's marker, edit that one line in a pull request; after a marker change, run
+  `pnpm --filter @backseat/supabase file-backlog` as a dry run, then with `--apply`. The Terms' Ontario address and phone stay legal-copy's item.
+  The /thanks button now reads "Follow the studio on Discord": it promises no ship posts, which
+  start only once you set `DISCORD_WEBHOOK_SHIPS` (above).
 - **Paid advice, your call.** Paid from the first payout's studio share, or through an exception you
   name to decision 35: one Canadian lawyer session on the new pages, one accountant session on the
   HST threshold and income tax on the pool, and Ontario business-name registration for "Mob

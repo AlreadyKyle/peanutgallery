@@ -152,12 +152,15 @@ test.describe('/roadmap', () => {
     await expect(held).toContainText('Held by the board');
     await expect(held).toContainText(VETO_REASON);
     await expect(held).not.toContainText('Approved, opens soon');
-    // Every other planned card keeps its plain label.
+    // Every other planned card carries no state label: its group's line says planned once
+    // (docs/specs/copy-pass.md).
     const others = page.locator(`main li[data-card]:not([data-card="${OPENS_SOON_ID}"]):not([data-card="${VETOED_ID}"])`);
     await expect(others).not.toHaveCount(0);
     for (const text of await others.allTextContents()) {
-      expect(text).toContain('Planned and not built yet');
-      expect(text).not.toMatch(/Approved, opens soon|Held by the board/);
+      expect(text).not.toMatch(/Planned and not built yet|Approved, opens soon|Held by the board/);
+    }
+    for (const group of await page.locator('main .roadmap-group').all()) {
+      expect(((await group.textContent()) ?? '').match(/planned/gi) ?? []).toHaveLength(1);
     }
   });
 });
