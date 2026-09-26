@@ -1295,8 +1295,8 @@ button.link:hover:not(:disabled) {
   grid-column: 2;
 }
 
-/* The Paused tag and the facts line sit together at the bottom of each box (.agent-foot), so the tags
-   and the lines align across a row of boxes. */
+/* The facts line and, under it, the Paused tag sit together at the bottom of each box (.agent-foot),
+   so the last lines and the tags align across a row of boxes however far the facts wrap. */
 .agent-foot {
   margin-top: auto;
   padding-top: var(--space-1);
