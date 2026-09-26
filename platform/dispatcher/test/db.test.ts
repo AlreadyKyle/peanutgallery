@@ -196,6 +196,29 @@ describe('createSupabaseDb queries', () => {
     ]);
   });
 
+  it("notes a running job run's output, and refuses when the run is not running", async () => {
+    const hit = rest([{ id: 'run-1' }]);
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn: hit.fetchFn }).noteJobRunOutput('run-1', { pending: { pr: 7 } });
+    expect(hit.seen[0]?.method).toBe('PATCH');
+    expect(hit.seen[0]?.url.pathname).toBe('/rest/v1/job_runs');
+    expect(hit.seen[0]?.url.searchParams.get('id')).toBe('eq.run-1');
+    expect(hit.seen[0]?.url.searchParams.get('status')).toBe('eq.running');
+    expect(hit.seen[0]?.body).toEqual({ output: { pending: { pr: 7 } } });
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: rest([]).fetchFn }).noteJobRunOutput('run-1', {})).rejects.toThrow(/job run run-1 is not running/);
+  });
+
+  it("reads the newest run's output that has a key, a null value included", async () => {
+    const { fetchFn, seen } = rest([{ output: { pending: null, decisions: [] } }]);
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).latestJobRunOutput('upkeep_merge', 'pending')).toEqual({ pending: null, decisions: [] });
+    const url = seen[0]!.url;
+    expect(url.pathname).toBe('/rest/v1/job_runs');
+    expect(url.searchParams.get('job_name')).toBe('eq.upkeep_merge');
+    expect(url.searchParams.get('output->pending')).toBe('not.is.null');
+    expect(url.searchParams.get('order')).toBe('created_at.desc,id.desc');
+    expect(url.searchParams.get('limit')).toBe('1');
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: rest([]).fetchFn }).latestJobRunOutput('upkeep_merge', 'pending')).toBeNull();
+  });
+
   it('reads the rankable cards from rankable_cards, the test apply_card_ranking refuses on, and refuses an answer that is not a list', async () => {
     const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: ['card-1', 'card-2'] } : undefined));
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).rankableCards()).toEqual(['card-1', 'card-2']);

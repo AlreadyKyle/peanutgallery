@@ -42,7 +42,8 @@ export function cardRoleFolder(role: Role): string | null {
  * sentence that says why when it is not simply running:
  * - running: roster status running, not paused, and (for a card role) its folder is open;
  * - paused: roster status running while the studio is paused (its reason's words, else the paused
- *   notice) or while the role itself is paused (its own reason, else a plain line);
+ *   notice), unless the role is code only, whose jobs run through a studio pause; or while the role
+ *   itself is paused (its own reason, else a plain line);
  * - starts: roster status starts, with its trigger; or a card role whose folder the board has not
  *   opened, which starts when the board opens the studio code lane;
  * - planned: roster status planned or unset, with its trigger when it has one.
@@ -58,7 +59,7 @@ export function teamStatus(role: Role, snapshot: Snapshot): TeamStatus {
       return { kind: 'starts', sentence: copy.team.laneClosed };
     }
     if (role.paused === true) return { kind: 'paused', sentence: role.paused_reason ?? copy.team.rolePaused, by: 'role' };
-    const studioPaused = pausedSentence(snapshot);
+    const studioPaused = role.code_only === true ? null : pausedSentence(snapshot);
     if (studioPaused !== null) return { kind: 'paused', sentence: studioPaused, by: 'studio' };
     return { kind: 'running', sentence: null };
   }

@@ -11,6 +11,7 @@
 import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
+import type { PinState } from './cli-pin.js';
 import type { Card, Db, Pool, StudioState } from './db.js';
 import { isInfrastructureConclusion, type GateStatus } from './github.js';
 import { haltReason } from './halt.js';
@@ -54,6 +55,9 @@ export interface TickDeps {
   alert: Alerter;
   // main's head and its gate status (docs/specs/money-safety.md); unset, main is not checked.
   mainGate?: () => Promise<{ sha: string; status: GateStatus }>;
+  // The Claude Code pin against the installed CLI (cli-pin.ts), read before an attended claim; unset,
+  // it is not read.
+  cliPin?: () => Promise<PinState>;
   // The job queue's tick (jobs.ts), run after the card path on every tick that is not halted.
   jobTick?: () => Promise<unknown>;
   // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
@@ -70,7 +74,7 @@ export function leaseTtlSeconds(tickMs: number): number {
 }
 
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason }
+  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason | 'cli_version' }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
@@ -163,8 +167,11 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   if (main) return { action: 'sleep', reason: main };
 
   // An attended session is billed to the founder, so the pool bounds nothing: its budget is the card
-  // ceiling alone (session.ts).
-  if (deps.mode === 'attended') return claimAndStart(deps, runnable[0]!, Number.POSITIVE_INFINITY);
+  // ceiling alone (session.ts). It runs on the host's Claude Code, so nothing is claimed off the pin.
+  if (deps.mode === 'attended') {
+    if (await offPin(deps)) return { action: 'sleep', reason: 'cli_version' };
+    return claimAndStart(deps, runnable[0]!, Number.POSITIVE_INFINITY);
+  }
 
   const money = await moneyState(deps, studio, pool, cards);
   await creditShortfall(deps, studio, pool, money);
@@ -203,6 +210,30 @@ async function mainBlocks(deps: TickDeps): Promise<MainReason | null> {
     return 'main_red';
   }
   return null;
+}
+
+// The attended adapter refuses a Claude Code that is not on its pin, and the card it was given pauses
+// with cli_version (cli-pin.ts, docs/specs/agent-upkeep.md). Claiming then would pause one funded card
+// a tick, each shown stopped until the board resumed it, so while the installed CLI is off its pin no
+// card is claimed: the cards stay funded, the board hears once per installed and pinned version, and
+// claiming resumes by itself once the CLI is back on its pin. A pin that cannot be read counts as off
+// it. The adapter's own check stays, for the role jobs and for an update between this read and a
+// session's start.
+async function offPin(deps: TickDeps): Promise<boolean> {
+  if (!deps.cliPin) return false;
+  let pin: PinState;
+  try {
+    pin = await deps.cliPin();
+  } catch (error) {
+    pin = { ok: false, installed: null, pinned: null, detail: `the Claude Code pin could not be checked: ${errorMessage(error)}` };
+  }
+  if (pin.ok) return false;
+  deps.log.warn('tick', 'claude code is off its pin; claiming nothing', { installed: pin.installed, pinned: pin.pinned });
+  await deps.alert.notifyOnce(
+    `cli_version:${pin.installed ?? 'unknown'}:${pin.pinned ?? 'unknown'}`,
+    `No card is claimed while Claude Code is off its pin, and funded cards keep their money. ${pin.detail}`,
+  );
+  return true;
 }
 
 // Two reads, both summed in the database: each card's studio spend (dispatcher_card_spend) and the spend

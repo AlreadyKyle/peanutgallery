@@ -6,14 +6,16 @@
 // lock, then deploys and smoke-tests both sites; each fixture that breaks exactly one condition is
 // refused naming it; a pull request behind main gets one "@dependabot rebase"; nothing happens while
 // the studio is paused or main is red; a failed smoke restores the site and reverts main.
+import { readFileSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { stringify as stringifyYaml } from 'yaml';
 import type { AgentAdapter } from '../src/adapters/types.js';
 import type { PinState } from '../src/cli-pin.js';
 import type { GateStatus } from '../src/github.js';
 import { janitor, schemaFindings } from '../src/job-handlers/janitor.js';
-import { isPatchBump, lockfileChanges, packageJsonChanges, upkeepMerge, type Decision } from '../src/job-handlers/upkeep-merge.js';
-import type { UpkeepDeps } from '../src/job-handlers/upkeep.js';
+import { isPatchBump, lockfileChanges, neverList, packageJsonChanges, queuePendingUpkeep, upkeepMerge, type Decision } from '../src/job-handlers/upkeep-merge.js';
+import { fingerprintEnv, migrationsFingerprintRunner, type UpkeepDeps } from '../src/job-handlers/upkeep.js';
 import { skipReason, type JobContext } from '../src/jobs.js';
 import { mergeLock } from '../src/lock.js';
 import { createLogger } from '../src/log.js';
@@ -230,8 +232,33 @@ const MERGE = 'd'.repeat(40);
 const SITE = { platform: 'https://platform.local', seed: 'https://seed.local' };
 const SERVED = new TextEncoder().encode('{"cost":10}\n');
 
-const lock = (packages: string[]) =>
-  ["lockfileVersion: '9.0'", '', 'importers:', '  .: {}', '', 'packages:', '', ...packages.flatMap((p) => [`  '${p}':`, '    resolution: {integrity: sha512-x}', '']), 'snapshots: {}', ''].join('\n');
+// A v9 lockfile: the dispatcher's importer (yaml and supabase-js, and tsx as its dev dependency), each package, and a
+// snapshot for each, with the dependencies SNAPSHOT_DEPS gives it at any version.
+const SNAPSHOT_DEPS: Record<string, Record<string, string>> = {
+  tsx: { esbuild: '0.28.2', 'get-tsconfig': '4.10.0' },
+  '@supabase/supabase-js': { '@supabase/auth-js': '2.116.0' },
+  '@scope/tool': { 'deep-helper': '1.0.0' },
+};
+const DISPATCHER_IMPORTER = {
+  dependencies: { yaml: { specifier: '2.9.1', version: '2.9.1' }, '@supabase/supabase-js': { specifier: '^2.116.0', version: '2.116.0' } },
+  devDependencies: { tsx: { specifier: '^4.23.13', version: '4.23.13' } },
+};
+const lock = (packages: string[], importer: Record<string, unknown> = DISPATCHER_IMPORTER) =>
+  stringifyYaml({
+    lockfileVersion: '9.0',
+    importers: { '.': {}, 'platform/dispatcher': importer },
+    packages: Object.fromEntries(packages.map((p) => [p, { resolution: { integrity: 'sha512-x' } }])),
+    snapshots: Object.fromEntries(
+      packages.map((p) => {
+        const deps = SNAPSHOT_DEPS[p.slice(0, p.lastIndexOf('@'))];
+        return [p, deps ? { dependencies: deps } : {}];
+      }),
+    ),
+  });
+// Every package main's lockfile names: the site's left-pad and @scope/tool (with its own dependency),
+// and the dispatcher's closure.
+const BASE_PACKAGES = ['left-pad@1.3.0', '@scope/tool@2.4.1', 'deep-helper@1.0.0', 'yaml@2.9.1', 'tsx@4.23.13', 'esbuild@0.28.2', 'get-tsconfig@4.10.0', '@supabase/supabase-js@2.116.0', '@supabase/auth-js@2.116.0', '@electric-sql/pglite@0.3.7'];
+const withPackages = (...swaps: Array<[string, string]>) => BASE_PACKAGES.map((p) => swaps.find(([from]) => from === p)?.[1] ?? p);
 
 interface MergeFixture {
   verified: boolean;
@@ -244,6 +271,15 @@ interface MergeFixture {
   comments: Array<{ body: string; created_at: string }>;
   version: string;
   main: GateStatus;
+  // main's ref as GitHub reads it; whether pull request 7 is still open, and merged.
+  mainRef: string;
+  listed: boolean;
+  pullMerged: boolean;
+  // The merge request: answered, or lost (the request throws).
+  mergeReply: 'ok' | 'lost';
+  // The state each site's deploy at the merge reports, and a hook on every read of it.
+  deployState: string;
+  onDeployRead: () => void;
 }
 
 function mergeFixture(): MergeFixture {
@@ -256,9 +292,8 @@ function mergeFixture(): MergeFixture {
     contents: {
       [`platform/site/package.json@${MAIN}`]: JSON.stringify({ name: '@backseat/site', dependencies: { 'left-pad': '^1.3.0' }, devDependencies: { typescript: '^5.9.0' } }),
       [`platform/site/package.json@${HEAD}`]: JSON.stringify({ name: '@backseat/site', dependencies: { 'left-pad': '^1.3.1' }, devDependencies: { typescript: '^5.9.0' } }),
-      [`pnpm-lock.yaml@${MAIN}`]: lock(['left-pad@1.3.0', '@scope/tool@2.4.1', 'yaml@2.9.1']),
-      [`pnpm-lock.yaml@${HEAD}`]: lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.1']),
-      [`platform/dispatcher/package.json@${MAIN}`]: JSON.stringify({ dependencies: { yaml: '2.9.1', dotenv: '^17.4.2' } }),
+      [`pnpm-lock.yaml@${MAIN}`]: lock(BASE_PACKAGES),
+      [`pnpm-lock.yaml@${HEAD}`]: lock(withPackages(['left-pad@1.3.0', 'left-pad@1.3.1'])),
     },
     published: { 'left-pad@1.3.1': new Date(NOW.getTime() - 9 * DAY).toISOString() },
     behind: 0,
@@ -267,7 +302,42 @@ function mergeFixture(): MergeFixture {
     comments: [],
     version: MERGE,
     main: { state: 'pass' },
+    mainRef: MAIN,
+    listed: true,
+    pullMerged: false,
+    mergeReply: 'ok',
+    deployState: 'ready',
+    onDeployRead: () => undefined,
   };
+}
+
+// An upkeep_merge run, running in job_runs as the queue leaves it, so its output can be noted.
+function mergeContext(db: FakeDb, upkeep: UpkeepDeps, alert: RecordingAlerter, stop = new AbortController(), runId = 'run-upkeep_merge'): JobContext {
+  db.jobRuns.push({
+    id: runId,
+    job_name: 'upkeep_merge',
+    origin: 'schedule',
+    status: 'running',
+    card_id: null,
+    input: {},
+    parent_run_id: null,
+    created_at: new Date(NOW.getTime() + db.jobRuns.length).toISOString(),
+    idem_key: runId,
+    reason: null,
+    output: null,
+    holder: 'dispatcher-a',
+  });
+  return {
+    ...context(db, upkeep, 'upkeep_merge', alert),
+    run: { id: runId, job_name: 'upkeep_merge', origin: 'schedule', status: 'running', card_id: null, input: {}, parent_run_id: null, created_at: NOW.toISOString() },
+    job: { name: 'upkeep_merge', role_id: 'role-janitor', calls_model: false, runs_when_paused: true },
+    stopSignal: stop.signal,
+  };
+}
+
+// How jobs.ts finishes a run with the handler's output.
+async function finishRun(db: FakeDb, ctx: JobContext, output: Record<string, unknown> | void) {
+  await db.finishJobRun(ctx.run.id, ctx.stopSignal.aborted ? 'failed' : 'succeeded', ctx.stopSignal.aborted ? String(ctx.stopSignal.reason) : null, output ?? {});
 }
 
 function mergeSetup(f: MergeFixture) {
@@ -284,10 +354,13 @@ function mergeSetup(f: MergeFixture) {
         status: 200,
         json: [
           { number: 3, title: 'Board work', user: { login: 'AlreadyKyle' }, head: { sha: 'f'.repeat(40), ref: 'board/x' }, base: { ref: 'main' }, created_at: '2026-09-01T00:00:00Z' },
-          { number: 7, title: 'Bump left-pad from 1.3.0 to 1.3.1', user: { login: 'dependabot[bot]' }, head: { sha: HEAD, ref: 'dependabot/npm_and_yarn/left-pad-1.3.1' }, base: { ref: 'main' }, created_at: '2026-09-10T00:00:00Z' },
+          ...(f.listed
+            ? [{ number: 7, title: 'Bump left-pad from 1.3.0 to 1.3.1', user: { login: 'dependabot[bot]' }, head: { sha: HEAD, ref: 'dependabot/npm_and_yarn/left-pad-1.3.1' }, base: { ref: 'main' }, created_at: '2026-09-10T00:00:00Z' }]
+            : []),
         ],
       };
     }
+    if (method === 'GET' && url === `${GITHUB}/pulls/7`) return { status: 200, json: { merged: f.pullMerged, merge_commit_sha: f.pullMerged ? MERGE : 'test-merge', head: { sha: HEAD } } };
     if (method === 'GET' && url === `${GITHUB}/commits/${HEAD}`) {
       return { status: 200, json: { commit: { verification: { verified: f.verified, reason: f.verified ? 'valid' : 'unsigned' }, committer: { date: '2026-09-10T00:00:00Z' } } } };
     }
@@ -313,10 +386,19 @@ function mergeSetup(f: MergeFixture) {
     }
     if (method === 'GET' && url === `${GITHUB}/actions/runs?head_sha=${HEAD}&per_page=50`) return f.headGate;
     if (method === 'GET' && url === `${GITHUB}/actions/runs?head_sha=${MERGE}&per_page=50`) return green;
-    if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main`) return { status: 200, json: { object: { sha: MAIN } } };
-    if (method === 'PUT' && url === `${GITHUB}/pulls/7/merge`) return { status: 200, json: { sha: MERGE } };
+    if (method === 'GET' && url === `${GITHUB}/git/ref/heads/main`) return { status: 200, json: { object: { sha: f.mainRef } } };
+    if (method === 'PUT' && url === `${GITHUB}/pulls/7/merge`) {
+      if (f.mergeReply === 'lost') return undefined;
+      f.pullMerged = true;
+      f.listed = false;
+      f.mainRef = MERGE;
+      return { status: 200, json: { sha: MERGE } };
+    }
     for (const [site, base] of [['site-platform', SITE.platform], ['site-seed', SITE.seed]] as const) {
-      if (method === 'GET' && url === `${NETLIFY}/${site}/deploys?page=1&per_page=50`) return { status: 200, json: [{ id: `dep-new-${site}`, state: 'ready', commit_ref: MERGE, context: 'production' }] };
+      if (method === 'GET' && url === `${NETLIFY}/${site}/deploys?page=1&per_page=50`) {
+        f.onDeployRead();
+        return { status: 200, json: [{ id: `dep-new-${site}`, state: f.deployState, commit_ref: MERGE, context: 'production' }] };
+      }
       if (method === 'GET' && url === `${NETLIFY}/${site}`) return { status: 200, json: { ssl_url: base } };
       if (method === 'POST' && url.startsWith(`${NETLIFY}/${site}/deploys/`) && url.endsWith('/restore')) return { status: 200, json: {} };
       if (method === 'GET' && url === `${base}/`) return { status: 200, text: `<meta name="build-sha" content="${MERGE}">` };
@@ -326,7 +408,10 @@ function mergeSetup(f: MergeFixture) {
     if (method === 'GET' && url === `${GITHUB}/git/commits/${MERGE}`) return { status: 200, json: { sha: MERGE, parents: [{ sha: MAIN }] } };
     if (method === 'GET' && url === `${GITHUB}/git/commits/${MAIN}`) return { status: 200, json: { sha: MAIN, tree: { sha: 'main-tree' } } };
     if (method === 'POST' && url === `${GITHUB}/git/commits`) return { status: 201, json: { sha: 'revert-sha' } };
-    if (method === 'PATCH' && url === `${GITHUB}/git/refs/heads/main`) return { status: 200, json: {} };
+    if (method === 'PATCH' && url === `${GITHUB}/git/refs/heads/main`) {
+      f.mainRef = 'revert-sha';
+      return { status: 200, json: {} };
+    }
     return undefined;
   });
   const upkeep: UpkeepDeps = {
@@ -337,10 +422,11 @@ function mergeSetup(f: MergeFixture) {
     cliPin: async () => ({ ok: true, version: '2.1.280' }),
     newestEvalResult: async () => null,
     servedFiles: async () => [{ path: 'seed-1/config/cost.json', route: '/config/cost.json', mode: '100644', blob: gitBlobId(SERVED) }],
-    timings: { deployIntervalMs: 1, deployTimeoutMs: 200, gateIntervalMs: 1, gateTimeoutMs: 200, retryDelayMs: 1 },
+    timings: { deployIntervalMs: 1, deployTimeoutMs: 200, gateIntervalMs: 1, gateTimeoutMs: 200, retryDelayMs: 1, mergeStateTimeoutMs: 20, mergeStateIntervalMs: 1 },
   };
   const alert = new RecordingAlerter();
-  return { db, calls, posted, alert, ctx: context(db, upkeep, 'upkeep_merge', alert) };
+  const stop = new AbortController();
+  return { db, calls, posted, alert, upkeep, stop, ctx: mergeContext(db, upkeep, alert, stop) };
 }
 
 async function decide(f: MergeFixture) {
@@ -397,17 +483,26 @@ describe('upkeep_merge', () => {
       'semver_patch',
       /changes name, which is not a dependency version/,
     ],
-    ['a lockfile minor bump', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.4.0', '@scope/tool@2.4.1', 'yaml@2.9.1'])), 'semver_patch', /left-pad@1\.4\.0, which is not a patch/],
-    ['a new package in the lockfile', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.1', 'evil@1.0.0'])), 'new_package', /adds the package evil/],
-    [
-      "a patch to one of the dispatcher's runtime dependencies",
+    ['a lockfile minor bump', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(withPackages(['left-pad@1.3.0', 'left-pad@1.4.0']))), 'semver_patch', /left-pad@1\.4\.0, which is not a patch/],
+    ['a new package in the lockfile', (f) => (f.contents[`pnpm-lock.yaml@${HEAD}`] = lock([...withPackages(['left-pad@1.3.0', 'left-pad@1.3.1']), 'evil@1.0.0'])), 'new_package', /adds the package evil/],
+    ...(
+      [
+        ["one of the dispatcher's runtime dependencies", 'yaml@2.9.1', 'yaml@2.9.2', /^yaml is on the never list$/],
+        ['tsx, the dev dependency the dispatcher runs under', 'tsx@4.23.13', 'tsx@4.23.14', /^tsx is on the never list$/],
+        ["a package in a runtime dependency's closure", '@supabase/auth-js@2.116.0', '@supabase/auth-js@2.116.1', /^@supabase\/auth-js is on the never list$/],
+        ["a package in tsx's closure", 'get-tsconfig@4.10.0', 'get-tsconfig@4.10.1', /^get-tsconfig is on the never list$/],
+        ['PGlite, which the daily check runs on the host', '@electric-sql/pglite@0.3.7', '@electric-sql/pglite@0.3.8', /^@electric-sql\/pglite is on the never list$/],
+      ] as const
+    ).map(([name, from, to, detail]): [string, (f: MergeFixture) => void, string, RegExp] => [
+      `a patch to ${name}`,
       (f) => {
-        f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(['left-pad@1.3.1', '@scope/tool@2.4.1', 'yaml@2.9.2']);
-        f.published['yaml@2.9.2'] = new Date(NOW.getTime() - 30 * DAY).toISOString();
+        f.contents[`pnpm-lock.yaml@${HEAD}`] = lock(withPackages(['left-pad@1.3.0', 'left-pad@1.3.1'], [from, to]));
+        f.published[to] = new Date(NOW.getTime() - 30 * DAY).toISOString();
       },
       'never_list',
-      /yaml is on the never list/,
-    ],
+      detail,
+    ]),
+    ['a lockfile with no dispatcher importer', (f) => (f.contents[`pnpm-lock.yaml@${MAIN}`] = lock(BASE_PACKAGES).replace('platform/dispatcher:', 'platform/other:')), 'never_list', /names no platform\/dispatcher importer/],
     ['a version less than seven days old', (f) => (f.published['left-pad@1.3.1'] = new Date(NOW.getTime() - 2 * DAY).toISOString()), 'release_age', /left-pad@1\.3\.1 was published .*, less than seven days ago/],
     ['a version the registry does not list', (f) => delete f.published['left-pad@1.3.1'], 'release_age', /does not list left-pad@1\.3\.1/],
     ['no gate run at the head sha', (f) => (f.headGate = { status: 200, json: { workflow_runs: [] } }), 'gate', /is missing/],
@@ -438,7 +533,6 @@ describe('upkeep_merge', () => {
     f.mergeBase = OLD_MAIN;
     f.contents[`platform/site/package.json@${OLD_MAIN}`] = f.contents[`platform/site/package.json@${MAIN}`]!;
     f.contents[`pnpm-lock.yaml@${OLD_MAIN}`] = f.contents[`pnpm-lock.yaml@${MAIN}`]!;
-    f.contents[`platform/dispatcher/package.json@${OLD_MAIN}`] = f.contents[`platform/dispatcher/package.json@${MAIN}`]!;
     const first = await decide(f);
     expect(first.output.decisions).toEqual([{ pr: 7, result: 'rebase_requested', detail: expect.stringMatching(/commented @dependabot rebase/) }]);
     expect(first.posted).toEqual(['@dependabot rebase']);
@@ -448,18 +542,194 @@ describe('upkeep_merge', () => {
     expect(second.posted).toEqual([]);
   });
 
-  it('does nothing while the studio is paused, or while main is red', async () => {
+  it('merges nothing while the studio is paused, or while main is red', async () => {
     const paused = mergeSetup(mergeFixture());
     paused.db.studio.paused = true;
-    expect(await upkeepMerge(paused.ctx)).toEqual({ skipped: 'studio_paused', decisions: [] });
+    // It runs while the studio is paused, so a merge it left pending is still settled (below).
+    expect(skipReason({ name: 'upkeep_merge', role_id: null, calls_model: false, runs_when_paused: true }, { origin: 'schedule' }, null, { paused: true })).toBeNull();
+    expect(await upkeepMerge(paused.ctx)).toEqual({ skipped: 'studio_paused', decisions: [], pending: null });
     expect(paused.calls).toEqual([]);
-    expect(skipReason({ name: 'upkeep_merge', role_id: null, calls_model: false, runs_when_paused: false }, { origin: 'schedule' }, null, { paused: true })).toBe('studio_paused');
 
     const f = mergeFixture();
     f.main = { state: 'fail', conclusion: 'failure' };
     const red = await decide(f);
-    expect(red.output).toEqual({ skipped: 'main_red', main: MAIN, decisions: [] });
+    expect(red.output).toEqual({ skipped: 'main_red', main: MAIN, decisions: [], pending: null });
     expect(red.calls).toEqual([]);
+  });
+
+  it('merges nothing when the studio pauses while the conditions are checked', async () => {
+    const t = mergeSetup(mergeFixture());
+    const read = t.db.getStudioState.bind(t.db);
+    let reads = 0;
+    t.db.getStudioState = async () => ({ ...(await read()), paused: ++reads > 1 });
+    const output = (await upkeepMerge(t.ctx)) as { decisions: Decision[] };
+    expect(output.decisions).toEqual([{ pr: 7, result: 'stopped', detail: expect.stringMatching(/nothing was merged/) }]);
+    expect(t.calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
+  it('notes the pull request before the merge request and the merge sha after it, and clears it at the verdict', async () => {
+    const t = mergeSetup(mergeFixture());
+    const notes: unknown[] = [];
+    const noteRun = t.db.noteJobRunOutput.bind(t.db);
+    t.db.noteJobRunOutput = async (runId, output) => {
+      notes.push(structuredClone(output.pending));
+      await noteRun(runId, output);
+    };
+    const output = await upkeepMerge(t.ctx);
+    const record = { pr: 7, title: 'Bump left-pad from 1.3.0 to 1.3.1', head_sha: HEAD, run: 'run-upkeep_merge' };
+    expect(notes).toEqual([{ ...record, merge_sha: null }, { ...record, merge_sha: MERGE }]);
+    expect(output).toMatchObject({ pending: null });
+    // The PUT came after the first note.
+    expect(t.calls.findIndex((c) => c.method === 'PUT')).toBeGreaterThan(-1);
+  });
+
+  it('does not merge when the pending record cannot be written', async () => {
+    const t = mergeSetup(mergeFixture());
+    t.db.noteJobRunOutput = async () => {
+      throw new Error('db job_runs output: timeout');
+    };
+    const output = (await upkeepMerge(t.ctx)) as { decisions: Decision[]; pending: unknown };
+    expect(output.decisions).toEqual([{ pr: 7, result: 'unchecked', detail: expect.stringMatching(/not merged: the pending record could not be written/) }]);
+    expect(output.pending).toBeNull();
+    expect(t.calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
+  it('leaves the merge pending when the run stops during the deploy wait: no restore, no revert, and the board is told', async () => {
+    const f = mergeFixture();
+    f.deployState = 'building';
+    const t = mergeSetup(f);
+    f.onDeployRead = () => t.stop.abort('dispatcher_stopping');
+    const output = (await upkeepMerge(t.ctx)) as { decisions: Decision[]; pending: unknown };
+    await finishRun(t.db, t.ctx, output);
+    expect(output.decisions).toEqual([{ pr: 7, result: 'pending', sha: MERGE, detail: expect.stringMatching(/the run stopped \(dispatcher_stopping\) while the platform deploy was running, so it is verified by the next run$/) }]);
+    expect(output.pending).toEqual({ pr: 7, title: 'Bump left-pad from 1.3.0 to 1.3.1', head_sha: HEAD, merge_sha: MERGE, run: 'run-upkeep_merge' });
+    expect(t.calls.some((c) => c.method === 'POST' && c.url.endsWith('/restore'))).toBe(false);
+    expect(t.calls.some((c) => c.method === 'PATCH' || (c.method === 'POST' && c.url === `${GITHUB}/git/commits`))).toBe(false);
+    expect(t.db.deploys.filter((d) => d.sha === MERGE)).toEqual([]);
+    expect(t.alert.messages).toEqual([expect.stringMatching(/^Upkeep merged as dddddddd pull request #7 .* before a verdict\. Nothing was rolled back; the next upkeep_merge run verifies it/)]);
+    expect(t.db.jobRuns[0]).toMatchObject({ status: 'failed', reason: 'dispatcher_stopping', output: { pending: { merge_sha: MERGE } } });
+  });
+
+  it('leaves the merge pending when the run stops while the smoke test waits on the gate', async () => {
+    const t = mergeSetup(mergeFixture());
+    const route = t.upkeep.fetchFn!;
+    t.upkeep.fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === `${GITHUB}/actions/runs?head_sha=${MERGE}&per_page=50`) {
+        t.stop.abort('role_paused');
+        return new Response(JSON.stringify({ workflow_runs: [{ path: '.github/workflows/gate.yml', status: 'in_progress', conclusion: null }] }), { status: 200 });
+      }
+      return route(input, init);
+    }) as typeof fetch;
+    const output = (await upkeepMerge(t.ctx)) as { decisions: Decision[] };
+    expect(output.decisions).toEqual([{ pr: 7, result: 'pending', sha: MERGE, detail: expect.stringMatching(/the run stopped \(role_paused\) while (the )?platform/) }]);
+    expect(t.calls.some((c) => c.method === 'POST' && c.url.endsWith('/restore'))).toBe(false);
+    expect(t.calls.some((c) => c.method === 'PATCH')).toBe(false);
+  });
+
+  it('settles a pending merge on the next run while main is still at it: deploys, smoke-tests and records it, with the studio paused too', async () => {
+    const f = mergeFixture();
+    f.deployState = 'building';
+    const t = mergeSetup(f);
+    f.onDeployRead = () => t.stop.abort('dispatcher_stopping');
+    await finishRun(t.db, t.ctx, await upkeepMerge(t.ctx));
+    f.deployState = 'ready';
+    f.onDeployRead = () => undefined;
+    t.db.studio.paused = true;
+    const next = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-next');
+    const output = (await upkeepMerge(next)) as { decisions: Decision[]; pending: unknown; skipped?: string };
+    expect(output.decisions).toEqual([{ pr: 7, result: 'merged', sha: MERGE, detail: 'merged, deployed and smoke-tested platform and seed-1' }]);
+    expect(output).toMatchObject({ skipped: 'studio_paused', pending: null });
+    expect(t.db.deploys.filter((d) => d.sha === MERGE).map((d) => [d.folder, d.is_green])).toEqual([
+      ['platform', true],
+      ['seed-1', true],
+    ]);
+    // The settled state is noted at once, so a crash after it does not settle it again.
+    expect(t.db.jobRuns.find((r) => r.id === 'run-next')?.output).toMatchObject({ pending: null });
+    // A third run finds nothing pending.
+    const third = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-third');
+    expect(await upkeepMerge(third)).toMatchObject({ skipped: 'studio_paused', decisions: [], pending: null });
+  });
+
+  it('leaves a pending merge to the board when main has moved past it, and runs no smoke test or rollback', async () => {
+    const f = mergeFixture();
+    f.deployState = 'building';
+    const t = mergeSetup(f);
+    f.onDeployRead = () => t.stop.abort('dispatcher_stopping');
+    await finishRun(t.db, t.ctx, await upkeepMerge(t.ctx));
+    f.mainRef = 'f'.repeat(40);
+    const before = t.calls.length;
+    const next = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-next');
+    const output = (await upkeepMerge(next)) as { decisions: Decision[]; pending: unknown };
+    expect(output.decisions[0]).toEqual({ pr: 7, result: 'left_for_board', sha: MERGE, detail: expect.stringMatching(/main moved to ffffffff before the merge was verified/) });
+    expect(output.pending).toBeNull();
+    expect(t.calls.slice(before).some((c) => c.url.startsWith(NETLIFY) || c.method === 'PATCH')).toBe(false);
+    expect(t.alert.messages.at(-1)).toMatch(/never verified, and main has moved to ffffffff since\. No smoke test or rollback ran/);
+  });
+
+  it('treats a lost merge answer as pending, not refused, and the next run verifies it once the pull request shows merged', async () => {
+    const f = mergeFixture();
+    f.mergeReply = 'lost';
+    const t = mergeSetup(f);
+    const output = (await upkeepMerge(t.ctx)) as { decisions: Decision[]; pending: unknown };
+    await finishRun(t.db, t.ctx, output);
+    expect(output.decisions).toEqual([{ pr: 7, result: 'pending', sha: null, detail: expect.stringMatching(/^may have merged; its merge answer was lost/) }]);
+    expect(output.pending).toMatchObject({ pr: 7, merge_sha: null });
+    expect(t.alert.messages).toEqual([expect.stringMatching(/^Upkeep may have merged pull request #7 .* Nothing was rolled back/)]);
+    // GitHub merged it after all.
+    f.pullMerged = true;
+    f.listed = false;
+    f.mainRef = MERGE;
+    const next = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-next');
+    const settled = (await upkeepMerge(next)) as { decisions: Decision[]; pending: unknown };
+    expect(settled.decisions).toEqual([{ pr: 7, result: 'merged', sha: MERGE, detail: 'merged, deployed and smoke-tested platform and seed-1' }]);
+    expect(settled.pending).toBeNull();
+  });
+
+  it('drops a pending merge whose lost answer GitHub never merged', async () => {
+    const f = mergeFixture();
+    f.mergeReply = 'lost';
+    const t = mergeSetup(f);
+    await finishRun(t.db, t.ctx, await upkeepMerge(t.ctx));
+    const next = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-next');
+    t.db.studio.paused = true;
+    const output = (await upkeepMerge(next)) as { decisions: Decision[]; pending: unknown };
+    expect(output.decisions).toEqual([{ pr: 7, result: 'not_merged', sha: null, detail: 'the merge request was lost and GitHub did not merge the pull request' }]);
+    expect(output.pending).toBeNull();
+    expect(t.calls.some((c) => c.url.startsWith(NETLIFY))).toBe(false);
+  });
+
+  it('keeps a merge pending, and merges nothing else, while it cannot be settled', async () => {
+    const f = mergeFixture();
+    f.mergeReply = 'lost';
+    const t = mergeSetup(f);
+    await finishRun(t.db, t.ctx, await upkeepMerge(t.ctx));
+    const route = t.upkeep.fetchFn!;
+    t.upkeep.fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === `${GITHUB}/pulls/7`) return new Response('{"message":"Server Error"}', { status: 502 });
+      return route(input, init);
+    }) as typeof fetch;
+    const next = mergeContext(t.db, t.upkeep, t.alert, new AbortController(), 'run-next');
+    const output = (await upkeepMerge(next)) as { decisions: Decision[]; pending: unknown; skipped?: string };
+    expect(output.skipped).toBe('merge_pending');
+    expect(output.decisions).toEqual([{ pr: 7, result: 'pending', sha: null, detail: expect.stringMatching(/could not be settled \(github pull request 7: http 502/) }]);
+    expect(output.pending).toMatchObject({ pr: 7, merge_sha: null });
+  });
+
+  it('queues a run at startup for a merge left pending, and tells the board', async () => {
+    const f = mergeFixture();
+    f.mergeReply = 'lost';
+    const t = mergeSetup(f);
+    // The process died before the run finished: fail_running_job_runs keeps the noted output.
+    await upkeepMerge(t.ctx);
+    t.db.lease = { holder: 'dispatcher-b', expiresAt: NOW.getTime() + 60_000 };
+    await t.db.failRunningJobRuns('dispatcher-b', 'dispatcher_restart');
+    const alert = new RecordingAlerter();
+    expect(await queuePendingUpkeep(t.db, alert, silent)).toBe(true);
+    expect(t.db.jobRuns.filter((r) => r.status === 'queued').map((r) => [r.job_name, r.origin])).toEqual([['upkeep_merge', 'event']]);
+    expect(alert.messages).toEqual([expect.stringMatching(/^Upkeep may have merged pull request #7 .* An upkeep_merge run is queued to verify it now\.$/)]);
+    const clean = new FakeDb();
+    expect(await queuePendingUpkeep(clean, alert, silent)).toBe(false);
+    expect(clean.jobRuns).toEqual([]);
   });
 
   it('restores the site and reverts main when the smoke test fails, as a card merge does', async () => {
@@ -492,5 +762,49 @@ describe('the merge policy helpers', () => {
     expect(packageJsonChanges('p', '{"dependencies":{"a":"^1.0.0"}}', '{"dependencies":{"a":"^1.0.1"}}')).toEqual({ ok: true, changes: [{ name: 'a', from: '^1.0.0', to: '^1.0.1' }] });
     expect(packageJsonChanges('p', '{"dependencies":{"a":"^1.0.0"}}', '{"dependencies":{"a":"^1.0.0","b":"1.0.0"}}')).toMatchObject({ ok: false });
     expect(lockfileChanges(lock(['a@1.0.0', '@s/b@2.0.0']), lock(['a@1.0.1', '@s/b@2.0.0']))).toEqual({ ok: true, change: { added: [{ name: 'a', version: '1.0.1' }], changedNames: ['a'] } });
+  });
+
+  it("builds the never list from the lockfile's closure of the dispatcher, dev dependencies and workspace links included, and PGlite's", () => {
+    const text = stringifyYaml({
+      lockfileVersion: '9.0',
+      importers: {
+        'platform/dispatcher': { dependencies: { a: { specifier: '^1.0.0', version: '1.0.0' }, '@backseat/lib': { specifier: 'workspace:*', version: 'link:../lib' } }, devDependencies: { tsx: { specifier: '^4.0.0', version: '4.0.0' } } },
+        'platform/lib': { dependencies: { c: { specifier: '1.0.0', version: '1.0.0' } } },
+        'platform/site': { dependencies: { react: { specifier: '19.0.0', version: '19.0.0' } } },
+      },
+      snapshots: {
+        'a@1.0.0': { dependencies: { b: '2.0.0(peer@1.0.0)', 'string-width-cjs': 'string-width@4.2.3' } },
+        'b@2.0.0(peer@1.0.0)': { optionalDependencies: { fsevents: '2.3.3' } },
+        'string-width@4.2.3': {},
+        'fsevents@2.3.3': {},
+        'c@1.0.0': {},
+        'tsx@4.0.0': { dependencies: { 'get-tsconfig': '4.10.0' } },
+        'get-tsconfig@4.10.0': {},
+        '@electric-sql/pglite@0.3.7': { dependencies: { d: '1.0.0' } },
+        'd@1.0.0': {},
+        'react@19.0.0': {},
+      },
+    });
+    expect([...neverList(text)].sort()).toEqual(
+      ['@backseat/lib', '@electric-sql/pglite', 'a', 'b', 'c', 'd', 'esbuild', 'fsevents', 'get-tsconfig', 'pnpm', 'string-width', 'string-width-cjs', 'tsx', 'vite'].sort(),
+    );
+    expect(() => neverList(stringifyYaml({ lockfileVersion: '9.0', importers: { '.': {} } }))).toThrow(/names no platform\/dispatcher importer/);
+    // The repository's own lockfile: the dispatcher's loader, a package deep in its runtime closure,
+    // and PGlite are in; the site's React is not.
+    const repo = neverList(readFileSync(new URL('../../../pnpm-lock.yaml', import.meta.url), 'utf8'));
+    expect(['tsx', 'esbuild', '@supabase/auth-js', 'fast-deep-equal', '@electric-sql/pglite', 'vite', 'pnpm'].filter((name) => !repo.has(name))).toEqual([]);
+    expect(repo.has('react')).toBe(false);
+  });
+
+  it('runs the schema fingerprint with none of the dispatcher\'s secrets in its environment', async () => {
+    const env = { PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', SUPABASE_SERVICE_ROLE_KEY: 'service', GITHUB_TOKEN: 'gh', NETLIFY_AUTH_TOKEN: 'netlify', STUDIO_ANTHROPIC_API_KEY: 'anthropic' };
+    expect(fingerprintEnv(env)).toEqual({ PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', TSX_DISABLE_CACHE: '1' });
+    let seen: NodeJS.ProcessEnv | null = null;
+    const run = migrationsFingerprintRunner('/code', async (_file, _args, options) => {
+      seen = options.env;
+      return { stdout: 'noise\n{"table:public.cards":"abc"}\n' };
+    }, env);
+    expect(await run()).toEqual({ 'table:public.cards': 'abc' });
+    expect(seen).toEqual({ PATH: '/usr/bin', HOME: '/Users/studio', TMPDIR: '/tmp/x', TSX_DISABLE_CACHE: '1' });
   });
 });

@@ -91,6 +91,8 @@ const UNDEFINED_COLUMN = "42703";
 const PUBLIC_ROLE_COLUMNS = "id,name,title,description,species_note,avatar_url,model,write_access,state,hired_at";
 // Each role's trust class and pause (docs/specs/agent-system-core.md).
 const PUBLIC_ROLE_CLASS_COLUMNS = "agent_class,paused,paused_reason";
+// Whether a role runs as code only, read from jobs (docs/specs/agent-upkeep.md).
+const PUBLIC_ROLE_CODE_COLUMNS = "code_only";
 
 // Each call is refused by the function itself if the grant is wrong: a holder
 // that holds nothing, a ttl of 0, no reason, a card id that does not exist, a
@@ -281,6 +283,11 @@ async function main(): Promise<void> {
     relation: `public_roles(${PUBLIC_ROLE_CLASS_COLUMNS})`,
     expected: "readable",
     ...(await probe(db, "public_roles", PUBLIC_ROLE_CLASS_COLUMNS)),
+  });
+  outcomes.push({
+    relation: `public_roles(${PUBLIC_ROLE_CODE_COLUMNS})`,
+    expected: "readable",
+    ...(await probe(db, "public_roles", PUBLIC_ROLE_CODE_COLUMNS)),
   });
   outcomes.push({
     relation: "public_ledger_totals(overhead_usd)",

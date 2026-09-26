@@ -2453,3 +2453,19 @@ describe("design-review migration", () => {
     expect(script).toContain('const CARD_COLUMNS_WITHHELD = ["actual_usd", "severity", "priority", "review_rounds", "*"];');
   });
 });
+
+// docs/specs/agent-upkeep.md: the findings and their functions are closed to anon, and public_roles'
+// code_only, read from jobs, is readable.
+describe("agent-upkeep migration", () => {
+  it("is probed by anon-negative-test: findings and the four functions refused, public_roles' code_only readable", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const block = (name: string) => {
+      const start = script.indexOf(`const ${name}`);
+      return script.slice(start, script.indexOf("];", start));
+    };
+    expect(block("PRIVATE_TABLES")).toContain('"findings"');
+    for (const name of ["record_finding", "close_finding", "schema_fingerprint", "producer_signals"]) expect(block("RPC_PROBES")).toContain(`["${name}",`);
+    expect(script).toContain('const PUBLIC_ROLE_CODE_COLUMNS = "code_only";');
+    expect(script).toContain("relation: `public_roles(${PUBLIC_ROLE_CODE_COLUMNS})`,");
+  });
+});

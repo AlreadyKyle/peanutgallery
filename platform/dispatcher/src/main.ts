@@ -28,6 +28,7 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
 import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
 import { scanPublicText } from './public-text.js';
@@ -131,11 +132,12 @@ async function main(): Promise<void> {
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
   await failStaleJobRuns(db, leaseHolder, log);
   await startupChecks({ db, adapter, config, log });
-  // The Claude Code pin (cli-pin.ts): every attended session, role jobs included, checks it; a
-  // mismatch here means those sessions pause until the board runs the pin or updates it.
-  const pin = await defaultCliPin(config.codeRoot, config.claudeBin).state();
+  // The Claude Code pin (cli-pin.ts): in attended mode the tick claims no card while the CLI is off
+  // it, and every attended session, role jobs included, checks it again before it starts.
+  const cliPin = defaultCliPin(config.codeRoot, config.claudeBin);
+  const pin = await cliPin.state();
   if (pin.ok) log.info('main', 'claude code is on its pin', { version: pin.version });
-  else log.warn('main', 'claude code is not on its pin; attended sessions pause with cli_version', { installed: pin.installed, pinned: pin.pinned, detail: pin.detail });
+  else log.warn('main', 'claude code is not on its pin; no card is claimed and attended sessions refuse to start', { installed: pin.installed, pinned: pin.pinned, detail: pin.detail });
   const managed = adapter.managed;
   await recoverOrphans({
     db,
@@ -148,6 +150,8 @@ async function main(): Promise<void> {
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
     ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
   });
+  // A dependency merge upkeep_merge left without a verdict is verified by a run queued now.
+  await queuePendingUpkeep(db, alert, log);
   const jobState: JobState = { running: null };
   // The Janitor's two code jobs (docs/specs/agent-upkeep.md).
   const upkeep = upkeepDeps(config, mainGate);
@@ -188,6 +192,8 @@ async function main(): Promise<void> {
     alert,
     runCard: (card: Card) => runCardPipeline(card, pipeline),
     mainGate,
+    // An attended card session runs on this host's Claude Code: nothing is claimed off its pin.
+    ...(adapter.mode === 'attended' ? { cliPin: () => cliPin.state() } : {}),
     jobTick: () =>
       jobTick({
         db,

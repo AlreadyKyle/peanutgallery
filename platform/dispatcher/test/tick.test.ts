@@ -549,6 +549,45 @@ describe('tick', () => {
     expect(started).toEqual([card().id, card().id]);
   });
 
+  // docs/specs/agent-upkeep.md: a claim off the pin would only pause the card with cli_version, one
+  // funded card a tick.
+  it('claims nothing in attended mode while Claude Code is off its pin, alerts once per version, and claims again once it is back on', async () => {
+    const db = new FakeDb();
+    db.cards = [card(), card({ id: 'second' })];
+    const started: string[] = [];
+    const alert = new RecordingAlerter();
+    let pin: import('../src/cli-pin.js').PinState = { ok: false, installed: '2.1.290', pinned: '2.1.283', detail: 'Claude Code 2.1.290 is installed but the pin is 2.1.283.' };
+    const cliPin = async () => pin;
+    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'sleep', reason: 'cli_version' });
+    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'sleep', reason: 'cli_version' });
+    expect(alert.messages).toEqual(['No card is claimed while Claude Code is off its pin, and funded cards keep their money. Claude Code 2.1.290 is installed but the pin is 2.1.283.']);
+    expect(db.claims).toBe(0);
+    expect(db.cards.map((c) => [c.stage, c.failing_check ?? null])).toEqual([
+      ['funded', null],
+      ['funded', null],
+    ]);
+    // A pin that cannot be read counts as off it.
+    const unreadable = async (): Promise<never> => {
+      throw new Error('pin file missing');
+    };
+    expect(await tick(deps(db, started, { alert, cliPin: unreadable }))).toEqual({ action: 'sleep', reason: 'cli_version' });
+    expect(alert.messages.at(-1)).toMatch(/the Claude Code pin could not be checked: pin file missing$/);
+    pin = { ok: true, version: '2.1.283' };
+    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'started', cardId: card().id });
+    expect(started).toEqual([card().id]);
+  });
+
+  it('does not read the pin in unattended mode, where card sessions run on Managed Agents', async () => {
+    const db = new FakeDb();
+    let reads = 0;
+    const cliPin = async () => {
+      reads += 1;
+      return { ok: false as const, installed: null, pinned: null, detail: 'off' };
+    };
+    await tick(deps(db, [], { mode: 'unattended', cliPin }));
+    expect(reads).toBe(0);
+  });
+
   it("claims nothing while main's gate cannot be read, so no session is spent on a card that could not be pushed", async () => {
     const db = new FakeDb();
     db.cards = [card()];

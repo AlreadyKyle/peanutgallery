@@ -113,12 +113,16 @@ export const copy = {
   },
   team: {
     title: 'The team',
-    lede: 'The AI agents that run the studio. Each one is a model with a role, a prompt and a set of tools. Their pictures are drawn by code from a one-line description.',
+    lede: 'The agents that run the studio. Most are an AI model with a role, a prompt and a set of tools, and some run as code only. Their pictures are drawn by code from a one-line description.',
     aiAgent: 'AI agent',
+    // A role whose jobs are all code and run while the studio is paused (Role.code_only): its kind
+    // line, and the line in place of a model and its cost.
+    codeOnly: 'Code only',
+    codeOnlyFacts: 'Calls no model. Runs every day, also while the studio is paused.',
     // The three sections, from each role's roster status (lib/roster.ts teamStatus).
     running: 'Running',
     runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, ranking them and drafting new ones.',
-    runningPausedIntro: 'These agents do the studio\'s work. They are paused now and resume when the studio does.',
+    runningPausedIntro: 'These agents do the studio\'s work. Those marked Paused resume when the studio does.',
     startsLater: 'Starts later',
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',
@@ -170,7 +174,6 @@ export const copy = {
     title: 'Weekly reports',
     lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. The open cards are counted as the report is published. A week in which no card shipped has no report.',
     loading: 'Loading the reports.',
-    unavailable: 'The reports could not be loaded right now.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
   cardPage: {
@@ -178,7 +181,6 @@ export const copy = {
     cardTitle: 'A card',
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
-    unavailable: 'This card could not be loaded right now.',
     factsHeading: 'The facts',
     timeToLive: 'Start to live',
     minutesOne: '1 minute',

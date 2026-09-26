@@ -388,6 +388,17 @@ export class FakeDb implements Db {
     run.reason = reason;
     run.output = output;
   }
+  async noteJobRunOutput(runId: string, output: Record<string, unknown>) {
+    const run = this.jobRuns.find((r) => r.id === runId);
+    if (!run || run.status !== 'running') throw new Error(`db job_runs output: job run ${runId} is not running`);
+    run.output = structuredClone(output);
+  }
+  async latestJobRunOutput(job: string, key: string) {
+    const run = this.jobRuns
+      .filter((r) => r.job_name === job && r.output !== null && Object.hasOwn(r.output, key))
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id < b.id ? 1 : -1))[0];
+    return run ? structuredClone(run.output) : null;
+  }
   async failRunningJobRuns(holder: string, reason: string) {
     if (!this.holdsLease(holder)) throw new Error('db fail_running_job_runs: Only the dispatcher lease holder fails running job runs');
     const running = this.jobRuns.filter((r) => r.status === 'running');

@@ -15,18 +15,27 @@ test.describe('while the studio is paused', () => {
     await page.goto('/team');
     const running = page.getByRole('region', { name: 'Running', exact: true });
     await expect(running.locator(':scope > p.muted').first()).toContainText(AWAITING_CREDIT);
+    await expect(running.locator(':scope > p.muted').first()).toContainText('Those marked Paused resume when the studio does.');
     const rows = running.locator('li.agent');
+    const agents = running.locator('li.agent:not([data-kind="code"])');
     await expect(rows).not.toHaveCount(0);
-    await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(await rows.count());
-    await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(await rows.count());
+    await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(await agents.count());
+    await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(await agents.count());
     await expect(running.locator('svg.avatar[data-pose="awake"]')).toHaveCount(await rows.count());
+    // The code-only Janitor's jobs run through the pause: it stays running, with no Paused tag, and
+    // says it calls no model.
+    const code = running.locator('li.agent[data-kind="code"]');
+    await expect(code).toHaveCount(1);
+    await expect(code).toHaveAttribute('data-status', 'running');
+    await expect(code.locator('.tag')).toHaveCount(0);
+    await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
     // The studio's reason is said once, above the list, not on every row.
     await expect(running.getByText(AWAITING_CREDIT)).toHaveCount(1);
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
       'claude-opus-5-5 · Spent from contributions $1.24, $0.31 in the last 7 days · Worked on 7 shipped cards',
     );
     await expect(page.locator(`#agent-${QA} .card-meta`)).toHaveText('claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 1 shipped card');
-    const models = runningModelsCheck(await running.locator('li.agent .card-meta').allTextContents());
+    const models = runningModelsCheck(await running.locator('li.agent:not([data-kind="code"]) .card-meta').allTextContents());
     expect(models.ok, models.message).toBe(true);
     // Home's team strip draws the same roles, awake.
     await page.goto('/');

@@ -186,6 +186,11 @@ export type Role = {
   /** The board or the moderator has paused the role (docs/specs/agent-system-core.md), with its reason. */
   paused?: boolean;
   paused_reason?: string | null;
+  /**
+   * The role's work is code only (docs/specs/agent-upkeep.md): every job it has calls no model and
+   * runs while the studio is paused, and it builds no card. public_roles reads it from jobs.
+   */
+  code_only?: boolean;
 };
 
 /**
@@ -404,6 +409,7 @@ function roleFrom(row: Doc): Role {
     trigger: textOrNull(row, 'trigger'),
     paused: row.paused === true,
     paused_reason: textOrNull(row, 'paused_reason'),
+    code_only: row.code_only === true,
   };
 }
 

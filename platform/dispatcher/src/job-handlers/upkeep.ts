@@ -7,7 +7,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { defaultCliPin, type PinState } from '../cli-pin.js';
 import type { DispatcherConfig } from '../config.js';
-import type { GateStatus } from '../github.js';
+import { MERGE_STATE_INTERVAL_MS, MERGE_STATE_TIMEOUT_MS, type GateStatus } from '../github.js';
 import type { JobContext } from '../jobs.js';
 import { mergedServedFiles, type MergedFile } from '../smoke.js';
 import { gitAuthEnv } from '../worktree.js';
@@ -20,6 +20,9 @@ export interface UpkeepTimings {
   gateTimeoutMs: number;
   gateIntervalMs: number;
   retryDelayMs: number;
+  // How long a merge request whose answer was lost is read back before it is left pending.
+  mergeStateTimeoutMs: number;
+  mergeStateIntervalMs: number;
 }
 
 export interface UpkeepDeps {
@@ -48,6 +51,8 @@ export const UPKEEP_TIMINGS: UpkeepTimings = {
   gateTimeoutMs: 12 * 60_000,
   gateIntervalMs: 15_000,
   retryDelayMs: 1000,
+  mergeStateTimeoutMs: MERGE_STATE_TIMEOUT_MS,
+  mergeStateIntervalMs: MERGE_STATE_INTERVAL_MS,
 };
 
 export function requireUpkeep(context: JobContext): UpkeepDeps {
@@ -59,14 +64,29 @@ export const EVAL_RESULTS_DIR = path.join('platform', 'agents', 'evals', 'result
 // The migrations on PGlite take seconds; the script gets two minutes.
 export const FINGERPRINT_TIMEOUT_MS = 120_000;
 
+// The fingerprint child's whole environment. It runs kernel migrations on PGlite with no network and
+// reads no secret, so it gets none of the dispatcher's (the service role, GitHub, Netlify and Anthropic
+// keys): PATH to find pnpm and node, HOME and TMPDIR, and tsx's cache off, as the dispatcher's own
+// start sets it (platform/ops/mac/run-dispatcher.sh).
+export function fingerprintEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = { TSX_DISABLE_CACHE: '1' };
+  for (const name of ['PATH', 'HOME', 'TMPDIR'] as const) {
+    if (env[name] !== undefined) out[name] = env[name];
+  }
+  return out;
+}
+
+type ExecFile = (file: string, args: string[], options: { cwd: string; timeout: number; maxBuffer: number; env: NodeJS.ProcessEnv }) => Promise<{ stdout: string }>;
+
 // schema_fingerprint() on PGlite after every migration in the code checkout, from
 // platform/supabase/scripts/schema-fingerprint.ts: in process, with no network, kernel code only.
-export function migrationsFingerprintRunner(codeRoot: string): () => Promise<Record<string, string>> {
+export function migrationsFingerprintRunner(codeRoot: string, exec: ExecFile = execFileAsync, env: NodeJS.ProcessEnv = process.env): () => Promise<Record<string, string>> {
   return async () => {
-    const { stdout } = await execFileAsync('pnpm', ['--silent', '--filter', '@backseat/supabase', 'exec', 'tsx', 'scripts/schema-fingerprint.ts', '--pglite'], {
+    const { stdout } = await exec('pnpm', ['--silent', '--filter', '@backseat/supabase', 'exec', 'tsx', 'scripts/schema-fingerprint.ts', '--pglite'], {
       cwd: codeRoot,
       timeout: FINGERPRINT_TIMEOUT_MS,
       maxBuffer: 16 * 1024 * 1024,
+      env: fingerprintEnv(env),
     });
     const line = stdout.trim().split('\n').at(-1) ?? '';
     const parsed: unknown = JSON.parse(line);

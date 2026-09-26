@@ -173,6 +173,24 @@ describe('Team', () => {
     expect(new Set(poses)).toEqual(new Set(['awake']));
   });
 
+  it('shows a code-only role as code: no AI agent, model or cost, and no Paused tag while the studio is paused', async () => {
+    const janitor = { ...role(['Janitor', false, 'claude-opus-5-5', 'running', null]), code_only: true };
+    renderTeam(sourceOf(snapshot({ roles: [...ROLES.map(role), janitor], paused: true, pauseReason: 'awaiting_credit' })));
+    const running = await screen.findByRole('region', { name: team.running });
+    expect(names(running)).toEqual(['Studio Head', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Janitor']);
+    const code = within(box('Janitor'));
+    expect(code.getByText(team.codeOnly)).toBeTruthy();
+    expect(code.getByText(team.codeOnlyFacts)).toBeTruthy();
+    expect(code.queryByText(team.aiAgent)).toBeNull();
+    expect(code.queryByText(/claude-|Spent from contributions/)).toBeNull();
+    expect(code.queryByText(team.statusPaused)).toBeNull();
+    expect(box('Janitor').getAttribute('data-status')).toBe('running');
+    // The rest are paused, and the intro says only those marked Paused resume with the studio.
+    expect(box('Builder A').getAttribute('data-status')).toBe('paused');
+    expect(within(running).getByText(`${team.runningPausedIntro} ${legal.pauseReasons.awaiting_credit}`)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/They are paused now/);
+  });
+
   it("shows a paused role with its own reason while the rest run, awake", async () => {
     const roles = ROLES.map(role).map((r) => (r.title === 'QA' ? { ...r, paused: true, paused_reason: 'Waiting on a fix to its tools.' } : r));
     renderTeam(sourceOf(snapshot({ roles })));
