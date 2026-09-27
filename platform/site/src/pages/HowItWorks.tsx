@@ -183,9 +183,24 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
  * Then where the money goes, holds and refunds, and the rules;
  * then who runs the studio and what code and the agents each do. Four bands (DESIGN.md, Bands): the
  * heading and the paused notice on the signal plate, the steps and their examples on paper, the money
- * and the rules on ink, and who runs it on paper. Each step stacks its text over its example at every
- * width, so a short text never floats beside a tall card. The all-ages line is in every footer.
+ * and the rules on ink, and who runs it on paper. On a phone each step stacks its text over its
+ * example; from 64rem the text sits beside it (and stays in view while the example scrolls past), and
+ * the text bands set their sections in pairs, so no band leaves its right side empty. The all-ages
+ * line is in every footer.
  */
+function MoneySection({ section, index }: { section: (typeof money.sections)[number]; index: number }) {
+  return (
+    <section className="section" aria-labelledby={`how-more-${index + 1}`}>
+      <h2 id={`how-more-${index + 1}`}>{section.heading}</h2>
+      {section.paragraphs.map((paragraph) => (
+        <p key={paragraph}>
+          <LinkedText text={paragraph} />
+        </p>
+      ))}
+    </section>
+  );
+}
+
 export function HowItWorks() {
   const studio = useStudio();
   const snapshot = studio.state === 'ready' ? studio.snapshot : null;
@@ -201,7 +216,10 @@ export function HowItWorks() {
           <h2 id="how-watch">{legal.explainer.heading}</h2>
           <ExplainerVideo />
         </section>
-        <ol className="how-steps">
+        {/* From 64rem a step's short text sits beside its taller example and stays in view while the
+            example scrolls past; the height difference is the example's own, so the balance audit
+            leaves the rows alone. */}
+        <ol className="how-steps" data-balance="ignore">
           {money.blocks.map((block, index) => (
             <li key={block.heading} className="how-step">
               <div className="how-text">
@@ -216,43 +234,45 @@ export function HowItWorks() {
         </ol>
       </div>
       <div className="band">
-        {money.sections.map((section, index) => (
-          <section key={section.heading} className="section" aria-labelledby={`how-more-${index + 1}`}>
-            <h2 id={`how-more-${index + 1}`}>{section.heading}</h2>
-            {section.paragraphs.map((paragraph) => (
-              <p key={paragraph}>
-                <LinkedText text={paragraph} />
-              </p>
+        <div className="pair how-pair">
+          {money.sections.slice(0, 1).map((section) => (
+            <MoneySection key={section.heading} section={section} index={0} />
+          ))}
+          <div>
+            {money.sections.slice(1).map((section, index) => (
+              <MoneySection key={section.heading} section={section} index={index + 1} />
             ))}
-          </section>
-        ))}
-        <section className="section" aria-labelledby="how-rules">
-          <h2 id="how-rules">{page.rulesHeading}</h2>
-          <div className="prose">
-            <p>{legal.fixedRulesIntro}</p>
-            <ul className="rules">
-              {legal.fixedRules.map((rule) => (
-                <li key={rule}>{rule}</li>
-              ))}
-            </ul>
-            <p>{legal.artPolicy}</p>
+            <section className="section" aria-labelledby="how-rules">
+              <h2 id="how-rules">{page.rulesHeading}</h2>
+              <div className="prose">
+                <p>{legal.fixedRulesIntro}</p>
+                <ul className="rules">
+                  {legal.fixedRules.map((rule) => (
+                    <li key={rule}>{rule}</li>
+                  ))}
+                </ul>
+                <p>{legal.artPolicy}</p>
+              </div>
+            </section>
           </div>
-        </section>
+        </div>
       </div>
       <div className="band">
-        <WhoRuns id="how-who" />
-        <section className="section" aria-labelledby="how-code">
-          <h2 id="how-code">{page.codeHeading}</h2>
-          <div className="prose">
-            <p>{page.codeIntro}</p>
-            <ul className="rules">
-              {page.code.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-            <p>{page.agents}</p>
-          </div>
-        </section>
+        <div className="pair">
+          <WhoRuns id="how-who" />
+          <section className="section" aria-labelledby="how-code">
+            <h2 id="how-code">{page.codeHeading}</h2>
+            <div className="prose">
+              <p>{page.codeIntro}</p>
+              <ul className="rules">
+                {page.code.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p>{page.agents}</p>
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   );
