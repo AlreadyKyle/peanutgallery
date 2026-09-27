@@ -156,10 +156,11 @@ export function CardMoney({
     );
   } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && inFundingOrder(snapshot, card.id)) {
     // The agreement goes with every live link to checkout, so no card layout can draw one without it
-    // (docs/specs/legal-copy.md). A sample or example card links nowhere and carries none.
+    // (docs/specs/legal-copy.md). A sample or example card links nowhere and carries none. The link
+    // covers its whole card (styles.css, The whole card funds), so a press anywhere on it funds.
     action = (
       <>
-        <a className="button button-secondary button-block" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
+        <a className="button button-secondary button-block card-fund" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
           {legal.fundThis}
         </a>
         <p className="muted small">

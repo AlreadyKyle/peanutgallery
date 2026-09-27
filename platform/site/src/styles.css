@@ -707,6 +707,32 @@ button.link:hover:not(:disabled) {
   color: var(--ink);
 }
 
+/* The whole card funds (the board, 27 Sep 2026): on a card with a live Fund this card link, the
+   link's box covers the card, so a press anywhere on it goes to checkout. On hover the card lifts a
+   few pixels straight up, its edge thickens to 3px (an outline, so nothing moves; no shadow, by the
+   colour rules), and its Fund button takes its hover colour. The
+   agreement's links and the brief sit above the cover, so they still work on their own. */
+.card-fund::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+}
+
+.card:has(.card-fund) :is(.brief, .card-bottom p a) {
+  position: relative;
+  z-index: 1;
+}
+
+.card:has(.card-fund):hover {
+  transform: translateY(-4px);
+  outline: 1px solid var(--ink);
+}
+
+.card:has(.card-fund):hover .card-fund {
+  background: var(--outline-hover);
+}
+
 /* Building and Being checked: the pale work face. The ink edge carries it against the page. */
 .card[data-face='building'],
 .card[data-face='checks'] {
@@ -1815,6 +1841,10 @@ input[type='radio'] {
 @media (prefers-reduced-motion: no-preference) {
   .button,
   button {
+    transition: transform var(--dur-quick) var(--ease-out);
+  }
+
+  .card:has(.card-fund) {
     transition: transform var(--dur-quick) var(--ease-out);
   }
 

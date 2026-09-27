@@ -181,3 +181,30 @@ test('build sha meta is stamped', async ({ page }) => {
   const sha = await page.locator('meta[name="build-sha"]').getAttribute('content');
   expect(sha).toMatch(/^[0-9a-f]{7,40}$/);
 });
+
+// The whole card funds (the board, 27 Sep 2026; styles.css): a press anywhere on an open card goes to
+// checkout, and on hover it lifts straight up with a thicker edge while its Fund button takes its
+// hover colour.
+test.describe('an open card on a wide screen', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('lifts on hover and funds from a press anywhere on it', async ({ page }) => {
+    await page.goto('/');
+    const card = page.locator('.fund-grid li.card').first();
+    const fund = card.locator('a.card-fund');
+    const href = await fund.getAttribute('href');
+    expect(href).toMatch(new RegExp(`^${PAYMENT_LINK}`));
+    const before = await fund.evaluate((a) => getComputedStyle(a).backgroundColor);
+    await card.hover({ position: { x: 20, y: 20 } });
+    await expect(card).toHaveCSS('outline-width', '1px');
+    await expect.poll(() => card.evaluate((li) => new DOMMatrix(getComputedStyle(li).transform).m42)).toBe(-4);
+    expect(await fund.evaluate((a) => getComputedStyle(a).backgroundColor)).not.toBe(before);
+    // The title is under the link's cover, so a press on it follows the Fund link.
+    const target = await card.locator('h3').evaluate((h) => {
+      const r = h.getBoundingClientRect();
+      const el = document.elementFromPoint(r.x + 10, r.y + r.height / 2);
+      return el?.closest('a')?.getAttribute('href') ?? null;
+    });
+    expect(target).toBe(href);
+  });
+});

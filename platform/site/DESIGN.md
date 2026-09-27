@@ -160,7 +160,7 @@ Every public page is a stack of full-bleed bands:
 
 ## Components
 
-**The card** (`components/Card.tsx`, `CardFace`). An `li.card` with `data-face`: a white face, 2px ink edge, `--radius-card`, no shadow, natural height (no aspect floor, clamp or `overflow: hidden`).
+**The card** (`components/Card.tsx`, `CardFace`). An `li.card` with `data-face`: a white face, 2px ink edge, `--radius-card`, no shadow, natural height (no aspect floor, clamp or `overflow: hidden`). **The whole card funds** (the board, 27 September 2026): on a card with a live Fund this card link (`a.card-fund`), the link's box covers the card, so a press anywhere on it goes to checkout; the agreement's links and the brief sit above the cover. On hover the card lifts 4px straight up and its edge thickens to 3px (a 1px outline, so nothing moves), and the Fund button takes its hover colour; under reduced motion it moves without a transition **(e2e)**.
 1. The **index row** (small, 600, an 8px gap so the widest pair fits a three-column card): the suit tile and label at the start, the state glyph and word at the end. No pill and no border.
 2. The **title** (`h3`, 20px, 700, balanced).
 3. The **summary** (body), and on a card an agent wrote, the **byline** under it (small, muted): "Written by the <role>, an AI agent", the drafting role's title from the roles already loaded. It appears beside agent-written card text and nowhere else **(tested)**. The two share one block (`.card-text`) in the summary's place, so a card no agent wrote keeps its four parts as they were.
