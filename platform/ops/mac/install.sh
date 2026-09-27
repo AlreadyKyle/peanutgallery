@@ -4,6 +4,8 @@
 # board's own user, never with sudo:
 #   platform/ops/mac/install.sh            # everything but starting the dispatcher
 #   platform/ops/mac/install.sh --start    # the cutover: also starts the dispatcher and waits for its probe
+#   platform/ops/mac/install.sh --jobs-only
+#                                          # before the cutover: only the jobs (docs/specs/jobs-only-install.md)
 #
 # First write the dispatcher's env file with
 #   platform/ops/make-dispatcher-env.sh ~/peanutgallery-host/env/dispatcher.env
@@ -29,12 +31,27 @@
 #    the three jobs. The dispatcher's is left disabled, so a login does not start it before the
 #    cutover. With --start, once /board shows the agent mode unattended, it enables and starts the
 #    dispatcher and waits for this start's `code root is read-only` and `startup probe passed` lines.
+#
+# --jobs-only installs the nightly jobs before the dispatcher's env file can exist (it needs the managed
+# agent's ids, which need Console credit). It needs no env/dispatcher.env, no .env in the code clone,
+# no node_modules and no work clone. After step 1 and 2 it:
+# a. Checks each job's env file (env/backup-mac.env, env/controller.env, env/quota.env) that exists:
+#    the board's, not a symlink, mode 0600, and passing platform/ops/jobs/check-env.mjs. The backup's
+#    must exist; a job whose file is missing is left out and named.
+# b. Writes env/ntfy.url from the exported NTFY_TOPIC_URL, or keeps the one already there.
+# c. Clones code/ from main when it is missing, with the exported GITHUB_READ_TOKEN (Contents read
+#    only), or VPS_GITHUB_TOKEN when that is not exported, both from .env.vps, and records the commit in
+#    state/code-jobs-only. The same refusals as step 4.
+# d. Makes the clone read-only, checks nothing in it is writable and the jobs' folders refuse a new
+#    file, and loads the LaunchAgents of the jobs from (a). The dispatcher's is not written.
+# A plain install.sh then refuses the clone --jobs-only made, which holds main as it was then, until
+# the board moves it aside (platform/ops/README.md, The Mac host), so the cutover clones main afresh.
 set -euo pipefail
 
 # shellcheck source=/dev/null
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-USAGE="usage: platform/ops/mac/install.sh [--start]"
+USAGE="usage: platform/ops/mac/install.sh [--start | --jobs-only]"
 CHANGES=0
 WORK=""
 
@@ -97,20 +114,24 @@ $problems"
 
 # write_ntfy_url: env/ntfy.url, which run-dispatcher.sh and run-job.sh post alerts to.
 write_ntfy_url() {
-  local url file=$ENV_DIR/ntfy.url
-  url=$(sed -n 's/^NTFY_TOPIC_URL=//p' "$HOST_ENV_FILE" | tail -n 1)
+  put_ntfy_url "$(sed -n 's/^NTFY_TOPIC_URL=//p' "$HOST_ENV_FILE" | tail -n 1)"
+}
+
+put_ntfy_url() {
+  local url=$1 file=$ENV_DIR/ntfy.url
   if [ "$(cat "$file" 2> /dev/null || true)" != "$url" ]; then
     (umask 077 && printf '%s\n' "$url" > "$file")
     changed "wrote $file"
   fi
 }
 
-# ensure_code_clone: a fresh clone when there is none; else the checks deploy.sh runs.
+# ensure_code_clone <env file>: a fresh clone, with the file's GITHUB_TOKEN, when there is none; else
+# the checks deploy.sh runs.
 ensure_code_clone() {
   local reason exclude
   if [ ! -d "$CODE_DIR/.git" ]; then
     [ ! -e "$CODE_DIR" ] || die "$CODE_DIR exists and is not a clone; move it aside"
-    clone_main "$HOST_ENV_FILE" "$CODE_DIR" || die "could not clone main into $CODE_DIR with the env file's GITHUB_TOKEN"
+    clone_main "$1" "$CODE_DIR" || die "could not clone main into $CODE_DIR with the GITHUB_TOKEN in $1"
     changed "cloned main into $CODE_DIR at $(code_git rev-parse --short HEAD)"
   fi
   exclude=$CODE_DIR/.git/info/exclude
@@ -149,14 +170,15 @@ ensure_dotenv() {
   check_dotenv || die "the dispatcher's dotenv does not read $CODE_DIR/.env as written"
 }
 
-# ensure_locked: the whole code clone read-only to its owner too, then the read-only check.
+# ensure_locked [check]: the whole code clone read-only to its owner too, then the read-only check:
+# the dispatcher's (check_readonly) by default.
 ensure_locked() {
-  local reason
+  local reason check=${1:-check_readonly}
   if code_writable; then
     lock_code
     changed "made $CODE_DIR read-only (chmod -R a-w)"
   fi
-  if ! reason=$(check_readonly); then die "the code clone is not read-only: $reason"; fi
+  if ! reason=$("$check"); then die "the code clone is not read-only: $reason"; fi
   if ! reason=$(check_clean); then die "the install left the code clone dirty: $reason"; fi
   if ! reason=$(check_code_clone); then die "the install left the code clone unsafe: $reason"; fi
   say "$CODE_DIR is read-only"
@@ -190,9 +212,10 @@ install_agent() {
   return 0
 }
 
+# install_jobs <jobs>: writes and loads each job's LaunchAgent.
 install_jobs() {
   local job label
-  for job in $MAC_JOBS; do
+  for job in $1; do
     label=$(job_label "$job")
     if install_agent "$label" studio.peanutgallery.job.plist "$job" && agent_loaded "$label"; then
       launchctl bootout "$(gui_target)/$label" 2> /dev/null || true
@@ -202,6 +225,138 @@ install_jobs() {
       changed "loaded $label"
     fi
   done
+}
+
+# The folders the jobs run from; with the clone's root, what check_jobs_readonly probes.
+JOB_PATHS="platform/ops platform/ops/mac platform/ops/jobs"
+JOBS_ONLY_MARK=$STATE_DIR/code-jobs-only
+# What --jobs-only installs: the jobs whose env file exists (select_jobs).
+JOBS=""
+
+# job_env_name <job>: the job's name in check-env.mjs and make-jobs-env.sh.
+job_env_name() {
+  case "$1" in
+    backup) echo backup-mac ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# job_env_file <job>: the env file run-job.sh reads for the job.
+job_env_file() { echo "$ENV_DIR/$(job_env_name "$1").env"; }
+
+# check_job_env <job>: the job's env file is the board's, not a symlink, 0600, and passes
+# check-env.mjs from this checkout, as run-job.sh checks it before every run.
+check_job_env() {
+  local file problems
+  file=$(job_env_file "$1")
+  [ ! -L "$file" ] || die "$file is a symlink"
+  [ -f "$file" ] || die "$file is not a file"
+  [ -O "$file" ] || die "$file is not yours"
+  [ -n "$(find "$file" -maxdepth 0 -perm 0600 -print)" ] || die "$file must be 0600"
+  if ! problems=$(env -i PATH="$PATH" node "$OPS_DIR/jobs/check-env.mjs" "$(job_env_name "$1")" "$file"); then
+    die "$file:
+$problems"
+  fi
+  say "$file: valid"
+}
+
+# select_jobs: JOBS, the jobs whose env file exists, each checked. The backup's must exist.
+select_jobs() {
+  local job file
+  JOBS=""
+  for job in $MAC_JOBS; do
+    file=$(job_env_file "$job")
+    if [ -e "$file" ] || [ -L "$file" ]; then
+      check_job_env "$job"
+      JOBS="${JOBS:+$JOBS }$job"
+    elif [ "$job" = backup ]; then
+      die "$file is missing; write it with JOBS_ENV_DIR=$ENV_DIR platform/ops/make-jobs-env.sh backup-mac (platform/ops/README.md, The Mac host)"
+    else
+      say "$file is missing: the $job job is left out"
+    fi
+  done
+}
+
+# write_jobs_ntfy_url: env/ntfy.url from the exported NTFY_TOPIC_URL, or the one already there. A job
+# that fails alerts through it, so one of them must be there.
+write_jobs_ntfy_url() {
+  local url=${NTFY_TOPIC_URL:-}
+  if [ -z "$url" ]; then
+    [ -s "$ENV_DIR/ntfy.url" ] || die "export NTFY_TOPIC_URL from .env.vps: a job that fails alerts through it"
+    return 0
+  fi
+  [[ "$url" =~ ^https://[^[:space:]\"\\]+$ ]] || die "NTFY_TOPIC_URL must be one https address"
+  put_ntfy_url "$url"
+}
+
+# jobs_clone_env: $WORK/clone.env, 0600 in the run's private folder, holding the exported
+# GITHUB_READ_TOKEN, or VPS_GITHUB_TOKEN when that is not exported, as GITHUB_TOKEN for clone_main.
+jobs_clone_env() {
+  local name token=""
+  for name in GITHUB_READ_TOKEN VPS_GITHUB_TOKEN; do
+    token=${!name:-}
+    [ -z "$token" ] || break
+  done
+  [ -n "$token" ] || die "export GITHUB_READ_TOKEN (or VPS_GITHUB_TOKEN) from .env.vps to clone main into $CODE_DIR"
+  [[ "$token" =~ ^github_pat_[A-Za-z0-9_]+$ ]] || die "$name is not a fine-grained personal access token (github_pat_...)"
+  (umask 077 && printf 'GITHUB_TOKEN=%s\n' "$token" > "$WORK/clone.env")
+  say "cloning main with $name"
+}
+
+# check_jobs_readonly: nothing in the code clone is writable, and its root and the jobs' folders
+# refuse a new file. Prints one line per problem and returns 1 when there is any.
+check_jobs_readonly() {
+  local relative folder probe problems=0
+  if code_writable; then
+    echo "a file in $CODE_DIR is writable"
+    problems=1
+  fi
+  for relative in . $JOB_PATHS; do
+    folder=$CODE_DIR/$relative
+    if [ ! -d "$folder" ]; then
+      echo "$relative is missing from the code clone"
+      problems=1
+      continue
+    fi
+    probe="$folder/.install-readonly-check-$$"
+    if (: > "$probe") 2> /dev/null; then
+      rm -f "$probe"
+      echo "$relative accepts a new file"
+      problems=1
+    fi
+  done
+  [ "$problems" = 0 ]
+}
+
+# refuse_jobs_only_clone: a plain install never takes over the clone --jobs-only made, which holds
+# main as it was then: the dispatcher starts from main as the cutover finds it.
+refuse_jobs_only_clone() {
+  [ -f "$JOBS_ONLY_MARK" ] || return 0
+  if [ -d "$CODE_DIR/.git" ] || [ -e "$CODE_DIR" ]; then
+    die "$CODE_DIR was cloned by install.sh --jobs-only at $(head -c 12 "$JOBS_ONLY_MARK"), for the jobs only. Move it aside so this install clones main afresh:
+  chmod -R u+w $CODE_DIR && mv $CODE_DIR $(dirname "$HOST_ROOT")/peanutgallery-code.jobs-only
+then run install.sh again (platform/ops/README.md, The Mac host)"
+  fi
+  rm -f "$JOBS_ONLY_MARK"
+  changed "removed $JOBS_ONLY_MARK: the jobs-only clone was moved aside"
+}
+
+install_jobs_only() {
+  local fresh=0
+  select_jobs
+  write_jobs_ntfy_url
+  if [ ! -d "$CODE_DIR/.git" ]; then
+    fresh=1
+    jobs_clone_env
+  fi
+  ensure_code_clone "$WORK/clone.env"
+  rm -f "$WORK/clone.env"
+  if [ "$fresh" = 1 ]; then
+    code_git rev-parse --verify 'HEAD^{commit}' > "$JOBS_ONLY_MARK"
+  fi
+  ensure_locked check_jobs_readonly
+  install_jobs "$JOBS"
+  say "the dispatcher is not installed: a plain install.sh does that at the cutover (docs/BOARD-SETUP.md step 23)"
 }
 
 # studio_mode: studio_state's agent mode and pause, as the service role reads them.
@@ -249,9 +404,10 @@ install_dispatcher() {
 }
 
 main() {
-  local start=0
+  local start=0 jobs_only=0
   case "${1:-}" in
     --start) start=1 ;;
+    --jobs-only) jobs_only=1 ;;
     '') ;;
     *) die "$USAGE" ;;
   esac
@@ -264,14 +420,20 @@ main() {
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"; if [ -d "$CODE_DIR" ] && code_writable; then lock_code; fi' EXIT
 
+  if [ "$jobs_only" = 1 ]; then
+    install_jobs_only
+    say "done: $CHANGES change(s)"
+    return 0
+  fi
+  refuse_jobs_only_clone
   check_host_env
   write_ntfy_url
-  ensure_code_clone
+  ensure_code_clone "$HOST_ENV_FILE"
   ensure_install
   ensure_dotenv
   ensure_locked
   ensure_work_clone
-  install_jobs
+  install_jobs "$MAC_JOBS"
   install_dispatcher "$start"
   say "done: $CHANGES change(s)"
 }
