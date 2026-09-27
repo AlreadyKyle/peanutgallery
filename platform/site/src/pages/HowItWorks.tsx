@@ -3,6 +3,7 @@ import { CardFace, ShippedRow } from '../components/Cards';
 import { DeployList } from '../components/DeployList';
 import { EventList } from '../components/EventList';
 import { Example } from '../components/Example';
+import { ExplainerVideo } from '../components/ExplainerVideo';
 import { PageHeader } from '../components/PageHeader';
 import { PausedNotice } from '../components/PausedNotice';
 import { PaidExample } from '../components/Funding';
@@ -178,7 +179,8 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
 /**
  * The whole path of a contribution: six steps, each a short text with the real component that shows
  * it under it, in example mode. A visual uses a real public record where one exists and made-up
- * figures, labelled so, where none does. Then where the money goes, holds and refunds, and the rules;
+ * figures, labelled so, where none does; above them, the explainer video walks the same six steps.
+ * Then where the money goes, holds and refunds, and the rules;
  * then who runs the studio and what code and the agents each do. Four bands (DESIGN.md, Bands): the
  * heading and the paused notice on the signal plate, the steps and their examples on paper, the money
  * and the rules on ink, and who runs it on paper. Each step stacks its text over its example at every
@@ -195,6 +197,10 @@ export function HowItWorks() {
         </PageHeader>
       </div>
       <div className="band">
+        <section className="how-watch" aria-labelledby="how-watch">
+          <h2 id="how-watch">{legal.explainer.heading}</h2>
+          <ExplainerVideo id="how-video" />
+        </section>
         <ol className="how-steps">
           {money.blocks.map((block, index) => (
             <li key={block.heading} className="how-step">

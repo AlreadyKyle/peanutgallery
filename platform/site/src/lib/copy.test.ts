@@ -108,6 +108,10 @@ describe('copy rules', () => {
       copy.fullLedger,
       copy.footer,
       legal.allAges,
+      legal.explainer.play,
+      legal.explainer.length,
+      legal.explainer.transcript,
+      ...legal.explainer.beats.flatMap((beat) => [beat.line, ...(beat.step === null ? [] : [beat.step])]),
     ];
     const inside = /\b(default split|the gate|kernel|dispatcher|directive|lane|the pool)\b/i;
     expect(landing.filter((t) => inside.test(t))).toEqual([]);
@@ -160,7 +164,9 @@ describe('launch copy', () => {
 
   it('names the one game that exists and promises no plural of games (docs/specs/copy-pass.md, PG-16)', () => {
     expect(copy.pitchTitle).toBe('Watch AI agents build a game studio and its free game, Dust.');
-    expect(offenders((t) => /free games/i.test(t))).toEqual([]);
+    // The one exception is the explainer video's opening line, the board's own (PLAN.md §10 decision 57).
+    const videoOpener = legal.explainer.beats[0]!.line;
+    expect(offenders((t) => /free games/i.test(t) && t !== videoOpener)).toEqual([]);
     const index = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
     expect(index).not.toMatch(/free games/i);
   });

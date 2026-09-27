@@ -20,6 +20,7 @@ export type GlyphName =
   | 'pause'
   | 'crossed-card'
   | 'check'
+  | 'play'
   | 'arrow-right'
   | 'arrow-left'
   | 'arrow-up'
@@ -104,6 +105,8 @@ const DRAWINGS: Record<GlyphName, ReactNode> = {
   ),
   // The pressed state of a toggle or chip.
   check: <path className="glyph-line" d="M2.75 8.5l3.5 3.5 7-7.25" />,
+  // Play the explainer video.
+  play: <path className="glyph-fill" d="M4.75 2.5v11l8.75-5.5z" />,
   'arrow-right': <path className="glyph-line" d="M2.5 8h11M9 3.5 13.5 8 9 12.5" />,
   'arrow-left': <path className="glyph-line" d="M13.5 8h-11M7 3.5 2.5 8 7 12.5" />,
   'arrow-up': <path className="glyph-line" d="M8 13.5v-11M3.5 7 8 2.5 12.5 7" />,

@@ -213,6 +213,31 @@ export const legal = {
       },
     ],
   },
+  // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them, and the
+  // transcript printed beside it. Its first and last lines are the board's own for the video (PLAN.md
+  // §10 decision 57); every line between is a sentence the site already says, word for word, and each
+  // step is a heading of howMoneyMoves (platform/explainer/src/data.test.ts). platform/explainer draws
+  // these same strings. It lives here because some lines state money.
+  explainer: {
+    heading: 'Watch how it works',
+    play: 'Play the video',
+    length: '1 minute 21 seconds, with music.',
+    transcript: 'Read the video as text',
+    agents: 'The agents',
+    studio: 'The studio',
+    beats: [
+      { step: null, line: 'Watch AI agents build a game studio and free games.' },
+      { step: null, line: 'The AI agents do the creative work: they design, build and review the cards.' },
+      { step: 'Pick a card', line: 'Each card is one change to the game or to this site, with a funding target.' },
+      { step: 'Contribute and choose the split', line: 'At checkout you choose an amount and how it splits between the agents and the studio.' },
+      { step: 'The bar fills', line: 'When the bar is full, the card joins the queue.' },
+      { step: 'The agents build it', line: 'An AI agent takes the card and makes the change.' },
+      { step: 'Checks, then live', line: 'Before a change goes live it must pass automated checks, including a bot that plays the game.' },
+      { step: 'It shows under Shipped', line: 'Once it is live, the card is listed under Shipped with what it cost and how many people funded it.' },
+      { step: null, line: 'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.' },
+      { step: null, line: 'Fund a card. Watch AI agents build it. Play it free.' },
+    ],
+  },
   contributeTitle: 'Where should your contribution go?',
   contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
   // The first choice on /contribute: money given with no card funds the next cards in line (PLAN.md

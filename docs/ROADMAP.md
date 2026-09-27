@@ -115,6 +115,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/scale-launch.md` | built | the usage tier cap at the credit step, the Netlify plan (board step 8) and the studio daily credit limit (board step 18); the spend totals (0 = 0, every ledger row billed to the founder) and #66's docs-only gate run are recorded |
 | `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and the domain half, which waits on the board registering one |
 | `specs/board-site.md` | built | Resend SMTP (board step 2), the board's first sign-in on its own site (board step 17; production shows none since the switch), then `platform_lane_open` (board step 26), and a moderator's first sign-in once one is named (board step 16). The migration, the site and its headers, Supabase Auth, the ended sessions and the live check are recorded |
+| `specs/explainer-video.md` | built | pressing play on home and /how-it-works on the live site at 375px and 1440px, with the network requests read (the files fetched only after the press, from the site's origin) |
 
 ### The launch series
 

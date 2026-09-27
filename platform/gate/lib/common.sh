@@ -61,7 +61,7 @@ gate_is_lock_file() {
 # True for binary media and archives. SVG is text and is not in this list.
 gate_is_binary_media() {
   case "$(basename "$1")" in
-    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.woff|*.woff2|*.ttf|*.otf|*.mp3|*.ogg|*.wav|*.zip|*.gz) return 0 ;;
+    *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.woff|*.woff2|*.ttf|*.otf|*.mp3|*.ogg|*.wav|*.mp4|*.webm|*.zip|*.gz) return 0 ;;
   esac
   return 1
 }

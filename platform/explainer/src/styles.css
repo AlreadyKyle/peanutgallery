@@ -1,0 +1,68 @@
+/* The site's glyph and avatar strokes (platform/site/src/styles.css), so the site's own components
+   draw here exactly as they do on the page. Sizes come from --g. */
+
+html,
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis-style: none;
+}
+
+.glyph {
+  flex: none;
+  width: var(--g, 16px);
+  height: var(--g, 16px);
+}
+
+.glyph-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glyph-fill {
+  fill: currentColor;
+}
+
+.glyph-money {
+  fill: #d9a441;
+}
+
+.avatar-body {
+  fill: var(--avatar-fill);
+  stroke: #111111;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.avatar-line {
+  fill: none;
+  stroke: #111111;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.avatar-thick {
+  stroke-width: 4;
+}
+
+.avatar-thin {
+  stroke-width: 2;
+}
+
+.avatar-eye {
+  fill: #ffffff;
+  stroke: #111111;
+  stroke-width: 2;
+}
+
+.avatar-pupil {
+  fill: #111111;
+}
+
+.avatar-ground {
+  fill: #d6d6d6;
+}

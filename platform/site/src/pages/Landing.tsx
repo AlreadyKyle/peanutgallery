@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BuildingNow, FundBoard, PlannedNext, QueuedList, ShippedList } from '../components/Cards';
 import { EventList } from '../components/EventList';
+import { ExplainerVideo } from '../components/ExplainerVideo';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { LiveUpdates } from '../components/LiveUpdates';
@@ -76,33 +77,39 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
 function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const env = siteEnv();
   return (
-    <div className="hero">
-      <h1>{copy.pitchTitle}</h1>
-      <p className="lede">{copy.pitchBody}</p>
-      <p className="hero-actions">
-        {env.playUrl === '' ? null : (
-          <a className="button" href={env.playUrl}>
-            <Glyph name="cartridge" />
-            {copy.playDust}
-          </a>
+    <div className="hero hero-with-video">
+      <div className="hero-text">
+        <h1>{copy.pitchTitle}</h1>
+        <p className="lede">{copy.pitchBody}</p>
+        <p className="hero-actions">
+          {env.playUrl === '' ? null : (
+            <a className="button" href={env.playUrl}>
+              <Glyph name="cartridge" />
+              {copy.playDust}
+            </a>
+          )}
+          <Link className="target" to="/how-it-works">
+            {copy.howItWorks}
+          </Link>
+        </p>
+      </div>
+      {/* The studio's state: under the pitch on a phone, under the pitch and the video from 64rem. */}
+      <div className="hero-status">
+        <StatusLine studio={studio} view={live.view} />
+        <StaleNotice studio={studio} />
+        {/* With no snapshot to update (the read failed), the row would claim "Up to date" about nothing. */}
+        {live.view === null && studio.state !== 'loading' ? null : (
+          <LiveUpdates
+            count={live.count}
+            paused={live.paused}
+            stale={studio.state === 'ready' && studio.stale}
+            onTogglePause={live.togglePause}
+            onShow={live.show}
+            message={live.message}
+          />
         )}
-        <Link className="target" to="/how-it-works">
-          {copy.howItWorks}
-        </Link>
-      </p>
-      <StatusLine studio={studio} view={live.view} />
-      <StaleNotice studio={studio} />
-      {/* With no snapshot to update (the read failed), the row would claim "Up to date" about nothing. */}
-      {live.view === null && studio.state !== 'loading' ? null : (
-        <LiveUpdates
-          count={live.count}
-          paused={live.paused}
-          stale={studio.state === 'ready' && studio.stale}
-          onTogglePause={live.togglePause}
-          onShow={live.show}
-          message={live.message}
-        />
-      )}
+      </div>
+      <ExplainerVideo id="home-video" />
     </div>
   );
 }
