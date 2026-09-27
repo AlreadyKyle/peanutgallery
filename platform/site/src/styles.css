@@ -1228,7 +1228,7 @@ button.link:hover:not(:disabled) {
    to the reading measure. Stacked at every width, so a short text never floats beside a tall
    example. The visual sits in a dashed frame with its Example label, so it never reads as something
    to act on. */
-/* The explainer video above the six steps, on the steps' measure. */
+/* The explainer video above the six steps: on the steps' measure on a phone, the full width from 64rem. */
 .how-watch {
   max-width: var(--measure);
   margin-bottom: var(--space-5);
@@ -1948,6 +1948,11 @@ input[type='radio'] {
   gap: var(--band-pad) var(--space-4);
 }
 
+/* Sections stacked in one cell of a pair sit a heading's gap apart. */
+.pair > div > .section + .section {
+  margin-top: var(--space-5);
+}
+
 /* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
 .rules-pair {
   row-gap: var(--space-4);
@@ -2006,6 +2011,28 @@ input[type='radio'] {
 
   .example {
     padding: var(--space-3);
+  }
+
+  /* /how-it-works: the video takes the page's width, and each step's text sits beside its example. */
+  .how-watch,
+  .how-steps {
+    max-width: none;
+  }
+
+  .how-step {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    column-gap: var(--space-5);
+    align-items: start;
+  }
+
+  .how-text {
+    position: sticky;
+    top: var(--space-4);
+  }
+
+  /* The money band's pair: the right cell holds two sections, so it takes a little more width. */
+  .pair.how-pair {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   }
 }
 
