@@ -491,6 +491,19 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
   });
 
+  it('sends a card back to funded when the merge is refused because main moved after the guard', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    let reads = 0;
+    const { fetchFn } = remote({
+      main: () => (++reads === 1 ? { status: 200, json: { object: { sha: originSha('refs/heads/main') } } } : { status: 200, json: { object: { sha: 'a-board-merge-0123456789' } } }),
+      merge: { status: 405, json: { message: 'Base branch was modified. Review and try the merge again.' } },
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'main_moved', commit_sha: null });
+    expect(db.events.at(-1)).toMatchObject({ type: 'message', payload: { step: 'requeue', reason: 'main_moved' } });
+  });
+
   it('rejects history, without merging, when GitHub reports a range that differs from the local check', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];

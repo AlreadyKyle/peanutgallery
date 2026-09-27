@@ -44,6 +44,15 @@ describe('GET /api/card/:id', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('answers a malformed percent-escape 400 rather than throwing', async () => {
+    const calls = stubFetch(ok(CARD_BODY));
+    for (const raw of ['%E0', '%', '00000000-0000-4000-8000-00000000000%ZZ']) {
+      const response = await request(`/api/card/${raw}`);
+      expect(response.status, raw).toBe(400);
+    }
+    expect(calls).toHaveLength(0);
+  });
+
   it('answers a query string 400 before any Supabase call, since the CDN would key on it', async () => {
     const calls = stubFetch(ok(CARD_BODY));
     const response = await request(`/api/card/${CARD_ID}?v=1`);

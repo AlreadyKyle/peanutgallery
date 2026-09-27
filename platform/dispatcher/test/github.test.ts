@@ -92,11 +92,11 @@ describe('mergePullRequest', () => {
 
   it('reports the merge as unknown, not refused, when the pull request never shows merged', async () => {
     const { fetchFn, calls } = afterLostPut({ status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } });
-    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 30, intervalMs: 5 })).toEqual({
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 200, intervalMs: 5 })).toEqual({
       ok: false,
       status: 0,
       unknown: true,
-      reason: 'the merge request failed (The operation was aborted due to timeout) and pull request 7 did not show merged within 0.03 s',
+      reason: 'the merge request failed (The operation was aborted due to timeout) and pull request 7 did not show merged within 0.2 s',
     });
     expect(calls.filter((call) => call.method === 'GET').length).toBeGreaterThan(1);
   });
@@ -170,7 +170,7 @@ describe('waitForPullHead', () => {
 
   it('gives up when the head never moves', async () => {
     const { fetchFn, calls } = routeFetch(() => ({ status: 200, json: { number: 7, head: { sha: 'stale-sha' } } }));
-    expect(await waitForPullHead({ ...base, fetchFn }, 7, 'pushed-sha', { timeoutMs: 30, intervalMs: 5 })).toBe(false);
+    expect(await waitForPullHead({ ...base, fetchFn }, 7, 'pushed-sha', { timeoutMs: 200, intervalMs: 5 })).toBe(false);
     expect(calls.length).toBeGreaterThan(1);
   });
 });

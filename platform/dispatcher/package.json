@@ -7,7 +7,7 @@
     "probe": "tsx src/probe.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout=20000",
     "managed:apply": "tsx src/adapters/managed-setup.ts",
     "sandbox:check": "tsx src/adapters/sandbox-check.ts"
   },

@@ -221,11 +221,14 @@ Cloud server is the planned later home, once you open a billing account (see **O
    (the Mac makes a missed night up at its next wake). Add its ping URL to `.env.vps` as
    `BACKUP_HEALTHCHECK_URL=`.
 
-Then I write the host's env files (they print key names only), run `platform/ops/mac/install.sh`
-twice (the second run must print `install: done: 0 change(s)`), and quote the first backup and the
-jobs' first runs. The dispatcher is installed but not started: starting it is the cutover (step 23).
-The backup login's password and `STRIPE_READ_KEY` are production steps I ask your allow for
-(`docs/specs/money-safety.md`); the backup and the Controller wait on them.
+Then, with your allow, I set the backup login's password (a production step,
+`docs/specs/money-safety.md`), write `backup-mac.env` (key names only) and run one backup by hand
+(`platform/ops/mac/backup-mac.sh`), and quote the file it writes to the Drive folder. That backup is
+the one the restore drill (step 19) uses. `install.sh` itself, which installs the nightly jobs and
+the dispatcher under launchd, cannot run yet: the host's env file needs the managed agent's ids, and
+`managed:apply` makes those only once the studio's Anthropic organisation has Console credit
+(step 22). So the install runs at the cutover (step 23), and until then a backup is one I run by hand
+when you ask. The Controller also waits on `STRIPE_READ_KEY` (step 4).
 
 **Tell me:** "the Mac is ready."
 
@@ -582,8 +585,8 @@ supporter-loop pull requests are live, and the launch cards are open to fund.
 
 ### 19. Restore drill (once, about 10 minutes)
 
-Bring the offline backup key (step 3). I decrypt one stored backup taken after the money-logic
-migration is live on your Mac with it, restore it by the runbook (`platform/ops/README.md`, Restore a
+Bring the offline backup key (step 3). I decrypt the backup I ran by hand in step 3 (or a newer one
+I run for the drill) with it, restore it by the runbook (`platform/ops/README.md`, Restore a
 Mac backup, `after-restore.sql` included) and quote the ledger identity and the pg_cron jobs on it.
 Then the key goes back offline and the decrypted copy is deleted.
 
@@ -671,9 +674,10 @@ from here the attended dispatcher is not started while the host runs. The runboo
 7. You: confirm the board's site shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
 8. Me: post a test alert to ntfy from the host. You: confirm it arrived on your phone.
 9. You: **Resume**.
-10. Me: a restart test (`launchctl kickstart -k`), a kill test (the dispatcher killed outright comes
-    back on its own after 30 seconds), and then you log out and back in, or restart and log in: it
-    comes back with no command. Then I stop it and we wait out the grace so healthchecks emails you,
+10. Me: a restart test (`launchctl kickstart -k`), a kill test (the dispatcher killed outright is
+    restarted by launchd after 30 seconds, then waits up to 5 minutes for the dead process's lease to
+    run out before it ticks again, so a healthchecks.io email during this test is expected), and
+    then you log out and back in, or restart and log in: it comes back with no command. Then I stop it and we wait out the grace so healthchecks emails you,
     which proves the alert path. I start it again.
 11. A 24-hour soak with the lid open, no restart loop and no unexpected alert. I quote the results.
 

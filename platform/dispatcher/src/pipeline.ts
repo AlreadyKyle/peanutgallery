@@ -1039,6 +1039,12 @@ async function merge(card: Card, roleId: string, commit: CommitInfo, deps: Pipel
         `Card ${shortId(card.id)}: the merge request for pull request #${commit.prNumber} failed and GitHub did not show it merged (${result.reason}). It is left gated; the dispatcher checks it again when it starts, and nothing was closed.`,
       );
     }
+    // A refusal while main moved (GitHub's 405 "Base branch was modified" when the board merges in the
+    // gap after confirmMergeable) is not the card's fault: it goes back to funded like main_moved.
+    const head = await mainHead(githubOptions(deps)).catch(() => commit.baseSha);
+    if (head !== commit.baseSha) {
+      throw new Requeue(['gated'], 'main_moved', `main moved from ${commit.baseSha.slice(0, 8)} to ${head.slice(0, 8)} as the card merged, and the merge was refused (${result.status}); it goes back to funded to be built on the new main`, false);
+    }
     throw new CardStop('rejected', 'merge', `merge refused (${result.status}): ${result.reason}`);
   }
   deps.log.info('pipeline', `card ${card.id} merged`, { sha: result.sha });
