@@ -22,7 +22,9 @@ const SAVE_INTERVAL_MS = 5000;
 
 const MARGIN = 16;
 const CONTENT_WIDTH = SCREEN_WIDTH - MARGIN * 2;
-const UNIT_ROW_HEIGHT = 58;
+// Tall enough that the Buy button is a 44px touch target on a 375px phone (the canvas scales 375/420).
+const UNIT_ROW_HEIGHT = 64;
+const BUY_BUTTON_HEIGHT = 50;
 const MAX_UNLOCK_LINES = 1 + MAX_UNEARNED_UNLOCK_LINES;
 
 const COLORS = {
@@ -70,6 +72,7 @@ export class DustScene extends Phaser.Scene {
   private unitsTop = 0;
   private unitRows: UnitRow[] = [];
   private unlockListTop = 0;
+  private unlockSection!: Phaser.GameObjects.Container;
   private unlockSlots: UnlockSlot[] = [];
   private drawnUnlockCount = -1;
 
@@ -130,16 +133,16 @@ export class DustScene extends Phaser.Scene {
       const container = this.add.container(0, y);
       const panel = this.add.rectangle(SCREEN_WIDTH / 2, UNIT_ROW_HEIGHT / 2 - 3, CONTENT_WIDTH, UNIT_ROW_HEIGHT - 6, COLORS.panel);
       panel.setStrokeStyle(1, COLORS.panelEdge);
-      const name = this.add.text(MARGIN + 10, 6, row.name, textStyle(16, COLORS.text, 'bold'));
-      const description = this.add.text(MARGIN + 10, 27, strings.unitDescriptions[row.id] ?? '', textStyle(11, COLORS.muted));
-      const owned = this.add.text(MARGIN + 10 + name.width + 8, 9, '', textStyle(12, COLORS.muted));
+      const name = this.add.text(MARGIN + 10, 9, row.name, textStyle(16, COLORS.text, 'bold'));
+      const description = this.add.text(MARGIN + 10, 32, strings.unitDescriptions[row.id] ?? '', textStyle(11, COLORS.muted));
+      const owned = this.add.text(MARGIN + 10 + name.width + 8, 12, '', textStyle(12, COLORS.muted));
       const buttonWidth = 96;
       const buttonX = SCREEN_WIDTH - MARGIN - buttonWidth / 2 - 8;
       const button = this.add
-        .rectangle(buttonX, UNIT_ROW_HEIGHT / 2 - 3, buttonWidth, 38, COLORS.accent)
+        .rectangle(buttonX, UNIT_ROW_HEIGHT / 2 - 3, buttonWidth, BUY_BUTTON_HEIGHT, COLORS.accent)
         .setInteractive({ useHandCursor: true });
       const buttonLabel = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 - 12, strings.labels.buy, textStyle(14, COLORS.dark, 'bold')).setOrigin(0.5);
-      const cost = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 + 4, '', textStyle(11, COLORS.dark)).setOrigin(0.5);
+      const cost = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 + 6, '', textStyle(11, COLORS.dark)).setOrigin(0.5);
       button.on('pointerdown', () => {
         this.state = apply(this.state, config, { type: 'buy', unit: row.id });
         this.refresh();
@@ -152,8 +155,11 @@ export class DustScene extends Phaser.Scene {
   }
 
   private createUnlockList(top: number): void {
-    const { config, strings } = this.data_;
-    this.add.text(MARGIN, top, strings.labels.unlocks, textStyle(14, COLORS.muted));
+    const { strings } = this.data_;
+    // One container, moved up in refresh() so the section sits right under the units shown, with no
+    // gap left for units still locked.
+    this.unlockSection = this.add.container(0, 0);
+    const heading = this.add.text(MARGIN, top, strings.labels.unlocks, textStyle(14, COLORS.muted));
     this.unlockCountText = this.add.text(SCREEN_WIDTH - MARGIN, top, '', textStyle(12, COLORS.muted)).setOrigin(1, 0);
     let y = top + 22;
     this.nextUnlockText = this.add.text(MARGIN, y, '', textStyle(13, COLORS.text));
@@ -162,9 +168,11 @@ export class DustScene extends Phaser.Scene {
     this.progressBar = this.add.graphics();
     y += 14;
     this.unlockListTop = y;
+    this.unlockSection.add([heading, this.unlockCountText, this.nextUnlockText, this.progressBar]);
     for (let i = 0; i < MAX_UNLOCK_LINES; i += 1) {
       const dot = this.add.circle(MARGIN + 6, y + 9, 5, COLORS.bar).setStrokeStyle(1, COLORS.bar);
       const label = this.add.text(MARGIN + 18, y, '', textStyle(12, COLORS.muted));
+      this.unlockSection.add([dot, label]);
       this.unlockSlots.push({ dot, label });
     }
   }
@@ -201,6 +209,7 @@ export class DustScene extends Phaser.Scene {
       row.buttonLabel.setColor(affordable ? COLORS.dark : COLORS.muted);
       row.cost.setColor(affordable ? COLORS.dark : COLORS.muted);
     }
+    this.unlockSection.setY((shown - this.unitRows.length) * UNIT_ROW_HEIGHT);
 
     const total = config.unlocks.unlocks.length;
     this.setText(this.unlockCountText, fill(strings.labels.unlockedCount, { unlocked: String(state.unlocked.length), total: String(total) }));
