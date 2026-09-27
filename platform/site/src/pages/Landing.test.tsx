@@ -362,12 +362,9 @@ describe('Landing', () => {
     const queued = screen.getByRole('region', { name: copy.queued });
     expect(within(queued).getByText('Gatherer costs 11')).toBeTruthy();
     expect(within(queued).queryByRole('progressbar')).toBeNull();
-    // Summaries show; the agent briefs sit in closed disclosures.
-    const briefs = [...document.querySelectorAll('details.brief')] as HTMLDetailsElement[];
-    expect(briefs.map((d) => [d.open, d.querySelector('p')?.textContent])).toEqual([
-      [false, 'Move, jump, land.'],
-      [false, 'Add a second stage.'],
-    ]);
+    // No brief on a card; the agreement is said once, under the fund grid.
+    expect(document.querySelector('details.brief')).toBeNull();
+    expect(within(fund).getAllByText(/By funding you accept/)).toHaveLength(1);
   });
 
   it('filters the fund board by category and shows the studio chip only while it has cards', async () => {

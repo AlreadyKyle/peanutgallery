@@ -112,6 +112,23 @@ export type CardMode = 'live' | 'example' | 'sample';
  * card takes money only while it is in the waterfall's order (public_money.funding_order), so no
  * button shows when the order did not load; a sample card draws its button while canFund says so.
  */
+/** Whether this card draws a live Fund this card link to checkout. */
+export function liveFundLink(card: Card, snapshot: Snapshot, mode: string = 'live'): boolean {
+  return mode === 'live' && siteEnv().stripePaymentLinkUrl !== '' && inFundingOrder(snapshot, card.id);
+}
+
+/**
+ * The agreement that goes with the Fund this card links (docs/specs/legal-copy.md): the Terms, the
+ * Refunds page and the age condition, said once under the cards that carry the links.
+ */
+export function FundAgreement() {
+  return (
+    <p className="muted small fund-agreement">
+      <LinkedText text={legal.fundAgreement} />
+    </p>
+  );
+}
+
 export function CardMoney({
   card,
   snapshot,
@@ -154,19 +171,14 @@ export function CardMoney({
         {legal.fundThis}
       </button>
     );
-  } else if (mode === 'live' && env.stripePaymentLinkUrl !== '' && inFundingOrder(snapshot, card.id)) {
-    // The agreement goes with every live link to checkout, so no card layout can draw one without it
-    // (docs/specs/legal-copy.md). A sample or example card links nowhere and carries none. The link
-    // covers its whole card (styles.css, The whole card funds), so a press anywhere on it funds.
+  } else if (liveFundLink(card, snapshot, mode)) {
+    // A sample or example card links nowhere. The link covers its whole card (styles.css, The whole
+    // card funds), so a press anywhere on it funds. The agreement is said once beside the cards
+    // (FundAgreement), not on every card (the board, 27 Sep 2026).
     action = (
-      <>
-        <a className="button button-secondary button-block card-fund" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
-          {legal.fundThis}
-        </a>
-        <p className="muted small">
-          <LinkedText text={legal.fundAgreement} />
-        </p>
-      </>
+      <a className="button button-secondary button-block card-fund" href={fundLink(env.stripePaymentLinkUrl, card.id)} aria-describedby={titleId}>
+        {legal.fundThis}
+      </a>
     );
   }
   return (

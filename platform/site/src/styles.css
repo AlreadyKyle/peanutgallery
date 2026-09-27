@@ -710,18 +710,12 @@ button.link:hover:not(:disabled) {
 /* The whole card funds (the board, 27 Sep 2026): on a card with a live Fund this card link, the
    link's box covers the card, so a press anywhere on it goes to checkout. On hover the card lifts a
    few pixels straight up, its edge thickens to 3px (an outline, so nothing moves; no shadow, by the
-   colour rules), and its Fund button takes its hover colour. The
-   agreement's links and the brief sit above the cover, so they still work on their own. */
+   colour rules), and its Fund button takes its hover colour. */
 .card-fund::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: var(--radius-card);
-}
-
-.card:has(.card-fund) :is(.brief, .card-bottom p a) {
-  position: relative;
-  z-index: 1;
 }
 
 .card:has(.card-fund):hover {
@@ -1032,33 +1026,10 @@ button.link:hover:not(:disabled) {
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
    one line of layout, so the card's bottom space matches its top. */
-.brief {
-  margin-top: var(--space-2);
-}
-
-.brief summary {
-  /* Padding, not flex, so the disclosure triangle stays: a 44px target around one line. */
-  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
-  margin-block: calc(-1 * max(0px, calc((var(--target) - 1lh) / 2)));
-  width: fit-content;
-  color: var(--text-muted);
-  font-size: var(--size-small);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-/* The same room as a closed brief, on a card that has none. */
-.brief-slot {
-  height: 1lh;
-  margin-top: var(--space-2);
-  font-size: var(--size-small);
-}
-
-.brief p {
-  margin: var(--space-2) 0 0;
-  padding-left: var(--space-2);
-  border-left: 2px solid var(--hairline);
+/* The one agreement line under a grid of cards with Fund this card links. */
+.fund-agreement {
+  max-width: var(--measure);
+  margin-top: var(--space-3);
 }
 
 /* Rows: body text, hairlines between them, a constant 0.5rem inset (room for the change marker).
