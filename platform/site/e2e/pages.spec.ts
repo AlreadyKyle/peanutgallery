@@ -55,6 +55,7 @@ for (const viewport of WIDTHS) {
       await onlyOneH1(page, 'How it works');
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 2 })).toHaveText([
+        'Watch how it works',
         /Pick a card$/,
         /Contribute and choose the split$/,
         /The bar fills$/,

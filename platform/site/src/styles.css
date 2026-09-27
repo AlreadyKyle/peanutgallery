@@ -1243,6 +1243,16 @@ button.link:hover:not(:disabled) {
    to the reading measure. Stacked at every width, so a short text never floats beside a tall
    example. The visual sits in a dashed frame with its Example label, so it never reads as something
    to act on. */
+/* The explainer video above the six steps, on the steps' measure. */
+.how-watch {
+  max-width: var(--measure);
+  margin-bottom: var(--space-5);
+}
+
+.how-watch h2 {
+  margin-bottom: var(--space-2);
+}
+
 .how-steps {
   display: grid;
   gap: var(--space-5);
@@ -1290,6 +1300,112 @@ button.link:hover:not(:disabled) {
 .example .rows,
 .example .stats {
   margin: 0;
+}
+
+/* The explainer video (ExplainerVideo.tsx, docs/specs/explainer-video.md): a still poster that is
+   the play button, then the video with its own controls. The frame holds the cut's shape before
+   anything loads (16:9, or 4:5 below 48rem), so pressing play moves nothing. Its hairline edge reads
+   on paper and on the plate by role. */
+.explainer {
+  margin: 0;
+}
+
+.explainer-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  background: var(--ink);
+}
+
+.explainer-frame video,
+.explainer-poster,
+.explainer-poster img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.explainer-frame video {
+  object-fit: cover;
+}
+
+.explainer-poster {
+  cursor: pointer;
+}
+
+.explainer-poster img {
+  object-fit: cover;
+}
+
+/* The play label sits on the poster's black plate at every width, so it keeps its own colours. It
+   takes the top-left corner, which the poster leaves empty in both cuts (the mark and the closing
+   line are centred). */
+.explainer-play {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-strong);
+  cursor: pointer;
+}
+
+.explainer-poster:hover .explainer-play,
+.explainer-play:active {
+  background: var(--paper-hover);
+}
+
+.explainer-caption {
+  margin-top: var(--space-2);
+  font-size: var(--size-small);
+}
+
+.explainer-caption p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.explainer-transcript summary {
+  color: var(--text-muted);
+  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
+  width: fit-content;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.explainer-transcript ol {
+  max-width: var(--measure);
+  margin: var(--space-1) 0 0;
+  padding-left: 1.4em;
+  font-size: var(--size-body);
+}
+
+.explainer-transcript li + li {
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 47.99rem) {
+  .explainer-frame {
+    aspect-ratio: 4 / 5;
+  }
+
+  .explainer-play {
+    left: var(--space-2);
+    top: var(--space-2);
+  }
 }
 
 /* The worked example's order after its figures: where the agent credit goes, numbered like the
@@ -1811,6 +1927,41 @@ input[type='radio'] {
 
 /* Play Dust and the How it works link, side by side, clear of the lede above and the status line
    below. */
+/* Home's hero holds the pitch, the studio's state and the explainer video. Below 64rem they stack in
+   that order. From 64rem the pitch and the video sit side by side, where the pitch alone left the
+   plate's right half empty, and the state runs under both, so the two columns balance. */
+.hero-with-video {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.hero.hero-with-video .status-line {
+  margin-top: 0;
+}
+
+@media (min-width: 64rem) {
+  .hero-with-video {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'text video'
+      'status status';
+    align-items: center;
+    column-gap: var(--space-5);
+  }
+
+  .hero-with-video > .hero-text {
+    grid-area: text;
+  }
+
+  .hero-with-video > .explainer {
+    grid-area: video;
+  }
+
+  .hero-with-video > .hero-status {
+    grid-area: status;
+  }
+}
+
 .hero-actions {
   margin-top: var(--space-4);
   display: flex;

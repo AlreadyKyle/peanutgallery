@@ -54,6 +54,9 @@ export const TIERS = {
     'platform/board/index.html',
     'platform/board/src/Board.test.tsx',
     'platform/board/src/Board.tsx',
+    // The explainer video's social cuts show the site's address on their closing plate
+    // (docs/specs/explainer-video.md); re-render them after a domain change.
+    'platform/explainer/src/data.ts',
     // The Discord posts' username and the site origin they link to (docs/specs/studio-reports.md).
     'platform/dispatcher/src/config.ts',
     'platform/dispatcher/src/discord.ts',
@@ -83,6 +86,7 @@ export const TIERS = {
     'seed-1/index.html',
   ],
   2: [
+    'KYLE_SETUP.md',
     'docs/BOARD-SETUP.md',
     'platform/dispatcher/src/alert.ts',
     'platform/dispatcher/test/attended.test.ts',

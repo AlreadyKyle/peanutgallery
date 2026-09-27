@@ -239,6 +239,7 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 Only `transform` and `opacity` move. Every `transition` and `animation` lives inside `@media (prefers-reduced-motion: no-preference)`, uses the duration and easing tokens, and never runs forever; there are no `@keyframes`, view transitions, `@starting-style` or `linear()` **(tested)**. Static transforms (the Live stamp's −3°, the bar's fill position) are geometry and allowed anywhere. `lib/motion.ts` plays each moment with the Web Animations API and, under reduced motion (anything but no-preference), applies the end state at once, so `document.getAnimations()` stays empty **(tested, e2e)**.
 
+- **The explainer video** (`ExplainerVideo.tsx`, docs/specs/explainer-video.md) answers a press: a still poster until the viewer presses it, no autoplay, nothing fetched before the press, then the browser's own controls. Its frame holds the cut's shape (16:9, or 4:5 below 48rem), so pressing moves nothing.
 - **Fund tick** (`funded_usd` rose on a card on screen): the fill moves from old to new over `--dur-move`, `--ease-out`; the spec rows swap at once.
 - **Flip in place** (a card on screen reaches its target): rotateY 0 to 90° in 200ms `--ease-in`, the face swaps, 90 to 0° in 200ms. Same slot and height **(e2e)**.
 - **Deal** (only when the viewer presses Show updates): new cards from translateY(−12px) rotate(−3°) and opacity 0, over `--dur-move`, `--stagger` apart.

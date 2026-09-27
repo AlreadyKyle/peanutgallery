@@ -373,6 +373,10 @@ for name in icon.svg app.js.map app.min.js app.min.css; do
 done
 printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/icon.png"
 expect "secrets: binary media is skipped" 0 '^PASS: secret-scan files=0$' -- bash "$SECRETS" "$T/served/icon.png"
+for name in explainer.mp4 explainer.webm; do
+  printf 'token=%s\n' "ghp""_$BODY24" > "$T/served/$name"
+  expect "secrets: video $name is skipped as binary media" 0 '^PASS: secret-scan files=0$' -- bash "$SECRETS" "$T/served/$name"
+done
 rm -rf "$T/served"
 git -C "$C" init -q && git -C "$C" add -A && git -C "$C" commit -q -m "clean"
 expect "secrets: tracked scan of a clean repository passes" 0 '^PASS: secret-scan files=1$' -- bash "$SECRETS" --repo-root "$C" --tracked

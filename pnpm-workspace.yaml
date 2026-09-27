@@ -2,6 +2,7 @@ packages:
   - platform/site
   - platform/board
   - platform/dispatcher
+  - platform/explainer
   - platform/gate
   - platform/supabase
   - seed-1

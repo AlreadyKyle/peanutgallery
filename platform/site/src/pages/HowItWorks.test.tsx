@@ -88,6 +88,7 @@ describe('How it works', () => {
     renderPage(null);
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([page.title]);
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      legal.explainer.heading,
       ...money.blocks.map((block) => block.heading),
       ...money.sections.map((section) => section.heading),
       page.rulesHeading,
