@@ -233,7 +233,7 @@ install_dispatcher() {
   mode=$(studio_mode) || die "could not read studio_state with the service key in $ENV_FILE"
   case "$mode" in
     "unattended "*) ;;
-    *) die "studio_state.agent_mode is not unattended; set it at /board first (the cutover, docs/BOARD-SETUP.md step 8)" ;;
+    *) die "studio_state.agent_mode is not unattended; set it at /board first (the cutover, docs/BOARD-SETUP.md step 23)" ;;
   esac
   if agent_loaded "$label"; then
     launchctl bootout "$(gui_target)/$label" || die "launchctl could not stop $label"

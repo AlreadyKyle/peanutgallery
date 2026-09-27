@@ -106,7 +106,8 @@ export default async function cardFunction(req: Request): Promise<Response> {
   if (match === null) return refuse(404, 'Not found');
   if (req.method !== 'GET') return refuse(405, 'Only GET is allowed', { Allow: 'GET' });
   if (url.search !== '') return refuse(400, 'No query string is allowed');
-  return card(decodeURIComponent(match[1]!));
+  // A uuid never needs percent-decoding, and decoding a malformed escape such as %E0 would throw.
+  return card(match[1]!);
 }
 
 /** Netlify's in-code function config, typed here so the site takes no @netlify/functions dependency. */

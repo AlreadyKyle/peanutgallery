@@ -402,7 +402,7 @@ Each job's first line must read `PASS:`, and the backup must end `backup: done: 
 
 ### The cutover on the Mac
 
-`docs/BOARD-SETUP.md` step 8. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not be started while the host runs (it would wait on the lease, and its attended mode would disagree with /board's).
+`docs/BOARD-SETUP.md` step 23. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not be started while the host runs (it would wait on the lease, and its attended mode would disagree with /board's).
 
 1. **Pause** from /board.
 2. **Stop the attended dispatcher** (Ctrl-C in its terminal) and confirm no `dispatcher` process is left: `pgrep -fl 'src/main.ts'` prints nothing.

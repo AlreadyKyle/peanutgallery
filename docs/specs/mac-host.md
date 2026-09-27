@@ -53,7 +53,7 @@ Out: the Google Cloud move (a backlog entry, waiting on the board's billing acco
 - [x] Every script passes `bash -n` and shellcheck, is executable in git, and every git call turns hooks and fsmonitor off.
 - [ ] The board's preparation (step 3) done, and `install.sh` run twice on the Mac with the second run at `0 change(s)` (waits on: the board's step 3 and the env files).
 - [ ] The Controller's dry run, the quota check and the first backup PASS on the Mac, with the backup file in the Drive folder (waits on: `STRIPE_READ_KEY`, the backup login's password, the age key and the backup check).
-- [ ] The cutover: `PASS: toolchain`, `install.sh --start` quoting `code root is read-only` and `startup probe passed`, the heartbeat, the ntfy test on the board's phone (waits on: Console credit and board step 8).
+- [ ] The cutover: `PASS: toolchain`, `install.sh --start` quoting `code root is read-only` and `startup probe passed`, the heartbeat, the ntfy test on the board's phone (waits on: Console credit and board step 23).
 - [ ] The restart, kill and login checks, the liveness alert email, and a 24-hour soak with no restart loop (waits on: the cutover).
 - [ ] The restore drill of a Mac backup: `holds` prints `true` and matches `identity.json` (waits on: the first backup and the board with the offline key).
 
@@ -71,7 +71,7 @@ Out: the Google Cloud move (a backlog entry, waiting on the board's billing acco
 
 1. After the board's step 3: write `env/dispatcher.env` with `make-dispatcher-env.sh` and the jobs' with `JOBS_ENV_DIR=~/peanutgallery-host/env make-jobs-env.sh backup-mac controller quota`, then `install.sh` twice. Quote both outputs.
 2. The Controller's dry run (after the board is told what it reads), `run-job.sh quota --now` and `run-job.sh backup --now`. Quote each.
-3. The cutover, board step 8, as the runbook's The cutover on the Mac lists it. Quote each line it names.
+3. The cutover, board step 23, as the runbook's The cutover on the Mac lists it. Quote each line it names.
 
 ## Evidence
 
