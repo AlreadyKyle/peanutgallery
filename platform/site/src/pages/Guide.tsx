@@ -282,6 +282,10 @@ function Controls() {
         {copy.fullLedger}
       </Link>
       <ContributeLink />
+      <button type="button" className="button button-secondary" aria-pressed="true">
+        <Glyph name="check" />
+        {guide.pressedGlyph}
+      </button>
       <Link to="/how-it-works">{copy.howItWorks}</Link>
     </div>
   );
@@ -354,6 +358,11 @@ function SignalBand() {
             <h3>{guide.focusHeading}</h3>
             <p className="caption">{guide.focusIntro}</p>
             <PoolLine />
+            <h3>{guide.markHeading}</h3>
+            <p className="cluster">
+              <MachineMark />
+            </p>
+            <p className="caption">{guide.markNote}</p>
           </div>
           <div className="demo">
             <h3>{guide.statusHeading}</h3>
@@ -371,11 +380,6 @@ function SignalBand() {
             <p className="caption">
               {guide.rowsIntro} {guide.inkRowsNote} <Sample />
             </p>
-            <h3>{guide.markHeading}</h3>
-            <p className="cluster">
-              <MachineMark />
-            </p>
-            <p className="caption">{guide.markNote}</p>
           </div>
         </div>
       </section>
