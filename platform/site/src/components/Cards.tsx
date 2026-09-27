@@ -176,14 +176,15 @@ export function ShippedRow({ card, snapshot, example = false }: { card: Card; sn
           <SuitTag suit={categoryOf(card)} />
           <StateTag face="live" />
           <span className="card-meta">{shippedMeta(card, snapshot, sourceLabel(card.source))}</span>
+          {/* The Watch link ends the meta line, so a shipped row is two lines, like a planned one. */}
+          {example ? null : (
+            <span className="row-link">
+              <Link to={`/card/${card.id}`} aria-describedby={`shipped-title-${card.id}`}>
+                {copy.cardPage.watchWasBuilt}
+              </Link>
+            </span>
+          )}
         </p>
-        {example ? null : (
-          <p className="row-link">
-            <Link to={`/card/${card.id}`} aria-describedby={`shipped-title-${card.id}`}>
-              {copy.cardPage.watchWasBuilt}
-            </Link>
-          </p>
-        )}
       </div>
     </li>
   );
