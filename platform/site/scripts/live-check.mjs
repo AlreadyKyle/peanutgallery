@@ -442,7 +442,7 @@ try {
     // The studio and next game chips show only while they have cards (none at launch).
     const filters = page.getByRole('group', { name: 'Show cards for' });
     const chips = (await filters.getByRole('button').allTextContents()).map((text) => text.replace(/\s*\d+$/, ''));
-    check(chips[0] === 'All' && chips[1] === 'Dust', `category chips ${JSON.stringify(chips)}`);
+    check(chips[0] === 'All' && chips[1] === 'The games', `category chips ${JSON.stringify(chips)}`);
     for (const label of [...chips.slice(1), 'All']) {
       await filters.getByRole('button', { name: new RegExp(`^${label}`) }).click();
       const bars = await main.getByRole('progressbar').count();
