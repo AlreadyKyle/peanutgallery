@@ -290,7 +290,7 @@ describe('horizons', () => {
 });
 
 describe('visibleFilters', () => {
-  it('always shows All and Dust, and The studio only while it has cards', () => {
+  it('always shows All and The games, and The studio only while it has cards', () => {
     expect(visibleFilters([card({ folder: 'seed-1' })])).toEqual(['all', 'game']);
     expect(visibleFilters([])).toEqual(['all', 'game']);
     expect(visibleFilters([card({ folder: 'platform' })])).toEqual(['all', 'game', 'studio']);

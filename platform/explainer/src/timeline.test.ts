@@ -35,10 +35,4 @@ describe('the timeline', () => {
       }
     }
   });
-
-  it('matches the length the site states beside the video', () => {
-    const seconds = Math.round(DURATION / FPS);
-    const said = `${Math.floor(seconds / 60)} minute ${seconds % 60} seconds, with music.`;
-    expect(legal.explainer.length).toBe(said);
-  });
 });

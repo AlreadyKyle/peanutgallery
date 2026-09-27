@@ -199,7 +199,7 @@ export function HowItWorks() {
       <div className="band">
         <section className="how-watch" aria-labelledby="how-watch">
           <h2 id="how-watch">{legal.explainer.heading}</h2>
-          <ExplainerVideo id="how-video" />
+          <ExplainerVideo />
         </section>
         <ol className="how-steps">
           {money.blocks.map((block, index) => (

@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  announcementText,
-  changesHeight,
-  diffSnapshots,
-  LONGEST_UPDATES_LABEL,
-  MAX_MOTIONS_PER_POLL,
-  shouldAnnounceCount,
-  updatesLabel,
-} from './changes';
+import { announcementText, diffSnapshots, MAX_MOTIONS_PER_POLL } from './changes';
 import { books } from './books.test-fixture';
 import { copy } from './copy';
 import type { Card, Snapshot } from './source';
@@ -115,49 +107,5 @@ describe('diffSnapshots', () => {
     const diff = diffSnapshots(snap([card('a', { funded_usd: 1 })]), snap([card('a', { funded_usd: 2 })]), { hidden: true });
     expect(diff.motions).toEqual([]);
     expect(diff.still).toEqual([{ kind: 'fund', id: 'a', from: 1, to: 2 }]);
-  });
-});
-
-describe('the updates button', () => {
-  it('reads Up to date, then Show n updates, capped at 99+', () => {
-    expect(updatesLabel(0)).toBe(copy.upToDate);
-    expect(updatesLabel(1)).toBe(copy.showOneUpdate);
-    expect(updatesLabel(3)).toBe('Show 3 updates');
-    expect(updatesLabel(120)).toBe('Show 99+ updates');
-    expect(LONGEST_UPDATES_LABEL).toBe('Show 99+ updates');
-    for (const n of [0, 1, 7, 99, 100]) expect(updatesLabel(n).length).toBeLessThanOrEqual(LONGEST_UPDATES_LABEL.length);
-  });
-
-  it('announces the waiting count only from none to some, at most once a minute', () => {
-    expect(shouldAnnounceCount(0, 2, null, 1_000)).toBe(true);
-    expect(shouldAnnounceCount(2, 3, 1_000, 2_000)).toBe(false);
-    expect(shouldAnnounceCount(0, 0, null, 1_000)).toBe(false);
-    expect(shouldAnnounceCount(0, 1, 1_000, 30_000)).toBe(false);
-    expect(shouldAnnounceCount(0, 1, 1_000, 61_000)).toBe(true);
-  });
-});
-
-describe('the height rule', () => {
-  /** An element whose height is one 20px line per 10 characters of its text, as a browser would wrap it. */
-  function wrapping(text: string): HTMLElement {
-    const el = document.createElement('dd');
-    el.textContent = text;
-    el.getBoundingClientRect = () => ({ height: Math.ceil((el.textContent ?? '').length / 10) * 20 }) as DOMRect;
-    document.body.appendChild(el);
-    return el;
-  }
-
-  it('holds a change that would wrap onto another line, and lets one that fits through', () => {
-    const el = wrapping('$9.50 of $10.00');
-    expect(changesHeight(el, '$9.75 of $10.00')).toBe(false);
-    expect(changesHeight(el, '$1,234.56 of $2,000.00')).toBe(true);
-  });
-
-  it('puts the text back in the same task and keeps the text node React owns', () => {
-    const el = wrapping('$9.50 of $10.00');
-    const node = el.firstChild;
-    changesHeight(el, '$1,234.56 of $2,000.00');
-    expect(el.textContent).toBe('$9.50 of $10.00');
-    expect(el.firstChild).toBe(node);
   });
 });

@@ -30,7 +30,7 @@ Nothing goes to r/gamedev (PLAN.md §7 Channels). Press comes fourth in PLAN.md 
 
 Every claim is the live site's own wording or a fact in the repository:
 
-- The pitch: "Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next." (`platform/site/src/lib/copy.ts` pitchTitle and pitchBody, PLAN.md §2).
+- The pitch: "Watch AI agents build a game studio and free games. Fund the card you want built next." (`platform/site/src/lib/copy.ts` pitchTitle and pitchBody, PLAN.md §2).
 - How a card is funded, built, checked and rolled back: /how-it-works (`copy.ts` howItWorksPage, `legal.ts` howMoneyMoves).
 - The split: "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio." (`legal.ts` fixedRules).
 - All ages, the art line, the ledger and the read rule: `legal.ts` allAges, artPolicy and fixedRules.

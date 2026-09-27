@@ -1,19 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SpecRow } from '../components/Funding';
-import { announcementText, changesHeight, diffSnapshots, MAX_MOTIONS_PER_POLL } from './changes';
-import { faceOf, groupCards, fundingPlace, plannedCards, type CardGroups } from './cards';
-import { formatInteger, formatUsd, percent } from './format';
+import { announcementText, diffSnapshots, MAX_MOTIONS_PER_POLL } from './changes';
+import { faceOf, groupCards, fundingPlace, type CardGroups } from './cards';
+import { percent } from './format';
 import { deal, flip, fundTick } from './motion';
-import { teamStrip } from './roster';
 import type { Card, CardFunding, Snapshot } from './source';
 import type { StudioState } from './studio';
 
-// Home's live view (DESIGN.md, Live updates). The page is drawn from the snapshot it first loaded,
-// frozen: no card is inserted, removed or reordered while the page is open, and nor is any other part
-// that would move what a viewer might tap. Two changes show in place, on a card already in the Fund
-// what's next grid: its bar rises (the fund tick) and it reaches its target (the flip to Funded),
-// each only when its spec rows keep their height. Everything else waits behind "Show n updates",
-// which redraws the page from the newest snapshot.
+// Home's live view (DESIGN.md, Live updates). Each new snapshot is drawn as it arrives; there is no
+// button to press and nothing to pause. A card already in the Fund what's next grid shows its change
+// with motion: its bar rises (the fund tick) or it turns to Funded (the flip). A card that arrives is
+// dealt in. Everything else simply redraws.
 
 /** What home draws: the frozen layout's groups, with the card data shown in place. */
 export type HomeView = { snapshot: Snapshot; groups: CardGroups };
@@ -93,74 +90,31 @@ export function applyChanges(display: Snapshot, changes: readonly InPlace[]): Sn
   return { ...display, cards: display.cards.map((card) => byId.get(card.id)?.card ?? card), funding };
 }
 
-function firstRunning(snapshot: Snapshot): string {
-  return teamStrip(snapshot)
-    .map((role) => `${role.id}:${role.name}:${role.description ?? ''}`)
-    .join('|');
-}
-
-function plannedTitles(snapshot: Snapshot): string {
-  const planned = plannedCards(snapshot.cards);
-  return [...planned.next, ...planned.later]
-    .slice(0, 3)
-    .map((card) => `${card.id}:${card.title}`)
-    .join('|');
-}
-
-/**
- * How many updates wait behind "Show n updates": each card that would arrive, leave, move or change
- * and is not shown in place yet, plus each other part of home that changed (the status line and the
- * pause, the pool, the agent actions, the team strip, what is planned next).
- */
-export function pendingCount(base: Snapshot, display: Snapshot, latest: Snapshot): number {
-  const ids = new Set(diffSnapshots(base, latest, { hidden: false }).held.map((item) => item.id));
-  const nextById = new Map(latest.cards.map((card) => [card.id, card]));
-  for (const card of display.cards) {
-    const next = nextById.get(card.id);
-    if (next === undefined) continue;
-    if (!sameCard(card, next) || contributorsOf(display, card.id) !== contributorsOf(latest, card.id)) ids.add(card.id);
-  }
-  const others = [
-    base.paused !== latest.paused || base.missing.includes('studio') !== latest.missing.includes('studio'),
-    (base.pool?.balance_usd ?? null) !== (latest.pool?.balance_usd ?? null),
-    base.events.slice(0, 5).map((event) => event.id).join() !== latest.events.slice(0, 5).map((event) => event.id).join(),
-    firstRunning(base) !== firstRunning(latest),
-    plannedTitles(base) !== plannedTitles(latest),
-  ].filter(Boolean).length;
-  return ids.size + others;
-}
-
-/** A spec row's value as SpecRows draws it. */
-function rowText(change: InPlace, row: SpecRow): string {
-  if (row === 'funded') return `${formatUsd(change.card.funded_usd)} of ${formatUsd(change.card.funding_target_usd)}`;
-  return formatInteger(change.funding?.contributors ?? 0);
-}
-
 function cardElement(id: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`.fund-grid li.card[data-card="${CSS.escape(id)}"]`);
 }
 
-/**
- * The height rule: a change shows in place only when none of its spec rows would change height. A
- * row that is not drawn yet (the contributors row appearing) always would, so it waits.
- */
-function keepsHeight(change: InPlace): boolean {
-  const card = cardElement(change.id);
-  if (card === null) return true;
-  return change.rows.every((row) => {
-    const value = card.querySelector<HTMLElement>(`[data-row="${row}"] dd`);
-    return value !== null && !changesHeight(value, rowText(change, row));
-  });
+/** `latest`, with the flipping cards still drawn as `shown` until their flip turns them. */
+function holdFlips(latest: Snapshot, shown: Snapshot, flips: readonly InPlace[]): Snapshot {
+  if (flips.length === 0) return latest;
+  const ids = new Set(flips.map((change) => change.id));
+  const shownById = new Map(shown.cards.map((card) => [card.id, card]));
+  const funding = { ...latest.funding };
+  for (const id of ids) {
+    const was = shown.funding[id];
+    if (was === undefined) delete funding[id];
+    else funding[id] = was;
+  }
+  return { ...latest, cards: latest.cards.map((card) => (ids.has(card.id) ? shownById.get(card.id) ?? card : card)), funding };
 }
 
 /**
- * Home's live view of the studio: the frozen view, the waiting count, the Pause toggle, Show updates,
- * the spec rows that changed since the last poll and the announcer's words.
+ * Home's live view of the studio: the newest snapshot, the spec rows that changed since the last
+ * poll and the announcer's words.
  */
 export function useLiveHome(studio: StudioState) {
   const latest = studio.state === 'ready' ? studio.snapshot : null;
   const [view, setView] = useState<{ base: Snapshot; display: Snapshot } | null>(null);
-  const [paused, setPaused] = useState(false);
   const [changed, setChanged] = useState<Record<string, SpecRow[]>>({});
   const [message, setMessage] = useState('');
   const viewRef = useRef(view);
@@ -187,14 +141,12 @@ export function useLiveHome(studio: StudioState) {
       setView({ base: latest, display: latest });
       return;
     }
-    if (paused) return;
-    const accepted = inPlaceChanges(current.base, current.display, latest).filter(keepsHeight);
-    setChanged(Object.fromEntries(accepted.filter((change) => change.rows.length > 0).map((change) => [change.id, change.rows])));
-    if (accepted.length === 0) return;
+    if (current.base === latest) return;
+    const inPlace = inPlaceChanges(current.base, current.display, latest);
+    setChanged(Object.fromEntries(inPlace.filter((change) => change.rows.length > 0).map((change) => [change.id, change.rows])));
     const hidden = document.visibilityState === 'hidden';
-    const moving = hidden ? [] : accepted.filter((change) => change.motion !== null).slice(0, MAX_MOTIONS_PER_POLL);
+    const moving = hidden ? [] : inPlace.filter((change) => change.motion !== null).slice(0, MAX_MOTIONS_PER_POLL);
     const flips = moving.filter((change) => change.motion === 'flip');
-    const now = accepted.filter((change) => !flips.includes(change));
     ticks.current = moving
       .filter((change) => change.motion === 'fund')
       .map((change) => {
@@ -205,14 +157,19 @@ export function useLiveHome(studio: StudioState) {
           to: percent(change.card.funded_usd, change.card.funding_target_usd),
         };
       });
-    setView({ base: current.base, display: applyChanges(current.display, now) });
+    dealIds.current = hidden
+      ? []
+      : diffSnapshots(current.base, latest, { hidden: false })
+          .held.filter((item) => item.kind === 'enter')
+          .map((item) => item.id);
+    setView({ base: latest, display: holdFlips(latest, current.display, flips) });
     for (const change of flips) {
       void flip(cardElement(change.id), () =>
         setView((was) => (was === null ? was : { base: was.base, display: applyChanges(was.display, [change]) })),
       );
     }
-    // `latest` changes identity on each load; the pause flag re-runs the in-place pass on resume.
-  }, [latest, paused]);
+    // `latest` changes identity on each load.
+  }, [latest]);
 
   useLayoutEffect(() => {
     for (const tick of ticks.current) fundTick(cardElement(tick.id)?.querySelector<HTMLElement>('.funding-bar-fill') ?? null, tick.from, tick.to);
@@ -223,23 +180,8 @@ export function useLiveHome(studio: StudioState) {
     }
   }, [view]);
 
-  const show = useCallback(() => {
-    const current = viewRef.current;
-    if (current === null || latest === null) return;
-    dealIds.current = diffSnapshots(current.base, latest, { hidden: false })
-      .held.filter((item) => item.kind === 'enter')
-      .map((item) => item.id);
-    setChanged({});
-    setView({ base: latest, display: latest });
-  }, [latest]);
-
-  const count = view === null || latest === null ? 0 : pendingCount(view.base, view.display, latest);
   return {
     view: view === null ? null : viewOf(view.base, view.display),
-    count,
-    paused,
-    togglePause: () => setPaused((was) => !was),
-    show,
     changed,
     message,
   };

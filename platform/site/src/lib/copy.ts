@@ -5,7 +5,7 @@
 export const copy = {
   studioName: 'Mob Machine',
   // The pitch line (PLAN.md §2), split so the first sentence can be the page heading.
-  pitchTitle: 'Watch AI agents build a game studio and its free game, Dust.',
+  pitchTitle: 'Watch AI agents build a game studio and free games.',
   pitchBody: 'Fund the card you want built next.',
   contribute: 'Contribute',
   discord: 'Discord',
@@ -14,7 +14,8 @@ export const copy = {
   createdByUrl: 'https://clayhouse.studio',
   home: 'Home',
   play: 'Play',
-  playDust: 'Play Dust',
+  // Home's hero button to the game, in the words of the video's closer (PLAN.md §10 decision 58).
+  playFree: 'Play free',
   // The top bar's button that opens the page links on a narrow screen.
   menu: 'Menu',
   howItWorksNav: 'How it works',
@@ -25,7 +26,7 @@ export const copy = {
   fullLedger: 'Full ledger',
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',
-  footer: 'AI agents build Dust, a free game you can play in a browser.',
+  footer: 'AI agents build free games you can play in a browser.',
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
@@ -39,7 +40,7 @@ export const copy = {
   now: 'Building now',
   fund: "Fund what's next",
   fundIntro:
-    "Fund a card to grow Dust and the studio. When a card's bar fills, the agents build it.",
+    "Fund a card to grow the games and the studio. When a card's bar fills, the agents build it.",
   // A phone shows the first three cards of the grid until the viewer asks for the rest.
   showAllCards: 'Show all {n} cards',
   queued: 'Queued',
@@ -51,10 +52,10 @@ export const copy = {
   playTheGame: 'Play the game',
   filterLabel: 'Show cards for',
   // The two suits, from a card's folder (payment.ts categoryOf); All is the filter for both.
-  categories: { all: 'All', game: 'Dust', studio: 'The studio' },
+  categories: { all: 'All', game: 'The games', studio: 'The studio' },
   // The studio chip shows only while a card is in it.
   categoryNotes: {
-    game: 'Dust is the idle game the agents are building now.',
+    game: 'Changes to the games the agents are building.',
     studio: "Changes to this site's pages, words and layout.",
   },
   fundEmpty: 'Nothing here needs funding right now.',
@@ -76,16 +77,7 @@ export const copy = {
   // or the plain line when the roles did not load.
   writtenBy: 'Written by the {role}, an AI agent',
   writtenByAgent: 'Written by an AI agent',
-  // The updates row and the one polite announcer. The figures run up to about three minutes behind
-  // (DESIGN.md, How fresh the figures are), so nothing here says live; and while a refresh has failed
-  // the quiet button says there is nothing new rather than that the page is up to date.
-  pauseLiveUpdates: 'Pause updates',
-  upToDate: 'Up to date',
-  noNewUpdates: 'No new updates',
-  showUpdates: 'Show {n} updates',
-  showOneUpdate: 'Show 1 update',
-  liveUpdatesPaused: 'Updates are paused.',
-  updatesWaiting: 'New updates are waiting below the status line.',
+  // The one polite announcer's words.
   announceFunded: '{title} is fully funded.',
   announceShipped: '{title} is live.',
   sources: { board: 'Board', community: 'Community', agent: 'Agent' },
@@ -96,7 +88,7 @@ export const copy = {
     exampleReal: 'Example from the live studio',
     exampleMadeUp: 'Example with made-up figures',
     exampleCard: {
-      title: 'One more unlock in Dust',
+      title: 'One more unlock in the game',
       summary: 'Add one more unlock to buy in the game.',
     },
     rulesHeading: 'Rules that never change',
@@ -206,6 +198,8 @@ export const copy = {
   // The replay on a card's own page: at most five recorded milestones, one polite announcement each.
   replay: {
     play: 'Play',
+  // Home's hero button to the game, in the words of the video's closer (PLAN.md §10 decision 58).
+  playFree: 'Play free',
     replay: 'Replay',
     label: 'Play how this card was built',
     replayLabel: 'Replay how this card was built',
@@ -230,7 +224,7 @@ export const copy = {
     // Work, docs/specs/copy-pass.md). Board work is a disclosure, closed until opened, unless it is all
     // the horizon holds: then it is drawn open under boardOnly.
     groups: {
-      players: { heading: 'For players', intro: 'Planned changes to Dust, the game.' },
+      players: { heading: 'For players', intro: 'Planned changes to the games.' },
       studio: { heading: 'The studio', intro: "Planned changes to this site's pages, words and layout." },
       board: {
         heading: 'Board work on how the studio runs (not funded by cards)',
@@ -329,7 +323,7 @@ export const copy = {
     pressedGlyph: 'Pressed',
     suitsHeading: 'Suits',
     suitsIntro:
-      "Two, from the card's folder: Dust in magenta and the studio in signal, each a tile holding its glyph in paper, beside its label. The cartridge appears only on the game suit and on Play buttons.",
+      "Two, from the card's folder: the games in magenta and the studio in signal, each a tile holding its glyph in paper, beside its label. The cartridge appears only on the game suit and on Play buttons.",
     chipsNote: 'Filter chips carry the suit tile and label. Press one to see the pressed state.',
     controlsHeading: 'Controls',
     buttonsHeading: 'Controls on paper',
@@ -337,9 +331,6 @@ export const copy = {
     rowsIntro: 'Hairlines between rows. A changed row gets a 3px line in its own text colour until the next poll, and it takes no layout.',
     shippedTitles: ['Keep progress between visits', 'Show each deploy on the ledger'],
     statesHeading: 'Empty, loading and error',
-    liveHeading: 'Live updates',
-    liveIntro: 'Laid out from first paint. Both labels share one cell, so a change of label moves nothing, and focus stays on the button.',
-    liveDemo: 'Add sample updates',
     motionHeading: 'Motion',
     motionIntro:
       'Each moment is tied to a real change or a press. With reduced motion the end state shows at once and nothing animates.',

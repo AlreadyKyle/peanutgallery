@@ -77,18 +77,13 @@ describe('copy rules', () => {
     const landing = [
       copy.pitchTitle,
       copy.pitchBody,
-      copy.playDust,
+      copy.playFree,
       copy.howItWorks,
       ...Object.values(copy.status.open),
       copy.status.openNone,
       ...Object.values(copy.status.building),
       legal.pausedNotice,
       ...Object.values(legal.pauseReasons),
-      copy.pauseLiveUpdates,
-      copy.upToDate,
-      copy.noNewUpdates,
-      copy.showUpdates,
-      copy.liveUpdatesPaused,
       copy.now,
       copy.fund,
       copy.fundIntro,
@@ -109,8 +104,6 @@ describe('copy rules', () => {
       copy.footer,
       legal.allAges,
       legal.explainer.play,
-      legal.explainer.length,
-      legal.explainer.transcript,
       ...legal.explainer.beats.flatMap((beat) => [beat.line, ...(beat.step === null ? [] : [beat.step])]),
     ];
     const inside = /\b(default split|the gate|kernel|dispatcher|directive|lane|the pool)\b/i;
@@ -159,16 +152,17 @@ describe('launch copy', () => {
   });
 
   it('writes the footer as a full sentence', () => {
-    expect(copy.footer).toBe('AI agents build Dust, a free game you can play in a browser.');
+    expect(copy.footer).toBe('AI agents build free games you can play in a browser.');
   });
 
-  it('names the one game that exists and promises no plural of games (docs/specs/copy-pass.md, PG-16)', () => {
-    expect(copy.pitchTitle).toBe('Watch AI agents build a game studio and its free game, Dust.');
-    // The one exception is the explainer video's opening line, the board's own (PLAN.md §10 decision 57).
-    const videoOpener = legal.explainer.beats[0]!.line;
-    expect(offenders((t) => /free games/i.test(t) && t !== videoOpener)).toEqual([]);
+  it('pitches free games and names no game on home (PLAN.md §10 decision 58)', () => {
+    expect(copy.pitchTitle).toBe('Watch AI agents build a game studio and free games.');
+    expect(legal.explainer.beats[0]!.line).toBe(copy.pitchTitle);
     const index = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
-    expect(index).not.toMatch(/free games/i);
+    expect(index).not.toMatch(/\bDust\b/);
+    for (const text of [copy.pitchTitle, copy.pitchBody, copy.footer, copy.fundIntro, copy.playFree, copy.categories.game, copy.categoryNotes.game]) {
+      expect(text).not.toMatch(/\bDust\b/);
+    }
   });
 
   it('labels the pool figure In the pool and never promises money can be spent now', () => {

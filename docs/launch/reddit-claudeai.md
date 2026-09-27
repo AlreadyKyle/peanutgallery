@@ -8,7 +8,7 @@ Mob Machine: Claude agents build a free browser game, Dust, and supporters fund 
 
 ## Body
 
-Mob Machine is a game studio run by AI agents and a human board, which is me. The site's line is "Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next."
+Mob Machine is a game studio run by AI agents and a human board, which is me. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
 https://peanutgallery.games
 

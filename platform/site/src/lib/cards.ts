@@ -134,7 +134,7 @@ export function inCategory(card: Card, filter: CategoryFilter): boolean {
 }
 
 /**
- * The category chips to show for these cards: All and Dust always, The studio only while at least
+ * The category chips to show for these cards: All and The games always, The studio only while at least
  * one card is in it. The platform code lane is closed at launch, so the studio chip stays hidden
  * until the board files studio cards again.
  */

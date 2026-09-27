@@ -727,7 +727,7 @@ so they sound like you, put the clip's link in each, and post them in the order 
   review. The gate's `frames` job runs only on GitHub Actions, so it waits on Actions minutes (see
   **GitHub Actions minutes**); the local gate cannot run it.
 - **The copy pass (nothing to do now).** The copy-pass pull request (`docs/specs/copy-pass.md`)
-  changes the pitch to "Watch AI agents build a game studio and its free game, Dust.", names you on
+  changed the pitch to name Dust; §10 decision 58 has since replaced it with "Watch AI agents build a game studio and free games.", names you on
   /how-it-works and at the foot of /team as the human board with your standing duties, and marks
   every `docs/BACKLOG.md` entry `board: yes` or `board: no`. Every entry today is board work (each
   lands in kernel paths), so each /roadmap band shows them open under "Board work on how the studio

@@ -4,7 +4,6 @@ import { CardFace } from '../components/Card';
 import { FilterChip, ShippedRow } from '../components/Cards';
 import { CoinMark, FundingBar, type SpecRow } from '../components/Funding';
 import { Glyph, STATE_TAGS, SuitTag, type GlyphName } from '../components/Glyph';
-import { LiveUpdates } from '../components/LiveUpdates';
 import { MachineMark } from '../components/Mark';
 import { PageHeader } from '../components/PageHeader';
 import { TeamStrip } from '../components/TeamStrip';
@@ -235,12 +234,12 @@ function Colour() {
 
 // ---------------------------------------------------------------- the controls, on any ground
 
-function PlayDust() {
+function PlayGame() {
   const env = siteEnv();
   const inner = (
     <>
       <Glyph name="cartridge" />
-      {copy.playDust}
+      {copy.playFree}
     </>
   );
   return env.playUrl === '' ? (
@@ -278,36 +277,13 @@ function PoolLine() {
 function Controls() {
   return (
     <div className="cluster">
-      <PlayDust />
+      <PlayGame />
       <Link className="button button-secondary" to="/ledger">
         {copy.fullLedger}
       </Link>
       <ContributeLink />
-      <button type="button" className="button button-secondary" aria-pressed="true">
-        <Glyph name="check" />
-        {copy.pauseLiveUpdates}
-      </button>
-      <button type="button" className="button button-quiet" aria-disabled="true">
-        {copy.upToDate}
-      </button>
       <Link to="/how-it-works">{copy.howItWorks}</Link>
     </div>
-  );
-}
-
-function LiveUpdatesDemo() {
-  const [count, setCount] = useState(0);
-  const [paused, setPaused] = useState(false);
-  return (
-    <>
-      <LiveUpdates count={count} paused={paused} onTogglePause={() => setPaused((p) => !p)} onShow={() => setCount(0)} />
-      <p className="cluster">
-        <button type="button" className="button button-secondary" onClick={() => setCount((n) => n + 3)}>
-          {guide.liveDemo}
-        </button>
-        <Sample />
-      </p>
-    </>
   );
 }
 
@@ -377,9 +353,6 @@ function SignalBand() {
             </p>
             <h3>{guide.focusHeading}</h3>
             <p className="caption">{guide.focusIntro}</p>
-            <h3>{guide.liveHeading}</h3>
-            <LiveUpdatesDemo />
-            <p className="caption">{guide.liveIntro}</p>
             <PoolLine />
           </div>
           <div className="demo">

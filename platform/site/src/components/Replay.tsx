@@ -5,7 +5,7 @@ import { copy } from '../lib/copy';
 import { deal, flip, fundTick, motionAllowed, slam } from '../lib/motion';
 import type { Snapshot } from '../lib/source';
 import { CardFace } from './Card';
-import { Announcer } from './LiveUpdates';
+import { Announcer } from './Announcer';
 import { Glyph } from './Glyph';
 import { stopReason } from './Stopped';
 
