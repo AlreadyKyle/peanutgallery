@@ -64,7 +64,7 @@ const ALL_RULES = [...rules(tokens), ...rules(styles)];
 
 // Tokens that alias a colour for a role (the studio suit is the signal) are colours too; the role
 // tokens (--primary-bg and the rest) name no colour of their own.
-const ROLES = ['--text-muted', '--hairline', '--focus-colour', '--primary-bg', '--primary-fg', '--primary-hover', '--primary-press', '--outline-bg', '--outline-fg', '--outline-hover', '--outline-press', '--coin-hover', '--quiet-fg', '--quiet-edge', '--suit-tile-game', '--suit-tile-studio', '--live-mark'];
+const ROLES = ['--text-muted', '--hairline', '--focus-colour', '--primary-bg', '--primary-fg', '--primary-hover', '--primary-press', '--outline-bg', '--outline-fg', '--outline-hover', '--outline-press', '--coin-hover', '--suit-tile-game', '--suit-tile-studio', '--live-mark'];
 
 // Colour vision (Machado 2009 at severity 1.0 on linear sRGB), then CIE76 delta-E in CIELAB (D65).
 const CVD_MODES = ['normal', 'protan', 'deutan', 'tritan'] as const;
@@ -402,7 +402,6 @@ describe('bands', () => {
     expect(signal).toMatch(/--text-muted:\s*var\(--muted-on-signal\)/);
     expect(signal).toMatch(/--hairline:\s*var\(--line-on-signal\)/);
     expect(signal).toMatch(/--coin-hover:\s*var\(--coin-up\)/);
-    expect(signal).toMatch(/--quiet-edge:\s*var\(--muted-on-signal\)/);
     expect(ink).toMatch(/--text-muted:\s*var\(--muted-on-ink\)/);
     expect(ink).toMatch(/--hairline:\s*var\(--line-on-ink\)/);
     expect(ink).not.toMatch(/--coin-hover/);

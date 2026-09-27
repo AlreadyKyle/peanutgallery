@@ -4,7 +4,7 @@ import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
-import { LiveUpdates } from '../components/LiveUpdates';
+import { Announcer } from '../components/Announcer';
 import { pausedSentence } from '../components/PausedNotice';
 import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
@@ -85,7 +85,7 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
           {env.playUrl === '' ? null : (
             <a className="button" href={env.playUrl}>
               <Glyph name="cartridge" />
-              {copy.playDust}
+              {copy.playFree}
             </a>
           )}
           <Link className="target" to="/how-it-works">
@@ -97,19 +97,9 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
       <div className="hero-status">
         <StatusLine studio={studio} view={live.view} />
         <StaleNotice studio={studio} />
-        {/* With no snapshot to update (the read failed), the row would claim "Up to date" about nothing. */}
-        {live.view === null && studio.state !== 'loading' ? null : (
-          <LiveUpdates
-            count={live.count}
-            paused={live.paused}
-            stale={studio.state === 'ready' && studio.stale}
-            onTogglePause={live.togglePause}
-            onShow={live.show}
-            message={live.message}
-          />
-        )}
+        <Announcer message={live.message} />
       </div>
-      <ExplainerVideo id="home-video" />
+      <ExplainerVideo />
     </div>
   );
 }

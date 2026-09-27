@@ -213,16 +213,13 @@ export const legal = {
       },
     ],
   },
-  // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them, and the
-  // transcript printed beside it. Its first and last lines are the board's own for the video (PLAN.md
+  // The explainer video (docs/specs/explainer-video.md): its words in the order it shows them. Its first and last lines are the board's own for the video (PLAN.md
   // §10 decision 57); every line between is a sentence the site already says, word for word, and each
   // step is a heading of howMoneyMoves (platform/explainer/src/data.test.ts). platform/explainer draws
   // these same strings. It lives here because some lines state money.
   explainer: {
     heading: 'Watch how it works',
     play: 'Play the video',
-    length: '1 minute 21 seconds, with music.',
-    transcript: 'Read the video as text',
     agents: 'The agents',
     studio: 'The studio',
     beats: [

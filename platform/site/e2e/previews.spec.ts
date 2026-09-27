@@ -6,7 +6,7 @@ test('the page carries link preview tags and serves the 1200x630 preview image',
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content',
-    'Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next.',
+    'Watch AI agents build a game studio and free games. Fund the card you want built next.',
   );
   const response = await request.get('/og.png');
   expect(response.status()).toBe(200);

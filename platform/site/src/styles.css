@@ -309,8 +309,6 @@ main > .band:nth-child(2n + 3),
   --outline-fg: var(--paper);
   --outline-hover: var(--ink-hover);
   --outline-press: var(--ink-hover);
-  --quiet-fg: var(--muted-on-ink);
-  --quiet-edge: var(--field);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -332,8 +330,6 @@ main > .band:first-child,
   --outline-hover: var(--signal-deep);
   --outline-press: var(--signal-press);
   --coin-hover: var(--coin-up);
-  --quiet-fg: var(--muted-on-signal);
-  --quiet-edge: var(--muted-on-signal);
   --suit-tile-game: transparent;
   --suit-tile-studio: transparent;
   --live-mark: currentColor;
@@ -599,16 +595,6 @@ button.button-secondary:active:not(:disabled) {
 .button.btn-coin:hover,
 .button.btn-coin:active {
   background: var(--coin-hover);
-}
-
-/* The quiet state: a button with nothing to do yet ("Up to date"). It keeps focus. */
-.button.button-quiet,
-.button.button-quiet:hover,
-.button.button-quiet:active {
-  border-color: var(--quiet-edge);
-  background: transparent;
-  color: var(--quiet-fg);
-  cursor: default;
 }
 
 /* Pressed (aria-pressed): a 3px border in the text colour plus the check glyph, in every mode. The
@@ -1212,33 +1198,6 @@ button.link:hover:not(:disabled) {
   font-weight: var(--weight-strong);
 }
 
-/* The live-updates row: Pause first, then the updates button, laid out from first paint. */
-.live-updates {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* Both labels share one cell; the longest possible one holds the width, hidden. */
-.label-stack {
-  display: inline-grid;
-}
-
-.label-stack > * {
-  grid-area: 1 / 1;
-}
-
-.label-stack > [aria-hidden='true'] {
-  visibility: hidden;
-}
-
-.live-updates-note {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--size-small);
-}
-
 /* How it works: six steps, each a short text with the real component that shows it under it, held
    to the reading measure. Stacked at every width, so a short text never floats beside a tall
    example. The visual sits in a dashed frame with its Example label, so it never reads as something
@@ -1321,7 +1280,8 @@ button.link:hover:not(:disabled) {
 
 .explainer-frame video,
 .explainer-poster,
-.explainer-poster img {
+.explainer-poster img,
+.explainer-poster .explainer-loop {
   position: absolute;
   inset: 0;
   display: block;
@@ -1341,22 +1301,22 @@ button.link:hover:not(:disabled) {
   object-fit: cover;
 }
 
-/* The play label sits on the poster's black plate at every width, so it keeps its own colours. It
-   takes the top-left corner, which the poster leaves empty in both cuts (the mark and the closing
-   line are centred). */
+/* The play label: an ink pill with a paper edge, so it reads on the loop's white scene and on the
+   still's black plate alike. It takes the bottom-left corner, which the loop's scene and the still
+   both leave empty. */
 .explainer-play {
   position: absolute;
   left: var(--space-3);
-  top: var(--space-3);
+  bottom: var(--space-3);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   min-height: var(--target);
   padding: 0 var(--space-2);
-  border: 0;
+  border: 2px solid var(--paper);
   border-radius: var(--radius);
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
   font: inherit;
   font-weight: var(--weight-strong);
   cursor: pointer;
@@ -1364,37 +1324,7 @@ button.link:hover:not(:disabled) {
 
 .explainer-poster:hover .explainer-play,
 .explainer-play:active {
-  background: var(--paper-hover);
-}
-
-.explainer-caption {
-  margin-top: var(--space-2);
-  font-size: var(--size-small);
-}
-
-.explainer-caption p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.explainer-transcript summary {
-  color: var(--text-muted);
-  padding-block: max(0px, calc((var(--target) - 1lh) / 2));
-  width: fit-content;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  cursor: pointer;
-}
-
-.explainer-transcript ol {
-  max-width: var(--measure);
-  margin: var(--space-1) 0 0;
-  padding-left: 1.4em;
-  font-size: var(--size-body);
-}
-
-.explainer-transcript li + li {
-  margin-top: var(--space-1);
+  background: var(--ink-hover);
 }
 
 @media (max-width: 47.99rem) {
@@ -1404,7 +1334,7 @@ button.link:hover:not(:disabled) {
 
   .explainer-play {
     left: var(--space-2);
-    top: var(--space-2);
+    bottom: var(--space-2);
   }
 }
 
@@ -1892,10 +1822,6 @@ input[type='radio'] {
   button:active:not(:disabled) {
     transform: scale(0.97);
   }
-
-  .button.button-quiet:active {
-    transform: none;
-  }
 }
 
 /* Forced colours -------------------------------------------------------------
@@ -1925,7 +1851,7 @@ input[type='radio'] {
 
 /* Home ---------------------------------------------------------------------- */
 
-/* Play Dust and the How it works link, side by side, clear of the lede above and the status line
+/* Play free and the How it works link, side by side, clear of the lede above and the status line
    below. */
 /* Home's hero holds the pitch, the studio's state and the explainer video. Below 64rem they stack in
    that order. From 64rem the pitch and the video sit side by side, where the pitch alone left the
@@ -1974,10 +1900,6 @@ input[type='radio'] {
   margin-top: var(--space-4);
 }
 
-.hero .live-updates {
-  margin-top: var(--space-2);
-}
-
 /* A phone shows the first three cards until the viewer presses Show all. */
 .show-all,
 .show-more {
@@ -2006,14 +1928,6 @@ input[type='radio'] {
 @media (max-width: 47.99rem) {
   .fund-grid:not([data-all]) > li:nth-child(n + 4) {
     display: none;
-  }
-}
-
-/* Below 30rem the live-updates row stacks full width, so no button is left alone on a line. */
-@media (max-width: 29.99rem) {
-  .live-updates {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -118,19 +118,6 @@ test.describe('the design guide', () => {
     }
   });
 
-  test('marks the pressed Pause with a 3px paper border and the check glyph on signal and on ink', async ({ page }) => {
-    await settle(page, GUIDE);
-    const pause = page.locator('main > .band:nth-child(1) .live-updates').getByRole('button', { name: 'Pause updates' });
-    await pause.click();
-    await expect(pause).toHaveAttribute('aria-pressed', 'true');
-    await expect(pause).toHaveCSS('border-top-width', '3px');
-    await expect(pause).toHaveCSS('border-top-color', PAPER);
-    await expect(pause.locator('svg[data-glyph="check"]')).toHaveCount(1);
-    const onInk = page.locator('main > .band:nth-child(3) [aria-pressed="true"]');
-    await expect(onInk).toHaveCSS('border-top-width', '3px');
-    await expect(onInk).toHaveCSS('border-top-color', PAPER);
-  });
-
   test('draws the suit tiles on paper, and resets them and the Live mark to the text colour on signal and ink', async ({ page }) => {
     await settle(page, GUIDE);
     const tiles = await page.evaluate(() =>
@@ -146,21 +133,6 @@ test.describe('the design guide', () => {
       ['rgb(176, 34, 106)', 'rgb(22, 112, 31)'],
       ['rgba(0, 0, 0, 0)', PAPER],
     ]);
-  });
-
-  test('keeps the updates button and Pause still when the label changes, and keeps focus after a press', async ({ page }) => {
-    await settle(page, GUIDE);
-    const band = page.locator('main > .band:nth-child(1)');
-    const updates = band.locator('.updates-button');
-    const pause = band.locator('.live-updates').getByRole('button', { name: 'Pause updates' });
-    const before = [await place(updates), await place(pause)];
-    await band.getByRole('button', { name: 'Add sample updates' }).click();
-    await expect(updates).toHaveText(/Show 3 updates/);
-    expect([await place(updates), await place(pause)]).toEqual(before);
-    await updates.focus();
-    await updates.press('Enter');
-    await expect(updates).toHaveAttribute('aria-disabled', 'true');
-    await expect(updates).toBeFocused();
   });
 
   test('rings every focused control with 3px at a 2px offset: paper on signal and ink, signal on paper', async ({ page }) => {

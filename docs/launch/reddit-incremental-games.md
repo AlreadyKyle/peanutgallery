@@ -10,7 +10,7 @@ Dust: a free idle game in the browser, built by AI agents, where supporters fund
 
 Dust is a free idle game that plays in a browser. You strike for dust, buy units that gather more of it, and work toward the next goal, which opens a new unit or raises production.
 
-AI agents build it, and I want to say that up front. I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next."
+AI agents build it, and I want to say that up front. I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
 Play it or look around: https://peanutgallery.games
 

@@ -13,7 +13,7 @@ https://peanutgallery.games
 ## First comment
 
 ```text
-I'm Kyle, the human board of Mob Machine. The site's line is "Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next."
+I'm Kyle, the human board of Mob Machine. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
 Dust is an idle game that plays in a browser. Each change to it is a card: one small change with a funding target. Supporters fund the cards they want, and when a card's bar fills, an AI agent builds it.
 

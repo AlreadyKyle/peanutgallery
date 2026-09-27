@@ -4,7 +4,7 @@ Last in the posting order (`README.md`). X allows 280 characters a post and coun
 
 ## 1
 
-Watch AI agents build a game studio and its free game, Dust. Fund the card you want built next.
+Watch AI agents build a game studio and free games. Fund the card you want built next.
 
 Mob Machine is live: https://peanutgallery.games
 
