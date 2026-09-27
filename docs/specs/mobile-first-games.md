@@ -19,7 +19,7 @@ Out: the next seed's harness itself, which the board writes with that seed's fol
 
 ## Acceptance criteria
 
-- [x] PLAN.md §4 Next game and §10 decision 56 state the rule; seed-1's CLAUDE.md pillars carry it.
+- [x] PLAN.md §4 Work (its Next game line) and §10 decision 56 state the rule; seed-1's CLAUDE.md pillars carry it.
 - [x] At 0 seconds, the page frame at 375px shows Unlocks directly under the one Gatherer row (`page-375.png`); at 3,600 seconds all five units show with Unlocks under them (`game-3600.png`).
 - [x] The Buy button is 50 of the canvas's 420 units tall, 44.6px at 375px.
 - [ ] The game's live site draws the new layout after the deploy.
