@@ -312,6 +312,7 @@ After the docs-only follow-up #70 merged as 0fe4b59 (both Netlify builds cancell
 - 2026-09-23: The agreement is stated before every path to checkout, drawn in `Funding.tsx` and `Contribute.tsx` (kernel) so no card can remove it. Stripe's terms checkbox adds express acceptance once the board turns it on; nothing waits on it.
 - 2026-09-23: The Terms and Refunds pages read the versions themselves instead of through the snapshot, so they stay readable when the pool or the cards fail, and no other page pays for the read.
 - 2026-09-23: Considered and not adopted: capping each payment at $50 to stay under the Ontario threshold (a product and money change for the board).
+- 2026-09-26, recording the board's call of 23 September 2026 (PLAN.md §10 decision 55): the disclosures use the operator's name and hello@clayhouse.studio, and no mailing address or phone is added. BOARD-SETUP step 10 is closed, the pages were read and approved (step 14), and nothing else is asked of the board about them. The lines above that list those items, under Scope, Board items and this section, record what was open when this spec was built; this line overrides them.
 
 ## Appendix: the words
 

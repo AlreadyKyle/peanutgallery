@@ -31,7 +31,7 @@ A Next card carries a funding target at or below the per-card maximum. A support
 - `pnpm test:functions` (Deno, PGlite over every migration in order).
 - `pnpm --filter @backseat/supabase test`.
 - `pnpm --filter @backseat/site test`.
-- Guarded select returns exactly 4 rows before the delete; the delete returns the same 4 ids.
+- ~~Guarded select returns exactly 4 rows before the delete; the delete returns the same 4 ids.~~ Superseded: the four cards were deleted on 14 September 2026 without the select's output kept, and it cannot be run again; `select count(*) from public.cards where title ilike 'Week %'` returns `[{"week_cards":0}]` on 26 September 2026, as it did then.
 - `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` prints `PASS:` after the migration is applied.
 - A real contribution toward a card moves its bar by the net amount and the pool by the same amount.
 
@@ -51,3 +51,5 @@ A Next card carries a funding target at or below the per-card maximum. A support
 - Criterion 8 holds under the names from `site-layout.md`: cards picked by the board list first under Fund what's next, a bar shows when the target is above 0, and Fund this card shows only for goal cards that are not full (`Cards.test.tsx`).
 
 2026-09-16: the status moves from done to built. Two Verification lines have no quoted output here: "Guarded select returns exactly 4 rows before the delete; the delete returns the same 4 ids" (the Evidence quotes only a count of 0 for the Week cards afterwards) and "A real contribution toward a card moves its bar by the net amount and the pool by the same amount".
+
+2026-09-26: the guarded-select line is struck through above, since the delete it guarded is done and the Week cards count 0. The status stays built: the real contribution line waits on the first player's contribution (`docs/BOARD-SETUP.md` step 20).

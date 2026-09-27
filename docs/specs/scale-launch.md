@@ -75,11 +75,11 @@ Out:
 - [x] The workflow runs the Deno steps only on `functions`, the end-to-end steps only on `site`, the build job on `seed` or `site`, and caches the pnpm store in `seed-code` and `platform` only.
 - [x] Each Netlify site rebuilds on its own folder and the four workspace files, skips a change to `docs/` or the dispatcher, and skips `card/*` and `dependabot/*` previews.
 - [x] `docs/PLAN.md` Appendix A says the work is selected by changed path, the Deno tests and the site build and suite run only for a change that can reach them, and the gate job fails closed.
-- [ ] `20260923000100_spend_totals.sql` is applied in production and `studio_spend_totals` matches a direct sum of the ledger there. (waits on: production step 1)
+- [x] `20260923000100_spend_totals.sql` is applied in production and `studio_spend_totals` matches a direct sum of the ledger there (Evidence, Production; the match is 0 = 0 until a studio or overhead row exists).
 - [ ] The tier's monthly limit is recorded in `studio_state.anthropic_tier_cap_usd`. (waits on: Kyle reporting the tier at the credit step, checklist C23; production step 2)
 - [ ] The Netlify team is confirmed on legacy Free. (waits on: Kyle, checklist A9)
 - [ ] The studio daily credit limit is kept at $500 or set to the proposed value. (waits on: Kyle, checklist B19)
-- [ ] A pull request that changes only `docs/` or only the dispatcher runs without the seed-code and build jobs, and its gate check is green. (waits on: this pull request's own CI and the next such pull request)
+- [x] A pull request that changes only `docs/` or only the dispatcher runs without the seed-code and build jobs, and its gate check is green (Evidence, Production: #66).
 
 ## Verification
 
@@ -145,6 +145,13 @@ FAIL: gate tests failed=1 passed=404
 ```
 
 - Minutes: the old and new `changed-paths.sh` over the 49 first-parent commits on main since 14 September 2026, priced with the job times of run 35807464310 (platform job 230 s, of which the end-to-end build, Chromium and suite 56 s and Deno 12 s; each other job one billed minute): 359 billed minutes before, 319 after, 11% fewer. 20 of the 37 commits that ran both folders before now skip the seed-1 jobs; 16 still change a workspace file and run everything, and one changes seed-1 and the site. A docs-only run falls from 8 billed minutes to 5, a dispatcher-only run from 7 to 5.
+
+### Production and CI (recorded at the close-out, 26 September 2026)
+
+- **The spend totals, production step 1.** The functions are live: `pg_get_function_arguments('public.studio_spend_totals'::regproc)` reads `p_month_start timestamp with time zone, p_tier_start timestamp with time zone`, returning `jsonb`. As the service role, `select public.studio_spend_totals(now() - interval '100 years', date_trunc('month', now()))` returns `{"totals":{"tier_usd":0,"month_usd":0,"spent_usd":0,"credit_purchased_usd":0}}`, and `select coalesce(sum(usd),0), count(*) from public.ledger where billed_to in ('studio','overhead')` returns `[{"direct_sum":"0","rows":0}]`, so `spent_usd` equals the direct sum. The match is trivial: `select billed_to, count(*), round(sum(usd)::numeric,4) from public.ledger group by 1` returns only `[{"billed_to":"founder","rows":65,"usd":"0.8242"}]`, since every agent turn so far ran attended and billed to the founder. The first studio or overhead row, at the cutover's startup probe, is the first real test of the sum; the Deno step above tests it with rows.
+- **A docs-only pull request.** #66 ("Launch specs, trimmed: the twelve launch-series specs, agreed", merged 2026-09-23T20:04:55Z) changed only `docs/`: `docs/ROADMAP.md` and twelve files under `docs/specs/`. Its gate run 35913159637 (`pull_request`, head 6256ee1) reads `detect=success`, `platform=success`, `build=skipped`, `seed-code=skipped`, `gate=success`, and the pull request's checks read the same.
+- **The close-out pull request's own local gate** (docs and `scripts/rename.mjs` only, merged on `scripts/local-gate.sh` while GitHub Actions minutes are out, which selects jobs as `gate.yml` does): a PASS line names the head it tested, so this pull request cannot quote its own; the line is in its squash merge's body, with the flags it selected, and the next pull request that touches the specs records it here.
+- **Still open:** the tier cap (production step 2, at the credit step, `docs/BOARD-SETUP.md` step 22), the Netlify plan (step 8) and the studio daily credit limit (step 18).
 
 ## Decisions
 

@@ -80,14 +80,14 @@ With nothing due it says "Nothing needs you." Under the list: the latest run's t
 - [x] The seed creates the moderator's auth user from `MODERATOR_EMAIL`, leaves existing users alone, and prints no address.
 - [x] The Controller's figures name the newest paid payout, or none.
 - [x] `docs/BOARD-SETUP.md` carries the plan's checklist A to D, with Actions read and Plan read on the dispatcher and Mac tokens, and the docs tests pass (no schedule, the backlog and PLAN in step).
-- [ ] Production: the migration applied, the anon negative test and the ledger identity PASS (waits on: the board's allow).
-- [ ] Production: the board's Netlify site live at its address, with the headers above read back (waits on: the board's allow).
-- [ ] Production: Supabase Auth's site URL and redirect list on the board site only, sign-ups off, the board users' sessions ended (waits on: the board's allow).
+- [x] Production: the migration applied, the anon negative test and the ledger identity PASS (Evidence, Production).
+- [x] Production: the board's Netlify site live at its address, with the headers above read back (Evidence, Production).
+- [x] Production: Supabase Auth's site URL and redirect list on the board site only, sign-ups off, the board users' sessions ended (Evidence, Production).
 - [ ] Production: sign-in email through Resend (waits on: the board's `RESEND_SMTP_KEY`, BOARD-SETUP step 2).
-- [ ] The board signs in on the new site and sees Needs you (waits on: the board, BOARD-SETUP step 17).
+- [ ] The board signs in on the new site and sees Needs you (waits on: the board, BOARD-SETUP step 17; production shows no sign-in since the switch, Evidence).
 - [ ] The moderator's first sign-in, as a Go-live test (waits on: the board naming a moderator, BOARD-SETUP step 16, and Resend).
-- [ ] The live check on production shows /board as a 404 naming no netlify.app address but the game's, no route naming the board site's address, and the enforced `form-action` (waits on: the site deploy after the merge, production step 11).
-- [ ] `platform_lane_open` set once the migration, the board site, the Auth settings and ended sessions, the board's own sign-in and the live check hold, and an hour has passed since the sessions ended: production steps 2 to 6, 8 and 11 (waits on: the board's allow, production step 12). Resend and the moderator's first sign-in do not hold it up: neither changes what a card's code could reach.
+- [x] The live check on production shows /board as a 404 naming no netlify.app address but the game's, no route naming the board site's address, and the enforced `form-action` (Evidence, Production).
+- [ ] `platform_lane_open` set once the migration, the board site, the Auth settings and ended sessions, the board's own sign-in and the live check hold, and an hour has passed since the sessions ended: production steps 2 to 6, 8 and 11 (waits on: the board's own sign-in, step 8, then the board's switch, production step 12 and BOARD-SETUP step 26). Resend and the moderator's first sign-in do not hold it up: neither changes what a card's code could reach.
 
 ## Verification
 
@@ -183,6 +183,39 @@ Where each criterion is tested:
 - The scan: the `pay:` and `ship:` lines in `platform/gate/test/run-tests.sh`.
 - The database: `migration_test.ts` steps above; the static `board-site migration` tests in `platform/supabase/test/migration.test.ts`, which also prove each changed function differs from its predecessor only where this spec says.
 - The dispatcher: `select.test.ts`, `tick.test.ts`, `db.test.ts`. The gate's lane: the `lane:` lines in `run-tests.sh`. The seed: `platform/supabase/test/board-users.test.ts`. The Controller: `platform/ops/test/jobs.test.mjs`.
+
+### Production (read back at the close-out, 26 September 2026, read only)
+
+The board site's address is `<BOARD_SITE_URL>` here: it lives only in `.env` and is never printed.
+
+- **The migration (step 2).** `select platform_lane_open from public.studio_state` returns `[{"platform_lane_open":false}]`, so the column exists and the lane is closed. On `origin/main` at ed63326, `anon-negative-test.ts` prints `PASS: anon access matches the RLS contract` (128 outcome lines, all `ok`) and `ledger-identity.ts` prints `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 66 cards`.
+- **The board's Netlify site (step 3).** `curl -sI "$BOARD_SITE_URL/"`, the address replaced before printing:
+
+  ```
+  HTTP/2 200
+  content-security-policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src https://lyxndueoeisyqzewflpu.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  referrer-policy: no-referrer
+  strict-transport-security: max-age=31536000; includeSubDomains; preload
+  x-content-type-options: nosniff
+  x-frame-options: DENY
+  x-robots-tag: noindex, nofollow
+  ```
+- **Supabase Auth (step 4).** `GET /v1/projects/lyxndueoeisyqzewflpu/config/auth`, five keys, the address redacted: `{'site_url': '<BOARD_SITE_URL>', 'uri_allow_list': '<BOARD_SITE_URL>/**', 'disable_signup': True, 'mfa_totp_enroll_enabled': True, 'mfa_totp_verify_enabled': True}`. Nothing on peanutgallery.games is on the list.
+- **The sessions ended (step 5).** For the board's users, `auth.sessions` holds 0 rows and `auth.refresh_tokens` 0 rows, revoked or not.
+- **The board's own sign-in (step 8): not yet.** `select role, last_seen_at from public.board_members` returns `[{"role":"board","last_seen_at":"2026-09-20 00:25:09.773289+00"}]`, and the board user's `auth.users.last_sign_in_at` is `2026-09-15 04:24:10+00`. Both are from before #56 merged (23 September 2026), when /board was still on the public site: the board site's sign-in calls `board_heartbeat`, which would have moved `last_seen_at`, and no session exists. So the board has not yet signed in on its own site; that is `docs/BOARD-SETUP.md` step 17, and the sign-in criterion and production step 12 wait on it.
+- **The live check (step 11).** On `origin/main` at ed63326, with `BOARD_SITE_URL` from `.env` in its environment and never printed (a scrub of the output finds the address 0 times): `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`, exit 0, with
+
+  ```
+  PASS 375px no route names the board site's address
+  PASS 1440px no route names the board site's address
+  PASS /board status 404
+  PASS /board is the not found page: ["Not found"]
+  PASS /board has no sign-in form
+  PASS /board names no netlify.app address but the game's (peanutgallery-seed-1.netlify.app)
+  PASS /board does not name the board site's address
+  PASS /team content-security-policy: frame-ancestors 'none'; connect-src 'self'; form-action 'self'
+  ```
+- **Still open:** Resend (step 7, `docs/BOARD-SETUP.md` step 2), the board's sign-in (step 8, BOARD-SETUP step 17), a moderator and their sign-in (step 9, BOARD-SETUP step 16; `board_members` has no moderator row), and opening the platform code lane (step 12, BOARD-SETUP step 26), which waits on the board's sign-in and then is the board's switch.
 
 ## Decisions
 

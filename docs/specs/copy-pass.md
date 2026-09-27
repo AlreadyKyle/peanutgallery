@@ -74,7 +74,7 @@ Out:
 ## Board items (never blocking)
 
 - Override any wording or any entry's board marker by editing one line; nothing waits on it.
-- The address and phone for the Terms' Ontario disclosure stay legal-copy's board item.
+- ~~The address and phone for the Terms' Ontario disclosure stay legal-copy's board item.~~ Closed: the board decided on 23 September 2026 that the disclosures use hello@clayhouse.studio with no address or phone (PLAN.md §10 decision 55, `docs/BOARD-SETUP.md` step 10).
 
 ## Evidence
 

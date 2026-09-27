@@ -118,6 +118,10 @@ Each dispatcher tick, after the card path, starts the oldest queued run that can
 
 Four jobs are registered, each with its handler: `studio_ranking` and `draft_card`, manual only (above), and the Janitor's `janitor` and `upkeep_merge`, code only, which pg_cron queues through `enqueue_job_run` and the board can queue with Run now (below). The weekly report is no job: pg_cron publishes it in SQL (below).
 
+## What the dispatcher reads of a card
+
+The dispatcher reads cards through one view, `dispatcher_cards` (service role only): every card, with the card columns it reads, whether the card needs an approval and holds a current one (`card_needs_approval`, `card_approved`), and whether its executor is paused. The view lists its card columns by name rather than `c.*`, because Postgres fixes a view's columns when the view is created, so a column added to `cards` later is not in it. A migration that adds a `cards` column the dispatcher reads therefore drops the view and creates it again with the column appended after the existing ones, in the same order, then repeats `revoke all on table public.dispatcher_cards from anon, authenticated, service_role;` and `grant select on public.dispatcher_cards to service_role;`. `20260925200000_design_review.sql` did this for `review_rounds`. The throttle reads each card's spend from `dispatcher_card_spend` (service role only), since the public `public_card_spend` leaves out hidden cards.
+
 ## The weekly report and the outbound lane
 
 Built by `docs/specs/studio-reports.md`; no model writes or reads any of it.

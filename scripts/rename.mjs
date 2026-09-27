@@ -39,6 +39,15 @@ export const TIERS = {
     'docs/PLAN.md',
     'docs/ROADMAP.md',
     'docs/SYSTEM.md',
+    // The launch post drafts the board posts (docs/specs/announcement.md): the name, and the domain
+    // every link points at.
+    'docs/launch/README.md',
+    'docs/launch/backlash-line.md',
+    'docs/launch/reddit-artificial.md',
+    'docs/launch/reddit-claudeai.md',
+    'docs/launch/reddit-incremental-games.md',
+    'docs/launch/show-hn.md',
+    'docs/launch/x-thread.md',
     'platform/agents/managed/agent.yaml',
     'platform/agents/managed/environment.yaml',
     'platform/board/e2e/board.spec.ts',

@@ -1,6 +1,6 @@
 # Design system v1: tokens, the card, the coin, bands and the guide
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 The design-system pull request of the approved v1 design direction (the board's review of 23 September 2026). The direction is the contract: a quiet, precise table where real cards are funded with arcade coins and built by a cast of code-drawn aliens, on a white page whose full-bleed bands rotate black and white. This is a board pull request: it changes kernel files, listed under Scope. Its mockup is the unlisted design guide; the home-and-design pull request that follows applies the bands to every page and rebuilds home.
 
@@ -66,6 +66,7 @@ Out, and what each waits on:
 - Contrast, measured on the guide from the built stylesheet: paper on ink 18.88, `--muted-on-ink` on ink 7.49 and on `--ink-hover` 5.01, paper on `--ink-hover` 12.63, `--field` on ink 4.59, as the direction measured.
 - Budgets, against `main` at 279b3a1 built the same way: CSS 3,184 to 5,131 bytes gzipped (+1,947, within 6KB); JavaScript 152,502 to 161,024 bytes gzipped (+8,522, within 12KB); the font 18,208 bytes. `scripts/fonts.sh` rebuilds the file with the same tables and sizes decompressed; with this machine's brotli the woff2 comes out at 18,104 bytes, and the committed file is the measured 18,208-byte one.
 - Screenshots of the guide and home at 375 and 1440px were taken and looked at; they are not committed.
+- Close-out, 26 September 2026. Every criterion is ticked and every Verification line above is run and quoted. What Scope left out, with what each waited on, has shipped or has its own line: the `/card/:id` replay and its Watch links are live with supporter-pages (#82, `specs/supporter-pages.md`); naming the next card in line on `/contribute` is live with money-surfaces (#71, fix-forward #78, `specs/money-surfaces.md`); the top bar, bands on every page and the new home are `specs/home-and-design.md`, done; the gate's design frames are design-review's line (`specs/design-review.md`), which waits on GitHub Actions minutes, not this spec's. The production live check on `origin/main` at ed63326 passes with the new card, bands and `li.agent` rows it reads: `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`. Status done.
 
 ## Decisions
 

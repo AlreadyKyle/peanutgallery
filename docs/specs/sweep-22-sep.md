@@ -1,6 +1,6 @@
 # Sweep, 22 September: obvious bugs and site fixes
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -41,6 +41,7 @@ Out, listed for the board in `docs/BOARD-SETUP.md`: gate hardening (config lane 
 
 - `pnpm verify`: exit 0. Site 163 tests, Supabase 146, dispatcher 374, seed-1 77, ops 41 with shellcheck running, secret scan PASS.
 - Preview at 375px: `wordmark 44`, `footer [44,44,44,44]`, `overflow false`; /ledger title `Ledger · Peanut Gallery`; no console errors.
+- Close-out, 26 September 2026: the pull request merged as 558b934, "Sweep: obvious bugs, site copy and layout fixes, and a plain board to-do list" (#43); `gh pr view 43` reads `MERGED 2026-09-22T18:07:43Z 558b934890991b8a57301a1a496bd688be9c0484`. The webhook's two error-label fixes took effect when `stripe-webhook` was redeployed from `main` at 558b934 the same day ("Deployed Functions."; an unsigned POST answers 400 "Missing stripe-signature header"), recorded in `docs/BOARD-SETUP.md`, Done, "Webhook secret and redeploy". Every Verification line is run and quoted above. Status done.
 
 ## Decisions
 

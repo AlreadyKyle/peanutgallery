@@ -237,7 +237,7 @@ A mismatch rejects the card `history`, and nothing merges. Each request that thr
 - `pnpm verify`
 - Live, before the first card: `checkRepositoryGit` passes on the VPS clone (git 2.39), so the allowlist matches what that git wrote.
 - Live, after merge: the next card on the VPS runs through push, gate, compare, merge and smoke with no `git_tamper`, `history` or `file_mode` rejection. That shows Claude Code and pnpm write no git configuration during a real session.
-- Live, after merge: a seed card's smoke log shows the bot's `cwd` under `.worktrees/smoke-`. The bot's first run, including pnpm's install in the fresh checkout, finishes inside its exec timeout, and the folder is gone after the card ends.
+- ~~Live, after merge: a seed card's smoke log shows the bot's `cwd` under `.worktrees/smoke-`. The bot's first run, including pnpm's install in the fresh checkout, finishes inside its exec timeout, and the folder is gone after the card ends.~~ Superseded by `launch-managed.md`: production smoke runs no card code (PLAN.md §10 decision 34), so no smoke bot runs after a merge; it checks the served build, the served config and the gate at the merge sha.
 
 ## Evidence
 
@@ -312,6 +312,11 @@ Pending: the three live lines.
 2026-09-20, status corrected from agreed to built. The code merged as 3ab50e8 (PR 37, landed on main
 as PR 38). The three live lines remain: they need a real card to merge through the dispatcher, which
 waits on the VPS cutover.
+
+2026-09-26: the third live line (the smoke bot's worktree) is struck through, superseded by
+`launch-managed.md`: production smoke runs no card code, so there is no smoke bot to watch. The first
+two live lines remain and wait on the first card merged through the dispatcher, at the cutover on the
+Mac host (`mac-host.md`).
 
 ## Residual risks
 

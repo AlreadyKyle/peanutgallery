@@ -1,6 +1,6 @@
 # Supporter pages: /thanks, /card/:id, supporter credits and /team statuses
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Built on the merge of site-snapshot (and money-logic, money-surfaces, agent-system-core before it). It is a board pull request: it changes kernel files (a migration, `legal.ts`, `Funding.tsx`, `Stopped.tsx`, `App.tsx`, `netlify.toml`, the new kernel files below, `docs/`). It writes no money rows; every money read is a view or a function over money-logic's tables.
 
@@ -117,7 +117,7 @@ Sections: Running (holding paused rows while the studio is paused), Starts later
 - [x] `/team` (unit tests of `teamStatus` and e2e) shows Running, Paused (studio pause with its reason words; role pause with its `paused_reason`), Starts when … with the trigger, and Planned from the roster columns as described, with model, cost and ships on running and paused rows only; home's team strip uses the same `teamStatus`; `team-models.mjs` still passes (every Running role on `claude-opus-5-5`, no model elsewhere); and `/roadmap` shows "Approved, opens soon" on a fixture card with `opens_at` set and not yet dealt and "Held by the board" with its reason on a vetoed card, and neither otherwise.
 - [x] `thanks` (and `api`) are in `KERNEL_SEGMENTS`, `netlify.toml` serves the app at `/thanks` with `force`; `Thanks.tsx`, `thanks.ts`, `card-source.ts` and `Supporters.tsx` are in `kernel-paths.txt` and `KERNEL_PATHS` and the parity test and `site-kernel.test.ts` pass; the Privacy page carries the three supporter-number lines, with `privacyUpdated` moved to the merge date; and `anon-negative-test.ts` reads `public_card_supporters` and `public_role_stats`, calls `site_card` and `thanks_for_session` as anon checking their exact keys, and still refuses every private table and the money schema.
 - [x] With fixtures for each, `design.spec.ts` (axe WCAG 2.2 AA, no sideways scroll, reduced motion) and `layout-balance.spec.ts` pass on `/card/:id` (live, live with no config checks, open, building, rejected, planned, opens soon), `/thanks` (no session, recorded, pending, not counted), `/team` and `/roadmap` with an opens-soon card, at 375, 768 and 1440 px.
-- [ ] Production: the dump is taken and the migration applied before the merge; `anon-negative-test.ts` and `ledger-identity.ts` PASS; main's `live-check.mjs` PASSes against production before the merge; after the deploy `live-check.mjs` PASSes with `/card/<a live card id>` showing its title and commit, `/thanks` with no session, `/thanks?session=cs_test_invalid0000000000` showing "Recording your payment" with the query dropped, and `/team`'s sections; and a SELECT shows the board's test payer has no row in `public_card_supporters`.
+- [x] Production: the dump is taken and the migration applied before the merge; `anon-negative-test.ts` and `ledger-identity.ts` PASS; main's `live-check.mjs` PASSes against production before the merge; after the deploy `live-check.mjs` PASSes with `/card/<a live card id>` showing its title and commit, `/thanks` with no session, `/thanks?session=cs_test_invalid0000000000` showing "Recording your payment" with the query dropped, and `/team`'s sections; and a SELECT shows the board's test payer has no row in `public_card_supporters`.
 
 ## Verification
 
@@ -246,7 +246,7 @@ Waiting on the ship stage: the board-test SELECT, the measured `/api/card` and `
 ### The ship: catch-up, checks and production before the merge (24 September 2026, UTC)
 
 1. Catch-up. site-snapshot merged as 86463fe (#80) and its fix-forward as 4360237 (#83). The branch first merged site-snapshot's last tip 57a06a7, whose tree is 86463fe's (`git diff --stat 57a06a7 86463fe` is empty): 16 files conflicted, each resolved as main's version plus this pull request's change (PLAN's decisions renumbered: this is decision 48 after main's 43 to 47; `/team` keeps the board's compact tiles for the roles to come; the title-stays rule sits beside main's aria-busy rule; `EventList` keeps main's `eventVerb` for a document without line keys). Then `git merge -s ours 86463fe` and `git merge origin/main` (one conflict, the ROADMAP rows). #82's base is main.
-2. What the catch-up found and fixed (INTERFACES.md, "After site-snapshot"):
+2. What the catch-up found and fixed (the series' interface notes, kept outside the repository, "After site-snapshot"):
    - The migration would have failed on production: it recreated `public_agent_events` with five columns plus `line_key`, and main's view has `step` and `usd` after `created_at`, which `create or replace view` cannot drop. The view now keeps main's columns and expressions and appends `line_key` after `usd`; `site_live()`'s events keep `step` and `usd` and add `line_key`; `site_card`'s lines carry `usd`.
    - `event_line_key` gave key none to the database's own steps, so the public "Topped up", "Resumed by rule" and the Studio Head's ranking lines would have vanished from home's feed. It now maps `ceiling_top_up` to `topped_up` (its words name the view's `usd`), `resume_rule` to `resumed` and `ranked` to `ranked` (the Studio Head writes it, so main's step column leaves it out and it read as a note). Their words are `legal.eventLinesMoney`, and `lib/lines.ts` fills the amount. The `held` step is gone: nothing on main writes it.
    - `card.mts`'s rate limit is 300 requests a minute per IP and domain, as `snapshot.mts`'s: a card page also reads both documents, and at 60 a draft deploy's live check drew 429s.
@@ -274,6 +274,28 @@ Waiting on the ship stage: the board-test SELECT, the measured `/api/card` and `
 
    The branch's live check against the draft: `PASS live-check https://6ab4bc8ddf3128914ea77c0f--peanutgallerygames.netlify.app passed=262 failed=0 skipped=2` (the og:image and www lines are production's), with `PASS /team sections ["Running","Starts later","Planned"]`, `PASS /card/23b1883a-7844-407a-bd83-f42056d47602 commit line "Merged as the studio's commit fc55225" for commit_sha fc55225`, `PASS /thanks?session=cs_test_invalid0000000000 shows ["Recording your payment…"] at /thanks` and `PASS /api/thanks with a made-up session 200 {"status":"pending"} Cache-Control no-store`.
    - The budget lines, measured: a card's document is 6,828 bytes raw (the newest live card, 26 lines) and costs one function build per card id per 60-second window, only while that card's page is read; `/api/thanks` is one build per ask and never cached. At today's traffic neither moves the month's figure; Netlify's usage notifications stay the alert (decision 47).
+7. The merge: #82 merged as 90be039 (`gh pr view 82`: `MERGED 2026-09-24T06:12:54Z 90be039ac4fde31596e99dab8be180cd7a1cd8a2`), and Netlify deployed the public site on 90be039 (the board site's build was cancelled, since nothing under `platform/board` changed).
+8. After the deploy, main's `live-check.mjs` against production: `PASS live-check https://peanutgallery.games passed=264 failed=0 skipped=0`, with the `/card`, `/thanks` and `/team` lines passing.
+
+### Close-out (26 September 2026)
+
+The same lines hold on `origin/main` at ed63326, with production's `version.json` serving that sha. `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs` exits 0:
+
+```
+PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0
+PASS /card/23b1883a-7844-407a-bd83-f42056d47602 one h1, its title: ["The game's tab shows its name and icon, and the page links to the studio"]
+PASS /card/23b1883a-7844-407a-bd83-f42056d47602 commit line "Merged as the studio's commit fc55225" for commit_sha fc55225
+PASS /card/23b1883a-7844-407a-bd83-f42056d47602 has a Supporters section
+PASS /thanks with no session: ["Thank you"]
+PASS /thanks?session=cs_test_invalid0000000000 shows ["Recording your payment…"] at /thanks
+PASS /api/card/not-a-card 400 Cache-Control no-store
+PASS /api/thanks with a made-up session 200 {"status":"pending"} Cache-Control no-store
+PASS /team sections ["Running","Starts later","Planned","Who runs it"]
+```
+
+`anon-negative-test.ts` prints `PASS: anon access matches the RLS contract`, with `rpc site_card (a live card) expected readable actual readable keys card,funding,line_count,lines,milestones,roles,spent_usd,stopped,supporter_count,supporters` and `rpc thanks_for_session (unknown) expected readable actual readable answered {"status":"pending"}`; `ledger-identity.ts` prints `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 66 cards`. The board-test SELECT is quoted in step 5 above; the board's test payment is still the only payment, so no supporter row has been added since. /team's fourth section, "Who runs it", is copy-pass's (`specs/copy-pass.md`).
+
+Stripe's after-payment redirect to `/thanks?session={CHECKOUT_SESSION_ID}` is a board step (`docs/BOARD-SETUP.md` step 12), not a criterion here: the real-payment criterion became a board item when the spec was trimmed (Decisions). Every Verification line is run and quoted. Status done.
 
 ## Decisions
 

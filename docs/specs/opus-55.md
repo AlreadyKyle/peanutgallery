@@ -1,6 +1,6 @@
 # Every running role on Claude Opus 5.5
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -36,6 +36,7 @@ The docs say what production runs: every role that runs is on `claude-opus-5-5` 
 - 2.1.139 refusing the model, recorded by the session that updated the CLI on 23 September 2026: `API Error: 400 Claude Code 2.1.139 does not support this model; version 2.1.280 or newer is required.`
 - The price row matches Anthropic's list price for `claude-opus-5-5`: 4 USD input and 20 USD output per million tokens, cache reads 0.20 USD; the cache writes are the standard 1.25 and 2 times input.
 - The sandbox check on 2.1.280: `PASS: attended sandbox`, in `docs/specs/carry-over.md`.
+- Close-out, 26 September 2026. `pnpm verify` on `origin/main` at ed63326 exits 0 with `docs.test.mjs` passing 22 of 22 (`docs/specs/launch-hardening.md`, Evidence). The Mac's Claude Code has since updated itself past the minimum: `~/.local/bin/claude --version` prints `2.1.283 (Claude Code)`, the version `platform/ops/mac/claude-code-pin.json` pins with its own `PASS: attended sandbox` in both layouts (`docs/specs/agent-upkeep.md`). The production live check that day reads `PASS /team 7 running roles, each on claude-opus-5-5: claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5, claude-opus-5-5` in `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`. Every Verification line is run and quoted. Status done.
 
 ## Decisions
 

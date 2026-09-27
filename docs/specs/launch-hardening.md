@@ -1,6 +1,6 @@
 # Launch hardening: founder billing, the daily cap, restarts, the kernel, rollback, alerts
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -110,3 +110,13 @@ The list lives in `platform/gate/kernel-paths.txt`, and the dispatcher's copy is
 - ~~Pending: the three week-1 runs with every ledger row billed to the founder.~~ Done: `week1-runs.md` Evidence quotes `founder, 65, 0.8242` over the three runs and D1–D3, no studio rows, and `pool.balance_usd` at 0.5019 before and after (16 September 2026).
 
 2026-09-16: the kernel-guard Verification line had no quoted output until now. Run on main at 4f60c7c, with a changed-files list holding only `platform/gate/ship-gate.sh`: `FAIL: kernel-guard path=platform/gate/ship-gate.sh`, exit 1. With a list holding only `seed-1/config/spawn-table.json`: `PASS: kernel-guard files=1`, exit 0.
+
+2026-09-26, close-out, on `origin/main` at ed6332648f4e7844aafe88c2a610a264cee91540 in a detached worktree after `pnpm install --frozen-lockfile`:
+
+- `rm -rf platform/site/dist-e2e platform/board/dist-e2e && npm_config_workspace_concurrency=1 pnpm verify` exits 0: board `Tests  103 passed (103)`, supabase `Tests  325 passed (325)`, site `Tests  530 passed (530)`, seed-1 `Tests  77 passed (77)`, dispatcher `Tests  860 passed (860)`, `PASS: gate tests passed=643`, agents `pass 142`, ops `pass 135`, functions `ok | 130 passed (240 steps) | 0 failed`, `GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=683`, docs `pass 22`, rename `pass 8` and "tier 1 carries the old name nowhere". The run before it, at the default concurrency with the load average near 78, failed one dispatcher test on its 5-second timeout ("takes a card from building to live with a green deploys row and a ship event 5191ms", `Tests  1 failed | 859 passed (860)`), not an assertion; the same test passed in both runs quoted here.
+- `pnpm --filter @backseat/dispatcher test` on its own: `Test Files  49 passed (49)`, `Tests  860 passed (860)`, exit 0. The nine files this line names are among the 49: `alert.test.ts config.test.ts github.test.ts pipeline.test.ts session.test.ts startup.test.ts throttle.test.ts tick.test.ts worktree.test.ts`.
+- `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts`: `ok | 3 passed (71 steps) | 0 failed`, exit 0, among them `record_usage billed to the founder charges the card and leaves the pool alone ... ok`, `anon holds select on three public tables, the eight views and the public columns of cards, and nothing else ... ok`, `as anon, the public window works and the private tables and view writes are refused ... ok`, `public_card_spend publishes studio-billed spend per card and never founder-billed turns ... ok` and `the views show the newest green deploy, the ledger totals and payload-free events ... ok`.
+- Production, read only: `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` prints `PASS: anon access matches the RLS contract` with 128 outcome lines, all `ok`, among them `ledger(billed_to=founder) expected empty actual empty 0 row(s) returned`. As the service role, `select billed_to, count(*), round(sum(usd)::numeric,4) from public.ledger group by 1` runs and returns `[{"billed_to":"founder","rows":65,"usd":"0.8242"}]`.
+- The line on the first three test runs is quoted above (`week1-runs.md`: every row billed to the founder, the pool unchanged).
+
+Every Verification line is run and quoted. Status done.

@@ -35,10 +35,10 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 
 ## The order from here
 
-1. **The launch batch** (below) is merged, and its production steps are run as each merged. The Managed Agents stream-loss fix below is built (`specs/carry-over.md`).
-2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 11), in order: the contact address (done), the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, the GitHub tokens, healthchecks.io, the Discord webhooks, the Netlify plan check, the ntfy subscription, the business contact for the Terms (it no longer blocks: the Terms shipped without an address or phone, and a later version adds them) and the Claude Code pin.
-3. **Board section B** (steps 12 to 18), before the announcement: the Stripe settings, retiring the full Stripe key, the legal pages, passkeys, a moderator, the first sign-in on the board's own site and the studio daily credit limit.
-4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live.
+1. **Built and merged.** The launch batch and the launch series (below) are merged, and each one's production steps ran as it merged; the live site serves main. What is left of the series is launch-card-floor (`specs/launch-card-floor.md`): one attended session in which the board presses **Draft to the floor** in Needs you on its own site and stays signed in while the Game Designer drafts and the Game Director grades, with the attended dispatcher running on the Mac. It waits on the board's first sign-in on its own site (`docs/BOARD-SETUP.md` step 17).
+2. **Board section A** in `docs/BOARD-SETUP.md` (steps 1 to 11, and 25): the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, healthchecks.io's emails, the Discord webhooks, the Netlify plan check, the ntfy subscription, the Claude Code pin, and the database password for the migration history repair. Done or closed: the contact address (1), the host's and the read tokens (5.1, 5.2; the host token expires on 23 October 2026 and is regenerated before then), and the business contact for the Terms (10, closed: the disclosures use hello@clayhouse.studio, PLAN.md §10 decision 55). The Mac's own token (5.3) is optional.
+3. **Board section B** (steps 12 to 18, and 26), before the announcement: the Stripe settings (the after-payment redirect to /thanks is ready now), retiring the full Stripe key, passkeys, a moderator, the first sign-in on the board's own site, the studio daily credit limit, and then opening the platform code lane. The legal pages are read and approved (14, done).
+4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live. The post drafts are in `docs/launch/` (`specs/announcement.md`).
 
 ## The launch batch (22 September 2026)
 
@@ -79,6 +79,17 @@ Every Verification line has been run and its output quoted.
 | `specs/metering-reconciliation.md` | done |
 | `specs/landing-copy-and-design.md` | done |
 | `specs/launch-pages.md` | done |
+| `specs/local-gate.md` | done |
+| `specs/gate-local-output.md` | done |
+| `specs/sweep-22-sep.md` | done |
+| `specs/opus-55.md` | done |
+| `specs/carry-over.md` | done |
+| `specs/launch-hardening.md` | done |
+| `specs/stale-tab.md` | done |
+| `specs/oracle-launch.md` | done |
+| `specs/design-system.md` | done |
+| `specs/home-and-design.md` | done |
+| `specs/machine-mark.md` | done |
 
 ### Built, live check pending
 
@@ -86,31 +97,21 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/launch-hardening.md` | built | none named in the spec; moving it to done is a close-out check |
 | `specs/week1-runs.md` | built | criterion 6, a player's contribution credited (criterion 1 above) |
 | `specs/live-cut.md` | built | criterion 7, an unattended build, at the cutover |
 | `specs/unattended-mode.md` | built | the unattended probe and a funded card with no board session, at the cutover |
 | `specs/vps.md` | built | superseded by `specs/mac-host.md` for now (PLAN.md §10 decision 38); a server's cutover waits on the Google Cloud move in the backlog |
 | `specs/ops-separation.md` | built | the production steps, which need a server; the Mac host has its own (`specs/mac-host.md`) |
-| `specs/oracle-launch.md` | built | none: Oracle is dropped (PLAN.md §10 decision 38); the script is kept, unrun |
 | `specs/stripe-late-fee.md` | built | `charge.updated` crediting a fresh payment, on the next real contribution |
-| `specs/next-cards.md` | built | a real contribution moving a card's bar |
-| `specs/stale-tab.md` | built | a tab held open across a site deploy reloads into the new build |
-| `specs/gate-hardening.md` | built | two CI observations: the platform job's four new steps green, and a `card/*` pull request showing the detect guard before any install |
-| `specs/merge-safety.md` | built | the three live lines, which need a card merged through the dispatcher |
+| `specs/next-cards.md` | built | a real contribution moving a card's bar; the guarded select is struck through as superseded (the Week cards count 0) |
+| `specs/gate-hardening.md` | built | a `card/*` pull request showing the detect guard before any install, which waits on Actions minutes and the first card; the platform job's four new steps are recorded green (run 35129960581) |
+| `specs/merge-safety.md` | built | the first two live lines, which need a card merged through the dispatcher; the smoke bot's line is struck through, superseded by `specs/launch-managed.md` (smoke runs no card code) |
 | `specs/site-truth-pass.md` | built | /board two-factor enrolment watched in Chromium and Safari with DevTools open and no CSP report |
-| `specs/sweep-22-sep.md` | built | none named in the spec; moving it to done is a close-out check |
-| `specs/carry-over.md` | built | the production steps: migration `20260923000200`, the role re-seed, and the live check on production |
-| `specs/opus-55.md` | built | none named in the spec; moving it to done is a close-out check |
-| `specs/money-safety.md` | built | the production steps: the three migrations, the backup login read-back, the history repair, the jobs' first runs (on the Mac host, `specs/mac-host.md`) and the backups repository, which waits on a new store |
+| `specs/money-safety.md` | built | the migration history repair, which needs `SUPABASE_DB_PASSWORD` from the board (`docs/BOARD-SETUP.md` step 25); the jobs' first runs on the Mac host (`specs/mac-host.md`); the backups repository, which waits on a new store; and the restore drill. The three migrations and the backup login are read back |
 | `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
-| `specs/scale-launch.md` | built | migration `20260923000100` applied on production, and a docs-only or dispatcher-only pull request showing no seed-code or build job with a green gate |
-| `specs/design-system.md` | built | the replay, the next-in-line sentence and the gate's design frames wait on supporter-loop, money-logic and agent-system; the bands on every page and the new home are `specs/home-and-design.md` |
-| `specs/home-and-design.md` | built | the production live check after the deploy; the replay links, naming the next card in line and the gate's design frames wait on supporter-loop, money-logic and agent-system; the two planned titles that say "vote" are the board's to edit |
+| `specs/scale-launch.md` | built | the usage tier cap at the credit step, the Netlify plan (board step 8) and the studio daily credit limit (board step 18); the spend totals (0 = 0, every ledger row billed to the founder) and #66's docs-only gate run are recorded |
 | `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and the domain half, which waits on the board registering one |
-| `specs/machine-mark.md` | built | the live check on production after the deploy |
-| `specs/local-gate.md` | done | #81 merged as b2d5126 on its own local gate PASS line (head aed3776, base 5f40ab5), quoted in the merge body and in the spec's Evidence |
-| `specs/board-site.md` | built | the production steps: migration `20260924000000`, the board's Netlify site, Supabase Auth's URLs, sign-up off and Resend SMTP (waits on board step 2), the sign-out at the switch, the board's first sign-in (board step 18), the live check, then `platform_lane_open`; the moderator's first sign-in (board step 17) once a moderator is named |
+| `specs/board-site.md` | built | Resend SMTP (board step 2), the board's first sign-in on its own site (board step 17; production shows none since the switch), then `platform_lane_open` (board step 26), and a moderator's first sign-in once one is named (board step 16). The migration, the site and its headers, Supabase Auth, the ended sessions and the live check are recorded |
 
 ### The launch series
 
@@ -124,7 +125,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 4 | `specs/agent-system-core.md` | done | approvals in Postgres, dealing after the cooling window, vetoes and role pauses, the job queue, resume by rule, `docs/SYSTEM.md` |
 | 5 | `specs/agent-workflows.md` | done | the Studio Head's ranking and the Game Designer's drafts graded by the Game Director, both board-started; the public-text filter |
 | 6 | `specs/site-snapshot.md` | done | the public site reads two CDN-cached documents from its own origin; stale tabs reload on navigation |
-| 7 | `specs/supporter-pages.md` | built | /thanks, /card/:id with the replay, supporter credits, /team statuses |
+| 7 | `specs/supporter-pages.md` | done | /thanks, /card/:id with the replay, supporter credits, /team statuses |
 | 8 | `specs/grid-boxes.md` | done | one item in each cell of every grid, no stretched last row; /team members in identical boxes |
 | 9 | `specs/studio-reports.md` | done | the weekly report, Discord ship and weekly posts, the card supply floor |
 | 10 | `specs/design-review.md` | built | board-only design files, card-proof design checks, the gate's frames and the Directors' visual review |
@@ -132,12 +133,11 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | 12 | `specs/copy-pass.md` | built | every public string after the supporter loop; the board-work marker on /roadmap |
 | 13 | `specs/launch-card-floor.md` | agreed | the first open cards, drafted and graded in one attended production session |
 
-### Draft
+### Agreed
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/announcement.md` | draft | the clip, the drafts and Go live, the last steps before the announcement |
-| `specs/gate-local-output.md` | built | none |
+| `specs/announcement.md` | agreed | the drafts are in `docs/launch/`; left: the clip, Go live, the link previews and the final check, after board section C |
 
 ## Standing facts for any session
 
@@ -151,7 +151,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 - **Money.** The pool holds customer money only. Work before the cutover runs attended on the founder's Max subscription, billed to the founder. There is no founding budget. Console credit is bought only from Stripe payouts, never with the founder's money. Everything the studio runs on is free.
 - **Models.** Every role that runs is on `claude-opus-5-5` (`MODEL_BUILDER` and `MODEL_DIRECTOR`); the Host keeps `claude-haiku-4-5` while it does not run (PLAN.md §10 decision 36).
 - **Claude Code on the Mac.** Attended sessions need 2.1.280 or newer, because 2.1.139 refuses `claude-opus-5-5`. They run only on the version in `platform/ops/mac/claude-code-pin.json`, 2.1.283, on which the attended `sandbox:check --positive` passes in both layouts (`specs/agent-upkeep.md`); the adapter pauses a card with `cli_version` on any other. Until the board runs the pin script, the CLI still updates itself, and an update pauses attended sessions until the pin moves in a board pull request.
-- **Production changes.** Take a dump before every production migration or manual write (`specs/money-safety.md`). Migrations are applied through the Supabase Management API query endpoint until the one-time `supabase migration repair` in `specs/money-safety.md` has run, and through `supabase db push` after it. Functions deploy from `platform/` with `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api`. Both need the board's allow in auto mode. A spec that needs production steps lists them under "Production steps (need the board's allow)", and a Verification line that can run only after Console credit, the cutover or the board's second factor names what it waits on and stays unticked, with the spec at built.
+- **Production changes.** Take a dump before every production migration or manual write (`specs/money-safety.md`). Migrations are applied through the Supabase Management API query endpoint until the one-time `supabase migration repair` in `specs/money-safety.md` has run, and through `supabase db push` after it; the repair needs `SUPABASE_DB_PASSWORD`, which the board puts in `.env` (`docs/BOARD-SETUP.md` step 25). Functions deploy from `platform/` with `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api`. Both need the board's allow in auto mode. A spec that needs production steps lists them under "Production steps (need the board's allow)", and a Verification line that can run only after Console credit, the cutover or the board's second factor names what it waits on and stays unticked, with the spec at built.
 - **What waits on the board.** `docs/BOARD-SETUP.md` is the step-by-step for every item that needs the board, with what is done and what is outstanding.
 - **Merging.** `main` has no branch protection; the repository is private on a plan without it. Every change reaches `main` through a pull request, except the revert commit the dispatcher writes after a merged card fails its deploy or smoke. The dispatcher merges a card only after a run of the gate workflow has succeeded on the pull request's exact head sha, and its squash merge passes that sha, so a head that moved is refused; it merges a Dependabot patch update the same way, only when every condition of the merge policy holds (PLAN.md §10 decision 53). While Actions cannot start jobs (below), board pull requests merge on the local gate instead (PLAN.md §10 decision 44, `specs/local-gate.md`): `bash scripts/local-gate.sh <pr> [port-base]` from main's checkout, never a pull request's own copy, then `gh pr merge <pr> --squash --match-head-commit <head>` only when the PASS line names that head and its `base=` is still `origin/main`, with the PASS line quoted in the merge body. One gate at a time on the Mac, 15 to 40 minutes a run. Cards wait for Actions: the script refuses a card branch, and the dispatcher fails closed without a gate workflow run.
 - **Actions minutes.** The repository is private on GitHub Free, which includes 2,000 Linux Actions minutes a month, counted across the whole account. Measured on 22 September 2026 from the Actions jobs API, each job rounded up to a whole minute: 104 gate runs since 14 September used 512 billed minutes, a median of 5 minutes a run and at most 7. On 23 September 2026 the included minutes ran out; with a $0 spending limit every job is refused within seconds with a billing annotation, so the gate workflow is disabled (`gh workflow disable gate`) and board pull requests merge on the local gate (Merging, above). To switch back, once the included minutes reset at the start of the next billing cycle, or the board makes the repository public (standard runners are free on public repositories), or the board adds an Actions budget (a spend, against PLAN.md §10 decision 35): `gh workflow enable gate`, and every pull request, cards included, merges on the Actions gate again (`docs/BOARD-SETUP.md`, GitHub Actions minutes). A board view of the minutes is a backlog entry.

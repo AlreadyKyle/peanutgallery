@@ -1,6 +1,6 @@
 # The machine mark and the icons
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 Replaces the peanut of `specs/site-mark.md`, as part of the rename to Mob Machine (`specs/rename.md`, PLAN.md §10 decision 43). This is a board pull request: the top bar, the mark component, `index.html`'s icons and the site's scripts are kernel.
 
@@ -33,7 +33,7 @@ The mark is a small machine drawn in code on a 32-unit grid: a rounded cabinet, 
 - [x] `icons.mjs` and `og-image.mjs` run twice write the same bytes.
 - [x] `og.png` shows "MOB MACHINE" with the mark; the top bar at 390px and 1440px shows the mark in paper on black; the favicons read at 16px on a light and a dark strip (looked at, Evidence).
 - [x] The site's e2e suite passes.
-- [ ] After the deploy, the live check passes with `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png` and `/icon-512.png` at 200 and the top bar's mark line.
+- [x] After the deploy, the live check passes with `/favicon.ico`, `/favicon-32.png`, `/apple-touch-icon.png` and `/icon-512.png` at 200 and the top bar's mark line.
 
 ## Verification
 
@@ -54,6 +54,23 @@ The mark is a small machine drawn in code on a 32-unit grid: a rounded cabinet, 
 - `E2E_PORT=4491 pnpm --filter @backseat/site e2e` at 3a845bb: "148 passed (3.3m)"; the 5 skipped are the screenshot specs, which run only when asked. Passed among the 148: "at 375 px › the top bar carries the mark, Play, Contribute and the page links" and the same at 1440 px, and axe WCAG 2.2 AA "finds no violation on the guide and every page" at 375px and 1440px.
 - The top bar at 1x, after review (23 September 2026). Built with the e2e fixture values and served on 4493 (before) and 4494 (after); the mark's 24×24 pixels (before) and 24×30 (after) counted at 1440px, a pixel "partial" when it is neither the bar's ink nor paper. Before, 1.5rem square: 94 of 326 lit pixels partial at 1x, the eyes, the cabinet's top edge, the slot and the feet ringed in grey. After, the ink box at one pixel a unit: 52 of 516 at 1x and 117 of 2016 at 2x, and a dump of the 1x pixels shows every partial one at a round corner. The Guide's specimen, at y 434.5 in that build, counts the same 52: Chromium snaps an SVG root's box to whole pixels (a probe of the mark at 24px moved by half a pixel down or right counted the same 94 as unmoved). The top bar's row is 60px at 320, 360, 390, 768, 1024 and 1440, the name starts at x 176 at 1440 as before, and `og.png` was drawn again (`icons.mjs` wrote the same bytes; both scripts run twice, `shasum -c` OK for the five files).
 - With that change: `pnpm verify` exit 0 (site 429 tests, among them the new one-pixel-a-unit check, which fails on the old 1.5rem square box); `E2E_PORT=4490 pnpm --filter @backseat/site e2e` "148 passed (3.1m)", 5 skipped, among them "keeps the top bar to one 61px row at 360px, Play shown" and at 375 and 390px, which a 2rem square box would fail; `node scripts/rename.mjs --check` "tier 1 carries the old name nowhere".
+
+After the deploy (close-out, 26 September 2026). The rename merged as 5f40ab5 (#79) and was live on the three sites that night (`specs/rename.md`). On `origin/main` at ed63326, with production's `version.json` serving that sha, `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs` exits 0:
+
+```
+PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0
+PASS home title is "Mob Machine"
+PASS the top bar's "Mob Machine" link goes home and draws the mark (1 path)
+PASS /favicon.ico 200
+PASS /favicon-32.png 200
+PASS /apple-touch-icon.png 200
+PASS /icon-512.png 200
+PASS /og.png 200 image/png 1200x630
+PASS index og:title "Mob Machine"
+PASS index og:site_name "Mob Machine"
+```
+
+Every Verification line is run and quoted. Status done.
 
 ## Decisions
 
