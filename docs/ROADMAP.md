@@ -82,7 +82,8 @@ Every Verification line has been run and its output quoted.
 | `specs/local-gate.md` | done |
 | `specs/gate-local-output.md` | done |
 | `specs/sweep-22-sep.md` | done |
-| `specs/sweep-27-sep.md` | built (the live 400 on `/api/card/%E0` after the deploy) |
+| `specs/sweep-27-sep.md` | done |
+| `specs/mobile-first-games.md` | built (Dust's layout live on the game's site after the deploy) |
 | `specs/opus-55.md` | done |
 | `specs/carry-over.md` | done |
 | `specs/launch-hardening.md` | done |

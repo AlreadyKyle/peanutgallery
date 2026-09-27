@@ -4,7 +4,7 @@ The first game. An idle game about dust: it accrues on its own, strikes add a li
 
 ## Pillars
 
-Idle/incremental. One screen. Numbers go up. Every feature is visible within 60 seconds of play. A session of two minutes is satisfying. All-ages. Procedural or vector art only.
+Idle/incremental. One screen. Mobile-first: the screen fits a 375px portrait phone with no sideways scroll, and every control is at least a 44px touch target there (`docs/PLAN.md` §10 decision 56). Numbers go up. Every feature is visible within 60 seconds of play. A session of two minutes is satisfying. All-ages. Procedural or vector art only.
 
 ## Layout
 
