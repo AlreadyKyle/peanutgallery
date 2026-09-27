@@ -1105,11 +1105,6 @@ button.link:hover:not(:disabled) {
   margin-top: 0.25rem;
 }
 
-/* The Watch link sits a step below the meta line, so the row's facts and its way out read apart. */
-.row-body > .row-link {
-  margin-top: var(--space-1);
-}
-
 /* A two-line title keeps a little more leading than a heading's, so its lines don't touch. */
 .row-title {
   font-size: var(--size-body);

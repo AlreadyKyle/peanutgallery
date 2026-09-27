@@ -214,7 +214,8 @@ async function livePart(key) {
 
 /**
  * Every Payment Link in main that does not carry the agreement: the Terms and Refunds links and the
- * age condition in its own card, or on /contribute in the line directly under the first choice.
+ * age condition in the one agreement line under its card grid (the board, 27 Sep 2026), or on
+ * /contribute in the line directly under the first choice.
  */
 function linksWithoutAgreement(page) {
   return page.evaluate((tokens) => {
@@ -227,7 +228,11 @@ function linksWithoutAgreement(page) {
     const line = first?.nextElementSibling ?? null;
     const underFirst = location.pathname === '/contribute' && line?.tagName === 'P' && has(line);
     return [...document.querySelectorAll('main a[href^="https://buy.stripe.com/"]')]
-      .filter((a) => !underFirst && !has(a.closest('li.card')))
+      .filter((a) => {
+        const grid = a.closest('ul.card-grid');
+        const next = grid === null ? [] : [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling];
+        return !underFirst && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
+      })
       .map((a) => `${(a.textContent ?? '').trim()} -> ${a.getAttribute('href')}`);
   }, AGREEMENT_TOKENS);
 }
