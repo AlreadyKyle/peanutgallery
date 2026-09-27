@@ -222,13 +222,16 @@ Cloud server is the planned later home, once you open a billing account (see **O
    `BACKUP_HEALTHCHECK_URL=`.
 
 Then, with your allow, I set the backup login's password (a production step,
-`docs/specs/money-safety.md`), write `backup-mac.env` (key names only) and run one backup by hand
-(`platform/ops/mac/backup-mac.sh`), and quote the file it writes to the Drive folder. That backup is
-the one the restore drill (step 19) uses. `install.sh` itself, which installs the nightly jobs and
-the dispatcher under launchd, cannot run yet: the host's env file needs the managed agent's ids, and
-`managed:apply` makes those only once the studio's Anthropic organisation has Console credit
-(step 22). So the install runs at the cutover (step 23), and until then a backup is one I run by hand
-when you ask. The Controller also waits on `STRIPE_READ_KEY` (step 4).
+`docs/specs/money-safety.md`), write `backup-mac.env` (key names only) and run
+`platform/ops/mac/install.sh --jobs-only` twice (`docs/specs/jobs-only-install.md`). It installs the
+nightly backup under launchd from a read-only copy of main, cloned with the read-only GitHub token
+(step 5.2), without the host's env file, which needs the managed agent's ids and so waits on Console
+credit (step 22). Then I run the first backup at once and quote the file it writes to the Drive
+folder; that backup is the one the restore drill (step 19) uses, and from then on one runs every
+night, with healthchecks.io emailing you if a night is missed. The Controller joins it once
+`STRIPE_READ_KEY` is in (step 4), and the quota check once its env file is written; the same command
+adds each. The dispatcher itself is installed at the cutover (step 23), which first moves this copy
+of main aside so the dispatcher runs from main as it is then.
 
 **Tell me:** "the Mac is ready."
 
@@ -585,8 +588,8 @@ supporter-loop pull requests are live, and the launch cards are open to fund.
 
 ### 19. Restore drill (once, about 10 minutes)
 
-Bring the offline backup key (step 3). I decrypt the backup I ran by hand in step 3 (or a newer one
-I run for the drill) with it, restore it by the runbook (`platform/ops/README.md`, Restore a
+Bring the offline backup key (step 3). I decrypt the first backup from step 3 (or a newer nightly
+one) with it, restore it by the runbook (`platform/ops/README.md`, Restore a
 Mac backup, `after-restore.sql` included) and quote the ledger identity and the pg_cron jobs on it.
 Then the key goes back offline and the decrypted copy is deleted.
 
@@ -664,8 +667,9 @@ from here the attended dispatcher is not started while the host runs. The runboo
 1. You: **Pause** on the board's site.
 2. Me: stop the attended dispatcher and confirm no dispatcher process is left.
 3. Me: create or update the managed agent and environment with the studio key and quote their ids;
-   write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only) and run
-   `platform/ops/mac/install.sh` twice. The second run must print `install: done: 0 change(s)`.
+   write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only), move the
+   jobs' copy of main from step 3 aside, and run `platform/ops/mac/install.sh` twice. The second run
+   must print `install: done: 0 change(s)`.
 4. You: set the agent mode to **unattended** on the board's site (second factor).
 5. Me: the toolchain check from the host's code clone, quoting `PASS: toolchain`.
 6. Me: `platform/ops/mac/install.sh --start`, which starts the dispatcher under launchd and waits

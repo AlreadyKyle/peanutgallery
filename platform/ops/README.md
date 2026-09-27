@@ -356,7 +356,7 @@ launchd's calendar is in local time, which moves with daylight saving, so each j
 
 | File in `platform/ops/mac` | Does |
 |---|---|
-| `install.sh` | creates the layout, clones both clones with the env file's token, installs `node_modules`, copies `env/dispatcher.env` to `code/.env` and checks the dispatcher's dotenv reads it as written, makes the code clone read-only and runs the dispatcher's read-only check, writes and loads the LaunchAgents; `--start` is the cutover. A second run reports `install: done: 0 change(s)`. It prints key names and paths, never a value. |
+| `install.sh` | creates the layout, clones both clones with the env file's token, installs `node_modules`, copies `env/dispatcher.env` to `code/.env` and checks the dispatcher's dotenv reads it as written, makes the code clone read-only and runs the dispatcher's read-only check, writes and loads the LaunchAgents; `--start` is the cutover; `--jobs-only` installs only the jobs, before the cutover. A second run reports `install: done: 0 change(s)`. It prints key names and paths, never a value. |
 | `deploy.sh` | the Mac's `platform/ops/deploy.sh`, with the same checks |
 | `uninstall.sh` | unloads and removes the four LaunchAgents, leaving `~/peanutgallery-host` |
 | `run-dispatcher.sh` | the dispatcher's wrapper: the entrypoint's checks, `caffeinate`, the exit codes and restarts |
@@ -375,6 +375,29 @@ These are `docs/BOARD-SETUP.md` step 3.
 4. **The backup folder.** Install Google Drive for desktop, sign in, and create a folder `peanutgallery-backups` in My Drive. Its path, something like `~/Library/CloudStorage/GoogleDrive-<account>/My Drive/peanutgallery-backups` written out in full, goes in `.env` as `BACKUP_DIR=`. Drive copies each backup off the Mac.
 5. **The age key.** `age-keygen -o ~/Desktop/peanutgallery-backup-key.txt`. The `# public key: age1...` line goes in `.env` as `BACKUP_AGE_RECIPIENT=`. Keep the file itself offline (a USB stick kept apart, and a copy in the board's password manager), then delete it from the Mac: only that key opens a backup.
 6. **The backup check.** At healthchecks.io, a check named `peanutgallery backup` with a period of 1 day and a grace of 12 hours (the Mac may make a run up at its next wake). Its ping URL goes in `.env.vps` as `BACKUP_HEALTHCHECK_URL=`.
+
+### The jobs before the cutover
+
+The full install needs `env/dispatcher.env`, and that needs the managed agent's ids, which `managed:apply` makes only once the studio's Anthropic organisation has Console credit (`docs/BOARD-SETUP.md` step 22). Until then `install.sh --jobs-only` installs the nightly jobs alone (`docs/specs/jobs-only-install.md`), so the money database is backed up every night from the day contributions open. From the repository root of the board's checkout of reviewed main, with `GITHUB_READ_TOKEN` (or, failing it, `VPS_GITHUB_TOKEN`) and `NTFY_TOPIC_URL` exported from `.env.vps`:
+
+```sh
+mkdir -p ~/peanutgallery-host/env && chmod 700 ~/peanutgallery-host ~/peanutgallery-host/env
+JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac
+platform/ops/mac/install.sh --jobs-only
+platform/ops/mac/install.sh --jobs-only
+~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log
+```
+
+It keeps the full install's refusals: macOS and never root, each env file the board's, 0600, not a symlink and passing `check-env.mjs`, a clean clone with nothing git would act on, the whole clone `chmod -R a-w`. `backup-mac.env` must exist; the Controller and the quota check are installed too when their env files exist (add `controller` and `quota` to `make-jobs-env.sh` once `STRIPE_READ_KEY` is in, then run `--jobs-only` again). It clones `code/` from main with the read-only token, never keeps it, and needs no dispatcher env file, `.env`, `node_modules` or work clone; it writes no dispatcher LaunchAgent. The second run must end `install: done: 0 change(s)`.
+
+`deploy.sh` needs the dispatcher's LaunchAgent, so it does not update a jobs-only clone. To move the jobs to a newer main before the cutover, move the clone aside and install again:
+
+```sh
+chmod -R u+w ~/peanutgallery-host/code && mv ~/peanutgallery-host/code ~/peanutgallery-code.jobs-only
+platform/ops/mac/install.sh --jobs-only
+```
+
+A plain `install.sh` refuses the clone `--jobs-only` made, printing the same two commands, so the cutover's install clones main afresh (The cutover on the Mac, step 3). Delete `~/peanutgallery-code.jobs-only` afterwards (`rm -rf`; it holds no secret).
 
 ### Install
 
@@ -406,7 +429,7 @@ Each job's first line must read `PASS:`, and the backup must end `backup: done: 
 
 1. **Pause** from /board.
 2. **Stop the attended dispatcher** (Ctrl-C in its terminal) and confirm no `dispatcher` process is left: `pgrep -fl 'src/main.ts'` prints nothing.
-3. **The managed agent and environment:** `pnpm --filter @backseat/dispatcher managed:apply` in the board's checkout; put the printed ids in `.env`, then rewrite the env file and run the install again (Install, above). It must end `0 change(s)` on its second run.
+3. **The managed agent and environment:** `pnpm --filter @backseat/dispatcher managed:apply` in the board's checkout; put the printed ids in `.env`, then rewrite the env file and run the install again (Install, above). If the jobs went in with `--jobs-only`, move that clone aside first (The jobs before the cutover, above); the install refuses it otherwise. It must end `0 change(s)` on its second run.
 4. **Set the agent mode to unattended** at /board (second factor).
 5. **The toolchain check,** once, as on a server, from the code clone:
    ```sh

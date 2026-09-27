@@ -9,7 +9,7 @@ A bug hunt over the live site, the Netlify functions, the Stripe webhook, the la
 ## Scope
 
 In: the fixes listed under Behaviour.
-Out: installing the Mac host's nightly jobs before the dispatcher's env file can be written (it needs the managed agent's ids, which need Console credit); until then a backup runs by hand. A backup job that installs on its own is a backlog item. Out too: a job whose env file is missing alerts every day it runs, which stays as it is, since that alert is how the board hears the job is not running.
+Out: installing the Mac host's nightly jobs before the dispatcher's env file can be written (it needs the managed agent's ids, which need Console credit); until then a backup runs by hand. A backup job that installs on its own is a backlog item (since built: `jobs-only-install.md`). Out too: a job whose env file is missing alerts every day it runs, which stays as it is, since that alert is how the board hears the job is not running.
 
 ## Behaviour
 

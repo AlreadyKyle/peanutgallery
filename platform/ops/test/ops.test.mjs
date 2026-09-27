@@ -1461,3 +1461,186 @@ describe('the backups repository template', () => {
     assert.match(read('platform/ops/backups-repo/README.md'), /never in the studio repository/);
   });
 });
+
+// ---------------------------------------------------------------- install.sh --jobs-only
+
+// docs/specs/jobs-only-install.md. install.sh's functions run sourced in a scratch host folder: the
+// Mac check is skipped (it asks for macOS, the pinned pnpm and not root, and runs first in both modes),
+// launchctl and plutil are fakes on PATH that record their calls, and clone_main clones a local
+// repository standing in for GitHub, recording the token header it was handed. Nothing here loads a
+// LaunchAgent or touches ~/peanutgallery-host.
+describe('install.sh --jobs-only', () => {
+  const BASH = existsSync('/bin/bash') ? '/bin/bash' : 'bash';
+  const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
+  const gitEnv = { PATH: process.env.PATH, HOME: process.env.HOME, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+  const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=Ops test', '-c', 'user.email=ops@test.local', ...args], { cwd, env: gitEnv, encoding: 'utf8' });
+  // Split so the secret scan does not read them as tokens.
+  const READ_TOKEN = `${'github_'}pat_fixture_read_only`;
+  const HOST_TOKEN = `${'github_'}pat_fixture_host`;
+  const BACKUP_ENV = [
+    'BACKUP_DB_URL=postgresql://peanutgallery_backup.fixtureref:fixture-password@aws-0-ca-central-1.pooler.supabase.com:5432/postgres',
+    `BACKUP_AGE_RECIPIENT=age1${'q'.repeat(58)}`,
+    'BACKUP_DIR=/fixture/backups',
+    'BACKUP_HEALTHCHECK_URL=https://hc-ping.com/fixture-backup',
+  ].join('\n');
+  const CONTROLLER_ENV = ['SUPABASE_URL=https://fixture.supabase.local', 'SUPABASE_SERVICE_ROLE_KEY=fixture-service', 'STRIPE_READ_KEY=rk_live_fixture', 'NTFY_TOPIC_URL=https://ntfy.sh/fixture-topic'].join('\n');
+  let serial = 0;
+  // The clones are read-only; the file's own clean-up needs them writable.
+  after(() => spawnSync('chmod', ['-R', 'u+w', scratch]));
+
+  // A repository on main holding the job template and the jobs' folders, standing in for GitHub.
+  const origin = path.join(scratch, 'jobs-only-origin');
+  mkdirSync(path.join(origin, 'platform', 'ops', 'mac'), { recursive: true });
+  mkdirSync(path.join(origin, 'platform', 'ops', 'jobs'), { recursive: true });
+  writeFileSync(path.join(origin, 'platform', 'ops', 'mac', 'studio.peanutgallery.job.plist'), read('platform/ops/mac/studio.peanutgallery.job.plist'));
+  writeFileSync(path.join(origin, 'platform', 'ops', 'jobs', 'main.mjs'), '');
+  git(origin, 'init', '-q', '--initial-branch=main');
+  git(origin, 'add', '-A');
+  git(origin, 'commit', '-q', '-m', 'the jobs');
+
+  function host({ backup = BACKUP_ENV, controller = null, mode = 0o600 } = {}) {
+    const root = mkdtempSync(path.join(scratch, `jobs-only-${(serial += 1)}-`));
+    const hostRoot = path.join(root, 'host');
+    const env = path.join(hostRoot, 'env');
+    mkdirSync(env, { recursive: true, mode: 0o700 });
+    chmodSync(hostRoot, 0o700);
+    if (backup !== null) writeFileSync(path.join(env, 'backup-mac.env'), `${backup}\n`, { mode });
+    if (controller !== null) writeFileSync(path.join(env, 'controller.env'), `${controller}\n`, { mode: 0o600 });
+    const bin = path.join(root, 'bin');
+    mkdirSync(bin);
+    const calls = path.join(root, 'calls.log');
+    const loaded = path.join(root, 'loaded');
+    writeFileSync(path.join(bin, 'launchctl'), `#!/bin/bash\necho "launchctl $*" >> "${calls}"\ncase "$1" in\n  print) grep -qxF "\${2##*/}" "${loaded}" 2> /dev/null ;;\n  bootstrap) basename "$3" .plist >> "${loaded}" ;;\n  print-disabled) : ;;\nesac\n`, { mode: 0o755 });
+    writeFileSync(path.join(bin, 'plutil'), `#!/bin/bash\nexit 0\n`, { mode: 0o755 });
+    const agents = path.join(root, 'LaunchAgents');
+    const run = (args, extra = {}) =>
+      spawnSync(
+        BASH,
+        [
+          '-c',
+          [
+            'set -euo pipefail',
+            'INSTALL_SOURCE_ONLY=1 . "$1"',
+            'check_mac() { :; }',
+            // GitHub stands in as a local repository; the header is what the real clone_main sends.
+            `clone_main() { local header; header=$(token_header "$1") || return 1; echo "$header" >> "${calls}"; git clone -q --branch main "${origin}" "$2" && code_git remote set-url origin "$REPO_URL"; }`,
+            'main "${@:2}"',
+          ].join('\n'),
+          'install-test',
+          path.join(OPS_DIR, 'mac', 'install.sh'),
+          ...args,
+        ],
+        { env: { ...gitEnv, PATH: `${bin}:${process.env.PATH}`, PEANUTGALLERY_HOST: hostRoot, LAUNCH_AGENTS_DIR: agents, ...extra }, encoding: 'utf8' },
+      );
+    const callLines = () => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(Boolean) : []);
+    return { root, hostRoot, env, agents, run, callLines, code: path.join(hostRoot, 'code') };
+  }
+  const operator = { GITHUB_READ_TOKEN: READ_TOKEN, VPS_GITHUB_TOKEN: HOST_TOKEN, NTFY_TOPIC_URL: 'https://ntfy.sh/fixture-topic' };
+  const decoded = (line) => Buffer.from(line.replace('AUTHORIZATION: basic ', ''), 'base64').toString('utf8');
+
+  test('installs the backup job from a read-only clone made with the read token, with no dispatcher env file, and a second run changes nothing', { skip: IS_ROOT ? 'root can write anywhere' : false }, () => {
+    const h = host();
+    const first = h.run(['--jobs-only'], operator);
+    assert.equal(first.status, 0, first.stdout + first.stderr);
+    assert.match(first.stdout, /install: cloning main with GITHUB_READ_TOKEN/);
+    const headers = h.callLines().filter((line) => line.startsWith('AUTHORIZATION: basic '));
+    assert.equal(headers.length, 1);
+    assert.equal(decoded(headers[0]), `x-access-token:${READ_TOKEN}`, 'the read-only token, not the host token, reached the clone');
+    for (const secret of [READ_TOKEN, HOST_TOKEN, 'fixture-password']) assert.ok(!(first.stdout + first.stderr).includes(secret), 'key names only');
+    assert.match(first.stdout, /backup-mac\.env: valid/);
+    assert.match(first.stdout, /controller\.env is missing: the controller job is left out/);
+    assert.match(first.stdout, /quota\.env is missing: the quota job is left out/);
+    assert.deepEqual(readdirSync(h.agents), ['studio.peanutgallery.backup.plist']);
+    assert.ok(h.callLines().some((line) => /^launchctl bootstrap gui\/\d+ .*studio\.peanutgallery\.backup\.plist$/.test(line)));
+    assert.ok(!h.callLines().some((line) => /dispatcher|controller|quota/.test(line)), 'no dispatcher and no job without an env file');
+    assert.equal(readFileSync(path.join(h.env, 'ntfy.url'), 'utf8'), 'https://ntfy.sh/fixture-topic\n');
+    assert.ok(!existsSync(path.join(h.env, 'dispatcher.env')));
+    assert.ok(!existsSync(path.join(h.code, '.env')), 'no dispatcher .env in the clone');
+    assert.ok(!existsSync(path.join(h.code, 'node_modules')), 'the jobs need no node_modules');
+    assert.ok(!existsSync(path.join(h.hostRoot, 'work')), 'no work clone');
+    const writable = spawnSync('find', [h.code, '!', '-type', 'l', '-perm', '-0200', '-print'], { encoding: 'utf8' }).stdout.trim();
+    assert.equal(writable, '', 'the whole clone is read-only');
+    assert.equal(readFileSync(path.join(h.hostRoot, 'state', 'code-jobs-only'), 'utf8').trim(), git(origin, 'rev-parse', 'HEAD').stdout.trim());
+    assert.equal(git(h.code, 'config', '--get', 'remote.origin.url').stdout.trim(), 'https://github.com/AlreadyKyle/peanutgallery.git');
+    assert.ok(!readFileSync(path.join(h.code, '.git', 'config'), 'utf8').includes('github_pat_'), 'the token is in no .git/config');
+    assert.match(first.stdout, /install: done: \d+ change\(s\)$/m);
+
+    // No token exported the second time: nothing is cloned, so none is needed.
+    const second = h.run(['--jobs-only'], {});
+    assert.equal(second.status, 0, second.stdout + second.stderr);
+    assert.match(second.stdout, /install: done: 0 change\(s\)$/m);
+  });
+
+  test('installs the other jobs whose env files exist, and falls back to the host token when the read token is not exported', { skip: IS_ROOT ? 'root can write anywhere' : false }, () => {
+    const h = host({ controller: CONTROLLER_ENV });
+    const run = h.run(['--jobs-only'], { VPS_GITHUB_TOKEN: HOST_TOKEN, NTFY_TOPIC_URL: 'https://ntfy.sh/fixture-topic' });
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /cloning main with VPS_GITHUB_TOKEN/);
+    assert.equal(decoded(h.callLines().find((line) => line.startsWith('AUTHORIZATION: basic '))), `x-access-token:${HOST_TOKEN}`);
+    assert.deepEqual(readdirSync(h.agents).sort(), ['studio.peanutgallery.backup.plist', 'studio.peanutgallery.controller.plist']);
+  });
+
+  test('refuses what the full install refuses: a missing, open, linked or invalid env file, a missing or classic token, no alert address', { skip: IS_ROOT ? 'root can write anywhere' : false }, () => {
+    const cases = [
+      [host({ backup: null }), operator, /backup-mac\.env is missing; write it with JOBS_ENV_DIR=.* platform\/ops\/make-jobs-env\.sh backup-mac/],
+      [host({ mode: 0o644 }), operator, /backup-mac\.env must be 0600/],
+      [host({ backup: `${BACKUP_ENV}\nSTRIPE_READ_KEY=sk_live_fixture` }), operator, /STRIPE_READ_KEY is not a backup-mac key/],
+      [host({ backup: BACKUP_ENV.replace('peanutgallery_backup.fixtureref', 'postgres.fixtureref') }), operator, /BACKUP_DB_URL signs in as the database owner/],
+      [host({ controller: CONTROLLER_ENV.replace('rk_live_', 'sk_live_') }), operator, /controller\.env:\n.*Stripe secret key/],
+      [host(), { NTFY_TOPIC_URL: 'https://ntfy.sh/fixture-topic' }, /export GITHUB_READ_TOKEN \(or VPS_GITHUB_TOKEN\) from \.env\.vps/],
+      [host(), { ...operator, GITHUB_READ_TOKEN: `${'ghp'}_fixtureclassic` }, /GITHUB_READ_TOKEN is not a fine-grained personal access token/],
+      [host(), { GITHUB_READ_TOKEN: READ_TOKEN }, /export NTFY_TOPIC_URL from \.env\.vps/],
+      [host(), { ...operator, NTFY_TOPIC_URL: 'http://ntfy.sh/fixture-topic' }, /NTFY_TOPIC_URL must be one https address/],
+    ];
+    const linked = host({ backup: null });
+    writeFileSync(path.join(linked.root, 'elsewhere.env'), `${BACKUP_ENV}\n`, { mode: 0o600 });
+    symlinkSync(path.join(linked.root, 'elsewhere.env'), path.join(linked.env, 'backup-mac.env'));
+    cases.push([linked, operator, /backup-mac\.env is a symlink/]);
+    for (const [h, env, message] of cases) {
+      const run = h.run(['--jobs-only'], env);
+      assert.equal(run.status, 1, `${message}: ${run.stdout}`);
+      assert.match(run.stderr, message);
+      assert.ok(!(run.stdout + run.stderr).includes('fixture-password'), 'key names only');
+      assert.ok(!existsSync(h.agents), `${message}: no LaunchAgent written`);
+    }
+    const both = host().run(['--jobs-only', '--start'], operator);
+    assert.equal(both.status, 1);
+    assert.match(both.stderr, /usage: platform\/ops\/mac\/install\.sh \[--start \| --jobs-only\]/);
+  });
+
+  test('refuses a dirty clone, and a plain install refuses the clone --jobs-only made until it is moved aside', { skip: IS_ROOT ? 'root can write anywhere' : false }, () => {
+    const h = host();
+    assert.equal(h.run(['--jobs-only'], operator).status, 0);
+    spawnSync('chmod', ['-R', 'u+w', h.code]);
+    writeFileSync(path.join(h.code, 'platform', 'ops', 'jobs', 'main.mjs'), 'changed\n');
+    const dirty = h.run(['--jobs-only'], operator);
+    assert.equal(dirty.status, 1);
+    assert.match(dirty.stderr, /refused: .* has uncommitted or untracked files/);
+    const writable = spawnSync('find', [h.code, '!', '-type', 'l', '-perm', '-0200', '-print'], { encoding: 'utf8' }).stdout.trim();
+    assert.equal(writable, '', 'the clone is locked again on the way out');
+
+    const plain = h.run([], operator);
+    assert.equal(plain.status, 1);
+    assert.match(plain.stderr, /was cloned by install\.sh --jobs-only at [0-9a-f]{12}, for the jobs only\. Move it aside/);
+    // As the refusal says: writable first, since a read-only folder cannot be moved to another.
+    spawnSync('chmod', ['-R', 'u+w', h.code]);
+    assert.equal(spawnSync('mv', [h.code, path.join(h.root, 'peanutgallery-code.jobs-only')]).status, 0);
+    const moved = spawnSync(BASH, ['-c', 'INSTALL_SOURCE_ONLY=1 . "$1"; refuse_jobs_only_clone; echo "changes $CHANGES"', 'x', path.join(OPS_DIR, 'mac', 'install.sh')], {
+      env: { ...gitEnv, PEANUTGALLERY_HOST: h.hostRoot },
+      encoding: 'utf8',
+    });
+    assert.equal(moved.status, 0, moved.stderr);
+    assert.match(moved.stdout, /changes 1/);
+    assert.ok(!existsSync(path.join(h.hostRoot, 'state', 'code-jobs-only')));
+  });
+
+  test('the Mac check runs first in both modes, and the plain install checks for a jobs-only clone before anything else', () => {
+    const install = read('platform/ops/mac/install.sh');
+    const body = /^main\(\) \{\n([\s\S]*?)^\}/m.exec(install)[1];
+    const at = (step) => body.indexOf(step);
+    assert.ok(at('check_mac') > -1 && at('check_mac') < at('install_jobs_only'), 'not root, macOS: before either mode');
+    assert.ok(at('install_jobs_only') < at('refuse_jobs_only_clone'));
+    assert.ok(at('refuse_jobs_only_clone') < at('check_host_env'));
+    assert.match(install, /\[ "\$\(id -u\)" -ne 0 \] \|\| die "run as your own user, not root/);
+  });
+});
