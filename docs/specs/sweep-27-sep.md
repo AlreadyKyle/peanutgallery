@@ -1,6 +1,6 @@
 # Sweep, 27 September: bugs found after the launch series
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -25,7 +25,7 @@ Out: installing the Mac host's nightly jobs before the dispatcher's env file can
 - [x] A merge refused with 405 while main has moved sends the card to funded with `main_moved` (`platform/dispatcher/test/pipeline.test.ts`, "sends a card back to funded when the merge is refused because main moved after the guard"; it fails without the fix). A 409 with main unmoved still rejects with `merge`.
 - [x] The GitHub poll tests use a 200 ms deadline; the dispatcher's `test` script passes `--testTimeout=20000`.
 - [x] No script or runbook line names BOARD-SETUP step 8 as the cutover.
-- [ ] The live site answers `/api/card/%E0` with 400 after the deploy.
+- [x] The live site answers `/api/card/%E0` with 400 after the deploy.
 
 ## Verification
 
@@ -40,3 +40,6 @@ Out: installing the Mac host's nightly jobs before the dispatcher's env file can
 - `pnpm --filter @backseat/dispatcher test`: `Test Files 49 passed (49)`, `Tests 861 passed (861)`.
 - `node --test platform/ops/test/ops.test.mjs`: `pass 135`, `fail 0`.
 - Before the fix, production: `curl https://peanutgallery.games/api/card/%E0` answered 502.
+- Merged as #92 (a226a31) on `LOCAL GATE PASS pr=92 head=02e012735130e0ebd7045a0ca7d70c268b2f9cee base=7fe600e8fef8dc244139fc2993ed78565094f464 merge=db8881bad1e4a1136f40f30ffc72c9c9ee7a455a seed=false platform=true lane=code site=true functions=false`.
+- After the deploy, 27 September 2026: `https://peanutgallery.games/version.json` answered `{"sha":"a226a318b0f7b564c88031a98de3e94a46ab5eb1","builtAt":"2026-09-27T13:59:30.738Z"}`; `curl -s -o /dev/null -w '%{http_code}' https://peanutgallery.games/api/card/%E0` printed `400`; `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`.
+- `pnpm verify` on the close-out branch: see `docs/specs/mobile-first-games.md` Evidence, the same run.
