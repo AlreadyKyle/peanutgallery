@@ -1035,19 +1035,20 @@ button.link:hover:not(:disabled) {
   border-left: 2px solid var(--hairline);
 }
 
-/* Rows: body text, hairlines between them, a constant 0.5rem inset (room for the change marker).
-   The date, the rail and the meta line are small. Queued, Shipped, planned cards and the ledger's
-   rows are rows, never cards. */
+/* Rows: body text, hairlines between them, a constant 0.5rem inline inset (room for the change
+   marker) and 0.75rem above and below against the hairlines. The date, the rail and the meta line
+   are small. Queued, Shipped, planned cards and the ledger's rows are rows, never cards. A list of
+   rows keeps 1.5rem before the link under it. */
 
 .rows {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-3);
 }
 
 .rows li {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
-  padding: var(--space-1);
+  padding: calc(var(--space-1) * 1.5) var(--space-1);
   border-top: 1px solid var(--hairline);
   font-size: var(--size-body);
 }
@@ -1071,7 +1072,7 @@ button.link:hover:not(:disabled) {
 .rows.rail li {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.125rem var(--space-2);
+  gap: 0.25rem var(--space-2);
 }
 
 .rail .row-time,
@@ -1104,12 +1105,19 @@ button.link:hover:not(:disabled) {
 }
 
 .row-body > * + * {
-  margin-top: 0.125rem;
+  margin-top: 0.25rem;
 }
 
+/* The Watch link sits a step below the meta line, so the row's facts and its way out read apart. */
+.row-body > .row-link {
+  margin-top: var(--space-1);
+}
+
+/* A two-line title keeps a little more leading than a heading's, so its lines don't touch. */
 .row-title {
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
+  line-height: 1.35;
   text-wrap: pretty;
 }
 
