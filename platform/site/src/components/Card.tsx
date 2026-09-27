@@ -15,18 +15,6 @@ function blank(text: string | null): boolean {
   return text === null || text.trim() === '';
 }
 
-// The agent brief stays public but collapsed behind a native disclosure. A card with no brief keeps
-// the disclosure's one line empty, so its bar and button line up with the cards beside it.
-function Brief({ intent }: { intent: string | null }) {
-  if (blank(intent)) return <div className="brief-slot" aria-hidden="true" />;
-  return (
-    <details className="brief">
-      <summary>{copy.agentBrief}</summary>
-      <p>{intent}</p>
-    </details>
-  );
-}
-
 /**
  * The line beside agent-written card text (docs/specs/agent-workflows.md): the drafting role's title
  * from the roles already loaded, or the plain line when they did not load; null on a card no agent
@@ -134,7 +122,6 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
             </Link>
           </p>
         ) : null}
-        {mode === 'example' ? null : <Brief intent={card.intent} />}
       </div>
     </li>
   );

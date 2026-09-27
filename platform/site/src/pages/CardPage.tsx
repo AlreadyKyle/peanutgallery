@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { plannedState } from '../components/Cards';
-import { CardFacts } from '../components/Funding';
+import { CardFacts, FundAgreement, liveFundLink } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
 import { PageHeader } from '../components/PageHeader';
@@ -140,6 +140,7 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
   return (
     <>
       {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
+      {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
       <Facts detail={detail} />
       <Changed detail={detail} />
       {detail.stopped === null ? null : (
@@ -160,6 +161,13 @@ function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }
         {detail.lines.length === 0 ? null : <p className="muted">{words.linesLede}</p>}
         <Timeline lines={detail.lines} count={detail.line_count} roles={detail.roles} />
       </section>
+      {/* What the agents are told: on the card's own page only, not on every card (the board, 27 Sep 2026). */}
+      {detail.card.intent === null || detail.card.intent.trim() === '' ? null : (
+        <section className="section" aria-labelledby="card-brief">
+          <h2 id="card-brief">{copy.agentBrief}</h2>
+          <p>{detail.card.intent}</p>
+        </section>
+      )}
     </>
   );
 }

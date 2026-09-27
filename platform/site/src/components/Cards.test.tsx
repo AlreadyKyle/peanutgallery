@@ -92,7 +92,7 @@ describe('FundBoard states', () => {
 });
 
 describe('a card box', () => {
-  it('shows the suit, the state, title, summary, bar, spec rows, a fund button and a closed brief', () => {
+  it('shows the suit, the state, title, summary, bar, spec rows and a fund button, with one agreement under the grid and no brief', () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const intent = 'Edit seed-1/config/unlocks.json. Run the bot; stop and report.';
     render(
@@ -134,13 +134,13 @@ describe('a card box', () => {
     expect(link.classList.contains('button')).toBe(true);
     expect(link.getAttribute('aria-describedby')).toBe(screen.getByRole('heading', { level: 3 }).id);
 
-    const details = box.querySelector('details.brief') as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    expect(details.querySelector('summary')?.textContent).toBe(copy.agentBrief);
-    expect(link.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.click(details.querySelector('summary')!);
-    expect(details.open).toBe(true);
-    expect(within(details).getByText(intent)).toBeTruthy();
+    // The brief is on the card's own page only, and the agreement is said once under the grid.
+    expect(box.querySelector('details')).toBeNull();
+    expect(box.textContent).not.toContain(intent);
+    expect(box.textContent).not.toContain(copy.agentBrief);
+    const agreement = document.querySelectorAll('p.fund-agreement');
+    expect(agreement).toHaveLength(1);
+    expect(box.contains(agreement[0]!)).toBe(false);
   });
 
   it('shows an open card with its state word and a single contributor', () => {
@@ -152,11 +152,10 @@ describe('a card box', () => {
     expect(specRow(box, 'contributors')).toEqual([legal.contributorsLabel, '1']);
   });
 
-  it('shows 0 contributors on a goal with no funding row, and no summary or brief when blank', () => {
+  it('shows 0 contributors on a goal with no funding row, and no summary when blank', () => {
     render(<FundBoard snapshot={snapshot([card({ id: 'new', title: 'New', summary: '  ', intent: null, funding_target_usd: 20 })])} />);
     expect(specRow(boxFor('New'), 'contributors')).toEqual([legal.contributorsLabel, '0']);
     expect(document.querySelectorAll('p.card-summary')).toHaveLength(0);
-    expect(boxFor('New').querySelector('details.brief')).toBeNull();
   });
 
   it('leaves the contributor count out of the caption when the funding figures did not load', () => {

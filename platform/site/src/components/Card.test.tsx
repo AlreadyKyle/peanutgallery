@@ -8,6 +8,7 @@ import { books } from '../lib/books.test-fixture';
 import { canFund } from '../lib/payment';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
+import { FundAgreement } from './Funding';
 import { Glyph, GLYPH_NAMES, STATE_TAGS, SUITS } from './Glyph';
 
 function card(overrides: Partial<Card> = {}): Card {
@@ -168,13 +169,14 @@ describe('the card faces', () => {
     expect(box.querySelector('.funding-bar-fill')?.getAttribute('style')).toContain('--fill: 50%');
   });
 
-  it('states the agreement under every live Fund this card link, with the Terms, the Refunds page and the age condition', () => {
+  it('draws no agreement on the card itself: it is said once beside the cards (FundAgreement)', () => {
     const box = one(card({ id: 'o', title: 'Open one' }));
-    const fund = within(box).getByRole('link', { name: legal.fundThis });
-    const agreement = fund.nextElementSibling as HTMLElement;
-    expect(agreement.tagName).toBe('P');
+    expect(within(box).getByRole('link', { name: legal.fundThis })).toBeTruthy();
+    expect(box.textContent).not.toContain(legal.fundAgreement.slice(0, 20));
+    cleanup();
+    render(<MemoryRouter><FundAgreement /></MemoryRouter>);
+    const agreement = document.querySelector('p.fund-agreement') as HTMLElement;
     expect(agreement.textContent).toBe(legal.fundAgreement.replace('{terms}', legal.footerLinks.terms).replace('{refunds}', legal.refundsPageLink));
-    expect(agreement.textContent).toMatch(/adult or have a guardian's permission/);
     expect(within(agreement).getByRole('link', { name: legal.footerLinks.terms }).getAttribute('href')).toBe('/terms');
     expect(within(agreement).getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });

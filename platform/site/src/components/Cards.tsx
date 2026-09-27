@@ -7,7 +7,7 @@ import { formatDate } from '../lib/format';
 import { legal } from '../lib/legal';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace } from './Card';
-import { shippedMeta, type SpecRow } from './Funding';
+import { FundAgreement, liveFundLink, shippedMeta, type SpecRow } from './Funding';
 import { Glyph, StateTag, SUITS, SuitTag } from './Glyph';
 
 // The card groups, in the platform code lane. Each card is drawn by Card.tsx; its money (the bar,
@@ -113,6 +113,7 @@ export function FundBoard({
           ))}
         </ul>
       )}
+      {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
       {all || shown.length <= PHONE_CARDS ? null : (
         <p className="show-all">
           <button

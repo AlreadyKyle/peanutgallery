@@ -213,8 +213,9 @@ test.describe('/roadmap with only board work planned', () => {
 });
 
 // Every path to checkout states the agreement first (docs/specs/legal-copy.md): each Payment Link on
-// /, /roadmap and /contribute has the Terms, the Refunds page and the age condition in its own card,
-// or, on /contribute, in the agreement line directly under the first choice.
+// /, /roadmap and /contribute has the Terms, the Refunds page and the age condition in the one
+// agreement line directly under its card grid (the board, 27 Sep 2026: not on every card), or, on
+// /contribute, in the agreement line directly under the first choice.
 for (const path of ['/', '/roadmap', '/contribute']) {
   test(`${path}: every Payment Link carries the agreement`, async ({ page }) => {
     await page.goto(path);
@@ -230,7 +231,9 @@ for (const path of ['/', '/roadmap', '/contribute']) {
       const first = document.querySelector('main a.choice-primary');
       const firstAgreement = first?.nextElementSibling ?? null;
       for (const a of document.querySelectorAll(`main a[href^="${link}"]`)) {
-        const inCard = hasAgreement(a.closest('li.card'));
+        const grid = a.closest('ul.card-grid');
+        const underGrid = grid !== null && [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling].some((el) => el?.classList.contains('fund-agreement') === true && hasAgreement(el));
+        const inCard = underGrid;
         const onContribute = location.pathname === '/contribute' && hasAgreement(firstAgreement) && firstAgreement?.tagName === 'P';
         if (!inCard && !onContribute) out.push(`${a.textContent?.trim()} -> ${a.getAttribute('href')}`);
       }

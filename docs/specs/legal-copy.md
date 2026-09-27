@@ -48,7 +48,7 @@ Out, and what each waits on:
 
 **Times.** Every posted time shows as a date and clock time in Toronto time, the same for every reader: "22 Sep 2026 at 21:32 Toronto time". One version's end is the next one's start.
 
-**Before checkout.** On /contribute, directly under the first choice and above the cards: `contributeAgreement`. Under every live Fund this card link, on any page: `fundAgreement`. Both link the Terms and the Refunds page and state the age condition.
+**Before checkout.** On /contribute, directly under the first choice and above the cards: `contributeAgreement`. Once under the cards that carry live Fund this card links (home's fund grid, a card's own page), not on every card (the board, 27 September 2026): `fundAgreement`. Both link the Terms and the Refunds page and state the age condition.
 
 **Privacy.** "If you give a display name at checkout, it is stored and kept private until names are reviewed." becomes "The studio's database does not store your name. Stripe keeps the name on your card with its record of the payment." Privacy shows `privacyUpdated` and is not part of a terms version.
 
