@@ -15,3 +15,14 @@ Nothing in this repo references the founder's other companies or projects, with 
 `docs/PLAN.md` is the constitution. A spec under `docs/specs/` (copy `TEMPLATE.md`) is the contract for one change; a card is the agents' spec. No feature work without a spec file. A change is done only when every line of its Verification section has been run and the output quoted. `pnpm verify` at the repository root is the floor.
 
 No dates, deadlines, week numbers or day numbers in plans, docs or prompts unless the board set them; work is ordered, not scheduled. Dates that record history (decision dates, evidence timestamps) are fine.
+
+## Long runs and merging
+
+Sessions that died mid-run (a usage limit or the Mac shutting down stops a session and every agent it runs at once) left pull requests half-shipped. Every session works so that a new one can pick up from git alone:
+
+- Keep multi-agent runs small: at most three reviewers and one review round a pull request, a second round only after a blocker fix, and several short workflows in sequence rather than one long one.
+- Every agent commits and pushes its branch at least every 20 minutes; nothing lives only in a worktree or in `/tmp`.
+- After each merge, append one line to `~/peanutgallery-launch/STATUS.md` (pull request, merge sha, live-check line).
+- At most three agents run `pnpm verify` or e2e at once, each on its own port (`E2E_PORT`, 4400 to 4499).
+- Before starting the local gate, run the e2e specs the change touches (`E2E_PORT=<port> npx playwright test <specs>` in `platform/site`); a full gate run takes about ten minutes, so a predictable failure costs one.
+- One session merges to `main` at a time, on a local gate PASS whose `base=` is still `origin/main` (`docs/ROADMAP.md`, Merging). Merged branches and their worktrees are deleted.
