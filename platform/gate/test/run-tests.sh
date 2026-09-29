@@ -331,7 +331,10 @@ shape_cases() {
     stripe-publishable-key "pk_""live_$BODY24" stripe-webhook-secret "whsec""_$BODY24" github-token "ghp""_$BODY24" \
     github-fine-grained-token "github_""pat_$BODY24" netlify-token "nfp""_$BODY24" json-web-token "eyJhbGci""Oi$BODY24" \
     anthropic-key "sk-""ant-api03-$BODY24" supabase-secret-key "sb_""secret_$BODY24" openai-key "sk-""proj-$BODY24" \
-    google-api-key "AI""za$BODY24$BODY24" openai-key-legacy "sk-""${BODY24}T3Blbk""FJ$BODY24"
+    google-api-key "AI""za$BODY24$BODY24" openai-key-legacy "sk-""${BODY24}T3Blbk""FJ$BODY24" \
+    supabase-access-token "sb""p_0123456789abcdef0123456789abcdef01234567" \
+    discord-webhook "https://discord.com/api/web""hooks/123456789012345678/$BODY24" \
+    age-secret-key "AGE-SECRET-""KEY-1QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7LQPZRY9X8GF2TVDW0S3JN54KHC"
 }
 shape_cases | while IFS='|' read -r name value; do
   printf 'key=%s\n' "$value" > "$C/secret.txt"
@@ -362,6 +365,8 @@ expect "secrets: a UTF-16 file fails as unreadable" 1 "^FAIL: secret-scan hits=1
 rm -f "$C/blob.dat"
 printf 'prefix only: %s\n' "sk_""live_abc" > "$C/secret.txt"
 expect "secrets: a bare prefix is not a key" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
+printf 'short: %s and %s and a webhook address without its token: %s\n' "sb""p_abc123" "AGE-SECRET-""KEY-1ABC" "https://discord.com/api/web""hooks/" > "$C/secret.txt"
+expect "secrets: the Supabase token, age key and Discord webhook shapes need their bodies" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
 printf 'key=%s\n' "sb_""publishable_$BODY24" > "$C/secret.txt"
 expect "secrets: a Supabase publishable key is public and passes" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$C/secret.txt"
 rm -f "$C/secret.txt"
@@ -386,6 +391,20 @@ expect "secrets: untracked files are inside --working-tree" 1 '^FAIL: secret-sca
 git -C "$C" add -A && git -C "$C" commit -q -m "with token"
 expect "secrets: tracked scan finds a committed token" 1 '^FAIL: secret-scan hits=1 first=untracked.txt:1 shape=github-token$' -- bash "$SECRETS" --repo-root "$C" --tracked
 expect "secrets: gate folder is clean" 0 '^PASS: secret-scan' -- bash "$SECRETS" "$GATE_DIR"
+# A scan that read nothing because it could not list the files must fail: git failing (a folder that
+# is not a repository, a checkout git refuses) and a repository path holding & or | (sed replacement
+# metacharacters) both left files.txt empty and gave PASS files=0 with a token committed.
+mkdir -p "$T/not-a-repo"
+expect "secrets: a folder git cannot list fails --tracked instead of passing files=0" 1 '^FAIL: secret-scan ' -- bash "$SECRETS" --repo-root "$T/not-a-repo" --tracked
+expect "secrets: a folder git cannot list fails --working-tree instead of passing files=0" 1 '^FAIL: secret-scan ' -- bash "$SECRETS" --repo-root "$T/not-a-repo" --working-tree
+for odd in 'R&D' 'a|b'; do
+  mkdir -p "$T/odd/$odd/repo"
+  git -C "$T/odd/$odd/repo" init -q
+  printf 'token=%s\n' "ghp""_$BODY24" > "$T/odd/$odd/repo/leak.txt"
+  git -C "$T/odd/$odd/repo" add -A && git -C "$T/odd/$odd/repo" commit -q -m "leak"
+  expect "secrets: --tracked finds a committed token in a repository whose path holds $odd" 1 '^FAIL: secret-scan hits=1 first=leak.txt:1 shape=github-token$' -- bash "$SECRETS" --repo-root "$T/odd/$odd/repo" --tracked
+  expect "secrets: --working-tree finds a committed token in a repository whose path holds $odd" 1 '^FAIL: secret-scan hits=1 first=leak.txt:1 shape=github-token$' -- bash "$SECRETS" --repo-root "$T/odd/$odd/repo" --working-tree
+done
 
 # ---------------------------------------------------------------- changed-paths.sh
 D="$T/d"
@@ -763,6 +782,10 @@ assert "restore: a new env file is gone" test ! -e "$W/seed-1/render/.env.local"
 assert "restore: a lane file is left alone" test -f "$W/seed-1/forged.js"
 expect "restore: the real bot fails again" 1 '^GATE FAIL step=bot detail=FAIL: headless-bot exit=1 ok=false failed=1$' -- env GATE_TEST_BOT_FAIL=1 bash "$SHIP" --repo-root "$W" --folder seed-1 --lane config --phase bot --dry-run
 expect "restore: a second run changes nothing" 0 '^PASS: restore-kernel files=[0-9]+ restored=0 removed=0$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+mkdir -p "$W/seed-1/sim"
+printf 'module.exports = {};\n' > "$W/seed-1/sim/rng.js"
+expect "restore: a module that shadows a kernel source file goes with the other new kernel files" 0 '^PASS: restore-kernel files=[0-9]+ restored=0 removed=1$' -- bash "$RESTORE" --repo-root "$W" "$W_BASE"
+assert "restore: the shadowing module is gone" test ! -e "$W/seed-1/sim/rng.js"
 rm -f "$W/seed-1/forged.js"
 expect "restore: usage without a base" 2 '^$' -- bash "$RESTORE" --repo-root "$W"
 expect "restore: a base that does not resolve is an error" 2 '^$' -- bash "$RESTORE" --repo-root "$W" not-a-ref
@@ -779,6 +802,18 @@ expect "kernel-guard: config and render changes pass" 0 '^PASS: kernel-guard fil
 expect "kernel-guard: a file under a kernel folder fails" 1 '^FAIL: kernel-guard path=platform/gate/ship-gate.sh$' -- bash "$KERNEL" "$T/kernel-gate.txt"
 expect "kernel-guard: a kernel file fails" 1 '^FAIL: kernel-guard path=seed-1/sim/invariants.ts$' -- bash "$KERNEL" "$T/kernel-file.txt"
 expect "kernel-guard: a name that only starts like a kernel path passes" 0 '^PASS: kernel-guard files=2$' -- bash "$KERNEL" "$T/kernel-near.txt"
+# Vite and Vitest resolve an import written without an extension in the order .mjs, .js, .mts, .ts, .jsx,
+# .tsx, .json, while TypeScript's check resolves the .ts file. A module under an earlier extension
+# therefore replaces a kernel source file in the build and in the tests without touching it, and
+# passes the typecheck.
+for shadow in platform/site/src/lib/format.js platform/site/src/lib/payment.mjs platform/site/src/lib/format.mts \
+  platform/site/src/components/Funding.js platform/site/src/components/Funding.ts platform/site/src/components/Funding.jsx \
+  platform/site/src/lib/snapshot-keys.ts seed-1/sim/rng.js seed-1/sim/hash.mjs seed-1/sim/invariants.mts Seed-1/Sim/Rng.JS; do
+  printf '%s\n' "$shadow" > "$T/kernel-shadow.txt"
+  expect "kernel-guard: $shadow shadows a kernel file and fails" 1 "^FAIL: kernel-guard path=$shadow\$" -- bash "$KERNEL" "$T/kernel-shadow.txt"
+done
+printf 'platform/site/src/lib/format.tsx\nplatform/site/src/lib/format.cjs\nplatform/site/src/lib/format.d.ts\nplatform/site/src/lib/formats.js\nplatform/site/src/lib/format.test.ts\nplatform/site/src/components/Funding.tsx.bak\nplatform/site/src/lib/newpage.js\n' > "$T/kernel-noshadow.txt"
+expect "kernel-guard: a module that resolves after the kernel file, or shares only a name prefix, passes" 0 '^PASS: kernel-guard files=7$' -- bash "$KERNEL" "$T/kernel-noshadow.txt"
 # kernel-names.txt: a file or folder with one of these names is kernel at any depth, in any lane.
 for file in seed-1/content/CLAUDE.md seed-1/render/.claude/settings.json seed-1/vitest.config.ts seed-1/config/.npmrc .pnpmfile.mjs seed-1/.pnpmfile.cjs \
   seed-1/content/claude.md seed-1/render/.Claude/settings.json seed-1/Vite.Config.ts .GitHub/workflows/x.yml Platform/Gate/ship-gate.sh; do

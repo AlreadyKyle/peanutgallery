@@ -10,8 +10,9 @@
 # Shapes: Stripe secret, restricted, publishable and webhook keys; GitHub tokens (personal, OAuth
 # as the gh command line stores it, user-to-server, server-to-server and refresh) and fine-grained
 # tokens; Netlify personal tokens; JSON web tokens; Anthropic, OpenAI (project, service, admin and
-# legacy) and Google API keys; Supabase secret keys (a Supabase publishable key is public and is
-# not a shape); the first line of a PEM private key block. A prefix alone is not a hit: a real key
+# legacy) and Google API keys; Supabase secret keys and Management API access tokens (a Supabase
+# publishable key is public and is not a shape); Discord webhook addresses; age secret keys (the
+# backups' identity); the first line of a PEM private key block. A prefix alone is not a hit: a real key
 # always carries a body, so the pattern text in this file and in documentation does not match
 # itself. Lock files and binary media are skipped; SVGs, source maps and minified bundles are
 # served, so they are scanned. Any other file with a NUL byte or a UTF-16 byte order mark fails as
@@ -43,6 +44,9 @@ shapes() {
     openai-key 'sk-(proj|svcacct|admin)-[0-9A-Za-z_-]{8}' \
     openai-key-legacy 'sk-[0-9A-Za-z_-]{16,}T3BlbkFJ' \
     google-api-key 'AIza[0-9A-Za-z_-]{35}' \
+    supabase-access-token 'sbp_[0-9a-f]{40}' \
+    discord-webhook 'discord(app)?\.com/api/webhooks/[0-9]{17,20}/[0-9A-Za-z_-]{20}' \
+    age-secret-key 'AGE-SECRET-KEY-1[0-9A-Z]{20}' \
     private-key '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 }
 
@@ -56,14 +60,23 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/secret-scan.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 export LC_ALL=C
 
+# The files git lists, as absolute paths one per line. A scan that read nothing because git failed
+# (not a repository, a checkout git refuses) must not pass, and REPO_ROOT goes through printf, not
+# sed, so a repository path holding & or | is read like any other.
+list_git_files() {
+  git -C "$REPO_ROOT" ls-files -z "$@" > "$WORK/listed.z" 2> "$WORK/listed.err" \
+    || { echo "FAIL: secret-scan cannot list the files of $REPO_ROOT: $(head -n 1 "$WORK/listed.err")"; exit 1; }
+  tr '\0' '\n' < "$WORK/listed.z" | while IFS= read -r rel; do printf '%s/%s\n' "$REPO_ROOT" "$rel"; done > "$WORK/files.txt"
+}
+
 case "$1" in
   --tracked)
     [ $# -eq 1 ] || usage
-    git -C "$REPO_ROOT" ls-files -z | tr '\0' '\n' | sed "s|^|$REPO_ROOT/|" > "$WORK/files.txt"
+    list_git_files
     ;;
   --working-tree)
     [ $# -eq 1 ] || usage
-    git -C "$REPO_ROOT" ls-files -z -co --exclude-standard | tr '\0' '\n' | sed "s|^|$REPO_ROOT/|" > "$WORK/files.txt"
+    list_git_files -co --exclude-standard
     ;;
   -*) usage ;;
   *)

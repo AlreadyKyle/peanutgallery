@@ -4,7 +4,9 @@
 # usage: kernel-guard.sh <changed-files-file>
 #
 # Reads kernel-paths.txt, kernel-names.txt and design-paths.txt beside this script (comments and
-# blank lines skipped). A changed file matches a kernel path when it equals it or lies under it, and a
+# blank lines skipped). A changed file matches a kernel path when it equals it or lies under it, or
+# shadows a kernel source file (format.js beside the kernel format.ts: Vite and Vitest try .mjs, .js
+# and .mts before .ts, so it replaces the kernel file and still passes the typecheck), and a
 # kernel name when any segment of its path matches the name as a glob. It matches a design path, one
 # of the board-only files that set the look (docs/specs/design-review.md), the same way as a kernel
 # path. Both matches ignore case, because a
