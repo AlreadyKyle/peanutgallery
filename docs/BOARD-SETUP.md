@@ -51,11 +51,13 @@ sign-in are gone from this list, and the backup key is part of the Mac's step.
 
 **Why.** You renamed the studio Mob Machine on 23 September 2026 (`docs/PLAN.md` §10 decision 43),
 with a new mark in place of the peanut: a small machine with two eyes, drawn in code
-(`docs/specs/machine-mark.md`). Once the rename pull request is merged and deployed, the site, the
-link preview, the icons, the game's tab, the agents and the alerts all say Mob Machine, and the
-Terms say it from version 3, which I post after the deploy. The steps below are the places only you
-can change. There is no new domain yet: the site stays at peanutgallery.games, so R1 to R4 are for
-now, R5 is registering one when you choose, and R6 follows it (`docs/specs/rename.md`).
+(`docs/specs/machine-mark.md`). The rename pull request (#79) is merged and live: the site, the
+link preview, the icons, the game's tab, the agents and the alerts say Mob Machine, and the Terms
+say it from version 3. The steps below are the places only you can change. On 29 September 2026 the
+Discord server still read Peanut Gallery with no icon; Stripe and the signature are unconfirmed.
+The domain comes first when you start it (`KYLE_SETUP.md`, Part 1): R5, then R6, so the sign-in
+email (step 2) and the Stripe links (step 12) are set once, on the new address
+(`docs/specs/rename.md`).
 
 The icon file for Stripe and Discord is `platform/site/public/icon-512.png` in the repository, also
 at https://peanutgallery.games/icon-512.png once the rename is deployed: the white machine on black,
@@ -108,34 +110,56 @@ is only a label.
 
 **Tell me:** nothing, unless the sign-in email still shows the old name.
 
-### R5. Register the new domain (when you choose; not free)
+### R5. Register the new domain (not free)
 
-A domain costs money, so it is your call and your timing: from a payout's studio share, or an
-exception you name to decision 35. Nothing waits on it; the site works at peanutgallery.games.
+A domain costs money, so it is an exception you name to decision 35 (or it waits for a payout's
+studio share); the domain's pull request records it as a decision.
 
-1. Register the domain at the registrar you use for peanutgallery.games (GoDaddy).
+1. Register the domain at GoDaddy, the registrar of peanutgallery.games, with auto-renew and the
+   registrar lock on.
 2. Keep peanutgallery.games registered and on auto-renew: old links, shared previews, search results
    and the address on the agents' commits keep reaching the studio.
 
 **Tell me:** "The domain is <name>." Then I open the domain's pull request: the script's domain
-pass, the 301 from peanutgallery.games to the new domain, the game's link, the preview image and the
-live check, with `pnpm verify` switched to checking the domain too.
+pass, the 301 from peanutgallery.games to the new domain, the game's link, the preview image, the
+explainer's social cuts, the production cards that name the old address (a dump first) and the live
+check, with `pnpm verify` switched to checking the domain too. It merges once R6.1 to R6.3 show
+HTTPS.
 
-### R6. The domain on Netlify and Stripe (15 minutes, free), once I say its pull request is ready
+### R6. The domain on Netlify and Stripe (20 minutes, free)
 
-1. app.netlify.com → the site **peanutgallerygames** → **Domain management** → **Add a domain** →
-   type the new domain → **Verify** → **Add domain**. Add `www.` the same way.
-2. At the registrar, add the DNS records Netlify lists beside the new domain. Wait until Netlify
-   stops showing "Pending DNS verification".
-3. Beside the new domain: **Options** → **Set as primary domain**. Keep peanutgallery.games in the
-   list as an alias; the 301 needs it there.
-4. **HTTPS** → **Verify DNS configuration**, then wait for "Your site has HTTPS enabled".
-   Expected: https://<new domain> opens the site with a padlock.
-5. Stripe → Payment Links → the link → **After payment**: the redirect URL's
-   https://peanutgallery.games becomes https://<new domain>, the rest unchanged.
+R6.1 to R6.3 are safe as soon as the domain is registered: the site answers on both addresses and
+nothing changes for visitors. R6.4 and R6.5 wait until I say the pull request is live.
 
-**Tell me:** "The domain is live on Netlify." I then merge the domain's pull request and run the
-live check against the new address.
+1. **The site.** app.netlify.com → the site **peanutgallerygames** → **Domain management** → **Add a
+   domain** → type the new domain → **Verify** → **Add domain**; add `www.<new domain>` the same way
+   if it does not appear on its own. Do not make it primary yet. At GoDaddy → the new domain →
+   **DNS**, delete the default "Parked" `@` A record and the default `www` CNAME, then add an **A**
+   record `@` → `75.2.60.5` and a **CNAME** `www` → `peanutgallerygames.netlify.app` (the records
+   peanutgallery.games uses; if Netlify lists others, use Netlify's). Wait until Netlify stops
+   showing "Pending DNS verification", then **HTTPS** → **Verify DNS configuration** and wait for
+   "Your site has HTTPS enabled". Expected: https://<new domain> opens the site with a padlock.
+2. **The game, my recommendation** (`docs/specs/rename.md`, the game's address): Netlify → the site
+   **peanutgallery-seed-1** → Domain management → **Add a domain** → `play.<new domain>`; at GoDaddy
+   a **CNAME** `play` → `peanutgallery-seed-1.netlify.app`; wait for HTTPS as above. Expected:
+   https://play.<new domain> opens Dust. Or tell me "keep the game's address", and the game stays at
+   its netlify.app address.
+3. **Tell me** "The domain has HTTPS on Netlify", and "play.<domain> has HTTPS" or "keep the game's
+   address".
+4. Once I say the pull request is live: on **peanutgallerygames**, beside the new domain,
+   **Options** → **Set as primary domain**. Keep peanutgallery.games in the list as an alias; the
+   301 needs it there.
+5. Stripe → Settings → **Business** → **Public details**: the business website, terms of service and
+   privacy policy URLs (and a support URL, if set) move from peanutgallery.games to the new domain,
+   same paths. **Payment Links** → the link → **After payment** → redirect to
+   `https://<new domain>/thanks?session={CHECKOUT_SESSION_ID}` (step 12's redirect, on the new
+   address).
+
+**Tell me:** "The new domain is primary" and "Stripe points at the new domain." I then run the live
+check against the new address and check the 301 and the redirect.
+
+Optional and free: Google Search Console → add both domains → **Settings** → **Change of address**
+from peanutgallery.games to the new one.
 
 ### Handles
 
@@ -175,9 +199,10 @@ Pause for an hour. Resend's free plan sends it instead.
 **Do this.**
 
 1. Sign up at resend.com on the free plan with your own email.
-2. Add a domain and give it the sending subdomain of peanutgallery.games that Resend suggests. Add
-   the DNS records it shows (SPF and DKIM, and the MX it asks for on that subdomain) in GoDaddy →
-   the domain → DNS, and wait until Resend shows the domain verified.
+2. Add a domain: a sending subdomain of the new domain (R5), such as `mail.<new domain>`, so it is
+   set up once; before the new domain exists, a subdomain of peanutgallery.games works the same.
+   Add the DNS records it shows (SPF and DKIM, and the MX it asks for on that subdomain) in GoDaddy
+   → the domain → DNS, and wait until Resend shows the domain verified.
 3. Create an SMTP key (an API key with sending access) and put it in `.env` at the repository root
    as `RESEND_SMTP_KEY=…`. Never paste it in chat.
 
@@ -207,8 +232,8 @@ Cloud server is the planned later home, once you open a billing account (see **O
    off installing macOS updates, and install them yourself while the studio is paused. With
    FileVault on, a restart or a power cut waits at the login screen and nothing runs until you log
    in; healthchecks.io emails you when that happens.
-3. **Two tools.** In the Terminal tab: `brew install libpq age`. libpq brings the database dump
-   tools the backup uses; age encrypts the backups.
+3. **Two tools: done.** `brew install libpq age` has run: libpq brings the database dump tools the
+   backup uses, age encrypts the backups, and both were on the Mac on 29 September 2026.
 4. **The backup folder.** Install Google Drive for desktop and sign in with your Google account.
    In My Drive, create a folder `peanutgallery-backups`. Drive copies each nightly backup off the
    Mac. Tell me when it exists; I find its full path and put it in `.env` as `BACKUP_DIR=`.
@@ -493,7 +518,8 @@ No agent touches Stripe; these are yours.
   studio share automatically; there is nothing to record by hand.
 - **After-payment redirect: ready now.** /thanks is live (`docs/specs/supporter-pages.md`, done).
   Payment Link → After payment: redirect customers to
-  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`. Until it is set Stripe shows its
+  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`, or the new domain's once R6 is
+  done. Until it is set Stripe shows its
   own receipt page. After it is set, the next real payment lands on /thanks with its supporter number
   and the cards it reached; tell me and I quote it.
 
@@ -950,6 +976,8 @@ different numbers.
 
 Copy any of these back to me as you finish:
 
+- "The domain is <name>." / "The domain has HTTPS on Netlify." / "play.<domain> has HTTPS" or "keep
+  the game's address" / "The new domain is primary." / "Stripe points at the new domain."
 - "Resend is verified and the key is in .env."
 - "the Mac is ready."
 - "Stripe read key is in .env."
