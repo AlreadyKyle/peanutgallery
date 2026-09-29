@@ -86,7 +86,6 @@ export const TIERS = {
     'seed-1/index.html',
   ],
   2: [
-    'KYLE_SETUP.md',
     'docs/BOARD-SETUP.md',
     'platform/dispatcher/src/alert.ts',
     'platform/dispatcher/test/attended.test.ts',
