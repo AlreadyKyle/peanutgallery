@@ -59,6 +59,9 @@ Kernel names and kernel paths both match without regard to case: `nocasematch` i
 - A Supabase publishable key is public, is committed in the site's Netlify config, and is not a shape.
 - `openai-key-legacy`: `sk-`, at least 16 body characters, then the legacy key marker (`T3Blbk` followed by `FJ`).
 - The scan skips lock files and binary media only (`gate_is_binary_media`), so SVGs, source maps and minified bundles are scanned.
+- Three more shapes, each needing its body: `supabase-access-token` (`sbp_` and 40 hex characters), `discord-webhook` (a `discord.com/api/webhooks/<id>/<token>` address) and `age-secret-key` (`AGE-SECRET-KEY-1` and a body); the bare prefixes are not hits.
+- The scan lists the files itself, so a listing that fails (a folder git refuses) or a repository path holding `&` or `|` fails the scan (`FAIL: secret-scan cannot list the files`) instead of passing `files=0`.
+- `kernel-guard.sh` and `restore-kernel.sh` treat a module that resolves ahead of a kernel source file (the same name under `.mjs`, `.js` or `.mts` before `.ts`, and `.mjs`, `.js`, `.mts`, `.ts` or `.jsx` before `.tsx`) as a kernel path, because the bundler and the tests import it in place of the kernel file while the typecheck does not. The dispatcher's `isKernelPath` (`platform/dispatcher/src/worktree.ts`) does not yet apply the same rule.
 
 **Card-branch checks.** On a `card/*` branch the `detect` job does four things, in order and before anything else runs:
 1. It restores `platform/gate` from the base commit.

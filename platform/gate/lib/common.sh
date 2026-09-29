@@ -146,11 +146,31 @@ gate_load_kernel_lists() {
 # kernel-guard.sh and restore-kernel.sh do: a case-insensitive checkout (macOS) loads claude.md as
 # CLAUDE.md and Platform/Gate as platform/gate. Both need gate_load_kernel_lists first.
 
-# True when the path equals a kernel path or lies under one.
+# The extensions Vite and Vitest try, in this order, for an import written without one. A module
+# under an extension earlier in the list is imported in place of a kernel source file, while
+# TypeScript's own check still resolves the kernel file: the shadow passes the typecheck and replaces
+# the kernel file without touching it.
+GATE_RESOLVE_ORDER='mjs js mts ts jsx tsx json'
+
+# True when path $1 is a module that resolves ahead of the kernel file $2: the same name under an
+# earlier extension of GATE_RESOLVE_ORDER than the kernel file's own.
+gate_shadows_kernel_file() {
+  local ext kext=${2##*.}
+  [ "$kext" != "$2" ] || return 1
+  case " $GATE_RESOLVE_ORDER " in *" $kext "*) ;; *) return 1 ;; esac
+  for ext in $GATE_RESOLVE_ORDER; do
+    [ "$ext" != "$kext" ] || return 1
+    case "$1" in "${2%.*}.$ext") return 0 ;; esac
+  done
+  return 1
+}
+
+# True when the path equals a kernel path or lies under one, or shadows a kernel source file.
 gate_under_kernel_path() {
   local kernel
   for kernel in ${GATE_KERNEL_PATHS[@]+"${GATE_KERNEL_PATHS[@]}"}; do
     case "$1" in "$kernel"|"$kernel"/*) return 0 ;; esac
+    gate_shadows_kernel_file "$1" "$kernel" && return 0
   done
   return 1
 }
