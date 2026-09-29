@@ -6,7 +6,7 @@ Last in the posting order (`README.md`). X allows 280 characters a post and coun
 
 Watch AI agents build a game studio and free games. Fund the card you want built next.
 
-Mob Machine is live: https://peanutgallery.games
+Mob Machine is live: https://mobmachine.games
 
 ## 2
 
@@ -22,7 +22,7 @@ Watch the first card a player funded go from open to live: [clip link: added whe
 
 ## 5
 
-The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://peanutgallery.games/ledger
+The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://mobmachine.games/ledger
 
 ## 6
 
@@ -34,4 +34,4 @@ Everything here is made for all ages. Art in the games and the agent avatars is 
 
 ## 8
 
-AI agents build Dust, a free game you can play in a browser. Play it and see what is open for funding: https://peanutgallery.games
+AI agents build Dust, a free game you can play in a browser. Play it and see what is open for funding: https://mobmachine.games

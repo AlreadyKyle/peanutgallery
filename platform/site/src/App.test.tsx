@@ -219,11 +219,12 @@ describe('Site chrome', () => {
   });
 
   it('has no board page: /board is the plain not found page, with no sign-in form and no link to the board site', () => {
-    // Built as production builds it: the top bar's Play link names the game's netlify.app address on
-    // every page, /board included, and that is the only netlify.app address allowed.
+    // Built as production builds it: the top bar's Play link names the game's own address on every
+    // page, /board included (play.mobmachine.games, PLAN.md §10 decision 59), so no page names any
+    // netlify.app address.
     const playUrl = readFileSync(resolve(process.cwd(), 'netlify.toml'), 'utf8').match(/^\s*VITE_PLAY_URL\s*=\s*"([^"]+)"/m)?.[1] ?? '';
     const playHost = new URL(playUrl).host;
-    expect(playHost).toMatch(/\.netlify\.app$/);
+    expect(playHost).toBe('play.mobmachine.games');
     vi.stubEnv('VITE_PLAY_URL', playUrl);
     for (const path of ['/board', '/board/']) {
       renderAt(path);
@@ -232,7 +233,7 @@ describe('Site chrome', () => {
       expect(screen.queryByRole('form', { name: 'Sign in' }), path).toBeNull();
       expect(screen.queryByLabelText('Email'), path).toBeNull();
       for (const play of within(nav()).getAllByRole('link', { name: copy.play })) expect(play.getAttribute('href'), path).toBe(playUrl);
-      expect(strayNetlifyHosts(document.body.innerHTML, [playHost]), path).toEqual([]);
+      expect(strayNetlifyHosts(document.body.innerHTML, []), path).toEqual([]);
       cleanup();
     }
   });

@@ -146,9 +146,9 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 ## Standing facts for any session
 
 - **Production.**
-  - The studio is Mob Machine (PLAN.md §10 decision 43); the domain stays peanutgallery.games until the board registers a new one (`specs/rename.md`).
-  - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
-  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and peanutgallery.games/board is a plain not found page.
+  - The studio is Mob Machine (PLAN.md §10 decision 43); the domain is mobmachine.games; peanutgallery.games stays registered and answers 301 to the same path (PLAN.md §10 decision 59, `specs/rename.md`).
+  - Site https://mobmachine.games (Netlify `peanutgallerygames`, base `platform/site`); game https://play.mobmachine.games (Netlify `peanutgallery-seed-1`, base `seed-1`).
+  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and mobmachine.games/board is a plain not found page.
   - Supabase project `lyxndueoeisyqzewflpu`.
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
   - The dispatcher runs attended on the founder's Mac until the cutover, and after it unattended on the board's Mac under launchd, from `~/peanutgallery-host`, until the studio has a server (PLAN.md §10 decision 38).

@@ -81,15 +81,15 @@ test('a form that posts to another host is refused by the enforced policy', asyn
   expect(new URL(page.url()).origin).not.toBe('https://example.com');
 });
 
-test("/board is the not found page, with no sign-in form and no netlify.app address but the game's", async ({ page }) => {
+test("/board is the not found page, with no sign-in form and no netlify.app address", async ({ page }) => {
   const reports = await watchPolicy(page);
   await page.goto('/board');
   await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
   await expect(page.getByLabel('Email')).toHaveCount(0);
-  // The build uses netlify.toml's play URL, a netlify.app address the top bar links to on every page.
-  const playHost = new URL(PLAY_URL).host;
-  expect(playHost).toMatch(/\.netlify\.app$/);
+  // The build uses netlify.toml's play URL, the game's own address (PLAN.md §10 decision 59), which
+  // the top bar links to on every page; no page names any netlify.app address.
+  expect(new URL(PLAY_URL).host).toBe('play.mobmachine.games');
   await expect(page.getByRole('navigation', { name: 'Site' }).getByRole('link', { name: 'Play' })).toHaveAttribute('href', PLAY_URL);
-  expect(strayNetlifyHosts(await page.content(), [playHost])).toEqual([]);
+  expect(strayNetlifyHosts(await page.content(), [])).toEqual([]);
   expect(reports).toEqual([]);
 });

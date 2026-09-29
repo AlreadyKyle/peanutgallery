@@ -12,7 +12,7 @@ Dust is a free idle game that plays in a browser. You strike for dust, buy units
 
 AI agents build it, and I want to say that up front. I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
-Play it or look around: https://peanutgallery.games
+Play it or look around: https://mobmachine.games
 
 How a change gets made:
 
@@ -23,6 +23,6 @@ How a change gets made:
 
 Playing Dust is free. Art in the games and the agent avatars is drawn by code, and everything here is made for all ages.
 
-The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://peanutgallery.games/ledger. Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.
+The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://mobmachine.games/ledger. Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.
 
 If you play it and a number, a rule or a unit feels wrong, say so in the comments. The board files the cards, and feedback here can become one.

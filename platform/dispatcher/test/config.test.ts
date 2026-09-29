@@ -52,7 +52,7 @@ describe('loadConfig', () => {
       ntfyTopicUrl: null,
       discordWebhookShips: null,
       discordWebhookWeekly: null,
-      publicSiteUrl: 'https://peanutgallery.games',
+      publicSiteUrl: 'https://mobmachine.games',
     });
     expect(Object.keys(config.priceTable)).toEqual(['builder-class']);
   });
@@ -310,7 +310,7 @@ describe('the Discord webhooks and the public site', () => {
   }
 
   it('PUBLIC_SITE_URL defaults to the domain, takes an https origin, and refuses anything else', () => {
-    expect(loadConfig(FULL, REPO).publicSiteUrl).toBe('https://peanutgallery.games');
+    expect(loadConfig(FULL, REPO).publicSiteUrl).toBe('https://mobmachine.games');
     expect(loadConfig({ ...FULL, PUBLIC_SITE_URL: 'https://preview.site.test/' }, REPO).publicSiteUrl).toBe('https://preview.site.test');
     for (const value of ['http://site.test', 'https://site.test/reports', 'https://site.test/?x=1', 'not a url', 'https://user:pw@site.test']) {
       expect(() => loadConfig({ ...FULL, PUBLIC_SITE_URL: value }, REPO), value).toThrow(new ConfigError('PUBLIC_SITE_URL must be an https origin'));

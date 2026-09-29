@@ -14,7 +14,7 @@
   # Public values only. Secrets never go here.
   VITE_STRIPE_PAYMENT_LINK_URL = "https://buy.stripe.com/dRm28s4ie0zp6BU0qEafS01"
   VITE_DISCORD_INVITE = "https://discord.gg/rwkbWhMk8r"
-  VITE_PLAY_URL = "https://peanutgallery-seed-1.netlify.app"
+  VITE_PLAY_URL = "https://play.mobmachine.games"
 
 # The site's one Netlify Function (docs/specs/site-snapshot.md): /api/live and /api/cards, the two
 # documents every figure on the site comes from, read from Supabase with the publishable key in
@@ -22,10 +22,23 @@
 [functions]
   directory = "netlify/functions"
 
-# The netlify.app address always forwards to the studio's own domain.
+# The netlify.app address and the old domain always forward to the studio's own domain, same path
+# (docs/specs/rename.md). peanutgallery.games stays registered and a domain alias of this site.
 [[redirects]]
   from = "https://peanutgallerygames.netlify.app/*"
-  to = "https://peanutgallery.games/:splat"
+  to = "https://mobmachine.games/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://peanutgallery.games/*"
+  to = "https://mobmachine.games/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://www.peanutgallery.games/*"
+  to = "https://mobmachine.games/:splat"
   status = 301
   force = true
 

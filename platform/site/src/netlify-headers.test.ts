@@ -55,7 +55,11 @@ describe('netlify.toml security headers', () => {
       ...toml.matchAll(/^\[\[redirects\]\]\s*\n\s*from = "([^"]+)"\s*\n\s*to = "([^"]+)"\s*\n\s*status = (\d+)(\s*\n\s*force = true)?/gm),
     ].map((m) => [m[1], m[2], m[3], m[4] === undefined ? 'no force' : 'force']);
     const spa = rules.findIndex(([from]) => from === '/*');
-    expect(rules.slice(1, spa)).toEqual([
+    // The first three forward the netlify.app address and the old domain to the domain (PLAN.md §10 decision 59).
+    expect(rules.slice(0, 3)).toEqual(
+      ['https://peanutgallerygames.netlify.app/*', 'https://peanutgallery.games/*', 'https://www.peanutgallery.games/*'].map((from) => [from, 'https://mobmachine.games/:splat', '301', 'force']),
+    );
+    expect(rules.slice(3, spa)).toEqual([
       ['/board', '/index.html', '404', 'force'],
       ['/board/*', '/index.html', '404', 'force'],
       ...['/contribute', '/ledger', '/terms', '/terms/*', '/privacy', '/refunds', '/refunds/*', '/contact', '/thanks'].map((path) => [path, '/index.html', '200', 'force']),

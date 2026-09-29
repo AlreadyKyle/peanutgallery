@@ -3,7 +3,7 @@
 // usage: node platform/site/scripts/live-check.mjs [baseUrl] [--allow-no-data]
 //        pnpm --filter @backseat/site exec node scripts/live-check.mjs [baseUrl] [--allow-no-data]
 //
-// baseUrl defaults to https://peanutgallery.games. Both forms work: the @playwright/test import
+// baseUrl defaults to https://mobmachine.games. Both forms work: the @playwright/test import
 // resolves from this file's folder, so the working directory does not matter.
 //
 // Every route (the landing, contribute, ledger, how it works, the team, the roadmap, the weekly
@@ -40,7 +40,7 @@
 // Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
-// set, no route names the board site's address. The www redirect runs only against production. The
+// set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
 // security headers from netlify.toml, the enforced and report-only policies' full values included,
 // run against any address that is not local; a local `vite preview` sends them too
 // (vite.config.ts), so they are checked there when present.
@@ -61,7 +61,9 @@ import { boardHostFrom, playHostFrom, strayNetlifyHosts } from './board-address.
 import { auditLayout, LIMITS } from './layout-audit.mjs';
 import { runningModelsCheck } from './team-models.mjs';
 
-const PRODUCTION = 'https://peanutgallery.games';
+const PRODUCTION = 'https://mobmachine.games';
+// The domain before PLAN.md §10 decision 59: it and its www answer 301 to the same path here.
+const OLD_DOMAIN = 'peanutgallery.games';
 // The Supabase host the snapshot function reads (netlify/lib/public-env.ts). No page may request it.
 const SUPABASE_HOST = new URL(
   readFileSync(new URL('../netlify/lib/public-env.ts', import.meta.url), 'utf8').match(/SUPABASE_URL = '([^']+)'/)?.[1] ?? 'https://invalid.supabase.co',
@@ -768,8 +770,13 @@ try {
   }
 
   if (BASE === PRODUCTION) {
-    const www = await fetch('https://www.peanutgallery.games/', { redirect: 'manual' });
+    const www = await fetch('https://www.mobmachine.games/', { redirect: 'manual' });
     check([301, 308].includes(www.status), `www redirects ${www.status}`);
+    for (const host of [OLD_DOMAIN, `www.${OLD_DOMAIN}`]) {
+      const old = await fetch(`https://${host}/how-it-works?x=1`, { redirect: 'manual' });
+      const to = old.headers.get('location');
+      check(old.status === 301 && to === `${PRODUCTION}/how-it-works?x=1`, `${host} answers ${old.status} to ${to}`);
+    }
   } else {
     skip('www redirect: production only');
   }

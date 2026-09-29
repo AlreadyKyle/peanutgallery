@@ -16,19 +16,19 @@ function fakeStore(emails: string[]): AuthUserStore & { created: string[] } {
 
 describe("ensureBoardUsers", () => {
   it("creates the moderator's user from MODERATOR_EMAIL and leaves existing board users alone", async () => {
-    const members = parseBoardMembers("board@peanutgallery.games", "mod@peanutgallery.games");
-    const store = fakeStore(["Board@PeanutGallery.games", "someone-else@example.com"]);
+    const members = parseBoardMembers("board@mobmachine.games", "mod@mobmachine.games");
+    const store = fakeStore(["Board@mobmachine.games", "someone-else@example.com"]);
     expect(await ensureBoardUsers(store, members)).toEqual({ existing: 1, created: 1 });
-    expect(store.created).toEqual(["mod@peanutgallery.games"]);
+    expect(store.created).toEqual(["mod@mobmachine.games"]);
     // A second run changes nothing.
     expect(await ensureBoardUsers(store, members)).toEqual({ existing: 2, created: 0 });
-    expect(store.created).toEqual(["mod@peanutgallery.games"]);
+    expect(store.created).toEqual(["mod@mobmachine.games"]);
   });
 
   it("creates no moderator when MODERATOR_EMAIL is unset", async () => {
     const store = fakeStore([]);
-    expect(await ensureBoardUsers(store, parseBoardMembers("board@peanutgallery.games", undefined))).toEqual({ existing: 0, created: 1 });
-    expect(store.created).toEqual(["board@peanutgallery.games"]);
+    expect(await ensureBoardUsers(store, parseBoardMembers("board@mobmachine.games", undefined))).toEqual({ existing: 0, created: 1 });
+    expect(store.created).toEqual(["board@mobmachine.games"]);
   });
 
   it("prints counts and never an address", () => {
@@ -58,11 +58,11 @@ describe("supabaseAuthUserStore", () => {
     };
     const store = supabaseAuthUserStore(db as never);
     expect(await store.listEmails()).toHaveLength(USERS_PAGE + 2);
-    await store.createUser("mod@peanutgallery.games");
+    await store.createUser("mod@mobmachine.games");
     expect(calls).toEqual([
       ["list", { page: 1, perPage: USERS_PAGE }],
       ["list", { page: 2, perPage: USERS_PAGE }],
-      ["create", { email: "mod@peanutgallery.games", email_confirm: true }],
+      ["create", { email: "mod@mobmachine.games", email_confirm: true }],
     ]);
   });
 
@@ -75,7 +75,7 @@ describe("supabaseAuthUserStore", () => {
         },
       },
     };
-    await expect(supabaseAuthUserStore(db as never).createUser("mod@peanutgallery.games")).rejects.toThrow(
+    await expect(supabaseAuthUserStore(db as never).createUser("mod@mobmachine.games")).rejects.toThrow(
       /^auth user create: Signups not allowed for this instance$/,
     );
   });

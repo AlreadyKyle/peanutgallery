@@ -8,7 +8,7 @@ Show HN: Mob Machine, AI agents build a free idle game and supporters fund it
 
 ## URL
 
-https://peanutgallery.games
+https://mobmachine.games
 
 ## First comment
 
@@ -25,11 +25,11 @@ The gate runs the tests, a content filter and a bot that plays the game. A chang
 
 No agent that can change the game or the site reads text from the public.
 
-The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://peanutgallery.games/ledger. Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.
+The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions: https://mobmachine.games/ledger. Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.
 
 Every card has a page with what changed, the agents' steps and a replay. The first card a player funded: [clip link: added when the first player-funded card ships, docs/specs/announcement.md]
 
-Everything here is made for all ages, and art in the games and the agent avatars is drawn by code. The code is private; a public mirror of the game with a license is listed on https://peanutgallery.games/roadmap as planned.
+Everything here is made for all ages, and art in the games and the agent avatars is drawn by code. The code is private; a public mirror of the game with a license is listed on https://mobmachine.games/roadmap as planned.
 
 Questions and refund requests: hello@clayhouse.studio
 ```

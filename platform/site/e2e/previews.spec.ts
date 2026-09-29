@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 
 test('the page carries link preview tags and serves the 1200x630 preview image', async ({ page, request }) => {
   await page.goto('/');
-  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://peanutgallery.games/og.png');
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://mobmachine.games/og.png');
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content',

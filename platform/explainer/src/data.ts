@@ -19,9 +19,9 @@ import { exampleFromPaid } from '../../site/src/lib/payment';
 export const script = legal.explainer;
 
 /** The site's address, shown on the social cuts' closing plate only (docs/ROADMAP.md, Standing facts:
- *  the domain stays peanutgallery.games until the board registers a new one). The site's own cuts
+ *  the domain is mobmachine.games, PLAN.md §10 decision 59). The site's own cuts
  *  name no address, so a new domain never leaves them wrong. */
-export const SITE_ADDRESS = 'peanutgallery.games';
+export const SITE_ADDRESS = 'mobmachine.games';
 export const stepHeadings = legal.howMoneyMoves.blocks.map((block) => block.heading);
 
 /** The agents drawn in the team scene: every role whose spec says it is running (data.test.ts). */
@@ -33,7 +33,7 @@ export const roster = [builderA, builderB, qa, gameDesigner, gameDirector, studi
 /** The builder the card is dealt to. */
 export const builder = { title: builderA.title, note: builderA.species_note };
 
-// Real cards from the live deck (https://peanutgallery.games/api/cards, read 27 Sep 2026): open game
+// Real cards from the live deck (https://mobmachine.games/api/cards, read 27 Sep 2026): open game
 // cards for the hand, and shipped ones for the pile. The video names no game (PLAN.md §10 decision
 // 57), so only cards whose titles do not say "dust" are dealt. The third card is the one followed.
 export const hand = [
