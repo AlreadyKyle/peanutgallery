@@ -356,7 +356,7 @@ install_jobs_only() {
   fi
   ensure_locked check_jobs_readonly
   install_jobs "$JOBS"
-  say "the dispatcher is not installed: a plain install.sh does that at the cutover (docs/BOARD-SETUP.md step 23)"
+  say "the dispatcher is not installed: a plain install.sh does that at the cutover (BOARD-SETUP.md step 23)"
 }
 
 # studio_mode: studio_state's agent mode and pause, as the service role reads them.
@@ -388,7 +388,7 @@ install_dispatcher() {
   mode=$(studio_mode) || die "could not read studio_state with the service key in $ENV_FILE"
   case "$mode" in
     "unattended "*) ;;
-    *) die "studio_state.agent_mode is not unattended; set it at /board first (the cutover, docs/BOARD-SETUP.md step 23)" ;;
+    *) die "studio_state.agent_mode is not unattended; set it at /board first (the cutover, BOARD-SETUP.md step 23)" ;;
   esac
   if agent_loaded "$label"; then
     launchctl bootout "$(gui_target)/$label" || die "launchctl could not stop $label"

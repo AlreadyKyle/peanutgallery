@@ -87,7 +87,7 @@ export const TIERS = {
     'seed-1/index.html',
   ],
   2: [
-    'docs/BOARD-SETUP.md',
+    'BOARD-SETUP.md',
     'platform/dispatcher/src/alert.ts',
     'platform/dispatcher/test/attended.test.ts',
     'platform/dispatcher/test/managed.test.ts',

@@ -2,7 +2,7 @@
 
 The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). Each card's agent runs as a Claude Managed Agents session in a container Anthropic hosts (`docs/specs/launch-managed.md`): the VPS holds the session's event stream, meters it, applies the patch the agent hands back, and drives the gate, merge and deploy. No agent-written code runs on the VPS. This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
-**Until the studio has a server, the host is the board's Mac** (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`): the dispatcher and the daily jobs run there under launchd, and [The Mac host](#the-mac-host) at the end of this page is its runbook. Oracle is dropped. The server sections are kept for the planned Google Cloud server, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud); the Oracle-specific parts (the instance launcher, idle reclaim, the bucket and its pre-authenticated requests) are kept for the record and are not run.
+**Until the studio has a server, the host is the board's Mac** (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`): the dispatcher and the daily jobs run there under launchd, and [The Mac host](#the-mac-host) at the end of this page is its runbook. Oracle is dropped. The server sections are kept for whatever host the studio moves to, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts (the instance launcher, idle reclaim, the bucket and its pre-authenticated requests) are kept for the record and are not run.
 
 ## What runs where
 
@@ -233,7 +233,7 @@ Oracle stops an Always Free instance whose CPU (at the 95th percentile), network
 
 **Recovery needs no laptop.** On a phone, sign in at cloud.oracle.com, then Compute, Instances, `peanutgallery-dispatcher`, Start. `dispatcher.service` and the job timers are enabled, so the dispatcher comes back on boot, and each timer's `Persistent=` runs the backup, the Controller or the quota check it missed while the instance was stopped. If Oracle answers that it has no capacity, try again later. From the Mac, `platform/ops/oracle-launch.sh` after `oci session authenticate` does the same and retries capacity by itself.
 
-Oracle's documentation does not say that moving the tenancy to Pay As You Go ends idle reclaim, so nothing here relies on it; it would also put a card on file, which is the board's call (`docs/BOARD-SETUP.md`).
+Oracle's documentation does not say that moving the tenancy to Pay As You Go ends idle reclaim, so nothing here relies on it; it would also put a card on file, which is the board's call (`BOARD-SETUP.md`).
 
 ## Backups and the Controller
 
@@ -268,7 +268,7 @@ With `oci session authenticate --region ca-toronto-1 --profile-name peanutgaller
 
 1. **The bucket**, private and versioned, once: `oci os bucket create --auth security_token --profile peanutgallery -c "$TENANCY" --name peanutgallery-backups --public-access-type NoPublicAccess --versioning Enabled`. For a bucket made without it: `oci os bucket update --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --versioning Enabled`, then check that `oci os bucket get --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --query 'data.versioning'` prints `"Enabled"`. Versioning is what keeps a written backup: a write to a name that already exists becomes the object's new version and the old one stays as a previous version, which only the board's own sign-in can delete. Always Free Object Storage holds 20 GB, far more than these dumps.
 2. **Two write-only pre-authenticated requests**, one for the VPS and one for the backups repository, so either can be revoked alone: `oci os preauth-request create --auth security_token --profile peanutgallery --bucket-name peanutgallery-backups --name vps-backup --access-type AnyObjectWrite --time-expires <the expiry the board chooses>`, and again with `--name actions-backup`. Each prints a `full-path`; the whole URL, ending in `/o/`, is the secret. Put the VPS's in `.env` as `BACKUP_PAR_URL=` with `BACKUP_BUCKET=peanutgallery-backups`. When a request expires, uploads fail and the backup check alerts; create a new one then. A request with `AnyObjectWrite` can add objects and cannot read, list or delete any. It can write to a name that already exists, and backup names are predictable, so without versioning a stolen request could replace every past backup; with it, a replaced backup is still there as a previous version.
-3. **The board's age public key** in `.env` as `BACKUP_AGE_RECIPIENT=age1...` (`docs/BOARD-SETUP.md`). The private key never comes near the VPS or the repository.
+3. **The board's age public key** in `.env` as `BACKUP_AGE_RECIPIENT=age1...` (`BOARD-SETUP.md`). The private key never comes near the VPS or the repository.
 4. **The backup login's password.** Migration `20260923000010_backup_role.sql` creates `peanutgallery_backup` with no password. Set one once through the Management API query endpoint (`alter role peanutgallery_backup with password '<a new random password>'`), never in a file in the repository, and put the Session pooler string in `.env` as `BACKUP_DB_URL=postgresql://peanutgallery_backup.<project ref>:<password>@<the Session pooler host from Dashboard, Connect>:5432/postgres`. Read back what it can do: `select rolbypassrls, rolconfig from pg_roles where rolname = 'peanutgallery_backup'` and `select has_table_privilege('peanutgallery_backup', 'auth.users', 'select')`. Every dump runs as this login. The database owner's password never goes to the VPS or the backups repository: the owner can drop the append-only triggers. If the login cannot read the auth schema, put `BACKUP_SKIP_AUTH=1` in `.env` (and the same variable in the backups repository): the dumps then leave `auth` out, and a restore signs the board in afresh (Restore the database, step 6). The auth schema holds only the board's accounts; board membership itself is `board_members`, by email, in the public data.
 5. **The env files.** On the Mac, with `.env.vps` exported: `platform/ops/make-jobs-env.sh`. It prints the folder it wrote. Upload each file and delete the local copies:
    ```sh
@@ -367,7 +367,7 @@ launchd's calendar is in local time, which moves with daylight saving, so each j
 
 ### Prepare the Mac (the board, once)
 
-These are `docs/BOARD-SETUP.md` step 3.
+These are `BOARD-SETUP.md` step 3.
 
 1. **Power.** Keep it plugged in and the lid open: `caffeinate -i -s`, which the wrapper holds, keeps a Mac on power from sleeping, but closing the lid sleeps it anyway. In System Settings, Battery, Options, turn on "Prevent automatic sleeping on power adapter when the display is off". The display may sleep.
 2. **Restarts.** In System Settings, General, Software Update, Automatic updates, turn off installing macOS updates, so the Mac never restarts on its own; install them by hand while the studio is paused. With FileVault on, a restart or a power cut stops at the login screen and nothing runs until the board logs in: healthchecks.io emails when the dispatcher goes quiet.
@@ -378,7 +378,7 @@ These are `docs/BOARD-SETUP.md` step 3.
 
 ### The jobs before the cutover
 
-The full install needs `env/dispatcher.env`, and that needs the managed agent's ids, which `managed:apply` makes only once the studio's Anthropic organisation has Console credit (`docs/BOARD-SETUP.md` step 22). Until then `install.sh --jobs-only` installs the nightly jobs alone (`docs/specs/jobs-only-install.md`), so the money database is backed up every night from the day contributions open. From the repository root of the board's checkout of reviewed main, with `GITHUB_READ_TOKEN` (or, failing it, `VPS_GITHUB_TOKEN`) and `NTFY_TOPIC_URL` exported from `.env.vps`:
+The full install needs `env/dispatcher.env`, and that needs the managed agent's ids, which `managed:apply` makes only once the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22). Until then `install.sh --jobs-only` installs the nightly jobs alone (`docs/specs/jobs-only-install.md`), so the money database is backed up every night from the day contributions open. From the repository root of the board's checkout of reviewed main, with `GITHUB_READ_TOKEN` (or, failing it, `VPS_GITHUB_TOKEN`) and `NTFY_TOPIC_URL` exported from `.env.vps`:
 
 ```sh
 mkdir -p ~/peanutgallery-host/env && chmod 700 ~/peanutgallery-host ~/peanutgallery-host/env
@@ -425,7 +425,7 @@ Each job's first line must read `PASS:`, and the backup must end `backup: done: 
 
 ### The cutover on the Mac
 
-`docs/BOARD-SETUP.md` step 23. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not be started while the host runs (it would wait on the lease, and its attended mode would disagree with /board's).
+`BOARD-SETUP.md` step 23. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not be started while the host runs (it would wait on the lease, and its attended mode would disagree with /board's).
 
 1. **Pause** from /board.
 2. **Stop the attended dispatcher** (Ctrl-C in its terminal) and confirm no `dispatcher` process is left: `pgrep -fl 'src/main.ts'` prints nothing.

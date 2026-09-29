@@ -406,13 +406,13 @@ everything else, in the order the board would take it.
 - intent: Version 1.0 ships free on the web and itch.io first; Steam follows only past that threshold, with the $100 Steamworks app fee recoupable after $1,000, and a paid supporter pack at a season's end is an option. It is not built yet.
 - board: yes
 
-### Move the dispatcher to Google Cloud
+### Move the dispatcher off the Mac
 - bucket: platform
 - folder: platform
 - horizon: later
 - rank: 39
-- summary: Move the studio's card runner from the board's laptop to a free cloud server, so it keeps working when the laptop sleeps.
-- intent: Move the dispatcher and the daily jobs (the backup, the Controller and the quota check) from the board's Mac to a free Google Cloud Compute Engine e2-micro under the board's existing Google account, with the Ubuntu provisioning already in platform/ops (provision.sh, deploy.sh, the systemd units). The e2-micro has 1 GB of memory, so the dispatcher container's 3 GB limit must drop and be load-tested with a card running; it is free only in three US regions; a $1 budget alert goes on the billing account; the backups need a new store, since Oracle is dropped. It waits on the board opening a Google Cloud billing account. It is not built yet.
+- summary: Move the studio's card runner off the board's laptop, so it keeps working when the laptop sleeps.
+- intent: Move the dispatcher and the daily jobs (the backup, the Controller and the quota check) off the board's Mac without a server. The board can put no card on file, so every cloud free tier that verifies one (Oracle, Google Cloud, AWS, Azure) is out, and a paid host is out too. Card work already runs in Anthropic's cloud on Managed Agents (docs/specs/launch-managed.md), so what is left is a clock: claim a funded card, start a session, watch it, merge, deploy, write the ledger. Supabase, on its free plan, can run that clock with Supabase Cron and an Edge Function (150 seconds of wall clock and 2 seconds of CPU a run), which needs no new account. The dispatcher is Node and does git work directly, so this is a port: the git and deploy steps become API calls, the lease and orphan recovery move into Postgres, and the gate still runs on GitHub Actions. The Ubuntu provisioning in platform/ops is then dead and goes. Until it is built the Mac is the host. It is not built yet.
 - board: yes
 
 ### Split slider on the site, in place of the checkout dropdown

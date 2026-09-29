@@ -8,7 +8,7 @@ GitHub Actions cannot start jobs. The account's included Actions minutes are use
 
 ## Scope
 
-In: the gate run on the board's Mac for board pull requests (`scripts/local-gate.sh`), the rule for merging on it (PLAN.md §10 decision 44), the standing facts in `docs/ROADMAP.md`, and the board's item in `docs/BOARD-SETUP.md` for bringing Actions back.
+In: the gate run on the board's Mac for board pull requests (`scripts/local-gate.sh`), the rule for merging on it (PLAN.md §10 decision 44), the standing facts in `docs/ROADMAP.md`, and the board's item in `BOARD-SETUP.md` for bringing Actions back.
 
 Out: cards. The dispatcher merges a card only after a run of the gate workflow passed on the card's exact head, read through the Actions API (`gateStatus` in `platform/dispatcher/src/github.ts`), and this change does not touch it. The gate itself (`.github/workflows/gate.yml`, `platform/gate/`) is unchanged.
 
@@ -32,7 +32,7 @@ What it does not give:
 - A clean GitHub runner. It runs on the board's Mac, with the Mac's tools on the path and other work running beside it.
 - Cards. A card branch is refused, and the dispatcher still waits for a passing run of the gate workflow, which cannot start, so no card merges until Actions is back. It fails closed. The studio is paused anyway (awaiting Console credit).
 
-How to go back: the included minutes reset each month; or the board adds an Actions budget (a spend, against the rule that everything the studio runs on is free, PLAN.md §10 decision 35); or the board makes the repository public, which GitHub does not bill for standard runners. Then `gh workflow enable gate`, and board pull requests merge on the Actions gate again (`docs/BOARD-SETUP.md`, GitHub Actions minutes).
+How to go back: the included minutes reset each month; or the board adds an Actions budget (a spend, against the rule that everything the studio runs on is free, PLAN.md §10 decision 35); or the board makes the repository public, which GitHub does not bill for standard runners. Then `gh workflow enable gate`, and board pull requests merge on the Actions gate again (`BOARD-SETUP.md`, GitHub Actions minutes).
 
 ## Acceptance criteria
 

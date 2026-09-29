@@ -97,7 +97,7 @@ The ship stage runs these after the merge; none is run by the build.
 8. After Netlify deploys both sites from the merge, `node platform/site/scripts/live-check.mjs` PASS.
 9. Publish `docs/SYSTEM.md` as a private visual page and give the board the link.
 
-Board items: none required. Optional at /board: a cooling window length (it ships at 0), a role pause or a veto (`docs/BOARD-SETUP.md`, D).
+Board items: none required. Optional at /board: a cooling window length (it ships at 0), a role pause or a veto (`BOARD-SETUP.md`, D).
 
 ## Evidence
 
@@ -213,7 +213,7 @@ The fixture answers the cards read with the undealt card only for the board memb
    - `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` and `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 57 cards`, again after the merge.
    - Step 8: both Netlify sites (the public site and the board's) published ff512b9, and `node platform/site/scripts/live-check.mjs` → `PASS live-check https://peanutgallery.games passed=236 failed=0 skipped=0`; the live page's build sha reads ff512b9114dc59fe64a5f561cd5ca95eaae40403. Live screenshots of home and /ledger at 375 and 1440 were looked at: the event list renders from the new select.
    - Step 9: `docs/SYSTEM.md` is published as a private page for the board (https://claude.ai/artifact/JMy2LBnN8f1yA8vVJPUEhS).
-8. Step 7, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `docs/BOARD-SETUP.md`. Installing it runs main, which carries this change, so nothing is left to redeploy.
+8. Step 7, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `BOARD-SETUP.md`. Installing it runs main, which carries this change, so nothing is left to redeploy.
 
 Every Verification line is now run and quoted: `pnpm verify`, the function, dispatcher, supabase and ops tests and the board e2e above; the gate at the head sha (5); and production (the dump's size, both scripts' PASS lines, the cooling window 0, no hidden card, the backlog's removal list and count, the live check).
 

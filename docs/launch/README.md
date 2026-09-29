@@ -1,6 +1,6 @@
 # Launch post drafts
 
-The drafts for the announcement (`docs/specs/announcement.md`, Drafts; `docs/ROADMAP.md` criterion 5). The board edits them into its own voice and posts them; no agent posts them (`docs/BOARD-SETUP.md` step 24).
+The drafts for the announcement (`docs/specs/announcement.md`, Drafts; `docs/ROADMAP.md` criterion 5). The board edits them into its own voice and posts them; no agent posts them (`BOARD-SETUP.md` step 24).
 
 ## Before anything is posted
 

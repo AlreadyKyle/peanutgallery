@@ -44,7 +44,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
 5. [x] `pnpm verify`, the site e2e and the board e2e (Evidence). Pull request, merge on a green gate.
 6. [ ] The board's steps below: the name ones after the deploy; the domain ones when the board has registered one. Open: none is ticked yet.
 7. [x] Production data: the read-only name query below; fix any hit through /board or a data migration with a dump first (`specs/money-safety.md`). A card that links to peanutgallery.games or the game's netlify.app address is correct until the domain moves, so the name query does not look for either. Domain: the domain query below (open, waits on the domain).
-8. [ ] The managed agent: `agent.yaml` and `environment.yaml` changed in tier 1 (the description and system text name the studio), so run `pnpm --filter @backseat/dispatcher managed:apply` with the board's allow and put the new `MANAGED_AGENT_VERSION` in the Mac host's `env/dispatcher.env`, then `platform/ops/mac/install.sh`. The startup check refuses an agent that differs from `agent.yaml`, so the unattended dispatcher does not start until this is done. The `name:` keys stay, because `managed:apply` finds the agent by name and a new name makes a new agent and a new id. Open: it ran and failed on "Your credit balance is too low to access the Anthropic API" (Evidence); it waits on Console credit, bought from a payout (`docs/BOARD-SETUP.md` step 22), and the Mac host is not installed yet, so there is no env file to update.
+8. [ ] The managed agent: `agent.yaml` and `environment.yaml` changed in tier 1 (the description and system text name the studio), so run `pnpm --filter @backseat/dispatcher managed:apply` with the board's allow and put the new `MANAGED_AGENT_VERSION` in the Mac host's `env/dispatcher.env`, then `platform/ops/mac/install.sh`. The startup check refuses an agent that differs from `agent.yaml`, so the unattended dispatcher does not start until this is done. The `name:` keys stay, because `managed:apply` finds the agent by name and a new name makes a new agent and a new id. Open: it ran and failed on "Your credit balance is too low to access the Anthropic API" (Evidence); it waits on Console credit, bought from a payout (`BOARD-SETUP.md` step 22), and the Mac host is not installed yet, so there is no env file to update.
 9. [x] Tier 2 ran in the same pull request (`--apply --tier 2`), since nothing in it waits on the domain. The ntfy titles change on the Mac after `install.sh`.
 10. [x] Update the memory files and this spec's Evidence; this spec is built, and moves to done when every line of Verification has run.
 
@@ -65,12 +65,12 @@ The files are `TIERS[1]` in `scripts/rename.mjs`. By surface:
 
 ### The board's steps
 
-Written out with the clicks in `docs/BOARD-SETUP.md`, "Rename to Mob Machine".
+Written out with the clicks in `BOARD-SETUP.md`, "Rename to Mob Machine".
 
 - [ ] Stripe: the public business name, the statement descriptor, the Payment Link's product name if it names the studio, and the icon on checkout and receipts (`icon-512.png`). The after-payment URL changes with the domain. Claude reads or changes nothing in Stripe without asking first.
 - [ ] Discord: the server's name and icon (`icon-512.png`). The invite in `netlify.toml` keeps working.
 - [ ] The hello@clayhouse.studio signature. The address itself does not change (PLAN.md §10 decision 37).
-- [ ] The Twitch channel, which already exists under the old name (https://www.twitch.tv/peanut_gallery_games), is renamed when the board chooses, and its new handle goes in the repository (`docs/BOARD-SETUP.md`, Handles). This line first assumed the channel was still to be made; corrected 26 September 2026.
+- [ ] The Twitch channel, which already exists under the old name (https://www.twitch.tv/peanut_gallery_games), is renamed when the board chooses, and its new handle goes in the repository (`BOARD-SETUP.md`, Handles). This line first assumed the channel was still to be made; corrected 26 September 2026.
 - [x] Domain: register `{{DOMAIN}}` and tell Claude (mobmachine.games, 29 September 2026). Keep peanutgallery.games registered and renewing, so old links, shared previews, search results and the agents' commit address keep working.
 - [x] Domain: Netlify, site `peanutgallerygames`: add `{{DOMAIN}}` and `www.{{DOMAIN}}`, set `{{DOMAIN}}` as primary, wait for the certificate; keep peanutgallery.games as a domain alias so the 301 in `netlify.toml` serves it.
 - [ ] Supabase Auth, project `lyxndueoeisyqzewflpu`: the sign-in email's sender name is Mob Machine. It is set with the Resend SMTP settings (`specs/board-site.md` production step 7, whose text predates the rename and names the old studio: use Mob Machine). The Site URL and the redirect list are the board's own site's address (`specs/board-site.md` production step 4), not the public domain, so the domain leaves them alone. A second factor enrolled before the rename keeps its old label in the authenticator app; that is cosmetic.
@@ -88,7 +88,7 @@ Domain, in the domain's pull request: the same query with `~* 'peanutgallery\.ga
 
 ### Tier 2: internal (ran with tier 1)
 
-`TIERS[2]`: `docs/BOARD-SETUP.md` (including the prefilled token-form descriptions), `platform/ops/README.md`, the ntfy and healthcheck titles in the dispatcher (`src/alert.ts`), the jobs, the Mac scripts, the systemd units and `stripe-webhook`, the backups workflow, and fixture emails and strings in tests. Only the board sees these.
+`TIERS[2]`: `BOARD-SETUP.md` (including the prefilled token-form descriptions), `platform/ops/README.md`, the ntfy and healthcheck titles in the dispatcher (`src/alert.ts`), the jobs, the Mac scripts, the systemd units and `stripe-webhook`, the backups workflow, and fixture emails and strings in tests. Only the board sees these.
 
 Also internal and not in the script: renaming the GitHub repository. GitHub redirects the old URL, but `GITHUB_REPO` in the Mac host's `env/dispatcher.env`, the work clone's origin and PLAN.md §6 change with it, and the dispatcher refuses a mismatch, so it happens with the dispatcher stopped, or not at all.
 

@@ -149,14 +149,14 @@ export function agentModeEnv(env: Env): AgentMode {
 }
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-// A fine-grained personal access token: one repository, and only the permissions docs/BOARD-SETUP.md
+// A fine-grained personal access token: one repository, and only the permissions BOARD-SETUP.md
 // names. A gh sign-in token (gho_) or a classic token (ghp_) reaches every repository the account can.
 export const FINE_GRAINED_TOKEN_PREFIX = 'github_pat_';
 
 // Why GITHUB_TOKEN is not a fine-grained token, or null when it is.
 export function githubTokenProblem(token: string): string | null {
   if (token.startsWith(FINE_GRAINED_TOKEN_PREFIX)) return null;
-  return `GITHUB_TOKEN is not a fine-grained token (${FINE_GRAINED_TOKEN_PREFIX}...); create one for this repository alone as docs/BOARD-SETUP.md describes`;
+  return `GITHUB_TOKEN is not a fine-grained token (${FINE_GRAINED_TOKEN_PREFIX}...); create one for this repository alone as BOARD-SETUP.md describes`;
 }
 
 // Unattended mode runs with no one watching, so it refuses a token that can reach more than this

@@ -4,7 +4,7 @@ Status: done. Card: none. Owner: board.
 
 ## Problem
 
-A bug hunt over the live site, the Netlify functions, the Stripe webhook, the latest migrations, the dispatcher, the ops scripts and `docs/BOARD-SETUP.md`, after the launch series merged, found one live crash, one money-safety slip in the merge path, two flaky tests and board steps that promise something the scripts cannot do yet. This spec covers only the ones with one obvious fix and no product call.
+A bug hunt over the live site, the Netlify functions, the Stripe webhook, the latest migrations, the dispatcher, the ops scripts and `BOARD-SETUP.md`, after the launch series merged, found one live crash, one money-safety slip in the merge path, two flaky tests and board steps that promise something the scripts cannot do yet. This spec covers only the ones with one obvious fix and no product call.
 
 ## Scope
 

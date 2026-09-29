@@ -8,7 +8,7 @@ On 23 September 2026 the board moved every role that runs to `claude-opus-5-5`, 
 
 ## Scope
 
-In: PLAN.md decision 36, superseding decision 22; the ROADMAP "Models" fact and a Claude Code fact; the 2.1.280 minimum as a standing item and a Done entry in `docs/BOARD-SETUP.md`; the `claude-opus-5-5` price row, the model values and the CLI minimum as comments in `.env.example`; one sentence in `platform/agents/README.md`; a decision line in `docs/specs/launch-managed.md`.
+In: PLAN.md decision 36, superseding decision 22; the ROADMAP "Models" fact and a Claude Code fact; the 2.1.280 minimum as a standing item and a Done entry in `BOARD-SETUP.md`; the `claude-opus-5-5` price row, the model values and the CLI minimum as comments in `.env.example`; one sentence in `platform/agents/README.md`; a decision line in `docs/specs/launch-managed.md`.
 Out: the attended sandbox fix that 2.1.280 needed, and the `/team` live check, both in `docs/specs/carry-over.md`. Pinning the CLI version is the board's step once that fix has merged. Recorded test data that names `claude-sonnet-5` (stream fixtures, the probe recording, metering tests) records what ran and stays.
 
 ## Behaviour
@@ -19,7 +19,7 @@ The docs say what production runs: every role that runs is on `claude-opus-5-5` 
 
 - [x] PLAN.md §10 decision 36 records the models, the price row and the 2.1.280 minimum, and decision 22 says it is superseded by 36.
 - [x] The ROADMAP's "Models" fact matches decision 36, and a standing fact names the 2.1.280 minimum.
-- [x] `docs/BOARD-SETUP.md` names the 2.1.280 minimum as a standing item and records the update as done.
+- [x] `BOARD-SETUP.md` names the 2.1.280 minimum as a standing item and records the update as done.
 - [x] `.env.example` names the model values and the `claude-opus-5-5` price row (4 input, 20 output, 0.20 cache read, 5 and 8 for five-minute and one-hour cache writes, USD per million tokens) in comments, with every value left blank.
 - [x] Claude Code 2.1.280 is installed on the Mac, and the attended sandbox check passes on it.
 

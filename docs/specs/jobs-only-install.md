@@ -4,7 +4,7 @@ Status: built. Card: none. Owner: board.
 
 ## Problem
 
-Contributions are open, so the money database is live, but it has no scheduled backup. `platform/ops/mac/install.sh` installs the nightly backup, Controller and quota LaunchAgents only after `check_host_env` passes on `~/peanutgallery-host/env/dispatcher.env`. That file needs `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` from `managed:apply`, which fails until the studio's Anthropic organisation has Console credit (`docs/BOARD-SETUP.md` step 22), and the code clone is cloned with that file's `GITHUB_TOKEN`. So until the cutover (step 23) a backup runs only by hand (`sweep-27-sep.md`, Scope, Out).
+Contributions are open, so the money database is live, but it has no scheduled backup. `platform/ops/mac/install.sh` installs the nightly backup, Controller and quota LaunchAgents only after `check_host_env` passes on `~/peanutgallery-host/env/dispatcher.env`. That file needs `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` from `managed:apply`, which fails until the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22), and the code clone is cloned with that file's `GITHUB_TOKEN`. So until the cutover (step 23) a backup runs only by hand (`sweep-27-sep.md`, Scope, Out).
 
 ## Scope
 
@@ -12,7 +12,7 @@ In:
 - `install.sh --jobs-only`: the jobs' LaunchAgents from a read-only code clone, with no dispatcher env file, no `.env` in the clone, no `node_modules` and no work clone.
 - The plain `install.sh` refusing the clone `--jobs-only` made, so the cutover never runs the dispatcher from main as it was when the jobs went in.
 - Tests in `platform/ops/test/ops.test.mjs` ("install.sh --jobs-only").
-- `docs/BOARD-SETUP.md` steps 3 and 19, the runbook's The Mac host (`platform/ops/README.md`), `mac-host.md`'s install paragraph, and the ROADMAP.
+- `BOARD-SETUP.md` steps 3 and 19, the runbook's The Mac host (`platform/ops/README.md`), `mac-host.md`'s install paragraph, and the ROADMAP.
 
 Out: any change to `run-job.sh`, `backup-mac.sh`, the job template or the jobs themselves; `deploy.sh` for a jobs-only host (it still requires the dispatcher's LaunchAgent loaded, so the jobs' code moves only by moving the clone aside and installing again); running anything on the Mac, which is the board's (Production steps).
 

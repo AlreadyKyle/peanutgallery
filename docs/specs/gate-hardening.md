@@ -248,7 +248,7 @@ head 71e3b70 has f0ebbdc as an ancestor: run 35129960581 (`created_at=2026-09-16
 `denoland/setup-deno@v2`.
 
 The second line stays open: no `card/*` pull request has run since the merge, and none can run the
-gate until GitHub Actions minutes are back (`docs/BOARD-SETUP.md`, GitHub Actions minutes) and the first
+gate until GitHub Actions minutes are back (`BOARD-SETUP.md`, GitHub Actions minutes) and the first
 card is built. It closes with that card's gate run.
 
 ## Decisions

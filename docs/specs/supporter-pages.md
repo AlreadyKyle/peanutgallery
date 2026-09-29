@@ -295,7 +295,7 @@ PASS /team sections ["Running","Starts later","Planned","Who runs it"]
 
 `anon-negative-test.ts` prints `PASS: anon access matches the RLS contract`, with `rpc site_card (a live card) expected readable actual readable keys card,funding,line_count,lines,milestones,roles,spent_usd,stopped,supporter_count,supporters` and `rpc thanks_for_session (unknown) expected readable actual readable answered {"status":"pending"}`; `ledger-identity.ts` prints `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 66 cards`. The board-test SELECT is quoted in step 5 above; the board's test payment is still the only payment, so no supporter row has been added since. /team's fourth section, "Who runs it", is copy-pass's (`specs/copy-pass.md`).
 
-Stripe's after-payment redirect to `/thanks?session={CHECKOUT_SESSION_ID}` is a board step (`docs/BOARD-SETUP.md` step 12), not a criterion here: the real-payment criterion became a board item when the spec was trimmed (Decisions). Every Verification line is run and quoted. Status done.
+Stripe's after-payment redirect to `/thanks?session={CHECKOUT_SESSION_ID}` is a board step (`BOARD-SETUP.md` step 12), not a criterion here: the real-payment criterion became a board item when the spec was trimmed (Decisions). Every Verification line is run and quoted. Status done.
 
 ## Decisions
 

@@ -26,7 +26,7 @@ In:
 - **Payment-host scan.** `platform/gate/payment-host-scan.mjs` and `payment-hosts.txt`, run by `ship-gate.sh` over the built public site and the built game. The public site's `form-action 'self'` moves into the enforced policy, and its `netlify.toml` serves the app at the kernel pages with `force`.
 - **The platform code lane, gated.** `studio_state.platform_lane_open` (default false) in the same migration; `file_card`, `set_card_horizon` and `resume_card` refuse a platform code card on now unless it is true; the dispatcher's `runnable` reads it; the gate's lane check accepts `platform/site` on a code branch; /team reads it from `public_studio`.
 - **The gate** builds, tests and runs the end-to-end suite of the board site with the platform folder (`ship-gate.sh`, `changed-paths.sh`, `.github/workflows/gate.yml`).
-- **Docs:** `docs/BOARD-SETUP.md` rewritten as the plan's checklist A to D; `docs/PLAN.md` §3, §4 Work, §4 The Board, §4 Not built yet, §6 and §11, decision 39 superseding 31 (numbered 39 after decisions 37 and 38 landed first); the backlog entry "Board on its own site" removed as built; `docs/ROADMAP.md`; the Platform Builder's and the Platform Director's prompts; `README.md`; `platform/site/DESIGN.md`; `docs/COPY.md`.
+- **Docs:** `BOARD-SETUP.md` rewritten as the plan's checklist A to D; `docs/PLAN.md` §3, §4 Work, §4 The Board, §4 Not built yet, §6 and §11, decision 39 superseding 31 (numbered 39 after decisions 37 and 38 landed first); the backlog entry "Board on its own site" removed as built; `docs/ROADMAP.md`; the Platform Builder's and the Platform Director's prompts; `README.md`; `platform/site/DESIGN.md`; `docs/COPY.md`.
 
 Kernel files this pull request changes: `.github/workflows/gate.yml`, `docs/` (PLAN, ROADMAP, BACKLOG, BOARD-SETUP, `docs.test.mjs`, this spec), `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `platform/agents/prompts/platform-builder.md` and `platform-director.md`, `platform/dispatcher` (`db.ts`, `select.ts`, `tick.ts`, `worktree.ts` and tests, `test/site-kernel.test.ts` new), `platform/gate` (`kernel-paths.txt`, `changed-paths.sh`, `ship-gate.sh`, `runtime-token-deny.sh`, `payment-host-scan.mjs`, `payment-hosts.txt`, tests), `platform/ops/jobs/controller.mjs` and its test, `platform/supabase` (the migration, `seed.ts`, `lib/board-users.ts`, `scripts/anon-negative-test.ts`, tests), `platform/site/netlify.toml`, `platform/site/index.html`, `platform/site/scripts/live-check.mjs` and `board-address.mjs` (new), every new `platform/board` file, and the site files that become kernel above.
 
@@ -79,7 +79,7 @@ With nothing due it says "Nothing needs you." Under the list: the latest run's t
 - [x] The gate's lane check accepts a code branch under `platform/site/` only or `seed-1/` only, and refuses both at once, the board site, other platform folders and root files; a board site change selects the site steps.
 - [x] The seed creates the moderator's auth user from `MODERATOR_EMAIL`, leaves existing users alone, and prints no address.
 - [x] The Controller's figures name the newest paid payout, or none.
-- [x] `docs/BOARD-SETUP.md` carries the plan's checklist A to D, with Actions read and Plan read on the dispatcher and Mac tokens, and the docs tests pass (no schedule, the backlog and PLAN in step).
+- [x] `BOARD-SETUP.md` carries the plan's checklist A to D, with Actions read and Plan read on the dispatcher and Mac tokens, and the docs tests pass (no schedule, the backlog and PLAN in step).
 - [x] Production: the migration applied, the anon negative test and the ledger identity PASS (Evidence, Production).
 - [x] Production: the board's Netlify site live at its address, with the headers above read back (Evidence, Production).
 - [x] Production: Supabase Auth's site URL and redirect list on the board site only, sign-ups off, the board users' sessions ended (Evidence, Production).
@@ -202,7 +202,7 @@ The board site's address is `<BOARD_SITE_URL>` here: it lives only in `.env` and
   ```
 - **Supabase Auth (step 4).** `GET /v1/projects/lyxndueoeisyqzewflpu/config/auth`, five keys, the address redacted: `{'site_url': '<BOARD_SITE_URL>', 'uri_allow_list': '<BOARD_SITE_URL>/**', 'disable_signup': True, 'mfa_totp_enroll_enabled': True, 'mfa_totp_verify_enabled': True}`. Nothing on peanutgallery.games is on the list.
 - **The sessions ended (step 5).** For the board's users, `auth.sessions` holds 0 rows and `auth.refresh_tokens` 0 rows, revoked or not.
-- **The board's own sign-in (step 8): not yet.** `select role, last_seen_at from public.board_members` returns `[{"role":"board","last_seen_at":"2026-09-20 00:25:09.773289+00"}]`, and the board user's `auth.users.last_sign_in_at` is `2026-09-15 04:24:10+00`. Both are from before #56 merged (23 September 2026), when /board was still on the public site: the board site's sign-in calls `board_heartbeat`, which would have moved `last_seen_at`, and no session exists. So the board has not yet signed in on its own site; that is `docs/BOARD-SETUP.md` step 17, and the sign-in criterion and production step 12 wait on it.
+- **The board's own sign-in (step 8): not yet.** `select role, last_seen_at from public.board_members` returns `[{"role":"board","last_seen_at":"2026-09-20 00:25:09.773289+00"}]`, and the board user's `auth.users.last_sign_in_at` is `2026-09-15 04:24:10+00`. Both are from before #56 merged (23 September 2026), when /board was still on the public site: the board site's sign-in calls `board_heartbeat`, which would have moved `last_seen_at`, and no session exists. So the board has not yet signed in on its own site; that is `BOARD-SETUP.md` step 17, and the sign-in criterion and production step 12 wait on it.
 - **The live check (step 11).** On `origin/main` at ed63326, with `BOARD_SITE_URL` from `.env` in its environment and never printed (a scrub of the output finds the address 0 times): `PASS live-check https://peanutgallery.games passed=279 failed=0 skipped=0`, exit 0, with
 
   ```
@@ -215,7 +215,7 @@ The board site's address is `<BOARD_SITE_URL>` here: it lives only in `.env` and
   PASS /board does not name the board site's address
   PASS /team content-security-policy: frame-ancestors 'none'; connect-src 'self'; form-action 'self'
   ```
-- **Still open:** Resend (step 7, `docs/BOARD-SETUP.md` step 2), the board's sign-in (step 8, BOARD-SETUP step 17), a moderator and their sign-in (step 9, BOARD-SETUP step 16; `board_members` has no moderator row), and opening the platform code lane (step 12, BOARD-SETUP step 26), which waits on the board's sign-in and then is the board's switch.
+- **Still open:** Resend (step 7, `BOARD-SETUP.md` step 2), the board's sign-in (step 8, BOARD-SETUP step 17), a moderator and their sign-in (step 9, BOARD-SETUP step 16; `board_members` has no moderator row), and opening the platform code lane (step 12, BOARD-SETUP step 26), which waits on the board's sign-in and then is the board's switch.
 
 ## Decisions
 

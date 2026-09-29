@@ -79,7 +79,7 @@ The ship stage runs these; none is run by the build.
 6. If the Mac dispatcher is installed, redeploy it on the merge commit (`platform/ops/mac/deploy.sh`) and confirm the job registry lists both handlers; it is not installed yet (the board's step 3), and installing it runs main.
 7. After both Netlify sites publish the merge, `node platform/site/scripts/live-check.mjs` PASS; update the private SYSTEM.md page.
 
-Board items (listed; none blocks this pull request): be signed in at /board for launch-card-floor's drafting session, the first real Draft a game card run, on your Max plan (`docs/BOARD-SETUP.md`); installing the Mac dispatcher (step 6) is the board's step 3.
+Board items (listed; none blocks this pull request): be signed in at /board for launch-card-floor's drafting session, the first real Draft a game card run, on your Max plan (`BOARD-SETUP.md`); installing the Mac dispatcher (step 6) is the board's step 3.
 
 ## Evidence
 
@@ -275,7 +275,7 @@ The second now puts a board-vetoed card back on now: `rankable_cards` leaves it 
    - Step 5, the backlog: the `file-backlog` dry run → `2 would be inserted, 2 would be updated, 0 would be removed` (inserting "Scheduled and unattended role jobs" and "Studio card drafting", updating the Community and Studio Head intents); `--apply` → `done: 2 inserted, 2 updated, 0 removed, 43 unchanged, 0 skipped`.
    - `anon-negative-test.ts` → `PASS: anon access matches the RLS contract` and `ledger-identity.ts` → `PASS: ledger identity holds over 1 contribution rows, 0 studio ledger rows, 1 allocations and 59 cards`, again after the merge.
    - Step 7: c65e7cb is ready on the public site (70df3957, 04:43:04Z) and the board's (51051b5b, 04:43:39Z); `node platform/site/scripts/live-check.mjs` → `PASS live-check https://peanutgallery.games passed=236 failed=0 skipped=0`, and the live page's build sha reads c65e7cb2eaa99a5ad487c8f6fddb5488f1ac72af. Live screenshots of /roadmap, home and /team at 375 and 1440 were looked at: no horizontal overflow, and the new /roadmap lede renders. The private SYSTEM.md page (https://claude.ai/artifact/JMy2LBnN8f1yA8vVJPUEhS) is at version 2 with the two role jobs.
-8. Step 6, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `docs/BOARD-SETUP.md`. Installing it runs main, which already carries both job handlers, so nothing is left to redeploy.
+8. Step 6, redeploying the Mac dispatcher on the merge commit, is not run: no dispatcher is installed (`dispatcher_seen_at` reads 2026-09-16) and the Mac host's install is the board's step 3 in `BOARD-SETUP.md`. Installing it runs main, which already carries both job handlers, so nothing is left to redeploy.
 
 Every Verification line is now run and quoted: `pnpm verify`, the function, dispatcher, supabase, agents and docs tests and both e2e runs above; the gate at the head sha (5); and production (the dump's size, both scripts' PASS lines with `ledger_identity()` read back, the two jobs, the Game Designer's row after the re-seed, and the live check).
 

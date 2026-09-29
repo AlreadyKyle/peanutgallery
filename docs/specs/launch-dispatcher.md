@@ -196,7 +196,7 @@ The failed-revert test asserts the alert ends "The studio is paused until the bo
 1. Apply the DB workstream's migrations `20260922000000` to `20260922000300` before any dispatcher built from this change runs. Without `claim_dispatcher_lease` it stops at startup with that error. In unattended mode it also needs `credit_purchases` and `studio_state.monthly_cap_usd`, or no card starts.
 2. On the Mac, stop any running dispatcher first.
 3. Edit the Mac `.env`. `DISPATCHER_WORKTREE_ROOT` points inside the repository, which the dispatcher now refuses. Remove it, so worktrees go to `<clone>-worktrees`, or point it outside the clone.
-4. Replace the Mac `.env`'s `GITHUB_TOKEN`. It is a gh sign-in token (`gho_`), which attended mode only warns about. The fine-grained token is the board's step in `docs/BOARD-SETUP.md`.
+4. Replace the Mac `.env`'s `GITHUB_TOKEN`. It is a gh sign-in token (`gho_`), which attended mode only warns about. The fine-grained token is the board's step in `BOARD-SETUP.md`.
 5. After any `MODEL_*` change in `.env`, restart the dispatcher, then re-seed the roles so /team shows the model the dispatcher resolves.
 
 ## Decisions

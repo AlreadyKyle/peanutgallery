@@ -286,7 +286,7 @@ Deno.test("with 1,100 live cards and cards on every other stage, both documents 
 Deno.test("BOARD-SETUP's pause statement does what set_paused(true) does, and the live document shows it", OPTS, async (t) => {
   const s = await studio();
   try {
-    const setup = await Deno.readTextFile(new URL("../../../../docs/BOARD-SETUP.md", import.meta.url));
+    const setup = await Deno.readTextFile(new URL("../../../../BOARD-SETUP.md", import.meta.url));
     const section = setup.slice(setup.indexOf("## Pause when the board site is down"));
     const statement = section.match(/```sql\n\s*([^\n]+)\n\s*```/)?.[1]?.trim();
     assert(statement !== undefined && statement.startsWith("update public.studio_state set paused = true"), "BOARD-SETUP carries one pause statement");

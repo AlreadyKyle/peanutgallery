@@ -310,7 +310,8 @@ https://mobmachine.games/icon-512.png).
 ### Your calls, nothing waits on them
 
 - **Kill-condition pivots:** "keep the pivots", or the ones you want for a site-first studio.
-- **Google Cloud billing account,** to move the dispatcher off your Mac.
+- **Where the dispatcher lives after the Mac** (see **Open decisions**): port its clock to Supabase,
+  which you already have, or leave it on the Mac. No card, so the cloud free tiers are all out.
 - **From the 28 September QA pass** (write-ups in `~/peanutgallery-launch/qa-2026-09-28/`): the
   lookalike-letter deny-list patch (I'd skip it), the same kernel shadow rule for the dispatcher,
   sharper Dust text on phones, and a test on real Safari.
@@ -525,8 +526,8 @@ you a sign-in link to check it arrives.
 **Why.** Live criterion 2 is the dispatcher running unattended. Oracle is dropped and no card goes on
 file for a cloud server, so until the studio has one the dispatcher and the daily jobs (the backup,
 the Controller and the quota check) run on this Mac under launchd, from a folder of their own,
-`~/peanutgallery-host` (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). A free Google
-Cloud server is the planned later home, once you open a billing account (see **Open decisions**).
+`~/peanutgallery-host` (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). Where it goes after the Mac is
+undecided and needs no card (see **Open decisions**).
 
 **Do this.**
 
@@ -1074,8 +1075,7 @@ so they sound like you, put the clip's link in each, and post them in the order 
   Ontario business-name registration for "Mob Machine" ($60). I book nothing.
 - **Kill-condition pivots.** "Keep the pivots", or the ones you want for a site-first studio (see
   **Open decisions**).
-- **A Google Cloud billing account,** whenever you choose, to move the dispatcher off your Mac (see
-  **Open decisions**).
+- **Where the dispatcher lives after the Mac,** whenever you choose (see **Open decisions**).
 - **Delete `KEYS.md`** from the repository folder on your Mac (see **Standing items**).
 - **HST registration review** when cumulative receipts reach $15k (see **Standing items**).
 - **Record the trademark search** for "Mob Machine".
@@ -1243,12 +1243,29 @@ Their pivots ("drop 24/7; run a weekly two-hour live show", "drop the meter; run
 "archive; publish the post-mortem; open-source the vote and meter kit") were written for a streamed
 studio. **Tell me:** "keep the pivots", or the pivots you want for a site-first studio.
 
-#### A Google Cloud billing account
+#### Where the dispatcher lives after the Mac
 
-The dispatcher moves from your Mac to a free Google Cloud Compute Engine e2-micro once you open a
-billing account on your Google account (`docs/BACKLOG.md`, Move the dispatcher to Google Cloud).
-It stays inside the free tier, with a $1 budget alert, but the account needs a card on file, which
-is your call. **Tell me:** "the Google Cloud billing account is open", whenever you choose to.
+You can't put a card on file, so every cloud free tier worth using is out: Oracle, Google Cloud, AWS
+and Azure all verify one. The "free VPS, no credit card" sites that search turns up are affiliate
+fronts; nothing that holds the studio's money goes on one. Paying for Google Drive doesn't help
+either — that's storage, and a Google payments profile doesn't carry over to Cloud Billing, which
+also takes no PayPal in Canada. MCP servers aren't hosting: an MCP server is a way for a program to
+offer tools, and it has to run somewhere itself.
+
+**The way out is to need no server at all.** Card work already runs in Anthropic's cloud on Managed
+Agents (`docs/specs/launch-managed.md`), so what's left on the Mac is a small clock: notice a funded
+card, start a session, watch it, merge, deploy, write the ledger. Supabase already runs the studio's
+database on its free plan, and it can run that clock: Supabase Cron fires as often as every second,
+and an Edge Function gets 150 seconds of wall clock and 2 seconds of CPU per run on the free plan —
+plenty to make API calls and wait for the next tick. No new account, nothing on a card, nothing on
+your Mac.
+
+The cost is mine, not yours: the dispatcher is Node and does git work directly, so this is a port,
+not a copy, and the gate still runs on GitHub Actions, which is refusing jobs today (step 22). Until
+it's built the Mac is the host, and that keeps working.
+
+**Tell me:** "port it to Supabase" to put it in the backlog as the way off the Mac, or "stay on the
+Mac" to leave it where it is.
 
 #### The card maximum (old item 10): resolved by the launch batch
 
@@ -1305,7 +1322,7 @@ Copy any of these back to me as you finish:
 - "ready for the cutover"
 - "gone live"
 - "keep the pivots" (or the pivots you want)
-- "the Google Cloud billing account is open" (whenever you choose)
+- "port it to Supabase" / "stay on the Mac" (the dispatcher's later home)
 
 ---
 
