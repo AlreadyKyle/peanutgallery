@@ -446,7 +446,7 @@ export const legal = {
     followHeading: 'Follow along',
     watchCard: 'Watch this card',
     // Says what the link does: the Discord invite. Ship posts start only once the board sets the
-    // ships webhook (docs/BOARD-SETUP.md), so the button promises none (docs/specs/copy-pass.md).
+    // ships webhook (BOARD-SETUP.md), so the button promises none (docs/specs/copy-pass.md).
     discord: 'Follow the studio on Discord',
     discordAge: 'Discord is for ages 13 and over.',
   },

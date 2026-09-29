@@ -28,7 +28,8 @@ The repository is private. `main` has no branch protection; the dispatcher merge
 - `platform/agents`: the sixteen role specs (JSON) and their prompts.
 - `platform/ops`: the dispatcher's Docker image, systemd units, provisioning and deploy scripts, and the VPS runbook.
 - `seed-1`: Dust, with its simulation, config, content, renderer, bot and tests. It never imports from `platform/`.
-- `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`), the board's steps (`BOARD-SETUP.md`) and the specs.
+- `BOARD-SETUP.md`: the board's steps, the one list of what only Kyle can do. It sits at the repository root so it is the first thing visible.
+- `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`) and the specs.
 
 ## How a card ships
 

@@ -158,6 +158,7 @@ export function worktreePath(root: string, cardId: string): string {
 // file a card can change.
 export const KERNEL_PATHS: readonly string[] = [
   '.github',
+  'BOARD-SETUP.md',
   'CLAUDE.md',
   'docs',
   'package.json',

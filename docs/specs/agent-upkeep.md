@@ -27,7 +27,7 @@ Out, and what each waits on:
 - Renovate: only if the first Dependabot run cannot read pnpm 11's lockfile and the board installs the app. Its config comes with that choice.
 - Producer signals as inputs to the Studio Head's ranking: not built. The ranking is board-queued, and the board reads the signals in Needs you.
 - The builder replay set: BACKLOG, after launch (A6). HR: waits on scorecards and this eval set.
-- The first replay run, and `baseline.json` from it: an optional board item (`docs/BOARD-SETUP.md`), run attended at the Mac on the founder's plan. Until it runs, the gate refuses a change to a guarded path.
+- The first replay run, and `baseline.json` from it: an optional board item (`BOARD-SETUP.md`), run attended at the Mac on the founder's plan. Until it runs, the gate refuses a change to a guarded path.
 
 ## Behaviour
 
@@ -130,7 +130,7 @@ The migration is additive (the `findings` table, four service-role functions, tw
 6. After the merge: re-seed the roles (`pnpm --filter @backseat/supabase seed`, from a checkout equal to the merge) so the Janitor's row is running with its new description, and read it back; `file-backlog` as a dry run, then `--apply` (the four new BACKLOG entries); wait for both sites to publish the merge and purge the CDN; the live check; /team at 375 and 1440, looked at, with the Janitor under Running as code.
 7. No function deploy: only Deno test files under `platform/supabase/functions` change. The Mac dispatcher is not installed yet (no launchd job on this Mac), so nothing is redeployed, and the first `janitor` and `upkeep_merge` runs wait for it: pg_cron queues them, and `enqueue_job_run` holds at most one queued scheduled run per job, so nothing piles up.
 
-Board items (listed, never blocking; `docs/BOARD-SETUP.md` has each):
+Board items (listed, never blocking; `BOARD-SETUP.md` has each):
 - Run `sudo bash platform/ops/mac/pin-claude-code.sh` once at the Mac, so Claude Code stops updating itself. Until then a self-update pauses attended sessions with `cli_version` until the pin moves in a board pull request.
 - The first replay eval run (optional, at the Mac, on the Max plan) and `baseline.json` from it. Until then the gate refuses a change to a role prompt, rubric, agent definition or schema under `platform/agents/`.
 - The first `janitor.yml` run waits on GitHub Actions minutes: while Actions has none, its Monday run fails before any job runs, which the daily check records as one `scan:run` finding.

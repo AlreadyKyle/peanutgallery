@@ -13,6 +13,7 @@
 # branch that does, and the gate's build job restores every one of them from the base commit before it
 # installs or builds.
 .github
+BOARD-SETUP.md
 CLAUDE.md
 docs
 package.json

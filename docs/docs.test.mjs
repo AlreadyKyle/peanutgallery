@@ -117,7 +117,7 @@ const PROMPT_FILES = markdownUnder('platform', 'agents', 'prompts');
 // The company guard reads the root docs, every Markdown file under docs/ (specs, the board's steps,
 // launch drafts), and the agents' prompts. This test file is not Markdown, so the guard's own
 // patterns below never trip it.
-const GUARDED_DOCS = ['README.md', 'CLAUDE.md', ...markdownUnder('docs'), ...PROMPT_FILES];
+const GUARDED_DOCS = ['README.md', 'CLAUDE.md', 'BOARD-SETUP.md', ...markdownUnder('docs'), ...PROMPT_FILES];
 
 // The founder's other company names, as sha256 digests of their lowercase spelling, so this file
 // never carries them in plain text: the gate's banned-phrases scan reads docs/ and refuses the
@@ -142,7 +142,7 @@ function namesCompany(line) {
 }
 
 test("the docs and prompts name none of the founder's other companies, and Clayhouse only as the footer credit and the contact address", () => {
-  assert.ok(GUARDED_DOCS.includes(join('docs', 'BOARD-SETUP.md')), 'the guard reads docs/BOARD-SETUP.md');
+  assert.ok(GUARDED_DOCS.includes('BOARD-SETUP.md'), 'the guard reads BOARD-SETUP.md');
   assert.ok(GUARDED_DOCS.some((file) => file.startsWith(join('docs', 'specs'))), 'the guard reads docs/specs');
   for (const file of GUARDED_DOCS) {
     const lines = read(file).split('\n');
@@ -307,7 +307,7 @@ test('docs/PLAN.md numbers its decisions from 1 with no gaps, and the live docs 
   const { decisions } = outline;
   assert.ok(decisions.length >= 35, `§10 holds the decisions (found ${decisions.length})`);
   assert.deepEqual(decisions, decisions.map((_, index) => index + 1));
-  const live = ['README.md', 'CLAUDE.md', 'docs/ROADMAP.md', 'docs/BOARD-SETUP.md', 'docs/BACKLOG.md', 'docs/PLAN.md', 'docs/SYSTEM.md', ...PROMPT_FILES];
+  const live = ['README.md', 'CLAUDE.md', 'docs/ROADMAP.md', 'BOARD-SETUP.md', 'docs/BACKLOG.md', 'docs/PLAN.md', 'docs/SYSTEM.md', ...PROMPT_FILES];
   for (const file of live) {
     assert.doesNotMatch(read(file), /PLAN\.md:\d/, `${file} cites PLAN.md by line number; cite a section instead`);
   }
@@ -445,7 +445,7 @@ test('every mechanic docs/PLAN.md lists as not built links a backlog entry, and 
 
 test('every link into docs/BACKLOG.md from the docs lands on an entry', () => {
   const anchors = new Set(backlog.entries.map((entry) => slug(entry.title)));
-  for (const file of ['README.md', 'CLAUDE.md', ...markdownUnder('docs')]) {
+  for (const file of ['README.md', 'CLAUDE.md', 'BOARD-SETUP.md', ...markdownUnder('docs')]) {
     for (const match of read(file).matchAll(/BACKLOG\.md#([a-z0-9_-]+)/g)) {
       assert.ok(anchors.has(match[1]), `${file} links BACKLOG.md#${match[1]}, which is not an entry`);
     }
@@ -459,7 +459,7 @@ test('every link into docs/BACKLOG.md from the docs lands on an entry', () => {
 const SCHEDULE = /\b(week|day|hour|sprint|season)[ -]\d+\b|\blaunch day\b/i;
 
 test('the plan, the checklist, the backlog, the board\'s steps, the root docs and the prompts carry no schedule', () => {
-  const files = ['docs/PLAN.md', 'docs/ROADMAP.md', 'docs/BACKLOG.md', 'docs/BOARD-SETUP.md', 'docs/SYSTEM.md', 'CLAUDE.md', 'README.md', ...PROMPT_FILES];
+  const files = ['docs/PLAN.md', 'docs/ROADMAP.md', 'docs/BACKLOG.md', 'BOARD-SETUP.md', 'docs/SYSTEM.md', 'CLAUDE.md', 'README.md', ...PROMPT_FILES];
   for (const file of files) {
     read(file)
       .split('\n')

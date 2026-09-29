@@ -191,14 +191,14 @@ describe('the GitHub token', () => {
   it('names a token that is not fine-grained', () => {
     expect(githubTokenProblem('github_pat_fake-token')).toBeNull();
     for (const token of ['gho_fake-token', 'ghp_fake-token', 'plain-token']) {
-      expect(githubTokenProblem(token)).toBe('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes');
+      expect(githubTokenProblem(token)).toBe('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as BOARD-SETUP.md describes');
     }
   });
 
   it('refuses a gh sign-in or classic token in unattended mode', () => {
     for (const token of ['gho_fake-token', 'ghp_fake-token']) {
       expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', GITHUB_TOKEN: token }, REPO)).toThrow(
-        new ConfigError('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes'),
+        new ConfigError('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as BOARD-SETUP.md describes'),
       );
     }
     expect(loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).githubToken).toBe('github_pat_-fixture-write');

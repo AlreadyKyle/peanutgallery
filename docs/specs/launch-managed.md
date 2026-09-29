@@ -263,7 +263,7 @@ The settings were checked against the installed command line, not assumed. `clau
 
 Nothing below has run. Each writes to the studio's Anthropic organization, GitHub or the VPS, and each follows this change's merge.
 
-1. Kyle creates `GITHUB_READ_TOKEN` (`docs/BOARD-SETUP.md`): fine-grained, this repository only, Contents read only (`platform/ops/README.md`, Provision step 3). It goes in the Mac's `.env` and in `.env.vps`, which the operator's shell exports for `make-dispatcher-env.sh`.
+1. Kyle creates `GITHUB_READ_TOKEN` (`BOARD-SETUP.md`): fine-grained, this repository only, Contents read only (`platform/ops/README.md`, Provision step 3). It goes in the Mac's `.env` and in `.env.vps`, which the operator's shell exports for `make-dispatcher-env.sh`.
 2. On the Mac, `pnpm --filter @backseat/dispatcher managed:apply`. Put the printed `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` in the Mac's `.env`, and quote the output here.
 3. `pnpm --filter @backseat/dispatcher managed:apply -- --check`, quoted. If the API refuses an organization with no credit, the refusal is quoted and this step moves to after the credit purchase.
 4. Regenerate the VPS env file with `make-dispatcher-env.sh`, which now carries `GITHUB_READ_TOKEN` and the three ids. Upload it and run `provision.sh` again. It must prove the read token is denied a write and end with `0 change(s)` on its second run.

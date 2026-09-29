@@ -143,7 +143,7 @@ describe('startupChecks in attended mode', () => {
       log,
     });
     expect(lines()).toEqual([
-      expect.objectContaining({ level: 'warn', msg: 'GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as docs/BOARD-SETUP.md describes', mode: 'attended' }),
+      expect.objectContaining({ level: 'warn', msg: 'GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as BOARD-SETUP.md describes', mode: 'attended' }),
     ]);
   });
 });

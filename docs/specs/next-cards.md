@@ -52,4 +52,4 @@ A Next card carries a funding target at or below the per-card maximum. A support
 
 2026-09-16: the status moves from done to built. Two Verification lines have no quoted output here: "Guarded select returns exactly 4 rows before the delete; the delete returns the same 4 ids" (the Evidence quotes only a count of 0 for the Week cards afterwards) and "A real contribution toward a card moves its bar by the net amount and the pool by the same amount".
 
-2026-09-26: the guarded-select line is struck through above, since the delete it guarded is done and the Week cards count 0. The status stays built: the real contribution line waits on the first player's contribution (`docs/BOARD-SETUP.md` step 20).
+2026-09-26: the guarded-select line is struck through above, since the delete it guarded is done and the Week cards count 0. The status stays built: the real contribution line waits on the first player's contribution (`BOARD-SETUP.md` step 20).

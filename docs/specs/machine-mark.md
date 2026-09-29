@@ -12,7 +12,7 @@ The studio is now Mob Machine, and the peanut does not survive the name. The pea
 
 In: the mark (`platform/site/brand/mark.svg`); the top bar and the Guide's specimen drawing it inline in the text colour; the tab icons and the home-screen icons, drawn from it by a script; the link preview; the live check's asset list. Deleted: `public/peanut.png`, `brand/peanut-source.png`, the `--mark-filter` role and the invert rules.
 
-Out: the game's tab icon, `seed-1/render/favicon.svg`, which is the game's own pile of dust and never was the peanut. The board's own site, which has no icons. A `favicon.svg` (the `.ico` and the PNG cover every browser, so none is added). Uploading the icon to Discord and Stripe, which are the board's steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine).
+Out: the game's tab icon, `seed-1/render/favicon.svg`, which is the game's own pile of dust and never was the peanut. The board's own site, which has no icons. A `favicon.svg` (the `.ico` and the PNG cover every browser, so none is added). Uploading the icon to Discord and Stripe, which are the board's steps (`BOARD-SETUP.md`, Rename to Mob Machine).
 
 ## Behaviour
 

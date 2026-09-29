@@ -9,7 +9,7 @@ A read-through of the site, the Supabase code, the ops scripts, the gate and see
 ## Scope
 
 In: the fixes listed under Behaviour.
-Out, listed for the board in `docs/BOARD-SETUP.md`: gate hardening (config lane skips the strings check; a NUL byte hides a file from the scanners; `seed-1/sim/hash.ts` and `rng.ts` not kernel-protected; awk reads a root file named `a=b` as an assignment), all kernel changes. Seed-1 unlock counting, which is game code for a card. The deploy detail line, the footer line, card titles in production, and "In the gate", which need a call. The ledger-identity race and the null-session refund edge, which need a migration or a production read.
+Out, listed for the board in `BOARD-SETUP.md`: gate hardening (config lane skips the strings check; a NUL byte hides a file from the scanners; `seed-1/sim/hash.ts` and `rng.ts` not kernel-protected; awk reads a root file named `a=b` as an assignment), all kernel changes. Seed-1 unlock counting, which is game code for a card. The deploy detail line, the footer line, card titles in production, and "In the gate", which need a call. The ledger-identity race and the null-session refund edge, which need a migration or a production read.
 
 ## Behaviour
 
@@ -41,7 +41,7 @@ Out, listed for the board in `docs/BOARD-SETUP.md`: gate hardening (config lane 
 
 - `pnpm verify`: exit 0. Site 163 tests, Supabase 146, dispatcher 374, seed-1 77, ops 41 with shellcheck running, secret scan PASS.
 - Preview at 375px: `wordmark 44`, `footer [44,44,44,44]`, `overflow false`; /ledger title `Ledger · Peanut Gallery`; no console errors.
-- Close-out, 26 September 2026: the pull request merged as 558b934, "Sweep: obvious bugs, site copy and layout fixes, and a plain board to-do list" (#43); `gh pr view 43` reads `MERGED 2026-09-22T18:07:43Z 558b934890991b8a57301a1a496bd688be9c0484`. The webhook's two error-label fixes took effect when `stripe-webhook` was redeployed from `main` at 558b934 the same day ("Deployed Functions."; an unsigned POST answers 400 "Missing stripe-signature header"), recorded in `docs/BOARD-SETUP.md`, Done, "Webhook secret and redeploy". Every Verification line is run and quoted above. Status done.
+- Close-out, 26 September 2026: the pull request merged as 558b934, "Sweep: obvious bugs, site copy and layout fixes, and a plain board to-do list" (#43); `gh pr view 43` reads `MERGED 2026-09-22T18:07:43Z 558b934890991b8a57301a1a496bd688be9c0484`. The webhook's two error-label fixes took effect when `stripe-webhook` was redeployed from `main` at 558b934 the same day ("Deployed Functions."; an unsigned POST answers 400 "Missing stripe-signature header"), recorded in `BOARD-SETUP.md`, Done, "Webhook secret and redeploy". Every Verification line is run and quoted above. Status done.
 
 ## Decisions
 

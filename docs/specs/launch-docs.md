@@ -9,13 +9,13 @@ bars, a numbered launch day, season and hour timings, scenario and kill-day tabl
 the stream and a dozen agent jobs as if they existed. Nothing listed what is planned but not built,
 so the studio had no source for the backlog cards /roadmap shows. `docs/ROADMAP.md` mixed phases
 with the launch checklist and gated the announcement on a contribution only the announcement could
-bring in. `docs/BOARD-SETUP.md` deadlocked on the first player, named one GitHub token where three
+bring in. `BOARD-SETUP.md` deadlocked on the first player, named one GitHub token where three
 are needed, and printed the founder's email. The prompts still carried re-votes, start days and week
 numbers, and the Platform Builder claimed to change the card system.
 
 ## Scope
 
-In: `docs/PLAN.md`, `docs/BACKLOG.md` (new), `docs/ROADMAP.md`, `docs/BOARD-SETUP.md`,
+In: `docs/PLAN.md`, `docs/BACKLOG.md` (new), `docs/ROADMAP.md`, `BOARD-SETUP.md`,
 `docs/docs.test.mjs`, `CLAUDE.md`, `README.md`, the nine prompts under `platform/agents/prompts/`,
 the `docs/PLAN.md` line fixture in `platform/gate/test/run-tests.sh`, one "Docs tests" step in the
 platform job of `.github/workflows/gate.yml`, run 2 in `docs/specs/week1-runs.md`, one line of
