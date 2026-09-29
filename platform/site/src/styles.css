@@ -1338,6 +1338,29 @@ button.link:hover:not(:disabled) {
   }
 }
 
+/* The pill keeps one size while the home hero's frame shrinks: from 64rem the hero has two columns
+   and the frame is 460px wide at 1024px, reaching 544px at 1200px, and below 72rem the labelled pill
+   reaches the poster's own lines ("Watch AI agents build it."). There it becomes the 44px play mark
+   alone, and the label stays for a screen reader. e2e/explainer-poster.spec.ts reads the poster's
+   pixels under the pill at every width, on both pages that draw the video. */
+@media (min-width: 64rem) and (max-width: 71.99rem) {
+  .hero-with-video .explainer-play {
+    justify-content: center;
+    width: var(--target);
+    padding: 0;
+  }
+
+  .hero-with-video .explainer-play-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
 /* The worked example's order after its figures: where the agent credit goes, numbered like the
    waterfall (docs/specs/copy-pass.md). */
 .example-order-intro {

@@ -915,6 +915,27 @@ describe('runAgentSession on the managed adapter', () => {
     expect(h.alert.messages).toEqual([]);
   });
 
+  // The agent's own reply is never read for a credit or spend-limit refusal (launch-dispatcher.md): only
+  // an API error, an error event or a session.error is. A card about an in-game shop can put those
+  // very words in the last message of a session that ended with no patch.
+  it("does not read the agent's own last reply as a credit refusal when its session ends with no patch", async () => {
+    const h = harness();
+    h.db.studio.agent_mode = 'unattended';
+    let idles = 0;
+    h.client.react = (session, event) => {
+      if (event.type !== 'user.message') return;
+      session.emit(
+        { type: 'span.model_request_end', model_usage: { input_tokens: 10, output_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } },
+        ...(idles === 0 ? [{ type: 'agent.message', content: [{ type: 'text', text: 'I could not finish: the shop text says "Your credit balance is too low to buy this upgrade" and I did not know what to change.' }] }] : []),
+        { type: 'session.status_idle', stop_reason: { type: 'end_turn' } },
+      );
+      idles += 1;
+    };
+    const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
+    expect(run.outcome).not.toBe('credit_exhausted');
+    expect(run.outcome).toBe('error');
+  });
+
   it('interrupts at the turn cap and ends as turn_cap', async () => {
     const h = harness();
     h.db.studio.agent_mode = 'unattended';

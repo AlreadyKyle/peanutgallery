@@ -90,6 +90,26 @@ describe('mergePullRequest', () => {
     expect(reads).toBe(3);
   });
 
+  it.each([500, 502, 503, 504])('reads the pull request when the merge request answers %i, and takes its merge commit when it merged', async (status) => {
+    const { fetchFn, calls } = routeFetch((method, url) => {
+      if (method === 'PUT') return { status, json: { message: 'Server Error' } };
+      if (method === 'GET' && url === `${API}/pulls/7`) return { status: 200, json: { number: 7, merged: true, merge_commit_sha: 'merge-sha', head: { sha: 'head-sha' } } };
+      return undefined;
+    });
+    expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 1000, intervalMs: 1 })).toEqual({ ok: true, sha: 'merge-sha' });
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([`PUT ${API}/pulls/7/merge`, `GET ${API}/pulls/7`]);
+  });
+
+  it('reports the merge as unknown, not refused, when the merge request answers 5xx and the pull request never shows merged', async () => {
+    const { fetchFn } = routeFetch((method, url) => {
+      if (method === 'PUT') return { status: 502, json: { message: 'Server Error' } };
+      if (method === 'GET' && url === `${API}/pulls/7`) return { status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } };
+      return undefined;
+    });
+    const result = await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 100, intervalMs: 5 });
+    expect(result).toMatchObject({ ok: false, unknown: true });
+  });
+
   it('reports the merge as unknown, not refused, when the pull request never shows merged', async () => {
     const { fetchFn, calls } = afterLostPut({ status: 200, json: { number: 7, merged: false, merge_commit_sha: null, head: { sha: 'head-sha' } } });
     expect(await mergePullRequest({ ...base, fetchFn }, 7, 'head-sha', { title: 't', message: 'm' }, { timeoutMs: 200, intervalMs: 5 })).toEqual({

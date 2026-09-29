@@ -152,7 +152,7 @@ for (const viewport of WIDTHS) {
       const board = 'Board work on how the studio runs (not funded by cards)';
       const next = page.getByRole('region', { name: 'Next', exact: true });
       await expect(next.getByRole('heading', { level: 3 })).toHaveText(['The studio', board]);
-      await expect(next.getByRole('region', { name: 'The studio', exact: true }).getByRole('heading', { level: 4 })).toHaveText([
+      await expect(next.getByRole('region', { name: 'Next The studio', exact: true }).getByRole('heading', { level: 4 })).toHaveText([
         'Choose the next card without paying',
         'Board on its own site',
       ]);
@@ -164,7 +164,7 @@ for (const viewport of WIDTHS) {
       await expect(disclosure.getByRole('heading', { level: 4 })).toHaveText(['The Studio Head drafts cards from the roadmap']);
       const later = page.getByRole('region', { name: 'Later', exact: true });
       await expect(later.getByRole('heading', { level: 3 })).toHaveText(['For players', board]);
-      await expect(later.getByRole('region', { name: 'For players', exact: true }).getByRole('heading', { level: 4 })).toHaveText(['A second area in Dust']);
+      await expect(later.getByRole('region', { name: 'Later For players', exact: true }).getByRole('heading', { level: 4 })).toHaveText(['A second area in Dust']);
       await expect(main.getByText('Planned and not built yet')).toHaveCount(0);
       await expect(main.getByText(/not funded by cards/)).toHaveCount(2);
       await expect(main.getByRole('progressbar')).toHaveCount(0);
@@ -200,7 +200,7 @@ test.describe('/roadmap with only board work planned', () => {
         const horizon = page.getByRole('region', { name, exact: true });
         await expect(horizon.getByText('No card for players or the studio is here yet. The cards below are board work.')).toBeVisible();
         await expect(horizon.getByRole('heading', { level: 3 })).toHaveText([board]);
-        const titlesShown = horizon.getByRole('region', { name: board, exact: true }).getByRole('heading', { level: 4 });
+        const titlesShown = horizon.getByRole('region', { name: `${name} ${board}`, exact: true }).getByRole('heading', { level: 4 });
         await expect(titlesShown).toHaveText([...titles]);
         for (const title of await titlesShown.all()) await expect(title).toBeVisible();
       }
