@@ -46,4 +46,32 @@ describe('serializeState / parseSavedState', () => {
     const raw = '{"version":1,"state":{"seed":1,"rngState":1,"elapsedSeconds":1,"dust":1e400,"totalDust":1,"owned":{},"unlocked":[]}}';
     expect(parseSavedState(raw)).toBeNull();
   });
+
+  // A save is read from localStorage, which a player, an extension or a bug can leave holding any
+  // number. Finite is not enough: dust below zero or a unit count below zero or between whole numbers
+  // is a state the sim never reaches, and the game would carry it on and write it back every five seconds.
+  describe('rejects a state the sim can never reach', () => {
+    function withState(change: (state: Record<string, unknown>) => void): string {
+      const wrapped = JSON.parse(serializeState(playedState())) as { state: Record<string, unknown> };
+      change(wrapped.state);
+      return JSON.stringify(wrapped);
+    }
+
+    it.each([
+      ['negative dust', (s: Record<string, unknown>) => (s['dust'] = -500)],
+      ['negative lifetime dust', (s: Record<string, unknown>) => (s['totalDust'] = -1)],
+      ['negative elapsed seconds', (s: Record<string, unknown>) => (s['elapsedSeconds'] = -10)],
+      ['a negative unit count', (s: Record<string, unknown>) => (s['owned'] = { gatherer: -40 })],
+      ['a fractional unit count', (s: Record<string, unknown>) => (s['owned'] = { gatherer: 2.5 })],
+    ])('%s', (_name, change) => {
+      expect(parseSavedState(withState(change))).toBeNull();
+    });
+  });
+
+  it('still reads a new game, a state with nothing owned, and a state with zero dust', () => {
+    const fresh = createSim(config, 1);
+    expect(parseSavedState(serializeState(fresh))).toEqual(fresh);
+    const empty = { ...playedState(), dust: 0, owned: {} };
+    expect(parseSavedState(serializeState(empty))).toEqual(empty);
+  });
 });

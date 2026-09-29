@@ -400,6 +400,11 @@ export async function mergePullRequest(
   if (result.status === 200 && isRecord(result.json) && typeof result.json.sha === 'string') {
     return { ok: true, sha: result.json.sha };
   }
+  // A 5xx is as lost as a timeout: GitHub answers a merge that ran long with one while the merge goes
+  // ahead, so the pull request is read before the merge is called refused.
+  if (result.status >= 500) {
+    return mergeStateAfterLostRequest(opts, number, new Error(`http ${result.status} ${apiMessage(result.json)}`.trim()), lost);
+  }
   if (result.status === 409) {
     return { ok: false, status: 409, reason: `head sha ${headSha} no longer matches the pull request` };
   }

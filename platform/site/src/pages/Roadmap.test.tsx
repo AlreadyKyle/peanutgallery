@@ -122,9 +122,9 @@ describe('Roadmap', () => {
       roadmap.groups.studio.heading,
       roadmap.groups.board.heading,
     ]);
-    const players = within(next).getByRole('region', { name: roadmap.groups.players.heading });
+    const players = within(next).getByRole('region', { name: `${roadmap.horizons.next} ${roadmap.groups.players.heading}` });
     expect(within(players).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Card drafting', 'Free picks']);
-    const studio = within(next).getByRole('region', { name: roadmap.groups.studio.heading });
+    const studio = within(next).getByRole('region', { name: `${roadmap.horizons.next} ${roadmap.groups.studio.heading}` });
     expect(within(studio).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Board on its own site']);
     // Board work, whatever its folder, sits in a native disclosure that starts closed.
     const board = next.querySelector('details[data-group="board"]') as HTMLDetailsElement;
@@ -162,13 +162,38 @@ describe('Roadmap', () => {
       const horizon = await screen.findByRole('region', { name });
       expect(horizon.querySelector('details')).toBeNull();
       expect(within(horizon).getByText(roadmap.boardOnly)).toBeTruthy();
-      const board = within(horizon).getByRole('region', { name: roadmap.groups.board.heading });
+      const board = within(horizon).getByRole('region', { name: `${name} ${roadmap.groups.board.heading}` });
       expect(board.getAttribute('data-group')).toBe('board');
       expect(within(board).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(titles);
       expect(within(horizon).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([roadmap.groups.board.heading]);
     }
     // Still said once per band, and only of board work.
     expect((container.querySelector('main')!.textContent!.match(/not funded by cards/g) ?? []).length).toBe(2);
+  });
+
+  it('gives every open group its own landmark name, so a screen reader can tell Next from Later (axe landmark-unique, found on production)', async () => {
+    // The same group heading sits under both horizons (on production, board work in each), and a
+    // landmark named only by its heading then appears twice under one name.
+    const boardOnly = [
+      card({ id: 'b1', title: 'Voter identity', folder: 'platform', bucket: 'platform', rank: 1, board_work: true }),
+      card({ id: 'b3', title: 'Seasons', horizon: 'later', board_work: true }),
+    ];
+    const bothHorizons = [...cards, card({ id: 'l2', title: 'Ladders', horizon: 'later', folder: 'platform', bucket: 'studio' })];
+    for (const list of [boardOnly, bothHorizons]) {
+      const { container } = renderRoadmap(sourceOf(list));
+      await screen.findByRole('region', { name: roadmap.horizons.next });
+      // An element's name from its aria-labelledby ids, in order, as a browser computes it.
+      const names = [...container.querySelectorAll('section[aria-labelledby]')].map((section) =>
+        section
+          .getAttribute('aria-labelledby')!
+          .split(' ')
+          .map((id) => container.querySelector(`#${id}`)!.textContent)
+          .join(' '),
+      );
+      expect(names.length).toBeGreaterThan(2);
+      expect(new Set(names).size, names.join(' | ')).toBe(names.length);
+      cleanup();
+    }
   });
 
   it('says no card for players or the studio only when board work is all a horizon holds', async () => {

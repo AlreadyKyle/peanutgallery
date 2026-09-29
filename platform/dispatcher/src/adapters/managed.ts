@@ -950,7 +950,9 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
       isError: this.isError(drive.stop),
       totalCostUsd: listUsd,
       numTurns: drive.turns,
-      result: drive.messages.at(-1) ?? '',
+      // Never the agent's own reply: session.ts reads an error result for a credit or spend-limit
+      // refusal, and only the API's words count for that. The API's errors reach it as error events.
+      result: '',
       usage,
       modelUsage: [
         {

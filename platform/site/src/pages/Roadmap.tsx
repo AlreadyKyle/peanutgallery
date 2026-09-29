@@ -65,7 +65,9 @@ function Group({
     );
   }
   return (
-    <section className="roadmap-group" data-group={group} aria-labelledby={id}>
+    // Named by its horizon and then its heading: the same group can sit under Next and under Later, and a
+    // landmark list would otherwise show two of one name.
+    <section className="roadmap-group" data-group={group} aria-labelledby={`roadmap-${horizon} ${id}`}>
       <h3 id={id}>{words.heading}</h3>
       <p className="muted">{words.intro}</p>
       <Rows cards={cards} snapshot={snapshot} />

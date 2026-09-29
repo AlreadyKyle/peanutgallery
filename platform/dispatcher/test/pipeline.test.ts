@@ -547,6 +547,31 @@ describe('runCardPipeline', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
   });
 
+  // GitHub answers a merge that took too long with a 5xx while the merge goes ahead, so a 5xx is as
+  // unknown as a timeout: main has then moved because of this very merge, and the card must not be
+  // sent back to funded (or rejected) with its change already on main and never verified.
+  it.each([500, 502, 503, 504])('continues with the merge commit when the merge request answers %i but the pull request merged', async (status) => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    let reads = 0;
+    const { fetchFn } = remote({
+      main: () => ({ status: 200, json: { object: { sha: ++reads === 1 ? originSha('refs/heads/main') : MERGE_SHA } } }),
+      merge: { status, json: { message: 'Server Error' } },
+      pull: (head) => ({ status: 200, json: { number: 5, head: { sha: head }, merged: true, merge_commit_sha: MERGE_SHA } }),
+    });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'live', commit_sha: MERGE_SHA });
+  });
+
+  it('leaves the card gated with a merge_unknown marker when the merge request answers 502 and the pull request does not show merged', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, state } = remote({ merge: { status: 502, json: { message: 'Server Error' } } });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'gated', failing_check: 'merge_unknown', commit_sha: null });
+    expect(db.events.at(-1)).toMatchObject({ type: 'error', payload: { step: 'merge_unknown', pr: 5, sha: state.head } });
+  });
+
   it('leaves the card gated with a merge_unknown marker when the merge request times out and the pull request does not show merged', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];

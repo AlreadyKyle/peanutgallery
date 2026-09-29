@@ -51,7 +51,15 @@ function parseState(raw: unknown): SimState | null {
   const parsedUnlocked = parseUnlocked(unlocked);
   if (parsedOwned === null || parsedUnlocked === null) return null;
   const state: SimState = { seed, rngState, elapsedSeconds, dust, totalDust, owned: parsedOwned, unlocked: parsedUnlocked };
-  return stateIsFinite(state) ? state : null;
+  return stateIsFinite(state) && stateIsReachable(state) ? state : null;
+}
+
+// A save is read from localStorage, so finite is not enough: dust, lifetime dust and elapsed time never
+// go below zero, and a unit count is a whole number of units, never below zero. A state that breaks
+// this is one the sim cannot reach, and the game would carry it on and write it back.
+function stateIsReachable(state: SimState): boolean {
+  if (state.dust < 0 || state.totalDust < 0 || state.elapsedSeconds < 0) return false;
+  return Object.values(state.owned).every((count) => Number.isInteger(count) && count >= 0);
 }
 
 export function parseSavedState(raw: string): SimState | null {

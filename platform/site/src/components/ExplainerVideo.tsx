@@ -87,7 +87,7 @@ export function ExplainerVideo() {
                 start();
               }}>
               <Glyph name="play" />
-              {words.play}
+              <span className="explainer-play-label">{words.play}</span>
             </button>
           </div>
         )}
