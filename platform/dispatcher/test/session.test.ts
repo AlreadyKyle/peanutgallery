@@ -104,7 +104,7 @@ describe('sessionPrompt', () => {
   });
 
   it('names the design spec, between the acceptance test and the allowed paths, only when the card has one', () => {
-    const url = 'https://peanutgallery.games/specs/gatherer-cost';
+    const url = 'https://mobmachine.games/specs/gatherer-cost';
     const prompt = sessionPrompt(card({ design_spec_url: url }), ['seed-1/config', 'seed-1/content'], 3);
     expect(prompt).toContain(`\n\nDesign spec: ${url}\n\nAllowed paths:`);
     expect(prompt.indexOf('Acceptance test:')).toBeLessThan(prompt.indexOf('Design spec:'));

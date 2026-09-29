@@ -20,7 +20,7 @@ import { forPglite, migrationOrder, SHIM } from "../../lib/pglite-migrations.ts"
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const MIGRATION = "20260925300000_agent_upkeep.sql";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
-const BOARD_EMAIL = "board@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
 
 type Row = Record<string, unknown>;
 
@@ -285,7 +285,7 @@ Deno.test("agent-upkeep: findings, the schema fingerprint and the producer signa
           await s.db.query(`select set_config('request.jwt.claim.email', '', false)`);
         }
       };
-      assertEquals(await readAs("someone@peanutgallery.games"), []);
+      assertEquals(await readAs("someone@mobmachine.games"), []);
       assertEquals(await readAs(BOARD_EMAIL), ["scan:osv"]);
       await s.as("authenticated", async () => {
         await assertRejects(() => s.db.query(`select public.close_finding('scan:osv')`), Error, "permission denied");

@@ -72,6 +72,7 @@ export const TIERS = {
     'platform/site/scripts/live-check.mjs',
     'platform/site/src/App.test.tsx',
     'platform/site/src/index-html.test.ts',
+    'platform/site/src/netlify-headers.test.ts',
     'platform/site/src/lib/copy.ts',
     'platform/site/src/lib/legal.ts',
     'platform/site/src/styles.css',
@@ -143,6 +144,7 @@ export const KEEP_LINES = [
   'from = "https://peanutgallery.games/*"', // netlify.toml, the 301
   'from = "https://www.peanutgallery.games/*"', // netlify.toml, the 301
   "const OLD_DOMAIN = 'peanutgallery.games'", // live-check.mjs checks the 301
+  "'https://peanutgallery.games/*', 'https://www.peanutgallery.games/*'", // netlify-headers.test.ts pins the 301s
 ];
 
 const isHistory = (file) => HISTORY_PREFIXES.some((prefix) => file.startsWith(prefix));
