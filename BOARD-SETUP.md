@@ -26,12 +26,7 @@ Checked against your Mac and the live site on 29 September 2026.
 | # | Step | How long |
 |---|---|---|
 | **Now** | | |
-| 5 | Point Stripe at mobmachine.games | 10 min |
-| 8 | A `peanutgallery-backups` folder in Google Drive | 2 min |
-| 9 | A `peanutgallery backup` check at healthchecks.io | 5 min |
-| 10, 11 | Mac power and update settings | 5 min |
-| 12 | The backup key onto a USB stick, then off the Mac | 5 min |
-| 13 | Resend, for the sign-in email | 20 min |
+| 12 | Delete the backup key from the Mac | 1 min |
 | 14 | A read-only Stripe key | 10 min |
 | 15 | healthchecks.io emails you for both checks | 2 min |
 | 16 | Two Discord webhooks | 10 min |
@@ -40,9 +35,9 @@ Checked against your Mac and the live site on 29 September 2026.
 | 20 | The database password into `.env` | 5 min |
 | 22 | Delete `KEYS.md` | 1 min |
 | **The name** | | |
-| 23, 24, 25 | Mob Machine on Stripe, Discord and your email signature | 20 min |
+| 24, 25 | Mob Machine on Discord and your email signature | 10 min |
 | **Before you tell anyone** | | |
-| 27 | Five Stripe settings, including refunding your $1 test | 20 min |
+| 27 | Four Stripe settings, including refunding your $1 test | 15 min |
 | 29 | Passkeys on all nine accounts | 20 min |
 | 30 | Sign in once on your board site | 5 min |
 | 31, 32, 33 | The platform lane, the daily limit, a moderator | 10 min |
@@ -62,47 +57,12 @@ handle.
 
 ### Now
 
-5. **Point Stripe at mobmachine.games (10 minutes).** Stripe still sends people to
-   peanutgallery.games. The redirect catches them, but set it straight.
-   1. Settings → **Business** → **Public details**: **Business website**, **Terms of service** and
-      **Privacy policy** to `https://mobmachine.games`, `https://mobmachine.games/terms` and
-      `https://mobmachine.games/privacy`. Same for a support URL if one is set. Save.
-   2. **Payment Links** → the link → **After payment** → **Don't show confirmation page** → redirect
-      to `https://mobmachine.games/thanks?session={CHECKOUT_SESSION_ID}`, typed exactly like that,
-      curly braces included. Save. (detail: ref 12)
+12. **The backup key off the Mac.** You copied `~/peanutgallery-backup.key` to a USB stick and your
+    password manager; it is still on the Mac. Once both copies open, run
+    `rm ~/peanutgallery-backup.key`. It is the only thing that can open a backup. Never send it to
+    me. You bring it back once, for the restore drill (step 35).
 
-   **Tell me:** "Stripe points at the new domain."
-
-8. **The backup folder.** Google Drive for desktop is installed and three accounts are signed in. In
-   the Drive of the account you want the backups in, make a folder in My Drive called
-   `peanutgallery-backups`. (detail: ref 3)
-
-9. **The backup check.** At healthchecks.io add a check named `peanutgallery backup`, period
-   **1 day**, grace **12 hours**. Put its ping URL in `.env.vps` on a new line:
-   `BACKUP_HEALTHCHECK_URL=<the URL>`
-
-   **Tell me:** "backup folder and check are ready", and which Google account the folder is in. I
-   then install the nightly backup, take the first one and show you the file in Drive.
-
-10. **Keep the Mac awake.** System Settings → Battery → Options → turn on **Prevent automatic
-    sleeping on power adapter when the display is off**. Keep it plugged in with the lid open.
-
-11. **No surprise restarts.** System Settings → General → Software Update → Automatic updates: turn
-    off installing macOS updates, and install them yourself while the studio is paused.
-
-12. **The backup key off the Mac.** Copy `~/peanutgallery-backup.key` to a USB stick you keep apart
-    and into your password manager, then delete it from the Mac. It is the only thing that can open
-    a backup. Never send it to me. You bring it back once, for the restore drill (step 35).
-
-13. **Resend, for the sign-in email (20 minutes, free).** (detail: ref 2)
-    1. Sign up at resend.com on the free plan.
-    2. **Domains** → **Add domain** → `mail.mobmachine.games`.
-    3. GoDaddy → mobmachine.games → DNS: add the records Resend shows (DKIM, SPF, and the MX for
-       that subdomain). Wait for **Verified**.
-    4. **API Keys** → **Create API key**, permission **Sending access**. Put it in `.env` as
-       `RESEND_SMTP_KEY=<key>`.
-
-    **Tell me:** "Resend is verified and the key is in .env."
+    **Tell me:** "the backup key is off the Mac."
 
 14. **A read-only Stripe key (10 minutes).** (detail: ref 4)
     1. Stripe → Developers → API keys → **Create restricted key**, named `peanutgallery-reconcile`.
@@ -156,12 +116,6 @@ handle.
 
 The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.games/icon-512.png.
 
-23. **Stripe.** Settings → Business → Public details: public business name `Mob Machine`, statement
-    descriptor `MOB MACHINE` (shortened `MOBMACHINE`). Branding → Icon → upload the icon. Product
-    catalog → the product the Payment Link sells → change the old name if it appears. (detail: R1)
-
-    **Tell me:** "Stripe says Mob Machine."
-
 24. **Discord.** Server Settings → Server Profile: name `Mob Machine`, icon the same file, Save. The
     invite link keeps working. (detail: R2)
 
@@ -178,9 +132,8 @@ The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.game
 27. **Stripe settings.** (detail: ref 12)
     1. Settings → Payouts → **Minimum balance**: turn it on.
     2. Settings → Payments → **Adaptive Pricing**: off.
-    3. Payment Link → Options → **Require customers to accept your terms of service**: on.
-    4. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
-    5. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
+    3. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
+    4. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
        rewards. Does a restricted category apply?" Keep the reply.
 
     **Tell me:** "Stripe settings done", and Stripe's reply when it comes.
@@ -194,7 +147,7 @@ The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.game
 30. **Sign in once on your board site.** `grep BOARD_SITE_URL ~/GitHub/peanutgallery/.env` shows the
     address. Open it, bookmark it, sign in by email link and your authenticator code. Nothing that
     needs you signed in — Draft to the floor, the role jobs, the visual review — can run until you
-    do. It waits on step 13. (detail: ref 17)
+    do. It waits on Resend verifying mobmachine.games (see **Done**). (detail: ref 17)
 
     **Tell me:** "signed in on the board site."
 
@@ -314,7 +267,7 @@ link preview, the icons, the game's tab, the agents and the alerts say Mob Machi
 say it from version 3. The steps below are the places only you can change. On 29 September 2026 the
 Discord server still had its old name and no icon; Stripe and the signature are unconfirmed.
 The domain moved to mobmachine.games on 29 September 2026 (R5 and R6, `docs/PLAN.md` §10 decision
-59, `docs/specs/rename.md`); only R6.5, Stripe's links, is left.
+59, `docs/specs/rename.md`); R6.5, Stripe's links, is done too.
 
 The icon file for Stripe and Discord is `platform/site/public/icon-512.png` in the repository, also
 at https://mobmachine.games/icon-512.png: the white machine on black,
@@ -385,7 +338,7 @@ explainer's social cuts, the production cards that name the old address (a dump 
 check, with `pnpm verify` switched to checking the domain too. It merges once R6.1 to R6.3 show
 HTTPS.
 
-#### R6. The domain on Netlify and Stripe: DONE 29 September 2026 except R6.5
+#### R6. The domain on Netlify and Stripe: DONE 29 September 2026
 
 R6.1 to R6.4 are done: GoDaddy's records, the certificates, play.mobmachine.games for the game, and
 mobmachine.games as the primary domain (set by me through Netlify's API after the merge). R6.5,
@@ -1389,3 +1342,29 @@ again with it under your home folder (`docs/specs/carry-over.md`).
 - **Backup key.** `BACKUP_AGE_RECIPIENT` is set in `.env`; the private file is at
   `~/peanutgallery-backup.key` (mode 0600) until you move it offline (step 3).
 - **Stripe.** Public details and the removed display-name field (step 12); the minimum stays $1.
+
+#### Stripe on mobmachine.games, the backup, the Mac, Resend: 29 September 2026
+
+Steps 5, 8, 9, 10, 11 and 23, and step 27's terms checkbox. Checked, not just done:
+
+- **Stripe, in the Dashboard (you).** Business details and Public details read back public business
+  name Mob Machine, website `https://mobmachine.games`, privacy and terms URLs set; statement
+  descriptor `MOB MACHINE`; the icon uploaded under Branding.
+- **Stripe, through the Stripe connector (me, with your allow).** The live Payment Link
+  `plink_1UFNNd…` reads back `consent_collection.terms_of_service: required` and
+  `after_completion.redirect.url: https://mobmachine.games/thanks?session={CHECKOUT_SESSION_ID}`.
+  Its product is named `Contribution` ("Funds agent compute for the game studio"): no old name.
+- **The Mac.** `pmset -g custom`: sleep `0` on AC power. `AutomaticallyInstallMacOSUpdates` `0`.
+- **The backup.** Folder `peanutgallery-backups` in the board's Google Drive, in `.env` as
+  `BACKUP_DIR`; `BACKUP_HEALTHCHECK_URL` in `.env.vps`. `make-jobs-env.sh backup-mac` wrote
+  `backup-mac.env` with 4 keys; `install.sh --jobs-only` made 8 changes (clone of main at `4b789c8`,
+  read-only; `studio.peanutgallery.backup` loaded), and its second run 0. `run-job.sh backup --now`
+  wrote `peanutgallery-20260929T213305Z.tar.age` (684,392 bytes) to the Drive folder. The backup
+  login's password was already set.
+- **Resend (step 13).** Domain `mobmachine.games` added at the root (not `mail.`): its DKIM and the
+  `send`/`rsend` records resolve in public DNS. A sending-only key restricted to that domain,
+  `peanutgallery-supabase-smtp`, is in `.env` as `RESEND_SMTP_KEY`. Supabase Auth reads back
+  `smtp.resend.com:465`, user `resend`, sender `board@mobmachine.games` named Mob Machine, 30 emails
+  an hour, password set. **Open:** Resend still showed the domain `pending`; once it verifies, I send
+  one sign-in link to prove delivery.
+
