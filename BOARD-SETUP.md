@@ -1,6 +1,6 @@
 # Board setup: everything that needs Kyle
 
-The one list of what only you can do. **Start at "Your checklist" and work down it.** Do one step,
+The one list of what only you can do. **Start at "What's left for you" and work down it.** Do one step,
 send me its **Tell me** line, and move on. Everything under **Reference**, further down, is the
 detail behind each step (why, and what I do after); you only need it if a step's "detail" note
 sends you there: "detail: ref 22" means section 22 under Reference, "detail: R5" means R5.
@@ -15,253 +15,218 @@ sends you there: "detail: ref 22" means section 22 under Reference, "detail: R5"
 
 ---
 
-## Your checklist
+## What's left for you
 
-**Already done, nothing to do:** the contact email, the host and read-only GitHub tokens, the
-dispatcher's healthchecks.io check, the backup key, the backup login's database address, the
-ntfy topic, the Terms review, Stripe's public details, the rename of the site itself, and
-`brew install libpq age` (both are on the Mac).
+Nothing else on this page is waiting on you. Finished steps are in **Done** at the end, and the
+**Reference** sections below hold the detail behind each step (a step's "detail: ref 12" means
+section 12 there). Step numbers never change, so a number you wrote down stays valid.
 
-**Checked on 29 September 2026, still open:** no `RESEND_SMTP_KEY`, `STRIPE_READ_KEY`,
-`DISCORD_WEBHOOK_SHIPS`/`_WEEKLY`, `MODERATOR_EMAIL`, `SUPABASE_DB_PASSWORD`, `BACKUP_DIR` or
-`BACKUP_HEALTHCHECK_URL`; no `peanutgallery-backups` folder in Drive; the backup key is still on the
-Mac; Claude Code is not pinned; nobody has signed in on the board site; the Discord server still has
-its old name and no icon; GitHub Actions is still refusing jobs; `KEYS.md` is still there.
+Checked against your Mac and the live site on 29 September 2026.
+
+| # | Step | How long |
+|---|---|---|
+| **Now** | | |
+| 5 | Point Stripe at mobmachine.games | 10 min |
+| 8 | A `peanutgallery-backups` folder in Google Drive | 2 min |
+| 9 | A `peanutgallery backup` check at healthchecks.io | 5 min |
+| 10, 11 | Mac power and update settings | 5 min |
+| 12 | The backup key onto a USB stick, then off the Mac | 5 min |
+| 13 | Resend, for the sign-in email | 20 min |
+| 14 | A read-only Stripe key | 10 min |
+| 15 | healthchecks.io emails you for both checks | 2 min |
+| 16 | Two Discord webhooks | 10 min |
+| 17 | Read your Netlify plan name | 2 min |
+| 19 | Pin Claude Code | 2 min |
+| 20 | The database password into `.env` | 5 min |
+| 22 | Delete `KEYS.md` | 1 min |
+| **The name** | | |
+| 23, 24, 25 | Mob Machine on Stripe, Discord and your email signature | 20 min |
+| **Before you tell anyone** | | |
+| 27 | Five Stripe settings, including refunding your $1 test | 20 min |
+| 29 | Passkeys on all nine accounts | 20 min |
+| 30 | Sign in once on your board site | 5 min |
+| 31, 32, 33 | The platform lane, the daily limit, a moderator | 10 min |
+| **Launch, in this order** | | |
+| 34 | GitHub Actions back | your call |
+| 35 | The restore drill, with me | 10 min |
+| 36 | The first player | your call |
+| 37, 38 | The first payout, then buy Console credit from it | days |
+| 39 | The cutover, with me | 20 min, then a day |
+| 40 | Go live | 5 min |
+
+Later, not now: **21**, regenerate the host's GitHub token before it expires on 23 October 2026.
+Optional, whenever: **6** tell Google Search Console about the new domain, and **26** the Twitch
+handle.
 
 ---
 
-### Part 1: The new domain, mobmachine.games (one step left for you)
+### Now
 
-The studio's address is https://mobmachine.games and the game's is https://play.mobmachine.games
-(`docs/PLAN.md` §10 decision 59). peanutgallery.games and its www answer 301 to the same path on the
-new domain. Supabase needs nothing: sign-in lives on the board's own site, which has no custom domain.
-
-1. **Register the domain: done 29 September 2026.** Keep both mobmachine.games and
-   peanutgallery.games on auto-renew in GoDaddy; old links, shared previews and search results reach
-   the studio through the old one's redirect. (detail: R5)
-2. **DNS and HTTPS: done 29 September 2026.** GoDaddy's records for mobmachine.games are `@` A
-   `75.2.60.5`, `www` CNAME `peanutgallerygames.netlify.app` and `play` CNAME
-   `peanutgallery-seed-1.netlify.app`; Netlify serves all three on HTTPS. Don't change them.
-   (detail: R6)
-3. **The game at play.mobmachine.games: done.** The old netlify.app address keeps working.
-4. **The domain's pull request and the switch: mine.** Every public page, link preview, launch draft
-   and the agents' commit address name the new domain, mobmachine.games is the primary domain on
-   Netlify, and the live check runs against it.
-
-5. **Stripe's links (10 minutes).** Stripe still sends people to peanutgallery.games; the redirect
-   catches them, but set them straight.
-   1. Settings → **Business** → **Public details**: change the **Business website**, **Terms of
-      service** and **Privacy policy** URLs to `https://mobmachine.games`,
-      `https://mobmachine.games/terms` and `https://mobmachine.games/privacy`. If a support URL is
-      set, the same. Save.
+5. **Point Stripe at mobmachine.games (10 minutes).** Stripe still sends people to
+   peanutgallery.games. The redirect catches them, but set it straight.
+   1. Settings → **Business** → **Public details**: **Business website**, **Terms of service** and
+      **Privacy policy** to `https://mobmachine.games`, `https://mobmachine.games/terms` and
+      `https://mobmachine.games/privacy`. Same for a support URL if one is set. Save.
    2. **Payment Links** → the link → **After payment** → **Don't show confirmation page** → redirect
       to `https://mobmachine.games/thanks?session={CHECKOUT_SESSION_ID}`, typed exactly like that,
       curly braces included. Save. (detail: ref 12)
 
-   **Tell me:** "Stripe points at the new domain." I then check the redirect, and the next real
-   payment should land on /thanks.
+   **Tell me:** "Stripe points at the new domain."
 
-6. **Optional, free: tell Google.** In Google Search Console, add both domains as properties and use
-   **Settings** → **Change of address** from peanutgallery.games to mobmachine.games. It moves search
-   results over faster. Nothing depends on it.
+8. **The backup folder.** Google Drive for desktop is installed and three accounts are signed in. In
+   the Drive of the account you want the backups in, make a folder in My Drive called
+   `peanutgallery-backups`. (detail: ref 3)
 
----
-
-### Part 2: Nightly backups (about 15 minutes)
-
-Contributions are open, so the money database needs a backup every night. Right now it has none. (detail: ref 3)
-
-8. **Make the backup folder.** Google Drive for desktop is already installed (three accounts are
-   signed in). In the Drive of the Google account you want the backups in, make a folder in My Drive
-   called `peanutgallery-backups`.
-9. **Make the backup check.** At healthchecks.io, add a check named `peanutgallery backup`, period
-   **1 day**, grace **12 hours**. Put its ping URL in `.env.vps` as a new line:
+9. **The backup check.** At healthchecks.io add a check named `peanutgallery backup`, period
+   **1 day**, grace **12 hours**. Put its ping URL in `.env.vps` on a new line:
    `BACKUP_HEALTHCHECK_URL=<the URL>`
+
+   **Tell me:** "backup folder and check are ready", and which Google account the folder is in. I
+   then install the nightly backup, take the first one and show you the file in Drive.
+
 10. **Keep the Mac awake.** System Settings → Battery → Options → turn on **Prevent automatic
     sleeping on power adapter when the display is off**. Keep it plugged in with the lid open.
-11. **No surprise restarts.** System Settings → General → Software Update → Automatic updates → turn
-    off installing macOS updates. Install them yourself while the studio is paused.
-12. **Put the backup key somewhere safe.** Copy `~/peanutgallery-backup.key` to a USB stick you keep
-    apart and into your password manager. Then delete it from the Mac. Never send it to me.
 
-**Tell me:** "backup folder and check are ready", and which Google account the folder is in.
+11. **No surprise restarts.** System Settings → General → Software Update → Automatic updates: turn
+    off installing macOS updates, and install them yourself while the studio is paused.
 
-Then I put the folder's path in `.env`, install the nightly backup, take the first one at once and
-show you the file in Drive. From then on it runs every night, and healthchecks.io emails you if a
-night is missed.
+12. **The backup key off the Mac.** Copy `~/peanutgallery-backup.key` to a USB stick you keep apart
+    and into your password manager, then delete it from the Mac. It is the only thing that can open
+    a backup. Never send it to me. You bring it back once, for the restore drill (step 35).
 
----
-
-### Part 3: Accounts and keys (about 1 hour in total)
-
-13. **Sign-in email (Resend).** (detail: ref 2)
+13. **Resend, for the sign-in email (20 minutes, free).** (detail: ref 2)
     1. Sign up at resend.com on the free plan.
-    2. **Domains** → **Add domain** → `mail.mobmachine.games`
-       (a subdomain keeps the main domain free for any other mail later).
-    3. GoDaddy → mobmachine.games → DNS: add the records Resend shows (DKIM, SPF and the MX for that
-       subdomain). Wait until Resend says **Verified**.
+    2. **Domains** → **Add domain** → `mail.mobmachine.games`.
+    3. GoDaddy → mobmachine.games → DNS: add the records Resend shows (DKIM, SPF, and the MX for
+       that subdomain). Wait for **Verified**.
     4. **API Keys** → **Create API key**, permission **Sending access**. Put it in `.env` as
        `RESEND_SMTP_KEY=<key>`.
 
-    **Tell me:** "Resend is verified and the key is in .env." I then connect Supabase's sign-in
-    email to it, with the sender name Mob Machine, and send you a sign-in link to prove it arrives.
+    **Tell me:** "Resend is verified and the key is in .env."
 
-14. **Stripe read-only key.** (detail: ref 4)
+14. **A read-only Stripe key (10 minutes).** (detail: ref 4)
     1. Stripe → Developers → API keys → **Create restricted key**, named `peanutgallery-reconcile`.
-    2. Give it **Read** on: Balance, Balance transactions, Payouts, Charges and Refunds, Checkout
-       Sessions, Payment Links, Events, Disputes. Nothing else. No Write anywhere.
-    3. Put it in `.env` as `STRIPE_READ_KEY=<key>` (it starts `rk_live_`).
+    2. **Read** on Balance, Balance transactions, Payouts, Charges and Refunds, Checkout Sessions,
+       Payment Links, Events, Disputes. Nothing else, and no Write anywhere.
+    3. Put it in `.env` as `STRIPE_READ_KEY=<key>`; it starts `rk_live_`.
 
-    **Tell me:** "Stripe read key is in .env." (I then add the daily Stripe reconciliation job.)
+    **Tell me:** "Stripe read key is in .env."
 
-15. **healthchecks.io emails.** healthchecks.io → Integrations: make sure your email gets both
-    checks. (detail: ref 6)
+15. **healthchecks.io emails.** Integrations → make sure your email gets both checks. (detail: ref 6)
 
     **Tell me:** "both checks email me."
 
-16. **Discord webhooks.** (detail: ref 7)
-    1. Discord → your server → Server Settings → Integrations → Webhooks. Make one for a read-only
-       `#ships` channel and one for `#weekly`.
+16. **Two Discord webhooks (10 minutes).** (detail: ref 7)
+    1. Server Settings → Integrations → Webhooks: one for a read-only `#ships` channel, one for
+       `#weekly`.
     2. Put them in `.env` as `DISCORD_WEBHOOK_SHIPS=<url>` and `DISCORD_WEBHOOK_WEEKLY=<url>`.
     3. Server Settings → Safety Setup → turn on AutoMod.
 
     **Tell me:** "Discord webhooks are in .env."
 
-17. **Netlify plan.** Netlify → Team settings → Billing. Don't change anything; just read the plan
-    name. Also confirm usage notifications go to your email. (detail: ref 8)
+17. **Your Netlify plan.** Team settings → Billing. Change nothing; just read the plan name, and
+    confirm usage notifications go to your email. (detail: ref 8)
 
     **Tell me:** "legacy Free" or "credit-based Free".
 
-18. **Phone alerts (ntfy).** (detail: ref 9)
-    1. Install the free **ntfy** app on your phone.
-    2. In Terminal: `cd ~/GitHub/peanutgallery && grep NTFY .env.vps | cut -d/ -f4 | tr -d '\n' | pbcopy`
-       (this copies the topic name).
-    3. In the app: **+** → paste → Subscribe (server stays ntfy.sh).
-
-    **Tell me:** "subscribed to ntfy". I send a test; then tell me "the test alert arrived."
-
-19. **Pin Claude Code.** The Mac is on 2.1.283, the checked version. In Terminal: (detail: ref 11)
+19. **Pin Claude Code (2 minutes).** The Mac is on 2.1.283, the checked version. (detail: ref 11)
 
     ```sh
     cd ~/GitHub/peanutgallery && sudo bash platform/ops/mac/pin-claude-code.sh
     ```
 
-    Enter your Mac password. It should print `PASS: claude-code pinned 2.1.283`.
+    It should print `PASS: claude-code pinned 2.1.283`.
 
     **Tell me:** "Claude Code is pinned", with the PASS line.
 
-20. **Database password.** (detail: ref 25)
-    1. Supabase → the project → Project Settings → Database → Database password. If you don't have
-       it, **Reset database password** (this breaks nothing).
-    2. Put it in `.env` on the empty line `SUPABASE_DB_PASSWORD=`.
+20. **The database password (5 minutes).** Supabase → the project → Project Settings → Database →
+    Database password; if you don't have it, **Reset database password**, which breaks nothing. Put
+    it in `.env` on the empty `SUPABASE_DB_PASSWORD=` line. (detail: ref 25)
 
     **Tell me:** "the database password is in .env."
 
-21. **GitHub host token renewal.** The host token expires on 23 October 2026. Before then: GitHub →
-    Settings → Developer settings → Fine-grained tokens → `peanutgallery-vps` → **Regenerate token**.
-    Replace the value of `VPS_GITHUB_TOKEN` in `.env.vps`. (detail: ref 5.1)
-
-    **Tell me:** "the host token is regenerated."
-
-22. **Delete `KEYS.md`.** Tell me first; I confirm both keys in it are in `.env` (by length only),
+22. **Delete `KEYS.md`.** Tell me first; I confirm both keys in it are in `.env`, by length only,
     then you delete `~/GitHub/peanutgallery/KEYS.md`. It can't be undone.
 
     **Tell me:** "delete KEYS.md?", then "KEYS.md is deleted."
 
 ---
 
-### Part 4: The name, Mob Machine, everywhere else (about 20 minutes)
+### The name, Mob Machine, everywhere else (about 20 minutes)
 
-The icon file for these steps is `platform/site/public/icon-512.png` in the repository (also at
-https://mobmachine.games/icon-512.png).
+The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.games/icon-512.png.
 
-23. **Stripe.** (detail: R1)
-    1. Settings → Business → Public details: public business name `Mob Machine`, statement
-       descriptor `MOB MACHINE` (shortened: `MOBMACHINE`). Save.
-    2. Settings → Business → Branding → Icon → upload `icon-512.png`. Save.
-    3. Product catalog → the product the Payment Link sells → if its name or description has the old
-       name, change it to Mob Machine.
+23. **Stripe.** Settings → Business → Public details: public business name `Mob Machine`, statement
+    descriptor `MOB MACHINE` (shortened `MOBMACHINE`). Branding → Icon → upload the icon. Product
+    catalog → the product the Payment Link sells → change the old name if it appears. (detail: R1)
 
     **Tell me:** "Stripe says Mob Machine."
 
-24. **Discord** (still under its old name). Server name → Server Settings → Server Profile. Name
-    `Mob Machine`, icon `icon-512.png`, Save Changes. The invite link keeps working. (detail: R2)
+24. **Discord.** Server Settings → Server Profile: name `Mob Machine`, icon the same file, Save. The
+    invite link keeps working. (detail: R2)
 
     **Tell me:** "Discord is renamed."
 
-25. **Email signature.** In the mail app that sends as hello@clayhouse.studio, change the signature
-    to say Mob Machine. (detail: R3)
+25. **Your email signature** in the app that sends as hello@clayhouse.studio. (detail: R3)
 
-    **Tell me:** "The signature says Mob Machine."
-
-26. **Twitch (optional, whenever).** The channel is still `peanut_gallery_games`. If you rename it,
-    tell me the new handle so it goes in the repository.
+    **Tell me:** "the signature says Mob Machine."
 
 ---
 
-### Part 5: Before you tell anyone (about 45 minutes)
+### Before you tell anyone (about an hour)
 
 27. **Stripe settings.** (detail: ref 12)
     1. Settings → Payouts → **Minimum balance**: turn it on.
-    2. Settings → Payments → **Adaptive Pricing**: make sure it's off.
-    3. Payment Link → Options → turn on **Require customers to accept your terms of service**.
+    2. Settings → Payments → **Adaptive Pricing**: off.
+    3. Payment Link → Options → **Require customers to accept your terms of service**: on.
     4. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
     5. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
-       rewards. Does a restricted category apply?" Keep their reply.
-    (The after-payment redirect is step 5.)
+       rewards. Does a restricted category apply?" Keep the reply.
 
     **Tell me:** "Stripe settings done", and Stripe's reply when it comes.
 
-28. **Retire the full Stripe key,** only when I say I've moved the webhook off it: Stripe →
-    Developers → API keys → **Roll key** on the secret key. (detail: ref 13)
-
-    **Tell me:** "secret key rolled."
-
-29. **Passkeys.** Turn on passkeys or a hardware key, and remove SMS recovery, on: Stripe, GitHub,
-    Supabase, Netlify, Anthropic (the studio organisation), Google, GoDaddy, Resend, Discord. Where
-    there's no passkey, use an authenticator app. (detail: ref 15)
+29. **Passkeys.** Turn on passkeys or a hardware key, and remove SMS recovery, on Stripe, GitHub,
+    Supabase, Netlify, Anthropic (the studio organisation), Google, GoDaddy, Resend and Discord. An
+    authenticator app where there is no passkey. (detail: ref 15)
 
     **Tell me:** "passkeys are on."
 
-30. **Sign in to your board site.** In Terminal: `grep BOARD_SITE_URL ~/GitHub/peanutgallery/.env`
-    shows its address. Open it, bookmark it, sign in by email link and your authenticator code.
-    Nothing that needs you signed in (Draft to the floor, role jobs, the visual review) can run until
-    you do. (detail: ref 17)
+30. **Sign in once on your board site.** `grep BOARD_SITE_URL ~/GitHub/peanutgallery/.env` shows the
+    address. Open it, bookmark it, sign in by email link and your authenticator code. Nothing that
+    needs you signed in — Draft to the floor, the role jobs, the visual review — can run until you
+    do. It waits on step 13. (detail: ref 17)
 
     **Tell me:** "signed in on the board site."
 
-31. **Open the platform lane,** right after step 30. (detail: ref 26)
+31. **The platform lane,** right after step 30. (detail: ref 26)
 
-    **Tell me:** "open the platform lane" (or "keep it closed").
+    **Tell me:** "open the platform lane", or "keep it closed".
 
-32. **Daily credit limit.** Keep $500, or set another number in the Caps form on the board site.
+32. **The daily credit limit.** Keep $500, or set another number in the Caps form on the board site.
     (detail: ref 18)
 
     **Tell me:** "keep $500", or the number you set.
 
-33. **A moderator (optional).** Add `MODERATOR_EMAIL=<their address>` to `.env`, then give them a
+33. **A moderator (optional).** Put `MODERATOR_EMAIL=<their address>` in `.env`, then give them a
     moderator role in Discord. (detail: ref 16)
 
     **Tell me:** "moderator email is in .env."
 
 ---
 
-### Part 6: Launch, in this order
+### Launch, in this order
 
-34. **GitHub Actions back.** Cards (the studio's own work) only merge on the Actions gate, so the
-    first player-funded card can't ship until it's back. The last run was still refused. Pick one:
+34. **GitHub Actions back.** Cards only merge on the Actions gate, so the first player-funded card
+    cannot ship until it is. The account's included minutes are used up and the spending limit is
+    $0. Pick one: **wait** for the minutes to reset at your next GitHub billing date (free);
+    **make the repository public** (free, but everything in it, history included, becomes readable
+    by anyone); or **add an Actions budget** (a spend, so an exception to decision 35).
     (detail: Standing items)
-    - **Wait** for the included minutes to reset at your next GitHub billing date. Free.
-    - **Make the repository public:** GitHub → the repository → Settings → General → Danger Zone →
-      Change visibility → Make public. Free, but everything in it, history included, becomes
-      readable by anyone.
-    - **Add an Actions budget:** GitHub → your picture → Settings → Billing and licensing → Budgets
-      and alerts. A spend, so an exception to decision 35.
 
-    **Tell me:** "Actions is back", and which one. I switch the gate back on.
+    **Tell me:** "Actions is back", and which one.
 
-35. **Restore drill** (10 minutes). Bring the USB stick with the backup key. I restore a backup and
-    prove it's intact, then the key goes back offline. (detail: ref 19)
+35. **The restore drill (10 minutes, with me).** Bring the USB stick with the backup key. I restore a
+    backup and prove it is intact, then the key goes back offline. (detail: ref 19)
 
     **Tell me:** "ready for the restore drill."
 
@@ -270,38 +235,30 @@ https://mobmachine.games/icon-512.png).
 
     **Tell me:** "share quietly" or "announce first", then "shared".
 
-37. **First payout.** Stripe → Balances: make sure payouts are on and the bank account is verified.
-    Wait for a payout that includes a player's money (it can take 7 to 14 days). (detail: ref 21)
+37. **The first payout.** Stripe → Balances: payouts on and the bank account verified. Then wait for
+    a payout that includes a player's money; it can take 7 to 14 days. (detail: ref 21)
 
     **Tell me:** "payouts are on", then later "the first payout arrived".
 
 38. **Buy Console credit** from that payout, never your own money. The board site's Needs you inbox
-    shows the amount. (detail: ref 22)
-    1. console.anthropic.com → switch to the **studio** organisation.
-    2. Billing → buy the amount shown. Keep auto-reload **off**; set the monthly limit to the cap on
-       the board site.
-    3. Board site → Needs you → **Fill in the record form** → **Record purchase**.
-    4. Tell me the tier on the Console's Limits page.
-    5. Stripe → Settings → Payouts → raise Minimum balance to the figure the inbox shows.
+    shows the amount. console.anthropic.com → the **studio** organisation → Billing → buy that
+    amount, auto-reload **off**, monthly limit set to the cap on the board site. Then Needs you →
+    **Record purchase**, tell me the tier from the Console's Limits page, and raise Stripe's minimum
+    balance to the figure the inbox shows. Repeat after every payout. (detail: ref 22)
 
-    Repeat after every payout. **Tell me:** "credit bought and recorded", and the tier.
+    **Tell me:** "credit bought and recorded", and the tier.
 
-39. **Cutover** (about 20 minutes together, then a day). I prompt you at each point: (detail: ref 23)
-    1. You: **Pause** on the board site.
-    2. Me: stop the attended dispatcher, set up the managed agent, move the backup-only copy of the
-       code aside and install the dispatcher on your Mac.
-    3. You: set the agent mode to **unattended** on the board site.
-    4. Me: start it and check it.
-    5. You: check the board site says the dispatcher was seen in the last 3 minutes, and that
-       healthchecks.io is green. Confirm the test alert reached your phone.
-    6. You: **Resume**.
-    7. Me: restart and kill tests. You: log out and back in. Then a 24-hour soak with the lid open.
+39. **The cutover (20 minutes with me, then a day).** You pause on the board site; I stop the
+    attended dispatcher and install the unattended one; you set the mode to unattended; I start it
+    and check it; you confirm the board site shows it seen in the last 3 minutes, healthchecks.io is
+    green and the test alert reached your phone; you resume. Then a 24-hour soak with the lid open.
+    (detail: ref 23)
 
     **Tell me:** "ready for the cutover".
 
-40. **Go live.** Once the first player-funded card ships, press **Go live** on the board site (it
-    works once and can't be undone). Edit my drafts in `docs/launch/` so they sound like you, add
-    the clip's link, and post them in the order in `docs/launch/README.md`. (detail: ref 24)
+40. **Go live.** Once the first player-funded card ships, press **Go live** on the board site; it
+    works once and cannot be undone. Edit my drafts in `docs/launch/` so they sound like you, add the
+    clip's link, and post them in the order in `docs/launch/README.md`. (detail: ref 24)
 
     **Tell me:** "gone live".
 
@@ -310,8 +267,6 @@ https://mobmachine.games/icon-512.png).
 ### Your calls, nothing waits on them
 
 - **Kill-condition pivots:** "keep the pivots", or the ones you want for a site-first studio.
-- **Where the dispatcher lives after the Mac** (see **Open decisions**): port its clock to Supabase,
-  which you already have, or leave it on the Mac. No card, so the cloud free tiers are all out.
 - **From the 28 September QA pass** (write-ups in `~/peanutgallery-launch/qa-2026-09-28/`): the
   lookalike-letter deny-list patch (I'd skip it), the same kernel shadow rule for the dispatcher,
   sharper Dust text on phones, and a test on real Safari.
@@ -1243,29 +1198,27 @@ Their pivots ("drop 24/7; run a weekly two-hour live show", "drop the meter; run
 "archive; publish the post-mortem; open-source the vote and meter kit") were written for a streamed
 studio. **Tell me:** "keep the pivots", or the pivots you want for a site-first studio.
 
-#### Where the dispatcher lives after the Mac
+#### Where the dispatcher lives after the Mac: DECIDED 29 September 2026 — it stays
 
-You can't put a card on file, so every cloud free tier worth using is out: Oracle, Google Cloud, AWS
-and Azure all verify one. The "free VPS, no credit card" sites that search turns up are affiliate
-fronts; nothing that holds the studio's money goes on one. Paying for Google Drive doesn't help
-either — that's storage, and a Google payments profile doesn't carry over to Cloud Billing, which
-also takes no PayPal in Canada. MCP servers aren't hosting: an MCP server is a way for a program to
-offer tools, and it has to run somewhere itself.
+You can put no card on file, and every cloud free tier worth using verifies one: Oracle, Google
+Cloud, AWS and Azure are all out for that reason, not a technical one. The "free VPS, no credit
+card" sites are affiliate fronts, and nothing holding the studio's money goes on one. Paying for
+Google Drive does not help; that is storage, and Cloud Billing takes neither a Drive subscription
+nor PayPal in Canada. MCP servers are not hosting either: an MCP server offers tools to a program,
+and has to run somewhere itself.
 
-**The way out is to need no server at all.** Card work already runs in Anthropic's cloud on Managed
-Agents (`docs/specs/launch-managed.md`), so what's left on the Mac is a small clock: notice a funded
-card, start a session, watch it, merge, deploy, write the ledger. Supabase already runs the studio's
-database on its free plan, and it can run that clock: Supabase Cron fires as often as every second,
-and an Edge Function gets 150 seconds of wall clock and 2 seconds of CPU per run on the free plan —
-plenty to make API calls and wait for the next tick. No new account, nothing on a card, nothing on
-your Mac.
+Moving off the Mac without a server would mean Supabase Cron as the clock and GitHub Actions as the
+muscle, because an Edge Function gets 150 seconds of wall clock and 2 seconds of CPU while a card's
+pipeline runs up to two hours and needs git, a filesystem and a live session stream. That is a
+multi-week rewrite of the code that merges to main and moves money, and on 29 September 2026 the
+board said no.
 
-The cost is mine, not yours: the dispatcher is Node and does git work directly, so this is a port,
-not a copy, and the gate still runs on GitHub Actions, which is refusing jobs today (step 22). Until
-it's built the Mac is the host, and that keeps working.
-
-**Tell me:** "port it to Supabase" to put it in the backlog as the way off the Mac, or "stay on the
-Mac" to leave it where it is.
+**So the Mac is the host.** While the studio runs, keep it plugged in, lid open and logged in. The
+site, contributions, the ledger and the webhook are on Netlify, Stripe and Supabase and keep working
+whatever the Mac is doing; what stops is card building and that night's backup, and healthchecks.io
+emails you. Pause on the board site before you need the Mac off, so nothing is caught mid-build.
+The backlog keeps the entry (`docs/BACKLOG.md`, Move the dispatcher off the Mac) if this ever
+changes.
 
 #### The card maximum (old item 10): resolved by the launch batch
 
@@ -1322,7 +1275,6 @@ Copy any of these back to me as you finish:
 - "ready for the cutover"
 - "gone live"
 - "keep the pivots" (or the pivots you want)
-- "port it to Supabase" / "stay on the Mac" (the dispatcher's later home)
 
 ---
 
