@@ -104,9 +104,9 @@ function setAppendOnly(state: "disable" | "enable"): string {
   return APPEND_ONLY_TABLES.map((table) => `alter table public.${table} ${state} trigger ${table}_append_only;`).join("\n");
 }
 
-const BOARD_EMAIL = "board@peanutgallery.games";
-const MODERATOR_EMAIL = "mod@peanutgallery.games";
-const OUTSIDER_EMAIL = "someone@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
+const MODERATOR_EMAIL = "mod@mobmachine.games";
+const OUTSIDER_EMAIL = "someone@mobmachine.games";
 
 type Row = Record<string, unknown>;
 
@@ -1184,7 +1184,7 @@ Deno.test("migrations on PGlite", {
         await db.exec(
           `insert into public.board_members (email, role) values ('${BOARD_EMAIL}', 'board'), ('${MODERATOR_EMAIL}', 'moderator')`,
         );
-        await signInAs("Board@PeanutGallery.games", "aal2");
+        await signInAs("Board@mobmachine.games", "aal2");
         assertEquals(
           (await row<{ b: boolean }>(`select public.is_board_member() as b`)).b,
           true,
@@ -1208,7 +1208,7 @@ Deno.test("migrations on PGlite", {
           await row(
             `select paused, paused_by, paused_at is not null as at from public.studio_state`,
           ),
-          { paused: true, paused_by: "Board@PeanutGallery.games", at: true },
+          { paused: true, paused_by: "Board@mobmachine.games", at: true },
         );
         await db.exec(`select public.set_paused(false)`);
         assertEquals(
@@ -1275,7 +1275,7 @@ Deno.test("migrations on PGlite", {
             [note.id],
           ),
           {
-            author_email: "Board@PeanutGallery.games",
+            author_email: "Board@mobmachine.games",
             text: "A note",
             state: "new",
           },
@@ -1966,7 +1966,7 @@ Deno.test("migrations on PGlite", {
           [OUTSIDER_EMAIL],
         );
         await db.query(`insert into auth.users (email) values ($1)`, [
-          "BOARD@peanutgallery.games",
+          "BOARD@mobmachine.games",
         ]);
         await db.query(`insert into auth.users (email) values ($1)`, [
           MODERATOR_EMAIL,
@@ -4384,7 +4384,7 @@ Deno.test("migrations on PGlite", {
           await insert("studio", 0.75, "2100-01-10T12:00:00Z", oneoffCardId);
           await insert("overhead", 0.25, "2100-01-10T12:00:00Z", null);
           await insert("founder", 9, "2100-01-10T12:00:00Z", oneoffCardId);
-          await db.query(`insert into public.credit_purchases (amount_usd, reason, created_by) values (12.5, 'Test credit', 'board@peanutgallery.games')`);
+          await db.query(`insert into public.credit_purchases (amount_usd, reason, created_by) values (12.5, 'Test credit', 'board@mobmachine.games')`);
           const after = await totals(MONTH, TIER);
           assertEquals(
             {

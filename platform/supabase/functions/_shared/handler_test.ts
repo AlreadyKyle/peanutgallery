@@ -31,7 +31,7 @@ function completedEvent(
         currency: "usd",
         payment_status: "paid",
         customer: null,
-        customer_details: { email: "board@peanutgallery.games" },
+        customer_details: { email: "board@mobmachine.games" },
         client_reference_id: null,
         metadata: null,
         custom_fields: [
@@ -1113,7 +1113,7 @@ Deno.test("a card payment keys the $50 window on its hashed fingerprint, and a L
   const link = fake();
   await call(link.deps, post());
   assertEquals(link.applied[0]!.payerKey, `email:${link.applied[0]!.parsed.contributor_id}`);
-  assertEquals(link.applied[0]!.parsed.contributor_id, await sha256Hex("board@peanutgallery.games"));
+  assertEquals(link.applied[0]!.parsed.contributor_id, await sha256Hex("board@mobmachine.games"));
 
   // The same holds when charge.updated credits the session.
   const updated = fake(

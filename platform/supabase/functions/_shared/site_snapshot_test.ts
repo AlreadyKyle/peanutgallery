@@ -294,7 +294,7 @@ Deno.test("BOARD-SETUP's pause statement does what set_paused(true) does, and th
       await s.row<{ paused: boolean; pause_reason: string | null; paused_by: string | null; paused_set: boolean }>(
         `select paused, pause_reason, paused_by, paused_at is not null as paused_set from public.studio_state where id = 1`,
       );
-    const email = "board@peanutgallery.games";
+    const email = "board@mobmachine.games";
     await s.db.query(`insert into public.board_members (email, role) values ($1, 'board') on conflict do nothing`, [email]);
     await s.db.exec(`update public.studio_state set paused = false where id = 1`);
 

@@ -105,12 +105,12 @@ Deno.test("parseSession hashes the email, then the customer id, then the session
     "evt_4",
     session({
       customer: "cus_1",
-      customer_details: { email: "Board@PeanutGallery.games" },
+      customer_details: { email: "Board@mobmachine.games" },
     }),
   );
   assertEquals(
     byEmail.contributor_id,
-    await sha256Hex("board@peanutgallery.games"),
+    await sha256Hex("board@mobmachine.games"),
   );
 
   const byCustomerId = await parseSession(

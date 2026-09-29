@@ -19,9 +19,9 @@ import {
 
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
-const BOARD_EMAIL = "board@peanutgallery.games";
-const MODERATOR_EMAIL = "mod@peanutgallery.games";
-const OUTSIDER_EMAIL = "someone@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
+const MODERATOR_EMAIL = "mod@mobmachine.games";
+const OUTSIDER_EMAIL = "someone@mobmachine.games";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
 
 const SHIM = `

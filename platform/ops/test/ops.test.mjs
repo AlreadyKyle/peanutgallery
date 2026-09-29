@@ -42,7 +42,7 @@ const MAC_DOTENV = {
   NETLIFY_SITE_ID_PLATFORM: 'fixture-site-platform',
   STRIPE_SECRET_KEY: 'fixture-stripe-key',
   STRIPE_WEBHOOK_SECRET: 'fixture-webhook-secret',
-  BOARD_EMAILS: 'board@peanutgallery.games',
+  BOARD_EMAILS: 'board@mobmachine.games',
   POOL_DAILY_CAP_USD: '100',
   CARD_MAX_USD: '25',
   SESSION_MAX_TURNS: '60',

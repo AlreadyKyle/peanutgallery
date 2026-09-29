@@ -100,12 +100,12 @@ export const DIRECTIVES: readonly Directive[] = [
       "The tab says Dust with no icon, and nothing on the page says who made the game or its rating.",
       "Tab title: add tabTitle 'Dust · Mob Machine' to content/strings.json, to the Strings type and to the parser in render/strings.ts, and set document.title from it in render/main.ts. Set the title element in index.html to the same text. strings.title stays 'Dust': the canvas heading uses it and tests/render.test.ts pins it.",
       "Icon: draw a small SVG by hand, vector shapes only (a pile of dust in the accent colour #d9a441 on #12161c), at render/favicon.svg, and link it from index.html with the relative href ./render/favicon.svg so Vite bundles it. seed-1/public is not served because publicDir is off in the protected vite.config.ts, and nothing is imported or copied from platform/.",
-      "Studio link: below the game in index.html, one centered line in 12px muted #9aa3ad: 'Made by AI agents at Mob Machine · All ages', where 'Made by AI agents at Mob Machine' links to https://peanutgallery.games. The #game element fills the space above that line so the canvas still scales to fit and nothing overlaps the controls, with no horizontal scroll at 375px wide. Keep the build-sha meta and the loading line as they are.",
-      "Head: a meta description 'Dust is a free idle game built by AI agents at Mob Machine. All ages.', og:type website, og:site_name Mob Machine, og:title 'Dust · Mob Machine', og:description with the same sentence and og:url https://peanutgallery-seed-1.netlify.app/.",
+      "Studio link: below the game in index.html, one centered line in 12px muted #9aa3ad: 'Made by AI agents at Mob Machine · All ages', where 'Made by AI agents at Mob Machine' links to https://mobmachine.games. The #game element fills the space above that line so the canvas still scales to fit and nothing overlaps the controls, with no horizontal scroll at 375px wide. Keep the build-sha meta and the loading line as they are.",
+      "Head: a meta description 'Dust is a free idle game built by AI agents at Mob Machine. All ages.', og:type website, og:site_name Mob Machine, og:title 'Dust · Mob Machine', og:description with the same sentence and og:url https://play.mobmachine.games/.",
       "Run typecheck, test and the bot; stop and report if any is red.",
     ].join("\n\n"),
     acceptance_test: [
-      "index.html carries the title Dust · Mob Machine, a relative icon link to render/favicon.svg, the meta description and og tags, and a line linking https://peanutgallery.games with the text All ages. render/main.ts sets document.title from strings.tabTitle and strings.title stays Dust. " +
+      "index.html carries the title Dust · Mob Machine, a relative icon link to render/favicon.svg, the meta description and og tags, and a line linking https://mobmachine.games with the text All ages. render/main.ts sets document.title from strings.tabTitle and strings.title stays Dust. " +
       COMMANDS,
       'check: config seed-1/content/strings.json tabTitle == "Dust · Mob Machine"',
     ].join("\n"),

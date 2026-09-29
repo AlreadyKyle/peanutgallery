@@ -30,9 +30,9 @@ $$;
 create publication supabase_realtime;
 `;
 
-const BOARD_EMAIL = "board@peanutgallery.games";
-const MODERATOR_EMAIL = "mod@peanutgallery.games";
-const OUTSIDER_EMAIL = "someone@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
+const MODERATOR_EMAIL = "mod@mobmachine.games";
+const OUTSIDER_EMAIL = "someone@mobmachine.games";
 // money-logic.md adds contribution_allocations, supporters and board_test_payments to the guard.
 // agent-system-core.md adds card_approvals.
 const APPEND_ONLY = ["ledger", "contributions", "credit_purchases", "board_actions", "controller_runs", "contribution_allocations", "supporters", "board_test_payments", "card_approvals"];
@@ -136,8 +136,8 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
     await t.step("every forbidden update, delete and truncate on a money table is refused, whoever asks", async () => {
       await db.exec(
         `select public.record_usage(null, null, 'builder-model-id', 1, 0, 1, 0.0100, 'overhead');
-         insert into public.credit_purchases (amount_usd, reason, created_by) values (5, 'fixture purchase', 'board@peanutgallery.games');
-         insert into public.board_actions (action, actor_email, reason) values ('set_caps', 'board@peanutgallery.games', 'fixture action');
+         insert into public.credit_purchases (amount_usd, reason, created_by) values (5, 'fixture purchase', 'board@mobmachine.games');
+         insert into public.board_actions (action, actor_email, reason) values ('set_caps', 'board@mobmachine.games', 'fixture action');
          insert into public.controller_runs (job, started_at, ok) values ('reconcile', now(), true);`,
       );
       const forbidden: [string, string][] = [
@@ -183,7 +183,7 @@ Deno.test("the money tables are append-only, and corrections are new rows", {
       const card = (await row<{ id: string }>(
         `insert into public.cards (bucket, source, shape, lane, folder, title, stage) values ('game', 'board', 'goal', 'config', 'seed-1', 'A card to delete', 'proposed') returning id`,
       )).id;
-      await db.query(`insert into public.board_actions (action, card_id, actor_email, reason) values ('file_card', $1, 'board@peanutgallery.games', 'filed')`, [card]);
+      await db.query(`insert into public.board_actions (action, card_id, actor_email, reason) values ('file_card', $1, 'board@mobmachine.games', 'filed')`, [card]);
       await refuses(`update public.board_actions set card_id = null where card_id = $1`, "board_actions is append-only: UPDATE of card_id is refused", [card]);
       await refuses(`delete from public.cards where id = $1`, "violates foreign key constraint \"board_actions_card_id_fkey\"", [card]);
       assertEquals(await rows(`select card_id, reason from public.board_actions where action = 'file_card'`), [{ card_id: card, reason: "filed" }]);

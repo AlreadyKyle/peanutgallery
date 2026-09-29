@@ -7,7 +7,7 @@ The drafts for the announcement (`docs/specs/announcement.md`, Drafts; `docs/ROA
 1. The board has pressed Go live on the board's own site.
 2. The clip exists: the first player-funded card's own page, `/card/<its id>`, with its replay (`docs/specs/announcement.md`, Clip). Posts go out only after it exists (PLAN.md §7 Order).
 3. In every draft, "[clip link: added when the first player-funded card ships, docs/specs/announcement.md]" is replaced with that page's address. The gap is left on purpose: no card id is written here before that card ships.
-4. Every link points at https://peanutgallery.games. When the board registers a new domain, the domain pull request rewrites these files with the rest of tier 1 (`scripts/rename.mjs`, `docs/specs/rename.md`).
+4. Every link points at https://mobmachine.games, the studio's domain since PLAN.md §10 decision 59 (`scripts/rename.mjs`, `docs/specs/rename.md`).
 5. Each subreddit's current rules and flair are read before its post goes up.
 
 ## Posting order
@@ -38,7 +38,7 @@ Every claim is the live site's own wording or a fact in the repository:
 - The model and how a card's session runs: /team, PLAN.md §10 decision 36 and PLAN.md §6 The pipeline.
 - The role jobs billed to the board: PLAN.md §3 and PLAN.md §4 Who files cards.
 
-No draft gives a figure the site can move, such as a supporter count, money raised or a card's cost; a reader who wants one is sent to https://peanutgallery.games/ledger. No draft says the studio or its games are open source (`docs/specs/announcement.md`). The only contact address is hello@clayhouse.studio.
+No draft gives a figure the site can move, such as a supporter count, money raised or a card's cost; a reader who wants one is sent to https://mobmachine.games/ledger. No draft says the studio or its games are open source (`docs/specs/announcement.md`). The only contact address is hello@clayhouse.studio.
 
 ## Length limits
 

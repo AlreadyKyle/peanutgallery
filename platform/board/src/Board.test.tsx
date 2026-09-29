@@ -92,7 +92,7 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('./lib/supabase', async (importOriginal) => {
   const original = await importOriginal<typeof import('./lib/supabase')>();
-  const session = { user: { email: 'board@peanutgallery.games' } };
+  const session = { user: { email: 'board@mobmachine.games' } };
   const client = {
     auth: {
       getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : session } }),
@@ -1355,13 +1355,13 @@ describe('Board sign-in', () => {
   it('sends a magic link back to this site that never creates a user', async () => {
     fake.signedOut = true;
     await renderBoard();
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: ' board@peanutgallery.games ' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: ' board@mobmachine.games ' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
     await flush();
     expect(fake.otpCalls).toEqual([
-      { email: 'board@peanutgallery.games', options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false } },
+      { email: 'board@mobmachine.games', options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false } },
     ]);
-    expect(screen.getByRole('status').textContent).toBe('A sign-in link was sent to board@peanutgallery.games.');
+    expect(screen.getByRole('status').textContent).toBe('A sign-in link was sent to board@mobmachine.games.');
   });
 });
 
@@ -1436,7 +1436,7 @@ describe('Board without a database configuration', () => {
     fake.noClient = true;
     await renderBoard();
     fireEvent.change(screen.getByLabelText('Email'), {
-      target: { value: 'board@peanutgallery.games' },
+      target: { value: 'board@mobmachine.games' },
     });
     fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
     await flush();

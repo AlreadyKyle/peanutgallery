@@ -13,7 +13,7 @@ const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
 const MONEY_LOGIC = "20260924200000_money_logic.sql";
 const BOARD_TEST_SESSION = "cs_live_a1OkB7xDSosjVf25TF8aNhbzy8PoWHrjEpeRGDtUSMaFK0tG0NU5Zl5oOh";
-const BOARD_EMAIL = "board@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
 
 const SHIM = `
 create role anon nologin;

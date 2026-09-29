@@ -18,9 +18,9 @@ describe("requireEnv and requireUsd", () => {
 
 describe("parseEmailList", () => {
   it("lowercases, trims, de-duplicates and drops empties", () => {
-    expect(parseEmailList(" Board@PeanutGallery.games, second@peanutgallery.games ,board@peanutgallery.games,,")).toEqual([
-      "board@peanutgallery.games",
-      "second@peanutgallery.games",
+    expect(parseEmailList(" Board@mobmachine.games, second@mobmachine.games ,board@mobmachine.games,,")).toEqual([
+      "board@mobmachine.games",
+      "second@mobmachine.games",
     ]);
     expect(parseEmailList(undefined)).toEqual([]);
     expect(parseEmailList("")).toEqual([]);
@@ -33,25 +33,25 @@ describe("parseEmailList", () => {
 
 describe("parseBoardMembers", () => {
   it("builds board rows and one moderator row", () => {
-    expect(parseBoardMembers("board@peanutgallery.games", "mod@peanutgallery.games")).toEqual([
-      { email: "board@peanutgallery.games", role: "board" },
-      { email: "mod@peanutgallery.games", role: "moderator" },
+    expect(parseBoardMembers("board@mobmachine.games", "mod@mobmachine.games")).toEqual([
+      { email: "board@mobmachine.games", role: "board" },
+      { email: "mod@mobmachine.games", role: "moderator" },
     ]);
   });
 
   it("omits the moderator when MODERATOR_EMAIL is empty", () => {
-    expect(parseBoardMembers("board@peanutgallery.games", "")).toEqual([{ email: "board@peanutgallery.games", role: "board" }]);
-    expect(parseBoardMembers("board@peanutgallery.games", undefined)).toEqual([{ email: "board@peanutgallery.games", role: "board" }]);
+    expect(parseBoardMembers("board@mobmachine.games", "")).toEqual([{ email: "board@mobmachine.games", role: "board" }]);
+    expect(parseBoardMembers("board@mobmachine.games", undefined)).toEqual([{ email: "board@mobmachine.games", role: "board" }]);
   });
 
   it("keeps a board member as board when the same address is also the moderator", () => {
-    expect(parseBoardMembers("board@peanutgallery.games", "BOARD@peanutgallery.games")).toEqual([
-      { email: "board@peanutgallery.games", role: "board" },
+    expect(parseBoardMembers("board@mobmachine.games", "BOARD@mobmachine.games")).toEqual([
+      { email: "board@mobmachine.games", role: "board" },
     ]);
   });
 
   it("requires at least one board email", () => {
-    expect(() => parseBoardMembers("", "mod@peanutgallery.games")).toThrow("BOARD_EMAILS");
+    expect(() => parseBoardMembers("", "mod@mobmachine.games")).toThrow("BOARD_EMAILS");
   });
 });
 

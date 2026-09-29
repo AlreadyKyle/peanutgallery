@@ -125,7 +125,7 @@ export function discordWebhookEnv(env: Env, name: string): string | null {
   return value;
 }
 
-export const DEFAULT_PUBLIC_SITE_URL = 'https://peanutgallery.games';
+export const DEFAULT_PUBLIC_SITE_URL = 'https://mobmachine.games';
 
 // The public site's origin: https, with no path, query or fragment.
 export function publicSiteUrlEnv(env: Env): string {

@@ -16,7 +16,7 @@ import { Mutex } from './lock.js';
 
 const execFileAsync = promisify(execFile);
 
-export const AGENT_EMAIL = 'agents@peanutgallery.games';
+export const AGENT_EMAIL = 'agents@mobmachine.games';
 const TITLE_LIMIT = 72;
 const SPACE = 32;
 const DELETE = 127;

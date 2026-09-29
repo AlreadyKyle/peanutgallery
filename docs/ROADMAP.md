@@ -113,7 +113,7 @@ Merged, with every criterion a test can prove ticked. The remaining line of each
 | `specs/mac-host.md` | built | the board's steps 3 and 8 in `docs/BOARD-SETUP.md`: the Mac made ready, the age key and backup folder, `install.sh`, the cutover and soak on the Mac, the first backup and the restore drill |
 | `specs/jobs-only-install.md` | built | `install.sh --jobs-only` run twice on the Mac and the first nightly backup, after the board's step 3 in `docs/BOARD-SETUP.md` and its allow |
 | `specs/scale-launch.md` | built | the usage tier cap at the credit step, the Netlify plan (board step 8) and the studio daily credit limit (board step 18); the spend totals (0 = 0, every ledger row billed to the founder) and #66's docs-only gate run are recorded |
-| `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and the domain half, which waits on the board registering one |
+| `specs/rename.md` | built | the name is live on all three sites (PLAN.md §10 decision 43), Terms version 3 is posted and the production data name query is clean; left: `managed:apply`, which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install, the board's Stripe, Discord, signature and sign-in sender steps (`docs/BOARD-SETUP.md`, Rename to Mob Machine), and Stripe's links to the new domain, mobmachine.games (PLAN.md §10 decision 59), live, with the old domain redirecting to it |
 | `specs/board-site.md` | built | Resend SMTP (board step 2), the board's first sign-in on its own site (board step 17; production shows none since the switch), then `platform_lane_open` (board step 26), and a moderator's first sign-in once one is named (board step 16). The migration, the site and its headers, Supabase Auth, the ended sessions and the live check are recorded |
 | `specs/explainer-video.md` | built | pressing play on home and /how-it-works on the live site at 375px and 1440px, with the network requests read (the files fetched only after the press, from the site's origin) |
 
@@ -146,9 +146,9 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 ## Standing facts for any session
 
 - **Production.**
-  - The studio is Mob Machine (PLAN.md §10 decision 43); the domain stays peanutgallery.games until the board registers a new one (`specs/rename.md`).
-  - Site https://peanutgallery.games (Netlify `peanutgallerygames`, base `platform/site`); game https://peanutgallery-seed-1.netlify.app (Netlify `peanutgallery-seed-1`, base `seed-1`).
-  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and peanutgallery.games/board is a plain not found page.
+  - The studio is Mob Machine (PLAN.md §10 decision 43); the domain is mobmachine.games; peanutgallery.games stays registered and answers 301 to the same path (PLAN.md §10 decision 59, `specs/rename.md`).
+  - Site https://mobmachine.games (Netlify `peanutgallerygames`, base `platform/site`); game https://play.mobmachine.games (Netlify `peanutgallery-seed-1`, base `seed-1`).
+  - The board's own site: a third free Netlify site, base `platform/board`, at its own `netlify.app` address with no custom domain, created as a production step of `specs/board-site.md`. Nothing on the public site links to it, and mobmachine.games/board is a plain not found page.
   - Supabase project `lyxndueoeisyqzewflpu`.
   - Stripe webhook `we_1UFd0XICmyTP81VUCeACUWhc`.
   - The dispatcher runs attended on the founder's Mac until the cutover, and after it unattended on the board's Mac under launchd, from `~/peanutgallery-host`, until the studio has a server (PLAN.md §10 decision 38).

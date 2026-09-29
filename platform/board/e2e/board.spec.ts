@@ -10,7 +10,7 @@ const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.u
 const enforced = toml.match(/^\s*Content-Security-Policy\s*=\s*"([^"]*)"/m)?.[1] ?? '';
 const host = new URL(SUPABASE_URL).host;
 const storageKey = `sb-${host.split('.')[0]}-auth-token`;
-const EMAIL = 'board@peanutgallery.games';
+const EMAIL = 'board@mobmachine.games';
 
 async function watchPolicy(page: Page): Promise<string[]> {
   const reports: string[] = [];

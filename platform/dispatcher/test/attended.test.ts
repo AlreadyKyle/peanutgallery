@@ -147,7 +147,7 @@ describe('childEnv and claudeArgs', () => {
       GOOGLE_AI_API_KEY: 'i',
       CLAUDE_CODE_OAUTH_TOKEN: 'j',
       PRICE_TABLE_JSON: '{}',
-      BOARD_EMAILS: 'board@peanutgallery.games',
+      BOARD_EMAILS: 'board@mobmachine.games',
     };
     const env = childEnv({ PATH: '/bin', ...secrets });
     for (const name of Object.keys(secrets)) {

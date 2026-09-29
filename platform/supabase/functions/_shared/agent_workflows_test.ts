@@ -11,7 +11,7 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const MIGRATION = "20260924400000_agent_workflows.sql";
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
-const BOARD_EMAIL = "board@peanutgallery.games";
+const BOARD_EMAIL = "board@mobmachine.games";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
 
 const SHIM = `

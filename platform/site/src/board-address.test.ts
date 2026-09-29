@@ -9,7 +9,7 @@ const toml = readFileSync(resolve(process.cwd(), 'netlify.toml'), 'utf8');
 
 describe('the board address check', () => {
   it("reads the game's host from netlify.toml: a netlify.app address every page links to", () => {
-    expect(playHostFrom(toml)).toBe('peanutgallery-seed-1.netlify.app');
+    expect(playHostFrom(toml)).toBe('play.mobmachine.games');
     expect(playHostFrom('VITE_PLAY_URL = ""\n')).toBeNull();
     expect(playHostFrom('[build]\n')).toBeNull();
   });

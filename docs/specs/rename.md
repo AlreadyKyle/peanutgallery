@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Domain (29 September 2026): the board registered mobmachine.games (PLAN.md §10 decision 59); `{{DOMAIN}}` below is mobmachine.games and the game's address is play.mobmachine.games. Its pull request is `board/domain-mobmachine`; its evidence is below.
+
 What is left (23 September 2026, after the merge): `managed:apply` (step 8), which waits on Console credit in the studio's Anthropic organisation and on the Mac host's install; the board's steps (Stripe, Discord, the signature, the sign-in email's sender name); and the domain half, which waits on the board registering a domain. Every Verification line that does not name the domain has run and is quoted in Evidence.
 
 The name: **Mob Machine**, the board's call on 23 September 2026 (PLAN.md §10 decision 43), with a new mark in place of the peanut (`specs/machine-mark.md`). The domain: not chosen yet. `{{DOMAIN}}` below stands for it and every line that names it is a pending board step; until the board registers one, the site stays at peanutgallery.games and only the name changes. The rename is not in `docs/BACKLOG.md`, because every backlog entry becomes a public /roadmap card.
@@ -35,7 +37,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
    - [x] PLAN.md: §10 decision 43 recording the rename and its date, decision 2 marked superseded by it, §3's line naming the studio, and §11 Names. The opening line is the script's. CLAUDE.md's opening paragraph reworded around the new name, keeping that the package names use the working name Backseat.
    - [x] Grammar and wording read in every rewritten file (`git grep -niE "peanut|gallery" -- platform seed-1 docs ':!docs/specs'`): nothing was built on "peanut" or "gallery" but the mark; "the peanut mark" in `DESIGN.md`, `styles.css`, `App.tsx`, `og-image.mjs` and the Guide's note became the new mark (`specs/machine-mark.md`); "Mob Machine" takes "a" where an article is needed. The Ontario business-name line in BOARD-SETUP was split across two lines, which the script cannot see, and was changed by hand.
    - [x] BOARD-SETUP's Done entry of 20 September 2026 quotes the Terms as they read then, so its "Peanut Gallery" is restored and kept (`KEEP_LINES`).
-   - [ ] Domain: `platform/site/netlify.toml`, a forced 301 from `https://peanutgallery.games/*` and `https://www.peanutgallery.games/*` to `https://{{DOMAIN}}/:splat`, beside the existing `.netlify.app` redirect.
+   - [x] Domain: `platform/site/netlify.toml`, a forced 301 from `https://peanutgallery.games/*` and `https://www.peanutgallery.games/*` to `https://{{DOMAIN}}/:splat`, beside the existing `.netlify.app` redirect.
    - [x] `platform/site/scripts/live-check.mjs`: the home title, og:title and og:site_name are "Mob Machine", the top bar's "Mob Machine" link goes home and draws the mark, the icons answer 200, and from Terms version 3 /terms names Mob Machine as the operator. Domain: a check that the old domain answers 301 to the new one.
    - [x] The Terms: version 3 appended to `platform/site/src/lib/terms-versions.ts` (the script never rewrites that file: each posted version is what applied to the money given under it). Its words are version 2's with "Peanut Gallery" changed to "Mob Machine" in its four places and nothing else, which `copy.test.ts` holds. The Refunds page is one document with the Terms and never named the studio, so it moves to version 3 with it unchanged; the Privacy page does not name the studio and is not versioned. Migration `20260925000000_terms_version_3.sql` posts it by the procedure in `specs/legal-copy.md`, applied after the site deploy (Production steps, below).
 4. [x] The link preview: `node platform/site/scripts/og-image.mjs` (the name from `copy.ts`, the address from `index.html`, the mark from `brand/mark.svg`), and `public/og.png` committed. Domain: run it again.
@@ -49,7 +51,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
 ### Open questions for the board, at migration time
 
 - **The mark: settled.** The peanut did not survive the name. The new mark is a small machine drawn in code (`platform/site/brand/mark.svg`, `specs/machine-mark.md`); the favicons, `apple-touch-icon.png`, `icon-512.png` and `og.png` are drawn from it, and `peanut.png`, `brand/peanut-source.png` and the invert filter are deleted.
-- **The game's address: waits on the domain.** The game lives at `peanutgallery-seed-1.netlify.app`, a public URL in tier 3. Renaming the Netlify site changes the URL and breaks shared links; a subdomain such as `play.{{DOMAIN}}` avoids both. Either way `VITE_PLAY_URL` in `platform/site/netlify.toml` and the og:url in `seed-1/index.html` follow.
+- **The game's address: play.mobmachine.games** (29 September 2026, the board took the recommendation). The game lives at `peanutgallery-seed-1.netlify.app`, a public URL in tier 3. Renaming the Netlify site changes the URL and breaks shared links; a subdomain such as `play.{{DOMAIN}}` avoids both. Either way `VITE_PLAY_URL` in `platform/site/netlify.toml` and the og:url in `seed-1/index.html` follow.
 
 ### Tier 1: public
 
@@ -69,8 +71,8 @@ Written out with the clicks in `docs/BOARD-SETUP.md`, "Rename to Mob Machine".
 - [ ] Discord: the server's name and icon (`icon-512.png`). The invite in `netlify.toml` keeps working.
 - [ ] The hello@clayhouse.studio signature. The address itself does not change (PLAN.md §10 decision 37).
 - [ ] The Twitch channel, which already exists under the old name (https://www.twitch.tv/peanut_gallery_games), is renamed when the board chooses, and its new handle goes in the repository (`docs/BOARD-SETUP.md`, Handles). This line first assumed the channel was still to be made; corrected 26 September 2026.
-- [ ] Domain: register `{{DOMAIN}}` and tell Claude. Keep peanutgallery.games registered and renewing, so old links, shared previews, search results and the agents' commit address keep working.
-- [ ] Domain: Netlify, site `peanutgallerygames`: add `{{DOMAIN}}` and `www.{{DOMAIN}}`, set `{{DOMAIN}}` as primary, wait for the certificate; keep peanutgallery.games as a domain alias so the 301 in `netlify.toml` serves it.
+- [x] Domain: register `{{DOMAIN}}` and tell Claude (mobmachine.games, 29 September 2026). Keep peanutgallery.games registered and renewing, so old links, shared previews, search results and the agents' commit address keep working.
+- [x] Domain: Netlify, site `peanutgallerygames`: add `{{DOMAIN}}` and `www.{{DOMAIN}}`, set `{{DOMAIN}}` as primary, wait for the certificate; keep peanutgallery.games as a domain alias so the 301 in `netlify.toml` serves it.
 - [ ] Supabase Auth, project `lyxndueoeisyqzewflpu`: the sign-in email's sender name is Mob Machine. It is set with the Resend SMTP settings (`specs/board-site.md` production step 7, whose text predates the rename and names the old studio: use Mob Machine). The Site URL and the redirect list are the board's own site's address (`specs/board-site.md` production step 4), not the public domain, so the domain leaves them alone. A second factor enrolled before the rename keeps its old label in the authenticator app; that is cosmetic.
 
 ### Production data
@@ -132,6 +134,11 @@ In order, after the merge, the studio paused:
 
 ## Evidence
 
+- Domain (29 September 2026), branch `board/domain-mobmachine`:
+  - The board registered mobmachine.games at GoDaddy and imported the zone file; after two hand fixes (the Parked `@` A record deleted, `www` pointed at the site) GoDaddy's nameserver answered `mobmachine.games: 75.2.60.5`, `www.mobmachine.games: peanutgallerygames.netlify.app.`, `play.mobmachine.games: peanutgallery-seed-1.netlify.app.`.
+  - Netlify through its API: `mobmachine.games` and `www.mobmachine.games` added as domain aliases of `peanutgallerygames` (read back `['www.peanutgallery.games', 'mobmachine.games', 'www.mobmachine.games']`), `play.mobmachine.games` the custom domain of `peanutgallery-seed-1`; the site's certificate renewed (`POST /ssl/renew`) and read back from the edge as `DNS:mobmachine.games, DNS:peanutgallery.games, DNS:www.mobmachine.games, DNS:www.peanutgallery.games`, the game's as `DNS:play.mobmachine.games`; `https://play.mobmachine.games/` 200.
+  - `node scripts/rename.mjs --apply --tier 1 --name "Mob Machine" --domain mobmachine.games` rewrote 28 files; the lines that must name the old domain (the 301 sources, the live check's old-domain check, the decision) are in `KEEP_LINES`. `node scripts/rename.mjs --check-domain`: "tier 1 carries the old name or domain nowhere", and `test:rename` now runs it.
+  - Site unit tests "526 passed (526)"; supabase 325, board 103, dispatcher 872; `E2E_PORT=4452 npx playwright test e2e/csp.spec.ts` 6 passed, `previews` 1 passed; board e2e 9 passed.
 - Production, after the merge (#79 squash-merged as 5f40ab52a53142fd87a69ba9de67de40752f2d7c at 2026-09-24T03:08:58Z, 23:08 on 23 September 2026 Toronto time):
   1. Checks before the merge, at the head d692c03 with origin/main at ecdfba6: `pnpm verify` ended "tier 1 carries the old name nowhere", exit 0; the site e2e "5 skipped / 148 passed (3.2m)", exit 0.
   2. The gate ran locally, since Actions could not start jobs (`specs/local-gate.md`): "LOCAL GATE PASS pr=79 head=d692c031b2b890c03c639ef378e88e541dbf3a79 base=ecdfba6ab6f9420dcaf8aa26fe662739f9c36b0b merge=4c09dcc7fae036cbfab1c7104d9c9fe881400a2d seed=true platform=true lane=code site=true functions=true", with "PASS: gate tests passed=508", functions "97 passed (106 steps) | 0 failed", site e2e "148 passed (3.2m)", board e2e "6 passed (3.4s)" and "GATE PASS folder=seed-1 lane=code phase=bot".

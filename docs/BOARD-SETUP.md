@@ -25,86 +25,44 @@ ntfy topic, the Terms review, Stripe's public details, the rename of the site it
 **Checked on 29 September 2026, still open:** no `RESEND_SMTP_KEY`, `STRIPE_READ_KEY`,
 `DISCORD_WEBHOOK_SHIPS`/`_WEEKLY`, `MODERATOR_EMAIL`, `SUPABASE_DB_PASSWORD`, `BACKUP_DIR` or
 `BACKUP_HEALTHCHECK_URL`; no `peanutgallery-backups` folder in Drive; the backup key is still on the
-Mac; Claude Code is not pinned; nobody has signed in on the board site; the Discord server is still
-called Peanut Gallery with no icon; GitHub Actions is still refusing jobs; `KEYS.md` is still there.
+Mac; Claude Code is not pinned; nobody has signed in on the board site; the Discord server still has
+its old name and no icon; GitHub Actions is still refusing jobs; `KEYS.md` is still there.
 
 ---
 
-### Part 1: The new domain (start here)
+### Part 1: The new domain, mobmachine.games (one step left for you)
 
-Do the domain first: the sign-in email (Part 3) and the Stripe links (Part 5) are then set up once, on
-the new address, instead of twice. Supabase needs nothing: sign-in lives on the board's own site,
-which has no custom domain.
+The studio's address is https://mobmachine.games and the game's is https://play.mobmachine.games
+(`docs/PLAN.md` §10 decision 59). peanutgallery.games and its www answer 301 to the same path on the
+new domain. Supabase needs nothing: sign-in lives on the board's own site, which has no custom domain.
 
-1. **Register the domain.** (detail: R5)
-   1. Register it at GoDaddy, where peanutgallery.games is, so all DNS stays in one place. Turn on
-      auto-renew and the registrar lock.
-   2. Keep peanutgallery.games registered and on auto-renew. Old links, shared previews and search
-      results keep reaching the studio through a permanent redirect.
-   3. A domain costs money, so this is an exception to "everything free" (`docs/PLAN.md` §10
-      decision 35). I record it as a decision in the domain's pull request.
+1. **Register the domain: done 29 September 2026.** Keep both mobmachine.games and
+   peanutgallery.games on auto-renew in GoDaddy; old links, shared previews and search results reach
+   the studio through the old one's redirect. (detail: R5)
+2. **DNS and HTTPS: done 29 September 2026.** GoDaddy's records for mobmachine.games are `@` A
+   `75.2.60.5`, `www` CNAME `peanutgallerygames.netlify.app` and `play` CNAME
+   `peanutgallery-seed-1.netlify.app`; Netlify serves all three on HTTPS. Don't change them.
+   (detail: R6)
+3. **The game at play.mobmachine.games: done.** The old netlify.app address keeps working.
+4. **The domain's pull request and the switch: mine.** Every public page, link preview, launch draft
+   and the agents' commit address name the new domain, mobmachine.games is the primary domain on
+   Netlify, and the live check runs against it.
 
-   **Tell me:** "The domain is <name>." I start the domain's pull request straight away (step 4).
-
-2. **Add it to the site on Netlify** (safe right away: the site answers on both addresses and nothing
-   changes for visitors). (detail: R6)
-   1. app.netlify.com → site **peanutgallerygames** → **Domain management** → **Add a domain** →
-      type the new domain → **Verify** → **Add domain**. It joins the list beside
-      peanutgallery.games. If `www.<new domain>` doesn't appear on its own, add it the same way.
-      Don't set it as primary yet.
-   2. GoDaddy → the new domain → **DNS**. Delete GoDaddy's default "Parked" A record for `@` and the
-      default `www` CNAME, then add:
-      - **A**, name `@`, value `75.2.60.5`
-      - **CNAME**, name `www`, value `peanutgallerygames.netlify.app`
-
-      These are the same records peanutgallery.games uses today. If Netlify lists different values
-      beside the new domain, use Netlify's.
-   3. Back in Netlify, wait until the new domain stops saying "Pending DNS verification" (minutes,
-      sometimes an hour). Then **HTTPS** → **Verify DNS configuration**, and wait for "Your site has
-      HTTPS enabled".
-   4. Check: https://<new domain> opens the site with a padlock.
-
-   **Tell me:** "The domain has HTTPS on Netlify."
-
-3. **The game's address.** Today the game lives at `peanutgallery-seed-1.netlify.app`. My
-   recommendation is `play.<new domain>`, so the game carries the studio's name too; the netlify.app
-   address keeps working for old links. To keep the netlify.app address instead, skip this step and
-   tell me "keep the game's address".
-   1. Netlify → site **peanutgallery-seed-1** → **Domain management** → **Add a domain** →
-      `play.<new domain>` → **Verify** → **Add domain**.
-   2. GoDaddy → the new domain → DNS → add a **CNAME**, name `play`, value
-      `peanutgallery-seed-1.netlify.app`.
-   3. Wait for HTTPS as in step 2.3. Check: https://play.<new domain> opens Dust.
-
-   **Tell me:** "play.<domain> has HTTPS" (or "keep the game's address").
-
-4. **Nothing for you: the domain's pull request.** I run the domain half of `docs/specs/rename.md`:
-   every public page, link preview, launch draft and the social cuts of the explainer video move to
-   the new address; the agents' commit address moves; peanutgallery.games and www redirect to the same path
-   on the new domain; the game's link follows step 3; the cards in the database that name the old
-   address are fixed, with a backup first; the live check learns the new address. It merges on the
-   local gate once steps 2 and 3 have HTTPS. I tell you when it is live.
-
-5. **Make the new domain primary,** once I say the pull request is live. Netlify → site
-   **peanutgallerygames** → Domain management → beside the new domain: **Options** → **Set as
-   primary domain**. Leave peanutgallery.games in the list; the redirect needs it there.
-
-   **Tell me:** "The new domain is primary."
-
-6. **Stripe's links.** Stripe still sends people to peanutgallery.games (the redirect would catch
-   them, but set them straight).
+5. **Stripe's links (10 minutes).** Stripe still sends people to peanutgallery.games; the redirect
+   catches them, but set them straight.
    1. Settings → **Business** → **Public details**: change the **Business website**, **Terms of
-      service** and **Privacy policy** URLs from peanutgallery.games to the new domain (same paths:
-      `/terms`, `/privacy`). If a support URL is set, the same. Save.
+      service** and **Privacy policy** URLs to `https://mobmachine.games`,
+      `https://mobmachine.games/terms` and `https://mobmachine.games/privacy`. If a support URL is
+      set, the same. Save.
    2. **Payment Links** → the link → **After payment** → **Don't show confirmation page** → redirect
-      to `https://<new domain>/thanks?session={CHECKOUT_SESSION_ID}`, typed exactly like that,
+      to `https://mobmachine.games/thanks?session={CHECKOUT_SESSION_ID}`, typed exactly like that,
       curly braces included. Save. (detail: ref 12)
 
-   **Tell me:** "Stripe points at the new domain." I then check the redirect and the live site, and
-   the next real payment should land on /thanks.
+   **Tell me:** "Stripe points at the new domain." I then check the redirect, and the next real
+   payment should land on /thanks.
 
-7. **Optional, free: tell Google.** In Google Search Console, add both domains as properties and use
-   **Settings** → **Change of address** from peanutgallery.games to the new one. It moves search
+6. **Optional, free: tell Google.** In Google Search Console, add both domains as properties and use
+   **Settings** → **Change of address** from peanutgallery.games to mobmachine.games. It moves search
    results over faster. Nothing depends on it.
 
 ---
@@ -138,9 +96,9 @@ night is missed.
 
 13. **Sign-in email (Resend).** (detail: ref 2)
     1. Sign up at resend.com on the free plan.
-    2. **Domains** → **Add domain** → a subdomain of the **new** domain, e.g. `mail.<new domain>`
+    2. **Domains** → **Add domain** → `mail.mobmachine.games`
        (a subdomain keeps the main domain free for any other mail later).
-    3. GoDaddy → the new domain → DNS: add the records Resend shows (DKIM, SPF and the MX for that
+    3. GoDaddy → mobmachine.games → DNS: add the records Resend shows (DKIM, SPF and the MX for that
        subdomain). Wait until Resend says **Verified**.
     4. **API Keys** → **Create API key**, permission **Sending access**. Put it in `.env` as
        `RESEND_SMTP_KEY=<key>`.
@@ -215,7 +173,7 @@ night is missed.
 ### Part 4: The name, Mob Machine, everywhere else (about 20 minutes)
 
 The icon file for these steps is `platform/site/public/icon-512.png` in the repository (also at
-https://peanutgallery.games/icon-512.png).
+https://mobmachine.games/icon-512.png).
 
 23. **Stripe.** (detail: R1)
     1. Settings → Business → Public details: public business name `Mob Machine`, statement
@@ -226,7 +184,7 @@ https://peanutgallery.games/icon-512.png).
 
     **Tell me:** "Stripe says Mob Machine."
 
-24. **Discord** (still called Peanut Gallery). Server name → Server Settings → Server Profile. Name
+24. **Discord** (still under its old name). Server name → Server Settings → Server Profile. Name
     `Mob Machine`, icon `icon-512.png`, Save Changes. The invite link keeps working. (detail: R2)
 
     **Tell me:** "Discord is renamed."
@@ -247,11 +205,10 @@ https://peanutgallery.games/icon-512.png).
     1. Settings → Payouts → **Minimum balance**: turn it on.
     2. Settings → Payments → **Adaptive Pricing**: make sure it's off.
     3. Payment Link → Options → turn on **Require customers to accept your terms of service**.
-    4. The after-payment redirect is step 6. If you haven't done Part 1 yet, set it to
-       `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}` for now.
-    5. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
-    6. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
+    4. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
+    5. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
        rewards. Does a restricted category apply?" Keep their reply.
+    (The after-payment redirect is step 5.)
 
     **Tell me:** "Stripe settings done", and Stripe's reply when it comes.
 
@@ -399,13 +356,12 @@ with a new mark in place of the peanut: a small machine with two eyes, drawn in 
 (`docs/specs/machine-mark.md`). The rename pull request (#79) is merged and live: the site, the
 link preview, the icons, the game's tab, the agents and the alerts say Mob Machine, and the Terms
 say it from version 3. The steps below are the places only you can change. On 29 September 2026 the
-Discord server still read Peanut Gallery with no icon; Stripe and the signature are unconfirmed.
-The domain comes first when you start it (the checklist's Part 1): R5, then R6, so the sign-in
-email (step 2) and the Stripe links (step 12) are set once, on the new address
-(`docs/specs/rename.md`).
+Discord server still had its old name and no icon; Stripe and the signature are unconfirmed.
+The domain moved to mobmachine.games on 29 September 2026 (R5 and R6, `docs/PLAN.md` §10 decision
+59, `docs/specs/rename.md`); only R6.5, Stripe's links, is left.
 
 The icon file for Stripe and Discord is `platform/site/public/icon-512.png` in the repository, also
-at https://peanutgallery.games/icon-512.png once the rename is deployed: the white machine on black,
+at https://mobmachine.games/icon-512.png: the white machine on black,
 512 by 512, with room around it for a round crop.
 
 #### R1. Stripe (10 minutes, free), after the rename is deployed
@@ -419,8 +375,7 @@ at https://peanutgallery.games/icon-512.png once the rename is deployed: the whi
 3. **Product catalog** → the product the Payment Link sells → **Edit product**. If its name or
    description still carries the old studio name, change it to Mob Machine and save. Expected:
    opening the Payment Link (the Contribute button on the site) shows the new words at checkout.
-4. The Payment Link's after-payment redirect is step 12's (/thanks is live); its domain changes with
-   R6.
+4. The Payment Link's after-payment redirect is R6.5.
 
 **Tell me:** "Stripe says Mob Machine."
 
@@ -455,7 +410,10 @@ is only a label.
 
 **Tell me:** nothing, unless the sign-in email still shows the old name.
 
-#### R5. Register the new domain (not free)
+#### R5. Register the new domain: DONE 29 September 2026, mobmachine.games
+
+Kept below as it was written. The board paid for the domain itself, an exception to decision 35
+(`docs/PLAN.md` §10 decision 59).
 
 A domain costs money, so it is an exception you name to decision 35 (or it waits for a payout's
 studio share); the domain's pull request records it as a decision.
@@ -471,7 +429,11 @@ explainer's social cuts, the production cards that name the old address (a dump 
 check, with `pnpm verify` switched to checking the domain too. It merges once R6.1 to R6.3 show
 HTTPS.
 
-#### R6. The domain on Netlify and Stripe (20 minutes, free)
+#### R6. The domain on Netlify and Stripe: DONE 29 September 2026 except R6.5
+
+R6.1 to R6.4 are done: GoDaddy's records, the certificates, play.mobmachine.games for the game, and
+mobmachine.games as the primary domain (set by me through Netlify's API after the merge). R6.5,
+Stripe's links, is the checklist's Part 1 step 5, with `<new domain>` read as mobmachine.games.
 
 R6.1 to R6.3 are safe as soon as the domain is registered: the site answers on both addresses and
 nothing changes for visitors. R6.4 and R6.5 wait until I say the pull request is live.
@@ -544,8 +506,7 @@ Pause for an hour. Resend's free plan sends it instead.
 **Do this.**
 
 1. Sign up at resend.com on the free plan with your own email.
-2. Add a domain: a sending subdomain of the new domain (R5), such as `mail.<new domain>`, so it is
-   set up once; before the new domain exists, a subdomain of peanutgallery.games works the same.
+2. Add a domain: a sending subdomain of mobmachine.games, such as `mail.mobmachine.games`.
    Add the DNS records it shows (SPF and DKIM, and the MX it asks for on that subdomain) in GoDaddy
    → the domain → DNS, and wait until Resend shows the domain verified.
 3. Create an SMTP key (an API key with sending access) and put it in `.env` at the repository root
@@ -863,8 +824,8 @@ No agent touches Stripe; these are yours.
   studio share automatically; there is nothing to record by hand.
 - **After-payment redirect: ready now.** /thanks is live (`docs/specs/supporter-pages.md`, done).
   Payment Link → After payment: redirect customers to
-  `https://peanutgallery.games/thanks?session={CHECKOUT_SESSION_ID}`, or the new domain's once R6 is
-  done. Until it is set Stripe shows its
+  `https://mobmachine.games/thanks?session={CHECKOUT_SESSION_ID}` (the checklist's Part 1 step 5).
+  Until it is set Stripe shows its
   own receipt page. After it is set, the next real payment lands on /thanks with its supporter number
   and the cards it reached; tell me and I quote it.
 
@@ -915,7 +876,7 @@ They then have pause-only access and Discord moderation.
 The board has moved to its own site (`docs/specs/board-site.md`): a separate free Netlify site at
 its own `netlify.app` address. It is live, and its address is in `.env` as `BOARD_SITE_URL`
 (`grep BOARD_SITE_URL .env` in the Terminal tab shows it). Bookmark it; nothing on the public site
-links to it, and peanutgallery.games/board is now a plain not found page. Everyone was signed out at
+links to it, and mobmachine.games/board is now a plain not found page. Everyone was signed out at
 the switch. Sign in there by magic link; your authenticator app carries over, so enter its code as
 before. The first thing you see is the **Needs you** inbox, which is usually empty.
 
@@ -1321,8 +1282,7 @@ different numbers.
 
 Copy any of these back to me as you finish:
 
-- "The domain is <name>." / "The domain has HTTPS on Netlify." / "play.<domain> has HTTPS" or "keep
-  the game's address" / "The new domain is primary." / "Stripe points at the new domain."
+- "Stripe points at the new domain."
 - "Resend is verified and the key is in .env."
 - "the Mac is ready."
 - "Stripe read key is in .env."

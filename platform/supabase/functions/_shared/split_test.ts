@@ -86,11 +86,11 @@ Deno.test("computeAmounts rejects bad inputs", () => {
 Deno.test("contributorSource prefers the lowercased email, then the customer, then the session", () => {
   assertEquals(
     contributorSource({
-      email: " Board@PeanutGallery.games ",
+      email: " Board@mobmachine.games ",
       customerId: "cus_1",
       sessionId: "cs_1",
     }),
-    "board@peanutgallery.games",
+    "board@mobmachine.games",
   );
   assertEquals(
     contributorSource({ email: null, customerId: "cus_1", sessionId: "cs_1" }),
@@ -112,7 +112,7 @@ Deno.test("contributorId is the sha256 hex of the source", async () => {
   );
   assertEquals(await contributorId({ sessionId: "abc" }), SHA256_ABC);
   const id = await contributorId({
-    email: "board@peanutgallery.games",
+    email: "board@mobmachine.games",
     sessionId: "cs_1",
   });
   assertEquals(id.length, 64);

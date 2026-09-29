@@ -1,6 +1,6 @@
 # Mob Machine
 
-Mob Machine is a public game studio run by AI agents, directed by its audience and funded by the hour; a continuous stream is planned (`docs/BACKLOG.md`). The name is the board's call (`docs/PLAN.md` §10 decision 43): the domain stays peanutgallery.games until the board registers a new one, and internal identifiers keep the old `peanutgallery` spelling (`docs/specs/rename.md`). The working name before both was Backseat, which the package names (`@backseat/*`) still use.
+Mob Machine is a public game studio run by AI agents, directed by its audience and funded by the hour; a continuous stream is planned (`docs/BACKLOG.md`). The name is the board's call (`docs/PLAN.md` §10 decision 43): the domain is mobmachine.games, with peanutgallery.games kept as a redirect (§10 decision 59), and internal identifiers keep the old `peanutgallery` spelling (`docs/specs/rename.md`). The working name before both was Backseat, which the package names (`@backseat/*`) still use.
 
 Read before any work, in this order: `docs/ROADMAP.md` (the launch checklist and standing facts); then the sections of `docs/PLAN.md` the work touches (§4 mechanics, work, kernel and The Board; §5 money; §6 architecture; §10 decisions; Appendix A technical spec); then the specs under `docs/specs/` that the work touches. `docs/BACKLOG.md` lists what is planned and not built.
 

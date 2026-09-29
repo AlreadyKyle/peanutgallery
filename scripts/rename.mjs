@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The studio rename (docs/specs/rename.md). The display name "Peanut Gallery" became "Mob Machine"
-// (PLAN.md §10 decision 43); the domain peanutgallery.games stays until the board registers a new one.
+// (PLAN.md §10 decision 43); the domain moved to mobmachine.games in decision 59.
 // This script keeps the list of every file that carries the old name or the domain, in tiers, and
 // rewrites a tier on request.
 //
@@ -72,6 +72,7 @@ export const TIERS = {
     'platform/site/scripts/live-check.mjs',
     'platform/site/src/App.test.tsx',
     'platform/site/src/index-html.test.ts',
+    'platform/site/src/netlify-headers.test.ts',
     'platform/site/src/lib/copy.ts',
     'platform/site/src/lib/legal.ts',
     'platform/site/src/styles.css',
@@ -136,6 +137,14 @@ export const KEEP_LINES = [
   'from Peanut Gallery, Backseat Driver, Armchair, Helicopter', // PLAN §10 decision 2
   'renamed from Peanut Gallery to Mob Machine', // PLAN §10 decision 43
   '"Who runs the studio": "Peanut Gallery is operated by', // BOARD-SETUP Done 3 quotes the Terms of 20 September 2026
+  // The old domain on purpose, after decision 59: it stays registered and redirects to the new one.
+  'peanutgallery.games stays registered', // PLAN §10 decision 59, ROADMAP, netlify.toml
+  'with peanutgallery.games kept as a redirect', // CLAUDE.md
+  'and peanutgallery.games redirects to it', // PLAN §6
+  'from = "https://peanutgallery.games/*"', // netlify.toml, the 301
+  'from = "https://www.peanutgallery.games/*"', // netlify.toml, the 301
+  "const OLD_DOMAIN = 'peanutgallery.games'", // live-check.mjs checks the 301
+  "'https://peanutgallery.games/*', 'https://www.peanutgallery.games/*'", // netlify-headers.test.ts pins the 301s
 ];
 
 const isHistory = (file) => HISTORY_PREFIXES.some((prefix) => file.startsWith(prefix));

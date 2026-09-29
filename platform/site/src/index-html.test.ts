@@ -25,8 +25,8 @@ describe('index.html link previews', () => {
     expect(meta('property', 'og:type')).toBe('website');
     expect(meta('property', 'og:site_name')).toBe(copy.studioName);
     expect(meta('property', 'og:title')).toBe(copy.studioName);
-    expect(meta('property', 'og:url')).toBe('https://peanutgallery.games/');
-    expect(meta('property', 'og:image')).toBe('https://peanutgallery.games/og.png');
+    expect(meta('property', 'og:url')).toBe('https://mobmachine.games/');
+    expect(meta('property', 'og:image')).toBe('https://mobmachine.games/og.png');
     expect(meta('property', 'og:image:width')).toBe('1200');
     expect(meta('property', 'og:image:height')).toBe('630');
     expect(meta('property', 'og:image:alt')).toBe(`${copy.studioName}: ${copy.pitchTitle}`);

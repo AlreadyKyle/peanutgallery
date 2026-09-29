@@ -16,6 +16,6 @@
     "eval:replay": "pnpm --filter @backseat/dispatcher exec tsx src/evals/replay.ts",
     "test:ops": "node --test platform/ops/test/ops.test.mjs",
     "test:docs": "node --test docs/docs.test.mjs",
-    "test:rename": "node --test scripts/rename.test.mjs && node scripts/rename.mjs --check"
+    "test:rename": "node --test scripts/rename.test.mjs && node scripts/rename.mjs --check-domain"
   }
 }
