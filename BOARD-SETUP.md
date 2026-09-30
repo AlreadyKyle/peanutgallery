@@ -21,21 +21,19 @@ Nothing else on this page is waiting on you. Finished steps are in **Done** at t
 **Reference** sections below hold the detail behind each step (a step's "detail: ref 12" means
 section 12 there). Step numbers never change, so a number you wrote down stays valid.
 
-Checked against your Mac and the live site on 29 September 2026.
+Checked against your Mac and the live site on 30 September 2026.
 
 | # | Step | How long |
 |---|---|---|
 | **Now** | | |
 | 12 | Delete the backup key from the Mac | 1 min |
-| 14 | A read-only Stripe key | 10 min |
-| 15 | healthchecks.io emails you for both checks | 2 min |
-| 16 | Two Discord webhooks | 10 min |
+| 14 | Three more Read permissions on the Stripe key | 3 min |
 | 17 | Read your Netlify plan name | 2 min |
 | 19 | Pin Claude Code | 2 min |
 | 20 | The database password into `.env` | 5 min |
 | 22 | Delete `KEYS.md` | 1 min |
 | **The name** | | |
-| 24, 25 | Mob Machine on Discord and your email signature | 10 min |
+| 25 | Mob Machine in your email signature | 5 min |
 | **Before you tell anyone** | | |
 | 27 | Four Stripe settings, including refunding your $1 test | 15 min |
 | 29 | Passkeys on all nine accounts | 20 min |
@@ -64,28 +62,20 @@ handle.
 
     **Tell me:** "the backup key is off the Mac."
 
-14. **A read-only Stripe key (10 minutes).** (detail: ref 4)
-    1. Stripe → Developers → API keys → **Create restricted key**, named `peanutgallery-reconcile`.
-    2. **Read** on Balance, Balance transactions, Payouts, Charges and Refunds, Checkout Sessions,
-       Payment Links, Events, Disputes. Nothing else, and no Write anywhere.
-    3. Put it in `.env` as `STRIPE_READ_KEY=<key>`; it starts `rk_live_`.
+14. **Three more Read permissions on the Stripe key (3 minutes).** (detail: ref 4) The key
+    `peanutgallery-reconcile` is in `.env` as `STRIPE_READ_KEY` and works, but a read on 30 September
+    2026 answered 403 for **Disputes, Events and Payment Links**, which the Controller needs. In
+    Stripe → Developers → API keys → `peanutgallery-reconcile` → **Edit**, give it **Read** on those
+    three, in addition to the ones it has (Balance, Balance transactions, Payouts, Charges and
+    Refunds, Checkout Sessions). Nothing else, and no Write anywhere. The key's value does not change.
 
-    **Tell me:** "Stripe read key is in .env."
-
-15. **healthchecks.io emails.** Integrations → make sure your email gets both checks. (detail: ref 6)
-
-    **Tell me:** "both checks email me."
-
-16. **Two Discord webhooks (10 minutes).** (detail: ref 7)
-    1. Server Settings → Integrations → Webhooks: one for a read-only `#ships` channel, one for
-       `#weekly`.
-    2. Put them in `.env` as `DISCORD_WEBHOOK_SHIPS=<url>` and `DISCORD_WEBHOOK_WEEKLY=<url>`.
-    3. Server Settings → Safety Setup → turn on AutoMod.
-
-    **Tell me:** "Discord webhooks are in .env."
+    **Tell me:** "the Stripe key has the three permissions." I re-read each endpoint the Controller
+    uses, then install it on the Mac.
 
 17. **Your Netlify plan.** Team settings → Billing. Change nothing; just read the plan name, and
-    confirm usage notifications go to your email. (detail: ref 8)
+    confirm usage notifications go to your email. (detail: ref 8) Netlify's API calls the team only
+    "Free", and the team was made in January 2025, so it is probably legacy Free, but only the
+    Billing page says.
 
     **Tell me:** "legacy Free" or "credit-based Free".
 
@@ -112,14 +102,9 @@ handle.
 
 ---
 
-### The name, Mob Machine, everywhere else (about 20 minutes)
+### The name, Mob Machine, in your email signature (about 5 minutes)
 
 The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.games/icon-512.png.
-
-24. **Discord.** Server Settings → Server Profile: name `Mob Machine`, icon the same file, Save. The
-    invite link keeps working. (detail: R2)
-
-    **Tell me:** "Discord is renamed."
 
 25. **Your email signature** in the app that sends as hello@clayhouse.studio. (detail: R3)
 
@@ -147,7 +132,7 @@ The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.game
 30. **Sign in once on your board site.** `grep BOARD_SITE_URL ~/GitHub/peanutgallery/.env` shows the
     address. Open it, bookmark it, sign in by email link and your authenticator code. Nothing that
     needs you signed in — Draft to the floor, the role jobs, the visual review — can run until you
-    do. It waits on Resend verifying mobmachine.games (see **Done**). (detail: ref 17)
+    do. Resend has verified mobmachine.games (see **Done**), so the link will arrive. (detail: ref 17)
 
     **Tell me:** "signed in on the board site."
 
@@ -1366,5 +1351,35 @@ Steps 5, 8, 9, 10, 11 and 23, and step 27's terms checkbox. Checked, not just do
   `peanutgallery-supabase-smtp`, is in `.env` as `RESEND_SMTP_KEY`. Supabase Auth reads back
   `smtp.resend.com:465`, user `resend`, sender `board@mobmachine.games` named Mob Machine, 30 emails
   an hour, password set. **Open:** Resend still showed the domain `pending`; once it verifies, I send
-  one sign-in link to prove delivery.
+  one sign-in link to prove delivery. (Verified on 30 September 2026, below; the link is still to send.)
+
+#### Discord, healthchecks.io, the Stripe key and the live check: 30 September 2026
+
+Steps 15, 16 and 24, the Resend verification, and most of step 14. Checked, not just done:
+
+- **healthchecks.io (step 15, you).** One email integration, to the board's address, assigned to 3 of
+  3 checks, status "Ready to deliver", "goes down" and "goes up" both ticked, last notification
+  delivered.
+- **Discord (step 16, me, through the desktop app with your allow).** `#ships` and `#weekly` made.
+  `@everyone` is denied Send Messages, Send Messages in Threads and both thread-creation permissions
+  on `#ships`, and the change is saved. One webhook in each, copied through the clipboard into `.env`
+  as `DISCORD_WEBHOOK_SHIPS` and `DISCORD_WEBHOOK_WEEKLY`, never printed. Read back with a `GET` on
+  each: HTTP 200, two different channels, neither `#general`; the key lines are 121 characters each.
+  Three AutoMod rules are on, each blocking the message: Block Mention Spam (20 mentions), Block
+  Suspected Spam Content, and Block Commonly Flagged Words with Severe Profanity, Insults & Slurs and
+  Sexual Content. The two test webhooks you pasted into the chat were deleted from `#general`; their
+  addresses now answer 404. The attended dispatcher reads the new keys when it is next restarted.
+- **The server's name (step 24).** Already `Mob Machine` with its icon when checked.
+- **Resend.** The domain `mobmachine.games` reads `verified`, sending enabled, receiving disabled.
+- **The Stripe read key (step 14).** In `.env` as `STRIPE_READ_KEY`, starts `rk_live_`, 107
+  characters, a different value from `STRIPE_SECRET_KEY`. One `GET /v1/balance` with it answered 200.
+  A read with `limit=1` of each endpoint the Controller uses: Checkout Sessions, Charges, Payouts,
+  Balance transactions and Refunds 200; **Disputes, Events and Payment Links 403** (step 14 above).
+  The Controller is not installed until they are fixed. No Stripe write was made.
+- **The live check.** `node platform/site/scripts/live-check.mjs https://mobmachine.games`:
+  `PASS live-check https://mobmachine.games passed=281 failed=0 skipped=0`. It also showed the pool
+  at $0.50 (your test payment) and `/ledger` saying "Not yet reconciled with Stripe.", both expected
+  until step 27's refund and the Controller.
+- **`KEYS.md`.** Every secret in it is also in `.env`; the one value that is not is the public
+  Stripe publishable key, which no code uses. Safe to delete (step 22).
 
