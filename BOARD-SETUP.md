@@ -17,9 +17,10 @@ sends you there: "detail: ref 22" means section 22 under Reference, "detail: R5"
 
 ## What's left for you
 
-Nothing else on this page is waiting on you. Finished steps are in **Done** at the end, and the
-**Reference** sections below hold the detail behind each step (a step's "detail: ref 12" means
-section 12 there). Step numbers never change, so a number you wrote down stays valid.
+Everything in the table below is waiting on you, and nothing else on this page is. Finished steps
+are in **Done** at the end, and the **Reference** sections below hold the detail behind each step (a
+step's "detail: ref 12" means section 12 there). Step numbers never change, so a number you wrote
+down stays valid.
 
 Checked against your Mac and the live site on 30 September 2026.
 
