@@ -34,7 +34,7 @@ Out, and what each waits on:
 - The operations bucket: not built. It ships at 0%, so nothing here carries a percentage for it. The operations-share pull request, opened only when a percentage exists, adds the percentage and a new Terms version by the procedure below.
 - The operator's mailing address and phone: the board (BOARD-SETUP step 10). A later board pull request adds them as a new version.
 - /thanks naming the version a contribution carries and linking /terms/n: supporter-pages.
-- Stripe Dashboard settings (the terms checkbox at checkout, Adaptive Pricing off) and a lawyer's review: the board (BOARD-SETUP step 12 and D). Nothing waits on them.
+- Stripe Dashboard settings (the terms checkbox at checkout; Adaptive Pricing is left alone, BOARD-SETUP Reference 12) and a lawyer's review: the board (BOARD-SETUP step 12 and D). Nothing waits on them.
 - site-snapshot moves this read behind `/api/cards`, keeping the fallback below.
 - A script that computes each contribution's share at a shutdown: not built; the rule does not depend on it.
 
@@ -100,7 +100,7 @@ The studio stays paused throughout.
 ## Board items (listed, never blocking)
 
 - BOARD-SETUP step 10: send a mailing address and phone for the Ontario disclosure; a later board pull request adds them as a new version.
-- BOARD-SETUP step 12 (Stripe Dashboard): turn on "Require customers to accept your terms of service" on the Payment Link, and confirm Adaptive Pricing is off (a local-currency checkout would be charged and not credited, because the webhook refuses non-USD sessions).
+- BOARD-SETUP step 12 (Stripe Dashboard): turn on "Require customers to accept your terms of service" on the Payment Link, and leave Adaptive Pricing alone: Stripe keeps the session in the price's currency (USD), so a local-currency checkout is still credited (BOARD-SETUP Reference 12, 1 October 2026).
 - BOARD-SETUP step 14: read the posted Terms, Refunds and Privacy pages.
 - BOARD-SETUP D: a paid lawyer's review of the pages (whether a contribution is a consumer internet agreement, whether the Consumer Protection Act, 2023 is in force, delivering a copy within 15 days, and the age, refund-fallback and wind-down wording).
 
