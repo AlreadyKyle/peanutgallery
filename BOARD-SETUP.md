@@ -220,9 +220,10 @@ identity, `/api/live` and the live check, fill in the spec's Evidence, and merge
 
 - **How the board site's second factor works.** You said on 1 October 2026 that you will change it
   later: it asks for an authenticator code in a panel on every new session before any button works, and
-  an agent cannot press a board button for you. The rule that state-changing board actions need a
-  verified second factor is the kernel's (`docs/PLAN.md` §4), so the change is how the prompt is
-  presented, not whether it exists.
+  an agent cannot press a board button for you. A verified second factor on state-changing board
+  actions is a live criterion (`docs/ROADMAP.md`, criterion 4: the board's own site requires a second
+  factor) and the board's database functions enforce it, so the change is a board-site change with its
+  own spec, not a setting.
 - **Kill-condition pivots:** "keep the pivots", or the ones you want for a site-first studio.
 - **From the 28 September QA pass** (write-ups in `~/peanutgallery-launch/qa-2026-09-28/`): the
   lookalike-letter deny-list patch (I'd skip it), the same kernel shadow rule for the dispatcher,
