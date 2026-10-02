@@ -41,7 +41,7 @@ Whenever you want a big card open to fund:
 - [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
 
 Later or optional: **21** regenerate the host's GitHub token before 23 October 2026, **6** Search
-Console, **26** the Twitch handle, and the dependency finding under **Later**.
+Console, **26** the Twitch handle, and Dependabot's #114 under **Later**.
 
 Finished (see **Done**): 12, 14, 17, 19, 20, 22, 27, 29, 30, 31, 32, 34, and the payouts check in 37.
 
@@ -207,14 +207,11 @@ identity, `/api/live` and the live check, fill in the spec's Evidence, and merge
   permissions), then replace `VPS_GITHUB_TOKEN` in `.env.vps` (`open -e ~/GitHub/peanutgallery/.env.vps`). An expired token stops the unattended
   dispatcher. More detail: Reference 5. **Reply:** "the host token is regenerated."
 - **Step 6: tell Google Search Console about the new domain.** Add both domains, then Settings →
-  **Change of address** from peanutgallery.games.
+  **Change of address** from peanutgallery.games. Then **Sitemaps** → submit `sitemap.xml`
+  (`https://mobmachine.games/sitemap.xml`, live from 2 October 2026).
 - **Step 26: rename the Twitch channel to Mob Machine**, and tell me the new handle.
-- **A dependency finding, mine to watch.** The weekly scan's `osv` job (run on 1 October 2026) reports one
-  High vulnerability: `fflate` 0.8.2, advisory GHSA-px8p-9vwx-vf98, fixed in 0.8.3. `fflate` is pinned
-  exactly in `platform/dispatcher/package.json` and used by the dispatcher's frame reading
-  (`src/frames.ts`). The upkeep merge only merges a Dependabot patch update, so it needs Dependabot to
-  open that bump; if none appears, I open it. Also open: Dependabot's #114, `actions/setup-node` 4 to 7,
-  a major bump that waits for your merge.
+- **Dependabot's #114**, `actions/setup-node` 4 to 7, a major bump to the gate workflow, waits for your
+  merge.
 
 ### Your calls, nothing waits on them
 
@@ -1538,3 +1535,12 @@ done:
   `dispatcher stopped`, `unfinished: 0`, and no process left. Draft to the floor was not pressed: my
   browser session on the board site was at the first factor and showed the **Two-factor sign-in** panel,
   which needs your authenticator code.
+
+#### The fflate advisory, robots.txt and the sitemap: 2 October 2026
+
+Nothing of yours; recorded so the list above stays honest.
+
+- **The `fflate` advisory.** `fflate` 0.8.2 (GHSA-px8p-9vwx-vf98, High) is bumped to 0.8.3 in
+  `platform/dispatcher/package.json` and the lockfile. The dispatcher's tests: 872 passed.
+- **robots.txt and sitemap.xml** (`docs/specs/robots-sitemap.md`). Both paths answered with the page's
+  HTML; the site now serves real files, ready for step 6's sitemap submission.
