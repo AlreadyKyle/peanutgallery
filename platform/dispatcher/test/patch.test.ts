@@ -228,7 +228,7 @@ describe('applyStoredPatch', () => {
   });
 
   it('discards, without applying, a stored patch whose base is not on main, as a visual revision stores against the card commit', async () => {
-    for (const offMain of [raw(['commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit']).trim(), 'a'.repeat(40), 'not-a-sha']) {
+    for (const offMain of [raw(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit']).trim(), 'a'.repeat(40), 'not-a-sha']) {
       const store = new MemoryStore();
       // The revision's hunks apply at main too, so only the base shows it is half the change.
       const patch = await configEdit();
