@@ -1,210 +1,229 @@
-# Board setup: everything that needs Kyle
+# Board setup: what you need to do
 
-The one list of what only you can do. **Start at "What's left for you" and work down it.** Do one step,
-send me its **Tell me** line, and move on. Everything under **Reference**, further down, is the
-detail behind each step (why, and what I do after); you only need it if a step's "detail" note
-sends you there: "detail: ref 22" means section 22 under Reference, "detail: R5" means R5.
+Work down this page, top to bottom. For each step, do the numbered lines, then send me its **Reply**
+line. Nothing else on this page is waiting on you. Finished steps are under **Done**, at the end.
 
 **Two rules.**
 
-1. **Never paste a key, token, password, email address or URL into the chat.** Put it in the file
-   the step names: `.env` or `.env.vps`, both in `~/GitHub/peanutgallery`. I can read them; I can
-   never type a secret for you.
+1. **Never paste a key, token, password, email address or URL into the chat.** Put it in the file the
+   step names: `.env` or `.env.vps`, both in `~/GitHub/peanutgallery`. I can read them; I can never
+   type a secret for you. Both are hidden files, so Finder does not list them. To open one, run
+   `open -e ~/GitHub/peanutgallery/.env` (or `.env.vps`) in Terminal, which opens it in TextEdit, or
+   press Cmd+Shift+. in Finder to show hidden files.
 2. **If a screen doesn't match these words,** the provider changed its UI. Tell me what you see
    instead of guessing.
 
----
+Step numbers never change, so a number you wrote down stays valid. "More detail: Reference 8" means
+section 8 under **Reference**, further down; you only need it if a step is unclear.
 
-## What's left for you
+Checked against your Mac, Stripe, the Admin console, GitHub and production on 1 October 2026. I do
+everything that can be done from the Mac; what is left needs you at a Google or board-site screen, a
+second factor, a decision, or money. The path to shipping:
 
-Everything in the table below is waiting on you, and nothing else on this page is. Finished steps
-are in **Done** at the end, and the **Reference** sections below hold the detail behind each step (a
-step's "detail: ref 12" means section 12 there). Step numbers never change, so a number you wrote
-down stays valid.
+**hello@ delivers, share the site, wait for the first payout, buy credit, cut over, Go live.**
 
-Checked against your Mac and the live site on 30 September 2026.
+## What's left, in order
 
-| # | Step | How long |
-|---|---|---|
-| **Now** | | |
-| 12 | Delete the backup key from the Mac | 1 min |
-| 14 | Three more Read permissions on the Stripe key | 3 min |
-| 17 | Read your Netlify plan name | 2 min |
-| 19 | Pin Claude Code | 2 min |
-| 20 | The database password into `.env` | 5 min |
-| 22 | Delete `KEYS.md` | 1 min |
-| **The name** | | |
-| 25 | Mob Machine in your email signature | 5 min |
-| **Before you tell anyone** | | |
-| 27 | Four Stripe settings, including refunding your $1 test | 15 min |
-| 29 | Passkeys on all nine accounts | 20 min |
-| 30 | Sign in once on your board site | 5 min |
-| 31, 32, 33 | The platform lane, the daily limit, a moderator | 10 min |
-| **Launch, in this order** | | |
-| 34 | GitHub Actions back | your call |
-| 35 | The restore drill, with me | 10 min |
-| 36 | The first player | your call |
-| 37, 38 | The first payout, then buy Console credit from it | days |
-| 39 | The cutover, with me | 20 min, then a day |
-| 40 | Go live | 5 min |
+Now:
+- [ ] **25** Finish the hello@ group and sign it (10 minutes)
+- [ ] **36** Share the site quietly (the message is drafted in the step)
 
-Later, not now: **21**, regenerate the host's GitHub token before it expires on 23 October 2026.
-Optional, whenever: **6** tell Google Search Console about the new domain, and **26** the Twitch
-handle.
+While the first payout is on its way (days):
+- [ ] **33** Name a moderator (needed before Go live)
+- [ ] **35** Restore drill (10 minutes, with me)
+
+When a payout that holds a player's money arrives:
+- [ ] **38** Console credit, bought from the payout
+- [ ] **39** The cutover (20 minutes with me, then a day)
+- [ ] **40** Go live
+
+Whenever you want a big card open to fund:
+- [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
+
+Later or optional: **21** regenerate the host's GitHub token before 23 October 2026, **6** Search
+Console, **26** the Twitch handle, and the dependency finding under **Later**.
+
+Finished (see **Done**): 12, 14, 17, 19, 20, 22, 27, 29, 30, 31, 32, 34, and the payouts check in 37.
 
 ---
 
-### Now
+## 1. Now
 
-12. **The backup key off the Mac.** You copied `~/peanutgallery-backup.key` to a USB stick and your
-    password manager; it is still on the Mac. Once both copies open, run
-    `rm ~/peanutgallery-backup.key`. It is the only thing that can open a backup. Never send it to
-    me. You bring it back once, for the restore drill (step 35).
+### Step 25: Finish the hello@ group, then sign it (10 minutes, you)
 
-    **Tell me:** "the backup key is off the Mac."
+More detail: R3. You created the `Hello` group at `hello@clayhouse.studio`. I read it back: it has **0
+members** and its access type is **Public**, where only people inside your organisation can post. So
+today mail to hello@ reaches nobody, and mail from players would be refused. Two settings fix that. I
+tried to change the second one and the browser tool refused to edit group access, so both are yours.
+Open the group in Dia: Admin console → **Directory** → **Groups** → **Hello**.
 
-14. **Three more Read permissions on the Stripe key (3 minutes).** (detail: ref 4) The key
-    `peanutgallery-reconcile` is in `.env` as `STRIPE_READ_KEY` and works, but a read on 30 September
-    2026 answered 403 for **Disputes, Events and Payment Links**, which the Controller needs. In
-    Stripe → Developers → API keys → `peanutgallery-reconcile` → **Edit**, give it **Read** on those
-    three, in addition to the ones it has (Balance, Balance transactions, Payouts, Charges and
-    Refunds, Checkout Sessions). Nothing else, and no Write anywhere. The key's value does not change.
+1. **Add members** → add yourself. **Save**.
+2. **Access settings** → in the **Who can post** row, tick **External**. **Save**. The access type
+   changes to Custom; that is expected.
+3. From a personal mailbox, send a mail to hello@ and check it arrives in your inbox.
+4. Gmail → the gear → **See all settings** → **General** → **Signature** → **Create new**. Name it
+   `Mob Machine`; text: `Mob Machine`, then `mobmachine.games` on the next line. Under **Signature
+   defaults** pick it for new emails and for replies. **Save Changes**.
+5. Replying as hello@ rather than from your own address is optional and Google sets it up differently
+   for a group. If you want it, tell me and I will look up the exact setting first.
 
-    **Tell me:** "the Stripe key has the three permissions." I re-read each endpoint the Controller
-    uses, then install it on the Mac.
+**Reply:** "hello@ delivers and the signature is set."
 
-17. **Your Netlify plan.** Team settings → Billing. Change nothing; just read the plan name, and
-    confirm usage notifications go to your email. (detail: ref 8) Netlify's API calls the team only
-    "Free", and the team was made in January 2025, so it is probably legacy Free, but only the
-    Billing page says.
+Optional: empty the Trash. `KEYS.md` is in it; every secret in it is also in `.env` or `.env.vps`.
 
-    **Tell me:** "legacy Free" or "credit-based Free".
+### Step 36: Share the site quietly (you)
 
-19. **Pin Claude Code (2 minutes).** The Mac is on 2.1.283, the checked version. (detail: ref 11)
+More detail: Reference 20. Do it after step 25, so hello@ works when someone writes to it. The six open
+cards can be funded as they are. Your own money never counts, so the first player has to be someone
+else. The studio stays paused either way, and the site says so.
 
-    ```sh
-    cd ~/GitHub/peanutgallery && sudo bash platform/ops/mac/pin-claude-code.sh
-    ```
+1. Pick where: the Discord server the site links, your own accounts, or people you name.
+2. Send this, edited into your own voice:
 
-    It should print `PASS: claude-code pinned 2.1.283`.
+   > I'm building a game studio run by AI agents, in public. You fund the thing you want built next, the
+   > agents build it, and every dollar goes on a public ledger. The first game, Dust, is free in your
+   > browser. It's early: the agents start building once the first contributions clear, so a card you
+   > fund will wait for that. https://mobmachine.games
 
-    **Tell me:** "Claude Code is pinned", with the PASS line.
+3. The alternative is to Go live and announce first, with the studio still paused. I do not recommend
+   it: the studio would be announced while it cannot build anything.
 
-20. **The database password (5 minutes).** Supabase → the project → Project Settings → Database →
-    Database password; if you don't have it, **Reset database password**, which breaks nothing. Put
-    it in `.env` on the empty `SUPABASE_DB_PASSWORD=` line. (detail: ref 25)
-
-    **Tell me:** "the database password is in .env."
-
-22. **Delete `KEYS.md`.** Tell me first; I confirm both keys in it are in `.env`, by length only,
-    then you delete `~/GitHub/peanutgallery/KEYS.md`. It can't be undone.
-
-    **Tell me:** "delete KEYS.md?", then "KEYS.md is deleted."
+**Reply:** "shared", and where.
 
 ---
 
-### The name, Mob Machine, in your email signature (about 5 minutes)
+## 2. While the first payout is on its way (days)
 
-The icon is `platform/site/public/icon-512.png`, also at https://mobmachine.games/icon-512.png.
+### Step 33: Name a moderator (needed before Go live, 5 minutes)
 
-25. **Your email signature** in the app that sends as hello@clayhouse.studio. (detail: R3)
+More detail: Reference 16. The live criteria want the moderator to have signed in once too.
 
-    **Tell me:** "the signature says Mob Machine."
+1. Run `open -e ~/GitHub/peanutgallery/.env` and add a line `MODERATOR_EMAIL=` followed by their
+   address. Never in chat.
+2. In Discord: Server Settings → **Roles** → give them a moderator role.
+3. I run the seed, which creates their sign-in. They sign in on the board site by email link and see the
+   pause control only.
 
----
+**Reply:** "moderator email is in .env."
 
-### Before you tell anyone (about an hour)
+### Step 35: The restore drill (10 minutes, with me)
 
-27. **Stripe settings.** (detail: ref 12)
-    1. Settings → Payouts → **Minimum balance**: turn it on.
-    2. Settings → Payments → **Adaptive Pricing**: off.
-    3. Payments → your $1.00 test payment of 15 September 2026 → **Refund**.
-    4. Email Stripe support: "supporters fund specific development tasks on an AI-built free game; no
-       rewards. Does a restricted category apply?" Keep the reply.
+More detail: Reference 19.
 
-    **Tell me:** "Stripe settings done", and Stripe's reply when it comes.
+1. Get the USB stick with the backup key.
+2. Tell me you are ready. I restore a backup and prove it is intact.
+3. Put the key away again when I say. I delete the decrypted copy.
 
-29. **Passkeys.** Turn on passkeys or a hardware key, and remove SMS recovery, on Stripe, GitHub,
-    Supabase, Netlify, Anthropic (the studio organisation), Google, GoDaddy, Resend and Discord. An
-    authenticator app where there is no passkey. (detail: ref 15)
+**Reply:** "ready for the restore drill."
 
-    **Tell me:** "passkeys are on."
+### Step 37: The first payout (days, nothing for you to do)
 
-30. **Sign in once on your board site.** `grep BOARD_SITE_URL ~/GitHub/peanutgallery/.env` shows the
-    address. Open it, bookmark it, sign in by email link and your authenticator code. Nothing that
-    needs you signed in — Draft to the floor, the role jobs, the visual review — can run until you
-    do. Resend has verified mobmachine.games (see **Done**), so the link will arrive. (detail: ref 17)
+More detail: Reference 21. Payouts are on and the bank account works: the Controller's dry run on 1
+October 2026 read one paid payout, 0.94 CAD arriving on 22 September 2026 (your test payment). Wait for a
+payout that includes a player's money; it can take 7 to 14 days after their payment. The Controller's
+daily run and the board site's **Needs you** inbox then show it, and the credit to buy.
 
-    **Tell me:** "signed in on the board site."
-
-31. **The platform lane,** right after step 30. (detail: ref 26)
-
-    **Tell me:** "open the platform lane", or "keep it closed".
-
-32. **The daily credit limit.** Keep $500, or set another number in the Caps form on the board site.
-    (detail: ref 18)
-
-    **Tell me:** "keep $500", or the number you set.
-
-33. **A moderator (optional).** Put `MODERATOR_EMAIL=<their address>` in `.env`, then give them a
-    moderator role in Discord. (detail: ref 16)
-
-    **Tell me:** "moderator email is in .env."
+**Reply:** "the first payout arrived", when you see it.
 
 ---
 
-### Launch, in this order
+## 3. When the payout arrives
 
-34. **GitHub Actions back.** Cards only merge on the Actions gate, so the first player-funded card
-    cannot ship until it is. The account's included minutes are used up and the spending limit is
-    $0. Pick one: **wait** for the minutes to reset at your next GitHub billing date (free);
-    **make the repository public** (free, but everything in it, history included, becomes readable
-    by anyone); or **add an Actions budget** (a spend, so an exception to decision 35).
-    (detail: Standing items)
+### Step 38: Buy Console credit from that payout, then after every payout
 
-    **Tell me:** "Actions is back", and which one.
+More detail: Reference 22. Never your own money. The board site's **Needs you** inbox shows the amount.
 
-35. **The restore drill (10 minutes, with me).** Bring the USB stick with the backup key. I restore a
-    backup and prove it is intact, then the key goes back offline. (detail: ref 19)
+1. console.anthropic.com → switch to the **studio** organisation, not your personal one.
+2. **Billing** → buy prepaid credit for the amount the inbox shows. Below the Console's minimum? Wait
+   for the next payout.
+3. Auto-reload **off**. Set the Console's monthly limit to the cap the board site shows.
+4. Board site → Needs you → **Fill in the record form**. Change the amount to the Console receipt's if
+   it differs. **Record purchase** (second factor).
+5. Stripe → Settings → Payouts → **Minimum balance**: raise it to the figure the inbox shows.
+6. Read the tier off the Console's **Limits** page.
 
-    **Tell me:** "ready for the restore drill."
+**Reply:** "credit bought and recorded", and the tier.
 
-36. **The first player.** Share the site quietly (my recommendation), or go live and announce first.
-    Your own money never counts. (detail: ref 20)
+### Step 39: The cutover (20 minutes with me, then a day)
 
-    **Tell me:** "share quietly" or "announce first", then "shared".
+More detail: Reference 23. I drive and prompt you at each point. You do four things:
 
-37. **The first payout.** Stripe → Balances: payouts on and the bank account verified. Then wait for
-    a payout that includes a player's money; it can take 7 to 14 days. (detail: ref 21)
+1. **Pause** on the board site, when I say.
+2. Set the agent mode to **unattended** on the board site (second factor), when I say.
+3. Confirm the board site shows the dispatcher seen in the last 3 minutes, healthchecks.io is green and
+   the test alert reached your phone.
+4. **Resume.**
 
-    **Tell me:** "payouts are on", then later "the first payout arrived".
+Then a 24-hour soak: Mac plugged in, lid open, logged in.
 
-38. **Buy Console credit** from that payout, never your own money. The board site's Needs you inbox
-    shows the amount. console.anthropic.com → the **studio** organisation → Billing → buy that
-    amount, auto-reload **off**, monthly limit set to the cap on the board site. Then Needs you →
-    **Record purchase**, tell me the tier from the Console's Limits page, and raise Stripe's minimum
-    balance to the figure the inbox shows. Repeat after every payout. (detail: ref 22)
+**Reply:** "ready for the cutover."
 
-    **Tell me:** "credit bought and recorded", and the tier.
+### Step 40: Go live
 
-39. **The cutover (20 minutes with me, then a day).** You pause on the board site; I stop the
-    attended dispatcher and install the unattended one; you set the mode to unattended; I start it
-    and check it; you confirm the board site shows it seen in the last 3 minutes, healthchecks.io is
-    green and the test alert reached your phone; you resume. Then a 24-hour soak with the lid open.
-    (detail: ref 23)
+More detail: Reference 24.
 
-    **Tell me:** "ready for the cutover".
+1. Once the first player-funded card ships, press **Go live** on the board site. It works once and
+   cannot be undone.
+2. Edit my drafts in `docs/launch/` so they sound like you, and add the clip's link.
+3. Post them in the order in `docs/launch/README.md`.
 
-40. **Go live.** Once the first player-funded card ships, press **Go live** on the board site; it
-    works once and cannot be undone. Edit my drafts in `docs/launch/` so they sound like you, add the
-    clip's link, and post them in the order in `docs/launch/README.md`. (detail: ref 24)
-
-    **Tell me:** "gone live".
+**Reply:** "gone live."
 
 ---
+
+## 4. Whenever you want a big card open to fund
+
+### Step 41: Draft to the floor (2 minutes, you; not a blocker)
+
+More detail: `docs/specs/launch-card-floor.md`. Your call on 1 October 2026: this is not a blocker. The
+six open cards can be funded as they are. The session adds one big card ($5 or more), because the floor
+wants one; the spec says to run it before the first stranger is invited, so until you do, the six are all
+there is. It needs your authenticator code, which I cannot enter: the board-site session I opened asked
+for it under **Two-factor sign-in**.
+
+1. Tell me you are ready. I take a fresh database dump and quote the card supply.
+2. Start the dispatcher in Terminal and leave the window open:
+
+   ```sh
+   cd ~/GitHub/peanutgallery && pnpm --filter @backseat/dispatcher start
+   ```
+
+   It should print `dispatcher started` with `"mode":"attended"`.
+3. Board site → **Two-factor sign-in** → the 6-digit code from your authenticator app → **Verify**.
+4. **Needs you** → **Draft to the floor**. Reason: `Launch floor: one big card of $5 or more`. Press it.
+5. Keep the tab signed in and the Mac awake until the run finishes, then tell me.
+
+Afterwards I check the supply before and after, each new card's approvals and estimate, the ledger
+identity, `/api/live` and the live check, fill in the spec's Evidence, and merge the docs pull request.
+
+**Reply:** "ready for the floor session", then "pressed."
+
+---
+
+## 5. Later, and optional
+
+- **Step 21: regenerate the host's GitHub token before it expires on 23 October 2026.** GitHub →
+  Settings → Developer settings → Fine-grained tokens → the token → **Regenerate token** (it keeps its
+  permissions), then replace `VPS_GITHUB_TOKEN` in `.env.vps` (`open -e ~/GitHub/peanutgallery/.env.vps`). An expired token stops the unattended
+  dispatcher. More detail: Reference 5. **Reply:** "the host token is regenerated."
+- **Step 6: tell Google Search Console about the new domain.** Add both domains, then Settings →
+  **Change of address** from peanutgallery.games.
+- **Step 26: rename the Twitch channel to Mob Machine**, and tell me the new handle.
+- **A dependency finding, mine to watch.** The weekly scan's `osv` job (run on 1 October 2026) reports one
+  High vulnerability: `fflate` 0.8.2, advisory GHSA-px8p-9vwx-vf98, fixed in 0.8.3. `fflate` is pinned
+  exactly in `platform/dispatcher/package.json` and used by the dispatcher's frame reading
+  (`src/frames.ts`). The upkeep merge only merges a Dependabot patch update, so it needs Dependabot to
+  open that bump; if none appears, I open it. Also open: Dependabot's #114, `actions/setup-node` 4 to 7,
+  a major bump that waits for your merge.
 
 ### Your calls, nothing waits on them
 
+- **How the board site's second factor works.** You said on 1 October 2026 that you will change it
+  later: it asks for an authenticator code in a panel on every new session before any button works, and
+  an agent cannot press a board button for you. A verified second factor on state-changing board
+  actions is a live criterion (`docs/ROADMAP.md`, criterion 4: the board's own site requires a second
+  factor) and the board's database functions enforce it, so the change is a board-site change with its
+  own spec, not a setting.
 - **Kill-condition pivots:** "keep the pivots", or the ones you want for a site-first studio.
 - **From the 28 September QA pass** (write-ups in `~/peanutgallery-launch/qa-2026-09-28/`): the
   lookalike-letter deny-list patch (I'd skip it), the same kernel shadow rule for the dispatcher,
@@ -595,11 +614,13 @@ function budget"), of legacy Free's 125,000 invocations. Answers the CDN does no
 invocation each: a failed read of the database (a 502 while Supabase is down or slow), a request
 with a query string (400), another method (405) or an unknown path (404). During a long Supabase
 outage every open tab's retry is such an invocation (at most one a minute per tab, backing off to one
-every ten minutes), so the usage notifications below are the alert for that case. Stay on legacy
-Free. While you are on that page:
+every ten minutes), so a long outage is the case that can use the budget up. Stay on legacy
+Free. About that page:
 
-- Confirm Netlify's **usage notifications** go to your address. They are the only alert that the
-  sites are close to a limit.
+- Netlify has no usage-notification setting to turn on. Its docs say Legacy Starter and Pro teams get
+  an email to the team's billing email at 50, 75, 90 and 100% of a limit, and do not say a Free team
+  does, so do not count on a warning. **Usage & billing** → **Account usage insights** shows the
+  numbers.
 - At 100% of any limit Netlify pauses **every** site on the team until the next cycle, the board's
   site and its Pause included. Money keeps moving (Stripe, the webhook and the dispatcher use no
   Netlify Function); **Pause when the board site is down** below is how you pause the agents then.
@@ -684,8 +705,9 @@ entry reverted, and quote `supabase migration list`; from then on migrations go 
 
 No agent touches Stripe; these are yours.
 
-- **Business description.** Check that Settings → Business details describes the model accurately.
-  Email Stripe support describing it ("supporters fund specific development tasks on an AI-built
+- **Business description (the email to Stripe support is not being sent: decided 1 October 2026).**
+  Check that Settings → Business details describes the model accurately. The email would have
+  described it ("supporters fund specific development tasks on an AI-built
   free game; no rewards") and ask whether a restricted category applies. Keep their reply. If they
   say it needs approval, tell me before anything else; otherwise nothing waits for a written OK.
 - **Minimum balance.** Settings → Payouts → Minimum balance. Turn it on. It holds a fixed amount,
@@ -703,12 +725,20 @@ No agent touches Stripe; these are yours.
   before every checkout; this adds express acceptance. If Stripe will not add it to the existing
   link, make a new link with the same settings and send me its address; a board pull request swaps
   it into `netlify.toml`.
-- **Adaptive Pricing off.** Settings → Payments → Adaptive Pricing: confirm it is off. With it on, a
-  payer could check out in their own currency, and the webhook refuses any currency but US dollars,
-  so the payment would be charged and not credited. No agent may read Stripe to check this, so it
-  is yours.
-- **Your test payment.** Refund your own $1 test payment (Payments → the $1.00 payment of
-  15 September 2026 → Refund), before the cutover. Until then it is booked apart
+- **Adaptive Pricing: leave it alone (decided 1 October 2026).** The earlier note here said a local
+  currency checkout would be charged and not credited. Stripe's docs say otherwise: the Checkout
+  Session and the payment keep the price's currency and amount (US dollars), and the payer's local
+  currency appears only in `presentment_details`, which is what the webhook's USD check (`session.ts`)
+  never reads. The payer, not the studio, pays the 2 to 4% conversion fee. Stripe also says Adaptive
+  Pricing is always on for Payment Links, so the account setting does not govern the Contribute link,
+  and that it needs the price's currency to be one of the account's settlement currencies; this account
+  settles only in CAD. Seen on 1 October 2026: the live link, opened with a French test location,
+  shows `$5.00` and no local price, and the one completed payment is `usd`, 100 cents, with no
+  `presentment_details`. Stripe's warnings on turning it off are about lost conversion, which is
+  moot here. Nothing to do.
+- **Your test payment: not refunding (decided 1 October 2026).** It stays, and the line on /ledger
+  below stays with it. The refund would have been Payments → the $1.00 payment of
+  15 September 2026 → Refund. While it is unrefunded it is booked apart
   (`docs/specs/money-logic.md`): it funds no card and sits in no "Not on a card yet" money, gets no
   supporter number, is in no money-in figure on the site, and is left out of the agent money a
   Console credit purchase may use. Until it is refunded, /ledger's Funding band says in one line
@@ -1121,7 +1151,7 @@ enough:
 - Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
-- The Netlify plan, its usage notifications, and any paid plan after an overrun.
+- Any paid Netlify plan after an overrun.
 - Bringing GitHub Actions minutes back: waiting for the reset, a public repository, or a budget.
 - Pinning Claude Code with `sudo`, and the first replay eval run on your plan.
 - Installing Renovate, only if Dependabot cannot read the lockfile.
@@ -1384,3 +1414,127 @@ Steps 15, 16 and 24, the Resend verification, and most of step 14. Checked, not 
 - **`KEYS.md`.** Every secret in it is also in `.env`; the one value that is not is the public
   Stripe publishable key, which no code uses. Safe to delete (step 22).
 
+
+#### Claude Code pin, the Stripe key's permissions and KEYS.md: 1 October 2026
+
+Step 19, your part of step 14, and the check behind step 22. Checked, not just done:
+
+- **The pin (step 19, you).** `sudo bash platform/ops/mac/pin-claude-code.sh` printed
+  `PASS: claude-code pinned 2.1.283`. Read back after: `/Library/Application
+  Support/ClaudeCode/managed-settings.json` exists and holds `DISABLE_AUTOUPDATER` set to `1`;
+  `claude --version` prints `2.1.283 (Claude Code)`, the version in `claude-code-pin.json`.
+- **The Stripe key (step 14, you).** You said the key has Read on Disputes, Events and Payment Links.
+  Not yet read back: no Stripe call was made, and the Controller is not installed. The re-read and the
+  install wait on your yes (step 14 above).
+- **`KEYS.md` (step 22).** Every token of 16 characters or more in it was compared with `.env` and
+  `.env.vps` by exact match, nothing printed: 22 are there. The 12 that are not are labels, the
+  Supabase connection string's `[YOUR-PASSWORD]` placeholder, the project id, two URLs, the public
+  Stripe publishable key and the public half of a signing key with its id (it has no private `d` field).
+- **Netlify plan (step 17, you).** The Usage & billing page reads **Free** with a **Legacy** badge:
+  bandwidth 89 MB of 100 GB, build minutes 0 of 300, concurrent builds 0 of 1, 12 of 500 projects. That
+  is the legacy Free the function budget in Reference 8 assumes. The guide's second part, "confirm
+  usage notifications", was wrong: there is no such setting in Netlify. The step is removed.
+- **The database password (step 20, you).** You saved it in `KEYS.md` because `.env` is hidden in
+  Finder, which the guide did not say. I copied it onto the `SUPABASE_DB_PASSWORD=` line of `.env`
+  without printing it: 20 characters, and `.env.vps` still has none (it must not). The migration
+  history repair is the new yes in step 20.
+- **Supabase project name (you).** Renamed from peanutgallery to mobmachine. Nothing in the docs names
+  the project by its display name (searched), so nothing changes; the project is addressed by its id.
+- **The backup key off the Mac (step 12, you).** `~/peanutgallery-backup.key` no longer exists
+  (`ls`: No such file or directory). `BACKUP_AGE_RECIPIENT`, the public half, is still in `.env`, so the
+  nightly backup keeps encrypting; only the offline copies can open one. The restore drill (step 35)
+  needs the USB stick.
+
+#### Controller, migration history, KEYS.md and Gmail: 1 October 2026
+
+Steps 14 and 20 done by me, step 22 moved to the Trash, step 25 not reachable. Checked, not just done:
+
+- **The Stripe key (step 14).** After you said it has the three permissions, and with your "drive to
+  completion", I made one read-only `GET` with `limit=1` on each endpoint with `STRIPE_READ_KEY`:
+  balance, checkout sessions, charges, disputes, payouts, balance transactions, events, payment links
+  and refunds all answered 200. No Stripe write was made.
+- **The Controller (step 14).** `make-jobs-env.sh backup-mac controller quota` wrote `controller.env`
+  (4 keys) and `quota.env` (5 keys), mode 0600, names only. `install.sh --jobs-only` made 4 changes
+  (`studio.peanutgallery.controller` and `studio.peanutgallery.quota` written and loaded) and its second
+  run 0; `launchctl list` shows backup, controller and quota. The dry run read: 14 of 15 checks pass,
+  the ledger identity matches, 1 paid session and 1 paid payout match Stripe; the one mismatch is
+  **minimum_balance** (Stripe balance 0 CAD, figure 0.48 CAD), which step 27's first line clears.
+  Nothing was written or alerted (dry run).
+- **A fresh backup first.** `run-job.sh backup --now` wrote `peanutgallery-20261002T001156Z.tar.age`
+  (`backup: done`) before the migration history was touched.
+- **The migration history (step 20).** `supabase@2.117.0 link` to the project, then `migration repair`:
+  the stray `20260915012546` reverted and all 35 repository versions marked applied. `migration list
+  --linked` afterwards: 35 rows, 35 with local equal to remote, none local-only, none remote-only.
+  From now on migrations can go through `supabase db push`.
+- **`KEYS.md` (step 22).** Moved to `~/.Trash` (not deleted); it is no longer in the repository folder.
+- **Gmail (step 25).** The mailbox signed in on this Mac's Chrome lists only itself under Send mail as
+  and has no signature. hello@clayhouse.studio is not signed in there.
+- **Stripe settings (step 27).** Chrome refused my request to open Stripe's settings page, so I made no
+  Stripe settings change and tried no other route; they stay yours.
+
+#### Stripe settings: 1 October 2026
+
+Step 27, closed. What you did, what I checked, and what you decided:
+
+- **Minimum balance (you).** Turned on at 1.00 CAD, above the Controller's 0.48 CAD figure, so it
+  covers the reserve and fees with room to spare. I cannot read this setting with the read key, so it
+  rests on your word; the Controller's next dry run after a payout shows whether the balance is held. Correction
+  to my earlier note: the dry run's one mismatch (Stripe balance 0 CAD against a 0.48 CAD figure) is
+  not cleared by turning the setting on. The whole $1 was paid out, so there is nothing to hold; it
+  clears once a payout leaves the held amount. Until then the daily Controller run (07:07) reports it.
+- **Adaptive Pricing (researched, no change).** See Reference 12: leave it alone. Evidence: Stripe's
+  docs (always on for Payment Links; the session and payment stay in the price's currency; needs the
+  price currency to be a settlement currency), the account's balance in CAD only, the live Contribute
+  link shown at `$5.00` with a French test location, and the one completed session in `usd` with no
+  `presentment_details`. Read-only: one `GET /v1/balance`, one `GET` of completed sessions, one page
+  load. No Stripe write.
+- **The test payment refund and the email to Stripe support (you).** Not doing either.
+
+#### Passkeys and the board sign-in: 1 October 2026
+
+Steps 29 and 30.
+
+- **Passkeys (step 29, you).** You said they are on, for the nine accounts. I cannot see inside those
+  accounts, so this rests on your word.
+- **The board sign-in (step 30, you).** You said it worked. Checked: `board_members.last_seen_at` for
+  the board member reads 2026-10-02 00:43:15 UTC, two minutes before the read, the first since 20
+  September. The sign-in email through Resend therefore arrived.
+- **The hello@ group (step 25), created by you, not yet working.** You created `Hello` at the contact
+  address. Read back in the Admin console on 1 October 2026: 0 members, access type Public (all
+  organisation members can post; external members not allowed), and the settings matrix has External
+  unticked in **Who can post**. No hello@ mail can be delivered or accepted until step 25's first two
+  lines are done. I tried to tick External; the browser tool refused to change group access, so I
+  stopped. The earlier `support@` group no longer appears in the Groups list; I did not touch it. My
+  own attempts to create the group and the alias had failed in that browser tab, and nothing was created
+  by me.
+
+#### The platform lane, the credit limit, GitHub Actions and the floor session's start: 1 October 2026
+
+Steps 31, 32 and 34 done by me, the payouts check in step 37, and the start of step 41. Checked, not just
+done:
+
+- **The platform lane (step 31).** After a database dump at 01:08 UTC, `update public.studio_state set
+  platform_lane_open = true where id = 1` through the Management API query endpoint answered
+  `[{"platform_lane_open":true}]`. Read back: `public_studio` true; `/api/live` shows
+  `studio.platform_lane_open` true; the board site's Studio panel reads "Studio code lane: open."
+  The studio is still paused, so nothing builds. Undo: the same update with `false`.
+- **The daily credit limit (step 32).** `studio_state.credit_studio_daily_cap_usd` is 500, the default;
+  the board site's Studio panel reads "Studio daily limit on immediate credit $500.00". Kept.
+- **GitHub Actions (step 34).** I dispatched the read-only `janitor` workflow (run 36949823035). Its
+  `links` job ran 5 steps and passed; its `osv` job ran 6 steps and failed on a real finding (the
+  `fflate` advisory under **Later**). The 28 September run, refused for billing, had no steps. So the
+  minutes are back; `gh workflow enable gate` made the gate `active`, and every pull request now merges on
+  the Actions gate.
+- **The live check.** `PASS live-check https://mobmachine.games passed=281 failed=0 skipped=0`.
+- **Payouts (step 37).** The Controller's dry run read a paid payout, 0.94 CAD, arriving on 22 September
+  2026, so payouts are on and the bank account works.
+- **The floor session (step 41), started and stopped.** A dump at 01:08 UTC
+  (`~/peanutgallery-dumps/pre-card-floor-20261002T010826Z.dump`, 950,661 bytes, mode 0600). Before it,
+  `card_supply()` read open 6, big 0, small 6, short_big 1. The attended dispatcher refused to start with
+  exit 78 because `.git/config` carried `extensions.worktreeConfig`; no worktree config existed (one
+  worktree, no `config.worktree`), so I removed the key. It then started (`dispatcher lease held`,
+  `claude code is on its pin` 2.1.283, `dispatcher started` mode attended), ran one scheduled
+  `upkeep_merge` job that succeeded, and slept because the studio is paused. I stopped it with SIGINT:
+  `dispatcher stopped`, `unfinished: 0`, and no process left. Draft to the floor was not pressed: my
+  browser session on the board site was at the first factor and showed the **Two-factor sign-in** panel,
+  which needs your authenticator code.

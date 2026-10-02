@@ -733,7 +733,7 @@ describe('orphan sessions', () => {
   it("refuses an orphan's patch made against a commit main does not hold, and starts no session", async () => {
     const h = harness();
     const patch = await costPatch();
-    const cardCommit = await git(['commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit'], repo);
+    const cardCommit = await git(['-c', 'user.name=Dispatcher test', '-c', `user.email=${AGENT_EMAIL}`, 'commit-tree', `${base}^{tree}`, '-p', base, '-m', 'card commit'], repo);
     const session = await orphan(h, patch, { baseSha: cardCommit });
     const error = await run(h).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(SessionPaused);
