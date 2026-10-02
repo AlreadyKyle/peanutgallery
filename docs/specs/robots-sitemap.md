@@ -1,6 +1,6 @@
 # robots.txt and sitemap.xml
 
-Status: built. Card: none. Owner: board.
+Status: done. Card: none. Owner: board.
 
 ## Problem
 
@@ -28,7 +28,7 @@ Contact, on `https://mobmachine.games`. Neither file names the unlisted design g
 - [x] `public/sitemap.xml` lists exactly the kernel route list's pages less the versioned legal pages,
       the not-found page and the design guide, so a new page fails the test until it is listed.
 - [x] Neither file names the design guide's path.
-- [ ] Production serves both files as text and XML, not the page's HTML.
+- [x] Production serves both files as text and XML, not the page's HTML.
 
 ## Verification
 
@@ -40,6 +40,9 @@ Contact, on `https://mobmachine.games`. Neither file names the unlisted design g
 ## Evidence
 
 - `src/crawl-files.test.ts`: 3 passed (criteria 1 to 3).
+- `pnpm verify` exit 0 (site 529, dispatcher 872); Actions gate run 37026284476 success on head 950ecb2.
+- Live at build 9811871: `/robots.txt` `content-type: text/plain; charset=UTF-8`, `/sitemap.xml`
+  `content-type: application/xml`; `PASS live-check https://mobmachine.games passed=281 failed=0 skipped=0`.
 
 ## Decisions
 
