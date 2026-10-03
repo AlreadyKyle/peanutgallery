@@ -1,6 +1,6 @@
 # Gate speed
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Draft: written, not yet agreed by the board. Agreed: the contract for the work. Built: merged, and every criterion a test can prove is ticked; live verification is still to run. Done: every Verification line has been run and its output quoted. A criterion replaced by a later spec is struck through and names that spec.
 
@@ -21,12 +21,12 @@ changed-paths.sh gives CLAUDE.md and README.md at the root the flags docs/ gets 
 
 ## Acceptance criteria
 
-- [ ] The site suite lists the same 268 tests before and after.
-- [ ] Site and board configs set `fullyParallel: true`, `workers: process.env.CI ? 2 : undefined` and `retries: 0`.
-- [ ] The suite passes three times over at two workers with `CI` set and at eight workers, with no failure and no flaky test.
-- [ ] layout-balance.spec.ts fails a data route still marked `aria-busy="true"`.
-- [ ] changed-paths.sh prints `seed=false platform=true lane=code site=false functions=false` for CLAUDE.md and README.md, `functions=true` for BOARD-SETUP.md, and every flag for any other root file; the gate tests carry each case.
-- [ ] The Actions gate on this pull request runs the site suite on 2 workers and its platform job is shorter than run 37026284476's (13.5 minutes).
+- [x] The site suite lists the same 268 tests before and after.
+- [x] Site and board configs set `fullyParallel: true`, `workers: process.env.CI ? 2 : undefined` and `retries: 0`.
+- [x] The suite passes three times over at two workers with `CI` set and at eight workers, with no failure and no flaky test.
+- [x] layout-balance.spec.ts fails a data route still marked `aria-busy="true"`.
+- [x] changed-paths.sh prints `seed=false platform=true lane=code site=false functions=false` for CLAUDE.md and README.md, `functions=true` for BOARD-SETUP.md, and every flag for any other root file; the gate tests carry each case.
+- [x] The Actions gate on this pull request runs the site suite on 2 workers and its platform job is shorter than run 37026284476's (13.5 minutes).
 
 ## Verification
 
@@ -39,6 +39,14 @@ changed-paths.sh gives CLAUDE.md and README.md at the root the flags docs/ gets 
 - The Actions gate run on the pull request: the platform job's "Running 268 tests using 2 workers" line and its job times
 
 ## Evidence
+
+- Same tests: `npx playwright test --list | tail -1` on main b4fd091 and on the branch: `Total: 268 tests in 16 files`.
+- Local site suite, before: `260 passed (4.0m)` (local gate log pr113-845d90e, 4 workers). After, on the branch: `260 passed (2.4m)`, `real 148.80`, with the gate tests running at the same time.
+- Stress, the two runs at the same time (ten Chromium workers on eight cores): `Running 804 tests using 2 workers` … `24 skipped` `780 passed (13.1m)`, exit 0; `Running 804 tests using 8 workers` … `24 skipped` `780 passed (3.9m)`, exit 0. No failed and no flaky test.
+- Board suite: `Running 9 tests using 4 workers` `9 passed (4.3s)`.
+- Detect on #113's range: `bash platform/gate/changed-paths.sh 1860d87 845d90e` prints `seed=false platform=true lane=code site=false functions=true render=false` (it ran every job before). Gate tests: `PASS: gate tests passed=678` (672 before; the new rows are CLAUDE.md, README.md, BOARD-SETUP.md, seed-1/CLAUDE.md, docs/CLAUDE.md and .env.example, and the generic root fixture is now tsconfig.base.json).
+- `pnpm verify` exit 0: dispatcher 872, site 529, supabase 325, board 103, seed-1 83, explainer 14, gate 678.
+- Actions gate run 37140619071 on head a983996, success in 13.9 minutes: platform `Running 268 tests using 2 workers` `260 passed (5.6m)`, site end-to-end step 339 s (515 s in run 37026284476 and 579 s in run 36951019779, both on one worker); platform job 12.9 minutes (13.5 and 16.3); frames job 4.3 minutes (8.9), its change draw `Running 9 tests using 2 workers` `9 passed (1.4m)` and its base draw, on main's config, `using 1 worker` `9 passed (2.1m)`. The platform job's other steps ran slower than in the earlier runs (typecheck and tests 160 s against 103 s, Deno tests 108 s against 65 s), so the job shrank less than the suite did; those steps, about 6.5 minutes, are now most of the platform job.
 
 ## Decisions
 
