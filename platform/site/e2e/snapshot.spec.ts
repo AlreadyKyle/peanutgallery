@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SUPABASE_URL } from './fixture-env';
 import { expect, test } from './fixtures';
+import { toDocuments } from './snapshot-documents';
 
 // The site's own documents (docs/specs/site-snapshot.md): every page reads /api/live and /api/cards
 // from its own origin, never the Supabase host, and opens no WebSocket; a hidden tab makes no request;
@@ -78,16 +79,27 @@ test('a tab opened hidden makes no /api request until it is shown', async ({ pag
   await expect.poll(() => [...api].sort()).toEqual(['/api/cards', '/api/live']);
 });
 
-test('a visible tab reads /api/live every 60 seconds and /api/cards only on the first load', async ({ page }) => {
+test('a visible tab reads /api/live every 60 seconds and /api/cards only on the first load', async ({ page, studio }) => {
+  // The site schedules the next read once a load is drawn (studio.tsx), so each /api/live answer
+  // carries a new balance and the clock moves only after the page shows it: a slow runner cannot move
+  // the clock before the next read is scheduled.
+  let reads = 0;
+  await page.route(/\/api\/live$/, (route) => {
+    reads += 1;
+    const pool = { ...studio.pool, balance_usd: (12.33 + reads / 100).toFixed(4) };
+    return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: JSON.stringify(toDocuments({ ...studio, pool }).live) });
+  });
   await page.clock.install();
   const api = apiRequests(page);
+  const figure = page.locator('main .pool-line .figure');
   await page.goto('/');
-  await expect(page.locator('main .pool-line .figure')).toHaveText('$12.34');
+  await expect(figure).toHaveText('$12.34');
   expect([...api].sort()).toEqual(['/api/cards', '/api/live']);
   await page.clock.runFor(60_000);
-  await expect.poll(() => api.filter((path) => path === '/api/live').length).toBe(2);
+  await expect(figure).toHaveText('$12.35');
   await page.clock.runFor(60_000);
-  await expect.poll(() => api.filter((path) => path === '/api/live').length).toBe(3);
+  await expect(figure).toHaveText('$12.36');
+  expect(api.filter((path) => path === '/api/live')).toHaveLength(3);
   expect(api.filter((path) => path === '/api/cards')).toHaveLength(1);
 });
 
