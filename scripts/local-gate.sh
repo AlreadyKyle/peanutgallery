@@ -12,7 +12,7 @@
 # What it runs is what Actions runs on a pull_request event:
 #   - the PR's head merged into its base branch's current tip (Actions checks out refs/pull/N/merge);
 #   - detect: changed files, the folder/lane flags from platform/gate/changed-paths.sh, the scans phase;
-#   - seed-code, platform and build exactly as gate.yml selects them, the build job in its own fresh
+#   - seed-code, platform, end-to-end and build exactly as gate.yml selects them, the build job in its own fresh
 #     worktree with --ignore-scripts, on Node 22 like the runners;
 #   - the gate job's rule: every selected job passed.
 # Board pull requests only. A card/ branch is refused: its checks must come from the base commit on
@@ -113,7 +113,7 @@ if [ "$PLATFORM" = true ]; then
   step "scans platform" bash platform/gate/ship-gate.sh --phase scans --folder platform --commit-message-file "$WORK/commit-message.txt" --changed-files-file "$WORK/changed-files.txt"
 fi
 
-# seed-code and platform share one install, as each Actions job does its own.
+# seed-code, platform and end-to-end share one install, as each Actions job does its own.
 if { [ "$SEED" = true ] && [ "$LANE" = code ]; } || [ "$PLATFORM" = true ] || [ "$SITE" = true ] || [ "$FUNCTIONS" = true ]; then
   step "install" pnpm install --frozen-lockfile
 fi
@@ -128,12 +128,13 @@ if [ "$PLATFORM" = true ] || [ "$SITE" = true ] || [ "$FUNCTIONS" = true ]; then
   step "platform: ops tests" pnpm test:ops
   step "platform: docs tests" pnpm test:docs
   if [ "$FUNCTIONS" = true ]; then step "platform: stripe webhook function tests" pnpm test:functions; fi
-  if [ "$SITE" = true ]; then
-    step "platform: site build" pnpm --filter @backseat/site build
-    step "platform: chromium" pnpm --filter @backseat/site exec playwright install chromium
-    step "platform: site e2e (port $E2E_PORT)" pnpm --filter @backseat/site e2e
-    step "platform: board e2e (port $BOARD_E2E_PORT)" pnpm --filter @backseat/board e2e
-  fi
+fi
+# end-to-end: its own job in gate.yml, run here after the platform steps on the same install.
+if [ "$SITE" = true ]; then
+  step "end-to-end: site build" pnpm --filter @backseat/site build
+  step "end-to-end: chromium" pnpm --filter @backseat/site exec playwright install chromium
+  step "end-to-end: site e2e (port $E2E_PORT)" pnpm --filter @backseat/site e2e
+  step "end-to-end: board e2e (port $BOARD_E2E_PORT)" pnpm --filter @backseat/board e2e
 fi
 
 # build, in a fresh worktree that never ran tests, installed without lifecycle scripts
