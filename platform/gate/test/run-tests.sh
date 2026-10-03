@@ -1208,7 +1208,7 @@ assert "detect: writes nothing when the render flag is missing" test ! -s "$T/de
 # reach the site, and the gate job fails closed.
 PLAN="$REPO_ROOT/docs/PLAN.md"
 assert "plan: Appendix A names the selection by changed path" grep -qF 'The detect job selects the work by changed path (`platform/gate/changed-paths.sh`)' "$PLAN"
-assert "plan: Appendix A runs the site build and the end-to-end suite only when a change can reach the site" grep -qF 'then, when it can reach the site, the site build and the Playwright end-to-end suite.' "$PLAN"
+assert "plan: Appendix A runs the site build and the end-to-end suites only when a change can reach the site, in their own job" grep -qF -- '- end-to-end, beside the platform job on its own runner, when the change can reach the site: the site build and the Playwright end-to-end suites' "$PLAN"
 assert "plan: Appendix A says the gate job fails closed" grep -qF 'The `gate` job fails closed: it fails when detect failed, when a flag is missing or not exactly true or false, and when a job detect selected did not pass.' "$PLAN"
 assert "plan: Appendix A no longer says every platform change builds the site" test "$(grep -cF 'supabase and site packages, then the site build and the Playwright end-to-end suite.' "$PLAN")" = 0
 
