@@ -10,7 +10,7 @@ Every merge waits on the gate, and the gate had grown to 15 to 18 minutes on Act
 
 ## Scope
 
-In: Playwright parallelism in platform/site and platform/board; a stricter readiness check in layout-balance.spec.ts; the polling test in snapshot.spec.ts made safe under load; changed-paths.sh flags for CLAUDE.md, README.md and BOARD-SETUP.md; the gate's run time in CLAUDE.md and ROADMAP.md.
+In: Playwright parallelism in platform/site and platform/board; a stricter readiness check in layout-balance.spec.ts; the polling tests in snapshot.spec.ts and thanks.spec.ts made safe under load, with an in-page fetch probe (e2e/fetch-probe.ts); changed-paths.sh flags for CLAUDE.md, README.md and BOARD-SETUP.md; the gate's run time in CLAUDE.md and ROADMAP.md.
 Out: gate.yml's jobs (splitting the end-to-end suite into its own job), the gate run on a push to main, a Deno dependency cache, seed-1's Playwright config (its frames render on the CPU through SwiftShader, so two vCPUs gain little). No test or check is removed.
 
 ## Behaviour
@@ -25,7 +25,7 @@ changed-paths.sh gives CLAUDE.md and README.md at the root the flags docs/ gets 
 - [x] Site and board configs set `fullyParallel: true`, `workers: process.env.CI ? 2 : undefined` and `retries: 0`.
 - [x] The suite passes three times over at two workers with `CI` set and at eight workers, with no failure and no flaky test.
 - [x] layout-balance.spec.ts fails a data route still marked `aria-busy="true"`.
-- [x] snapshot.spec.ts moves the clock only after the page has drawn each /api/live answer.
+- [x] snapshot.spec.ts and thanks.spec.ts move the clock only after the page has acted on each answer, and fail a poll that fires early or late.
 - [x] changed-paths.sh prints `seed=false platform=true lane=code site=false functions=false` for CLAUDE.md and README.md, `functions=true` for BOARD-SETUP.md, and every flag for any other root file; the gate tests carry each case.
 - [x] The Actions gate on this pull request runs the site suite on 2 workers and its platform job is shorter than run 37026284476's (13.5 minutes).
 
@@ -54,3 +54,4 @@ changed-paths.sh gives CLAUDE.md and README.md at the root the flags docs/ gets 
 - 2026-10-03: two workers on Actions, one per vCPU, and no retries. More workers than vCPUs would trade speed for flakes; a retry would hide a flake the board should see.
 - 2026-10-03: name the three root documents rather than match `*.md`: a shell `case` `*` matches `/`, and a root file no rule names must keep selecting every job.
 - 2026-10-03: the second gate run on this pull request (run 37141646498, head 7a4d53d) failed one test: snapshot.spec.ts's 60-second read counted the second /api/live request as soon as it was sent and moved the fake clock, but the site schedules the next read only once a load is drawn (studio.tsx), so on a loaded runner the clock moved before the timer existed (`Expected: 3, Received: 2`). A race in the test, not the site: each answer now carries a new balance and the clock moves only after the page shows it. 90 of 90 passed at eight workers, fifteen times over.
+- 2026-10-03: the third run (37142574481, head 7cc6640) failed the same way in thanks.spec.ts (`Expected: 35, Received: 34`): /thanks also asks again only once an answer is handled (thanks.ts), and nothing on the page changes while it stays pending. e2e/fetch-probe.ts now counts, inside the page, each fetch of a path as it is called and each answer the page has finished acting on (a task posted when the answer's JSON is read runs only after the page's own handling). Both polling tests wait on it before moving the clock, and check in the page that no read fires early: 4.5 of the 5 seconds on /thanks, 55 of the 60 on home. Mutations of the poll intervals, run on the built site: 4 s and 50 s fail both tests, 6 s and 70 s fail both tests, the real 5 s and 60 s pass. Before this the tests could not tell a 4-second poll from a 5-second one. Stress: thanks, snapshot and card specs fifteen times over at eight workers, `510 passed (1.7m)`, at the same time as the whole suite twice over at two workers with `CI` set, `16 skipped` `520 passed (8.4m)`.

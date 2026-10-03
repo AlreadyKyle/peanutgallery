@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { SUPABASE_URL } from './fixture-env';
+import { fetchProbe } from './fetch-probe';
 import { expect, test } from './fixtures';
 import { toDocuments } from './snapshot-documents';
 
@@ -91,13 +92,18 @@ test('a visible tab reads /api/live every 60 seconds and /api/cards only on the 
   });
   await page.clock.install();
   const api = apiRequests(page);
+  const live = await fetchProbe(page, '/api/live');
   const figure = page.locator('main .pool-line .figure');
   await page.goto('/');
   await expect(figure).toHaveText('$12.34');
   expect([...api].sort()).toEqual(['/api/cards', '/api/live']);
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(55_000);
+  expect(await live.asked()).toBe(1);
+  await page.clock.runFor(5_000);
   await expect(figure).toHaveText('$12.35');
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(55_000);
+  expect(await live.asked()).toBe(2);
+  await page.clock.runFor(5_000);
   await expect(figure).toHaveText('$12.36');
   expect(api.filter((path) => path === '/api/live')).toHaveLength(3);
   expect(api.filter((path) => path === '/api/cards')).toHaveLength(1);
