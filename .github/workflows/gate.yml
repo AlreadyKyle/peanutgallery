@@ -210,22 +210,44 @@ jobs:
       - name: Stripe webhook function tests
         if: needs.detect.outputs.functions == 'true'
         run: pnpm test:functions
-      # The end-to-end suite serves a build. This one is only for the suite: the build job builds
-      # and scans the site on its own runner. Detect selects the suite only for a change that can
-      # reach the site or the role specs it reads.
+
+  # The end-to-end suites, on their own runner beside the platform job so neither waits on the other
+  # (docs/specs/gate-e2e-job.md). Detect selects them only for a change that can reach the site or the
+  # role specs it reads. They run card code, like the platform job, so they install the same way and
+  # run the base commit's gate on a card branch.
+  end-to-end:
+    name: end-to-end
+    needs: detect
+    if: needs.detect.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Use the base commit's gate on a card branch
+        if: startsWith(github.head_ref, 'card/')
+        env:
+          BASE: ${{ needs.detect.outputs.base }}
+        run: git checkout "$BASE" -- platform/gate
+      # The suite serves a build. This one is only for the suite: the build job builds and scans the
+      # site on its own runner.
       - name: Build the site for the end-to-end suite
-        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site build
       - name: Install Chromium for Playwright
-        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
       - name: Site end-to-end
-        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/site e2e
       # The board's own site (docs/specs/board-site.md) builds its own copy for its suite, under its
       # enforced policy, with the Chromium installed above.
       - name: Board site end-to-end
-        if: needs.detect.outputs.site == 'true'
         run: pnpm --filter @backseat/board e2e
 
   # A fresh runner that never runs card tests builds each selected folder and scans the build, and
@@ -369,7 +391,7 @@ jobs:
 
   gate:
     name: gate
-    needs: [detect, seed-code, platform, build, frames]
+    needs: [detect, seed-code, platform, end-to-end, build, frames]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -389,6 +411,7 @@ jobs:
           LANE: ${{ needs.detect.outputs.lane }}
           SEED_CODE: ${{ needs.seed-code.result }}
           PLATFORM_JOB: ${{ needs.platform.result }}
+          E2E_JOB: ${{ needs.end-to-end.result }}
           BUILD: ${{ needs.build.result }}
           FRAMES: ${{ needs.frames.result }}
         run: |
@@ -409,6 +432,11 @@ jobs:
           }
           if [ "$SEED" = true ] && [ "$LANE" = code ]; then want seed-code "$SEED_CODE"; fi
           if [ "$PLATFORM" = true ] || [ "$SITE" = true ] || [ "$FUNCTIONS" = true ]; then want platform "$PLATFORM_JOB"; fi
+          if [ "$SITE" = true ]; then
+            want end-to-end "$E2E_JOB"
+          else
+            [ "$E2E_JOB" = skipped ] || { echo "detect did not select end-to-end and it ran: $E2E_JOB"; exit 1; }
+          fi
           if [ "$SEED" = true ] || [ "$SITE" = true ]; then want build "$BUILD"; fi
           if [ "$RENDER" = true ]; then
             want frames "$FRAMES"

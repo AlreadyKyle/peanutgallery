@@ -942,14 +942,14 @@ WORKFLOW="$REPO_ROOT/.github/workflows/gate.yml"
 workflow_has() { grep -qE -- "$1" "$WORKFLOW"; }
 assert "workflow: file exists" test -f "$WORKFLOW"
 assert "workflow: named gate" workflow_has '^name: gate$'
-for job in detect seed-code platform build gate; do
+for job in detect seed-code platform end-to-end build gate; do
   assert "workflow: job $job" workflow_has "^  $job:$"
 done
 assert "workflow: no seed-config job (the config lane's build and bot run in the build job)" test "$(grep -c '^  seed-config:$' "$WORKFLOW")" = 0
-assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-code, platform, build, frames\]$'
+assert "workflow: the gate job needs every other job" workflow_has '^    needs: \[detect, seed-code, platform, end-to-end, build, frames\]$'
 assert "workflow: the gate job runs unless the run was cancelled" workflow_has '^    if: \$\{\{ !cancelled\(\) \}\}$'
 assert "workflow: the gate job fails on a failed or cancelled job" workflow_has '\(failure\|cancelled\)'
-assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -cE '^ +(run: )?git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 5
+assert "workflow: card branches restore the base commit's gate in every job" test "$(grep -cE '^ +(run: )?git checkout "\$BASE" -- platform/gate$' "$WORKFLOW")" = 6
 assert "workflow: the gate is restored before the changed-files list is written" awk '/Use the base commit.s gate on a card branch/{r=NR} /Write the commit message and changed files/{if (!r || r > NR) bad=1; r=0} END{exit bad}' "$WORKFLOW"
 job_block() { awk -v job="  $1:" '$0 == job {p=1; next} /^  [a-z-]+:$/{p=0} p' "$WORKFLOW"; }
 detect_runs() { job_block detect | grep -qF -- "$1"; }
@@ -967,12 +967,14 @@ assert "workflow: the kernel guard runs in one place only" test "$(grep -c 'plat
 assert "workflow: detect installs nothing" detect_installs_nothing
 assert "workflow: detect restores the base gate, then guards, then scans" order detect 'run: git checkout "$BASE" -- platform/gate' 'kernel-guard.sh' '--check-modes' '--check-lane' 'Detect folders and lane' '--phase scans --folder seed-1' '--phase scans --folder platform'
 assert "workflow: the gate job requires detect to pass" workflow_has '\[ "\$DETECT" = success \]'
-for pair in 'seed-code SEED_CODE' 'platform PLATFORM_JOB' 'build BUILD' 'frames FRAMES'; do
+for pair in 'seed-code SEED_CODE' 'platform PLATFORM_JOB' 'end-to-end E2E_JOB' 'build BUILD' 'frames FRAMES'; do
   set -- $pair
   assert "workflow: the gate job requires $1 to pass when detect selects it" workflow_has "want $1 \"\\\$$2\""
 done
 assert "workflow: the gate job requires the build job whenever detect selects the seed or the site" workflow_has 'if \[ "\$SEED" = true \] \|\| \[ "\$SITE" = true \]; then want build'
 assert "workflow: the gate job requires the platform job whenever detect selects any platform step" workflow_has 'if \[ "\$PLATFORM" = true \] \|\| \[ "\$SITE" = true \] \|\| \[ "\$FUNCTIONS" = true \]; then want platform'
+assert "workflow: the gate job requires the end-to-end job whenever detect selects the site" order gate 'if [ "$SITE" = true ]; then' 'want end-to-end "$E2E_JOB"'
+assert "workflow: the gate job fails an end-to-end job that ran when detect did not select it" workflow_has '\[ "\$E2E_JOB" = skipped \] \|\| '
 for flag in seed platform lane site functions render; do
   assert "workflow: detect outputs $flag" test "$(job_block detect | grep -c "^      $flag: \\\${{ steps.paths.outputs.$flag }}\$")" = 1
   assert "workflow: detect writes $flag to its outputs" detect_runs "echo \"$flag=\$$flag\" >> \"\$GITHUB_OUTPUT\""
@@ -986,22 +988,24 @@ step_if() {
 for step in 'uses: denoland/setup-deno' 'name: Stripe webhook function tests'; do
   assert "workflow: the platform job runs '$step' only when detect selects the functions" step_if platform "$step" "if: needs.detect.outputs.functions == 'true'"
 done
-for step in 'name: Build the site for the end-to-end suite' 'name: Install Chromium for Playwright' 'name: Site end-to-end' 'name: Board site end-to-end'; do
-  assert "workflow: the platform job runs '$step' only when detect selects the site" step_if platform "$step" "if: needs.detect.outputs.site == 'true'"
-done
-assert "workflow: the platform job gates exactly six steps on detect's flags" test "$(job_block platform | grep -cE "^        if: needs\.detect\.outputs\.(site|functions) == 'true'\$")" = 6
-assert "workflow: the platform job's checks, gate, agent, ops and docs tests run on every platform change" test "$(job_block platform | grep -cE '^        if: ')" = 7
+platform_runs_no_e2e() { ! job_block platform | grep -qE 'playwright|pnpm (--filter [^ ]+ )?e2e|site build'; }
+assert "workflow: the platform job runs no end-to-end step: the end-to-end job does" platform_runs_no_e2e
+assert "workflow: the platform job gates exactly two steps on detect's flags, both on the functions" test "$(job_block platform | grep -cE "^        if: needs\.detect\.outputs\.(site|functions) == 'true'\$")" = 2
+assert "workflow: the platform job's checks, gate, agent, ops and docs tests run on every platform change" test "$(job_block platform | grep -cE '^        if: ')" = 3
+assert "workflow: the end-to-end job runs when detect selects the site" test "$(job_block end-to-end | grep -c "^    if: needs.detect.outputs.site == 'true'$")" = 1
+assert "workflow: the end-to-end job needs detect alone" test "$(job_block end-to-end | grep -c '^    needs: detect$')" = 1
+assert "workflow: the end-to-end job's only step condition is the card-branch gate restore" test "$(job_block end-to-end | grep -cE '^        if: ')" = 1
 assert "workflow: the build job builds the sites only when detect selects them" step_if build 'name: Build the sites and scan the builds' "if: needs.detect.outputs.site == 'true'"
-for job in seed-code platform; do
+for job in seed-code platform end-to-end; do
   assert "workflow: $job caches the pnpm store" test "$(job_block "$job" | grep -c '^          cache: pnpm$')" = 1
 done
 for step in 'pnpm --filter @backseat/gate test' 'pnpm test:agents' 'pnpm test:ops' 'pnpm test:functions'; do
   assert "workflow: the platform job runs $step after typecheck and tests" awk -v run="        run: $step" '/^  platform:$/{p=1; next} /^  [a-z-]+:$/{p=0} p && /name: Typecheck and tests$/{g=1} p && $0 == run {found=g} END{exit !found}' "$WORKFLOW"
 done
 assert "workflow: the platform job pins Deno" workflow_has '^          deno-version: v2\.[0-9]+\.[0-9]+$'
-assert "workflow: the platform job builds the site for the end-to-end suite before running it, then the board site's suite" order platform 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e' 'run: pnpm --filter @backseat/board e2e'
+assert "workflow: the end-to-end job installs, restores the base gate on a card branch, builds the site for the suite, runs it, then the board site's suite" order end-to-end 'run: pnpm install --frozen-lockfile' 'run: git checkout "$BASE" -- platform/gate' 'run: pnpm --filter @backseat/site build' 'run: pnpm --filter @backseat/site exec playwright install' 'run: pnpm --filter @backseat/site e2e' 'run: pnpm --filter @backseat/board e2e'
 assert "workflow: every job has a timeout" test "$(grep -c '^    timeout-minutes: ' "$WORKFLOW")" = "$(grep -c '^    runs-on: ' "$WORKFLOW")"
-# Card code runs in seed-code and platform only; the build job runs it only in its last step.
+# Card code runs in seed-code, platform and end-to-end only; the build job runs it only in its last step.
 assert "workflow: every ship-gate call names its phase" test "$(grep 'ship-gate.sh' "$WORKFLOW" | grep -vc -- '--phase ')" = 0
 for job in seed-code platform; do
   assert "workflow: $job runs the checks phase and never the build or the bot" test "$(job_block "$job" | grep -c -- '--phase checks')" = 1 -a "$(job_block "$job" | grep -cE -- '--phase (build|bot|all)')" = 0
@@ -1086,7 +1090,7 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
     assert "workflow audit: $name has no job named gate" test "$gate_jobs" = 0
   fi
 done
-assert "workflow audit: gate.yml runs checkout five times" test "$(grep -c 'uses: actions/checkout@' "$WORKFLOW")" = 5
+assert "workflow audit: gate.yml runs checkout six times" test "$(grep -c 'uses: actions/checkout@' "$WORKFLOW")" = 6
 
 # The Janitor's weekly scan (docs/specs/agent-upkeep.md): the audit above holds for it (contents: read,
 # no secret, every checkout drops the token); besides, every action is pinned by a full commit sha, it
@@ -1147,14 +1151,17 @@ verdict() {
   local want=$1 name=$2
   shift 2
   expect "gate verdict: $name" "$want" '' -- env -i PATH="$PATH" RESULTS='{}' DETECT=success SEED=false PLATFORM=false SITE=false FUNCTIONS=false RENDER=false LANE=code \
-    SEED_CODE=skipped PLATFORM_JOB=skipped BUILD=skipped FRAMES=skipped "$@" bash -e "$GATE_SCRIPT"
+    SEED_CODE=skipped PLATFORM_JOB=skipped E2E_JOB=skipped BUILD=skipped FRAMES=skipped "$@" bash -e "$GATE_SCRIPT"
 }
 verdict 0 "a docs-only change passes with platform alone" PLATFORM=true PLATFORM_JOB=success
 verdict 0 "a dispatcher change passes without the build job" PLATFORM=true PLATFORM_JOB=success
-verdict 1 "a site change fails when the build job did not run" PLATFORM=true SITE=true PLATFORM_JOB=success
-verdict 0 "a site change passes with platform and build" PLATFORM=true SITE=true PLATFORM_JOB=success BUILD=success
+verdict 1 "a site change fails when the build job did not run" PLATFORM=true SITE=true PLATFORM_JOB=success E2E_JOB=success
+verdict 0 "a site change passes with platform, end-to-end and build" PLATFORM=true SITE=true PLATFORM_JOB=success E2E_JOB=success BUILD=success
+verdict 1 "a site change fails when the end-to-end job did not run" PLATFORM=true SITE=true PLATFORM_JOB=success BUILD=success
+verdict 1 "a site change fails when the end-to-end job failed" PLATFORM=true SITE=true PLATFORM_JOB=success E2E_JOB=failure BUILD=success
+verdict 1 "a change with no site fails when the end-to-end job ran anyway" PLATFORM=true PLATFORM_JOB=success E2E_JOB=success
 verdict 1 "a functions change fails when the platform job did not run" PLATFORM=true FUNCTIONS=true
-verdict 1 "a site flag without the platform flag still needs the platform job" SITE=true BUILD=success
+verdict 1 "a site flag without the platform flag still needs the platform job" SITE=true E2E_JOB=success BUILD=success
 verdict 1 "a seed code change fails when seed-code did not run" SEED=true BUILD=success
 verdict 0 "a seed code change passes with seed-code and build" SEED=true SEED_CODE=success BUILD=success
 verdict 0 "a config change passes with build alone" SEED=true LANE=config BUILD=success
@@ -1163,8 +1170,8 @@ verdict 1 "a missing site flag fails the gate" PLATFORM=true PLATFORM_JOB=succes
 verdict 1 "a malformed functions flag fails the gate" PLATFORM=true PLATFORM_JOB=success FUNCTIONS=yes
 verdict 1 "a failed job named in the results fails the gate" PLATFORM=true PLATFORM_JOB=success RESULTS='{"build": {"result": "failure"}}'
 verdict 0 "a change to nothing passes with detect alone"
-verdict 0 "a render change passes with platform, build and frames" PLATFORM=true SITE=true RENDER=true PLATFORM_JOB=success BUILD=success FRAMES=success
-verdict 1 "a render change fails when frames did not run" PLATFORM=true SITE=true RENDER=true PLATFORM_JOB=success BUILD=success
+verdict 0 "a render change passes with platform, end-to-end, build and frames" PLATFORM=true SITE=true RENDER=true PLATFORM_JOB=success E2E_JOB=success BUILD=success FRAMES=success
+verdict 1 "a render change fails when frames did not run" PLATFORM=true SITE=true RENDER=true PLATFORM_JOB=success E2E_JOB=success BUILD=success
 verdict 1 "a render change fails when frames failed" SEED=true RENDER=true SEED_CODE=success BUILD=success FRAMES=failure
 verdict 1 "a change with no render fails when frames ran anyway" PLATFORM=true PLATFORM_JOB=success FRAMES=success
 verdict 1 "a malformed render flag fails the gate" PLATFORM=true PLATFORM_JOB=success RENDER=maybe
