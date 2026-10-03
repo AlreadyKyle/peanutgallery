@@ -7,9 +7,16 @@ import { E2E_BUILD_ENV, E2E_ORIGIN, E2E_PORT } from './e2e/fixture-env';
 // worktree's build: reuseExistingServer is off and the port is strict.
 const vite = 'node node_modules/vite/bin/vite.js';
 
+// Every test runs on its own page with its own fixture routes, so tests spread across workers one by
+// one, not file by file: the long design files no longer run on one worker while the others idle
+// (docs/specs/gate-speed.md). CI takes two workers, one per vCPU of the gate's runner; locally the
+// default is half the cores. No retries: a test that fails under load fails the gate.
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
+  fullyParallel: true,
+  workers: process.env.CI ? 2 : undefined,
+  retries: 0,
   use: {
     baseURL: E2E_ORIGIN,
     browserName: 'chromium',

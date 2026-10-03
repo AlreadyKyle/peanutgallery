@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { DISCORD_INVITE } from './fixture-env';
+import { fetchProbe } from './fetch-probe';
 import { expect, mockStudio, test } from './fixtures';
 import { BUILDING_CARD_ID, LIVE_CARD_ID, OPEN_CARD_ID, SESSIONS, SUPPORTER_STUDIO } from './supporter-studio';
 
@@ -38,12 +39,14 @@ test('keeps the title where it first renders when the payment goes from recordin
   const studio = { ...SUPPORTER_STUDIO, thanks: { ...SUPPORTER_STUDIO.thanks } };
   await mockStudio(page, studio);
   await page.clock.install();
+  const { handled } = await fetchProbe(page, '/api/thanks');
   for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const session = `cs_test_recordsLater${width}0000`;
     await page.goto(`/thanks?session=${session}`);
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toHaveText('Recording your payment…');
+    await expect.poll(handled).toBe(1);
     const pending = await heading.boundingBox();
     studio.thanks[session] = SUPPORTER_STUDIO.thanks![SESSIONS.recorded]!;
     await page.clock.runFor(5_000);
@@ -66,20 +69,28 @@ test('while not recorded asks every 5 seconds, then says Stripe has the payment 
   test.setTimeout(90_000);
   await page.clock.install();
   const sent = thanksRequests(page);
+  const thanks = await fetchProbe(page, '/api/thanks');
+  const handled = thanks.handled;
   await page.goto(`/thanks?session=${SESSIONS.pending}`);
   await expect(page).toHaveURL(/\/thanks$/);
   const heading = page.getByRole('heading', { level: 1 });
   await expect(heading).toHaveText('Recording your payment…');
   await expect(page.locator('main [aria-busy="true"]')).toBeVisible();
   await expect.poll(() => sent.length).toBe(1);
-  // One more request every 5 seconds, each after the last answer, up to 170 seconds.
+  // One more request every 5 seconds, each after the last answer, up to 170 seconds. The clock
+  // moves only once the page has acted on the last answer.
   for (let seconds = 5; seconds <= 170; seconds += 5) {
-    await page.clock.runFor(5_000);
+    await expect.poll(handled).toBe(seconds / 5);
+    await page.clock.runFor(4_500);
+    expect(await thanks.asked()).toBe(seconds / 5);
+    await page.clock.runFor(500);
     await expect.poll(() => sent.length).toBe(1 + seconds / 5);
   }
   await expect(heading).toHaveText('Recording your payment…');
   // By 180 seconds it stops asking and says Stripe has the payment.
+  await expect.poll(handled).toBe(35);
   await page.clock.runFor(5_000);
+  await expect.poll(handled).toBe(36);
   await page.clock.runFor(5_000);
   await expect(page.getByText("Stripe has taken your payment and emailed your receipt. It can take a few minutes to reach the studio's books.")).toBeVisible();
   await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
@@ -87,7 +98,7 @@ test('while not recorded asks every 5 seconds, then says Stripe has the payment 
   expect(asked).toBeGreaterThanOrEqual(36);
   expect(asked).toBeLessThanOrEqual(37);
   await page.clock.runFor(30_000);
-  expect(sent.length).toBe(asked);
+  expect(await thanks.asked()).toBe(asked);
 });
 
 test('a recorded payment names the supporter, the cards it reached (named first) and the terms it is under', async ({ page }) => {

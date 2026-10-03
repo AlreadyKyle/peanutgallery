@@ -410,13 +410,13 @@ done
 D="$T/d"
 mkdir -p "$D/seed-1/config" "$D/seed-1/sim" "$D/platform/site" "$D/docs"
 git -C "$D" init -q -b main
-printf '{}\n' > "$D/seed-1/config/spawn-table.json"; printf 'x\n' > "$D/seed-1/sim/a.ts"; printf 'y\n' > "$D/platform/site/a.ts"; printf 'z\n' > "$D/README.md"
+printf '{}\n' > "$D/seed-1/config/spawn-table.json"; printf 'x\n' > "$D/seed-1/sim/a.ts"; printf 'y\n' > "$D/platform/site/a.ts"; printf 'z\n' > "$D/tsconfig.base.json"
 git -C "$D" add -A && git -C "$D" commit -q -m "base"
 C0=$(git -C "$D" rev-parse HEAD)
 printf '{"rows":[]}\n' > "$D/seed-1/config/spawn-table.json"; git -C "$D" commit -q -am "config"; C1=$(git -C "$D" rev-parse HEAD)
 printf 'x2\n' > "$D/seed-1/sim/a.ts"; git -C "$D" commit -q -am "code"; C2=$(git -C "$D" rev-parse HEAD)
 printf 'y2\n' > "$D/platform/site/a.ts"; git -C "$D" commit -q -am "platform"; C3=$(git -C "$D" rev-parse HEAD)
-printf 'z2\n' > "$D/README.md"; git -C "$D" commit -q -am "root"; C4=$(git -C "$D" rev-parse HEAD)
+printf 'z2\n' > "$D/tsconfig.base.json"; git -C "$D" commit -q -am "root"; C4=$(git -C "$D" rev-parse HEAD)
 expect "changed: usage without refs" 2 '^$' -- bash "$CHANGED"
 expect "changed: config-only change is the config lane" 0 '^seed=true platform=false lane=config site=false functions=false render=false$' -- bash "$CHANGED" --repo-root "$D" "$C0" "$C1"
 expect "changed: seed code change is the code lane" 0 '^seed=true platform=false lane=code site=false functions=false render=false$' -- bash "$CHANGED" --repo-root "$D" "$C1" "$C2"
@@ -456,7 +456,7 @@ expect "lane: a seed code change fails on a config branch" 1 '^FAIL: lane-check 
 expect "lane: a platform/site change passes on a code branch" 0 '^PASS: lane-check files=1 lane=code$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C2" "$C3"
 expect "lane: a platform/site change fails on a config branch" 1 '^FAIL: lane-check path=platform/site/a.ts rule=config-json-only$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-config "$C2" "$C3"
 expect "lane: one branch never changes both card folders" 1 '^FAIL: lane-check path=seed-1/sim/a.ts rule=one-folder$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C1" "$C3"
-expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=README.md rule=card-folders$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
+expect "lane: a root file fails on a card branch" 1 '^FAIL: lane-check path=tsconfig.base.json rule=card-folders$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C3" "$C4"
 expect "lane: a branch that names no lane fails" 1 '^FAIL: lane-check branch=card/abcd1234 rule=branch-name$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234 "$C0" "$C1"
 expect "lane: --check-lane needs a branch and two refs" 2 '^$' -- bash "$CHANGED" --repo-root "$D" --check-lane card/abcd1234-code "$C0"
 git -C "$D" checkout -q main
@@ -484,6 +484,12 @@ scope_of() {
 }
 for pair in \
   'docs/PLAN.md seed=false platform=true lane=code site=false functions=false render=false' \
+  'CLAUDE.md seed=false platform=true lane=code site=false functions=false render=false' \
+  'README.md seed=false platform=true lane=code site=false functions=false render=false' \
+  'BOARD-SETUP.md seed=false platform=true lane=code site=false functions=true render=false' \
+  'seed-1/CLAUDE.md seed=true platform=false lane=code site=false functions=false render=false' \
+  'docs/CLAUDE.md seed=false platform=true lane=code site=false functions=false render=false' \
+  '.env.example seed=true platform=true lane=code site=true functions=true render=false' \
   'platform/dispatcher/src/tick.ts seed=false platform=true lane=code site=false functions=false render=false' \
   'platform/ops/deploy.sh seed=false platform=true lane=code site=false functions=false render=false' \
   'platform/supabase/migrations/x.sql seed=false platform=true lane=code site=false functions=true render=false' \

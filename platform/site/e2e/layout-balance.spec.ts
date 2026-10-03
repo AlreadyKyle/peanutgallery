@@ -2,7 +2,7 @@ import { auditLayout, LIMITS } from '../scripts/layout-audit.mjs';
 import type { Page } from '@playwright/test';
 import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, test, type StudioFixture } from './fixtures';
 import { LIVE_STUDIO } from './live-studio';
-import { PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
+import { isDataRoute, PAGE_PATHS, SUPPORTER_ROUTES } from './routes';
 import { SUPPORTER_STUDIO } from './supporter-studio';
 
 // Layout balance (DESIGN.md, No dead space; docs/specs/home-and-design.md): on every public route,
@@ -20,8 +20,14 @@ async function audit(page: Page, path: string): Promise<string[]> {
   await page.goto(path);
   await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
   await page.evaluate(() => document.fonts.ready);
-  // The figures arrive after first paint; wait for the loading lines to go.
-  await page.waitForFunction(() => document.querySelector('[aria-busy="true"]') === null, undefined, { timeout: 5_000 }).catch(() => {});
+  // The figures arrive after first paint; wait for the loading lines to go. A data route still loading
+  // fails rather than being audited half-drawn, as route-shots.spec.ts does; other pages may keep a
+  // loading line on purpose (the guide shows one as a state, /thanks waits on a payment).
+  const settled = await page
+    .waitForFunction(() => document.querySelector('[aria-busy="true"]') === null, undefined, { timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!settled && isDataRoute(path)) throw new Error(`${path} is still loading: an element has aria-busy="true"`);
   return page.evaluate(auditLayout, LIMITS);
 }
 
