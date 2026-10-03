@@ -12,9 +12,11 @@
 # Output: seed=true|false platform=true|false lane=config|code site=true|false functions=true|false
 #         render=true|false
 #   seed      a changed file lies under seed-1/, or outside seed-1/, platform/ and docs/ (a
-#             workspace-level change)
-#   platform  a changed file lies under platform/ or docs/, or is workspace-level. The docs tests, the
-#             agent spec tests and the supabase tests read docs/, and the seed-1 checks do not.
+#             workspace-level change) and is not one of the root documents named below
+#   platform  a changed file lies under platform/ or docs/, is a root document (CLAUDE.md, README.md,
+#             BOARD-SETUP.md), or is workspace-level. The docs tests, the agent spec tests and the
+#             supabase tests read docs/ and the root documents, and the seed-1 checks, the site builds
+#             and the end-to-end suites read neither (docs/specs/gate-speed.md).
 #   lane      config only when every changed file is a .json file under seed-1/config/ or
 #             seed-1/content/: the build copies those folders into the game verbatim, and the config
 #             lane runs no typecheck or tests
@@ -25,7 +27,7 @@
 #             or platform/supabase/ leave it false.
 #   functions the Deno tests of platform/supabase/functions may change: a changed file under
 #             platform/supabase/, or under platform/ outside the folders named below, or
-#             workspace-level. Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/,
+#             workspace-level, or BOARD-SETUP.md (a Deno test runs its pause statement). Changes only under seed-1/, docs/, platform/dispatcher/, platform/ops/,
 #             platform/site/ or platform/agents/ leave it false.
 #   render    what a page or the game draws may change, so the gate's frames job screenshots the base
 #             and the change (docs/specs/design-review.md): a changed file that is not a test
@@ -222,6 +224,8 @@ if [ -n "$FILES" ]; then
       platform/site/*|platform/board/*|platform/agents/*) PLATFORM=true; SITE=true; LANE=code ;;
       platform/supabase/*) PLATFORM=true; FUNCTIONS=true; LANE=code ;;
       platform/*) PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;
+      CLAUDE.md|README.md) PLATFORM=true; LANE=code ;;
+      BOARD-SETUP.md) PLATFORM=true; FUNCTIONS=true; LANE=code ;;
       *) SEED=true; PLATFORM=true; SITE=true; FUNCTIONS=true; LANE=code ;;
     esac
   done <<EOF_FILES
