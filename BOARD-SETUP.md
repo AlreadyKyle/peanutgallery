@@ -1166,6 +1166,11 @@ studio. **Tell me:** "keep the pivots", or the pivots you want for a site-first 
 
 #### Where the dispatcher lives after the Mac: DECIDED 29 September 2026 — it stays
 
+**Changed 5 October 2026:** you are putting your card on Google Cloud billing, so the card premise
+below no longer holds and Google Cloud's free e2-micro is open again (`docs/PLAN.md` §10 decision 60).
+The Mac stays the host until the backlog entry is built. The rest of this section is the 29 September
+record.
+
 You can put no card on file, and every cloud free tier worth using verifies one: Oracle, Google
 Cloud, AWS and Azure are all out for that reason, not a technical one. The "free VPS, no credit
 card" sites are affiliate fronts, and nothing holding the studio's money goes on one. Paying for
