@@ -6,6 +6,8 @@
 // (jobs.ts), until SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a
 // restart resumes work, releases the lease once running cards have stopped, and a restart also
 // clears a halt.
+// With DISPATCHER_DRAIN_AT set (a host with a bounded run, docs/specs/actions-host.md), the tick claims
+// nothing from that time and the process exits 0 once nothing it started is still running.
 // A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -36,7 +38,7 @@ import { AGENTS_DIR, TypedOutput } from './typed-output.js';
 import { gitAuthEnv } from './worktree.js';
 import { resolveRoleModel } from './role-model.js';
 import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
-import { leaseTtlSeconds, tick } from './tick.js';
+import { drainState, leaseTtlSeconds, tick } from './tick.js';
 import { sleep } from './time.js';
 
 // How long a stopping dispatcher waits for running cards: a session's SIGINT grace (15 s) and SIGTERM
@@ -212,14 +214,26 @@ async function main(): Promise<void> {
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
+    drainAt: config.drainAt ?? null,
   };
+  if (config.drainAt) log.info('main', 'dispatcher drains at', { drainAt: config.drainAt.toISOString() });
 
+  let toldDraining = false;
   while (!stop.signal.aborted) {
     try {
       const outcome = await tick(deps);
       log.info('tick', outcome.action, { ...outcome, running: running.size });
     } catch (error) {
       log.error('tick', 'tick failed', { error: errorMessage(error) });
+    }
+    const drain = drainState(config.drainAt, now(), running.size, jobState.running !== null);
+    if (drain === 'drained') {
+      log.info('main', 'dispatcher drained', { drainAt: config.drainAt?.toISOString() });
+      break;
+    }
+    if (drain === 'draining' && !toldDraining) {
+      log.info('main', 'dispatcher draining', { running: running.size, job: jobState.running !== null });
+      toldDraining = true;
     }
     await sleep(config.tickMs, stop.signal);
   }

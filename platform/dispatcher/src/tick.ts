@@ -62,6 +62,18 @@ export interface TickDeps {
   jobTick?: () => Promise<unknown>;
   // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
   outbound?: () => Promise<unknown>;
+  // DISPATCHER_DRAIN_AT (config.ts): from this time no card or job is claimed. Unset or null: never.
+  drainAt?: Date | null;
+}
+
+export type DrainState = 'off' | 'draining' | 'drained';
+
+// A host that runs for a bounded time (GitHub Actions, docs/specs/actions-host.md) drains before its
+// hard stop: from drainAt the tick claims nothing, and once no card or job this process started is
+// still running the process is drained and main exits 0. Before drainAt, or with none, it is off.
+export function drainState(drainAt: Date | null | undefined, now: Date, runningCards: number, jobRunning: boolean): DrainState {
+  if (!drainAt || now.getTime() < drainAt.getTime()) return 'off';
+  return runningCards === 0 && !jobRunning ? 'drained' : 'draining';
 }
 
 // Each claim holds the lease this long; the tick renews it every DISPATCHER_TICK_MS, so it lapses only
@@ -74,7 +86,7 @@ export function leaseTtlSeconds(tickMs: number): number {
 }
 
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason | 'cli_version' }
+  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason | 'cli_version' | 'draining' }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
@@ -89,13 +101,16 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   deps.alert.forget(`lease:${deps.leaseHolder}`);
   await watchStuckCards(deps);
   const halted = haltReason() !== null;
+  // Draining claims no card and starts no job; the cards and the job already running carry on, and
+  // the heartbeat, the ping and the outbound lane go on until main exits.
+  const draining = deps.drainAt != null && deps.now().getTime() >= deps.drainAt.getTime();
   if (!halted) await dealAndResume(deps);
   let outcome: TickOutcome;
   try {
-    outcome = halted ? { action: 'sleep', reason: 'halted' } : await evaluate(deps);
+    outcome = halted ? { action: 'sleep', reason: 'halted' } : draining ? { action: 'sleep', reason: 'draining' } : await evaluate(deps);
   } finally {
-    // A sleeping or failed card path never skips the job queue.
-    if (!halted) await runJobs(deps);
+    // A sleeping or failed card path never skips the job queue; a draining one starts no job.
+    if (!halted && !draining) await runJobs(deps);
   }
   await heartbeat(deps);
   if (!halted) await deps.alert.ping();

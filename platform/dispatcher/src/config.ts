@@ -53,6 +53,9 @@ export interface DispatcherConfig {
   discordWebhookWeekly: string | null;
   // The public site's origin, which the posts link to.
   publicSiteUrl: string;
+  // DISPATCHER_DRAIN_AT: from this time the tick claims no new card or job, and the process exits 0
+  // once nothing it started is still running (docs/specs/actions-host.md). Null or absent: never.
+  drainAt?: Date | null;
 }
 
 export interface ManagedConfig {
@@ -140,6 +143,18 @@ export function publicSiteUrlEnv(env: Env): string {
     throw new ConfigError('PUBLIC_SITE_URL must be an https origin');
   }
   return url.origin;
+}
+
+// An ISO 8601 time with its zone (Z or an offset), as `date -u +%Y-%m-%dT%H:%M:%SZ` writes it; unset or
+// blank is null. A time without a zone would be read in the host's own, so it is refused.
+const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+export function drainAtEnv(env: Env): Date | null {
+  const value = env.DISPATCHER_DRAIN_AT?.trim();
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!ISO_WITH_ZONE.test(value) || !Number.isFinite(time)) throw new ConfigError('DISPATCHER_DRAIN_AT must be an ISO 8601 time with its zone, such as 2026-01-01T05:00:00Z');
+  return new Date(time);
 }
 
 export function agentModeEnv(env: Env): AgentMode {
@@ -308,5 +323,6 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     discordWebhookShips: discordWebhookEnv(env, 'DISCORD_WEBHOOK_SHIPS'),
     discordWebhookWeekly: discordWebhookEnv(env, 'DISCORD_WEBHOOK_WEEKLY'),
     publicSiteUrl: publicSiteUrlEnv(env),
+    drainAt: drainAtEnv(env),
   };
 }

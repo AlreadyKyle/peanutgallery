@@ -4,7 +4,7 @@ import { SessionBudgets } from '../src/budgets.js';
 import { haltDispatcher, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
 import { stuckAfterMs } from '../src/pipeline.js';
-import { leaseTtlSeconds, tick, type TickDeps } from '../src/tick.js';
+import { drainState, leaseTtlSeconds, tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
 
@@ -596,5 +596,44 @@ describe('tick', () => {
     };
     expect(await tick(deps(db, [], { mainGate }))).toEqual({ action: 'sleep', reason: 'main_unreadable' });
     expect(db.claims).toBe(0);
+  });
+});
+
+// docs/specs/actions-host.md: from the drain time no card or job is claimed, and the process is
+// drained once nothing it started is still running.
+describe('tick: draining', () => {
+  const before = new Date(NOW.getTime() + 60_000);
+  const after = new Date(NOW.getTime() - 60_000);
+
+  it('claims as usual before the drain time, or with none', async () => {
+    for (const drainAt of [undefined, null, before]) {
+      const db = new FakeDb();
+      db.cards = [card()];
+      expect(await tick(deps(db, [], { drainAt }))).toEqual({ action: 'started', cardId: card().id });
+    }
+  });
+
+  it('claims no card and starts no job from the drain time, and still deals and writes the heartbeat', async () => {
+    for (const drainAt of [NOW, after]) {
+      const db = new FakeDb();
+      db.cards = [card()];
+      let jobTicks = 0;
+      const started: string[] = [];
+      expect(await tick(deps(db, started, { drainAt, jobTick: async () => void (jobTicks += 1) }))).toEqual({ action: 'sleep', reason: 'draining' });
+      expect(started).toEqual([]);
+      expect(db.claims).toBe(0);
+      expect(jobTicks).toBe(0);
+      expect(db.dealCalls).toBe(1);
+      expect(db.heartbeats).toHaveLength(1);
+    }
+  });
+
+  it('is off before the drain time, draining while a card or a job runs, and drained once neither does', () => {
+    expect(drainState(null, NOW, 1, true)).toBe('off');
+    expect(drainState(undefined, NOW, 0, false)).toBe('off');
+    expect(drainState(before, NOW, 0, false)).toBe('off');
+    expect(drainState(NOW, NOW, 1, false)).toBe('draining');
+    expect(drainState(after, NOW, 0, true)).toBe('draining');
+    expect(drainState(after, NOW, 0, false)).toBe('drained');
   });
 });
