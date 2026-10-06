@@ -1669,7 +1669,7 @@ describe('the GitHub Actions host', () => {
     assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
     assert.deepEqual(workflow.on.schedule, [{ cron: '*/30 * * * *' }]);
     assert.deepEqual(workflow.concurrency, { group: 'dispatcher', 'cancel-in-progress': false });
-    assert.match(job.if, /github\.ref == 'refs\/heads\/main'/);
+    assert.equal(job.if, "github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery' && vars.DISPATCHER_HOST == 'on'");
     assert.doesNotMatch(text, /pull_request|workflow_run/);
   });
 

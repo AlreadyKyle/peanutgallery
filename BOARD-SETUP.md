@@ -154,7 +154,7 @@ More detail: Reference 23. I drive and prompt you at each point. You do four thi
    the test alert reached your phone.
 4. **Resume.**
 
-Then a 24-hour soak: Mac plugged in, lid open, logged in.
+Then a 24-hour soak on GitHub Actions; your Mac can sleep.
 
 **Reply:** "ready for the cutover."
 
@@ -915,29 +915,30 @@ next payout's purchase clears it.
 #### 23. Cutover and soak (about twenty minutes with me, then a day)
 
 I prompt you at each point. Only one dispatcher ever runs: the dispatcher lease guarantees it, and
-from here the attended dispatcher is not started while the host runs. The runbook is
-`platform/ops/README.md`, The Mac host.
+from here the attended dispatcher is not started while the host runs. The host is GitHub Actions in
+this repository (`docs/PLAN.md` §10 decision 61); the runbook is `platform/ops/README.md`, The GitHub
+Actions host, whose Set it up steps (the environment `dispatcher`, its secret and the age variable)
+run first, with your allow.
 
 1. You: **Pause** on the board's site.
 2. Me: stop the attended dispatcher and confirm no dispatcher process is left.
 3. Me: create or update the managed agent and environment with the studio key and quote their ids;
-   write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only), move the
-   jobs' copy of main from step 3 aside, and run `platform/ops/mac/install.sh` twice. The second run
-   must print `install: done: 0 change(s)`.
+   write the host's env file with `platform/ops/make-dispatcher-env.sh` (key names only) and set it
+   as the environment secret `DISPATCHER_ENV`.
 4. You: set the agent mode to **unattended** on the board's site (second factor).
-5. Me: the toolchain check from the host's code clone, quoting `PASS: toolchain`.
-6. Me: `platform/ops/mac/install.sh --start`, which starts the dispatcher under launchd and waits
-   for its `startup probe passed` line; I quote it. The probe is a small Managed Agents session,
-   billed as overhead from the studio share.
+5. Me: the toolchain check, quoting `PASS: toolchain`.
+6. Me: switch the host on (`DISPATCHER_HOST=on`) and start the first run with `gh workflow run`,
+   quoting its `code root is read-only`, `containment verified` and `startup probe passed` lines. The
+   probe is a small Managed Agents session, billed as overhead from the studio share.
 7. You: confirm the board's site shows the dispatcher seen under 3 minutes ago, and healthchecks.io is green.
-8. Me: post a test alert to ntfy from the host. You: confirm it arrived on your phone.
+8. Me: post a test alert to ntfy. You: confirm it arrived on your phone.
 9. You: **Resume**.
-10. Me: a restart test (`launchctl kickstart -k`), a kill test (the dispatcher killed outright is
-    restarted by launchd after 30 seconds, then waits up to 5 minutes for the dead process's lease to
-    run out before it ticks again, so a healthchecks.io email during this test is expected), and
-    then you log out and back in, or restart and log in: it comes back with no command. Then I stop it and we wait out the grace so healthchecks emails you,
-    which proves the alert path. I start it again.
-11. A 24-hour soak with the lid open, no restart loop and no unexpected alert. I quote the results.
+10. Me: a restart test (the run cancelled and a new one started, which may wait up to 5 minutes for
+    the old run's lease to run out, so a healthchecks.io email during this test is expected). Then I
+    switch the host off and we wait out the grace so healthchecks emails you, which proves the alert
+    path. I switch it on and start it again.
+11. A 24-hour soak: each run drains and starts the next, with no failed run and no unexpected alert.
+    I quote the run list.
 
 Then the first player-funded card builds with nobody at the keyboard, billed to the studio, which
 closes live criterion 2.

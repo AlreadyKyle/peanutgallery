@@ -2,7 +2,7 @@
 
 The dispatcher runs unattended on a small Ubuntu server in a Docker container under systemd, on the studio's Anthropic key (`docs/specs/vps.md`). Each card's agent runs as a Claude Managed Agents session in a container Anthropic hosts (`docs/specs/launch-managed.md`): the VPS holds the session's event stream, meters it, applies the patch the agent hands back, and drives the gate, merge and deploy. No agent-written code runs on the VPS. This page is how the board provisions it, cuts over from the Mac, deploys, rotates keys, reads logs, pauses and rolls back.
 
-**Until the studio has a server, the host is the board's Mac** (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`): the dispatcher and the daily jobs run there under launchd, and [The Mac host](#the-mac-host) at the end of this page is its runbook. Oracle is dropped. The server sections are kept for whatever host the studio moves to, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts (the instance launcher, idle reclaim, the bucket and its pre-authenticated requests) are kept for the record and are not run.
+**The host is GitHub Actions** (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`): since 6 October 2026 the repository is public, its Actions minutes are free, and the dispatcher runs there one run of up to about six hours after another; [The GitHub Actions host](#the-github-actions-host) is its runbook. The daily jobs run on Actions in the board's private repository AlreadyKyle/mobmachine-ops (`ops-repo/README.md`). The board's Mac host is retired and its LaunchAgents are removed; [The Mac host](#the-mac-host) is kept for the record, and `backup-mac.sh` is the backup the ops repository runs. The server sections are kept for a paid always-on host once player money pays the overhead, which reuses this Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac); the Oracle-specific parts are kept for the record and are not run.
 
 ## What runs where
 
@@ -34,7 +34,8 @@ The dispatcher runs unattended on a small Ubuntu server in a Docker container un
 | `jobs/main.mjs`, `peanutgallery-controller.service`, `.timer` | the VPS, in the image, as nobody | the Controller: the daily reconciliation with Stripe |
 | `jobs/main.mjs`, `peanutgallery-quota.service`, `.timer` | the VPS, in the image, as nobody | the quota check: database size and Actions minutes |
 | `peanutgallery-job-alert@.service` | the VPS | posts to ntfy when a job fails |
-| `backups-repo/` | a separate private repository | the weekly fallback backup's workflow template |
+| `actions/run-dispatcher.sh`, `.github/workflows/dispatcher.yml` | GitHub Actions, this repository | the dispatcher's host (The GitHub Actions host, below) |
+| `ops-repo/` | the private repository AlreadyKyle/mobmachine-ops | the daily jobs' workflow template and its README |
 | `after-restore.sql` | the Mac, on a restored copy | what the migrations make outside the dumped schemas: the sign-in trigger, Realtime's tables, the backup login's reads and the pg_cron jobs |
 
 ## Operator inputs
@@ -328,7 +329,109 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
 
 Production's migrations were applied through the Management API query endpoint, which records nothing in `supabase_migrations.schema_migrations`. Once, with the board's allow, `npx supabase@2.117.0 migration repair --status applied <each applied version> --linked` (after `npx supabase link --project-ref lyxndueoeisyqzewflpu`) records every applied file, and `npx supabase migration list --linked` must then show local and remote in step. Later migrations can then go through `supabase db push`. The nightly dump carries the history (`history_schema.sql`, `history_data.sql`), so a restore keeps it.
 
+## The GitHub Actions host
+
+Since 6 October 2026 the repository is public, so standard GitHub-hosted runners are free in it, and the dispatcher runs there (`docs/PLAN.md` §10 decision 61, `docs/specs/actions-host.md`). A run lasts at most 355 minutes, so the host is a chain of runs: `.github/workflows/dispatcher.yml` runs `platform/ops/actions/run-dispatcher.sh`, which runs the dispatcher with `DISPATCHER_DRAIN_AT` set 300 minutes after the run started. From then the dispatcher claims no card and starts no job, and it exits 0 once nothing it started is still running; the run then starts the next one with `gh workflow run`. At 350 minutes a card still running gets SIGTERM, which interrupts, meters and archives its session, and the next start's recovery pauses it. A schedule every 30 minutes is the backstop, and the concurrency group `dispatcher` keeps one run at a time with at most one waiting; the dispatcher lease keeps a second process from ticking in any case.
+
+### What runs where
+
+| Path on the runner | Holds |
+|---|---|
+| `$GITHUB_WORKSPACE` | the code clone: the checkout of main at the run's sha, with no credential kept, its `node_modules` installed by a step that holds no secret, and the `.env` the dispatcher reads. `chmod -R a-w` before the dispatcher starts, so `DISPATCHER_CODE_READONLY=required` passes. |
+| `$RUNNER_TEMP/host/work` | the work clone (`DISPATCHER_REPO_ROOT`): a fresh clone of main, made with the env file's `GITHUB_TOKEN` through a one-off header, never on a command line or in `.git/config`. |
+| `$RUNNER_TEMP/host/work-worktrees` | card worktrees (`DISPATCHER_WORKTREE_ROOT`). |
+| `$RUNNER_TEMP/host/env/dispatcher.env` | the env file, 0600, written from the environment secret `DISPATCHER_ENV` and checked with `provision.sh`'s `check_env_lines`. |
+| `$RUNNER_TEMP/host/logs/dispatcher.log` | the dispatcher's output, encrypted with age before it leaves the runner. |
+
+Each run is a fresh virtual machine, so nothing carries over between runs but the database, GitHub and the Managed Agents organisation: the work clone and the worktrees are made again, and a card a run left mid-flight is recovered by the next start as after any restart.
+
+**Secrets and the public log.** The job runs in the GitHub environment `dispatcher`, which only main may deploy to, so a card branch, a pull request or a fork never receives `DISPATCHER_ENV`; the job also runs only on main in this repository and only while the repository variable `DISPATCHER_HOST` is `on`. Only the step that runs the dispatcher and the alert step read the secret, every value of eight characters or more in it is masked, and the token the job holds can read the repository and start a workflow run, nothing else. Actions logs of a public repository are public, so the dispatcher's output never reaches the run's log: the log shows the script's own lines and, for a fixed list of lifecycle messages, the message alone (`dispatcher: code root is read-only`, `dispatcher: containment verified`, `dispatcher: startup probe passed`, `dispatcher: dispatcher drained` and so on). The full log is encrypted to `vars.BACKUP_AGE_RECIPIENT`, the board's age public key, and kept as the run's artifact `dispatcher-log-<run id>-<attempt>` for 14 days; with no recipient set the log is deleted, not uploaded.
+
+**Exits.** Exit 78, or a failed check in the script (no `DISPATCHER_ENV`, an env file `check_env_lines` refuses, a dotenv that misreads a line, a checkout still writable), is fatal: ntfy hears "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error", the run fails, and it does not start the next one. The 30-minute schedule tries again and fails the same way until the cause is fixed, so fix it or switch the host off. A drain, a hard stop, or any run of 10 minutes or more starts the next run at once; a shorter failed run posts to ntfy and waits for the schedule, which is the restart delay.
+
+### Set it up (the operator, once)
+
+Each step is a command from the board's checkout of main. Nothing here sets a value into the repository's files.
+
+1. **The environment.** Create `dispatcher` with a deployment branch policy that allows main alone:
+   ```sh
+   gh api -X PUT repos/AlreadyKyle/peanutgallery/environments/dispatcher \
+     -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true'
+   gh api -X POST repos/AlreadyKyle/peanutgallery/environments/dispatcher/deployment-branch-policies -f name=main -f type=branch
+   gh api repos/AlreadyKyle/peanutgallery/environments/dispatcher/deployment-branch-policies --jq '.branch_policies[].name'
+   ```
+   The last line must print `main` and nothing else.
+2. **The env file.** With the managed agent's ids in `.env` (The cutover, step 3, below) and `VPS_GITHUB_TOKEN`, `GITHUB_READ_TOKEN`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL` exported from `.env.vps`: `platform/ops/make-dispatcher-env.sh "$HOME/dispatcher.env"`. It writes the server's format, which `run-dispatcher.sh` checks with `check_env_lines` at every start.
+3. **The secret.** `gh secret set DISPATCHER_ENV --env dispatcher --repo AlreadyKyle/peanutgallery < "$HOME/dispatcher.env"`, then `rm "$HOME/dispatcher.env"`. GitHub never shows it again; to change a key, write the file and set the secret again.
+4. **The variables.** `gh variable set BACKUP_AGE_RECIPIENT --repo AlreadyKyle/peanutgallery --body '<the age1... public key>'` (the backup key's public half; it is public). `DISPATCHER_HOST` stays unset until the cutover.
+5. **The healthchecks.io check.** Give the dispatcher's check a grace of at least 15 minutes, so the minute or two between one run and the next never alerts.
+
+### The cutover on GitHub Actions
+
+`BOARD-SETUP.md` step 23, in place of The cutover on the Mac. Only one dispatcher ever ticks: the lease guarantees it, and the attended dispatcher must not run while the host runs.
+
+1. **Pause** from /board.
+2. **Stop the attended dispatcher** (Ctrl-C in its terminal) and confirm `pgrep -fl 'src/main.ts'` prints nothing. The Mac's LaunchAgents are already removed (`platform/ops/mac/uninstall.sh`).
+3. **The managed agent and environment:** `pnpm --filter @backseat/dispatcher managed:apply` in the board's checkout; put the printed ids in `.env`, then write the env file and set the secret again (Set it up, steps 2 and 3).
+4. **Set the agent mode to unattended** at /board (second factor).
+5. **The toolchain check,** once, from the board's checkout of main, with the env file written again as in step 2 (its values come before `.env`'s, which dotenv never overrides):
+   ```sh
+   cd platform/dispatcher && node --env-file="$HOME/dispatcher.env" --import tsx src/probe.ts --toolchain; cd -
+   rm "$HOME/dispatcher.env"
+   ```
+   The first line must read `PASS: toolchain`. A `FAIL:` stops the cutover here.
+6. **Switch the host on and start it:**
+   ```sh
+   gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body on
+   gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/peanutgallery
+   gh run watch "$(gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 1 --json databaseId --jq '.[0].databaseId')" --repo AlreadyKyle/peanutgallery
+   ```
+   Stop watching once the step "Run the dispatcher" shows them, and quote these lines from the run's log: `actions-host: the code clone is read-only`, `dispatcher: code root is read-only`, `dispatcher: containment verified` and `dispatcher: startup probe passed`. `gh run view <run id> --log --repo AlreadyKyle/peanutgallery | grep -E 'actions-host:|dispatcher:'` prints them.
+7. **Heartbeat.** /board shows the dispatcher seen under 3 minutes ago; the healthchecks.io check is green.
+8. **The alert path:** `curl -fsS -H 'Title: Mob Machine test' -d "Test alert from the Actions host" "$NTFY_TOPIC_URL"` with the value from `.env.vps`; the board's phone shows it.
+9. **Resume** from /board.
+10. **Restart check.** `gh run cancel <run id> --repo AlreadyKyle/peanutgallery`, then `gh workflow run dispatcher.yml --ref main --repo AlreadyKyle/peanutgallery`; as the service role, `select paused, dispatcher_seen_at from studio_state`: `paused` is still false and `dispatcher_seen_at` moves within 5 minutes of the new run starting. A cancelled run starts no next run.
+11. **Liveness alert.** `gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off`, cancel the run, and wait out the check's grace: healthchecks.io emails the board. Set it `on` again and start a run as in step 6.
+12. **Soak for 24 hours**, across at least four drains: `gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 10` shows each run succeeding and the next starting within minutes, each run's log ends with `dispatcher: dispatcher drained`, and no unexpected alert arrives. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
+
+### Deploy an update
+
+Every run checks out main at its own start, so a merge reaches the host at the next run, at most about five hours later. To deploy at once: pause from /board and let any building card finish, `gh run cancel <run id>`, `gh workflow run dispatcher.yml --ref main`, and check the probe lines as in the cutover's step 6; resume. When the merge changes `platform/ops`, move the ops repository's `STUDIO_REF` to the new main sha after reviewing its `platform/ops` diff (`ops-repo/README.md`).
+
+### Roll back
+
+There is no `--ref` on this host: runs start from main only, which the environment enforces. Pause, revert the change on main with a pull request (gate green), then deploy as above. Resume.
+
+### Rotate a key
+
+Pause from /board. Write the env file again with `make-dispatcher-env.sh`, `gh secret set DISPATCHER_ENV --env dispatcher` from it, delete the file, then cancel the run and start one; check `startup probe passed` and the heartbeat. Resume, and only then revoke the old key.
+
+### Read logs
+
+```sh
+gh run list --workflow dispatcher.yml --repo AlreadyKyle/peanutgallery --limit 10
+gh run view <run id> --log --repo AlreadyKyle/peanutgallery | grep -E 'actions-host:|dispatcher:'   # the public lifecycle lines
+gh run download <run id> --repo AlreadyKyle/peanutgallery --name dispatcher-log-<run id>-1 --dir dispatcher-log
+age -d -i <path to the backup key> dispatcher-log/dispatcher-log.age | grep -v '"level":"info"' | tail -n 50
+```
+
+The full log needs the board's offline age key, the same one that opens a backup. Delete the decrypted copy afterwards.
+
+### Stop the host
+
+`gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off`, then `gh run cancel <run id>` for a run in progress (`gh run list --workflow dispatcher.yml --status in_progress`). No run starts while it is off: the schedule and a re-dispatch both skip the job.
+
+### What is weaker than a server
+
+- **Gaps between runs.** Each handover leaves a minute or two with no dispatcher, and a card claimed shortly before a drain may still be running at the hard stop, where it is interrupted and paused for the board to resume. Ticks resume with the next run.
+- **GitHub decides when a run starts.** A scheduled run can start late or be dropped under load, GitHub disables the schedule of a public repository after 60 days with no activity in it, and an Actions outage stops the host. healthchecks.io alerts on all of them.
+- **The secret is in GitHub.** Anyone who can change the environment's branch policy, or push to main, can reach `DISPATCHER_ENV`; on a server only root could. Branch protection on main is not set yet.
+- **Every merge to main deploys itself.** On a server or the Mac a deploy needed the gate green and the board's confirmed sha; here the next run runs whatever main holds. What stands between a card and the dispatcher's own code is the kernel paths: no card may change `.github`, `platform/dispatcher`, `platform/ops`, the lockfile or the workspace files (`platform/gate/kernel-paths.txt`), so only a board pull request changes what this host runs.
+- **The code clone is read-only by its mode bits,** as on the Mac: the runner's user could `chmod` it back. No agent-written code runs on the runner, which is what makes this enough.
+
 ## The Mac host
+
+Retired on 6 October 2026 (`docs/PLAN.md` §10 decision 61): the dispatcher runs on GitHub Actions ([The GitHub Actions host](#the-github-actions-host)) and the daily jobs in the private ops repository (`ops-repo/README.md`), and the Mac's LaunchAgents were removed with `uninstall.sh`. This section is kept for the record; `backup-mac.sh` and the restore steps below are still the ones the backups use.
 
 Until the studio has a server, the dispatcher runs unattended on the board's Mac, a MacBook Pro on Apple Silicon kept plugged in, under launchd (`docs/PLAN.md` §10 decision 38, `docs/specs/mac-host.md`). The daily jobs run there too. It keeps the server's rules where a single-user Mac can: the dispatcher runs from a code clone it cannot write, git state lives in a separate work clone, card worktrees sit outside both, every git call runs with hooks and fsmonitor off, a deploy needs the gate green and the board's confirmed sha, and no agent-written code runs on the Mac at all (card sessions are Managed Agents sessions). What is weaker is at the end of this section.
 

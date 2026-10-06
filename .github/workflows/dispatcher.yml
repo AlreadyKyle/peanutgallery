@@ -28,7 +28,9 @@ concurrency:
 jobs:
   dispatcher:
     name: dispatcher
-    if: github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery'
+    # The repository variable DISPATCHER_HOST is the host's switch: the cutover sets it to on, and
+    # stopping the host sets it to off. Until then no run starts, so merging this file starts nothing.
+    if: github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery' && vars.DISPATCHER_HOST == 'on'
     runs-on: ubuntu-24.04
     environment: dispatcher
     timeout-minutes: 355

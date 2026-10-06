@@ -411,8 +411,8 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: later
 - rank: 39
-- summary: Move the studio's card runner off the board's laptop, so it keeps working when the laptop sleeps.
-- intent: Move the dispatcher and the daily jobs (the backup, the Controller and the quota check) off the board's Mac onto a free Google Cloud Compute Engine e2-micro, under the billing account the board opened on 5 October 2026 (docs/PLAN.md §10 decision 60), reusing the Ubuntu provisioning in platform/ops. It stays inside the Always Free limits behind the board's budget alert, so it costs nothing; anything that would bill is out. The e2-micro has 1 GB of memory, so the container's limit drops with it, and the server's backup store is still to be chosen. Until it is built the Mac is the host. It is not built yet.
+- summary: Give the studio's card runner an always-on paid host once player money pays the overhead, in place of back-to-back GitHub Actions runs.
+- intent: The first step is done: since 6 October 2026 the dispatcher runs on GitHub Actions in the public studio repository, one run of up to about six hours after another, and the daily jobs run in the board's private ops repository (docs/PLAN.md §10 decision 61, docs/specs/actions-host.md); the Mac is retired and the Google Cloud e2-micro was rejected because its public IPv4 address bills $0.005 an hour. What is left is the paid upgrade, once player money pays the studio's overhead (decision 35 holds until then): Cloudflare Containers at $5 a month, or the Google Cloud e2-micro at about $3.65 a month for its address, either running the dispatcher continuously with no drain and no gap between runs, the e2-micro reusing the Ubuntu provisioning in platform/ops. It is not built yet.
 - board: yes
 
 ### Split slider on the site, in place of the checkout dropdown
@@ -512,4 +512,22 @@ everything else, in the order the board would take it.
 - rank: 50
 - summary: Frozen cards replayed through the builders, with the gate as the grader, so a change to a builder's prompt is checked before it merges.
 - intent: The replay eval set covers the Game Designer and the Game Director today. A builder set would freeze funded cards with their acceptance tests and replay them through Builder A, Builder B, QA and the Platform Builder in scratch worktrees, the gate and the card's check lines grading each run, pass^k against a baseline. It waits on launch, since the first real cards are its cases, and HR waits on it. It is not built yet.
+- board: yes
+
+### Weekly restore check on Actions
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 51
+- summary: Restore the nightly backup into a scratch database once a week, so a backup that cannot be restored is found before it is needed.
+- intent: The nightly backup runs in the board's private ops repository on GitHub Actions since 6 October 2026 (docs/PLAN.md §10 decision 61, platform/ops/ops-repo/README.md) and is kept as an artifact for 90 days, but nothing restores it: the server's weekly restore check needed Supabase's Postgres image in Docker, and the Mac had only the drill by hand. A weekly job in the ops repository would start Supabase's Postgres image as a service container on the runner, restore the newest backup into it with the board's age key held as that repository's secret, run platform/ops/after-restore.sql, read public.ledger_identity() and fail unless holds is true and it matches identity.json, posting to ntfy on a failure. The decryption key on a runner is a choice for the board. It is not built yet.
+- board: yes
+
+### Actions minutes in the quota check
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 52
+- summary: Make the daily quota check read the account's GitHub Actions minutes again.
+- intent: The quota job reports the database size, and its Actions minutes line says the billing usage could not be read, on the Mac and on Actions alike (platform/ops/jobs/main.mjs quota). The dispatcher's runs are free in the public studio repository, but the daily jobs in the private ops repository draw on the account's included minutes, so the check should read them through GitHub's current billing usage API with a token that has the permission it needs, and alert before they run out. It is not built yet.
 - board: yes

@@ -2,7 +2,7 @@
 
 Status: built. Card: none. Owner: board.
 
-Superseded by `mac-host.md` for now: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), and the dispatcher runs unattended on the board's Mac until the studio has a server. This spec and its scripts are kept: whatever host the studio moves to reuses the Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac).
+Superseded by `actions-host.md`: the board dropped Oracle on 23 September 2026 (PLAN.md §10 decision 38), then retired the Mac host and rejected the Google Cloud e2-micro on 6 October 2026 (decision 61); the dispatcher runs on GitHub Actions. This spec and its scripts are kept: a paid always-on host, once player money pays the overhead, reuses the Ubuntu provisioning (`docs/BACKLOG.md`, Move the dispatcher off the Mac).
 
 ## Problem
 
