@@ -80,7 +80,7 @@ export const copy = {
   // The one polite announcer's words.
   announceFunded: '{title} is fully funded.',
   announceShipped: '{title} is live.',
-  sources: { board: 'Board', community: 'Community', agent: 'Agent' },
+  sources: { board: 'Filed by the board', community: 'Suggested by the community', agent: 'Drafted by an agent' },
 
   howItWorksPage: {
     title: 'How it works',

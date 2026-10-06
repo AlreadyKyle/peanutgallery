@@ -782,7 +782,8 @@ describe('Board card controls', () => {
     await flush();
     const form = cardForm('Open now');
     expect(form.queryByLabelText('Funding target (USD)')).toBeNull();
-    expect(form.getByText('A card with money on its bar stays on now; reject it instead.')).toBeTruthy();
+    expect(form.queryByText('A card with money on its bar stays on now; reject it instead.')).toBeNull();
+    expect(form.getByText('Open for funding. Veto it or move it to next to take it off now, or reject it.')).toBeTruthy();
     fireEvent.change(form.getByLabelText('Rank'), { target: { value: '1' } });
     fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First in line.' } });
     fireEvent.click(form.getByRole('button', { name: 'Move card' }));

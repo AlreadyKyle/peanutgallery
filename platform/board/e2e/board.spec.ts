@@ -445,6 +445,11 @@ test('at the second factor the board sees and vetoes an undealt agent card, paus
   await expect(card).toBeVisible();
   await expect(card.getByText('Written by an agent; its approval is current.')).toBeVisible();
   await expect(card.getByText(/^Waiting to be dealt: moves to now at /)).toBeVisible();
+  // docs/specs/simple-board.md: the row says what the board can do with it, and the jump link reaches Cards.
+  await expect(card.getByText('New from the agents: it opens for funding when its cooling window ends, unless you veto it.')).toBeVisible();
+  await page.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Cards' }).click();
+  await expect(page).toHaveURL(/#cards$/);
+  await expect(page.getByRole('heading', { level: 2, name: 'Cards' })).toBeInViewport();
   await card.getByLabel('Reason').fill('Not this week');
   await card.getByRole('button', { name: 'Veto card' }).click();
   await expect(card.getByRole('status')).toHaveText('Card vetoed.');

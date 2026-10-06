@@ -1145,7 +1145,7 @@ function CardControl({
           </label>
         ) : null}
         {settableTarget ? <p id={`${idBase}-target`}>Needed to move the card to now.</p> : null}
-        {movable && card.horizon === 'now' ? <p>A card with money on its bar stays on now; reject it instead.</p> : null}
+        {movable && card.horizon === 'now' && card.funded_usd > 0 ? <p>A card with money on its bar stays on now; reject it instead.</p> : null}
         {movable ? null : <p>A {STAGE_WORDS[card.stage] ?? card.stage} card can only be rejected{card.stage === 'paused' ? ' or resumed' : ''}.</p>}
         {card.stage === 'paused' ? (
           <label>
