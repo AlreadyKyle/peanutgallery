@@ -2469,3 +2469,33 @@ describe("agent-upkeep migration", () => {
     expect(script).toContain("relation: `public_roles(${PUBLIC_ROLE_CODE_COLUMNS})`,");
   });
 });
+
+// launch-stamp (docs/PLAN.md §10 decision 62): no Go live button; the first credit purchase stamps
+// launched_at. The trigger function is no RPC, revoked from anon like studio_pause_reason, and
+// anon-negative-test keeps credit_purchases private.
+describe("launch-stamp migration", () => {
+  const stamp = withoutComments(readFileSync(resolve(MIGRATIONS_DIR, "20261006000000_launch_stamp.sql"), "utf8"));
+
+  it("stamps launched_at after an insert on credit_purchases, only while it is null", () => {
+    expect(stamp).toContain("create or replace function public.stamp_launched_at() returns trigger");
+    expect(stamp).toContain("create trigger credit_purchases_stamp_launched_at after insert on public.credit_purchases\n  for each row execute function public.stamp_launched_at();");
+    expect(stamp).toContain("set launched_at = now()\n  where id = 1 and launched_at is null;");
+    expect(stamp).not.toMatch(/security definer/);
+  });
+
+  it("keeps set_launched and every other object: it drops nothing and grants nothing to anon", () => {
+    expect(stamp).not.toMatch(/\bdrop function\b/);
+    expect(stamp).not.toMatch(/grant [^;]* to [^;]*\banon\b/);
+    expect(stamp).toContain("revoke all on function public.stamp_launched_at() from public, anon, authenticated;");
+  });
+
+  it("backfills only a null launched_at, from the first purchase", () => {
+    expect(stamp).toContain("set launched_at = (select min(created_at) from public.credit_purchases)\nwhere id = 1\n  and launched_at is null");
+  });
+
+  it("is covered by anon-negative-test: credit_purchases stays a private table", () => {
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const start = script.indexOf("const PRIVATE_TABLES");
+    expect(script.slice(start, script.indexOf("];", start))).toContain('"credit_purchases"');
+  });
+});

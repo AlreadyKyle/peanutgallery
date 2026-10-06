@@ -275,6 +275,7 @@ Deno.test("migrations on PGlite", {
         "20260925200000_design_review.sql",
         "20260925300000_agent_upkeep.sql",
         "20260925400000_board_work.sql",
+        "20261006000000_launch_stamp.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4095,6 +4096,7 @@ Deno.test("migrations on PGlite", {
             "restrict_auth_users_to_board",
             "set_live_at",
             "set_updated_at",
+            "stamp_launched_at",
             "studio_pause_reason",
           ].sort(),
         );
@@ -4127,7 +4129,7 @@ Deno.test("migrations on PGlite", {
         const invoker = await rows<{ proname: string }>(
           `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and not p.prosecdef order by 1`,
         );
-        assertEquals(invoker.map((p) => p.proname), ["event_line_key", "producer_signals", "refuse_money_change", "schema_fingerprint", "set_live_at", "set_updated_at", "site_card", "site_cards", "site_live", "studio_pause_reason", "terms_version_at"]);
+        assertEquals(invoker.map((p) => p.proname), ["event_line_key", "producer_signals", "refuse_money_change", "schema_fingerprint", "set_live_at", "set_updated_at", "site_card", "site_cards", "site_live", "stamp_launched_at", "studio_pause_reason", "terms_version_at"]);
       },
     );
 

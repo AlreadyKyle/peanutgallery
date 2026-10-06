@@ -877,6 +877,77 @@ Deno.test("supporter numbers", OPTS, async () => {
   }
 });
 
+// launch-stamp (docs/PLAN.md §10 decision 62): no Go live button. The first credit purchase stamps
+// studio_state.launched_at, so a supporter is founding when they paid before the studio bought its
+// first agent credit; a later purchase never moves the stamp, and set_launched's stamp is kept.
+const LAUNCH_STAMP = "20261006000000_launch_stamp.sql";
+const BUY = `insert into public.credit_purchases (amount_usd, reason, created_by) values ($1, 'Credit', 'board@mobmachine.games')`;
+
+Deno.test("the launch stamp", OPTS, async (t) => {
+  await t.step("the first credit purchase stamps launched_at once, and founding follows it", async () => {
+    const s = await studio();
+    try {
+      const launched = async () => (await s.row<{ t: Date | null }>(`select launched_at as t from public.studio_state where id = 1`)).t;
+      assertEquals(await launched(), null);
+      const before = await s.pay("sa", 1, null, { contributor: "contrib_a" });
+      assertEquals(before.founding, true);
+      await s.asRole("service_role", () => s.db.query(BUY, [10]));
+      const first = await launched();
+      assert(first instanceof Date, "the first purchase stamps launched_at");
+      await s.db.exec(`update public.studio_state set launched_at = launched_at - interval '1 day' where id = 1`);
+      const moved = (await launched())!.getTime();
+      await s.asRole("service_role", () => s.db.query(BUY, [5]));
+      assertEquals((await launched())!.getTime(), moved, "a later purchase never moves the stamp");
+      const after = await s.pay("sb", 1, null, { contributor: "contrib_b", created: new Date().toISOString() });
+      assertEquals([after.supporter_number, after.founding], [2, false]);
+      // The board's own path stamps too: record_credit_purchase inserts the row.
+      const t2 = await studio();
+      try {
+        await t2.signInAs(BOARD_EMAIL, "aal2");
+        await t2.db.query(`select public.record_credit_purchase(40, null, 'First credit')`);
+        await t2.signInAs(null);
+        assert((await t2.row<{ t: Date | null }>(`select launched_at as t from public.studio_state where id = 1`)).t instanceof Date);
+      } finally {
+        await t2.close();
+      }
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("set_launched's stamp is kept, and the trigger function is no RPC for anon or authenticated", async () => {
+    const s = await studio();
+    try {
+      await s.db.exec(`update public.studio_state set launched_at = timestamptz '2026-09-30T00:00:00Z' where id = 1`);
+      await s.asRole("service_role", () => s.db.query(BUY, [10]));
+      assertEquals((await s.row<{ t: Date }>(`select launched_at as t from public.studio_state where id = 1`)).t.toISOString(), "2026-09-30T00:00:00.000Z");
+      const grants = await s.row<{ anon: boolean; authenticated: boolean; definer: boolean }>(
+        `select has_function_privilege('anon', 'public.stamp_launched_at()', 'execute') as anon,
+                has_function_privilege('authenticated', 'public.stamp_launched_at()', 'execute') as authenticated,
+                (select prosecdef from pg_proc where proname = 'stamp_launched_at') as definer`,
+      );
+      assertEquals(grants, { anon: false, authenticated: false, definer: false });
+      await s.asRole("anon", () => s.refuses(BUY.replace("$1", "1"), "permission denied"));
+    } finally {
+      await s.close();
+    }
+  });
+
+  await t.step("a purchase recorded before the file backfills launched_at to its time, and a second apply changes nothing", async () => {
+    const s = await studio({ upTo: LAUNCH_STAMP });
+    try {
+      await s.asRole("service_role", () => s.db.query(`insert into public.credit_purchases (amount_usd, reason, created_by, created_at) values (10, 'Credit', 'board', timestamptz '2026-10-01T12:00:00Z')`));
+      assertEquals((await s.row<{ t: Date | null }>(`select launched_at as t from public.studio_state where id = 1`)).t, null);
+      const file = (await readMigrations()).find((m) => m.name === LAUNCH_STAMP)!;
+      await s.db.exec(file.sql);
+      await s.db.exec(file.sql);
+      assertEquals((await s.row<{ t: Date }>(`select launched_at as t from public.studio_state where id = 1`)).t.toISOString(), "2026-10-01T12:00:00.000Z");
+    } finally {
+      await s.close();
+    }
+  });
+});
+
 Deno.test("why the studio is paused", OPTS, async () => {
   const s = await studio();
   try {
