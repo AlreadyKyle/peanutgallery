@@ -73,8 +73,6 @@ import { NEEDS_POLL_MS, NeedsYou } from './NeedsYou';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
-/** Before the first credit purchase: live is stamped by the database, not by a button (decision 62). */
-export const NOT_LIVE_LINE = 'Not live yet. The studio goes live on its own when the first agent credit purchase is recorded.';
 export const CANCEL_CONFIRM =
   'Reject this card? It stops for good with your reason, its unspent money goes to the next cards in line, and this cannot be undone.';
 /** Under the heading on every screen: what the board is, in one line (docs/specs/simple-board.md). */
@@ -548,13 +546,6 @@ function StudioStatus({
           <p>
             Dispatcher:{' '}
             {seenAgo === null ? 'not running' : `seen ${Math.round(seenAgo / 1000)} s ago`}.
-          </p>
-          <p>
-            {/* No Go live button (docs/PLAN.md §10 decision 62): the database stamps launched_at when
-                the first credit purchase is recorded. */}
-            {state.launched_at === null
-              ? NOT_LIVE_LINE
-              : `Live since ${formatDateTime(state.launched_at)}.`}
           </p>
           <p>
             Daily cap {formatUsd(state.daily_cap_usd)}. Card maximum {formatUsd(state.card_max_usd)}.

@@ -12,5 +12,5 @@
   "class": "web_only",
   "write_access": false,
   "status": "starts",
-  "trigger": "Starts last, once every other role in the launch roster is built."
+  "trigger": "Starts last, once every other role is built."
 }

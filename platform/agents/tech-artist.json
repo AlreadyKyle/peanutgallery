@@ -12,5 +12,5 @@
   "class": "writer",
   "write_access": false,
   "status": "starts",
-  "trigger": "Starts at the first visual card after launch."
+  "trigger": "Starts at the first visual card."
 }

@@ -71,7 +71,7 @@ describe('the golden snapshot', () => {
     const builder = snapshot.roles.find((role) => role.title === 'Builder A')!;
     expect([builder.status, builder.trigger, builder.paused, builder.paused_reason]).toEqual(['running', null, false, null]);
     const biz = snapshot.roles.find((role) => role.title === 'Biz Dev')!;
-    expect([biz.status, biz.trigger]).toEqual(['starts', 'Starts last, once every other role in the launch roster is built.']);
+    expect([biz.status, biz.trigger]).toEqual(['starts', 'Starts last, once every other role is built.']);
     expect(snapshot.cards.every((card) => card.board_vetoed === false && card.opens_at === null)).toBe(true);
   });
 

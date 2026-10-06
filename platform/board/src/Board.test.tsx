@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Board, BOARD_LEDE, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, NO_CARDS, NOT_LIVE_LINE, NOT_ON_BOARD, SECOND_FACTOR_LINE, TIER_CAP_LABEL } from './Board';
+import { Board, BOARD_LEDE, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, NO_CARDS, NOT_ON_BOARD, SECOND_FACTOR_LINE, TIER_CAP_LABEL } from './Board';
 import {
   BOARD_CARD_COLUMNS,
   BOARD_SESSION_TTL_MIN,
@@ -904,14 +904,14 @@ describe('Board studio status', () => {
   it('has no Go live button, and says the studio goes live on its first credit purchase (decision 62)', async () => {
     await renderBoard();
     expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
-    expect(screen.getByText(NOT_LIVE_LINE)).toBeTruthy();
+    expect(screen.queryByText(/live yet|Live since/)).toBeNull();
     expect(callsNamed('set_launched')).toHaveLength(0);
   });
 
-  it('says when the studio went live once launched_at is stamped', async () => {
+  it('shows no launch line, stamped or not', async () => {
     fake.studio.launched_at = '2026-09-13T09:00:00Z';
     await renderBoard();
-    expect(screen.getByText(`Live since ${formatDateTime('2026-09-13T09:00:00Z')}.`)).toBeTruthy();
+    expect(screen.queryByText(/live yet|Live since/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
   });
 

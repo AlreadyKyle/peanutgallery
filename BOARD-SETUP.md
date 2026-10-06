@@ -138,8 +138,7 @@ More detail: Reference 22. Never your own money. The board site's **Needs you** 
    for the next payout.
 3. Auto-reload **off**. Set the Console's monthly limit to the cap the board site shows.
 4. Board site → Needs you → **Fill in the record form**. Change the amount to the Console receipt's if
-   it differs. **Record purchase** (second factor). The first one also stamps the launch time: the
-   board site's Studio status then reads "Live since …" (`docs/PLAN.md` §10 decision 62).
+   it differs. **Record purchase** (second factor).
 5. Stripe → Settings → Payouts → **Minimum balance**: raise it to the figure the inbox shows.
 6. Read the tier off the Console's **Limits** page.
 

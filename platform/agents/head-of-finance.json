@@ -12,5 +12,5 @@
   "class": "read_only",
   "write_access": false,
   "status": "starts",
-  "trigger": "Starts at the cutover, once the first Stripe payout has bought Console credit."
+  "trigger": "Starts once the first Stripe payout has bought the agents' model credit."
 }

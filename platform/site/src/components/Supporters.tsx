@@ -3,12 +3,12 @@ import { formatInteger } from '../lib/format';
 import { legal } from '../lib/legal';
 
 // Kernel (docs/specs/supporter-pages.md): the supporters a card's money came from, each only as a
-// number (and founding when it is), in number order: the first 24 the document carries, then "and n
+// number, in number order: the first 24 the document carries, then "and n
 // more". No amount, time or name, ever.
 
-/** "Supporter 12" or "Founding supporter 12". */
+/** "Supporter 12". */
 export function supporterName(supporter: Supporter): string {
-  return (supporter.founding ? legal.foundingSupporter : legal.supporter).replace('{n}', formatInteger(supporter.number));
+  return legal.supporter.replace('{n}', formatInteger(supporter.number));
 }
 
 export function Supporters({ supporters, count }: { supporters: readonly Supporter[]; count: number }) {
@@ -19,7 +19,7 @@ export function Supporters({ supporters, count }: { supporters: readonly Support
     <>
       <ul className="supporters">
         {shown.map((supporter) => (
-          <li key={supporter.number} data-founding={supporter.founding ? 'true' : undefined}>
+          <li key={supporter.number}>
             {supporterName(supporter)}
           </li>
         ))}

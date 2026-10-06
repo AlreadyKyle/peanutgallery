@@ -12,13 +12,13 @@ afterEach(() => {
 });
 
 describe('Supporters', () => {
-  it('lists supporters in number order with the founding form, then "and n more" past the 24 shown', () => {
+  it('lists supporters in number order as Supporter n, founding or not, then "and n more" past the 24 shown', () => {
     const first = Array.from({ length: 24 }, (_, k) => ({ number: 24 - k, founding: k % 2 === 0 }));
     const { container } = render(<Supporters supporters={first} count={30} />);
     const items = [...container.querySelectorAll('ul.supporters li')].map((li) => li.textContent);
     expect(items).toHaveLength(24);
     expect(items[0]).toBe('Supporter 1');
-    expect(items[1]).toBe('Founding supporter 2');
+    expect(items[1]).toBe('Supporter 2');
     expect(screen.getByText(legal.supportersMore.replace('{n}', '6'))).toBeTruthy();
     expect(container.textContent).not.toMatch(/\$/);
   });
@@ -27,7 +27,7 @@ describe('Supporters', () => {
     render(<Supporters supporters={[]} count={0} />);
     expect(screen.getByText(legal.supportersNone)).toBeTruthy();
     expect(supporterName({ number: 12, founding: false })).toBe('Supporter 12');
-    expect(supporterName({ number: 12, founding: true })).toBe('Founding supporter 12');
+    expect(supporterName({ number: 12, founding: true })).toBe('Supporter 12');
   });
 });
 

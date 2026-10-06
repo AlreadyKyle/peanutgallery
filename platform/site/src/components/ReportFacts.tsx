@@ -14,7 +14,7 @@ import { supporterName } from './Supporters';
 /** How many supporters a shipped row names before "and n more". */
 export const NAMED_SUPPORTERS = 3;
 
-/** "$0.29 from contributions · funded by Supporter 1, Founding supporter 2 and 3 more"; the cost left out at $0.00, the supporters with none. */
+/** "$0.29 from contributions · funded by Supporter 1, Supporter 2 and 3 more"; the cost left out at $0.00, the supporters with none. */
 export function shippedMeta(card: ReportCard): string | null {
   const parts: string[] = [];
   if (Math.round(card.cost_usd * 100) > 0) parts.push(legal.reportFacts.cost.replace('{usd}', formatUsd(card.cost_usd)));
