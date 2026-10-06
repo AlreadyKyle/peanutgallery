@@ -1812,7 +1812,17 @@ describe('the GitHub Actions host', () => {
     mkdirSync(bin, { recursive: true });
     const record = path.join(scratch, 'actions-git-calls');
     const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
-    // A git that records its arguments and whether the header reached it, and clones this repository
+    // A one-commit repository with a main branch stands in for GitHub: a CI checkout of this
+    // repository is a detached merge ref with no local main.
+    const origin = path.join(scratch, 'actions-origin');
+    mkdirSync(origin, { recursive: true });
+    for (const args of [
+      ['init', '--quiet', '--initial-branch=main'],
+      ['-c', 'user.name=ops-test', '-c', 'user.email=ops-test@example.invalid', 'commit', '--quiet', '--allow-empty', '-m', 'origin'],
+    ]) {
+      assert.equal(spawnSync(realGit, args, { cwd: origin }).status, 0);
+    }
+    // A git that records its arguments and whether the header reached it, and clones that repository
     // in place of GitHub.
     writeFileSync(
       path.join(bin, 'git'),
@@ -1821,7 +1831,7 @@ describe('the GitHub Actions host', () => {
         `printf '%s\\n' "$*" >> "${record}"`,
         `[ -n "\${GIT_CONFIG_VALUE_0:-}" ] && echo "header: \${GIT_CONFIG_KEY_0}" >> "${record}"`,
         'args=()',
-        `for a in "$@"; do case "$a" in https://github.com/*) args+=("${REPO_ROOT}") ;; *) args+=("$a") ;; esac; done`,
+        `for a in "$@"; do case "$a" in https://github.com/*) args+=("${origin}") ;; *) args+=("$a") ;; esac; done`,
         `exec env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 "${realGit}" "\${args[@]}"`,
         '',
       ].join('\n'),
