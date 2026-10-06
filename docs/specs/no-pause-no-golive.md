@@ -45,6 +45,15 @@ Out: the pause itself (`studio_state.paused` and `pause_reason`, the board's and
 
 Run on branch `launch/no-pause-no-golive`.
 
+- Site unit tests (`pnpm test` in `platform/site`): "Test Files  47 passed (47)", "Tests  514 passed (514)".
+- Site e2e, `E2E_PORT=4450 npx playwright test e2e/paused.spec.ts e2e/team-status.spec.ts e2e/thanks.spec.ts e2e/pages.spec.ts e2e/layout-balance.spec.ts e2e/design.spec.ts`: "2 skipped", "144 passed (1.9m)".
+- Board unit tests: "Test Files  4 passed (4)", "Tests  105 passed (105)". Board e2e, `E2E_PORT=4460 npx playwright test`: "9 passed (4.0s)".
+- Deno, `money_logic_test.ts` and `migration_test.ts`: "the launch stamp ... ok (1s)", "ok | 16 passed (96 steps) | 0 failed (17s)".
+- `npx vitest run test/migration.test.ts` in `platform/supabase`: "Test Files  1 passed (1)", "Tests  187 passed (187)".
+- `pnpm test:docs`: "ℹ tests 22", "ℹ pass 22", "ℹ fail 0". `pnpm secret-scan`: "PASS: secret-scan files=742".
+- `pnpm verify`: exit 0; "GATE PASS folder=platform lane=code", "PASS: secret-scan files=742", dispatcher "Tests  878 passed (878)", supabase "Tests  329 passed (329)", functions "ok | 131 passed (243 steps) | 0 failed (45s)".
+- Terms check: no posted Terms or Refunds version promises a paused notice; both say only "No card has a delivery date, because the agents work only while the studio is not paused." (`terms-versions.ts`), left unedited.
+
 ## Decisions
 
 - 2026-10-06: the board decided no paused notice on the public site and no Go live button; the launch time is stamped by the first credit purchase (PLAN.md §10 decision 62).
