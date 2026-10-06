@@ -319,7 +319,7 @@ function expectNoSecondFactorControls() {
 
 function expectSecondFactorControls() {
   expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
-  expect(screen.getByRole('group', { name: 'Agent mode' })).toBeTruthy();
+  expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
   expect(screen.getByRole('form', { name: 'File a card' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a directive' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a note' })).toBeTruthy();
@@ -915,14 +915,10 @@ describe('Board studio status', () => {
     expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
   });
 
-  it('sends the agent mode RPC with the contract argument', async () => {
+  it('shows no agent mode and no mode control', async () => {
     await renderBoard();
-    const group = within(screen.getByRole('group', { name: 'Agent mode' }));
-    fireEvent.click(group.getByRole('radio', { name: 'unattended' }));
-    await flush();
-    expect(callsNamed('set_agent_mode').map((call) => call.args)).toEqual([
-      { p_mode: 'unattended' },
-    ]);
+    expect(screen.queryByText(/Agent mode/)).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
   });
 
   it('reports a fresh dispatcher heartbeat as seen', async () => {
@@ -1011,7 +1007,7 @@ describe('Board two-factor sign-in', () => {
     await renderBoard();
     expectNoSecondFactorControls();
     expect(screen.getByText('Agents: running.')).toBeTruthy();
-    expect(screen.getByText('Agent mode: attended.')).toBeTruthy();
+    expect(screen.queryByText(/Agent mode/)).toBeNull();
     // The board at the first factor is told what it lacks, not that only the board resumes a role.
     const roles = within(screen.getByRole('region', { name: 'Roles' }));
     expect(roles.getByText('Verify your second factor to pause or resume a role.', { exact: false })).toBeTruthy();
