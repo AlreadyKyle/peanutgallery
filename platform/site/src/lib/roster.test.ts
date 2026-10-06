@@ -71,17 +71,14 @@ describe('teamStatus', () => {
     expect(teamStatus(role('Platform Builder'), snapshot({ platformLaneOpen: true }))).toEqual({ kind: 'running', sentence: null });
   });
 
-  it("pauses every running role while the studio is paused, with the reason's words or else the paused notice", () => {
-    const paused = snapshot({ paused: true, pauseReason: 'awaiting_credit' });
-    expect(teamStatus(role('Builder A'), paused)).toEqual({ kind: 'paused', sentence: legal.pauseReasons.awaiting_credit, by: 'studio' });
-    expect(teamStatus(role('Builder A'), snapshot({ paused: true, pauseReason: null }))).toEqual({ kind: 'paused', sentence: legal.pausedNotice, by: 'studio' });
-    // A failed studio read never claims a pause.
-    expect(teamStatus(role('Builder A'), snapshot({ paused: true, missing: ['studio'] })).kind).toBe('running');
-    // A role that does not run is not paused by the studio.
-    expect(teamStatus(role('HR', { status: 'starts', trigger: 'Starts later.' }), paused).kind).toBe('starts');
+  it('keeps every running role running while the studio is paused: a studio pause is not shown (decision 62)', () => {
+    for (const s of [snapshot({ paused: true, pauseReason: 'awaiting_credit' }), snapshot({ paused: true, pauseReason: null })]) {
+      expect(teamStatus(role('Builder A'), s)).toEqual({ kind: 'running', sentence: null });
+      expect(teamStatus(role('HR', { status: 'starts', trigger: 'Starts later.' }), s).kind).toBe('starts');
+    }
   });
 
-  it('keeps a code-only role running through a studio pause, since its jobs run then; its own pause still shows', () => {
+  it("shows a code-only role's own pause, studio paused or not", () => {
     const janitor = role('Janitor', { write_access: false, code_only: true });
     expect(teamStatus(janitor, snapshot({ paused: true, pauseReason: 'awaiting_credit' }))).toEqual({ kind: 'running', sentence: null });
     expect(teamStatus({ ...janitor, paused: true }, snapshot({ paused: true }))).toEqual({ kind: 'paused', sentence: copy.team.rolePaused, by: 'role' });

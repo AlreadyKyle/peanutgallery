@@ -5,7 +5,6 @@ import { ExplainerVideo } from '../components/ExplainerVideo';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { Announcer } from '../components/Announcer';
-import { pausedSentence } from '../components/PausedNotice';
 import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
 import { MoreLink } from '../components/MoreLink';
@@ -41,8 +40,8 @@ function Count({ n, words }: { n: number; words: { one: string; many: string; re
 
 /**
  * The status line: one true sentence from the snapshot home is drawn from. It says how many cards
- * are open, how many are building, and while the agents are paused why (pausedSentence, the same
- * sentence as the paused notice on other pages), which home says only here.
+ * are open and how many are building. It never says the studio is paused (docs/PLAN.md §10
+ * decision 62): the public site shows no paused notice.
  */
 function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | null }) {
   if (studio.state === 'loading' && view === null) {
@@ -54,12 +53,8 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   }
   if (view === null) return <p className="status-line">{unavailableLine(studio)}</p>;
   const { fund, now } = view.groups;
-  const paused = pausedSentence(view.snapshot);
-  // The 16px pause glyph marks the sentence beside it; it is not a column that could leave dead space
-  // beside a long reason, so the layout audit leaves the pair alone (DESIGN.md, No dead space).
   return (
-    <p className="status-line" data-balance={paused === null ? undefined : 'ignore'}>
-      {paused === null ? null : <Glyph name="pause" />}
+    <p className="status-line">
       <span>
         {fund.length === 0 ? copy.status.openNone : <Count n={fund.length} words={copy.status.open} />}
         {now.length === 0 ? null : (
@@ -68,7 +63,6 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
             <Count n={now.length} words={copy.status.building} />
           </>
         )}
-        {paused === null ? null : ` ${paused}`}
       </span>
     </p>
   );

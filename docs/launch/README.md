@@ -4,7 +4,7 @@ The drafts for the announcement (`docs/specs/announcement.md`, Drafts; `docs/ROA
 
 ## Before anything is posted
 
-1. The board has pressed Go live on the board's own site.
+1. ~~The board has pressed Go live on the board's own site.~~ Superseded by `docs/PLAN.md` §10 decision 62: the launch time is stamped when the first credit purchase is recorded; check the board's site says "Live since …".
 2. The clip exists: the first player-funded card's own page, `/card/<its id>`, with its replay (`docs/specs/announcement.md`, Clip). Posts go out only after it exists (PLAN.md §7 Order).
 3. In every draft, "[clip link: added when the first player-funded card ships, docs/specs/announcement.md]" is replaced with that page's address. The gap is left on purpose: no card id is written here before that card ships.
 4. Every link points at https://mobmachine.games, the studio's domain since PLAN.md §10 decision 59 (`scripts/rename.mjs`, `docs/specs/rename.md`).

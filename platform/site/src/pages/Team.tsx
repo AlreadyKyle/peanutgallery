@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
-import { pausedSentence } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
 import { WhoRuns } from '../components/WhoRuns';
 import { copy } from '../lib/copy';
@@ -111,14 +110,13 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
   const roles = snapshot.roles.filter((role) => role.state === 'active');
   if (roles.length === 0) return <p className="muted">{team.empty}</p>;
   const rows = roles.map((role) => ({ role, status: teamStatus(role, snapshot) }));
-  const studioPause = pausedSentence(snapshot);
   const running = rows.filter((row) => onTheTeam(row.status));
   return (
     <>
       <Section
         id="team-running"
         heading={team.running}
-        intro={studioPause === null ? team.runningIntro : `${team.runningPausedIntro} ${studioPause}`}
+        intro={team.runningIntro}
         rows={running}
         snapshot={snapshot}
       />
@@ -130,7 +128,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
 
 /**
  * Meet the team: every active role from public_roles in three sections from the roster's own columns
- * (lib/roster.ts teamStatus): Running (with the paused rows while the studio or the role is paused),
+ * (lib/roster.ts teamStatus): Running (with the paused rows while a role itself is paused; a studio pause is not shown, docs/PLAN.md §10 decision 62),
  * Starts later and Planned. Running and paused rows show the model, the cost from contributions and
  * the shipped cards, or, for a code-only role, that it calls no model; the rest show when they start.
  * Every section is the same grid of the same boxes, one to a cell. Three bands: the heading on the

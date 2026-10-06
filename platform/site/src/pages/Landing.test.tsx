@@ -299,33 +299,17 @@ describe('Landing', () => {
     expect(line.querySelector('svg[data-glyph="pause"]')).toBeNull();
   });
 
-  it('says the agents are paused only in the status line, with the pause glyph, while the board has paused them', async () => {
-    renderLanding(fakeSource({ paused: true, cards: snapshot.cards.filter((card) => card.stage !== 'building') }));
-    await screen.findByRole('heading', { level: 2, name: copy.fund });
-    const line = document.querySelector('p.status-line')!;
-    // No reason read: the general line, the same sentence as the paused notice on other pages.
-    await waitFor(() => expect(line.textContent).toBe(`3 cards are open for funding. ${legal.pausedNotice}`));
-    expect(line.querySelector('svg[data-glyph="pause"]')).not.toBeNull();
-    expect(document.querySelector('p.notice')).toBeNull();
-    // The team strip draws the agents asleep.
-    expect(document.querySelectorAll('.team-strip svg.avatar').length).toBe(3);
-  });
-
-  for (const reason of ['awaiting_credit', 'spend_limit', 'incident', 'board']) {
-    it(`says why the agents are paused in the status line: ${reason}`, async () => {
-      renderLanding(fakeSource({ paused: true, pauseReason: reason, cards: snapshot.cards.filter((card) => card.stage !== 'building') }));
+  it('says nothing about a pause while the studio is paused, whatever the reason (decision 62)', async () => {
+    for (const pauseReason of [null, 'awaiting_credit', 'spend_limit', 'incident', 'board']) {
+      renderLanding(fakeSource({ paused: true, pauseReason, cards: snapshot.cards.filter((card) => card.stage !== 'building') }));
       await screen.findByRole('heading', { level: 2, name: copy.fund });
       const line = document.querySelector('p.status-line')!;
-      await waitFor(() => expect(line.textContent).toBe(`3 cards are open for funding. ${legal.pauseReasons[reason]}`));
-      expect(line.querySelector('svg[data-glyph="pause"]')).not.toBeNull();
-    });
-  }
-
-  it('says nothing about a pause when the studio row did not load', async () => {
-    renderLanding(fakeSource({ paused: true, pauseReason: 'incident', missing: ['studio'] }));
-    const line = await statusLine();
-    expect(line.textContent).toBe('3 cards are open for funding. 1 card is being built.');
-    expect(line.querySelector('svg[data-glyph="pause"]')).toBeNull();
+      await waitFor(() => expect(line.textContent).toBe('3 cards are open for funding.'));
+      expect(line.querySelector('svg[data-glyph="pause"]')).toBeNull();
+      expect(document.querySelector('p.notice')).toBeNull();
+      expect(document.querySelectorAll('.team-strip svg.avatar').length).toBe(3);
+      cleanup();
+    }
   });
 
   it('shows the loading line while the snapshot loads, and the unavailable line without a database', () => {

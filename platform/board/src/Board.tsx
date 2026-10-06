@@ -40,7 +40,6 @@ import {
   setCardHorizon,
   setCardVeto,
   setCoolingWindow,
-  setLaunched,
   setRolePause,
   PAUSE_REASONS,
   type PauseReason,
@@ -74,7 +73,8 @@ import { NEEDS_POLL_MS, NeedsYou } from './NeedsYou';
 
 const noDatabase = 'The site has no database configuration, so board sign-in is unavailable.';
 const CLOCK_TICK_MS = 1_000;
-export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
+/** Before the first credit purchase: live is stamped by the database, not by a button (decision 62). */
+export const NOT_LIVE_LINE = 'Not live yet. The studio goes live on its own when the first agent credit purchase is recorded.';
 export const CANCEL_CONFIRM =
   'Reject this card? It stops for good with your reason, its unspent money goes to the next cards in line, and this cannot be undone.';
 /** Under the heading on every screen: what the board is, in one line (docs/specs/simple-board.md). */
@@ -520,21 +520,6 @@ function StudioStatus({
     return () => clearInterval(timer);
   }, []);
 
-  async function goLive() {
-    if (busy) return;
-    if (!window.confirm(GO_LIVE_CONFIRM)) return;
-    setBusy(true);
-    try {
-      const at = await setLaunched(client);
-      setMessage(`The studio went live at ${formatDateTime(at.toISOString())}.`);
-      await refresh();
-    } catch (error) {
-      setMessage(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function changeMode(mode: AgentMode) {
     if (busy) return;
     setBusy(true);
@@ -565,8 +550,10 @@ function StudioStatus({
             {seenAgo === null ? 'not running' : `seen ${Math.round(seenAgo / 1000)} s ago`}.
           </p>
           <p>
+            {/* No Go live button (docs/PLAN.md §10 decision 62): the database stamps launched_at when
+                the first credit purchase is recorded. */}
             {state.launched_at === null
-              ? 'Not live yet.'
+              ? NOT_LIVE_LINE
               : `Live since ${formatDateTime(state.launched_at)}.`}
           </p>
           <p>
@@ -585,11 +572,6 @@ function StudioStatus({
             <p data-supply="line">{supplyLine(supply.supply)}.</p>
           ) : supply.loadError !== '' ? (
             <p className="error">Card supply: {supply.loadError}</p>
-          ) : null}
-          {canChange && state.launched_at === null ? (
-            <button type="button" aria-disabled={busy} onClick={() => void goLive()}>
-              Go live
-            </button>
           ) : null}
           {canChange ? (
             <>

@@ -170,26 +170,14 @@ describe('Contribute', () => {
     expect(checkoutLinks()).toHaveLength(2);
   });
 
-  it('says the agents are paused above the choices while the board has paused them', async () => {
-    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true));
-    await waitFor(() => expect(screen.getByText(legal.pausedNotice)).toBeTruthy());
-    // The notice comes before the first choice, so it is read before any payment.
-    const notice = screen.getByText(legal.pausedNotice);
-    const pick = screen.getByRole('link', { name: new RegExp(legal.pickForMe) });
-    expect(notice.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  for (const reason of ['awaiting_credit', 'spend_limit', 'incident', 'board']) {
-    it(`says why the agents are paused in the notice: ${reason}`, async () => {
-      renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true, undefined, { pauseReason: reason }));
-      await waitFor(() => expect(document.querySelector('p.notice')?.textContent).toBe(legal.pauseReasons[reason]));
-    });
-  }
-
-  it('draws no paused notice when the studio row did not load', async () => {
-    renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true, undefined, { pauseReason: 'incident', missing: ['studio'] }));
-    await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
-    expect(document.querySelector('p.notice')).toBeNull();
+  it('shows no paused notice while the studio is paused, whatever the reason (decision 62)', async () => {
+    for (const pauseReason of [null, 'awaiting_credit', 'spend_limit', 'incident', 'board']) {
+      renderContribute(source([card({ id: 'g1', title: 'Rename the Gatherer' })], true, undefined, { pauseReason }));
+      await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
+      expect(document.querySelector('p.notice')).toBeNull();
+      expect(document.body.textContent).not.toMatch(/paused/i);
+      cleanup();
+    }
   });
 
   it('keeps Fund the next card in line when no card needs funding, and says so', async () => {

@@ -1181,9 +1181,10 @@ button.link:hover:not(:disabled) {
   box-shadow: inset 3px 0 0 currentColor;
 }
 
-/* The paused notice and the status line: one line of text beside the pause glyph, which never
-   wraps onto a line of its own. The notice is kernel (PausedNotice.tsx), so it draws the glyph in
-   CSS: two 3px bars in currentColor, the same shape as the pause glyph. No box. */
+/* The legal pages' notice (Legal.tsx) and the status line: one line of text, the notice beside the
+   pause glyph, which never wraps onto a line of its own. The notice is kernel, so it draws the glyph
+   in CSS: two 3px bars in currentColor, the same shape as the pause glyph. No box. No public page
+   shows a paused notice (docs/PLAN.md §10 decision 62). */
 .notice,
 .status-line {
   display: flex;

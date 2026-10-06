@@ -1,4 +1,3 @@
-import { pausedSentence } from '../components/PausedNotice';
 import { copy } from './copy';
 import type { Role, Snapshot } from './source';
 
@@ -41,16 +40,15 @@ export function cardRoleFolder(role: Role): string | null {
  * Where a role stands on /team and home's team strip (docs/specs/supporter-pages.md), with the one
  * sentence that says why when it is not simply running:
  * - running: roster status running, not paused, and (for a card role) its folder is open;
- * - paused: roster status running while the studio is paused (its reason's words, else the paused
- *   notice), unless the role is code only, whose jobs run through a studio pause; or while the role
- *   itself is paused (its own reason, else a plain line);
+ * - paused: roster status running while the role itself is paused (its own reason, else a plain
+ *   line). A studio pause is not shown on the public site (docs/PLAN.md §10 decision 62);
  * - starts: roster status starts, with its trigger; or a card role whose folder the board has not
  *   opened, which starts when the board opens the studio code lane;
  * - planned: roster status planned or unset, with its trigger when it has one.
  */
 export type TeamKind = 'running' | 'paused' | 'starts' | 'planned';
-/** by: who paused a paused role, the studio (one sentence for every row) or the role itself. */
-export type TeamStatus = { kind: TeamKind; sentence: string | null; by?: 'studio' | 'role' };
+/** by: who paused a paused role; only the role itself, since a studio pause is not shown. */
+export type TeamStatus = { kind: TeamKind; sentence: string | null; by?: 'role' };
 
 export function teamStatus(role: Role, snapshot: Snapshot): TeamStatus {
   if (role.status === 'running') {
@@ -59,8 +57,6 @@ export function teamStatus(role: Role, snapshot: Snapshot): TeamStatus {
       return { kind: 'starts', sentence: copy.team.laneClosed };
     }
     if (role.paused === true) return { kind: 'paused', sentence: role.paused_reason ?? copy.team.rolePaused, by: 'role' };
-    const studioPaused = role.code_only === true ? null : pausedSentence(snapshot);
-    if (studioPaused !== null) return { kind: 'paused', sentence: studioPaused, by: 'studio' };
     return { kind: 'running', sentence: null };
   }
   if (role.status === 'starts') return { kind: 'starts', sentence: role.trigger ?? null };

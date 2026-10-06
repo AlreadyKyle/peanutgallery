@@ -30,8 +30,8 @@ export const copy = {
   notFound: 'Not found',
   notFoundBody: 'There is no page at this address.',
   howItWorks: 'How it works',
-  // Home's status line: one true sentence from the snapshot, its figures at 600, the pause said here
-  // only, in PausedNotice's sentence from legal.ts.
+  // Home's status line: one true sentence from the snapshot, its figures at 600. It never says the
+  // studio is paused (docs/PLAN.md §10 decision 62).
   status: {
     open: { one: '1 card', many: '{n} cards', restOne: 'is open for funding.', restMany: 'are open for funding.' },
     openNone: 'No card is open for funding right now.',
@@ -114,7 +114,6 @@ export const copy = {
     // The three sections, from each role's roster status (lib/roster.ts teamStatus).
     running: 'Running',
     runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, ranking them and drafting new ones.',
-    runningPausedIntro: 'These agents do the studio\'s work. Those marked Paused resume when the studio does.',
     startsLater: 'Starts later',
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',
@@ -254,11 +253,10 @@ export const copy = {
     onInkIntro:
       'Odd bands from the third are ink. Text, links, glyphs, edges, the pressed border and the focus ring are paper; suit tiles and the Live mark reset to paper. The coin, Contribute and the avatars stay as they are.',
     inkRowsNote: 'On ink the suit tile and the Live mark reset to the text colour, so nothing measures below 3 to 1.',
-    statusHeading: 'Status line and notice',
+    statusHeading: 'Status line',
     // A sample status line: its figure is set at 600.
     statusFigure: '6 cards',
-    statusRest: 'are open for funding. The agents are paused.',
-    noticeNote: 'The paused notice is one plain line with the pause glyph, no box, on pages without a status line.',
+    statusRest: 'are open for funding.',
     focusHeading: 'Focus',
     focusIntro: 'Tab through the page: the ring is 3px signal at a 2px offset on paper and the work face, and 3px paper on the signal plate and on ink.',
     colourHeading: 'Colour',

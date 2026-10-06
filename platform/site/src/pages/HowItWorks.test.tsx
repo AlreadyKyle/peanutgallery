@@ -223,8 +223,10 @@ describe('How it works', () => {
     for (const region of [who, code]) expect(region.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
   });
 
-  it('shows the paused notice while the board has paused the agents', async () => {
-    renderPage(sourceOf(snapshot({ paused: true })));
-    await waitFor(() => expect(screen.getByText(legal.pausedNotice)).toBeTruthy());
+  it('shows no paused notice while the board has paused the agents (decision 62)', async () => {
+    renderPage(sourceOf(snapshot({ paused: true, pauseReason: 'incident' })));
+    await screen.findAllByRole('heading', { level: 2 });
+    expect(document.querySelector('p.notice')).toBeNull();
+    expect(screen.queryByText(/The agents are paused/)).toBeNull();
   });
 });

@@ -1,7 +1,6 @@
 import { FundingBar, fundingCaption } from '../components/Funding';
 import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
-import { PausedNotice } from '../components/PausedNotice';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
 import { siteEnv } from '../lib/env';
@@ -48,7 +47,6 @@ export function Contribute() {
       <div className="band">
         <PageHeader title={legal.contributeTitle} lede={legal.contributeLede}>
           <StaleNotice studio={studio} />
-          <PausedNotice studio={studio} />
         </PageHeader>
       </div>
       <div className="band">

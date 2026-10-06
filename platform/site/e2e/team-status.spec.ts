@@ -5,32 +5,25 @@ import { BUILDER_A, OPENS_SOON_ID, QA, SUPPORTER_STUDIO, VETOED_ID, VETO_REASON 
 // /team from the roster's own columns through lib/roster.ts teamStatus, and /roadmap's opens-soon and
 // held labels (docs/specs/supporter-pages.md).
 
-const AWAITING_CREDIT =
-  "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.";
-
 test.describe('while the studio is paused', () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
-  test('keeps the running roles in Running as paused, says the reason once, draws them awake (the board, 23 Sep 2026), and still shows model, cost and ships', async ({ page }) => {
+  test('shows the running roles as running, with no paused line (decision 62), awake, with model, cost and ships', async ({ page }) => {
     await page.goto('/team');
     const running = page.getByRole('region', { name: 'Running', exact: true });
-    await expect(running.locator(':scope > p.muted').first()).toContainText(AWAITING_CREDIT);
-    await expect(running.locator(':scope > p.muted').first()).toContainText('Those marked Paused resume when the studio does.');
+    await expect(running.locator(':scope > p.muted').first()).not.toContainText(/paused|Paused/);
     const rows = running.locator('li.agent');
-    const agents = running.locator('li.agent:not([data-kind="code"])');
     await expect(rows).not.toHaveCount(0);
-    await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(await agents.count());
-    await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(await agents.count());
+    await expect(running.locator('li.agent[data-status="paused"]')).toHaveCount(0);
+    await expect(running.locator('li.agent .tag[data-state="paused"]')).toHaveCount(0);
     await expect(running.locator('svg.avatar[data-pose="awake"]')).toHaveCount(await rows.count());
-    // The code-only Janitor's jobs run through the pause: it stays running, with no Paused tag, and
-    // says it calls no model.
+    // The code-only Janitor says it calls no model.
     const code = running.locator('li.agent[data-kind="code"]');
     await expect(code).toHaveCount(1);
     await expect(code).toHaveAttribute('data-status', 'running');
     await expect(code.locator('.tag')).toHaveCount(0);
     await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
-    // The studio's reason is said once, above the list, not on every row.
-    await expect(running.getByText(AWAITING_CREDIT)).toHaveCount(1);
+    await expect(page.locator('main')).not.toContainText('waits for Stripe');
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
       'claude-opus-5-5 · Spent from contributions $1.24, $0.31 in the last 7 days · Worked on 7 shipped cards',
     );

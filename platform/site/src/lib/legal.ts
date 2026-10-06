@@ -91,19 +91,6 @@ export const legal = {
   // money went card by card (movedTo).
   notBuiltMoney: 'Its unspent money went to the next cards in line.',
   folders: { 'seed-1': 'Game', platform: 'Site' } as Record<string, string>,
-  // Shown while the agents are paused and public_studio names no reason. It follows the board's Pause
-  // and Resume on its own. With a reason, the notice and home's status line say pauseReasons' sentence
-  // instead (PausedNotice.tsx pausedSentence); each names the category only, never who paused or when.
-  pausedNotice: 'The agents are paused. Funded cards keep their money and wait in the queue until the board resumes them.',
-  pauseReasons: {
-    awaiting_credit:
-      "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.",
-    spend_limit:
-      'The agents are paused because the studio reached its monthly limit on model usage. Funded cards keep their money and wait in the queue until the board resumes them.',
-    incident:
-      'The agents are paused while the board checks a problem. Funded cards keep their money and wait in the queue until the board resumes them.',
-    board: 'The board has paused the agents. Funded cards keep their money and wait in the queue until the board resumes them.',
-  } as Record<string, string>,
   eventVerbs: {
     start: 'started',
     tool_call: 'used a tool',
