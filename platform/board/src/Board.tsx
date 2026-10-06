@@ -1,7 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import {
-  agentModes,
   boardStudioState,
   buckets,
   cancelCard,
@@ -35,7 +34,6 @@ import {
   runOutputFrom,
   sendMagicLink,
   sessionExpiry,
-  setAgentMode,
   setCaps,
   setCardHorizon,
   setCardVeto,
@@ -50,7 +48,6 @@ import {
   twoFactorState,
   undealt,
   verifyTotp,
-  type AgentMode,
   type BoardCard,
   type BoardJob,
   type BoardRoleRow,
@@ -518,20 +515,6 @@ function StudioStatus({
     return () => clearInterval(timer);
   }, []);
 
-  async function changeMode(mode: AgentMode) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await setAgentMode(client, mode);
-      setMessage(`Agent mode set to ${mode}. Restart the dispatcher in the same mode.`);
-      await refresh();
-    } catch (error) {
-      setMessage(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const seenAgo = state === null ? null : dispatcherSeenAgoMs(state.dispatcher_seen_at, now);
 
   return (
@@ -542,7 +525,6 @@ function StudioStatus({
       ) : (
         <>
           <p>Agents: {state.paused ? 'paused' : 'running'}.</p>
-          <p>Agent mode: {state.agent_mode}.</p>
           <p>
             Dispatcher:{' '}
             {seenAgo === null ? 'not running' : `seen ${Math.round(seenAgo / 1000)} s ago`}.
@@ -563,28 +545,6 @@ function StudioStatus({
             <p data-supply="line">{supplyLine(supply.supply)}.</p>
           ) : supply.loadError !== '' ? (
             <p className="error">Card supply: {supply.loadError}</p>
-          ) : null}
-          {canChange ? (
-            <>
-              <fieldset aria-disabled={busy}>
-                <legend>Agent mode</legend>
-                <div className="row">
-                  {agentModes.map((mode) => (
-                    <label key={mode} className="choice">
-                      <input
-                        type="radio"
-                        name="agent-mode"
-                        value={mode}
-                        checked={state.agent_mode === mode}
-                        onChange={() => void changeMode(mode)}
-                      />
-                      {mode}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <p>Restart the dispatcher in the same mode.</p>
-            </>
           ) : null}
           {loadError === '' ? null : <p className="error">{loadError}</p>}
         </>
