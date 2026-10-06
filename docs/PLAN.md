@@ -195,6 +195,8 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Monthly security audit](BACKLOG.md#monthly-security-audit): a Janitor mode that reviews the kernel's security once a month.
 - [Visual replay set](BACKLOG.md#visual-replay-set): frozen frame pairs from real visual reviews, replayed like the draft set.
 - [Builder replay set](BACKLOG.md#builder-replay-set): frozen cards replayed through the builders, with the gate as the grader.
+- [Board sign-in link on the public site](BACKLOG.md#board-sign-in-link-on-the-public-site): a footer link to the board's site on the studio's own domain, once the board amends decision 39.
+- [Edit a card's words on the board site](BACKLOG.md#edit-a-cards-words-on-the-board-site): title, summary and intent from the card's row, with a board approval of the new words.
 
 ## 5. Business model
 

@@ -513,3 +513,21 @@ everything else, in the order the board would take it.
 - summary: Frozen cards replayed through the builders, with the gate as the grader, so a change to a builder's prompt is checked before it merges.
 - intent: The replay eval set covers the Game Designer and the Game Director today. A builder set would freeze funded cards with their acceptance tests and replay them through Builder A, Builder B, QA and the Platform Builder in scratch worktrees, the gate and the card's check lines grading each run, pass^k against a baseline. It waits on launch, since the first real cards are its cases, and HR waits on it. It is not built yet.
 - board: yes
+
+### Board sign-in link on the public site
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 51
+- summary: A small Board sign-in link in the site's footer, to the board's own site at its own address on the studio's domain.
+- intent: The board signs in on its own site at a netlify.app address that nothing public links to, and mobmachine.games/board answers not found (PLAN.md §10 decision 39), so a board member has to keep a bookmark. A footer link would need a board decision amending decision 39 and §4 The Board, a subdomain such as board.mobmachine.games at the registrar with the Supabase Auth site address and redirect list moved to it, and the public site's no-other-address test changed to allow that one address; the sign-in itself stays the magic link to board_members with the second factor. It is not built yet (docs/specs/simple-board.md).
+- board: yes
+
+### Edit a card's words on the board site
+- bucket: platform
+- folder: platform
+- horizon: later
+- rank: 52
+- summary: The board edits a card's title, summary and intent from its row, and the edit records the board's approval of the new words.
+- intent: The board can move, rank, veto, reject and resume a card from the board site, but it cannot change what a card says: no board RPC edits the hashed fields, so a wrong title means rejecting the card and filing it again. A security-definer edit_card for the board at the second factor, with a reason, would write the new words, record a board approval of the new content hash as PLAN.md §4 Cards already describes for approvals, run the deny-list scan and leave money untouched. It needs a kernel migration and its tests. It is not built yet (docs/specs/simple-board.md).
+- board: yes
