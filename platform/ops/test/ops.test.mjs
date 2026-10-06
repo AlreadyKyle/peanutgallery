@@ -5,6 +5,7 @@
 // Every value in the fixtures is made up; none has the shape of a real credential.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -463,6 +464,7 @@ const SHELL_SCRIPTS = readdirSync(OPS_DIR, { recursive: true }).filter((name) =>
 describe('shell scripts', () => {
   test('parse with bash -n (the entrypoint with sh -n too)', () => {
     assert.deepEqual(SHELL_SCRIPTS.sort(), [
+      'actions/run-dispatcher.sh',
       'backup/backup.sh',
       'deploy.sh',
       'dispatcher-entrypoint.sh',
@@ -1642,5 +1644,197 @@ describe('install.sh --jobs-only', () => {
     assert.ok(at('install_jobs_only') < at('refuse_jobs_only_clone'));
     assert.ok(at('refuse_jobs_only_clone') < at('check_host_env'));
     assert.match(install, /\[ "\$\(id -u\)" -ne 0 \] \|\| die "run as your own user, not root/);
+  });
+});
+
+// ---------------------------------------------------------------- the GitHub Actions host
+
+// docs/specs/actions-host.md: .github/workflows/dispatcher.yml and platform/ops/actions/run-dispatcher.sh.
+describe('the GitHub Actions host', () => {
+  const require = createRequire(path.join(REPO_ROOT, 'platform', 'dispatcher', 'package.json'));
+  const YAML = require('yaml');
+  const text = read('.github/workflows/dispatcher.yml');
+  const workflow = YAML.parse(text);
+  const job = workflow.jobs.dispatcher;
+  const steps = job.steps;
+  const step = (name) => steps.find((candidate) => candidate.name === name);
+  const script = read('platform/ops/actions/run-dispatcher.sh');
+  const actionsFn = (body, env = {}) => callFunction('actions/run-dispatcher.sh', 'ACTIONS_HOST_SOURCE_ONLY', body, env);
+
+  test('runs on workflow_dispatch and a 30-minute schedule, one run at a time that is never cancelled, on main only', () => {
+    assert.deepEqual(Object.keys(workflow.on).sort(), ['schedule', 'workflow_dispatch']);
+    assert.deepEqual(workflow.on.schedule, [{ cron: '*/30 * * * *' }]);
+    assert.deepEqual(workflow.concurrency, { group: 'dispatcher', 'cancel-in-progress': false });
+    assert.match(job.if, /github\.ref == 'refs\/heads\/main'/);
+    assert.doesNotMatch(text, /pull_request|workflow_run/);
+  });
+
+  test('runs in the environment dispatcher with a 355-minute timeout and minimal permissions', () => {
+    assert.equal(job.environment, 'dispatcher');
+    assert.equal(job['timeout-minutes'], 355);
+    assert.deepEqual(workflow.permissions, { contents: 'read' });
+    assert.deepEqual(job.permissions, { contents: 'read', actions: 'write' });
+    assert.deepEqual(Object.keys(workflow.jobs), ['dispatcher']);
+  });
+
+  test('pins every action to a commit sha, and its checkout of the run sha keeps no credential', () => {
+    for (const { uses } of steps.filter((candidate) => candidate.uses)) assert.match(uses, /@[0-9a-f]{40}$/, uses);
+    const checkout = steps.find((candidate) => candidate.uses?.startsWith('actions/checkout@'));
+    assert.deepEqual(checkout.with, { ref: '${{ github.sha }}', 'persist-credentials': false });
+  });
+
+  test('hands DISPATCHER_ENV to the run and alert steps alone, never to the install, and echoes no secret', () => {
+    const withSecrets = steps.filter((candidate) => JSON.stringify(candidate).includes('secrets.'));
+    assert.deepEqual(withSecrets.map((candidate) => candidate.name), ['Run the dispatcher', 'Alert the board']);
+    for (const candidate of withSecrets) assert.deepEqual(candidate.env, { DISPATCHER_ENV: '${{ secrets.DISPATCHER_ENV }}' });
+    assert.deepEqual([...new Set([...text.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))], ['DISPATCHER_ENV']);
+    for (const candidate of steps) {
+      assert.doesNotMatch(candidate.run ?? '', /secrets\.|\$\{\{\s*env\./, `${candidate.name} puts an expression in its script`);
+      assert.doesNotMatch(candidate.run ?? '', /(echo|printf|cat)[^\n]*DISPATCHER_ENV/, `${candidate.name} prints the env`);
+    }
+    const install = step("Install the code clone's node_modules");
+    assert.ok(steps.indexOf(install) < steps.indexOf(step('Run the dispatcher')));
+    assert.equal(install.env, undefined);
+    // The only write of DISPATCHER_ENV is to the 0600 file.
+    assert.deepEqual([...script.matchAll(/printf '%s\\n' "\$DISPATCHER_ENV"[^\n]*/g)].map((match) => match[0]), [
+      `printf '%s\\n' "$DISPATCHER_ENV" > "$1")`,
+      `printf '%s\\n' "$DISPATCHER_ENV" | sed -n 's/^NTFY_TOPIC_URL=//p' | tail -n 1)`,
+    ]);
+  });
+
+  test('drains at 300 minutes and stops hard at 350, inside the 355-minute timeout, as the script defaults', () => {
+    assert.deepEqual(job.env, { DRAIN_AFTER_MINUTES: '300', HARD_STOP_AFTER_MINUTES: '350' });
+    assert.match(script, /^DRAIN_AFTER_MINUTES=\$\{DRAIN_AFTER_MINUTES:-300\}$/m);
+    assert.match(script, /^HARD_STOP_AFTER_MINUTES=\$\{HARD_STOP_AFTER_MINUTES:-350\}$/m);
+    assert.match(script, /^KILL_AFTER_SECONDS=90$/m);
+    assert.ok(350 * 60 + 90 < 355 * 60 - 3 * 60, 'the kill lands with time for the log, the upload and the next run');
+    assert.match(script, /DISPATCHER_DRAIN_AT="\$\(iso_time "\$drain_epoch"\)"/);
+    assert.match(script, /exec timeout --preserve-status --signal=TERM --kill-after="\$KILL_AFTER_SECONDS" "\$seconds" \\/);
+    const iso = actionsFn('iso_time 1791306000');
+    assert.equal(iso.stdout.trim(), '2026-10-06T17:00:00Z');
+  });
+
+  test('runs the dispatcher from the read-only checkout with only the environment run-dispatcher.sh gives it on the Mac', () => {
+    assert.match(
+      script,
+      /env -i PATH="\$PATH" HOME="\$HOME" USER="\$\{USER:-runner\}" TMPDIR="\$\{RUNNER_TEMP:-\/tmp\}" LANG=C\.UTF-8 \\\n\s+DISPATCHER_CODE_ROOT="\$code" DISPATCHER_REPO_ROOT="\$HOST_DIR\/work" DISPATCHER_WORKTREE_ROOT="\$HOST_DIR\/work-worktrees" \\\n\s+DISPATCHER_CODE_READONLY=required TSX_DISABLE_CACHE=1 DISPATCHER_DRAIN_AT=/,
+    );
+    assert.match(script, /^\s+node --import tsx src\/main\.ts$/m);
+    const at = (needle) => script.indexOf(needle);
+    assert.ok(at('problem=$(check_env "$ENV_FILE")') < at('cp "$ENV_FILE" "$code/.env"'));
+    assert.ok(at('cp "$ENV_FILE" "$code/.env"') < at('problem=$(check_dotenv "$code")'));
+    assert.ok(at('problem=$(check_dotenv "$code")') < at('chmod -R a-w "$code"'));
+    assert.ok(at('chmod -R a-w "$code"') < at('exec timeout'));
+  });
+
+  test('starts the next run with the job token unless the run was fatal, and alerts the board on a failure', () => {
+    const next = step('Start the next run');
+    assert.equal(next.run, 'gh workflow run dispatcher.yml --ref main --repo "$GITHUB_REPOSITORY"');
+    assert.equal(next.if, "always() && steps.run.outputs.redispatch == 'true'");
+    assert.deepEqual(next.env, { GH_TOKEN: '${{ github.token }}' });
+    assert.equal(step('Alert the board').if, "failure() && steps.run.outputs.alerted != 'true'");
+    const redispatch = (args) => actionsFn(`redispatch_now ${args}`).stdout.trim();
+    assert.equal(redispatch('true true true 20000'), 'false', 'never after a fatal exit');
+    assert.equal(redispatch('false true false 30'), 'true', 'after a drain');
+    assert.equal(redispatch('false false true 21000'), 'true', 'after a hard stop');
+    assert.equal(redispatch('false false false 600'), 'true', 'after a run of ten minutes');
+    assert.equal(redispatch('false false false 599'), 'false', 'a short failed run waits for the schedule');
+    assert.match(script, /^EXIT_FATAL=78$/m);
+    assert.match(script, /stop_fatal\(\) \{\n[^}]*output redispatch false\n[^}]*alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error"\n\s+exit "\$EXIT_FATAL"/);
+  });
+
+  test('encrypts the log with age to vars.BACKUP_AGE_RECIPIENT and uploads only the ciphertext, for 14 days', () => {
+    const encrypt = step('Encrypt the dispatcher log');
+    assert.equal(encrypt.if, 'always()');
+    assert.deepEqual(encrypt.env, { AGE_RECIPIENT: '${{ vars.BACKUP_AGE_RECIPIENT }}' });
+    assert.match(encrypt.run, /age -r "\$AGE_RECIPIENT" -o "\$RUNNER_TEMP\/dispatcher-log\.age" "\$log"\n\s*rm -f "\$log"/);
+    assert.match(encrypt.run, /if \[ -z "\$AGE_RECIPIENT" \]; then\n\s*rm -f "\$log"/);
+    const uploads = steps.filter((candidate) => candidate.uses?.startsWith('actions/upload-artifact@'));
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].if, "always() && steps.log.outputs.encrypted == 'true'");
+    assert.equal(uploads[0].with.path, '${{ runner.temp }}/dispatcher-log.age');
+    assert.equal(uploads[0].with['retention-days'], 14);
+    assert.match(script, /\) >> "\$LOG" 2>&1 &/);
+  });
+
+  test('prints only fixed lifecycle lines from the log, never a field', () => {
+    const log = [
+      '{"ts":"t","level":"info","scope":"startup","msg":"code root is read-only","codeRoot":"/secret/path"}',
+      '{"ts":"t","level":"info","scope":"startup","msg":"containment verified","agent":"agent_fixture-secret"}',
+      '{"ts":"t","level":"info","scope":"probe","msg":"startup probe passed","billed_to":"overhead"}',
+      '{"ts":"t","level":"info","scope":"tick","msg":"started","cardId":"card-1"}',
+      '{"ts":"t","level":"error","scope":"main","msg":"dispatcher exited with an error","error":"fixture-service-role-key"}',
+      '{"ts":"t","level":"info","scope":"main","msg":"dispatcher drained","drainAt":"x"}',
+      'a line that is not JSON naming containment verified',
+    ].join('\n');
+    const run = actionsFn('printf "%s\\n" "$LOG_LINES" | lifecycle_lines', { LOG_LINES: log });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(
+      run.stdout,
+      ['dispatcher: code root is read-only', 'dispatcher: containment verified', 'dispatcher: startup probe passed', 'dispatcher: dispatcher exited with an error', 'dispatcher: dispatcher drained', ''].join('\n'),
+    );
+  });
+
+  test('checks the env file with check_env_lines, refuses DISPATCHER_DRAIN_AT in it, and masks long values', () => {
+    const made = makeEnv();
+    assert.equal(made.status, 0, made.output);
+    const good = actionsFn('check_env "$ENV_TO_CHECK"', { ENV_TO_CHECK: made.out });
+    assert.equal(good.status, 0, `${good.stdout}${good.stderr}`);
+    const bad = path.join(scratch, 'actions-bad.env');
+    writeFileSync(bad, `${readFileSync(made.out, 'utf8')}DISPATCHER_DRAIN_AT=2026-01-01T00:00:00Z\nDISPATCHER_CODE_ROOT=/x\n`);
+    const refused = actionsFn('check_env "$ENV_TO_CHECK"', { ENV_TO_CHECK: bad });
+    assert.equal(refused.status, 1);
+    assert.match(refused.stdout, /DISPATCHER_DRAIN_AT is set by the workflow/);
+    assert.match(refused.stdout, /DISPATCHER_CODE_ROOT is set by dispatcher\.service/);
+    const masks = actionsFn('mask_values "$ENV_TO_CHECK"', { ENV_TO_CHECK: made.out }).stdout.split('\n').filter(Boolean);
+    assert.ok(masks.includes(`::add-mask::${OPERATOR.VPS_GITHUB_TOKEN}`));
+    const long = parseEnvFile(readFileSync(made.out, 'utf8')).filter(([, value]) => value.length >= 8);
+    assert.deepEqual(masks, long.map(([, value]) => `::add-mask::${value}`));
+    assert.ok(!masks.includes('::add-mask::1'), 'a short value is not masked');
+  });
+
+  test('writes DISPATCHER_ENV to a 0600 file and refuses an empty one', () => {
+    const file = path.join(scratch, 'actions-env', 'dispatcher.env');
+    const wrote = actionsFn('write_env_file "$OUT"', { OUT: file, DISPATCHER_ENV: 'A=1\nB=2' });
+    assert.equal(wrote.status, 0, wrote.stderr);
+    assert.equal(wrote.stdout, '');
+    assert.equal(readFileSync(file, 'utf8'), 'A=1\nB=2\n');
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    assert.equal(actionsFn('write_env_file "$OUT"', { OUT: file, DISPATCHER_ENV: '' }).status, 1);
+  });
+
+  test("clones the work clone with the token in git's environment only, never on its command line or in .git/config", () => {
+    const bin = path.join(scratch, 'actions-fake-git');
+    mkdirSync(bin, { recursive: true });
+    const record = path.join(scratch, 'actions-git-calls');
+    const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+    // A git that records its arguments and whether the header reached it, and clones this repository
+    // in place of GitHub.
+    writeFileSync(
+      path.join(bin, 'git'),
+      [
+        '#!/bin/bash',
+        `printf '%s\\n' "$*" >> "${record}"`,
+        `[ -n "\${GIT_CONFIG_VALUE_0:-}" ] && echo "header: \${GIT_CONFIG_KEY_0}" >> "${record}"`,
+        'args=()',
+        `for a in "$@"; do case "$a" in https://github.com/*) args+=("${REPO_ROOT}") ;; *) args+=("$a") ;; esac; done`,
+        `exec env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 "${realGit}" "\${args[@]}"`,
+        '',
+      ].join('\n'),
+    );
+    chmodSync(path.join(bin, 'git'), 0o755);
+    const env = path.join(scratch, 'actions-clone.env');
+    writeFileSync(env, 'GITHUB_REPO=AlreadyKyle/peanutgallery\nGITHUB_TOKEN=github_pat_-fixture-clone\n');
+    const target = path.join(scratch, 'actions-work');
+    const run = spawnSync('bash', ['-c', 'set -euo pipefail; ACTIONS_HOST_SOURCE_ONLY=1 . "$1"; clone_work "$2" "$3"', 'ops-test', path.join(OPS_DIR, 'actions', 'run-dispatcher.sh'), env, target], {
+      env: { PATH: `${bin}:${process.env.PATH}`, HOME: process.env.HOME },
+      encoding: 'utf8',
+    });
+    const calls = readFileSync(record, 'utf8');
+    assert.equal(run.status, 0, `${run.stdout}${run.stderr}\n${calls}`);
+    assert.match(calls, /^-c core\.hooksPath=\/dev\/null -c core\.fsmonitor=false clone --quiet --branch main https:\/\/github\.com\/AlreadyKyle\/peanutgallery\.git /m);
+    assert.match(calls, /^header: http\.https:\/\/github\.com\/\.extraheader$/m);
+    assert.doesNotMatch(calls, /fixture-clone/);
+    assert.doesNotMatch(readFileSync(path.join(target, '.git', 'config'), 'utf8'), /extraheader|fixture-clone/);
   });
 });
