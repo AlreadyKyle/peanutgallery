@@ -51,7 +51,7 @@ Run on branch `launch/no-pause-no-golive`.
 - Deno, `money_logic_test.ts` and `migration_test.ts`: "the launch stamp ... ok (1s)", "ok | 16 passed (96 steps) | 0 failed (17s)".
 - `npx vitest run test/migration.test.ts` in `platform/supabase`: "Test Files  1 passed (1)", "Tests  187 passed (187)".
 - `pnpm test:docs`: "ℹ tests 22", "ℹ pass 22", "ℹ fail 0". `pnpm secret-scan`: "PASS: secret-scan files=742".
-- `pnpm verify`: exit 0; "GATE PASS folder=platform lane=code", "PASS: secret-scan files=742", dispatcher "Tests  878 passed (878)", supabase "Tests  329 passed (329)", functions "ok | 131 passed (243 steps) | 0 failed (45s)".
+- `pnpm verify`: exit 0, with the gate passing on folder platform, lane code; the secret scan clean over 742 files; dispatcher 878 tests, supabase 329 tests and functions 131 tests all passing.
 - Terms check: no posted Terms or Refunds version promises a paused notice; both say only "No card has a delivery date, because the agents work only while the studio is not paused." (`terms-versions.ts`), left unedited.
 
 ## Decisions
