@@ -35,12 +35,12 @@ everything else, in the order the board would take it.
 - intent: Humble Bundle style slider on the contribute page sets the supporter's Agents/Studio split (default 80/20, which stays the default and is not votable, PLAN.md §4 Kernel), with the 10% chargeback reserve and the incident share shown as fixed and not movable. It snaps to the eleven splits SPLIT_MAP already allows (platform/supabase/functions/_shared/split.ts) and carries the choice on the Payment Link's client_reference_id beside the card id (platform/site/src/lib/payment.ts), so the site holds no Stripe secret and creates no Checkout Session; the webhook reads it there, still accepts only valid splits and keeps crediting sessions that used the old dropdown, and the dropdown comes off the Payment Link once the slider is live. This is one payment's Agents/Studio split, not the pool's weekly bucket allocation. Requested by the board on 23 September 2026 and made the first entry in Next on 6 October 2026, to build after Go live. It is not built yet.
 - board: yes
 
-### Voter identity for free votes
+### Player accounts
 - bucket: platform
 - folder: platform
 - horizon: next
 - rank: 2
-- summary: A player sign-in, so that a free vote counts once per person. Free voting waits on it.
+- summary: Make an account on the site and sign in, so what you fund and play is yours. Free voting waits on it.
 - intent: A supporter account on the site, separate from the board's sign-in, with one vote per account and a minimum account age before an account can vote, so votes cannot be multiplied; linking a Twitch identity can come later. Free voting cannot move to now until this exists. It is not built yet.
 - board: yes
 

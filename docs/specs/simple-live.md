@@ -10,7 +10,7 @@ The board wants the studio to read as simply running. The site still split suppo
 
 ## Scope
 
-In: the supporter label on the card pages, the reports and /thanks; the board site's launch line; the trigger lines of Biz Dev, Head of Finance, Head of Product and Tech Artist (role files and prompts); PLAN.md §10 decision 63, ROADMAP.md and BOARD-SETUP.md.
+In: retitling the backlog entry "Voter identity for free votes" to "Player accounts" (rank 2 in Next, behind the split slider); the supporter label on the card pages, the reports and /thanks; the board site's launch line; the trigger lines of Biz Dev, Head of Finance, Head of Product and Tech Artist (role files and prompts); PLAN.md §10 decision 63, ROADMAP.md and BOARD-SETUP.md.
 
 Out: the database. The `supporters.founding` column, `studio_state.launched_at`, its trigger and `set_launched` stay as they are and nothing public draws them. Posted Terms versions are not edited. The pause, the kill switch and every money rule are unchanged.
 
@@ -32,6 +32,7 @@ Out: the database. The `supporters.founding` column, `studio_state.launched_at`,
 
 - `pnpm verify`
 - `E2E_PORT=4450 npx playwright test e2e/thanks.spec.ts e2e/card.spec.ts e2e/reports.spec.ts e2e/team-status.spec.ts` in `platform/site`
+- `pnpm --filter @backseat/supabase file-backlog -- --apply` (files Player accounts, removes the old title)
 - `pnpm --filter @backseat/supabase seed`, then `node platform/site/scripts/live-check.mjs https://mobmachine.games`
 
 ## Evidence

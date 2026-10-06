@@ -141,7 +141,7 @@ Controls on the board's site: the Needs you inbox (`board_needs_you`); pause and
 
 Each line is one mechanic from the kick-off plan or a later decision, with its entry in `docs/BACKLOG.md`. None of them exists, and nothing public describes them as existing.
 
-- [Voter identity for free votes](BACKLOG.md#voter-identity-for-free-votes): one account one vote, with a minimum account age.
+- [Player accounts](BACKLOG.md#player-accounts): one account one vote, with a minimum account age.
 - [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards): free votes beside funding, with tiers, quorums and micro-votes.
 - [Studio Head drafts cards from the roadmap](BACKLOG.md#studio-head-drafts-cards-from-the-roadmap): the Studio Head picks planned cards to draft.
 - [Scheduled and unattended role jobs](BACKLOG.md#scheduled-and-unattended-role-jobs): the ranking and drafting on a schedule or an event, without a board member signed in, once an operations percentage exists.
