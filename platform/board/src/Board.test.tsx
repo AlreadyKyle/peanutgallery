@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Board, BOARD_LEDE, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, GO_LIVE_CONFIRM, NO_CARDS, NOT_ON_BOARD, SECOND_FACTOR_LINE, TIER_CAP_LABEL } from './Board';
+import { Board, BOARD_LEDE, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, NO_CARDS, NOT_LIVE_LINE, NOT_ON_BOARD, SECOND_FACTOR_LINE, TIER_CAP_LABEL } from './Board';
 import {
   BOARD_CARD_COLUMNS,
   BOARD_SESSION_TTL_MIN,
@@ -58,14 +58,12 @@ type FakeCard = {
 const fake = vi.hoisted(() => ({
   role: 'board' as string | null,
   heartbeatFails: false,
-  launchFails: false,
   noClient: false,
   signedOut: false,
   otpCalls: [] as Record<string, unknown>[],
   needs: {} as Record<string, unknown>,
   roleRows: [] as Record<string, unknown>[],
   seenAt: '2026-09-14T12:00:00Z',
-  launchedAt: '2026-09-14T12:00:00Z',
   studio: {} as FakeStudio,
   cards: [] as FakeCard[],
   selects: [] as { table: string; columns: string; filters: string[] }[],
@@ -161,9 +159,6 @@ vi.mock('./lib/supabase', async (importOriginal) => {
       if (name === 'board_heartbeat' && fake.heartbeatFails) {
         return Promise.resolve({ data: null, error: { message: 'heartbeat refused' } });
       }
-      if (name === 'set_launched' && fake.launchFails) {
-        return Promise.resolve({ data: null, error: { message: 'launch refused' } });
-      }
       if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
       // The card RPCs change the card as the database does, so the cards read gives it back changed: a
       // veto moves a card on now with no money to next, a cancelled card is rejected and leaves the list.
@@ -193,7 +188,6 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         board_studio_state: fake.studio,
         board_needs_you: fake.needs,
         card_supply: fake.supply,
-        set_launched: fake.launchedAt,
         set_agent_mode: null,
         set_paused: null,
         cancel_card: fake.cancelResult,
@@ -325,7 +319,6 @@ function expectNoSecondFactorControls() {
 
 function expectSecondFactorControls() {
   expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Go live' })).toBeTruthy();
   expect(screen.getByRole('group', { name: 'Agent mode' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a card' })).toBeTruthy();
   expect(screen.getByRole('form', { name: 'File a directive' })).toBeTruthy();
@@ -352,7 +345,6 @@ beforeEach(() => {
   vi.setSystemTime(startedAt);
   fake.role = 'board';
   fake.heartbeatFails = false;
-  fake.launchFails = false;
   fake.noClient = false;
   fake.signedOut = false;
   fake.otpCalls.length = 0;
@@ -362,7 +354,6 @@ beforeEach(() => {
   fake.findingsError = null;
   fake.roleRows = [...ROLE_ROWS];
   fake.seenAt = startedAt.toISOString();
-  fake.launchedAt = startedAt.toISOString();
   fake.studio = {
     paused: false,
     agent_mode: 'attended',
@@ -910,37 +901,14 @@ describe('Board studio status', () => {
     expect(callsNamed('board_studio_state')).toHaveLength(2);
   });
 
-  it('does not go live when the confirm is declined', async () => {
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('has no Go live button, and says the studio goes live on its first credit purchase (decision 62)', async () => {
     await renderBoard();
-    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
-    await flush();
-    expect(confirm).toHaveBeenCalledWith(GO_LIVE_CONFIRM);
+    expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
+    expect(screen.getByText(NOT_LIVE_LINE)).toBeTruthy();
     expect(callsNamed('set_launched')).toHaveLength(0);
   });
 
-  it('goes live once when the confirm is accepted', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await renderBoard();
-    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
-    await flush();
-    expect(callsNamed('set_launched')).toHaveLength(1);
-    expect(
-      screen.getByText(`The studio went live at ${formatDateTime(fake.launchedAt)}.`),
-    ).toBeTruthy();
-  });
-
-  it('shows the error when set_launched fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    fake.launchFails = true;
-    await renderBoard();
-    fireEvent.click(screen.getByRole('button', { name: 'Go live' }));
-    await flush();
-    expect(callsNamed('set_launched')).toHaveLength(1);
-    expect(screen.getByText('launch refused')).toBeTruthy();
-  });
-
-  it('hides Go live once the studio has launched', async () => {
+  it('says when the studio went live once launched_at is stamped', async () => {
     fake.studio.launched_at = '2026-09-13T09:00:00Z';
     await renderBoard();
     expect(screen.getByText(`Live since ${formatDateTime('2026-09-13T09:00:00Z')}.`)).toBeTruthy();

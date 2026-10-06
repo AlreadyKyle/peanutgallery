@@ -816,15 +816,6 @@ export async function boardStudioState(client: SupabaseClient): Promise<BoardStu
   return studioStateFrom(unwrap<unknown>(await client.rpc('board_studio_state')));
 }
 
-export async function setLaunched(client: SupabaseClient): Promise<Date> {
-  const at = unwrap<string>(await client.rpc('set_launched'));
-  const date = at === null ? null : new Date(at);
-  if (date === null || !Number.isFinite(date.getTime())) {
-    throw new Error('set_launched returned no timestamp');
-  }
-  return date;
-}
-
 export async function setAgentMode(client: SupabaseClient, mode: AgentMode): Promise<void> {
   unwrap(await client.rpc('set_agent_mode', { p_mode: mode }));
 }

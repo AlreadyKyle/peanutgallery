@@ -125,8 +125,9 @@ test('a recorded payment names the supporter, the cards it reached (named first)
   await expect(follow.getByRole('link', { name: 'Watch this card' })).toHaveAttribute('href', `/card/${BUILDING_CARD_ID}`);
   await expect(follow.getByRole('link', { name: 'Follow the studio on Discord' })).toHaveAttribute('href', DISCORD_INVITE);
   await expect(follow).toContainText('Discord is for ages 13 and over.');
-  // The studio is paused in this fixture: the paused notice shows under the heading.
-  await expect(page.locator('main > .band').first()).toContainText('paused');
+  // The studio is paused in this fixture, and no paused notice shows (decision 62).
+  await expect(page.locator('main p.notice')).toHaveCount(0);
+  await expect(page.locator('main > .band').first()).not.toContainText('paused');
   // No amount anywhere in the supporter area.
   expect(await page.locator('main').textContent()).not.toContain('$');
 });

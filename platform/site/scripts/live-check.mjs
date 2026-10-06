@@ -27,8 +27,8 @@
 // operator. /contribute's Fund the next card in line is first
 // and names the next card in line (the first card choice) or says the money waits; /ledger shows
 // exactly one reconciliation line, and its received figure (or "No contributions yet.") matches
-// /api/live's money; while /api/live's studio says the agents are paused for awaiting_credit, home
-// and /contribute say the payout sentence (docs/specs/money-surfaces.md).
+// /api/live's money; home's status line and /contribute never say the agents are paused, and
+// /contribute draws no paused notice (docs/PLAN.md §10 decision 62).
 // The studio's name in the home title, og:title and og:site_name, and the top bar's home link named
 // for it with the inline mark (docs/specs/rename.md, docs/specs/machine-mark.md).
 //
@@ -113,13 +113,9 @@ const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned nex
 const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
-// The status line: the open and building counts, then while paused the paused sentence
-// (PausedNotice.tsx pausedSentence, the same sentence as the paused notice).
+// The status line: the open and building counts, and never a paused sentence (decision 62).
 const STATUS_LINE =
-  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?( (The agents are paused|The board has paused the agents)\b.*)?$/;
-// legal.pauseReasons.awaiting_credit, said on home and /contribute while the studio waits for a payout.
-const PAYOUT_SENTENCE =
-  "The agents are paused while the studio waits for Stripe to pay out contributions, which buy the agents' model credit. Cards funded now keep their money and wait in the queue.";
+  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?$/;
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
@@ -408,12 +404,6 @@ try {
   } else {
     const status = ((await main.locator('p.status-line').textContent()) ?? '').trim();
     check(STATUS_LINE.test(status), `status line: ${status}`);
-    const home = await livePart('studio');
-    if (home !== null && home.paused === true && home.pause_reason === 'awaiting_credit') {
-      check(status.endsWith(` ${PAYOUT_SENTENCE}`), 'home status line says the payout sentence while paused for awaiting_credit');
-    } else {
-      skip(`home payout sentence: the studio is not paused for awaiting_credit`);
-    }
     const available = (await pool.textContent()) ?? '';
     check(/^\$[\d,]+\.\d\d$/.test(available) && (await money.locator('.pool-line svg.coin').count()) === 1, `pool figure with the coin shows ${available}`);
 
@@ -513,17 +503,11 @@ try {
       check(false, `Payment Link fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  // The pause reason (docs/specs/money-surfaces.md): while the studio waits for a payout, /contribute's
-  // notice says the payout sentence; home's status line is checked with the landing below.
-  const studioRow = await livePart('studio');
-  const awaitingCredit = studioRow !== null && studioRow.paused === true && studioRow.pause_reason === 'awaiting_credit';
-  if (studioRow === null) {
-    noData('the pause reason on /contribute');
-  } else if (!awaitingCredit) {
-    skip(`the payout sentence: the studio is not paused for awaiting_credit (paused ${studioRow.paused}, reason ${studioRow.pause_reason})`);
-  } else {
-    const notice = ((await page.getByRole('main').locator('p.notice').first().textContent().catch(() => '')) ?? '').trim();
-    check(notice === PAYOUT_SENTENCE, `/contribute says the payout sentence while paused for awaiting_credit: "${notice}"`);
+  // No paused notice (docs/PLAN.md §10 decision 62): /contribute says nothing about a pause, paused or not.
+  {
+    const notices = await page.getByRole('main').locator('p.notice').count();
+    const said = await page.getByRole('main').getByText(/The agents are paused|The board has paused the agents/).count();
+    check(notices === 0 && said === 0, `/contribute shows no paused notice (${notices} notices, ${said} paused sentences)`);
   }
 
   // /ledger: exactly one reconciliation line, and money in as public_money has it.
