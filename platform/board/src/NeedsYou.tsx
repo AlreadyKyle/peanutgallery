@@ -23,7 +23,10 @@ import { errorMessage } from './lib/supabase';
 
 // The inbox reloads once a minute; the Controller writes its figures once a day.
 export const NEEDS_POLL_MS = 60_000;
-export const NOTHING_NEEDS_YOU = 'Nothing needs you.';
+export const NOTHING_NEEDS_YOU =
+  'Nothing needs you right now. A payout to turn into credit, a dispute, a paused or hidden card, a short card supply or a daily-check finding shows up here when there is one.';
+/** Under the heading: what this list is, like an inbox. */
+export const NEEDS_YOU_LEDE = 'Your inbox: what the board has to act on now. Each item says what to do.';
 /** The non-card pull requests (docs/specs/agent-upkeep.md): upkeep_merge merges the patch updates that pass the policy. */
 export const NON_CARD_PULLS_LINE =
   'Dependency patch updates that pass the merge policy merge by themselves. Every other pull request that is not from a card branch waits for your merge:';
@@ -87,7 +90,7 @@ function Item({
           Its text was changed outside a board control, so the public does not see it, no session runs it and it takes
           no money. {canRecord ? null : 'Verify your second factor, then '}
           <ToCard id={item.card.id} listed={listedCards}>
-            {canRecord ? 'Cancel it under Cards' : 'cancel it under Cards'}
+            {canRecord ? 'Reject it under Cards' : 'reject it under Cards'}
           </ToCard>
           , which moves its unspent money to the next cards in line.
         </p>
@@ -102,7 +105,7 @@ function Item({
           It has cost {formatUsd(item.card.actual_usd)}. The rule will not resume it:{' '}
           {canRecord ? null : 'verify your second factor, then '}
           <ToCard id={item.card.id} listed={listedCards}>
-            resume it with a new estimate, or cancel it, under Cards
+            resume it with a new estimate, or reject it, under Cards
           </ToCard>
           .
         </p>
@@ -344,8 +347,9 @@ export function NeedsYou({
   const short = supply !== undefined && supply.supply !== null && supplyShort(supply.supply);
 
   return (
-    <section aria-label="Needs you">
+    <section aria-label="Needs you" id="needs-you">
       <h2>Needs you</h2>
+      <p className="muted">{NEEDS_YOU_LEDE}</p>
       {data === null ? (
         <p role="status">{loadError === '' ? 'Loading what needs you.' : loadError}</p>
       ) : (

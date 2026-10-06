@@ -335,9 +335,9 @@ test('the preview sends the enforced policy, the robots header and the frame rul
 test('the sign-in form renders at 375 px with no horizontal overflow and no policy report', async ({ page }) => {
   const reports = await watchPolicy(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Board' })).toBeVisible();
-  await expect(page.getByLabel('Email')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Send sign-in link' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Mob Machine board' })).toBeVisible();
+  await expect(page.getByLabel('Board email')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
   expect(reports).toEqual([]);
 });
@@ -355,7 +355,7 @@ test('a signed-in board member sees Needs you first, and sets up an authenticato
   await expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeVisible();
   await expect(inbox.getByText('Verify your second factor, then fill in the record form from here.', { exact: false })).toBeVisible();
   // Cards is shown only at the second factor, so the ceiling pause names the second factor and links nowhere.
-  await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or cancel it, under Cards.', { exact: false })).toBeVisible();
+  await expect(inbox.getByText('verify your second factor, then resume it with a new estimate, or reject it, under Cards.', { exact: false })).toBeVisible();
   await expect(inbox.locator('a[href^="#"]')).toHaveCount(0);
   // The Janitor's findings, and the line for pull requests not from a card branch (docs/specs/agent-upkeep.md).
   await expect(inbox.getByRole('heading', { level: 3, name: 'Findings' })).toBeVisible();
@@ -415,17 +415,17 @@ test('at the second factor the board sees and vetoes an undealt agent card, paus
   await page.goto('/');
 
   // Needs you's ceiling pause links to the card's row under Cards, which is on the page.
-  const toCard = page.getByRole('region', { name: 'Needs you' }).getByRole('link', { name: 'resume it with a new estimate, or cancel it, under Cards' });
+  const toCard = page.getByRole('region', { name: 'Needs you' }).getByRole('link', { name: 'resume it with a new estimate, or reject it, under Cards' });
   await expect(toCard).toHaveAttribute('href', `#card-${PAUSED.id}`);
   await toCard.click();
   await expect(page.locator(`#card-${PAUSED.id}`)).toBeInViewport();
   // The void card holding money links to its row, where it is marked hidden and can be vetoed or cancelled.
   const needs = page.getByRole('region', { name: 'Needs you' });
   await expect(needs.getByText(`Card ${HIDDEN.title} holds $2.00 but its approval is not current.`)).toBeVisible();
-  await expect(needs.getByRole('link', { name: 'Cancel it under Cards' })).toHaveAttribute('href', `#card-${HIDDEN.id}`);
+  await expect(needs.getByRole('link', { name: 'Reject it under Cards' })).toHaveAttribute('href', `#card-${HIDDEN.id}`);
   const hidden = page.getByRole('form', { name: `Card ${HIDDEN.title}` });
   await expect(hidden.getByText(/^Hidden: written by an agent with no current approval/)).toBeVisible();
-  await expect(hidden.getByRole('button', { name: 'Cancel card' })).toBeVisible();
+  await expect(hidden.getByRole('button', { name: 'Reject card' })).toBeVisible();
 
   // A keyboard user vetoes a card on now: the veto moves it to next, and the confirmation is shown and
   // focus stays on the one veto button, which now reads Lift veto.
