@@ -95,6 +95,8 @@ export type Caps = {
 export type BoardCard = {
   id: string;
   title: string;
+  /** The card's one public line, so the board reads what it is reviewing. */
+  summary: string | null;
   stage: string;
   horizon: Horizon;
   rank: number | null;
@@ -132,7 +134,7 @@ export function movesToNow(card: { horizon: Horizon }, horizon: Horizon): boolea
   return horizon === 'now' && card.horizon !== 'now';
 }
 export const BOARD_CARD_COLUMNS =
-  'id,title,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at,source,drafter_role_id,opens_at,board_vetoed,board_veto_reason';
+  'id,title,summary,stage,horizon,rank,folder,lane,funding_target_usd,funded_usd,estimate_usd,created_at,source,drafter_role_id,opens_at,board_vetoed,board_veto_reason';
 
 /** An agent wrote some of the card: it needs an approval (card_needs_approval). */
 export function agentWritten(card: Pick<BoardCard, 'source' | 'drafter_role_id'>): boolean {
@@ -197,7 +199,7 @@ export const cardStages = [
   { value: 'voted', label: 'Picked by the board' },
 ] as const satisfies readonly { value: NextCardStage; label: string }[];
 export const horizons = [
-  { value: 'now', label: 'Now: open to funding and the agents' },
+  { value: 'now', label: 'Now: open for funding' },
   { value: 'next', label: 'Next: on the roadmap' },
   { value: 'later', label: 'Later: on the roadmap' },
 ] as const satisfies readonly { value: Horizon; label: string }[];
@@ -708,6 +710,7 @@ function boardCardFrom(row: Record<string, unknown>): BoardCard {
   return {
     id: String(row.id),
     title: String(row.title),
+    summary: textOrNull(row, 'summary'),
     stage: String(row.stage),
     horizon,
     rank: optionalAmount(row, 'rank'),

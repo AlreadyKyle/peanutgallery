@@ -95,6 +95,7 @@ describe('boardCardOrder', () => {
     const card = (id: string, horizon: BoardCard['horizon'], rank: number | null, created_at = '2026-09-15T00:00:00Z'): BoardCard => ({
       id,
       title: id,
+      summary: null,
       stage: 'proposed',
       horizon,
       rank,
@@ -312,3 +313,4 @@ describe('the card supply (docs/specs/studio-reports.md)', () => {
     expect(new TextEncoder().encode(JSON.stringify(input)).length).toBeLessThanOrEqual(JOB_INPUT_MAX_BYTES);
   });
 });
+
