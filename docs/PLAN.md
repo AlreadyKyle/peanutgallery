@@ -147,6 +147,7 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Scheduled and unattended role jobs](BACKLOG.md#scheduled-and-unattended-role-jobs): the ranking and drafting on a schedule or an event, without a board member signed in, once an operations percentage exists.
 - [Studio card drafting](BACKLOG.md#studio-card-drafting): Platform Builder proposals with the Platform Director's check lines.
 - [Studio Head triages board notes](BACKLOG.md#studio-head-triages-board-notes): each note becomes a card, a scheduled item or a discard.
+- [A simpler board site: triage queue and sign-in](BACKLOG.md#a-simpler-board-site-triage-queue-and-sign-in): a triage queue for cards, an edit of a card's words, and a public Board sign-in link if decision 39 is amended.
 - [Refund and dispute fee rows on the ledger](BACKLOG.md#refund-and-dispute-fee-rows-on-the-ledger): Stripe's fees on reversals as their own rows.
 - [Two rare accounting edge cases](BACKLOG.md#two-rare-accounting-edge-cases): the two items the sweep left open.
 - [Board Decisions page](BACKLOG.md#board-decisions-page): every board action in public.

@@ -76,7 +76,16 @@ const noDatabase = 'The site has no database configuration, so board sign-in is 
 const CLOCK_TICK_MS = 1_000;
 export const GO_LIVE_CONFIRM = 'Mark the studio live now? This is recorded once and cannot be undone.';
 export const CANCEL_CONFIRM =
-  'Cancel this card? It is rejected with your reason, its unspent money goes to the next cards in line, and this cannot be undone.';
+  'Reject this card? It stops for good with your reason, its unspent money goes to the next cards in line, and this cannot be undone.';
+/** Under the heading on every screen: what the board is, in one line (docs/specs/simple-board.md). */
+export const BOARD_LEDE =
+  'The board is the people who run Mob Machine. Here they review the cards the agents will build, open them for funding or stop them, and keep the studio safe.';
+/** At the first factor, the page reads but changes nothing until the authenticator code is in. */
+export const SECOND_FACTOR_LINE =
+  'Enter the 6-digit code from your authenticator app to unlock the controls. Until then this page is read-only: you can see what needs you, but not act on it.';
+export const NOT_ON_BOARD = 'This email is not on the board, so there is nothing to show. Sign out and sign in with your board email.';
+export const NO_CARDS =
+  'No cards to review. File one under File a card, or press Draft a game card under Jobs and the agents draft one.';
 export const FILLED_FROM_CONTROLLER = "Filled in from the Controller's figure. Check it against the Console receipt, then record it.";
 
 export function Board() {
@@ -93,8 +102,8 @@ export function Board() {
   return (
     <main>
       <div className="hero">
-        <h1>Board</h1>
-        <p className="lede">Private controls for the board. Sign-in is limited to board accounts.</p>
+        <h1>Mob Machine board</h1>
+        <p className="lede">{BOARD_LEDE}</p>
       </div>
       {client === null || session === null ? (
         <SignIn client={client} />
@@ -120,7 +129,7 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
     setBusy(true);
     try {
       await sendMagicLink(client, email.trim());
-      setMessage(`A sign-in link was sent to ${email.trim()}.`);
+      setMessage(`Check ${email.trim()} for your sign-in link, and open it in this browser.`);
     } catch (error) {
       setMessage(errorMessage(error));
     } finally {
@@ -129,9 +138,15 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
   }
 
   return (
+    <section aria-label="Board sign-in">
+      <h2>Board sign-in</h2>
+      <p>
+        For board members only. Enter your board email and we send you a one-time sign-in link. After it, a 6-digit code
+        from your authenticator app unlocks the controls.
+      </p>
     <form className="stack" onSubmit={submit} aria-label="Sign in">
       <label>
-        Email
+        Board email
         <input
           type="email"
           name="email"
@@ -142,10 +157,11 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
         />
       </label>
       <button type="submit" aria-disabled={busy}>
-        Send sign-in link
+        Email me a sign-in link
       </button>
       {message === '' ? null : <p role="status">{message}</p>}
     </form>
+    </section>
   );
 }
 
@@ -187,7 +203,7 @@ function SignedIn({ client, email }: { client: SupabaseClient; email: string }) 
       {role === 'pending' ? <p>Checking board membership.</p> : null}
       {role === null ? (
         <p role="status">
-          {roleError === '' ? 'This account is not on the board.' : roleError}
+          {roleError === '' ? NOT_ON_BOARD : roleError}
         </p>
       ) : null}
       {/* The moderator's pause works at aal1; the board's needs the second factor. */}
@@ -303,11 +319,7 @@ function TwoFactor({
   return (
     <section aria-label="Two-factor sign-in">
       <h2>Two-factor sign-in</h2>
-      <p>
-        A second factor is needed before you can pause agents or roles, go live, change the agent mode, the caps or
-        the cooling window, record credit, move, veto, cancel or resume cards, run a job now, or file cards,
-        directives and notes.
-      </p>
+      <p>{SECOND_FACTOR_LINE}</p>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Checking two-factor sign-in.' : loadError}</p>
       ) : null}
@@ -541,7 +553,7 @@ function StudioStatus({
 
   return (
     <section aria-label="Studio status">
-      <h2>Studio</h2>
+      <h2>Studio status</h2>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Loading the studio state.' : loadError}</p>
       ) : (
@@ -681,7 +693,8 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
 
   return (
     <section aria-label="Pause and resume">
-      <h2>Agents</h2>
+      <h2>Pause the agents</h2>
+      <p>While the agents are paused no card session starts, and the public site says so with the reason. Funded cards keep their money.</p>
       <label>
         Pause reason
         <select value={reason} aria-disabled={busy} onChange={(event) => setReason(event.target.value as PauseReason)}>
@@ -796,7 +809,7 @@ function CapsForm({
 
   return (
     <form className="stack" onSubmit={submit} aria-label="Set the caps">
-      <h2>Caps</h2>
+      <h2>Spending caps</h2>
       <p>Every cap is saved together, with the reason, and the database checks each bound.</p>
       {CAP_FIELDS.map((field) => (
         <label key={field.key}>
@@ -1018,7 +1031,7 @@ function CardControl({
           target_usd: toNow ? targetValue : null,
           reason: why,
         }),
-      'Card saved.',
+      'Card moved.',
     );
   }
 
@@ -1029,7 +1042,7 @@ function CardControl({
     if (!window.confirm(CANCEL_CONFIRM)) return;
     await run(async () => {
       const moved = await cancelCard(client, card.id, why);
-      onCancelled(`Card ${card.title} cancelled.${moved > 0 ? ` $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : ''}`);
+      onCancelled(`Card ${card.title} rejected.${moved > 0 ? ` $${moved.toFixed(2)} of unspent money moved to the next cards in line.` : ''}`);
     }, '');
   }
 
@@ -1056,6 +1069,7 @@ function CardControl({
     <li id={`card-${card.id}`} ref={row}>
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
+        {card.summary === null || card.summary.trim() === '' ? null : <p>{card.summary}</p>}
         <p>
           {stageWord(card)} · horizon {card.horizon}
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
@@ -1095,8 +1109,8 @@ function CardControl({
           </label>
         ) : null}
         {settableTarget ? <p id={`${idBase}-target`}>Needed to move the card to now.</p> : null}
-        {movable && card.horizon === 'now' ? <p>A card with money on its bar stays on now; cancel it instead.</p> : null}
-        {movable ? null : <p>A {STAGE_WORDS[card.stage] ?? card.stage} card can only be cancelled{card.stage === 'paused' ? ' or resumed' : ''}.</p>}
+        {movable && card.horizon === 'now' ? <p>A card with money on its bar stays on now; reject it instead.</p> : null}
+        {movable ? null : <p>A {STAGE_WORDS[card.stage] ?? card.stage} card can only be rejected{card.stage === 'paused' ? ' or resumed' : ''}.</p>}
         {card.stage === 'paused' ? (
           <label>
             New estimate (USD)
@@ -1121,7 +1135,7 @@ function CardControl({
         <div className="row">
           {movable ? (
             <button type="submit" aria-disabled={busy}>
-              Save horizon and rank
+              Move card
             </button>
           ) : null}
           {card.stage === 'paused' ? (
@@ -1136,7 +1150,7 @@ function CardControl({
             </button>
           ) : null}
           <button type="button" className="button-secondary" aria-disabled={busy} onClick={() => void cancel()}>
-            Cancel card
+            Reject card
           </button>
         </div>
         {message === '' ? null : <p role="status">{message}</p>}
@@ -1231,9 +1245,10 @@ function CardControls({ client, onListed }: { client: SupabaseClient; onListed: 
     <section aria-label="Cards">
       <h2>Cards</h2>
       <p>
-        Move a card between now, next and later, rank it, set its target, veto it, cancel it, or resume a paused card
-        with a new estimate. Each change needs a reason and is recorded. Undealt and hidden agent cards are listed
-        here, and nowhere public.
+        Move a card to now to open it for funding, or to next or later to keep it on the roadmap; veto it to hold it
+        back, or reject it to stop it for good. A paused card can be resumed with a new estimate. Every change needs a
+        one-line reason, which is recorded. Agent cards waiting to be dealt or hidden are listed here and nowhere
+        public.
       </p>
       {notice === '' ? null : (
         <p role="status" tabIndex={-1} ref={noticeLine}>
@@ -1241,7 +1256,7 @@ function CardControls({ client, onListed }: { client: SupabaseClient; onListed: 
         </p>
       )}
       {cards === null ? <p role="status">{loadError === '' ? 'Loading the cards.' : loadError}</p> : null}
-      {cards !== null && cards.length === 0 ? <p>No cards to manage.</p> : null}
+      {cards !== null && cards.length === 0 ? <p>{NO_CARDS}</p> : null}
       {cards !== null && cards.length > 0 ? (
         <ul className="board-cards">
           {cards.map((card) => (
