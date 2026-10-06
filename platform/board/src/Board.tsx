@@ -8,8 +8,6 @@ import {
   canUnveto,
   canVeto,
   cardStages,
-  triageCounts,
-  triageHint,
   COOLING_WINDOW_MAX,
   dispatcherSeenAgoMs,
   enqueueManualJob,
@@ -467,14 +465,10 @@ function BoardControls({
     creditForm.current?.scrollIntoView?.({ block: 'start' });
   }
 
-  // The order is the board's job in the order it does it (docs/specs/simple-board.md): what needs it,
-  // the cards to review, the pause, then how the studio runs, filing new work, and the settings.
   return (
     <>
-      <JumpNav secondFactor={secondFactor} />
       <NeedsYou client={client} canRecord={secondFactor} listedCards={listedCards} onFillCredit={fillCredit} supply={supply} />
       {secondFactor ? null : <TwoFactor client={client} onVerified={onVerified} />}
-      {secondFactor ? <CardControls client={client} onListed={setListedCards} /> : null}
       {/* Pausing refreshes the status below, so the two never disagree about the agents. */}
       {secondFactor ? <PauseControls client={client} onChanged={studio.refresh} /> : null}
       <StudioStatus client={client} studio={studio} supply={supply} canChange={secondFactor} />
@@ -483,41 +477,14 @@ function BoardControls({
       <JobsPanel client={client} canRun={secondFactor} cardTitles={listedCards} />
       {secondFactor ? (
         <>
-          <SecondFactorForms client={client} />
           <CapsForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CoolingWindowForm client={client} state={studio.state} onChanged={studio.refresh} />
           <CreditPurchaseForm client={client} draft={draft} formRef={creditForm} />
+          <CardControls client={client} onListed={setListedCards} />
+          <SecondFactorForms client={client} />
         </>
       ) : null}
     </>
-  );
-}
-
-/** The page's parts the jump links name, in page order; the second-factor ones show only at aal2. */
-const JUMPS: readonly { id: string; label: string; secondFactor: boolean }[] = [
-  { id: 'needs-you', label: 'Needs you', secondFactor: false },
-  { id: 'cards', label: 'Cards', secondFactor: true },
-  { id: 'pause', label: 'Pause', secondFactor: true },
-  { id: 'studio', label: 'Studio', secondFactor: false },
-  { id: 'roles', label: 'Roles', secondFactor: false },
-  { id: 'jobs', label: 'Jobs', secondFactor: false },
-  { id: 'file', label: 'File a card', secondFactor: true },
-  { id: 'caps', label: 'Caps', secondFactor: true },
-  { id: 'credit', label: 'Record credit', secondFactor: true },
-];
-
-/** One row of plain links to each part of a long page, so nothing is a long scroll away. */
-function JumpNav({ secondFactor }: { secondFactor: boolean }) {
-  return (
-    <nav aria-label="On this page" className="jump">
-      <ul>
-        {JUMPS.filter((jump) => secondFactor || !jump.secondFactor).map((jump) => (
-          <li key={jump.id}>
-            <a href={`#${jump.id}`}>{jump.label}</a>
-          </li>
-        ))}
-      </ul>
-    </nav>
   );
 }
 
@@ -585,7 +552,7 @@ function StudioStatus({
   const seenAgo = state === null ? null : dispatcherSeenAgoMs(state.dispatcher_seen_at, now);
 
   return (
-    <section aria-label="Studio status" id="studio">
+    <section aria-label="Studio status">
       <h2>Studio status</h2>
       {state === null ? (
         <p role="status">{loadError === '' ? 'Loading the studio state.' : loadError}</p>
@@ -725,7 +692,7 @@ function PauseControls({ client, onChanged }: { client: SupabaseClient; onChange
   }
 
   return (
-    <section aria-label="Pause and resume" id="pause">
+    <section aria-label="Pause and resume">
       <h2>Pause the agents</h2>
       <p>While the agents are paused no card session starts, and the public site says so with the reason. Funded cards keep their money.</p>
       <label>
@@ -841,7 +808,7 @@ function CapsForm({
   }
 
   return (
-    <form className="stack" onSubmit={submit} aria-label="Set the caps" id="caps">
+    <form className="stack" onSubmit={submit} aria-label="Set the caps">
       <h2>Spending caps</h2>
       <p>Every cap is saved together, with the reason, and the database checks each bound.</p>
       {CAP_FIELDS.map((field) => (
@@ -933,7 +900,7 @@ function CreditPurchaseForm({
   }
 
   return (
-    <form className="stack" onSubmit={submit} aria-label="Record a credit purchase" ref={formRef} id="credit">
+    <form className="stack" onSubmit={submit} aria-label="Record a credit purchase" ref={formRef}>
       <h2>Record a credit purchase</h2>
       <p>Record Console credit bought for the agents after a Stripe payout. Unattended agents spend only recorded credit.</p>
       <label>
@@ -1103,10 +1070,7 @@ function CardControl({
       <form className="stack" onSubmit={saveHorizon} aria-label={`Card ${card.title}`}>
         <h3>{card.title}</h3>
         {card.summary === null || card.summary.trim() === '' ? null : <p>{card.summary}</p>}
-        <p className="triage" data-triage="">
-          {triageHint(card)}
-        </p>
-        <p className="muted">
+        <p>
           {stageWord(card)} · horizon {card.horizon}
           {card.rank === null ? '' : ` · rank ${card.rank}`} · {card.folder} {card.lane} ·{' '}
           {formatUsd(card.funded_usd)} of {formatUsd(card.funding_target_usd)}
@@ -1145,7 +1109,7 @@ function CardControl({
           </label>
         ) : null}
         {settableTarget ? <p id={`${idBase}-target`}>Needed to move the card to now.</p> : null}
-        {movable && card.horizon === 'now' && card.funded_usd > 0 ? <p>A card with money on its bar stays on now; reject it instead.</p> : null}
+        {movable && card.horizon === 'now' ? <p>A card with money on its bar stays on now; reject it instead.</p> : null}
         {movable ? null : <p>A {STAGE_WORDS[card.stage] ?? card.stage} card can only be rejected{card.stage === 'paused' ? ' or resumed' : ''}.</p>}
         {card.stage === 'paused' ? (
           <label>
@@ -1278,15 +1242,14 @@ function CardControls({ client, onListed }: { client: SupabaseClient; onListed: 
   );
 
   return (
-    <section aria-label="Cards" id="cards">
+    <section aria-label="Cards">
       <h2>Cards</h2>
       <p>
-        Review each card: move it to now to open it for funding, keep it on the roadmap (next or later), veto it to
-        hold it back, or reject it to stop it for good. A paused card can be resumed with a new estimate. Every
-        change needs a one-line reason, which is recorded. Agent cards waiting to be dealt or hidden are listed here
-        and nowhere public.
+        Move a card to now to open it for funding, or to next or later to keep it on the roadmap; veto it to hold it
+        back, or reject it to stop it for good. A paused card can be resumed with a new estimate. Every change needs a
+        one-line reason, which is recorded. Agent cards waiting to be dealt or hidden are listed here and nowhere
+        public.
       </p>
-      {cards !== null && cards.length > 0 ? <p data-cards="counts">{triageCounts(cards)}.</p> : null}
       {notice === '' ? null : (
         <p role="status" tabIndex={-1} ref={noticeLine}>
           {notice}
@@ -1443,7 +1406,7 @@ function RolePauses({ client, canPause, canResume }: { client: SupabaseClient; c
   }
 
   return (
-    <section aria-label="Roles" id="roles">
+    <section aria-label="Roles">
       <h2>Roles</h2>
       <p>
         Pause a role to stop its work: it starts nothing, and a session it is running stops and its card goes back to
@@ -1735,7 +1698,7 @@ function JobsPanel({ client, canRun, cardTitles }: { client: SupabaseClient; can
   }, [refresh]);
 
   return (
-    <section aria-label="Jobs" id="jobs">
+    <section aria-label="Jobs">
       <h2>Jobs</h2>
       {jobs === null ? <p role="status">{loadError === '' ? 'Loading the jobs.' : loadError}</p> : null}
       {jobs !== null && jobs.length === 0 ? <p>No jobs yet. Each is added with the work it runs.</p> : null}
@@ -1835,7 +1798,7 @@ function NextCardForm({ client, roles, rolesError }: { client: SupabaseClient; r
   }
 
   return (
-    <form className="stack" onSubmit={submit} aria-label="File a card" id="file">
+    <form className="stack" onSubmit={submit} aria-label="File a card">
       <h2>File a card</h2>
       <p>
         A card on horizon now shows on the site under Fund what's next. Supporters fund it; when its bar

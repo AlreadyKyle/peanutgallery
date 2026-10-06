@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  cardTriage,
-  triageCounts,
-  triageHint,
   agentWritten,
   boardCardOrder,
   cancelCard,
@@ -317,61 +314,3 @@ describe('the card supply (docs/specs/studio-reports.md)', () => {
   });
 });
 
-describe('cardTriage, triageHint and triageCounts', () => {
-  const base: BoardCard = {
-    id: 'c',
-    title: 'A card',
-    summary: null,
-    stage: 'proposed',
-    horizon: 'next',
-    rank: null,
-    folder: 'seed-1',
-    lane: 'config',
-    funding_target_usd: 2,
-    funded_usd: 0,
-    estimate_usd: 2,
-    created_at: '2026-09-15T00:00:00Z',
-    source: 'board',
-    drafter_role_id: null,
-    opens_at: null,
-    board_vetoed: false,
-    board_veto_reason: null,
-    approval: 'none',
-  };
-
-  it('puts each card where the board reviews it, like a triage queue', () => {
-    expect(cardTriage({ ...base, stage: 'paused', horizon: 'now' })).toBe('decide');
-    expect(cardTriage({ ...base, source: 'agent', approval: 'missing' })).toBe('decide');
-    expect(cardTriage({ ...base, source: 'agent', approval: 'current', opens_at: '2026-09-24T00:00:00Z' })).toBe('new');
-    expect(cardTriage({ ...base, horizon: 'now' })).toBe('open');
-    expect(cardTriage({ ...base, horizon: 'now', stage: 'voted' })).toBe('open');
-    expect(cardTriage(base)).toBe('roadmap');
-    expect(cardTriage({ ...base, board_vetoed: true })).toBe('roadmap');
-    expect(cardTriage({ ...base, horizon: 'now', stage: 'funded', funded_usd: 2 })).toBe('funded');
-  });
-
-  it('says in one line what the board can do with each', () => {
-    expect(triageHint({ ...base, stage: 'paused', horizon: 'now' })).toMatch(/^Paused at its spending limit\. Resume it/);
-    expect(triageHint({ ...base, source: 'agent', approval: 'missing' })).toMatch(/hidden and takes no money\. Reject it\.$/);
-    expect(triageHint({ ...base, source: 'agent', approval: 'current', opens_at: '2026-09-24T00:00:00Z' })).toBe(
-      'New from the agents: it opens for funding when its cooling window ends, unless you veto it.',
-    );
-    expect(triageHint({ ...base, horizon: 'now' })).toBe('Open for funding. Veto it or move it to next to take it off now, or reject it.');
-    expect(triageHint({ ...base, horizon: 'now', funded_usd: 1 })).toBe('Open for funding, with money on it, so it stays on now. Reject it to stop it.');
-    expect(triageHint(base)).toBe('On the roadmap. Move it to now, with a funding target, to open it for funding.');
-    expect(triageHint({ ...base, board_vetoed: true })).toMatch(/^Vetoed: it is never dealt or run\./);
-    expect(triageHint({ ...base, horizon: 'now', stage: 'funded', funded_usd: 2 })).toBe('Funded and waiting for the agents. You can still reject it.');
-  });
-
-  it('counts the cards in triage order and leaves out the empty groups', () => {
-    expect(triageCounts([])).toBe('');
-    expect(
-      triageCounts([
-        base,
-        { ...base, id: 'b' },
-        { ...base, id: 'p', stage: 'paused' },
-        { ...base, id: 'o', horizon: 'now' },
-      ]),
-    ).toBe('1 needs a decision · 1 open for funding · 2 on the roadmap');
-  });
-});

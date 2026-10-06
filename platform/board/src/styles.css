@@ -428,31 +428,3 @@ input[type='radio'] {
 .error {
   font-weight: var(--weight-bold);
 }
-
-/* The jump links (docs/specs/simple-board.md): one wrapping row of plain links to each part of the
-   page, each a full touch target tall, under a hairline. */
-.jump {
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--line);
-}
-
-.jump ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.jump a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target);
-}
-
-/* What the board can do with a card: the row's first line after its title and summary. */
-.triage {
-  font-weight: var(--weight-strong);
-}

@@ -147,6 +147,7 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Scheduled and unattended role jobs](BACKLOG.md#scheduled-and-unattended-role-jobs): the ranking and drafting on a schedule or an event, without a board member signed in, once an operations percentage exists.
 - [Studio card drafting](BACKLOG.md#studio-card-drafting): Platform Builder proposals with the Platform Director's check lines.
 - [Studio Head triages board notes](BACKLOG.md#studio-head-triages-board-notes): each note becomes a card, a scheduled item or a discard.
+- [A simpler board site: triage queue and sign-in](BACKLOG.md#a-simpler-board-site-triage-queue-and-sign-in): a triage queue for cards, an edit of a card's words, and a public Board sign-in link if decision 39 is amended.
 - [Refund and dispute fee rows on the ledger](BACKLOG.md#refund-and-dispute-fee-rows-on-the-ledger): Stripe's fees on reversals as their own rows.
 - [Two rare accounting edge cases](BACKLOG.md#two-rare-accounting-edge-cases): the two items the sweep left open.
 - [Board Decisions page](BACKLOG.md#board-decisions-page): every board action in public.
@@ -195,8 +196,6 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Monthly security audit](BACKLOG.md#monthly-security-audit): a Janitor mode that reviews the kernel's security once a month.
 - [Visual replay set](BACKLOG.md#visual-replay-set): frozen frame pairs from real visual reviews, replayed like the draft set.
 - [Builder replay set](BACKLOG.md#builder-replay-set): frozen cards replayed through the builders, with the gate as the grader.
-- [Board sign-in link on the public site](BACKLOG.md#board-sign-in-link-on-the-public-site): a footer link to the board's site on the studio's own domain, once the board amends decision 39.
-- [Edit a card's words on the board site](BACKLOG.md#edit-a-cards-words-on-the-board-site): title, summary and intent from the card's row, with a board approval of the new words.
 
 ## 5. Business model
 

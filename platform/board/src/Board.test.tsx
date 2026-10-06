@@ -782,8 +782,7 @@ describe('Board card controls', () => {
     await flush();
     const form = cardForm('Open now');
     expect(form.queryByLabelText('Funding target (USD)')).toBeNull();
-    expect(form.queryByText('A card with money on its bar stays on now; reject it instead.')).toBeNull();
-    expect(form.getByText('Open for funding. Veto it or move it to next to take it off now, or reject it.')).toBeTruthy();
+    expect(form.getByText('A card with money on its bar stays on now; reject it instead.')).toBeTruthy();
     fireEvent.change(form.getByLabelText('Rank'), { target: { value: '1' } });
     fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First in line.' } });
     fireEvent.click(form.getByRole('button', { name: 'Move card' }));
@@ -1363,7 +1362,6 @@ describe('Board sign-in', () => {
     expect(signIn.getByRole('heading', { level: 2 }).textContent).toBe('Board sign-in');
     expect(signIn.getByText(/^For board members only\. Enter your board email/)).toBeTruthy();
     expect(signIn.getByRole('button', { name: 'Email me a sign-in link' })).toBeTruthy();
-    expect(screen.queryByRole('navigation', { name: 'On this page' })).toBeNull();
   });
 
   it('sends a magic link back to this site that never creates a user', async () => {
@@ -1840,59 +1838,17 @@ describe('Board agent system controls', () => {
   });
 });
 
-describe('Board triage (docs/specs/simple-board.md)', () => {
-  const jumps = () =>
-    within(screen.getByRole('navigation', { name: 'On this page' }))
-      .getAllByRole('link')
-      .map((link) => [link.textContent, link.getAttribute('href')]);
-
-  it('links each part of the page from one row, and every link has its target', async () => {
-    await renderBoard();
-    await flush();
-    expect(jumps()).toEqual([
-      ['Needs you', '#needs-you'],
-      ['Cards', '#cards'],
-      ['Pause', '#pause'],
-      ['Studio', '#studio'],
-      ['Roles', '#roles'],
-      ['Jobs', '#jobs'],
-      ['File a card', '#file'],
-      ['Caps', '#caps'],
-      ['Record credit', '#credit'],
-    ]);
-    for (const [, href] of jumps()) expect(document.getElementById(href!.slice(1)), href!).not.toBeNull();
-  });
-
-  it('at the first factor links only to the parts it shows, and says the page is read-only', async () => {
-    fake.aal = 'aal1';
-    await renderBoard();
-    await flush();
-    expect(jumps().map(([label]) => label)).toEqual(['Needs you', 'Studio', 'Roles', 'Jobs']);
-    for (const [, href] of jumps()) expect(document.getElementById(href!.slice(1)), href!).not.toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Two-factor sign-in' })).getByText(SECOND_FACTOR_LINE)).toBeTruthy();
-  });
-
-  it('puts Cards straight after Needs you, before the pause and the studio', async () => {
-    await renderBoard();
-    await flush();
-    const order = [...document.querySelectorAll('main section[aria-label]')].map((el) => el.getAttribute('aria-label'));
-    expect(order.slice(0, 4)).toEqual(['Needs you', 'Cards', 'Pause and resume', 'Studio status']);
-  });
-
-  it('shows each card with its summary, what the board can do with it, and the counts over the list', async () => {
+describe('Board card rows (docs/specs/simple-board.md)', () => {
+  it('shows each card with its summary, the verbs Move, Veto, Reject and Resume, and says what to do with no cards', async () => {
     fake.cards = [
       card({ id: 'o', title: 'On now', summary: 'One more unlock in the game.' }),
-      card({ id: 'n', title: 'Planned', horizon: 'next' }),
       card({ id: 'p', title: 'Stopped', stage: 'paused' }),
     ];
     await renderBoard();
     await flush();
-    const cards = within(screen.getByRole('region', { name: 'Cards' }));
-    expect(cards.getByText('1 needs a decision · 1 open for funding · 1 on the roadmap.')).toBeTruthy();
     expect(cardForm('On now').getByText('One more unlock in the game.')).toBeTruthy();
-    expect(cardForm('On now').getByText('Open for funding. Veto it or move it to next to take it off now, or reject it.')).toBeTruthy();
-    expect(cardForm('Planned').getByText('On the roadmap. Move it to now, with a funding target, to open it for funding.')).toBeTruthy();
-    expect(cardForm('Stopped').getByText(/^Paused at its spending limit\. Resume it with a new estimate or reject it/)).toBeTruthy();
+    expect(cardForm('On now').getByRole('button', { name: 'Move card' })).toBeTruthy();
+    expect(cardForm('On now').getByRole('button', { name: 'Veto card' })).toBeTruthy();
     expect(cardForm('Stopped').getByRole('button', { name: 'Resume card' })).toBeTruthy();
     expect(cardForm('Stopped').getByRole('button', { name: 'Reject card' })).toBeTruthy();
   });
@@ -1901,8 +1857,12 @@ describe('Board triage (docs/specs/simple-board.md)', () => {
     fake.cards = [];
     await renderBoard();
     await flush();
-    const cards = within(screen.getByRole('region', { name: 'Cards' }));
-    expect(cards.getByText(NO_CARDS)).toBeTruthy();
-    expect(screen.queryByText(/need a decision|needs a decision/)).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Cards' })).getByText(NO_CARDS)).toBeTruthy();
+  });
+
+  it('at the first factor says the page is read-only until the code is in', async () => {
+    fake.aal = 'aal1';
+    await renderBoard();
+    expect(within(screen.getByRole('region', { name: 'Two-factor sign-in' })).getByText(SECOND_FACTOR_LINE)).toBeTruthy();
   });
 });

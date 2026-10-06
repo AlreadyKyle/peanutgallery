@@ -147,64 +147,6 @@ export function undealt(card: Pick<BoardCard, 'approval' | 'horizon' | 'opens_at
   return card.approval === 'current' && card.horizon !== 'now' && card.opens_at !== null && card.stage === 'proposed' && !card.board_vetoed;
 }
 
-/**
- * Where a card stands in the board's review (docs/specs/simple-board.md), like a triage queue's
- * columns: decide (paused at its ceiling, or hidden because its approval is not current), new (an
- * approved agent card waiting to be dealt), open (on now, open for funding), roadmap (next or later,
- * or vetoed), funded (holding its full target, waiting for the agents).
- */
-export type Triage = 'decide' | 'new' | 'open' | 'roadmap' | 'funded';
-
-export const TRIAGE_ORDER: readonly Triage[] = ['decide', 'new', 'open', 'roadmap', 'funded'];
-
-/** The count words for the line over the cards, singular and plural. */
-export const TRIAGE_COUNT_WORDS: Record<Triage, [string, string]> = {
-  decide: ['needs a decision', 'need a decision'],
-  new: ['new from the agents', 'new from the agents'],
-  open: ['open for funding', 'open for funding'],
-  roadmap: ['on the roadmap', 'on the roadmap'],
-  funded: ['funded and waiting for the agents', 'funded and waiting for the agents'],
-};
-
-export function cardTriage(card: BoardCard): Triage {
-  if (card.stage === 'paused' || card.approval === 'missing') return 'decide';
-  if (undealt(card)) return 'new';
-  if (!HORIZON_STAGES.includes(card.stage)) return 'funded';
-  if (card.horizon === 'now' && !card.board_vetoed) return 'open';
-  return 'roadmap';
-}
-
-/** What the board can do with a card, in one plain line, by where it stands. */
-export function triageHint(card: BoardCard): string {
-  const triage = cardTriage(card);
-  if (triage === 'decide') {
-    return card.stage === 'paused'
-      ? 'Paused at its spending limit. Resume it with a new estimate or reject it, unless the resume rule resumes it first.'
-      : 'Needs a decision: its text changed outside a board control, so it is hidden and takes no money. Reject it.';
-  }
-  if (triage === 'new') return 'New from the agents: it opens for funding when its cooling window ends, unless you veto it.';
-  if (triage === 'funded') return 'Funded and waiting for the agents. You can still reject it.';
-  if (triage === 'open') {
-    return card.funded_usd > 0
-      ? 'Open for funding, with money on it, so it stays on now. Reject it to stop it.'
-      : 'Open for funding. Veto it or move it to next to take it off now, or reject it.';
-  }
-  if (card.board_vetoed) return 'Vetoed: it is never dealt or run. Lift the veto to put it back, or reject it.';
-  return 'On the roadmap. Move it to now, with a funding target, to open it for funding.';
-}
-
-/** The line over the cards: how many stand where, in triage order, leaving out the empty ones. */
-export function triageCounts(cards: readonly BoardCard[]): string {
-  const counts = new Map<Triage, number>();
-  for (const card of cards) counts.set(cardTriage(card), (counts.get(cardTriage(card)) ?? 0) + 1);
-  return TRIAGE_ORDER.filter((triage) => (counts.get(triage) ?? 0) > 0)
-    .map((triage) => {
-      const n = counts.get(triage)!;
-      return `${n} ${TRIAGE_COUNT_WORDS[triage][n === 1 ? 0 : 1]}`;
-    })
-    .join(' · ');
-}
-
 /** set_card_veto takes a proposed, designing or voted card; a card holding money is cancelled instead. */
 export function canVeto(card: Pick<BoardCard, 'stage' | 'board_vetoed' | 'funded_usd'>): boolean {
   return HORIZON_STAGES.includes(card.stage) && !card.board_vetoed && card.funded_usd === 0;

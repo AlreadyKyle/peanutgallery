@@ -347,7 +347,7 @@ export function NeedsYou({
   const short = supply !== undefined && supply.supply !== null && supplyShort(supply.supply);
 
   return (
-    <section aria-label="Needs you" id="needs-you">
+    <section aria-label="Needs you">
       <h2>Needs you</h2>
       <p className="muted">{NEEDS_YOU_LEDE}</p>
       {data === null ? (
