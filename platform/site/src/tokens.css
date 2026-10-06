@@ -89,8 +89,9 @@
   --weight-strong: 600;
   --weight-bold: 700;
   --leading-body: 1.6;
-  --leading-heading: 1.2;
-  --leading-display: 1.1; /* the page heading */
+  --leading-display: 1.15; /* the page heading (h1) */
+  --leading-heading: 1.25; /* section headings (h2) */
+  --leading-title: 1.35; /* h3 and h4, card, row and choice titles: a two-line title's lines never touch */
 
   /* Type scale (the board, 23 Sep 2026). Headings grow with the viewport, from a 390px phone to a
      1440px screen; text holds still. Every font-size is one of these. */
@@ -113,6 +114,7 @@
   /* Layout */
   --wrap: 72rem;
   --measure: 44rem;
+  --measure-text: 36em; /* running text: about 72 characters a line at the body size */
   --gutter: 1.25rem;
   --rail: 9rem; /* the time column of a row from 48rem */
   --radius: 0.375rem; /* buttons, fields, chips and choices */
