@@ -35,15 +35,15 @@ The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mo
 - `pnpm test:docs` and `pnpm secret-scan`: the fast checks for a docs-only change. `test:docs` guards the kernel line, schedules, company names and `PLAN.md §` references.
 - Site e2e: `E2E_PORT=<port> npx playwright test <specs>` in `platform/site`.
 - Live check of a running site: `node platform/site/scripts/live-check.mjs [baseUrl]`. Quote its first line, which must read `PASS ... failed=0`.
-- Local gate for a board pull request (while Actions cannot start jobs): `bash scripts/local-gate.sh <pr> [port-base]`, from main's checkout and never a pull request's own copy. It prints `LOCAL GATE PASS pr=... head=... base=...`.
+- Local gate for a board pull request, the fallback if Actions cannot start jobs (the gate workflow runs on Actions again since the repository went public on 6 October 2026): `bash scripts/local-gate.sh <pr> [port-base]`, from main's checkout and never a pull request's own copy. It prints `LOCAL GATE PASS pr=... head=... base=...`.
 
 ## Long runs and merging
 
-Sessions that died mid-run (a usage limit or the Mac shutting down stops a session and every agent it runs at once) left pull requests half-shipped. Work so that a new session can pick up from git alone.
+Sessions that died mid-run (a usage limit or the machine shutting down stops a session and every agent it runs at once) left pull requests half-shipped. Work so that a new session can pick up from git alone.
 
 - Keep multi-agent runs small: at most three reviewers and one review round a pull request, a second round only after a blocker fix, and several short workflows in sequence rather than one long one.
 - Every agent commits and pushes its branch at least every 20 minutes. Nothing lives only in a worktree or in `/tmp`.
 - At most three agents run `pnpm verify` or e2e at once, each on its own port (`E2E_PORT`, 4400 to 4499).
-- Before starting the local gate, run the e2e specs the change touches. A full gate run takes about 8 minutes on Actions and 8 to 9 locally (`docs/ROADMAP.md`, Merging), so a predictable failure is expensive.
-- One session merges to `main` at a time, on a local gate PASS whose `base=` is still `origin/main`: `gh pr merge <pr> --squash --match-head-commit <head> --delete-branch`, with the PASS line quoted in the merge body. If `main` moved, run the gate again.
+- Before starting the gate, run the e2e specs the change touches. A full gate run takes about 8 minutes on Actions and 8 to 9 locally (`docs/ROADMAP.md`, Merging), so a predictable failure is expensive.
+- One session merges to `main` at a time, on a green gate workflow run at the pull request's exact head (or, when Actions is down, a local gate PASS whose `base=` is still `origin/main`, quoted in the merge body): `gh pr merge <pr> --squash --match-head-commit <head> --delete-branch`. If `main` moved, run the gate again.
 - After each merge, append one line to `~/peanutgallery-launch/STATUS.md`: the pull request, the merge sha and the live-check line. Merged branches and their worktrees are deleted.

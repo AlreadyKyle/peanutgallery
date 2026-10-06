@@ -24,12 +24,7 @@ second factor, a decision, or money. The path to shipping:
 
 ## What's left, in order
 
-Now:
-- [ ] **25** Finish the hello@ group and sign it (10 minutes)
-- [ ] **36** Share the site quietly (the message is drafted in the step)
-
 While the first payout is on its way (days):
-- [ ] **33** Name a moderator (needed before Go live)
 - [ ] **35** Restore drill (10 minutes, with me)
 
 When a payout that holds a player's money arrives:
@@ -43,68 +38,17 @@ Whenever you want a big card open to fund:
 Later or optional: **21** regenerate the host's GitHub token before 23 October 2026, **6** Search
 Console, **26** the Twitch handle, and Dependabot's #114 under **Later**.
 
-Finished (see **Done**): 12, 14, 17, 19, 20, 22, 27, 29, 30, 31, 32, 34, and the payouts check in 37.
+Finished (see **Done**): 12, 14, 17, 19, 20, 22, 25 (hello@ delivers to the board), 27, 29, 30, 31, 32, 33 and 36 (the board's own), 34, and the payouts check in 37.
 
 ---
 
 ## 1. Now
 
-### Step 25: Finish the hello@ group, then sign it (10 minutes, you)
-
-More detail: R3. You created the `Hello` group at `hello@clayhouse.studio`. I read it back: it has **0
-members** and its access type is **Public**, where only people inside your organisation can post. So
-today mail to hello@ reaches nobody, and mail from players would be refused. Two settings fix that. I
-tried to change the second one and the browser tool refused to edit group access, so both are yours.
-Open the group in Dia: Admin console → **Directory** → **Groups** → **Hello**.
-
-1. **Add members** → add yourself. **Save**.
-2. **Access settings** → in the **Who can post** row, tick **External**. **Save**. The access type
-   changes to Custom; that is expected.
-3. From a personal mailbox, send a mail to hello@ and check it arrives in your inbox.
-4. Gmail → the gear → **See all settings** → **General** → **Signature** → **Create new**. Name it
-   `Mob Machine`; text: `Mob Machine`, then `mobmachine.games` on the next line. Under **Signature
-   defaults** pick it for new emails and for replies. **Save Changes**.
-5. Replying as hello@ rather than from your own address is optional and Google sets it up differently
-   for a group. If you want it, tell me and I will look up the exact setting first.
-
-**Reply:** "hello@ delivers and the signature is set."
-
 Optional: empty the Trash. `KEYS.md` is in it; every secret in it is also in `.env` or `.env.vps`.
-
-### Step 36: Share the site quietly (you)
-
-More detail: Reference 20. Do it after step 25, so hello@ works when someone writes to it. The six open
-cards can be funded as they are. Your own money never counts, so the first player has to be someone
-else. The studio stays paused either way, and the site says so.
-
-1. Pick where: the Discord server the site links, your own accounts, or people you name.
-2. Send this, edited into your own voice:
-
-   > I'm building a game studio run by AI agents, in public. You fund the thing you want built next, the
-   > agents build it, and every dollar goes on a public ledger. The first game, Dust, is free in your
-   > browser. It's early: the agents start building once the first contributions clear, so a card you
-   > fund will wait for that. https://mobmachine.games
-
-3. The alternative is to Go live and announce first, with the studio still paused. I do not recommend
-   it: the studio would be announced while it cannot build anything.
-
-**Reply:** "shared", and where.
 
 ---
 
 ## 2. While the first payout is on its way (days)
-
-### Step 33: Name a moderator (needed before Go live, 5 minutes)
-
-More detail: Reference 16. The live criteria want the moderator to have signed in once too.
-
-1. Run `open -e ~/GitHub/peanutgallery/.env` and add a line `MODERATOR_EMAIL=` followed by their
-   address. Never in chat.
-2. In Discord: Server Settings → **Roles** → give them a moderator role.
-3. I run the seed, which creates their sign-in. They sign in on the board site by email link and see the
-   pause control only.
-
-**Reply:** "moderator email is in .env."
 
 ### Step 35: The restore drill (10 minutes, with me)
 
