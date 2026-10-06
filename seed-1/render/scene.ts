@@ -12,10 +12,10 @@ import {
 import { serializeState } from '../sim/save';
 import type { SimState, UnlockRow } from '../sim/types';
 import { fill, formatDust, formatPercent, formatRate } from './format';
-import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
+import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
-export { SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
+export { RENDER_SCALE, SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
 
 export const SAVE_KEY = 'dust.save';
 const SAVE_INTERVAL_MS = 5000;
@@ -57,7 +57,7 @@ interface UnlockSlot {
 }
 
 function textStyle(size: number, color = COLORS.text, weight = 'normal'): Phaser.Types.GameObjects.Text.TextStyle {
-  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight };
+  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight, resolution: RENDER_SCALE };
 }
 
 export class DustScene extends Phaser.Scene {
@@ -84,7 +84,7 @@ export class DustScene extends Phaser.Scene {
 
   create(): void {
     const { strings } = this.data_;
-    this.cameras.main.setBackgroundColor(COLORS.background);
+    this.cameras.main.setBackgroundColor(COLORS.background).setZoom(RENDER_SCALE).centerOn(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
     this.setUpSaving();
 
     let y = MARGIN;

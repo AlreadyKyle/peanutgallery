@@ -2,6 +2,9 @@ import type { UnlockRow } from '../sim/types';
 
 export const SCREEN_WIDTH = 420;
 export const SCREEN_HEIGHT = 880;
+// The canvas draws at this many pixels per layout pixel, so FIT's upscaling and high-density screens
+// stay sharp; the camera zooms by the same factor, so layout and input coordinates are unchanged.
+export const RENDER_SCALE = Math.min(4, Math.ceil((globalThis.devicePixelRatio || 1) * 1.5));
 
 export const UNLOCK_ROW_HEIGHT = 22;
 export const MAX_UNEARNED_UNLOCK_LINES = 3;
