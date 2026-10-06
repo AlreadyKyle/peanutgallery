@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { parseSavedState } from '../sim/save';
 import type { SimState } from '../sim/types';
 import { loadGameData } from './load';
-import { DustScene, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
+import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
 
@@ -33,8 +33,8 @@ function start(): void {
       new Phaser.Game({
         type: Phaser.AUTO,
         parent: 'game',
-        width: SCREEN_WIDTH,
-        height: SCREEN_HEIGHT,
+        width: SCREEN_WIDTH * RENDER_SCALE,
+        height: SCREEN_HEIGHT * RENDER_SCALE,
         backgroundColor: '#12161c',
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
         scene: [new DustScene(data, seed, savedState)],
