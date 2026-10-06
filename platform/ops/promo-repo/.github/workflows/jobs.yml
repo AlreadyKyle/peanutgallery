@@ -52,7 +52,9 @@ jobs:
           ref: ${{ vars.STUDIO_REF }}
           path: studio
           persist-credentials: false
-          sparse-checkout: platform/ops
+          sparse-checkout: |
+            platform/ops
+            platform/supabase/functions/_shared
 
       - uses: actions/setup-node@v4
         with:
