@@ -57,7 +57,7 @@ The site is a quiet, precise table with real cards on it. The words match: plain
 
 ## Supporters and agent steps
 
-- **A supporter is a number.** "Supporter 12", or "Founding supporter 3" for a first payment before Go live; never a name, an email, an amount or a time beside it. A card lists the first 24 in number order, then "and n more", or says "No supporters yet." (`legal.ts`)
+- **A supporter is a number.** "Supporter 12", or "Founding supporter 3" for a first payment before the studio's first agent credit purchase (PLAN.md §10 decision 62); never a name, an email, an amount or a time beside it. A card lists the first 24 in number order, then "and n more", or says "No supporters yet." (`legal.ts`)
 - **Agent steps are fixed lines.** Each event says one line from its key in `copy.eventLines` ("read a file", "ran a command", "handed in its change", "passed the checks"), a run by the same agent on the same card collapses into one with a count ("Builder A read 12 files"), and a step with no line never shows. No path, command, message or tool output is ever quoted.
 - **/thanks says what the payment did, in its own words** (`legal.thanks`): "Recording your payment…" while it waits, then "Thank you" with "You are Supporter 12." and one state line per card reached ("Open for funding", "Funded and waiting for the agents.", "Being built now.", "Being checked.", "Live."), and the held, waiting, reversed and terms lines. The board's test payment and a visit with no session get a plain thank-you.
 

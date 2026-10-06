@@ -20,7 +20,7 @@ Checked against your Mac, Stripe, the Admin console, GitHub and production on 1 
 everything that can be done from the Mac; what is left needs you at a Google or board-site screen, a
 second factor, a decision, or money. The path to shipping:
 
-**hello@ delivers, share the site, wait for the first payout, buy credit, cut over, Go live.**
+**hello@ delivers, share the site, wait for the first payout, buy credit, cut over, announce.** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
 
 ## What's left, in order
 
@@ -35,7 +35,7 @@ While the first payout is on its way (days):
 When a payout that holds a player's money arrives:
 - [ ] **38** Console credit, bought from the payout
 - [ ] **39** The cutover (20 minutes with me, then a day)
-- [ ] **40** Go live
+- [x] ~~**40** Go live~~ Superseded by `docs/PLAN.md` §10 decision 62: no button; step 38's recorded purchase stamps the launch time. The posting part is below.
 
 Whenever you want a big card open to fund:
 - [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
@@ -138,7 +138,8 @@ More detail: Reference 22. Never your own money. The board site's **Needs you** 
    for the next payout.
 3. Auto-reload **off**. Set the Console's monthly limit to the cap the board site shows.
 4. Board site → Needs you → **Fill in the record form**. Change the amount to the Console receipt's if
-   it differs. **Record purchase** (second factor).
+   it differs. **Record purchase** (second factor). The first one also stamps the launch time: the
+   board site's Studio status then reads "Live since …" (`docs/PLAN.md` §10 decision 62).
 5. Stripe → Settings → Payouts → **Minimum balance**: raise it to the figure the inbox shows.
 6. Read the tier off the Console's **Limits** page.
 
@@ -162,8 +163,9 @@ Then a 24-hour soak on GitHub Actions; your Mac can sleep.
 
 More detail: Reference 24.
 
-1. Once the first player-funded card ships, press **Go live** on the board site. It works once and
-   cannot be undone.
+1. ~~Once the first player-funded card ships, press **Go live** on the board site.~~ Superseded by
+   `docs/PLAN.md` §10 decision 62: there is no Go live button. The launch time was stamped when step
+   38's credit purchase was recorded. Wait for the first player-funded card to ship.
 2. Edit my drafts in `docs/launch/` so they sound like you, and add the clip's link.
 3. Post them in the order in `docs/launch/README.md`.
 
@@ -947,8 +949,9 @@ closes live criterion 2.
 
 #### 24. Go live
 
-The first player-funded card ships, and its /card replay is the launch clip. You press **Go live**
-on the board's site; it works once and cannot be undone. Then you edit my drafts in `docs/launch/`
+The first player-funded card ships, and its /card replay is the launch clip. ~~You press **Go live**
+on the board's site.~~ Superseded by `docs/PLAN.md` §10 decision 62: no button; recording the first
+credit purchase (step 22) stamped the launch time. Then you edit my drafts in `docs/launch/`
 so they sound like you, put the clip's link in each, and post them in the order in
 `docs/launch/README.md`. The posting is yours.
 

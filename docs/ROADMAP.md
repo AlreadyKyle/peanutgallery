@@ -6,8 +6,8 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on GitHub Actions. While the studio is paused the site says so. Before Go live the board may share the site quietly; how the first player arrives is the board's call (`BOARD-SETUP.md` step 20, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
-- **Go live** is the board pressing Go live on the board's own site, once every criterion below holds with its evidence quoted in the specs. It stamps the launch time and cannot be undone. The announcement follows it (`docs/specs/announcement.md`).
+- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on GitHub Actions. The public site shows no paused notice (PLAN.md §10 decision 62). Before Go live the board may share the site quietly; how the first player arrives is the board's call (`BOARD-SETUP.md` step 20, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
+- **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button (PLAN.md §10 decision 62): the database stamps the launch time, `studio_state.launched_at`, when the first Console credit purchase is recorded at /board, once and for good, and founding supporters are those who paid before it. The announcement follows (`docs/specs/announcement.md`).
 
 ## What "live" means
 
@@ -28,8 +28,8 @@ These are two different states.
    - Link previews render, and the board's own site requires a second factor.
    - The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).
    - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items, on /roadmap and in home's Planned next.
-   - The site shows a notice while the studio is paused.
-5. **The board has pressed Go live.** The launch clip and the post drafts exist.
+   - ~~The site shows a notice while the studio is paused.~~ Removed: the public site shows no paused notice (PLAN.md §10 decision 62).
+5. **The launch time is stamped.** The first Console credit purchase recorded at /board stamps `launched_at` (PLAN.md §10 decision 62); ~~the board has pressed Go live~~ (superseded, no button). The launch clip and the post drafts exist.
 
 Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for example [the stream](BACKLOG.md#twitch-channel-and-stream-scenes), [the host](BACKLOG.md#the-host), [free voting](BACKLOG.md#free-voting-on-open-cards), [personal decisions](BACKLOG.md#personal-decisions-for-contributors), [display names through the name pipeline](BACKLOG.md#the-name-pipeline), [the image adapter](BACKLOG.md#image-adapter-for-studio-pictures), [the public seed-1 mirror](BACKLOG.md#public-mirror-of-the-game-with-a-license) and [a board rollback button](BACKLOG.md#board-rollback-button).
 
@@ -38,7 +38,7 @@ Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for exa
 1. **Built and merged.** The launch batch and the launch series (below) are merged, and each one's production steps ran as it merged; the live site serves main. What is left of the series is launch-card-floor (`specs/launch-card-floor.md`): one attended session in which the board presses **Draft to the floor** in Needs you on its own site and stays signed in while the Game Designer drafts and the Game Director grades, with the attended dispatcher running on the Mac. It waits on the board's first sign-in on its own site (`BOARD-SETUP.md` step 17).
 2. **Board section A** in `BOARD-SETUP.md` (steps 1 to 11, and 25): the board's sign-in email through Resend, the Mac made ready as the host with the backup key and folder, the Stripe read-only key, healthchecks.io's emails, the Discord webhooks, the Netlify plan check, the ntfy subscription, the Claude Code pin, and the database password for the migration history repair. Done or closed: the contact address (1), the host's and the read tokens (5.1, 5.2; the host token expires on 23 October 2026 and is regenerated before then), and the business contact for the Terms (10, closed: the disclosures use hello@clayhouse.studio, PLAN.md §10 decision 55). The Mac's own token (5.3) is optional.
 3. **Board section B** (steps 12 to 18, and 26), before the announcement: the Stripe settings (the after-payment redirect to /thanks is ready now), retiring the full Stripe key, passkeys, a moderator, the first sign-in on the board's own site, the studio daily credit limit, and then opening the platform code lane. The legal pages are read and approved (14, done).
-4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live. The post drafts are in `docs/launch/` (`specs/announcement.md`).
+4. **Board section C** (steps 19 to 24), in order: the restore drill, the first player, the first payout, Console credit bought from it and recorded on the board's site, the cutover and soak (closes criterion 2 once a player's card builds unattended), and Go live (no button: recording the credit purchase stamps the launch time, (PLAN.md §10 decision 62)). The post drafts are in `docs/launch/` (`specs/announcement.md`).
 
 ## The launch batch (22 September 2026)
 
@@ -142,7 +142,8 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/announcement.md` | agreed | the drafts are in `docs/launch/`; left: the clip, Go live, the link previews and the final check, after board section C |
+| `specs/announcement.md` | agreed | the drafts are in `docs/launch/`; left: the clip, the link previews and the final check, after board section C (Go live is no longer a button, (PLAN.md §10 decision 62)) |
+| `specs/no-pause-no-golive.md` | built | apply `20261006000000_launch_stamp.sql` to production after merge, then the site deploy and the live check |
 
 ## Standing facts for any session
 

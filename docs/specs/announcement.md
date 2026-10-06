@@ -12,7 +12,7 @@ In:
 - The final pre-announcement check.
 - A launch clip.
 - Post drafts.
-- Pressing Go live.
+- ~~Pressing Go live.~~ Superseded by PLAN.md §10 decision 62: no button; the first credit purchase stamps the launch time.
 - The posting order.
 - The PLAN.md §7 amendment.
 
@@ -37,7 +37,7 @@ Out: Twitch, the host, micro-votes, the name vote (the studio is already named).
 - the backlash response line from PLAN.md §7, without its open-source clause while the repository is private and the public seed-1 mirror with a license does not exist
 
 **Launch day.**
-1. The board presses Go live on /board.
+1. ~~The board presses Go live on /board.~~ Superseded by PLAN.md §10 decision 62: the launch time is already stamped by the first credit purchase.
 2. The site shows "Live since …".
 3. Posts go out after the clip exists, in the PLAN.md §7 order.
 
@@ -62,7 +62,7 @@ Recorded 26 September 2026, when the drafts were written, after the copy pass (#
 - **PLAN.md §7 is site-first.** Its Order paragraph describes the launch with no stream: contributions open now with the studio paused, a quiet share or an announcement as the board chooses, the first payout, Console credit, the cutover, a moderator, "the launch clip of a real card going from open to shipped", Go live at /board, then the posts in the order under Channels. Nothing in §7 plans a Twitch launch, a host or an on-stream clip; §7 Content after launch puts episodes and clips in §4 Not built yet, and PLAN.md §2 and §10 decision 15 say the launch is site-first with the stream later.
 - **No open-source claim.** `git grep -n -i -E "open[ -]?source" -- platform/site/src platform/site/index.html platform/site/public seed-1 docs` on the close-out branch finds nothing under the site or the game. Every hit under `docs/` is a rule against the claim or a record of one: PLAN.md §5 Canada admin ("nothing public says open source before then"), §7 Backlash (the clause allowed only once the mirror exists), §8's 90-day pivot, the backlog's mirror entry, this spec's own lines, `docs/launch/README.md` and `backlash-line.md` saying no draft makes the claim, the kill-condition pivot in `BOARD-SETUP.md`, and copy-pass's quote of another studio's site. The backlash line is PLAN.md §7's, word for word, without the open-source clause.
 
-Still open: the clip (the first player-funded card's page, after the cutover), Go live and `launched_at`, link previews checked in the X and LinkedIn tools, the final pre-announcement check and the screenshots after Go live. They wait on `BOARD-SETUP.md` section C (steps 19 to 24).
+Still open: the clip (the first player-funded card's page, after the cutover), ~~Go live and `launched_at`~~ (stamped by the first credit purchase, PLAN.md §10 decision 62), link previews checked in the X and LinkedIn tools, the final pre-announcement check and the screenshots after Go live. They wait on `BOARD-SETUP.md` section C (steps 19 to 24).
 
 ## Decisions
 
