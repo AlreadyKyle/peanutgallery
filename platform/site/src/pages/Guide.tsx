@@ -367,13 +367,10 @@ function SignalBand() {
           <div className="demo">
             <h3>{guide.statusHeading}</h3>
             <p className="status-line">
-              <Glyph name="pause" />
               <span>
                 <strong>{guide.statusFigure}</strong> {guide.statusRest} <Sample />
               </span>
             </p>
-            <p className="notice">{legal.pausedNotice}</p>
-            <p className="caption">{guide.noticeNote}</p>
             <h3>{guide.rowsHeading}</h3>
             <SampleShipped ground="signal" />
             <SampleRows />

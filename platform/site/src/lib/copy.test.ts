@@ -82,8 +82,6 @@ describe('copy rules', () => {
       ...Object.values(copy.status.open),
       copy.status.openNone,
       ...Object.values(copy.status.building),
-      legal.pausedNotice,
-      ...Object.values(legal.pauseReasons),
       copy.now,
       copy.fund,
       copy.fundIntro,

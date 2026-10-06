@@ -5,7 +5,6 @@ import { EventList } from '../components/EventList';
 import { Example } from '../components/Example';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { PageHeader } from '../components/PageHeader';
-import { PausedNotice } from '../components/PausedNotice';
 import { PaidExample } from '../components/Funding';
 import { LinkedText } from '../components/TextPage';
 import { WhoRuns } from '../components/WhoRuns';
@@ -207,9 +206,7 @@ export function HowItWorks() {
   return (
     <main className="wide">
       <div className="band">
-        <PageHeader title={page.title} lede={page.lede}>
-          <PausedNotice studio={studio} />
-        </PageHeader>
+        <PageHeader title={page.title} lede={page.lede} />
       </div>
       <div className="band">
         <section className="how-watch" aria-labelledby="how-watch">

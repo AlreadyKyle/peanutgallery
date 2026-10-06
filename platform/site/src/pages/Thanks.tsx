@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CoinMark, FundingBar } from '../components/Funding';
 import { PageHeader } from '../components/PageHeader';
-import { PausedNotice } from '../components/PausedNotice';
 import { LinkedText } from '../components/TextPage';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
@@ -165,9 +164,7 @@ export function Thanks() {
     return (
       <main className="title-stays">
         <div className="band">
-          <PageHeader title={words.title} lede={supporterLine(state.answer)}>
-            <PausedNotice studio={studio} />
-          </PageHeader>
+          <PageHeader title={words.title} lede={supporterLine(state.answer)} />
         </div>
         <div className="band">
           <RecordedBody answer={state.answer} snapshot={snapshot} />
