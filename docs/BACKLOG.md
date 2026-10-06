@@ -75,7 +75,7 @@ everything else, in the order the board would take it.
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 5
+- rank: 6
 - summary: The board's site as a plain triage queue, like an issue tracker's inbox, with a clear Board sign-in.
 - intent: The board's site is one long page with the card review below the caps and the credit form. A simpler model would open on Needs you, then a Cards queue grouped the way triage tools group work (needs a decision, new from the agents, open for funding, roadmap, funded), each card showing its summary, one line saying what the board can do and the actions beside it, with jump links to the rest; an edit of a card's title, summary and intent from its row through a new board RPC at the second factor that records a board approval of the new words (a kernel migration); and, if the board amends PLAN.md §10 decision 39, a small Board sign-in link in the public footer to the board's site on a subdomain of the studio's domain. It is not built yet (docs/specs/simple-board.md).
 - board: yes
