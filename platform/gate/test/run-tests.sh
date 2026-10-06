@@ -1063,9 +1063,20 @@ for file in "$REPO_ROOT"/.github/workflows/*.yml "$REPO_ROOT"/.github/workflows/
   name=$(basename "$file")
   top_permissions() { awk '/^permissions:/{p=1; next} p && /^  /{print; next} {p=0}' "$1"; }
   assert "workflow audit: $name grants the token contents: read and nothing else" test "$(top_permissions "$file")" = "  contents: read"
-  assert "workflow audit: $name sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
-  assert "workflow audit: $name grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0
-  assert "workflow audit: $name names no secret" test "$(grep -c 'secrets\.' "$file")" = 0
+  if [ "$name" = dispatcher.yml ]; then
+    # The dispatcher's host (docs/specs/actions-host.md) is the one exception: its job may start the
+    # next run (actions: write) and reads one secret, DISPATCHER_ENV, from the environment dispatcher,
+    # which only main can deploy to. Nothing else is widened.
+    assert "workflow audit: dispatcher.yml widens one job to contents: read and actions: write only" test "$(grep -A3 -E '^ +permissions:' "$file" | grep -cE '^ +(permissions:|contents: read|actions: write)$')" = 3
+    assert "workflow audit: dispatcher.yml sets job-level permissions once" test "$(grep -cE '^ +permissions:' "$file")" = 1
+    assert "workflow audit: dispatcher.yml grants no other write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 1
+    assert "workflow audit: dispatcher.yml names DISPATCHER_ENV and no other secret" test "$(grep -oE 'secrets\.[A-Za-z_]+' "$file" | sort -u)" = secrets.DISPATCHER_ENV
+    assert "workflow audit: dispatcher.yml runs in the environment dispatcher" test "$(grep -cxE '    environment: dispatcher' "$file")" = 1
+  else
+    assert "workflow audit: $name sets no job-level permissions" test "$(grep -cE '^ +permissions:' "$file")" = 0
+    assert "workflow audit: $name grants no write access" test "$(grep -cE ':[[:space:]]*write([[:space:]]|$)|write-all' "$file")" = 0
+    assert "workflow audit: $name names no secret" test "$(grep -c 'secrets\.' "$file")" = 0
+  fi
   assert "workflow audit: $name has no pull_request_target or workflow_run trigger" test "$(grep -cE 'pull_request_target|workflow_run' "$file")" = 0
   checkouts_drop_token() {
     awk '
