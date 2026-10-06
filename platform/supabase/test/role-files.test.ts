@@ -29,7 +29,7 @@ describe("readRoleSpecs against platform/agents", () => {
     expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
     expect(byStatus("planned")).toEqual(["Host"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
-    expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/cutover/);
+    expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/first Stripe payout/);
   });
 
   it("gives every role a description of its job, and leaves whether it runs to the site", async () => {

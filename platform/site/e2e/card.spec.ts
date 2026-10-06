@@ -56,11 +56,11 @@ test.describe('a live card', () => {
     const names = await supporters.locator('li').allTextContents();
     expect(names).toHaveLength(24);
     expect(names.slice(0, 6)).toEqual([
-      'Founding supporter 1',
-      'Founding supporter 2',
-      'Founding supporter 3',
-      'Founding supporter 4',
-      'Founding supporter 5',
+      'Supporter 1',
+      'Supporter 2',
+      'Supporter 3',
+      'Supporter 4',
+      'Supporter 5',
       'Supporter 6',
     ]);
     expect(names.at(-1)).toBe('Supporter 24');

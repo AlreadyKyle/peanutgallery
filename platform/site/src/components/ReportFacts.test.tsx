@@ -37,7 +37,7 @@ describe('ReportFacts', () => {
     const { container } = draw();
     const shipped = [...container.querySelectorAll('[data-shipped]')];
     expect(shipped.map((row) => row.querySelector('a')!.getAttribute('href'))).toEqual(['/card/10000000-0000-4000-8000-000000000001', '/card/10000000-0000-4000-8000-000000000002']);
-    expect(shipped[0]!.querySelector('.row-meta')!.textContent).toBe('$0.29 from contributions · funded by Founding supporter 1, Supporter 3, Supporter 4 and 2 more');
+    expect(shipped[0]!.querySelector('.row-meta')!.textContent).toBe('$0.29 from contributions · funded by Supporter 1, Supporter 3, Supporter 4 and 2 more');
     expect(shipped[1]!.querySelector('.row-meta')!.textContent).toBe('$0.25 from contributions · funded by Supporter 2');
     const inLine = [...container.querySelectorAll('[data-open] a')].map((a) => a.textContent);
     expect(inLine).toEqual(['Open one', 'Open two', 'Open three']);
@@ -48,7 +48,7 @@ describe('ReportFacts', () => {
     const { container } = draw(older!);
     expect(container.querySelector('[data-shipped] .row-meta')).toBeNull();
     expect(shippedMeta({ ...older!.facts.shipped[0]!, supporters: [{ number: 5, founding: false }, { number: 2, founding: true }], supporter_count: 2 })).toBe(
-      'funded by Founding supporter 2 and Supporter 5',
+      'funded by Supporter 2 and Supporter 5',
     );
     expect(shippedMeta({ ...older!.facts.shipped[0]!, cost_usd: 0.004 })).toBeNull();
   });

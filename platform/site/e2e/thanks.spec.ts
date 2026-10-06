@@ -132,9 +132,10 @@ test('a recorded payment names the supporter, the cards it reached (named first)
   expect(await page.locator('main').textContent()).not.toContain('$');
 });
 
-test('a founding supporter reads Founding supporter', async ({ page }) => {
+test('a founding supporter reads plain Supporter, with no founding label', async ({ page }) => {
   await open(page, SESSIONS.founding);
-  await expect(page.getByText('You are Founding supporter 3.', { exact: true })).toBeVisible();
+  await expect(page.getByText('You are Supporter 3.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Founding/)).toHaveCount(0);
   expect(await page.locator('main').textContent()).not.toContain('$');
 });
 

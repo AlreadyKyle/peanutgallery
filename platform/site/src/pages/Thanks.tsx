@@ -136,7 +136,7 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
 /** Under the Thank you heading: the supporter's number, or nothing for a payment with none. */
 function supporterLine(answer: Recorded): string | undefined {
   if (answer.supporter === null) return undefined;
-  return (answer.supporter.founding ? words.youAreFounding : words.youAre).replace('{n}', formatInteger(answer.supporter.number));
+  return words.youAre.replace('{n}', formatInteger(answer.supporter.number));
 }
 
 // Every state keeps the signal plate to its title (main.title-stays, styles.css): the page starts

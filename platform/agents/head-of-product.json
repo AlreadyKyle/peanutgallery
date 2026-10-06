@@ -12,5 +12,5 @@
   "class": "web_only",
   "write_access": false,
   "status": "starts",
-  "trigger": "Starts with a first review after launch, then runs monthly and after any big change."
+  "trigger": "Starts with a first review, then runs monthly and after any big change."
 }

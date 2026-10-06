@@ -16,12 +16,12 @@ Sixteen roles, one role spec each in `platform/agents/` (a JSON file and a promp
 | QA | writer | running |  | reproduces and fixes bugs in Dust; verifies another role's build | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths; record a qa_verify approval of a card it did not build | verify its own build; touch a kernel path |
 | Platform Builder | writer | running |  | builds studio cards in `platform/site/` outside the kernel paths, once the board opens the code lane | Read, Edit, Write, Glob, Grep, Bash | change the card's allowed paths in a card session | touch a money, legal or board surface; approve a card |
 | Platform Director | reviewer | running |  | reviews a platform/site card's changed frames after its gate passes, against `platform/site/DESIGN.md` (the visual review); grading site card drafts and writing their check lines wait on studio card drafting, a backlog entry | Read, Glob, Grep | pass or send back the frames of a site card it did not build | change the repository; grade its own change |
-| Head of Finance | read_only | starts | Starts at the cutover, once the first Stripe payout has bought Console credit. | explains the ledger and each credit purchase | none | read the books | move money; change anything |
+| Head of Finance | read_only | starts | Starts once the first Stripe payout has bought the agents' model credit. | explains the ledger and each credit purchase | none | read the books | move money; change anything |
 | Janitor | read_only | running |  | checks drift every day as code (`janitor`); its name is on `upkeep_merge`, the code that merges a dependency patch passing the merge policy; its model-written docs pass is backlog | none | read the repository and the database's schema; record findings for the board | change the repository in a session; file a card; read public text |
-| Tech Artist | writer | starts | Starts at the first visual card after launch. | keeps the game's look as code | none | build visual cards once the board grants tools | read public text |
+| Tech Artist | writer | starts | Starts at the first visual card. | keeps the game's look as code | none | build visual cards once the board grants tools | read public text |
 | HR | planner | starts | Starts once role scorecards and the replay eval set exist. | keeps each role spec true to the role's measured work | none | propose role changes for the board to merge | change a role spec itself |
-| Head of Product | web_only | starts | Starts with a first review after launch, then runs monthly and after any big change. | reviews the studio as a stranger, a supporter and the board meet it | none | read outside text; propose | change anything |
-| Biz Dev | web_only | starts | Starts last, once every other role in the launch roster is built. | watches tools, models and prices outside the studio | none | read outside text; propose trials | change anything |
+| Head of Product | web_only | starts | Starts with a first review, then runs monthly and after any big change. | reviews the studio as a stranger, a supporter and the board meet it | none | read outside text; propose | change anything |
+| Biz Dev | web_only | starts | Starts last, once every other role is built. | watches tools, models and prices outside the studio | none | read outside text; propose trials | change anything |
 | Community | web_only | starts | Starts once a named moderator is in place for the community channels. | reads the studio's community channels and turns requests into proposals | none | read public text; propose | change anything; approve a card |
 | Host | web_only | planned | No trigger is set yet; the Host waits on the stream, a backlog entry. | narrates the stream | none | read chat | change anything |
 
@@ -29,11 +29,11 @@ Sixteen roles, one role spec each in `platform/agents/` (a JSON file and a promp
 
 Six roles start on a named trigger and one is planned; each role spec carries its trigger, and no job runs any of them yet:
 
-- Head of Finance starts at the cutover, once the first Stripe payout has bought Console credit.
-- Tech Artist starts at the first visual card after launch.
+- Head of Finance starts once the first Stripe payout has bought the agents' model credit.
+- Tech Artist starts at the first visual card.
 - HR starts once role scorecards and the replay eval set exist.
-- Head of Product starts with a first review after launch.
-- Biz Dev starts last, once every other role in the launch roster is built.
+- Head of Product starts with a first review.
+- Biz Dev starts last, once every other role is built.
 - Community starts once a named moderator is in place for the community channels.
 - The Host is planned; it waits on the stream, a backlog entry.
 

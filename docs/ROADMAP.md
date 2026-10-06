@@ -7,7 +7,7 @@ The launch checklist: what stands between today and Go live, in order, each item
 These are two different states.
 
 - **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on GitHub Actions. The public site shows no paused notice (PLAN.md §10 decision 62). Before Go live the board may share the site quietly; how the first player arrives is the board's call (`BOARD-SETUP.md` step 20, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
-- **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button (PLAN.md §10 decision 62): the database stamps the launch time, `studio_state.launched_at`, when the first Console credit purchase is recorded at /board, once and for good, and founding supporters are those who paid before it. The announcement follows (`docs/specs/announcement.md`).
+- **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button and no founding label (PLAN.md §10 decisions 62 and 63): the site runs or it is down. The announcement follows (`docs/specs/announcement.md`).
 
 ## What "live" means
 

@@ -351,7 +351,6 @@ export const legal = {
   supportersHeading: 'Supporters',
   supportersLede: 'Everyone whose money reached this card, by supporter number.',
   supporter: 'Supporter {n}',
-  foundingSupporter: 'Founding supporter {n}',
   supportersMore: 'and {n} more',
   supportersNone: 'No supporters yet.',
   // /reports' fixed facts template (docs/specs/studio-reports.md, kernel ReportFacts.tsx): each weekly
@@ -414,7 +413,6 @@ export const legal = {
     // Under the Thank you heading: the spec's "Thank you. You are Supporter 12." in two parts, since
     // the copy rules keep a sentence under three words out of a longer line.
     youAre: 'You are Supporter {n}.',
-    youAreFounding: 'You are Founding supporter {n}.',
     plainLede: 'Thank you for supporting the studio.',
     reachedHeading: 'Where your money went',
     reachedLede: 'The cards your contribution reached, the one you picked first.',
