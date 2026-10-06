@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded by `actions-host.md` (PLAN.md §10 decision 61): since 6 October 2026 the daily jobs run on GitHub Actions in the board's private ops repository, not on the Mac.
+
 ## Problem
 
 Contributions are open, so the money database is live, but it has no scheduled backup. `platform/ops/mac/install.sh` installs the nightly backup, Controller and quota LaunchAgents only after `check_host_env` passes on `~/peanutgallery-host/env/dispatcher.env`. That file needs `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION` and `MANAGED_ENVIRONMENT_ID` from `managed:apply`, which fails until the studio's Anthropic organisation has Console credit (`BOARD-SETUP.md` step 22), and the code clone is cloned with that file's `GITHUB_TOKEN`. So until the cutover (step 23) a backup runs only by hand (`sweep-27-sep.md`, Scope, Out).

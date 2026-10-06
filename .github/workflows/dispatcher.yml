@@ -1,0 +1,115 @@
+# The dispatcher's host (docs/specs/actions-host.md, docs/PLAN.md §10 decision 61): one run of the
+# dispatcher of up to about six hours on a GitHub-hosted runner, free in this public repository. Each
+# run drains (claims nothing new) five hours after it starts and starts the next run before it ends;
+# the 30-minute schedule is the backstop that restarts it after a short failure or a lost run, and the
+# concurrency group keeps one run at a time with at most one waiting.
+#
+# Secrets: the job runs in the GitHub environment `dispatcher`, whose deployment branch policy allows
+# main alone, so a card branch, a pull request or a fork never receives DISPATCHER_ENV. Only the step
+# that runs the dispatcher (and the alert step) reads it; the install runs with no secret.
+# The repository is public, and so are its Actions logs: the dispatcher's output goes to a file that
+# is encrypted with age to vars.BACKUP_AGE_RECIPIENT and kept as an artifact for 14 days, and the
+# public log shows only fixed lifecycle lines (platform/ops/actions/run-dispatcher.sh).
+# Every action is pinned to a full commit sha (the tag it was is in the comment).
+name: dispatcher
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dispatcher
+  cancel-in-progress: false
+
+jobs:
+  dispatcher:
+    name: dispatcher
+    # The repository variable DISPATCHER_HOST is the host's switch: the cutover sets it to on, and
+    # stopping the host sets it to off. Until then no run starts, so merging this file starts nothing.
+    if: github.ref == 'refs/heads/main' && github.repository == 'AlreadyKyle/peanutgallery' && vars.DISPATCHER_HOST == 'on'
+    runs-on: ubuntu-24.04
+    environment: dispatcher
+    timeout-minutes: 355
+    permissions:
+      contents: read
+      actions: write
+    env:
+      DRAIN_AFTER_MINUTES: '300'
+      HARD_STOP_AFTER_MINUTES: '350'
+    steps:
+      - name: Note the start
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      # No secret in this step's environment: install scripts never see the dispatcher's keys.
+      - name: Install the code clone's node_modules
+        run: pnpm install --frozen-lockfile
+
+      - name: Install age
+        run: sudo apt-get install -y -q --no-install-recommends age > /dev/null
+
+      - name: Run the dispatcher
+        id: run
+        env:
+          DISPATCHER_ENV: ${{ secrets.DISPATCHER_ENV }}
+        run: bash platform/ops/actions/run-dispatcher.sh run
+
+      - name: Encrypt the dispatcher log
+        id: log
+        if: always()
+        env:
+          AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/host/logs/dispatcher.log"
+          if [ ! -f "$log" ]; then echo "no dispatcher log"; exit 0; fi
+          if [ -z "$AGE_RECIPIENT" ]; then
+            rm -f "$log"
+            echo "vars.BACKUP_AGE_RECIPIENT is not set; the log was deleted, not uploaded"
+            exit 1
+          fi
+          age -r "$AGE_RECIPIENT" -o "$RUNNER_TEMP/dispatcher-log.age" "$log"
+          rm -f "$log"
+          echo "encrypted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the encrypted log
+        if: always() && steps.log.outputs.encrypted == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dispatcher-log-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dispatcher-log.age
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      # Exit 78 is fatal: the run says so and nothing starts the next one until the board does.
+      - name: Start the next run
+        if: always() && steps.run.outputs.redispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run dispatcher.yml --ref main --repo "$GITHUB_REPOSITORY"
+
+      - name: Alert the board
+        if: failure() && steps.run.outputs.alerted != 'true'
+        env:
+          DISPATCHER_ENV: ${{ secrets.DISPATCHER_ENV }}
+        run: bash platform/ops/actions/run-dispatcher.sh notify "Mob Machine dispatcher run failed on GitHub Actions before or after the dispatcher ran"
+
+      - name: Remove the env file
+        if: always()
+        run: |
+          chmod -R u+w "$GITHUB_WORKSPACE"
+          rm -f "$GITHUB_WORKSPACE/.env" "$RUNNER_TEMP/host/env/dispatcher.env"

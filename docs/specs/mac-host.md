@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Superseded by `actions-host.md` (PLAN.md §10 decision 61, 6 October 2026): the dispatcher runs on GitHub Actions in the public studio repository and the daily jobs in the board's private ops repository; the Mac's LaunchAgents were removed with `uninstall.sh` (`uninstall: done: 6 change(s)`). The Mac scripts are kept: `backup-mac.sh` is the backup the ops repository runs, and the rest are the record. The criteria left open below are closed by that move, not run.
+
 ## Problem
 
 Live criterion 2 needs the dispatcher running unattended, restarting on its own and alerting the board. The plan put it on an Oracle Cloud Always Free instance (`vps.md`, `oracle-launch.md`), but on 23 September 2026 the board decided it cannot put a card on file for a cloud server now and does not trust Oracle (PLAN.md §10 decision 38). Nothing else can host the dispatcher and the daily jobs, and the backup's store was an Oracle bucket.

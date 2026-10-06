@@ -317,3 +317,22 @@ describe('the Discord webhooks and the public site', () => {
     }
   });
 });
+
+// docs/specs/actions-host.md: a host with a bounded run sets the time the dispatcher drains from.
+describe('the drain time', () => {
+  it('is null when unset or blank', () => {
+    expect(loadConfig(FULL, REPO).drainAt).toBeNull();
+    expect(loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: '  ' }, REPO).drainAt).toBeNull();
+  });
+
+  it('reads an ISO 8601 time in UTC or with an offset', () => {
+    expect(loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: '2026-10-06T17:00:00Z' }, REPO).drainAt?.toISOString()).toBe('2026-10-06T17:00:00.000Z');
+    expect(loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: '2026-10-06T13:00:00-04:00' }, REPO).drainAt?.toISOString()).toBe('2026-10-06T17:00:00.000Z');
+  });
+
+  it('refuses a time with no zone, a bare number or nonsense, fatally', () => {
+    for (const value of ['2026-10-06T17:00:00', '1791306000', 'soon', '2026-13-45T99:00:00Z']) {
+      expect(() => loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: value }, REPO), value).toThrow(ConfigError);
+    }
+  });
+});
