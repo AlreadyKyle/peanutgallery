@@ -1446,21 +1446,25 @@ describe('the Oracle instance', () => {
   });
 });
 
-describe('the backups repository template', () => {
-  test('lives outside .github, needs no token, uses only its own secrets and checks the CLI it installs', () => {
-    const workflow = read('platform/ops/backups-repo/workflows/backup.yml');
-    assert.match(workflow, /^permissions: \{\}$/m);
-    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_DB_URL', 'BACKUP_PAR_URL']);
-    // Every dump signs in as the backup login; the owner's password is never a secret there.
-    assert.equal([...workflow.matchAll(/supabase db dump --db-url "\$BACKUP_DB_URL"/g)].length, 6);
-    assert.doesNotMatch(workflow, /OWNER|postgres\./);
-    assert.match(workflow, /sha256sum -c -/);
-    assert.match(workflow, /^ {4}- cron: '\d+ \d+ \* \* \d'$/m);
-    assert.doesNotMatch(workflow, /uses: /, 'no third-party action');
+// docs/specs/actions-host.md: the daily jobs in the private ops repository.
+describe('the ops repository template', () => {
+  test('lives outside .github, reads contents only, runs the three jobs at their times from STUDIO_REF, and uses only its own secrets', () => {
+    const workflow = read('platform/ops/ops-repo/jobs.yml');
+    assert.match(workflow, /^permissions:\n {2}contents: read\n(?! )/m);
+    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
+    for (const cron of ["'17 6 * * *'", "'7 7 * * *'", "'37 7 * * *'"]) assert.ok(workflow.includes(`- cron: ${cron}`), cron);
+    assert.match(workflow, /repository: AlreadyKyle\/peanutgallery\n\s+ref: \$\{\{ vars\.STUDIO_REF \}\}/);
+    assert.match(workflow, /persist-credentials: false/);
+    assert.match(workflow, /BACKUP_PG_BIN=\/usr\/lib\/postgresql\/17\/bin/);
+    assert.match(workflow, /bash studio\/platform\/ops\/mac\/backup-mac\.sh/);
+    assert.match(workflow, /retention-days: 90/);
+    assert.match(workflow, /node studio\/platform\/ops\/jobs\/check-env\.mjs "\$JOB" "\$file"/);
     assert.doesNotMatch(workflow, /pull_request/);
+    assert.doesNotMatch(workflow, /OWNER|postgres\./);
     const workflows = readdirSync(path.join(REPO_ROOT, '.github', 'workflows'));
-    assert.ok(!workflows.includes('backup.yml'), 'the template is not a workflow of this repository');
-    assert.match(read('platform/ops/backups-repo/README.md'), /never in the studio repository/);
+    assert.ok(!workflows.includes('jobs.yml'), 'the template is not a workflow of this repository');
+    assert.ok(!existsSync(path.join(OPS_DIR, 'backups-repo')), 'the Oracle-era template is gone');
+    assert.match(read('platform/ops/ops-repo/README.md'), /never in this one/);
   });
 });
 

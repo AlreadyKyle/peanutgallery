@@ -1,0 +1,126 @@
+# Mob Machine's daily jobs: the nightly backup, the Controller and the quota check
+# (platform/ops/ops-repo/README.md in the studio repository). They run here, in a private repository,
+# never in the public studio repository: no job secret sits where card code or public logs reach it.
+# The job code is the studio repository's platform/ops at the commit in the STUDIO_REF variable, a
+# full sha the board moves on purpose, so a commit reaches these secrets only once someone sets it.
+name: jobs
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # backup
+    - cron: '7 7 * * *'    # controller
+    - cron: '37 7 * * *'   # quota
+  workflow_dispatch:
+    inputs:
+      job:
+        description: backup, controller or quota
+        required: true
+        type: choice
+        options: [backup, controller, quota]
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: job-${{ github.event.inputs.job || github.event.schedule }}
+      cancel-in-progress: false
+    steps:
+      - name: Pick the job
+        id: pick
+        env:
+          ASKED: ${{ github.event.inputs.job }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          case "$ASKED:$SCHEDULE" in
+            backup:* | ':17 6 * * *') job=backup ;;
+            controller:* | ':7 7 * * *') job=controller ;;
+            quota:* | ':37 7 * * *') job=quota ;;
+            *) echo "no job for '$ASKED' '$SCHEDULE'"; exit 1 ;;
+          esac
+          echo "job=$job" >> "$GITHUB_OUTPUT"
+          echo "job: $job"
+
+      - name: Check out the studio's job code
+        uses: actions/checkout@v4
+        with:
+          repository: AlreadyKyle/peanutgallery
+          ref: ${{ vars.STUDIO_REF }}
+          path: studio
+          persist-credentials: false
+          sparse-checkout: |
+            platform/ops
+            platform/supabase/functions/_shared
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: PostgreSQL 17 client and age
+        if: steps.pick.outputs.job == 'backup'
+        run: |
+          set -euo pipefail
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -q --no-install-recommends postgresql-client-17 age > /dev/null
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Backup
+        if: steps.pick.outputs.job == 'backup'
+        env:
+          JOB_ENV: ${{ secrets.BACKUP_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/env" "$RUNNER_TEMP/backups" "$RUNNER_TEMP/state"
+          printf '%s\n' "$JOB_ENV" | grep -v '^BACKUP_DIR=' > "$RUNNER_TEMP/env/backup.env"
+          echo "BACKUP_DIR=$RUNNER_TEMP/backups" >> "$RUNNER_TEMP/env/backup.env"
+          chmod 600 "$RUNNER_TEMP/env/backup.env"
+          for attempt in 1 2 3; do
+            if env -i PATH="$PATH" HOME="$HOME" BACKUP_ENV_FILE="$RUNNER_TEMP/env/backup.env" \
+                 BACKUP_STATE_DIR="$RUNNER_TEMP/state" BACKUP_PG_BIN=/usr/lib/postgresql/17/bin \
+                 bash studio/platform/ops/mac/backup-mac.sh; then
+              exit 0
+            fi
+            echo "backup attempt $attempt failed"
+            [ "$attempt" = 3 ] || sleep 60
+          done
+          exit 1
+
+      - name: Keep the encrypted backup
+        if: steps.pick.outputs.job == 'backup'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/backups/*.tar.age
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+      - name: Controller or quota check
+        if: steps.pick.outputs.job != 'backup'
+        env:
+          JOB: ${{ steps.pick.outputs.job }}
+          CONTROLLER_ENV: ${{ secrets.CONTROLLER_ENV }}
+          QUOTA_ENV: ${{ secrets.QUOTA_ENV }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/env"
+          file="$RUNNER_TEMP/env/$JOB.env"
+          if [ "$JOB" = controller ]; then printf '%s\n' "$CONTROLLER_ENV" > "$file"; else printf '%s\n' "$QUOTA_ENV" > "$file"; fi
+          env -i PATH="$PATH" HOME="$HOME" node studio/platform/ops/jobs/check-env.mjs "$JOB" "$file"
+          env -i PATH="$PATH" HOME="$HOME" node --env-file="$file" studio/platform/ops/jobs/main.mjs "$JOB"
+
+      - name: Alert the board
+        if: failure()
+        env:
+          NTFY_TOPIC_URL: ${{ secrets.NTFY_TOPIC_URL }}
+          JOB: ${{ steps.pick.outputs.job }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -fsS --max-time 20 -H 'Title: Mob Machine job' \
+            -d "Mob Machine job ${JOB:-unknown} failed on GitHub Actions: $RUN_URL" "$NTFY_TOPIC_URL" > /dev/null || true
