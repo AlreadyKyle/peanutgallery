@@ -6,8 +6,8 @@ The launch checklist: what stands between today and Go live, in order, each item
 
 These are two different states.
 
-- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on GitHub Actions. The public site shows no paused notice (PLAN.md §10 decision 62). Before Go live the board may share the site quietly; how the first player arrives is the board's call (`BOARD-SETUP.md` step 20, a quiet share recommended). A player's contribution from that share is what closes criterion 1.
-- **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button and no founding label (PLAN.md §10 decisions 62 and 63): the site runs or it is down. The announcement follows (`docs/specs/announcement.md`).
+- **Contributions open** is true now. The Contribute button is live, and the studio is paused until the first Stripe payout buys Console credit and the dispatcher is cut over to run unattended on GitHub Actions. The public site shows no paused notice (PLAN.md §10 decision 62). The board announces now, before Go live, to bring the first players' money in (PLAN.md §10 decision 64, `docs/launch/`). A player's contribution from it is what closes criterion 1.
+- **Go live** is when every criterion below holds with its evidence quoted in the specs. There is no Go live button and no founding label (PLAN.md §10 decisions 62 and 63): the site runs or it is down. The announcement does not wait for it (PLAN.md §10 decision 64).
 
 ## What "live" means
 
@@ -142,7 +142,8 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 
 | Spec | Status | What is left |
 |---|---|---|
-| `specs/announcement.md` | agreed | the drafts are in `docs/launch/`; left: the clip, the link previews and the final check, after board section C (Go live is no longer a button, (PLAN.md §10 decision 62)) |
+| `specs/announcement.md` | agreed | the drafts in `docs/launch/` post now, with no clip (PLAN.md §10 decision 64, `specs/announce-now.md`) |
+| `specs/announce-now.md` | built | the three site lines and the game's og:image served in production |
 | `specs/no-pause-no-golive.md` | built | apply `20261006000000_launch_stamp.sql` to production after merge, then the site deploy and the live check |
 
 ## Standing facts for any session

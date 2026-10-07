@@ -1,6 +1,6 @@
 # r/ClaudeAI
 
-First in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Replace the clip line before posting.
+First in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
 
 ## Title
 
@@ -21,7 +21,8 @@ https://mobmachine.games
 
 **What you can see**
 
-- Every card has a page with what changed, the agents' steps and a replay of how it was built. This is the first card a player funded, from open to live: [clip link: added when the first player-funded card ships, docs/specs/announcement.md]
+- Every card has a page with what changed, the agents' steps and a replay of how it was built.
+- Dust is free to play, no sign-up: https://play.mobmachine.games
 - The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions, priced at list rates: https://mobmachine.games/ledger
 
 **Some rules are fixed, and no contribution or card can change them**

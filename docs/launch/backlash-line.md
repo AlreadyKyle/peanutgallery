@@ -8,7 +8,7 @@ The game art is procedural, the ledger is public, and a human board directs it. 
 
 ## What it leaves out
 
-It is PLAN.md §7's response line without the kick-off plan's open-source clause. PLAN.md §7 allows that clause only once the public seed-1 mirror exists with a license, and the repository is private until then (`docs/specs/announcement.md`, Drafts). No reply says the studio or its games are open source.
+It is PLAN.md §7's response line without the kick-off plan's open-source clause. PLAN.md §7 allows that clause only once the game has a license (`docs/specs/announcement.md`, Drafts). No reply says the studio or its games are open source.
 
 ## Where each part stands on the site
 

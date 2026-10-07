@@ -4,11 +4,10 @@ The drafts for the announcement (`docs/specs/announcement.md`, Drafts; `docs/ROA
 
 ## Before anything is posted
 
-1. ~~The board has pressed Go live on the board's own site.~~ Superseded by `docs/PLAN.md` §10 decision 62: the launch time is stamped when the first credit purchase is recorded; check the board's site says "Live since …".
-2. The clip exists: the first player-funded card's own page, `/card/<its id>`, with its replay (`docs/specs/announcement.md`, Clip). Posts go out only after it exists (PLAN.md §7 Order).
-3. In every draft, "[clip link: added when the first player-funded card ships, docs/specs/announcement.md]" is replaced with that page's address. The gap is left on purpose: no card id is written here before that card ships.
-4. Every link points at https://mobmachine.games, the studio's domain since PLAN.md §10 decision 59 (`scripts/rename.mjs`, `docs/specs/rename.md`).
-5. Each subreddit's current rules and flair are read before its post goes up.
+The board posts these now (`docs/PLAN.md` §10 decision 64).
+
+1. Every link points at https://mobmachine.games or https://play.mobmachine.games (PLAN.md §10 decision 59).
+2. Each subreddit's current rules and flair are read before its post goes up.
 
 ## Posting order
 
@@ -42,13 +41,13 @@ No draft gives a figure the site can move, such as a supporter count, money rais
 
 ## Length limits
 
-Measured on the drafts as written, with the clip line in place and the current domain.
+Measured on the drafts as written, with the current domain.
 
 | Draft | Limit | Measured |
 |---|---|---|
-| `reddit-claudeai.md` | title 300, body 40,000 | title 101, body 2,329 |
-| `reddit-artificial.md` | title 300, body 40,000 | title 109, body 1,937 |
-| `reddit-incremental-games.md` | title 300, body 40,000 | title 102, body 1,684 |
-| `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,917 |
+| `reddit-claudeai.md` | title 300, body 40,000 | title 101, body 2,231 |
+| `reddit-artificial.md` | title 300, body 40,000 | title 109, body 1,816 |
+| `reddit-incremental-games.md` | title 300, body 40,000 | title 102, body 1,570 |
+| `show-hn.md` | title 80; the first comment held under 2,000 | title 77, comment 1,695 |
 | `x-thread.md` | 280 a post, a link counted as 23 | 8 posts, the longest 248 counted in full |
 | `backlash-line.md` | fits any of the above | 144 |

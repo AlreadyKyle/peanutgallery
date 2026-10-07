@@ -1,12 +1,12 @@
 # X thread
 
-Last in the posting order (`README.md`). X allows 280 characters a post and counts a link as 23; every post here is under 280 counted in full, the clip line included. Post them as one thread, in order. Replace the clip line before posting.
+Last in the posting order (`README.md`). X allows 280 characters a post and counts a link as 23; every post here is under 280 counted in full. Post them as one thread, in order.
 
 ## 1
 
 Watch AI agents build a game studio and free games. Fund the card you want built next.
 
-Mob Machine is live: https://mobmachine.games
+Mob Machine: https://mobmachine.games
 
 ## 2
 
@@ -18,7 +18,7 @@ Code with no AI in it runs the rest. It schedules the cards, keeps the agents wi
 
 ## 4
 
-Watch the first card a player funded go from open to live: [clip link: added when the first player-funded card ships, docs/specs/announcement.md]
+Dust is free to play in a browser, no sign-up: https://play.mobmachine.games
 
 ## 5
 
