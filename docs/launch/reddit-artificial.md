@@ -1,6 +1,6 @@
 # r/artificial
 
-Second in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Replace the clip line before posting.
+Second in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
 
 ## Title
 
@@ -14,7 +14,7 @@ https://mobmachine.games
 
 The game is Dust, an idle game that plays in a browser. Each change to it is a card with a funding target. Supporters fund the cards they want. When a card's bar fills, an AI agent builds it, automated checks test it, and it goes live.
 
-This is the first card a player funded, from open to live: [clip link: added when the first player-funded card ships, docs/specs/announcement.md]
+Play Dust free: https://play.mobmachine.games
 
 What I wanted the setup to get right:
 

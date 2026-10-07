@@ -224,6 +224,11 @@ export const legal = {
   },
   contributeTitle: 'Where should your contribution go?',
   contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
+  // When the agents start, said plainly before checkout and after it (/contribute, /thanks): the
+  // studio pays for model usage only with money Stripe has paid out (PLAN.md §5). Not a paused
+  // notice (PLAN.md §10 decision 62): it is true whether the studio runs or not.
+  whenAgentsStart:
+    'The agents are paid for with contributions once Stripe pays them out to the studio, which can take up to two weeks. A funded card waits in the queue until then.',
   // The first choice on /contribute: money given with no card funds the next cards in line (PLAN.md
   // §4). It names the first card in the waterfall's order (public_money.funding_order), says the
   // money waits when no card takes money, and names no card when the order did not load
@@ -417,6 +422,8 @@ export const legal = {
     reachedHeading: 'Where your money went',
     reachedLede: 'The cards your contribution reached, the one you picked first.',
     reachedNone: 'Your contribution has not reached a card yet.',
+    whenAgentsStart:
+      'The agents start on a funded card once Stripe pays your contribution out to the studio, which can take up to two weeks. This page and the card show when it starts.',
     stateOpen: 'Open for funding',
     stateFunded: 'Funded and waiting for the agents.',
     stateBuilding: 'Being built now.',

@@ -20,17 +20,19 @@ Checked against your Mac, Stripe, the Admin console, GitHub and production on 1 
 everything that can be done from the Mac; what is left needs you at a Google or board-site screen, a
 second factor, a decision, or money. The path to shipping:
 
-**hello@ delivers, share the site, wait for the first payout, buy credit, cut over, announce.** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
+**Post the announcement now (`docs/PLAN.md` §10 decision 64), wait for the first payout, buy credit, cut over.** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
 
 ## What's left, in order
 
 While the first payout is on its way (days):
 - [ ] **35** Restore drill (10 minutes, with me)
 
+Now:
+- [ ] **40** Post the announcement (`docs/launch/`, the order in its README)
+
 When a payout that holds a player's money arrives:
 - [ ] **38** Console credit, bought from the payout
 - [ ] **39** The cutover (20 minutes with me, then a day)
-- [x] ~~**40** Go live~~ Superseded by `docs/PLAN.md` §10 decision 62: no button; step 38's recorded purchase stamps the launch time. The posting part is below.
 
 Whenever you want a big card open to fund:
 - [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
@@ -102,17 +104,16 @@ Then a 24-hour soak on GitHub Actions; your Mac can sleep.
 
 **Reply:** "ready for the cutover."
 
-### Step 40: Go live
+### Step 40: Post the announcement (now)
 
-More detail: Reference 24.
+`docs/PLAN.md` §10 decision 64: post now; there is no clip to wait for and no Go live button.
 
-1. ~~Once the first player-funded card ships, press **Go live** on the board site.~~ Superseded by
-   `docs/PLAN.md` §10 decision 62: there is no Go live button. The launch time was stamped when step
-   38's credit purchase was recorded. Wait for the first player-funded card to ship.
-2. Edit my drafts in `docs/launch/` so they sound like you, and add the clip's link.
-3. Post them in the order in `docs/launch/README.md`.
+1. Read each draft in `docs/launch/` and change any words you want in your own voice.
+2. Check each subreddit's current self-promotion and flair rules.
+3. Post them in the order in `docs/launch/README.md`: r/ClaudeAI, r/artificial, r/incremental_games, Show HN, then the X thread.
+4. Keep `docs/launch/backlash-line.md` handy for comments about AI in games.
 
-**Reply:** "gone live."
+**Reply:** "posted."
 
 ---
 

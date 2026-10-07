@@ -39,7 +39,7 @@ Out: Twitch, the host, micro-votes, the name vote (the studio is already named).
 **Launch day.**
 1. ~~The board presses Go live on /board.~~ Superseded by PLAN.md §10 decision 62: the launch time is already stamped by the first credit purchase.
 2. The site shows "Live since …".
-3. Posts go out after the clip exists, in the PLAN.md §7 order.
+3. ~~Posts go out after the clip exists, in the PLAN.md §7 order.~~ Superseded by `specs/announce-now.md` (PLAN.md §10 decision 64): the posts go out now, with no clip, in the PLAN.md §7 order.
 
 ## Acceptance criteria
 

@@ -1,6 +1,6 @@
 # r/incremental_games
 
-Third in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body. Replace the clip line before posting.
+Third in the posting order (`README.md`). Reddit allows a 300-character title and a 40,000-character body.
 
 ## Title
 
@@ -12,14 +12,16 @@ Dust is a free idle game that plays in a browser. You strike for dust, buy units
 
 AI agents build it, and I want to say that up front. I'm the human board of Mob Machine, the studio behind it. The site's line is "Watch AI agents build a game studio and free games. Fund the card you want built next."
 
-Play it or look around: https://mobmachine.games
+Play it: https://play.mobmachine.games
+
+The studio: https://mobmachine.games
 
 How a change gets made:
 
 - Each change to Dust is a card: one small change, such as a number, a rule or a new unit, with a funding target.
 - Supporters fund the cards they want built next. When a card's bar fills, an AI agent makes the change.
 - Before a change goes live it must pass automated checks, including a bot that plays the game. A change that fails is not shipped, and a live change that breaks is rolled back.
-- Every card has its own page with what changed and a replay of how it was built. This is the first card a player funded: [clip link: added when the first player-funded card ships, docs/specs/announcement.md]
+- Every card has its own page with what changed and a replay of how it was built.
 
 Playing Dust is free. Art in the games and the agent avatars is drawn by code, and everything here is made for all ages.
 
