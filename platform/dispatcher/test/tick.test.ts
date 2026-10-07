@@ -198,38 +198,18 @@ describe('tick', () => {
     expect(budgets.budgetFor('c')).toBe(10);
   });
 
-  it('bounds an unattended budget by the Console credit left: a $50 pool with $10 of credit gives at most $10', async () => {
-    const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
-    db.pool.balance_usd = 50;
-    db.creditPurchased = 10;
-    db.cards = [card({ estimate_usd: 8, funded_usd: 8 })];
-    const budgets = new SessionBudgets();
-    const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
-    expect(budgets.budgetFor(card().id)).toBe(10);
-    expect(alert.messages).toEqual(['Console credit needed: the pool holds $50.00 for the agents but $10.00 of Console credit is left. Buy credit and record it on /board.']);
-  });
-
-  it('sleeps on the Console credit, counting studio and overhead rows, and alerts once per purchase', async () => {
+  it('starts a funded card unattended with no Console credit recorded, and sends no credit alert (PLAN.md §10 decision 65)', async () => {
     const db = new FakeDb();
     db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
-    db.creditPurchased = 3;
+    db.creditPurchased = 0;
     db.ledger = [
       { id: 'l1', created_at: NOW.toISOString(), billed_to: 'overhead', card_id: null, role_id: null, model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 1.5, request_id: 'probe/1' },
-      { id: 'l2', created_at: NOW.toISOString(), billed_to: 'founder', card_id: null, role_id: null, model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 9, request_id: 'probe/2' },
     ];
     db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
     const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'console_credit' });
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'console_credit' });
-    expect(alert.messages).toEqual([
-      'Console credit needed: the pool holds $5.00 for the agents but $1.50 of Console credit is left. Buy credit and record it on /board.',
-      'Console credit needed: card 4c2f5a1e needs $2.00 and $1.50 of Console credit is left once running sessions are covered. Buy credit and record it on /board.',
-    ]);
-    db.creditPurchased = 10;
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, [], { mode: 'unattended', alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
+    expect(alert.messages).toEqual([]);
   });
 
   it('starts nothing once the month-to-date studio spend reaches the monthly cap, and alerts once', async () => {

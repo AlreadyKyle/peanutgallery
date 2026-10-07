@@ -1,6 +1,6 @@
 # Announce now
 
-Status: built. Card: none. Owner: board.
+Status: built. The /contribute and /thanks timing line and home's queue line were removed by `specs/build-on-funding.md` (PLAN.md §10 decision 65): a funded card builds at once. Card: none. Owner: board.
 
 ## Problem
 

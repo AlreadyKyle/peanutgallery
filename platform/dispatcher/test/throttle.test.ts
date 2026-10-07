@@ -271,16 +271,12 @@ describe('planStart', () => {
     expect(planStart(money({ balanceUsd: 50, cards: [x] }), x)).toMatchObject({ ok: true, budgetUsd: 3 });
   });
 
-  describe('Console credit', () => {
-    it('bounds the budget by the credit left: a $50 pool with $10 of credit gives at most $10', () => {
+  describe('Console credit (PLAN.md §10 decision 65)', () => {
+    it('is not a bound: a funded card starts with no credit recorded, and the budget ignores it', () => {
       const x = moneyCard({ id: 'x', estimate_usd: 8, funded_usd: 50 });
-      expect(planStart(money({ balanceUsd: 50, creditPurchasedUsd: 10, cards: [x] }), x)).toMatchObject({ ok: true, budgetUsd: 10 });
-    });
-    it('counts studio and overhead spend and the running sessions against the credit', () => {
-      const building = moneyCard({ id: 'b', stage: 'building' });
-      const x = moneyCard({ id: 'x', estimate_usd: 2, funded_usd: 2 });
-      const state = money({ balanceUsd: 50, creditPurchasedUsd: 10, creditSpentUsd: 6, cards: [building, x], running: new Map([['b', 3]]) });
-      expect(planStart(state, x)).toMatchObject({ ok: false, reason: 'console_credit', bounds: { creditUsd: 1 } });
+      const plan = planStart(money({ balanceUsd: 50, creditPurchasedUsd: 0, creditSpentUsd: 6, cards: [x] }), x);
+      expect(plan).toMatchObject({ ok: true });
+      expect(plan.bounds.creditUsd).toBe(Number.POSITIVE_INFINITY);
     });
   });
 

@@ -89,7 +89,6 @@ export function Contribute() {
                 );
               }}
             </Guarded>
-            <p className="muted small">{legal.whenAgentsStart}</p>
             <p className="muted small">{legal.split}</p>
             <p className="muted small">{legal.usdNote}</p>
           </div>
