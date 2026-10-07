@@ -410,7 +410,7 @@ describe('the Controller reconciliation', () => {
     assert.match(alertMessage(open), /Dispute dp_fixture_won \(needs_response, \$10\.00\) needs an answer in Stripe by 2026-09-25\./);
   });
 
-  test('names a payout whose transactions do not sum to it, an undelivered event, spend beyond the credit, a low balance, a drifting ledger and a list read short', () => {
+  test('names a payout whose transactions do not sum to it, an undelivered event, a low balance, a drifting ledger and a list read short; spend beyond the credit recorded is no mismatch (PLAN.md §10 decision 65)', () => {
     const account = clone(ACCOUNT);
     account.payouts[0].amount = 1700;
     account.undelivered_events = [{ id: 'evt_fixture_lost', object: 'event', type: 'charge.refunded', created: 1790067600, pending_webhooks: 1 }];
@@ -420,12 +420,12 @@ describe('the Controller reconciliation', () => {
     const data = stripeData(account);
     data.truncated = ['charges'];
     const result = reconcile({ identity: account.identity, figures: account.figures, stripe: data, now: NOW });
-    assert.deepEqual(failing(result), ['ledger_identity', 'payouts_sum', 'webhook_delivered', 'console_credit', 'minimum_balance', 'stripe_lists_complete']);
-    assert.equal(result.mismatches, 6);
+    assert.deepEqual(failing(result), ['ledger_identity', 'payouts_sum', 'webhook_delivered', 'minimum_balance', 'stripe_lists_complete']);
+    assert.equal(result.mismatches, 5);
     assert.deepEqual(result.checks.find((c) => c.name === 'payouts_sum').items, [{ payout: 'po_fixture_1', amount: 1700, transactions_sum: 1648, currency: 'cad' }]);
     assert.equal(result.checks.find((c) => c.name === 'webhook_delivered').items[0].fix, 'resend it from the Stripe Dashboard (Developers, Events)');
     const message = alertMessage(result);
-    assert.match(message, /^Controller: 6 mismatch\(es\) between the books and Stripe\./);
+    assert.match(message, /^Controller: 5 mismatch\(es\) between the books and Stripe\./);
     // The overspend raises what the cards need, but the purchase stays capped by paid-out agent money.
     assert.match(message, /Credit to buy now: \$3\.39\. Minimum balance: \$2\.17 USD \(2\.98 CAD\)\.$/);
   });

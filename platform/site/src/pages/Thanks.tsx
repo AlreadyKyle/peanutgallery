@@ -120,7 +120,6 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
               <p data-note="held">{words.held.replace('{date}', formatDay(answer.heldUntil))}</p>
             ) : null}
             {answer.waiting ? <p data-note="waiting">{words.waiting}</p> : null}
-            <p className="muted" data-note="when">{words.whenAgentsStart}</p>
           </>
         )}
         {answer.termsVersion === null ? null : (
@@ -180,7 +179,6 @@ export function Thanks() {
         <PageHeader title={words.title} lede={state.kind === 'fallback' ? words.fallback : words.plainLede} />
       </div>
       <div className="band">
-        <p className="muted" data-note="when">{words.whenAgentsStart}</p>
         <HomeLinks />
         {state.kind === 'fallback' ? <FollowAlong cardId={null} /> : null}
       </div>

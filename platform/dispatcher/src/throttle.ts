@@ -201,7 +201,8 @@ export interface MoneyBounds {
   dailyUsd: number;
   monthlyUsd: number;
   tierUsd: number;
-  // The Console credit bought, less every studio and overhead row, less the running sessions' budgets.
+  // Not a bound (PLAN.md §10 decision 65): the studio key's real Console balance is the limit, and the
+  // API's refusal pauses the studio (credit.ts). Always Infinity; kept so alerts keep their shape.
   creditUsd: number;
 }
 
@@ -214,7 +215,7 @@ export function moneyBounds(state: MoneyState, x: MoneyCard): MoneyBounds {
     dailyUsd: round4(state.dailyCapUsd - state.spentTodayUsd - running),
     monthlyUsd: state.monthlyCapUsd === null ? 0 : round4(state.monthlyCapUsd - state.spentThisMonthUsd - running),
     tierUsd: state.tierCapUsd === null ? Number.POSITIVE_INFINITY : round4(state.tierCapUsd - state.spentThisTierMonthUsd - running),
-    creditUsd: round4(state.creditPurchasedUsd - state.creditSpentUsd - running),
+    creditUsd: Number.POSITIVE_INFINITY,
   };
 }
 
@@ -228,9 +229,8 @@ export function planStart(state: MoneyState, x: MoneyCard): StartPlan {
   if (!fits(bounds.dailyUsd)) return { ok: false, reason: 'daily_cap', needUsd, bounds };
   if (!fits(bounds.monthlyUsd)) return { ok: false, reason: 'monthly_cap', needUsd, bounds };
   if (!fits(bounds.tierUsd)) return { ok: false, reason: 'tier_cap', needUsd, bounds };
-  if (!fits(bounds.creditUsd)) return { ok: false, reason: 'console_credit', needUsd, bounds };
   if (!fits(bounds.availableUsd)) return { ok: false, reason: 'insufficient_balance', needUsd, bounds };
   const ceilingLeft = round4(ceilingUsd(x.estimate_usd, state.cardMaxUsd) - x.actual_usd);
-  const budgetUsd = round4(Math.min(ceilingLeft, bounds.availableUsd, bounds.dailyUsd, bounds.monthlyUsd, bounds.tierUsd, bounds.creditUsd));
+  const budgetUsd = round4(Math.min(ceilingLeft, bounds.availableUsd, bounds.dailyUsd, bounds.monthlyUsd, bounds.tierUsd));
   return { ok: true, budgetUsd, needUsd, bounds };
 }

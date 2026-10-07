@@ -18,7 +18,7 @@ These are two different states.
    - It runs on GitHub Actions in this repository (PLAN.md §10 decision 61, `specs/actions-host.md`), each run draining and starting the next with a 30-minute schedule as the backstop, holds the dispatcher lease, and alerts the board through healthchecks.io and ntfy, with a test alert received on the board's phone.
    - Card sessions run as Claude Managed Agents sessions: no agent-written code runs on the dispatcher's host, the repository is mounted read-only, and the dispatcher applies and checks the returned patch itself (PLAN.md §10 decision 25).
    - Every dispatcher secret and id is present, and provisioning and startup check it: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`), `GITHUB_TOKEN` (the host's own fine-grained token, never the attended checkout's), `GITHUB_READ_TOKEN` (contents read only; a write attempt with it answers 403), `GITHUB_REPO`, `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID_SEED`, `NETLIFY_SITE_ID_PLATFORM`, `STUDIO_ANTHROPIC_API_KEY` (the studio organisation's key, never the founder's), `MANAGED_AGENT_ID`, `MANAGED_AGENT_VERSION`, `MANAGED_ENVIRONMENT_ID`, `MODEL_BUILDER`, `MODEL_DIRECTOR`, `PRICE_TABLE_JSON`, `HEALTHCHECK_URL` and `NTFY_TOPIC_URL`.
-   - Console credit bought from a Stripe payout is recorded at /board, and the unattended startup probe passes on it.
+   - ~~Console credit bought from a Stripe payout is recorded at /board, and the unattended startup probe passes on it.~~ Superseded by PLAN.md §10 decision 65: the studio key's real Console balance is the limit; the unattended startup probe passes on it (dispatcher runs on Actions since 6 October 2026).
    - A card funded by a player builds with no one at the keyboard, billed to the studio.
 3. **The money is safe.** Refunds and disputes reverse cleanly. Credit above $50 a day per payer (keyed on the card fingerprint), or above the studio-wide daily limit, is held for 14 days. A refund of money already spent takes the shortfall from unearmarked money first and alerts the board.
 4. **The site is ready for strangers.**
@@ -143,6 +143,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | Spec | Status | What is left |
 |---|---|---|
 | `specs/announcement.md` | agreed | the drafts in `docs/launch/` post now, with no clip (PLAN.md §10 decision 64, `specs/announce-now.md`) |
+| `specs/build-on-funding.md` | built | a player-funded card building unattended |
 | `specs/announce-now.md` | built | the three site lines and the game's og:image served in production |
 | `specs/no-pause-no-golive.md` | built | apply `20261006000000_launch_stamp.sql` to production after merge, then the site deploy and the live check |
 

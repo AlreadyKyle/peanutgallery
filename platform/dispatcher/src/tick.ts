@@ -189,7 +189,6 @@ async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   }
 
   const money = await moneyState(deps, studio, pool, cards);
-  await creditShortfall(deps, studio, pool, money);
   let first: Stopped | null = null;
   for (const card of runnable) {
     const plan = planStart(money, card);
@@ -273,18 +272,6 @@ async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards
     spent,
     running: deps.budgets.remaining(),
   };
-}
-
-// The pool runs ahead of the Console credit whenever money arrives between purchases. The board is
-// told once per purchase total, so the next purchase can raise the alert again.
-async function creditShortfall(deps: TickDeps, studio: StudioState, pool: Pool, money: MoneyState): Promise<void> {
-  const creditLeft = money.creditPurchasedUsd - money.creditSpentUsd;
-  const poolAgentMoney = pool.balance_usd - studio.studio_reserve_usd;
-  if (poolAgentMoney <= creditLeft) return;
-  await deps.alert.notifyOnce(
-    `credit_short:${money.creditPurchasedUsd.toFixed(4)}`,
-    `Console credit needed: the pool holds $${poolAgentMoney.toFixed(2)} for the agents but $${Math.max(0, creditLeft).toFixed(2)} of Console credit is left. Buy credit and record it on /board.`,
-  );
 }
 
 // The first runnable card in order that the money stopped, and why.

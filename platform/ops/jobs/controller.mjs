@@ -258,7 +258,9 @@ export function reconcile({ identity, figures, stripe, now }) {
   const bought = Number(credit.bought_usd);
   const spent = Number(credit.studio_spend_usd) + Number(credit.overhead_usd);
   const creditLeft = round4(bought - spent);
-  const creditItems = creditLeft < -TOLERANCE_USD ? [{ bought_usd: bought, spent_usd: round4(spent), fix: 'more was spent on the studio key than the credit recorded: record the missing purchase at /board, or find the spend' }] : [];
+  // Not a check (PLAN.md §10 decision 65): the studio key's real Console balance is the limit, so
+  // spend above the credit recorded at /board is not a mismatch.
+  const creditItems = [];
   const need = round4(Number(figures.funded_cards.remaining_ceilings_usd) + Number(credit.overhead_since_last_purchase_usd) - creditLeft);
   const cap = round4(paidOutAgentUsd + Number(credit.overhead_usd) - bought);
   const purchase = floor2(Math.max(0, Math.min(need, cap)));

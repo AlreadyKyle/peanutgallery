@@ -20,7 +20,7 @@ Checked against your Mac, Stripe, the Admin console, GitHub and production on 1 
 everything that can be done from the Mac; what is left needs you at a Google or board-site screen, a
 second factor, a decision, or money. The path to shipping:
 
-**Post the announcement now (`docs/PLAN.md` §10 decision 64), wait for the first payout, buy credit, cut over.** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
+**Post the announcement now (`docs/PLAN.md` §10 decision 64). Funded cards build on their own (decision 65).** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
 
 ## What's left, in order
 
@@ -30,9 +30,9 @@ While the first payout is on its way (days):
 Now:
 - [ ] **40** Post the announcement (`docs/launch/`, the order in its README)
 
-When a payout that holds a player's money arrives:
-- [ ] **38** Console credit, bought from the payout
-- [ ] **39** The cutover (20 minutes with me, then a day)
+Funded cards build on their own (`docs/PLAN.md` §10 decision 65): the dispatcher runs unattended on
+GitHub Actions and spends the studio key's Console balance. Keep that balance topped up in the studio
+organisation; recording a purchase at /board is optional.
 
 Whenever you want a big card open to fund:
 - [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
