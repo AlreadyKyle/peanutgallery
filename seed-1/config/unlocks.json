@@ -12,6 +12,7 @@
     { "id": "stronger-wheels", "name": "Stronger wheels", "atTotalDust": 50000000, "effect": { "type": "multiplier", "value": 1.05 } },
     { "id": "bright-lanterns", "name": "Bright lanterns", "atTotalDust": 85000000, "effect": { "type": "multiplier", "value": 1.05 } },
     { "id": "deeper-veins", "name": "Deeper veins", "atTotalDust": 130000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "polished-rails", "name": "Polished rails", "atTotalDust": 185000000, "effect": { "type": "multiplier", "value": 1.05 } }
+    { "id": "polished-rails", "name": "Polished rails", "atTotalDust": 185000000, "effect": { "type": "multiplier", "value": 1.05 } },
+    { "id": "quiet-rooms", "name": "Quiet rooms", "atTotalDust": 300000000, "effect": { "type": "multiplier", "value": 1.05 } }
   ]
 }
