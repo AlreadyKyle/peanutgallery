@@ -13,6 +13,10 @@ export type UnlockListLine =
   | { kind: 'earned'; count: number; y: number }
   | { kind: 'unlock'; row: UnlockRow; y: number };
 
+export function earnedUnlockCount(rows: readonly UnlockRow[], earnedIds: ReadonlySet<string>): number {
+  return rows.reduce((count, row) => count + (earnedIds.has(row.id) ? 1 : 0), 0);
+}
+
 export function layoutUnlockList(
   topY: number,
   rows: readonly UnlockRow[],
@@ -21,7 +25,7 @@ export function layoutUnlockList(
   const lines: UnlockListLine[] = [];
   let y = topY;
 
-  const earnedCount = rows.reduce((count, row) => count + (earnedIds.has(row.id) ? 1 : 0), 0);
+  const earnedCount = earnedUnlockCount(rows, earnedIds);
   if (earnedCount > 0) {
     lines.push({ kind: 'earned', count: earnedCount, y });
     y += UNLOCK_ROW_HEIGHT;

@@ -46,7 +46,7 @@ describe('content/strings.json', () => {
   it('parses with every label present', () => {
     const strings = parseStrings(raw);
     expect(strings.title).toBe('Dust');
-    expect(strings.labels.unlockedCount).toContain('{unlocked}');
+    expect(strings.labels.unlockedCount).toContain('{earned}');
     expect(strings.labels.nextUnlock).toContain('{name}');
     expect(strings.effects.multiplier).toContain('{percent}');
   });

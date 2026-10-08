@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
-import { layoutUnlockList, SCREEN_HEIGHT, UNLOCK_ROW_HEIGHT } from '../render/layout';
+import { earnedUnlockCount, layoutUnlockList, SCREEN_HEIGHT, UNLOCK_ROW_HEIGHT } from '../render/layout';
 import type { UnlockRow } from '../sim/types';
 import { LIVE_CONFIG_DIR } from './paths';
 
@@ -38,6 +38,29 @@ describe('layoutUnlockList', () => {
     for (let earnedCount = 0; earnedCount <= rows.length; earnedCount += 1) {
       const earnedIds = new Set(rows.slice(0, earnedCount).map((row) => row.id));
       assertLaysOutOnScreen(rows, earnedIds);
+    }
+  });
+});
+
+describe('earnedUnlockCount', () => {
+  const rows = loadConfigFromDir(LIVE_CONFIG_DIR).unlocks.unlocks;
+
+  it('counts only unlock rows that exist', () => {
+    const earnedIds = new Set([...rows.map((row) => row.id), 'not-a-live-unlock']);
+    expect(earnedUnlockCount(rows, earnedIds)).toBe(rows.length);
+  });
+
+  it('gives 0 with no earned ids', () => {
+    expect(earnedUnlockCount(rows, new Set())).toBe(0);
+  });
+
+  it('never exceeds the number of rows', () => {
+    const ids = rows.map((row) => row.id);
+    for (let n = 0; n <= ids.length; n += 1) {
+      const earnedIds = new Set([...ids.slice(0, n), 'gone-a', 'gone-b']);
+      const count = earnedUnlockCount(rows, earnedIds);
+      expect(count).toBe(n);
+      expect(count).toBeLessThanOrEqual(rows.length);
     }
   });
 });

@@ -12,7 +12,7 @@ import {
 import { serializeState } from '../sim/save';
 import type { SimState, UnlockRow } from '../sim/types';
 import { fill, formatDust, formatPercent, formatRate } from './format';
-import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
+import { earnedUnlockCount, layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
 export { RENDER_SCALE, SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
@@ -212,7 +212,8 @@ export class DustScene extends Phaser.Scene {
     this.unlockSection.setY((shown - this.unitRows.length) * UNIT_ROW_HEIGHT);
 
     const total = config.unlocks.unlocks.length;
-    this.setText(this.unlockCountText, fill(strings.labels.unlockedCount, { unlocked: String(state.unlocked.length), total: String(total) }));
+    const earned = earnedUnlockCount(config.unlocks.unlocks, new Set(state.unlocked.map((event) => event.id)));
+    this.setText(this.unlockCountText, fill(strings.labels.unlockedCount, { earned: String(earned), total: String(total) }));
     const next = nextLockedUnlock(state, config);
     this.progressBar.clear();
     if (next === null) {
