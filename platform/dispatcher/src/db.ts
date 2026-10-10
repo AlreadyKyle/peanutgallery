@@ -21,6 +21,19 @@ export interface StudioState {
   // Whether the platform code lane is open (select.ts, docs/specs/board-site.md); false when unset or
   // when studio_state has no such column.
   platform_lane_open: boolean;
+  // Why the studio is paused, who paused it and when (studio_state.pause_reason, paused_by and
+  // paused_at); null or absent while it is not paused. The tick's credit probe (tick.ts) reads them:
+  // only a pause the dispatcher set for awaiting_credit or spend_limit is probed and lifted.
+  pause_reason?: PauseReason | null;
+  paused_by?: string | null;
+  paused_at?: string | null;
+}
+
+// What auto_resume_due answers (20261010000000_auto_resume.sql): how many paused cards went back to
+// funded, and a line for each card it considered, resumed or skipped with the reason.
+export interface AutoResumeResult {
+  resumed: number;
+  results: Record<string, unknown>[];
 }
 
 export interface Pool {
@@ -362,6 +375,12 @@ export interface Db extends OutboundDb {
   // Resumes each card paused at its ceiling for the first time whose bar covers a new ceiling
   // (resume_due_by_rule); how many resumed and each card's result.
   resumeDueByRule(): Promise<{ resumed: number; results: Record<string, unknown>[] }>;
+  // Resumes each card paused for a check that resumes on its own (pause-checks.ts), within its
+  // bounds (auto_resume_due); nothing while the studio is paused.
+  autoResumeDue(): Promise<AutoResumeResult>;
+  // Unpauses the studio only while the dispatcher itself paused it for awaiting_credit or
+  // spend_limit (dispatcher_resume_studio); whether it did.
+  dispatcherResumeStudio(reason: string, detail: Record<string, unknown>): Promise<boolean>;
   // The job queue (docs/specs/agent-system-core.md).
   enqueueJobRun(input: EnqueueInput): Promise<{ id: string; created: boolean }>;
   // The oldest queued runs, oldest first, up to limit.
@@ -569,12 +588,22 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         monthly_cap_usd: row.monthly_cap_usd === null || row.monthly_cap_usd === undefined ? null : num(row, 'monthly_cap_usd'),
         anthropic_tier_cap_usd: row.anthropic_tier_cap_usd === null || row.anthropic_tier_cap_usd === undefined ? null : num(row, 'anthropic_tier_cap_usd'),
         platform_lane_open: row.platform_lane_open === true,
+        pause_reason: row.paused === true ? (optionalText(row, 'pause_reason') as PauseReason | null) : null,
+        paused_by: row.paused === true ? optionalText(row, 'paused_by') : null,
+        paused_at: row.paused === true ? optionalText(row, 'paused_at') : null,
       };
     },
 
     async pauseStudio(by, now, reason) {
-      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason }).eq('id', 1).eq('paused', false);
+      const row = { paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason };
+      const { error } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', false);
       if (error) fail('studio_state pause', error);
+      // An incident outranks the dispatcher's own money pause: it takes that pause over, so the credit
+      // probe (which lifts only awaiting_credit and spend_limit) can never lift an incident.
+      if (reason === 'incident') {
+        const { error: escalate } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', true).in('pause_reason', ['awaiting_credit', 'spend_limit']).like('paused_by', 'dispatcher:%');
+        if (escalate) fail('studio_state pause (incident over a money pause)', escalate);
+      }
     },
 
     async claimLease(holder, ttlSeconds) {
@@ -757,6 +786,19 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       if (error) fail('resume_due_by_rule', error);
       const row = (data ?? {}) as Row;
       return { resumed: num(row, 'resumed'), results: Array.isArray(row.results) ? (row.results as Record<string, unknown>[]) : [] };
+    },
+
+    async autoResumeDue() {
+      const { data, error } = await client.rpc('auto_resume_due');
+      if (error) fail('auto_resume_due', error);
+      const row = (data ?? {}) as Row;
+      return { resumed: num(row, 'resumed'), results: Array.isArray(row.results) ? (row.results as Record<string, unknown>[]) : [] };
+    },
+
+    async dispatcherResumeStudio(reason, detail) {
+      const { data, error } = await client.rpc('dispatcher_resume_studio', { p_reason: reason, p_detail: detail });
+      if (error) fail('dispatcher_resume_studio', error);
+      return data === true;
     },
 
     async enqueueJobRun(input) {

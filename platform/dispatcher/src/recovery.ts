@@ -8,7 +8,8 @@
 //   with no new session. A building card whose session could not be settled, or whose sessions could
 //   not be listed, is paused as session_unsettled; the managed adapter settles it again before the
 //   card's next session.
-// - A building card is paused so the board can re-fund it rather than left reserving budget.
+// - A building card is paused rather than left reserving budget. dispatcher_restart and
+//   session_unsettled resume on their own (pause-checks.ts, the tick's auto_resume_due), within bounds.
 // - A gated card with a merge sha is already on main: its deploy and smoke test run again in the
 //   background, with the pipeline's rollback (pipeline.ts resumeMerged).
 // - A gated card without one may still have merged before the sha was written, so the newest pull
@@ -23,6 +24,7 @@ import type { Alerter } from './alert.js';
 import type { DispatcherConfig } from './config.js';
 import type { Card, Db } from './db.js';
 import { errorMessage, type Logger } from './log.js';
+import { resumeWords } from './pause-checks.js';
 import { removeWorktree, shortId, worktreePath } from './worktree.js';
 
 export interface RecoveryDeps {
@@ -138,7 +140,7 @@ async function pause(deps: RecoveryDeps, card: Card, check = 'dispatcher_restart
   deps.log.warn('recovery', `card ${card.id} was ${card.stage} at startup; paused`, { title: card.title, branch: card.branch, check });
   const left = card.branch ? ` Branch ${card.branch} and any pull request are left open.` : '';
   const as = check === 'dispatcher_restart' ? '' : ` as ${check}`;
-  await deps.alert.notify(`Card ${shortId(card.id)} was ${card.stage} when the dispatcher restarted and is paused${as}.${left}${note ? ` Note: ${note}.` : ''}`);
+  await deps.alert.notify(`Card ${shortId(card.id)} was ${card.stage} when the dispatcher restarted and is paused${as}.${left}${note ? ` Note: ${note}.` : ''} ${resumeWords(check)}`);
 }
 
 // A lost merge request whose pull request never merged. The card is rejected; the pull request is not

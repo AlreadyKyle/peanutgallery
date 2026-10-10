@@ -146,6 +146,7 @@ export const copy = {
     smoke_passed: { one: 'saw the play bot pass the change' },
     requeued: { one: 'sent the card back to the queue' },
     paused_infra: { one: "stopped for a problem in the studio's tools" },
+    auto_resumed: { one: 'picked the card up again after a pause that was not its fault' },
     patch_reused: { one: 'reused its earlier change' },
     dealt: { one: 'dealt the card to the table' },
     gate_passed: { one: 'passed the checks' },

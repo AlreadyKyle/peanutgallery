@@ -55,6 +55,9 @@ describe('skipReason', () => {
     expect(skipReason(model, { paused: false }, { paused: false })).toBeNull();
     expect(skipReason(model, null, { paused: false })).toBeNull();
     expect(skipReason(job({ runs_when_paused: true }), null, { paused: true })).toBeNull();
+    // A model call is studio spend on a card: a paused studio stops it whatever the jobs row says (a
+    // database the supply-refill migration has not reached still has draft_card runs_when_paused).
+    expect(skipReason(job({ calls_model: true, runs_when_paused: true }), null, { paused: true })).toBe('studio_paused');
   });
 });
 
@@ -134,6 +137,25 @@ describe('jobTick', () => {
     );
     await t.settle();
     expect([t.status(paused.id).status, t.status(paused.id).reason]).toEqual(['failed', 'studio_paused']);
+  });
+
+  it('stops a model job when the studio pauses even if its row says it runs while paused, and skips one queued then', async () => {
+    const t = setup([job({ name: 'draft_card', calls_model: true, runs_when_paused: true })]);
+    const running = await t.enqueue('draft_card', 'schedule');
+    await jobTick(
+      t.make({
+        draft_card: async ({ stopSignal }) => {
+          t.db.studio.paused = true;
+          await new Promise<void>((resolve) => stopSignal.addEventListener('abort', () => resolve(), { once: true }));
+          return { stopped: String(stopSignal.reason) };
+        },
+      }),
+    );
+    await t.settle();
+    expect([t.status(running.id).status, t.status(running.id).reason]).toEqual(['failed', 'studio_paused']);
+    const queued = await t.enqueue('draft_card', 'board');
+    expect(await jobTick(t.make({ draft_card: async () => ({ ran: true }) }))).toEqual({ action: 'idle', skipped: 1 });
+    expect([t.status(queued.id).status, t.status(queued.id).reason]).toEqual(['skipped', 'studio_paused']);
   });
 
   it('starts a code run in both modes', async () => {

@@ -276,6 +276,8 @@ Deno.test("migrations on PGlite", {
         "20260925300000_agent_upkeep.sql",
         "20260925400000_board_work.sql",
         "20261006000000_launch_stamp.sql",
+        "20261010000000_auto_resume.sql",
+        "20261010100000_studio_auto_resume.sql",
         "20261010200000_supply_refill.sql",
       ]);
       for (const m of migrations) {
@@ -306,6 +308,7 @@ Deno.test("migrations on PGlite", {
       );
       assertEquals(tables.map((r) => r.table_name), [
         "agent_events",
+        "auto_resume_checks",
         "board_actions",
         "board_members",
         "board_notes",
@@ -4038,6 +4041,7 @@ Deno.test("migrations on PGlite", {
           "apply_card_ranking",
           "apply_contribution",
           "approve_card_draft",
+          "auto_resume_due",
           "card_approved",
           "card_ceiling_resumed",
           "card_content_hash",
@@ -4056,6 +4060,7 @@ Deno.test("migrations on PGlite", {
           "controller_figures",
           "credit_held_contributions",
           "deal_due_cards",
+          "dispatcher_resume_studio",
           "draft_card_answer",
           "draft_target_kind",
           "enqueue_job_run",

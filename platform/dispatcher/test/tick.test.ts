@@ -4,7 +4,7 @@ import { SessionBudgets } from '../src/budgets.js';
 import { haltDispatcher, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
 import { stuckAfterMs } from '../src/pipeline.js';
-import { currentMoneyState, drainState, jobsHoldUsd, leaseTtlSeconds, tick, type TickDeps } from '../src/tick.js';
+import { currentMoneyState, drainState, jobsHoldUsd, leaseTtlSeconds, newStudioProbeState, tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
 
@@ -79,6 +79,194 @@ describe('tick: dealing, resume by rule and the job queue (docs/specs/agent-syst
     const db = new FakeDb();
     db.cards = [card()];
     expect((await tick(deps(db, [], { jobTick: async () => { throw new Error('queue down'); } }))).action).toBe('started');
+  });
+});
+
+// docs/specs/unattended-roles.md, PR3: auto_resume_due on every tick that is not halted, and the credit
+// probe that lifts the dispatcher's own credit and spend-limit pauses.
+describe('tick: auto-resume and the credit probe', () => {
+  const lines = () => {
+    const out: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { out.push(String(chunk)); cb(); } }));
+    return { out, log, parsed: () => out.map((line) => JSON.parse(line) as Record<string, unknown>) };
+  };
+  const MIN = 60_000;
+
+  it('calls auto_resume_due after resume by rule on every tick, a paused studio included, and logs what it resumed', async () => {
+    const db = new FakeDb();
+    const order: string[] = [];
+    const rule = db.resumeDueByRule.bind(db);
+    db.resumeDueByRule = async () => {
+      order.push('rule');
+      return rule();
+    };
+    const auto = db.autoResumeDue.bind(db);
+    db.autoResumeDue = async () => {
+      order.push('auto');
+      return auto();
+    };
+    db.autoResumeResult = { resumed: 1, results: [{ card_id: 'c1', resumed: true, from_check: 'dispatcher_restart' }, { card_id: 'c2', skipped: 'backoff' }] };
+    const { log, parsed } = lines();
+    await tick(deps(db, [], { log }));
+    db.studio.paused = true;
+    await tick(deps(db, [], { log }));
+    expect(order).toEqual(['rule', 'auto', 'rule', 'auto']);
+    expect(db.autoResumeCalls).toBe(2);
+    const resumed = parsed().filter((line) => line.msg === '1 card(s) resumed on their own');
+    expect(resumed.map((line) => line.results)).toEqual([[{ card_id: 'c1', resumed: true, from_check: 'dispatcher_restart' }], [{ card_id: 'c1', resumed: true, from_check: 'dispatcher_restart' }]]);
+  });
+
+  it('logs a failed auto_resume_due and goes on with the tick; a halted tick does not call it', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    db.autoResumeError = new Error('auto down');
+    const { log, parsed } = lines();
+    expect((await tick(deps(db, [], { log }))).action).toBe('started');
+    expect(parsed().filter((line) => line.level === 'warn').map((line) => [line.msg, line.error])).toEqual([['auto_resume_due failed', 'auto down']]);
+    haltDispatcher('test halt');
+    try {
+      await tick(deps(db, [], { log }));
+    } finally {
+      resetHalt();
+    }
+    expect(db.autoResumeCalls).toBe(1);
+  });
+
+  // A studio the dispatcher paused for credit at NOW, ticked at the minutes given with one probe state.
+  function pausedFor(reason: 'awaiting_credit' | 'spend_limit' | 'incident' | 'board', by = 'dispatcher: Console credit needed (card 4c2f5a1e)') {
+    const db = new FakeDb();
+    db.studio = { ...db.studio, paused: true, pause_reason: reason, paused_by: by, paused_at: NOW.toISOString() };
+    return db;
+  }
+
+  it('never probes a pause the board, the moderator or an incident set, nor without a probe (attended mode)', async () => {
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'ok' as const, model: 'm', usd: 0 };
+    };
+    const later = () => new Date(NOW.getTime() + 24 * 60 * MIN);
+    for (const db of [pausedFor('incident', 'dispatcher: the revert of card 4c2f5a1e failed'), pausedFor('board', 'board@mobmachine.games'), pausedFor('awaiting_credit', 'board@mobmachine.games'), pausedFor('spend_limit', 'mod@mobmachine.games')]) {
+      expect(await tick(deps(db, [], { now: later, creditProbe }))).toEqual({ action: 'sleep', reason: 'paused' });
+      expect(db.studio.paused).toBe(true);
+      expect(db.studioResumes).toEqual([]);
+    }
+    const unprobed = pausedFor('awaiting_credit');
+    await tick(deps(unprobed, [], { now: later }));
+    expect([probes, unprobed.studio.paused, unprobed.studioResumes]).toEqual([0, true, []]);
+  });
+
+  it('probes an awaiting_credit pause 15 minutes after it, backs off doubling to 4 hours while refused, and unpauses once it passes', async () => {
+    const db = pausedFor('awaiting_credit');
+    const alert = new RecordingAlerter();
+    let at = NOW.getTime();
+    const probeTimes: number[] = [];
+    let answer: 'credit' | 'ok' = 'credit';
+    const creditProbe = async () => {
+      probeTimes.push((at - NOW.getTime()) / MIN);
+      return answer === 'ok' ? { outcome: 'ok' as const, model: 'model-small', usd: 0.0001 } : { outcome: 'credit' as const, model: 'model-small', detail: 'Your credit balance is too low' };
+    };
+    const studioProbe = newStudioProbeState();
+    const d = deps(db, [], { now: () => new Date(at), alert, creditProbe, studioProbe });
+    // Every 5 minutes for 12 hours: refused at 15, then 30, 60, 120 and 240 minutes after each refusal.
+    for (let minute = 0; minute <= 12 * 60; minute += 5) {
+      at = NOW.getTime() + minute * MIN;
+      expect(await tick(d)).toEqual({ action: 'sleep', reason: 'paused' });
+    }
+    expect(probeTimes).toEqual([15, 45, 105, 225, 465, 705]);
+    expect([db.studio.paused, db.studioResumes, alert.messages]).toEqual([true, [], []]);
+    answer = 'ok';
+    at = NOW.getTime() + 945 * MIN;
+    await tick(d);
+    expect(db.studio.paused).toBe(false);
+    expect(db.studioResumes).toEqual([
+      { reason: 'credit_probe_ok', detail: { pause_reason: 'awaiting_credit', paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString(), model: 'model-small', usd: 0.0001 } },
+    ]);
+    expect(alert.messages).toEqual([
+      'The studio is unpaused: the dispatcher paused it for Console credit, and a one-token call on the studio key went through again. Cards paused for it resume on their own.',
+    ]);
+    // The same tick's auto-resume runs after the studio is unpaused.
+    expect(db.autoResumeCalls).toBeGreaterThan(0);
+  });
+
+  it('probes a spend_limit pause every hour; a probe that throws counts as refused and the studio stays paused', async () => {
+    const db = pausedFor('spend_limit', 'dispatcher: usage tier cap reached (card 4c2f5a1e)');
+    let at = NOW.getTime();
+    const probeTimes: number[] = [];
+    const creditProbe = async () => {
+      probeTimes.push((at - NOW.getTime()) / MIN);
+      if (probeTimes.length === 2) throw new Error('network down');
+      return { outcome: 'tier_cap' as const, model: 'model-small', detail: 'You have reached your API usage limits' };
+    };
+    const { log, parsed } = lines();
+    const d = deps(db, [], { now: () => new Date(at), creditProbe, studioProbe: newStudioProbeState(), log });
+    for (let minute = 0; minute <= 4 * 60; minute += 10) {
+      at = NOW.getTime() + minute * MIN;
+      await tick(d);
+    }
+    expect(probeTimes).toEqual([60, 120, 180, 240]);
+    expect(db.studio.paused).toBe(true);
+    const refused = parsed().filter((line) => line.msg === 'the credit probe was refused; the studio stays paused');
+    expect(refused.map((line) => (line.probe as { outcome: string }).outcome)).toEqual(['tier_cap', 'error', 'tier_cap', 'tier_cap']);
+  });
+
+  it('probes on the first tick of a new process when the pause is older than its delay', async () => {
+    const db = pausedFor('awaiting_credit');
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'credit' as const, model: 'm', detail: 'credit balance is too low' };
+    };
+    await tick(deps(db, [], { now: () => new Date(NOW.getTime() + 6 * 60 * MIN), creditProbe, studioProbe: newStudioProbeState() }));
+    expect(probes).toBe(1);
+  });
+
+  it('a probe that passes on a pause no longer the dispatcher\'s leaves the studio paused and sends no alert', async () => {
+    const db = pausedFor('awaiting_credit');
+    const alert = new RecordingAlerter();
+    // The board pauses again between the read and the write.
+    db.dispatcherResumeStudio = async () => false;
+    const creditProbe = async () => ({ outcome: 'ok' as const, model: 'm', usd: 0 });
+    await tick(deps(db, [], { now: () => new Date(NOW.getTime() + 20 * MIN), alert, creditProbe, studioProbe: newStudioProbeState() }));
+    expect([db.studio.paused, alert.messages]).toEqual([true, []]);
+  });
+
+  it('keeps backing off after the database refuses to unpause, so a refusal never probes on every tick', async () => {
+    const db = pausedFor('awaiting_credit');
+    db.dispatcherResumeStudio = async () => false;
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'ok' as const, model: 'm', usd: 0 };
+    };
+    const studioProbe = newStudioProbeState();
+    let at = NOW.getTime() + 20 * MIN;
+    const d = deps(db, [], { now: () => new Date(at), creditProbe, studioProbe });
+    await tick(d);
+    for (let minute = 1; minute <= 10; minute += 1) {
+      at += MIN;
+      await tick(d);
+    }
+    expect(probes).toBe(1);
+  });
+
+  it('an incident takes over the dispatcher\'s credit pause, and the probe never lifts it', async () => {
+    const db = pausedFor('awaiting_credit');
+    await db.pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect([db.studio.paused, db.studio.pause_reason]).toEqual([true, 'incident']);
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'ok' as const, model: 'm', usd: 0 };
+    };
+    await tick(deps(db, [], { now: () => new Date(NOW.getTime() + 24 * 60 * MIN), creditProbe, studioProbe: newStudioProbeState() }));
+    expect([db.studio.paused, db.studio.pause_reason, probes]).toEqual([true, 'incident', 0]);
+  });
+
+  it('an incident does not take over the board\'s pause', async () => {
+    const db = pausedFor('board', 'board@mobmachine.games');
+    await db.pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect([db.studio.pause_reason, db.studio.paused_by]).toEqual(['board', 'board@mobmachine.games']);
   });
 });
 

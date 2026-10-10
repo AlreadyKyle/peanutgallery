@@ -20,6 +20,7 @@ import { createAlerter } from './alert.js';
 import { createDiscordPoster } from './discord.js';
 import { SessionBudgets } from './budgets.js';
 import { loadConfig } from './config.js';
+import { probeCredit, sdkProbeClient } from './credit-probe.js';
 import { createSupabaseDb, type Card, type Db, type Role } from './db.js';
 import { EXIT_FATAL, exitCodeFor } from './exit-code.js';
 import { gateStatus, mainHead } from './github.js';
@@ -37,7 +38,7 @@ import { AGENTS_DIR, TypedOutput } from './typed-output.js';
 import { gitAuthEnv } from './worktree.js';
 import { resolveRoleModel } from './role-model.js';
 import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
-import { currentMoneyState, drainState, leaseTtlSeconds, tick } from './tick.js';
+import { currentMoneyState, drainState, leaseTtlSeconds, newStudioProbeState, tick } from './tick.js';
 import { sleep } from './time.js';
 
 // How long a stopping dispatcher waits for running cards: a session's SIGINT grace (15 s) and SIGTERM
@@ -179,6 +180,7 @@ async function main(): Promise<void> {
     worktrees: config.worktreeRoot,
   });
 
+  const studioKey = adapter.mode === 'unattended' ? config.studioAnthropicApiKey : null;
   const deps = {
     db,
     mode: adapter.mode,
@@ -215,6 +217,10 @@ async function main(): Promise<void> {
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
     drainAt: config.drainAt ?? null,
+    // Unattended mode: the one-token call on the studio key that lifts the dispatcher's own credit and
+    // spend-limit pauses (credit-probe.ts); attended mode has no studio key and sets no such pause.
+    ...(studioKey ? { creditProbe: () => probeCredit({ client: sdkProbeClient(studioKey), db, priceTable: config.priceTable }) } : {}),
+    studioProbe: newStudioProbeState(),
   };
   if (config.drainAt) log.info('main', 'dispatcher drains at', { drainAt: config.drainAt.toISOString() });
 

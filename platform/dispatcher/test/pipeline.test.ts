@@ -358,7 +358,7 @@ describe('runCardPipeline', () => {
     expect(db.deploys.filter((row) => row.is_green)).toEqual([OLDER_GREEN]);
     expect(alert.messages).toEqual([
       `Card 4c2f5a1e was reverted on main (revert-): post-merge check failed: ${detail}`,
-      `Card 4c2f5a1e stopped by infrastructure, not by its change (post_merge_outage): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}. The change was rolled back as unverified; the card is paused with its money and is not rejected. Resume it from /board once the outage is over.`,
+      `Card 4c2f5a1e stopped by infrastructure, not by its change (post_merge_outage): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}. The change was rolled back as unverified; the card is paused with its money and is not rejected. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.`,
     ]);
   });
 
@@ -1095,7 +1095,7 @@ describe('runCardPipeline', () => {
       await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), infraStops });
       expect(db.cards[0]).toMatchObject({ stage: expected, failing_check: 'dispatcher_error' });
     }
-    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money; resume it from \/board/);
+    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money\. It resumes on its own once nothing blocks it/);
     expect(adapter.specs).toEqual([]);
   });
 
@@ -1121,7 +1121,7 @@ describe('runCardPipeline', () => {
     expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
     expect(db.deploys).toEqual([]);
     expect(alert.messages).toEqual([
-      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged',
+      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
     ]);
   });
 
@@ -1219,8 +1219,8 @@ describe('runCardPipeline', () => {
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages).toEqual([
-      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.',
-      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low',
+      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board. The dispatcher tries the studio key with a one-token call 15 minutes after the pause, then backing off to every 4 hours, and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.',
+      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
     ]);
     const outcome = await tick({
       db,
@@ -1265,7 +1265,7 @@ describe('runCardPipeline', () => {
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages[0]).toBe(
-      "Usage tier cap reached: card 4c2f5a1e stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. The studio is paused. Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.",
+      "Usage tier cap reached: card 4c2f5a1e stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. The studio is paused. Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it. The dispatcher tries the studio key with a one-token call every hour and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.",
     );
     expect(alert.messages[1]).toMatch(/^Card 4c2f5a1e paused \(usage_tier_cap\): /);
     expect(alert.messages).toHaveLength(2);

@@ -4,17 +4,18 @@
 // - it reads the oldest queued runs and takes the first that can start, finishing each earlier one
 //   that cannot as skipped with its reason: job_disabled (the job is retired, as studio_ranking is),
 //   role_paused (the job's role is paused), studio_paused (the studio is paused and the job does not
-//   run while it is);
+//   run while it is, which is every model-calling job whatever its row says);
 // - a model-calling run starts like a code run, from any origin, with no board member signed in: its
 //   sessions run unattended on the card sessions' adapter, billed to the card they work on
-//   (PLAN.md §10 decision 66, docs/specs/unattended-roles.md);
+//   (PLAN.md §10 decision 66, docs/specs/unattended-roles.md), so it never runs while the studio is
+//   paused;
 // - it claims the run under the dispatcher lease, runs its handler (job-handlers/index.ts) in the
 //   background and finishes the run with the handler's output, or as failed with the error. A job
 //   with no handler fails with no_handler.
 // A running job's stopSignal fires at the next watch after its role pauses, or the studio pauses and
 // the job does not run while it is paused, or the dispatcher stops; the run then fails with that
-// reason. A job that runs while the studio is paused keeps running through a studio pause; its role's
-// pause still stops it.
+// reason. A code job that runs while the studio is paused keeps running through a studio pause; its
+// role's pause still stops it.
 import type { AgentAdapter, AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Db, Job, JobRun, Role, StudioState } from './db.js';
@@ -86,12 +87,19 @@ export type JobTickOutcome =
 // How many queued runs a tick reads.
 export const QUEUE_WINDOW = 50;
 
+// Whether a studio pause stops the job: one that does not run while the studio is paused, and every
+// model-calling job whatever its row says, since each model call is billed to the studio on a card
+// (PLAN.md §10 decision 66) and a pause stops studio spend.
+export function stopsWithStudio(job: Pick<Job, 'calls_model' | 'runs_when_paused'>): boolean {
+  return job.calls_model || !job.runs_when_paused;
+}
+
 // Why a queued run cannot start, or null when it may. Its origin does not matter: a model-calling run
 // the schedule queued starts as one the board queued does.
 export function skipReason(job: Job, role: Pick<Role, 'paused'> | null, studio: Pick<StudioState, 'paused'>): SkipReason | null {
   if (!job.enabled) return 'job_disabled';
   if (role?.paused) return 'role_paused';
-  if (studio.paused && !job.runs_when_paused) return 'studio_paused';
+  if (studio.paused && stopsWithStudio(job)) return 'studio_paused';
   return null;
 }
 
@@ -142,7 +150,7 @@ function start(deps: JobTickDeps, run: JobRun, job: Job, role: Role | null): voi
       try {
         const [studio, roleState] = await Promise.all([deps.db.getStudioState(), job.role_id ? deps.db.roleState(job.role_id) : Promise.resolve(null)]);
         if (roleState?.paused) halt('role_paused');
-        else if (studio.paused && !job.runs_when_paused) halt('studio_paused');
+        else if (studio.paused && stopsWithStudio(job)) halt('studio_paused');
       } catch (error) {
         deps.log.warn('jobs', 'job watch failed', { run: run.id, error: errorMessage(error) });
       }

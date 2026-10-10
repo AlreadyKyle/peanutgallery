@@ -138,6 +138,8 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["deal_due_cards", {}],
   ["resume_card_by_rule", { p_card: NO_CARD }],
   ["resume_due_by_rule", {}],
+  ["auto_resume_due", {}],
+  ["dispatcher_resume_studio", { p_reason: "anon-negative-test", p_detail: {} }],
   ["enqueue_job_run", { p_job: "anon_negative_test", p_origin: "operator" }],
   ["claim_job_run", { p_run: NO_CARD, p_holder: "anon-negative-test" }],
   ["finish_job_run", { p_run: NO_CARD, p_status: "skipped", p_reason: "anon-negative-test", p_output: null }],
