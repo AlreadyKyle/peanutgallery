@@ -151,6 +151,8 @@ interface Remote {
   // main's head at the merge; origin's main when unset.
   main?: Answer;
   close?: Reply;
+  // The newest pull request for a branch (findPullForBranch); none when unset.
+  branchPulls?: Reply;
 }
 
 function answer(value: Answer | undefined, head: string, fallback: Reply): Reply {
@@ -184,6 +186,7 @@ function remote(over: Remote = {}) {
       return answer(over.created, state.head, { status: 201, json: { number: 5, head: { sha: state.head } } });
     }
     if (method === 'GET' && url.startsWith(`${GITHUB}/pulls?state=open`)) return answer(over.existing, state.head, { status: 200, json: [] });
+    if (method === 'GET' && url.startsWith(`${GITHUB}/pulls?state=all`)) return over.branchPulls ?? { status: 200, json: [] };
     if (method === 'GET' && url === `${GITHUB}/pulls/5`) {
       return answer(over.pull, state.head, { status: 200, json: { number: 5, head: { sha: state.head }, merged: false, merge_commit_sha: null } });
     }
@@ -300,6 +303,8 @@ describe('runCardPipeline', () => {
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
 
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'smoke', commit_sha: MERGE_SHA });
+    // The pull request merged, so the rejection after its revert leaves it as it is.
+    expect(urls(calls)).not.toContain(`PATCH ${GITHUB}/pulls/5`);
     expect(db.deploys.at(-1)).toMatchObject({ sha: MERGE_SHA, is_green: false, smoke_result: 'fail: GET / returned 500' });
     expect(db.events.map((e) => e.type)).toEqual(['start', 'gate_pass', 'revert']);
     expect(db.events.at(-1)?.payload).toEqual({
@@ -484,12 +489,53 @@ describe('runCardPipeline', () => {
     expect(db.deploys).toEqual([]);
   });
 
-  it('rejects when the merge guard refuses the head sha', async () => {
+  // A rejected card's open pull request is closed, with no alert of its own (the rejection's stands).
+  it('closes the pull request of a card its gate rejects, sending no alert beyond the rejection', async () => {
     const c = platformCard();
     db.cards = [{ ...c, stage: 'building' }];
-    const { fetchFn } = remote({ merge: { status: 409, json: { message: 'Head branch was modified.' } } });
+    const alert = new RecordingAlerter();
+    const { fetchFn, calls } = remote({ gate: { status: 200, json: { workflow_runs: [{ path: '.github/workflows/gate.yml', status: 'completed', conclusion: 'failure' }] } } });
+    await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn, undefined, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
+    expect(urls(calls).filter((call) => call === `PATCH ${GITHUB}/pulls/5`)).toHaveLength(1);
+    expect(calls.find((call) => call.method === 'PATCH' && call.url === `${GITHUB}/pulls/5`)?.body).toEqual({ state: 'closed' });
+    expect(alert.messages).toEqual([expect.stringMatching(/^Card 4c2f5a1e rejected \(gate\): /)]);
+  });
+
+  it('closes the open pull request an earlier claim left when a later session is rejected, and never a merged one', async () => {
+    const refused: FakeScript = async (_spec, emit) => {
+      await emit(startEvent(['Read', 'WebFetch']));
+    };
+    const branch = 'card/4c2f5a1e-code';
+    for (const [pulls, closed] of [
+      [[{ number: 5, state: 'open', merged_at: null, merge_commit_sha: null }], 1],
+      [[{ number: 5, state: 'closed', merged_at: '2026-09-14T14:00:00Z', merge_commit_sha: MERGE_SHA }], 0],
+      [[], 0],
+    ] as const) {
+      const c = platformCard({ branch });
+      db.cards = [{ ...c, stage: 'building' }];
+      const { fetchFn, calls } = remote({ branchPulls: { status: 200, json: pulls } });
+      await runCardPipeline(c, deps(db, new FakeAdapter(refused), fetchFn));
+      expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'tool_allowlist' });
+      expect(urls(calls).filter((call) => call.startsWith(`GET ${GITHUB}/pulls?state=all&head=`))).toHaveLength(1);
+      expect(urls(calls).filter((call) => call === `PATCH ${GITHUB}/pulls/5`)).toHaveLength(closed);
+    }
+    // A first claim that never pushed a branch looks nothing up.
+    const fresh = platformCard();
+    db.cards = [{ ...fresh, stage: 'building' }];
+    const { fetchFn, calls } = remote();
+    await runCardPipeline(fresh, deps(db, new FakeAdapter(refused), fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'tool_allowlist' });
+    expect(calls).toEqual([]);
+  });
+
+  it('rejects when the merge guard refuses the head sha, and closes the unmerged pull request', async () => {
+    const c = platformCard();
+    db.cards = [{ ...c, stage: 'building' }];
+    const { fetchFn, calls } = remote({ merge: { status: 409, json: { message: 'Head branch was modified.' } } });
     await runCardPipeline(c, deps(db, new FakeAdapter(editSite), fetchFn));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge', commit_sha: null });
+    expect(urls(calls)).toContain(`PATCH ${GITHUB}/pulls/5`);
   });
 
   it('sends a card back to funded when the merge is refused because main moved after the guard', async () => {
@@ -1586,9 +1632,11 @@ describe('a paid card and an infrastructure failure', () => {
     const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
     const first = remote({ gate: RUN('completed', 'failure') });
     await runCardPipeline(c, { ...deps(db, adapter, first.fetchFn), timings: SLOW, patches, infraStops: new Map() });
-    // Once: back to funded with the patch kept, so the next claim gates it again on a new commit.
+    // Once: back to funded with the patch kept, so the next claim gates it again on a new commit, on
+    // the same branch and pull request, which stays open.
     expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'gate_retry' });
     expect(patches.rows).toHaveLength(1);
+    expect(urls(first.calls).some((call) => call.startsWith(`PATCH ${GITHUB}/pulls/`))).toBe(false);
     expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(1);
     expect(db.events.find((e) => e.payload.step === 'gate_retry')).toMatchObject({ type: 'message', payload: { detail: 'gate concluded failure' } });
     expect(urls(first.calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
@@ -1601,6 +1649,8 @@ describe('a paid card and an infrastructure failure', () => {
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
     expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(2);
     expect(sessions()).toBe(0);
+    // The rejection closes the pull request the retry kept open.
+    expect(urls(second.calls).filter((call) => call === `PATCH ${GITHUB}/pulls/5`)).toHaveLength(1);
   });
 
   it('a retried gate that passes carries the card on', async () => {

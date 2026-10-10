@@ -6,7 +6,8 @@
 // deploy is restored unless the deploy itself failed. A merged change the dispatcher cannot finish
 // verifying or recording, or a merge whose outcome is unknown, is left gated, and recovery.ts resolves
 // it at startup. The board is alerted whenever a card stops short of live for a reason other than the
-// dispatcher stopping before the merge.
+// dispatcher stopping before the merge. A rejected card's open pull request is closed, with no alert of
+// its own (closeRejectedPull); a merged one never is.
 //
 // Every stage write names the stage the card must still be in, so a stage the board set while the
 // dispatcher held the card is never overwritten; a write that finds the card elsewhere stops the
@@ -338,6 +339,9 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
   let role: Role | null = null;
   let worktree: Worktree | null = null;
   let phase: Phase = 'preparing';
+  // The pull request this claim opened or reused, and whether it merged: a rejection closes it only
+  // while it is open.
+  const pull: ClaimPull = { number: null, merged: false };
   try {
     role = await db.getRole(card.executor_role_id ?? '');
     const checks = parseAcceptance(card);
@@ -362,12 +366,14 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
     if (sessionError) throw sessionError;
     await postCheck(worktree, checks);
     const built = await commitAndOpenPullRequest(card, role, worktree, before, allowed, checks, deps);
+    pull.number = built.prNumber;
     await finalize(card, deps, 'gated', null).catch((error: unknown) => {
       if (error instanceof StageMoved) error.pr = built.prNumber;
       throw error;
     });
     await waitForGatePass(card, role, built, deps);
     const commit = await visualReview({ card, role, worktree, before, allowed, checks, maker }, built, deps);
+    pull.number = commit.prNumber;
     // No further session runs for the card, so the rest of its budget is no longer held from others.
     deps.budgets?.close(card.id);
     const roleId = role.id;
@@ -376,10 +382,11 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
       await confirmRemoteRange(commit, allowed, deps);
       phase = 'merging';
       const merged = await merge(card, roleId, commit, deps);
+      pull.merged = true;
       await verifyMerged(card, roleId, merged.sha, checks, deps, { shaRecorded: merged.recorded });
     });
   } catch (error) {
-    await settleFailure(card, role?.id ?? null, classifyFailure(error, phase), deps);
+    await settleFailure(card, role?.id ?? null, classifyFailure(error, phase), deps, pull);
   } finally {
     if (worktree) await discardWorktree(worktree.path, worktree.branch, deps);
   }
@@ -421,7 +428,8 @@ export async function resumeMerged(card: Card, deps: PipelineDeps): Promise<void
       await verifyMerged(card, roleId, sha, checks, deps);
     });
   } catch (error) {
-    await settleFailure(card, roleId, error, deps);
+    // The card merged before the restart, so its pull request is not closed whatever happens now.
+    await settleFailure(card, roleId, error, deps, { number: null, merged: true });
   }
 }
 
@@ -434,9 +442,44 @@ export async function findCardMerge(card: Card, deps: PipelineDeps): Promise<str
   return pull?.merged && pull.mergeCommitSha ? pull.mergeCommitSha : null;
 }
 
+// A claim's pull request: the number this claim opened or reused (null before it opened one), and
+// whether it merged.
+interface ClaimPull {
+  number: number | null;
+  merged: boolean;
+}
+
+// A rejected card's pull request is closed so it does not sit open on a branch nothing will merge, with
+// no alert of its own (the rejection's alert stands): the one this claim opened, or, when it was
+// rejected before opening one, the newest pull request for the branch an earlier claim pushed while
+// that one is still open. A merged pull request is never closed: a card rejected after its merge (a
+// deploy or smoke failure, rolled back) keeps it as the record of what was reverted. A gate retry is a
+// requeue, not a rejection, so its pull request stays open for the next claim to gate again. Best
+// effort: a failure is logged and never stops the settle.
+async function closeRejectedPull(card: Card, pull: ClaimPull, deps: PipelineDeps): Promise<void> {
+  if (pull.merged) return;
+  let number = pull.number;
+  if (number === null) {
+    const branch = card.branch;
+    if (!branch) return;
+    let found: Awaited<ReturnType<typeof findPullForBranch>>;
+    try {
+      found = await requesting(deps, () => findPullForBranch(githubOptions(deps), branch));
+    } catch (error) {
+      deps.log.warn('pipeline', `card ${card.id} pull request lookup failed; nothing was closed`, { branch, error: errorMessage(error) });
+      return;
+    }
+    if (!found || !found.open || found.merged) return;
+    number = found.number;
+  }
+  const pr = number;
+  const failed = await attempt(deps, `card ${card.id} pull request close`, () => requesting(deps, () => closePullRequest(githubOptions(deps), pr)));
+  if (failed === null) deps.log.info('pipeline', `card ${card.id} pull request #${pr} closed`, { pr });
+}
+
 // Records how a card stopped. Every write here is best effort: a database failure is logged and
 // named in the alert, and never stops the alert.
-async function settleFailure(card: Card, roleId: string | null, error: unknown, deps: PipelineDeps): Promise<void> {
+async function settleFailure(card: Card, roleId: string | null, error: unknown, deps: PipelineDeps, pull: ClaimPull = { number: null, merged: false }): Promise<void> {
   const { log } = deps;
   if (error instanceof LeftGated) {
     log.warn('pipeline', `card ${card.id} left gated`, { detail: error.message });
@@ -465,6 +508,7 @@ async function settleFailure(card: Card, roleId: string | null, error: unknown, 
   if (error instanceof CardStop) {
     log.warn('pipeline', `card ${card.id} ${error.stage}`, { check: error.failingCheck, detail: error.message });
     const unwritten = await attempt(deps, `card ${card.id} stage`, () => finalize(card, deps, error.stage, error.failingCheck));
+    if (error.stage === 'rejected') await closeRejectedPull(card, pull, deps);
     if (error.failingCheck !== 'dispatcher_stopped' || unwritten) {
       const body = `${error.message}${unwrittenNote(unwritten)}`;
       const resume = error.stage === 'paused' ? `${/[.!?]$/.test(body) ? '' : '.'} ${resumeWords(error.failingCheck)}` : '';
