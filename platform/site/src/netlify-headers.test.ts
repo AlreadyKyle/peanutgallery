@@ -4,9 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { netlifyHeaders } from '../vite.config';
 import { KERNEL_SEGMENTS } from './App';
 
-// Security headers: netlify.toml sends them on every path. frame-ancestors and connect-src are
-// enforced (docs/specs/launch-site.md); the full policy is report-only until production shows it
-// breaks nothing. vite preview sends the same headers, so the e2e run loads every page under them.
+// Security headers: netlify.toml sends them on every path, the whole Content Security Policy
+// enforced (docs/specs/site-truth-pass.md). vite preview sends the same headers, so the e2e run loads every page under them.
 // Paths resolve from the package root vitest runs in (see styles.test.ts).
 const toml = readFileSync(resolve(process.cwd(), 'netlify.toml'), 'utf8');
 
@@ -44,10 +43,9 @@ describe('netlify.toml security headers', () => {
     expect(headers['Permissions-Policy']).toBe('camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   });
 
-  it('enforces frame-ancestors, connect-src to the site alone, and form-action to the site', () => {
-    expect(headers['Content-Security-Policy']).toBe("frame-ancestors 'none'; connect-src 'self'; form-action 'self'");
+  it('enforces every directive: same-origin sources, no plugins, no framing', () => {
     const enforced = directives(headers['Content-Security-Policy'] ?? '');
-    expect(Object.keys(enforced)).toEqual(['frame-ancestors', 'connect-src', 'form-action']);
+    expect(Object.keys(enforced)).toEqual(['default-src', 'script-src', 'style-src', 'img-src', 'font-src', 'connect-src', 'object-src', 'base-uri', 'form-action', 'frame-ancestors']);
   });
 
   it('answers /board with the not found page and a 404 status, and serves the app at the kernel pages even over a file, before the SPA rewrite', () => {
@@ -83,8 +81,10 @@ describe('netlify.toml security headers', () => {
     expect(netlifyHeaders(toml)).toEqual(headers);
   });
 
-  it('reports the full policy without enforcing it', () => {
-    const policy = directives(headers['Content-Security-Policy-Report-Only'] ?? '');
+  it('enforces the full policy, with no report-only copy', () => {
+    expect(headers['Content-Security-Policy-Report-Only']).toBeUndefined();
+    const policy = directives(headers['Content-Security-Policy'] ?? '');
+    expect(policy['frame-ancestors']).toEqual(["'none'"]);
     expect(policy['default-src']).toEqual(["'self'"]);
     expect(policy['script-src']).toEqual(["'self'"]);
     expect(policy['style-src']).toEqual(["'self'"]);
@@ -101,7 +101,6 @@ describe('netlify.toml security headers', () => {
       const pieces = script.match(new RegExp(`const ${name} =\\s*((?:"[^"]*"\\s*\\+?\\s*)+);`))?.[1] ?? '';
       return [...pieces.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join('');
     };
-    expect(joined('REPORT_ONLY_POLICY')).toBe(headers['Content-Security-Policy-Report-Only']);
     expect(joined('ENFORCED_POLICY')).toBe(headers['Content-Security-Policy']);
     for (const name of ['X-Frame-Options', 'X-Content-Type-Options', 'Referrer-Policy', 'Permissions-Policy']) {
       expect(script).toContain(`'${name.toLowerCase()}'`);
@@ -110,8 +109,6 @@ describe('netlify.toml security headers', () => {
   });
 
   it('lets the page connect to its own origin only: no Supabase host, no WebSocket, and no Supabase build value', () => {
-    const policy = directives(headers['Content-Security-Policy-Report-Only'] ?? '');
-    expect(policy['connect-src']).toEqual(["'self'"]);
     expect(directives(headers['Content-Security-Policy'] ?? '')['connect-src']).toEqual(["'self'"]);
     expect(toml).not.toMatch(/VITE_SUPABASE_/);
     expect(toml).not.toMatch(/supabase\.co/);

@@ -84,7 +84,7 @@ The board supplies these; nothing in the repository holds them. Export them in t
    ```sh
    ssh root@$VPS_IP 'bash -s' < platform/ops/provision.sh
    ```
-   It clones the code clone as root with the token from the env file and refuses it if it has uncommitted or untracked files. It validates the env file (root 0600, no quoted value, `AGENT_MODE=unattended`, every required key including `GITHUB_READ_TOKEN` and the three `MANAGED_*` ids, two different fine-grained GitHub tokens, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR` or `MODEL_HOST`, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, and none of the `DISPATCHER_*_ROOT` or `DISPATCHER_CODE_READONLY` values the unit sets). It proves `GITHUB_READ_TOKEN` reads the repository and is denied a write. It builds the image from the commit, installs `node_modules` into the code clone in a throwaway container with no secret, and makes the code clone root-owned and not writable by others. It clones the work clone inside the image as uid 10001, creates `/srv/peanutgallery-worktrees`, installs both units from the commit, runs `systemd-analyze verify` and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
+   It clones the code clone as root with the token from the env file and refuses it if it has uncommitted or untracked files. It validates the env file (root 0600, no quoted value, every required key including `GITHUB_READ_TOKEN` and the three `MANAGED_*` ids, two different fine-grained GitHub tokens, `PRICE_TABLE_JSON` parsed by node with a row for `MODEL_BUILDER` and any `MODEL_DIRECTOR` or `MODEL_HOST`, none of `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_ACCESS_TOKEN`, `ANTHROPIC_API_KEY`, and none of the `DISPATCHER_*_ROOT` or `DISPATCHER_CODE_READONLY` values the unit sets). It proves `GITHUB_READ_TOKEN` reads the repository and is denied a write. It builds the image from the commit, installs `node_modules` into the code clone in a throwaway container with no secret, and makes the code clone root-owned and not writable by others. It clones the work clone inside the image as uid 10001, creates `/srv/peanutgallery-worktrees`, installs both units from the commit, runs `systemd-analyze verify` and enables the dispatcher without starting it. Run it a second time: the last line must read `provision: done: 0 change(s)`.
 
 ### Pin the base image by digest
 
@@ -120,7 +120,7 @@ Pass the printed `node@sha256:...` reference with its tag, as `NODE_IMAGE=node:2
 10. **Liveness alert.** `ssh root@$VPS_IP 'systemctl stop dispatcher'` and wait out the check's grace: healthchecks.io emails the board. Start it again. Stopping sends each running card session an interrupt, meters it and archives it before the container exits.
 11. **Soak for 24 hours** with no restart loop (`systemctl show dispatcher -p NRestarts`) and no unexpected alert. The first funded card built in this window must have `billed_to = 'studio'` ledger rows.
 
-After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leaves `studio_state` alone and prints a warning when `.env` still says attended.
+After cutover, running `pnpm --filter @backseat/supabase seed` from the Mac leaves `studio_state` alone.
 
 ## Deploy an update
 
@@ -514,7 +514,7 @@ platform/ops/mac/install.sh
 platform/ops/mac/install.sh
 ```
 
-`make-dispatcher-env.sh` writes the same file as for a server (`KEY=value`, no quotes, `PRICE_TABLE_JSON` on one line, `AGENT_MODE=unattended`); the dispatcher's dotenv reads every line of it as written, which `install.sh` checks. `install.sh` refuses the env file on the same rules `provision.sh` uses. The second run must end `install: done: 0 change(s)`. The dispatcher is installed and disabled, so a login does not start it: starting it is the cutover.
+`make-dispatcher-env.sh` writes the same file as for a server (`KEY=value`, no quotes, `PRICE_TABLE_JSON` on one line); the dispatcher's dotenv reads every line of it as written, which `install.sh` checks. `install.sh` refuses the env file on the same rules `provision.sh` uses. The second run must end `install: done: 0 change(s)`. The dispatcher is installed and disabled, so a login does not start it: starting it is the cutover.
 
 The first job runs, by hand, quoted in `docs/specs/mac-host.md`:
 

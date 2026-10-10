@@ -13,7 +13,11 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     browserName: 'chromium',
-    launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+    // PW_CHROMIUM_PATH: a cloud session whose network blocks Playwright's download uses the image's Chromium (scripts/cloud-setup.sh).
+    launchOptions: {
+      args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+      executablePath: process.env.PW_CHROMIUM_PATH || undefined,
+    },
   },
   webServer: {
     command: `pnpm build && ${vite} preview --host 127.0.0.1 --port ${PORT} --strictPort`,

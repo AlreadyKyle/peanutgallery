@@ -143,7 +143,6 @@ export function dispatcherEnvEntries(dotenvText, operator) {
   };
 
   const entries = [
-    ['AGENT_MODE', 'unattended'],
     ['STUDIO_ANTHROPIC_API_KEY', studioKey],
     ['GITHUB_REPO', required('GITHUB_REPO', fromDotenv('GITHUB_REPO'), '.env')],
     ['GITHUB_TOKEN', vpsToken],

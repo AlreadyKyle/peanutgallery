@@ -13,6 +13,20 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Security headers on every path (the game makes no request but to its own origin: e2e/frames.spec.ts
+# fails one to any other). Enforced: no framing, connections to this origin alone, no plugins, no
+# <base> or form posts elsewhere. Script, style and image sources stay open: Phaser draws its own
+# textures from data: and blob: URLs and the page carries one inline style block. vite.config.ts sends
+# the same headers from `vite preview`, so the e2e run plays the game under them.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+
 [[headers]]
   for = "/config/*"
   [headers.values]

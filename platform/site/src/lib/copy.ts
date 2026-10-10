@@ -113,7 +113,7 @@ export const copy = {
     codeOnlyFacts: 'Calls no model. Runs every day, also while the studio is paused.',
     // The three sections, from each role's roster status (lib/roster.ts teamStatus).
     running: 'Running',
-    runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, ranking them and drafting new ones.',
+    runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, drafting new ones and grading the drafts.',
     startsLater: 'Starts later',
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',

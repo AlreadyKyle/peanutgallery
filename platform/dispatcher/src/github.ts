@@ -14,7 +14,6 @@ export interface GitHubOptions {
   signal?: AbortSignal;
 }
 
-export const GATE_CHECK_NAME = 'gate';
 export const REQUEST_TIMEOUT_MS = 30_000;
 const API_BASE = 'https://api.github.com';
 
@@ -574,6 +573,8 @@ export async function runJobs(opts: GitHubOptions, runId: number): Promise<RunJo
 export interface IssueComment {
   body: string;
   createdAt: string;
+  // GitHub's author_association: OWNER, MEMBER and COLLABORATOR can write to the repository.
+  authorAssociation: string;
 }
 
 // A pull request's comments (the first hundred).
@@ -582,7 +583,7 @@ export async function pullComments(opts: GitHubOptions, number: number): Promise
   if (result.status !== 200 || !Array.isArray(result.json)) {
     throw new Error(`github comments on ${number}: http ${result.status} ${apiMessage(result.json)}`.trim());
   }
-  return result.json.filter(isRecord).map((comment) => ({ body: String(comment.body ?? ''), createdAt: String(comment.created_at ?? '') }));
+  return result.json.filter(isRecord).map((comment) => ({ body: String(comment.body ?? ''), createdAt: String(comment.created_at ?? ''), authorAssociation: String(comment.author_association ?? '') }));
 }
 
 export async function commentOnPull(opts: GitHubOptions, number: number, body: string): Promise<void> {

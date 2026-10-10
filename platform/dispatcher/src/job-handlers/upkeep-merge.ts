@@ -66,6 +66,7 @@ import { requireUpkeep, UPKEEP_TIMINGS, type UpkeepDeps } from './upkeep.js';
 export const DEPENDABOT = 'dependabot[bot]';
 export const LOCKFILE = 'pnpm-lock.yaml';
 export const REBASE_COMMENT = '@dependabot rebase';
+const WRITERS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 export const RELEASE_AGE_MS = 7 * 24 * 60 * 60_000;
 export const NEVER_ALWAYS: readonly string[] = ['esbuild', 'vite', 'pnpm'];
 // The lockfile importer the dispatcher runs from, and the packages the host runs beside it: the daily
@@ -344,7 +345,10 @@ async function evaluate(pull: AuthorPull, mainSha: string, deps: UpkeepDeps, git
   if (range.behindBy !== 0 || mergeBase !== mainSha) {
     const comments = await pullComments(github, pull.number);
     const since = commit.committedAt === null ? 0 : Date.parse(commit.committedAt);
-    const asked = comments.some((c) => c.body.trim() === REBASE_COMMENT && Date.parse(c.createdAt) >= since);
+    // Dependabot acts only on a command from someone who can write to the repository, and the
+    // repository is public: a stranger's "@dependabot rebase" changes nothing, so it must not count as
+    // the request this job is waiting on.
+    const asked = comments.some((c) => c.body.trim() === REBASE_COMMENT && WRITERS.has(c.authorAssociation) && Date.parse(c.createdAt) >= since);
     if (asked) return { decision: { pr: pull.number, result: 'waiting_for_rebase', detail: `built on ${mergeBase.slice(0, 8)}, not main's ${mainSha.slice(0, 8)}; a rebase was asked for` } };
     await commentOnPull(github, pull.number, REBASE_COMMENT);
     return { decision: { pr: pull.number, result: 'rebase_requested', detail: `built on ${mergeBase.slice(0, 8)}, not main's ${mainSha.slice(0, 8)}; commented ${REBASE_COMMENT}` } };

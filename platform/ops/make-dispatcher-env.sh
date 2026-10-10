@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # make-dispatcher-env.sh: writes the VPS dispatcher's docker env file on the Mac (docs/specs/vps.md).
 # It reads the repository .env and four variables the operator exports, and writes exactly the keys
-# the dispatcher needs, with AGENT_MODE=unattended, at mode 0600. It prints key names, never values.
+# the dispatcher needs, at mode 0600. It prints key names, never values.
 #
 # usage, at the repository root:
 #   export VPS_GITHUB_TOKEN=...   # the VPS's own fine-grained token, not the Mac's GITHUB_TOKEN

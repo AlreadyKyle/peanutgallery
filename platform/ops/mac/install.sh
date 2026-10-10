@@ -17,7 +17,7 @@
 # 1. Checks the Mac: macOS, not root, node 22 or later, the pnpm the repository pins, git, curl,
 #    caffeinate, launchctl and plutil.
 # 2. Creates ~/peanutgallery-host and its folders, 0700.
-# 3. Checks env/dispatcher.env with provision.sh's own rules (AGENT_MODE=unattended, every key the
+# 3. Checks env/dispatcher.env with provision.sh's own rules (every key the
 #    dispatcher needs, two different fine-grained GitHub tokens, none of the forbidden keys, and each
 #    Discord webhook that is set a Discord webhook address), and writes env/ntfy.url from its
 #    NTFY_TOPIC_URL.

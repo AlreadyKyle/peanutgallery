@@ -5,7 +5,6 @@ import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { defaultCliPin, type PinState } from '../cli-pin.js';
 import type { DispatcherConfig } from '../config.js';
 import { MERGE_STATE_INTERVAL_MS, MERGE_STATE_TIMEOUT_MS, type GateStatus } from '../github.js';
 import type { JobContext } from '../jobs.js';
@@ -37,7 +36,6 @@ export interface UpkeepDeps {
   // schema_fingerprint() after every migration in this process's checkout, on PGlite.
   migrationsFingerprint: () => Promise<Record<string, string>>;
   // The Claude Code pin against claude --version (cli-pin.ts).
-  cliPin: () => Promise<PinState>;
   // The newest file in platform/agents/evals/results/, parsed, or null when there is none.
   newestEvalResult: () => Promise<{ file: string; model_ids: Record<string, string> } | null>;
   // seed-1's served files at a merge commit, for the smoke test (smoke.ts mergedServedFiles).
@@ -112,12 +110,10 @@ export async function newestEvalResult(codeRoot: string): Promise<{ file: string
 }
 
 export function upkeepDeps(config: DispatcherConfig, mainGate: UpkeepDeps['mainGate']): UpkeepDeps {
-  const pin = defaultCliPin(config.codeRoot, config.claudeBin);
   return {
     config,
     mainGate,
     migrationsFingerprint: migrationsFingerprintRunner(config.codeRoot),
-    cliPin: () => pin.state(),
     newestEvalResult: () => newestEvalResult(config.codeRoot),
     servedFiles: (sha) => mergedServedFiles(config.repoRoot, sha, gitAuthEnv(config.githubToken)),
   };

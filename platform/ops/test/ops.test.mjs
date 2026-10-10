@@ -109,7 +109,6 @@ describe('make-dispatcher-env.sh', () => {
     assert.equal(statSync(run.out).mode & 0o777, 0o600);
     const entries = parseEnvFile(readFileSync(run.out, 'utf8'));
     assert.deepEqual(entries, [
-      ['AGENT_MODE', 'unattended'],
       ['STUDIO_ANTHROPIC_API_KEY', 'fixture-studio-key'],
       ['GITHUB_REPO', 'AlreadyKyle/peanutgallery'],
       ['GITHUB_TOKEN', 'github_pat_-fixture-vps'],
@@ -134,7 +133,7 @@ describe('make-dispatcher-env.sh', () => {
       ['DISPATCHER_MAX_CONCURRENCY', '1'],
     ]);
     for (const value of SECRET_VALUES) assert.ok(!run.output.includes(value), 'the output names keys only');
-    assert.match(run.stdout, /with 23 keys: AGENT_MODE, STUDIO_ANTHROPIC_API_KEY/);
+    assert.match(run.stdout, /with 22 keys: STUDIO_ANTHROPIC_API_KEY, GITHUB_REPO/);
   });
 
   test('copies the director and host models and the session wall clock when .env sets them', () => {
@@ -230,7 +229,6 @@ describe('provision.sh env file checks', () => {
       [good.replace('NETLIFY_SITE_ID_SEED=fixture-site-seed', 'NETLIFY_SITE_ID_SEED="fixture-site-seed"'), 'NETLIFY_SITE_ID_SEED starts with a quote'],
       [good.replace('MODEL_BUILDER=', 'export MODEL_BUILDER='), 'is not KEY=value'],
       [`${good}CARD_MAX_USD=30\n`, 'CARD_MAX_USD is set more than once'],
-      [good.replace('AGENT_MODE=unattended', 'AGENT_MODE=attended'), 'AGENT_MODE must be unattended'],
       [good.replace(/^NTFY_TOPIC_URL=.*\n/m, ''), 'NTFY_TOPIC_URL is missing or empty'],
       [`${good}ANTHROPIC_API_KEY=fixture-founder-key\n`, "ANTHROPIC_API_KEY must not be in the dispatcher's env file"],
       [`${good}STRIPE_SECRET_KEY=fixture-stripe-key\n`, "STRIPE_SECRET_KEY must not be in the dispatcher's env file"],
