@@ -57,11 +57,12 @@ function LaneWho({ lane, snapshot }: { lane: FlowLane; snapshot: Snapshot }) {
   );
 }
 
-function LaneCards({ cards, snapshot, fund = false, changed = {} }: { cards: Card[]; snapshot: Snapshot; fund?: boolean; changed?: Readonly<Record<string, readonly SpecRow[]>> }) {
+/** A lane's cards as compact faces. Only Next up draws the Planned face; the others take their stage's. */
+function LaneCards({ cards, snapshot, fund = false, planned = false, changed = {} }: { cards: Card[]; snapshot: Snapshot; fund?: boolean; planned?: boolean; changed?: Readonly<Record<string, readonly SpecRow[]>> }) {
   return (
     <ul className={fund ? 'flow-cards fund-grid' : 'flow-cards'}>
       {cards.slice(0, FLOW_LANE_CARDS).map((card) => (
-        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={card.horizon === 'now' ? undefined : 'planned'} changed={changed[card.id]} />
+        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={planned ? 'planned' : undefined} changed={changed[card.id]} />
       ))}
     </ul>
   );
@@ -100,7 +101,7 @@ function LaneBody({ lane, cards, snapshot, lastShipped, changed }: { lane: FlowL
       </div>
     );
   }
-  if (cards.length > 0) return <LaneCards cards={cards} snapshot={snapshot} />;
+  if (cards.length > 0) return <LaneCards cards={cards} snapshot={snapshot} planned={lane === 'next'} />;
   if (lane === 'building') {
     return (
       <EmptyTile>

@@ -256,7 +256,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
+    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund now on the home page: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
     // A single planned card's state, on its own page (/card/:id); /roadmap says planned once per group.
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
