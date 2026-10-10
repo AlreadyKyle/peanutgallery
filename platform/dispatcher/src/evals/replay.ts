@@ -225,6 +225,7 @@ export function inMemoryStore(roles: readonly Role[], studio: StudioState, openC
         kind: 'new',
         opened: 'new',
         card: { title: 'A game card the Game Designer is drafting', summary: null, intent: null, horizon: 'next', rank: null, funded_usd: 0, severity: null },
+        gaveUp: [],
       };
     },
     async cardSpend() {

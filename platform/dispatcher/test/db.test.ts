@@ -238,6 +238,7 @@ describe('createSupabaseDb queries', () => {
       kind: 'backlog',
       opened: 'backlog',
       card: { title: 'Show the next unlock', summary: 'A summary.', intent: 'It is not built yet.', horizon: 'later', rank: 4, funded_usd: '0.0000', severity: null },
+      gave_up: [{ card_id: 'card-0', kind: 'new', why: 'failed_twice', rejected: true }],
     };
     const open = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/open_draft_card') ? { status: 200, json: answer } : undefined));
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: open.fetchFn }).openDraftCard('run-1')).toEqual({
@@ -245,6 +246,7 @@ describe('createSupabaseDb queries', () => {
       kind: 'backlog',
       opened: 'backlog',
       card: { title: 'Show the next unlock', summary: 'A summary.', intent: 'It is not built yet.', horizon: 'later', rank: 4, funded_usd: 0, severity: null },
+      gaveUp: [{ cardId: 'card-0', kind: 'new', why: 'failed_twice', rejected: true }],
     });
     expect(open.calls.map((call) => call.body)).toEqual([{ p_run: 'run-1' }]);
     const odd = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/open_draft_card') ? { status: 200, json: { ...answer, kind: 'platform' } } : undefined));
@@ -258,6 +260,18 @@ describe('createSupabaseDb queries', () => {
     const reject = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/reject_draft_card') ? { status: 200, json: null } : undefined));
     await createSupabaseDb('https://db.local', 'service-role', { fetchFn: reject.fetchFn }).rejectDraftCard('card-1', 'run-1');
     expect(reject.calls.map((call) => call.body)).toEqual([{ p_card: 'card-1', p_run: 'run-1' }]);
+
+    const check = mockFetch((method, url) =>
+      method === 'POST' && url.endsWith('/rpc/supply_draft_check')
+        ? { status: 200, json: { short: true, reason: 'daily_limit', floor: { short_open: 2, big_min_usd: '5.0000' }, waiting: 0, runs_today: 4 } }
+        : undefined,
+    );
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: check.fetchFn }).supplyDraftCheck()).toEqual({
+      short: true,
+      reason: 'daily_limit',
+      floor: { short_open: 2, big_min_usd: 5 },
+      runsToday: 4,
+    });
   });
 
   it('reads the oldest queued runs first, the jobs and a role\'s pause', async () => {

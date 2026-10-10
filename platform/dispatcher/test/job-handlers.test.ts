@@ -62,12 +62,14 @@ const NEW_TARGET: DraftTarget = {
   kind: 'new',
   opened: 'new',
   card: { title: 'A game card the Game Designer is drafting', summary: null, intent: null, horizon: 'next', rank: null, funded_usd: 0, severity: null },
+  gaveUp: [],
 };
 const BACKLOG_TARGET: DraftTarget = {
   cardId: BACKLOG_CARD,
   kind: 'backlog',
   opened: 'backlog',
   card: { title: 'Show how long until the next unlock', summary: 'A timer shows how long the next unlock takes.', intent: 'It is not built yet.', horizon: 'later', rank: 4, funded_usd: 0, severity: null },
+  gaveUp: [],
 };
 
 const DRAFT = {
@@ -93,6 +95,8 @@ interface Answers {
   fail?: Kind[];
   // Sessions of these kinds meet the API refusing the studio key for credit.
   refuse?: Kind[];
+  // What a Director session spends, $0.01 unless set.
+  directorUsd?: number;
 }
 
 interface Seen {
@@ -137,7 +141,7 @@ function setup(answers: Answers, input: Record<string, unknown> = { floor: { sho
         await emit({ type: 'error', message: 'the Managed Agents session could not be created: 400 Your credit balance is too low to access the Anthropic API.' });
         return;
       }
-      await db.recordUsage({ billed_to: cardId ? 'studio' : 'overhead', card_id: cardId ?? null, role_id: spec.roleId ?? null, model: MODEL, input_tokens: 1000, cached_tokens: 0, output_tokens: 200, usd: 0.01, request_id: `managed:sesn_${count}:1` });
+      await db.recordUsage({ billed_to: cardId ? 'studio' : 'overhead', card_id: cardId ?? null, role_id: spec.roleId ?? null, model: MODEL, input_tokens: 1000, cached_tokens: 0, output_tokens: 200, usd: kindOf(spec) === 'director' ? (answers.directorUsd ?? 0.01) : 0.01, request_id: `managed:sesn_${count}:1` });
       await emit(usageEvent(1, 200, MODEL));
     },
     { mode: 'unattended', result: (spec) => queues[kindOf(spec)].shift() ?? '' },
@@ -250,8 +254,12 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     const draft = t.db.drafts[0]!;
     expect([draft.target_card_id, draft.job_run_id, draft.status, draft.maker_ref, draft.grader_ref]).toEqual([NEW_CARD, 'run-1', 'approved', 'claude:sesn_1', 'claude:sesn_2']);
     expect(draft.fields).toEqual({ title: DRAFT.title, summary: DRAFT.summary, intent: DRAFT.intent, acceptance_test: DRAFT.acceptance_test, lane: 'config', executor_role_id: 'role-builder-a', estimate_usd: 0.5 });
-    expect(t.db.draftCards).toEqual([{ id: NEW_CARD, draft_id: 'draft-1', approver_role_id: 'role-director', grader_ref: 'claude:sesn_2', verdict: { result: 'approved', reason_codes: ['fits_pillars'], round: 1 }, content_sha256: draft.content_sha256 }]);
-    expect(output).toMatchObject({ result: 'approved', card_id: NEW_CARD, kind: 'new', opened: 'new', draft_id: 'draft-1', base_sha: BASE_SHA });
+    // Approval raises the target by the drafting spend: the $0.50 estimate and the two sessions' $0.02.
+    expect(t.db.draftCards).toEqual([
+      { id: NEW_CARD, funding_target_usd: 0.52, draft_id: 'draft-1', approver_role_id: 'role-director', grader_ref: 'claude:sesn_2', verdict: { result: 'approved', reason_codes: ['fits_pillars'], round: 1 }, content_sha256: draft.content_sha256 },
+    ]);
+    expect(output).toMatchObject({ result: 'approved', card_id: NEW_CARD, kind: 'new', opened: 'new', draft_id: 'draft-1', estimate_usd: 0.5, draft_spend_usd: 0.02, funding_target_usd: 0.52, base_sha: BASE_SHA });
+    expect(t.sessions[0]!.prompt).toContain("The card's drafting has spent $0.00 so far. On approval its funding target is your estimate plus everything its drafting spends, this session and the grading included, rounded up to the cent, and that total must stay within the per-card maximum of $5.00.");
     expect(t.sessions[1]!.prompt).toContain(RUBRIC.trim());
     expect(t.scanned).toEqual([[DRAFT.title, DRAFT.summary, DRAFT.intent, DRAFT.acceptance_test]]);
     expect(t.workspace.closed).toBe(1);
@@ -272,14 +280,14 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     for (const row of t.db.ledger) expect([row.billed_to, row.card_id]).toEqual(['studio', BACKLOG_CARD]);
   });
 
-  it('budgets each session at DRAFT_SESSION_MAX_USD, lowered to what the per-card maximum leaves on the card, and holds it from the card path while it runs', async () => {
-    const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] });
+  it('budgets each session at DRAFT_SESSION_MAX_USD, lowered to what the per-card maximum leaves on the card (for the Director, after the estimate), and holds it from the card path while it runs', async () => {
+    const t = setup({ designer: [JSON.stringify({ ...DRAFT, estimate_usd: 0.1 })], director: [verdict('approved', ['fits_pillars'])] });
     // Earlier spend on the card: the per-card maximum of $5 leaves $0.50.
     await t.db.recordUsage({ billed_to: 'studio', card_id: NEW_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 4.5, request_id: 'earlier' });
-    await draftCard(t.context);
-    // The Designer gets the $0.50 left; its own $0.01 leaves the Director $0.49.
-    expect(t.sessions.map((s) => s.budget)).toEqual([0.5, 0.49]);
-    expect(t.sessions.map((s) => s.held)).toEqual([0.5, 0.49]);
+    expect(await draftCard(t.context)).toMatchObject({ result: 'approved', funding_target_usd: 4.62 });
+    // The Designer gets the $0.50 left; its $0.01 and the $0.10 estimate leave the Director $0.39.
+    expect(t.sessions.map((s) => s.budget)).toEqual([0.5, 0.39]);
+    expect(t.sessions.map((s) => s.held)).toEqual([0.5, 0.39]);
     expect(t.jobBudgets.remaining().size).toBe(0);
 
     const roomy = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] });
@@ -287,12 +295,68 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     expect(roomy.sessions.map((s) => s.budget)).toEqual([0.75, 0.75]);
   });
 
-  it('starts no session when the per-card maximum leaves less than a session needs, and fails the run with the reason', async () => {
+  it('gives the card up when the per-card maximum leaves less than a session needs: no session, a new card rejected, a backlog card passed over, the board told once', async () => {
     const t = setup({ designer: [JSON.stringify(DRAFT)] });
     await t.db.recordUsage({ billed_to: 'studio', card_id: NEW_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 4.8, request_id: 'earlier' });
-    await expect(draftCard(t.context)).rejects.toThrow(/^card_max: card 77777777 has spent 4.8 USD of the per-card maximum 5 USD/);
+    expect(await draftCard(t.context)).toMatchObject({ result: 'withdrawn', reason: 'card_max', card_id: NEW_CARD, kind: 'new', card_rejected: true });
     expect(t.sessions).toEqual([]);
-    expect(t.db.rejectedCards).toEqual([]);
+    expect(t.db.rejectedCards).toEqual([{ cardId: NEW_CARD, runId: 'run-1' }]);
+    expect(t.alert.messages).toEqual([
+      "The card supply's draft of card 77777777 was withdrawn (card_max): the new card is rejected, its spend kept, and the next run drafts another card.",
+    ]);
+
+    const backlog = setup({ designer: [JSON.stringify(DRAFT)] }, {}, BACKLOG_TARGET);
+    await backlog.db.recordUsage({ billed_to: 'studio', card_id: BACKLOG_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 4.8, request_id: 'earlier' });
+    expect(await draftCard(backlog.context)).toMatchObject({ result: 'withdrawn', reason: 'card_max', card_id: BACKLOG_CARD, card_rejected: false });
+    expect([backlog.sessions, backlog.db.rejectedCards]).toEqual([[], []]);
+  });
+
+  it('gives the card up when the Director cannot start for want of room under the per-card maximum, withdrawing the recorded draft', async () => {
+    const t = setup({ designer: [JSON.stringify({ ...DRAFT, estimate_usd: 0.1 })] });
+    // $4.65 earlier leaves the Designer $0.35; its $0.01 leaves $0.34, less than the Director needs.
+    await t.db.recordUsage({ billed_to: 'studio', card_id: NEW_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 4.65, request_id: 'earlier' });
+    expect(await draftCard(t.context)).toMatchObject({ result: 'withdrawn', reason: 'card_max', card_rejected: true });
+    expect(t.sessions.map((s) => s.kind)).toEqual(['designer']);
+    expect(t.db.drafts.map((d) => [d.status, d.reason_codes])).toEqual([['withdrawn', ['stopped_card_max']]]);
+  });
+
+  it("refuses an estimate that, with the card's drafting spend and the least a grading needs, would take the target over the per-card maximum, and approves a smaller one with the target raised", async () => {
+    const t = setup({ designer: [JSON.stringify({ ...DRAFT, estimate_usd: 1 }), JSON.stringify({ ...DRAFT, estimate_usd: 0.2 })], director: [verdict('approved', ['fits_pillars'])] });
+    await t.db.recordUsage({ billed_to: 'studio', card_id: NEW_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 4, request_id: 'earlier' });
+    const output = await draftCard(t.context);
+    expect(t.sessions.map((s) => s.kind)).toEqual(['designer', 'designer', 'director']);
+    expect(t.sessions[0]!.prompt).toContain("The card's drafting has spent $4.00 so far.");
+    expect(t.sessions[1]!.prompt).toContain("The card's drafting has spent $4.01 so far.");
+    expect(t.sessions[1]!.prompt).toContain(
+      "Your last draft was refused by the estimate check: the estimate $1 plus the $4.01 this card's drafting has spent and the $0.35 its grading needs at least comes to $5.36, above the per-card maximum $5",
+    );
+    // $4.00 earlier and three sessions' $0.03: the target is the $0.20 estimate plus $4.03.
+    expect(output).toMatchObject({ result: 'approved', estimate_usd: 0.2, draft_spend_usd: 4.03, funding_target_usd: 4.23 });
+    expect(t.db.draftCards.map((c) => c.funding_target_usd)).toEqual([4.23]);
+  });
+
+  it('withdraws an approved draft whose target, raised by the drafting spend, would pass the per-card maximum, and gives the card up', async () => {
+    // The Director spends more than the check reserved for it: $3.91 + $1.00 + the $0.30 estimate is $5.21.
+    const t = setup({ designer: [JSON.stringify({ ...DRAFT, estimate_usd: 0.3 })], director: [verdict('approved', ['fits_pillars'])], directorUsd: 1 });
+    await t.db.recordUsage({ billed_to: 'studio', card_id: NEW_CARD, role_id: 'role-designer', model: MODEL, input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 3.9, request_id: 'earlier' });
+    expect(await draftCard(t.context)).toMatchObject({ result: 'withdrawn', reason: 'over_card_max', total_usd: 5.21, card_rejected: true });
+    expect(t.db.drafts.map((d) => [d.status, d.reason_codes])).toEqual([['withdrawn', ['over_card_max']]]);
+    expect(t.db.draftCards).toEqual([]);
+    expect(t.db.rejectedCards).toEqual([{ cardId: NEW_CARD, runId: 'run-1' }]);
+  });
+
+  it('tells the board once about each card the open gave up on', async () => {
+    const t = setup({ designer: [JSON.stringify(DRAFT), JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars']), verdict('approved', ['fits_pillars'])] });
+    t.db.draftTarget.gaveUp = [
+      { cardId: '99999999-9999-4999-8999-999999999999', kind: 'new', why: 'failed_twice', rejected: true },
+      { cardId: BACKLOG_CARD, kind: 'backlog', why: 'card_max', rejected: false },
+    ];
+    await draftCard(t.context);
+    await draftCard(t.context);
+    expect(t.alert.messages).toEqual([
+      'The card supply gave up on card 99999999: two draft runs on it failed after spending on it. The new card is rejected, its spend kept. The supply drafts another card.',
+      'The card supply gave up on card 88888888: its drafting spend leaves less than one session under the per-card maximum. The backlog card is passed over until it changes. The supply drafts another card.',
+    ]);
   });
 
   it("starts a session only when the throttle's money covers its budget: the balance after the other cards' holds, the daily and the monthly cap", async () => {

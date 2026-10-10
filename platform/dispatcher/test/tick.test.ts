@@ -272,6 +272,30 @@ describe('tick: auto-resume and the credit probe', () => {
 
 // docs/specs/studio-reports.md: Discord runs after the heartbeat, only with the lease and not halted,
 // and a throwing or hanging poster never touches the rest of the tick.
+describe('tick: the card supply alert', () => {
+  it('runs after the outbound lane, not while halted, and a throwing read leaves the tick unaffected', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const order: string[] = [];
+    const lines: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
+    const supplyWatch = async () => {
+      order.push('supply');
+      throw new Error('db supply_draft_check: down');
+    };
+    expect(await tick(deps(db, [], { log, supplyWatch, outbound: async () => void order.push('outbound') }))).toEqual({ action: 'started', cardId: card().id });
+    expect(order).toEqual(['outbound', 'supply']);
+    expect(lines.map((line) => JSON.parse(line)).filter((line) => line.scope === 'supply').map((line) => line.msg)).toEqual(['supply watch failed']);
+    haltDispatcher('test halt');
+    try {
+      await tick(deps(db, [], { supplyWatch }));
+    } finally {
+      resetHalt();
+    }
+    expect(order).toEqual(['outbound', 'supply']);
+  });
+});
+
 describe('tick: the outbound lane', () => {
   it('runs after the heartbeat, and a throwing poster leaves the card path, the jobs and the heartbeat unaffected', async () => {
     const db = new FakeDb();

@@ -2,7 +2,7 @@
 // one refuses by name with every other check passing.
 import { describe, expect, it } from 'vitest';
 import type { Role } from '../src/db.js';
-import { checkDraft, seedExecutor, type CardDraft, type DraftCheckDeps } from '../src/draft-checks.js';
+import { checkDraft, draftTotalUsd, seedExecutor, type CardDraft, type DraftCheckDeps } from '../src/draft-checks.js';
 import { role } from './helpers/fake-db.js';
 
 const SPAWN = JSON.stringify({ rows: [{ id: 'gatherer', baseCost: 10 }] });
@@ -91,6 +91,19 @@ describe('checkDraft', () => {
     expect(hit).toEqual({ ok: false, check: 'deny_list', detail: 'a deny-list hit: FAIL: banned-phrases hits=1' });
     const down = await checkDraft(draft(), deps({ scanText: async () => ({ ok: false, detail: 'the deny-list scan could not run: banned-phrases.sh is missing' }) }));
     expect(down).toMatchObject({ ok: false, check: 'deny_list' });
+  });
+
+  // docs/specs/unattended-roles.md: approval raises the target by the card's drafting spend.
+  it("refuses an estimate whose target, raised by the card's drafting spend and the least a grading needs, rounded up to the cent, passes card_max_usd", async () => {
+    expect(draftTotalUsd(2.5, 0.123)).toBe(2.63);
+    expect(draftTotalUsd(2.5, 0)).toBe(2.5);
+    expect(draftTotalUsd(0.1, 0.0001)).toBe(0.11);
+    expect(await checkDraft(draft({ estimate_usd: 1 }), deps({ draftingUsd: 3.6, gradingUsd: 0.35 }))).toEqual({ ok: true });
+    expect(await checkDraft(draft({ estimate_usd: 1 }), deps({ draftingUsd: 3.66, gradingUsd: 0.35 }))).toEqual({
+      ok: false,
+      check: 'estimate',
+      detail: "the estimate $1 plus the $3.66 this card's drafting has spent and the $0.35 its grading needs at least comes to $5.01, above the per-card maximum $5",
+    });
   });
 
   it('refuses an estimate above card_max_usd', async () => {

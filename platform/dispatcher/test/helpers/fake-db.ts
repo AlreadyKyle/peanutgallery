@@ -11,6 +11,7 @@ import type {
   DeployInput,
   DraftFields,
   DraftTarget,
+  SupplyDraftCheck,
   EnqueueInput,
   Finding,
   Job,
@@ -112,9 +113,10 @@ export interface FakeDraft {
 }
 
 // A draft approve_card_draft wrote onto its card, with the approval it recorded, as the handler tests
-// read it.
+// read it: the card's estimate and funding target raised by its drafting spend, rounded up to the cent.
 export interface FakeDraftCard {
   id: string;
+  funding_target_usd: number;
   draft_id: string;
   approver_role_id: string;
   grader_ref: string;
@@ -203,8 +205,13 @@ export class FakeDb implements Db {
     kind: 'new',
     opened: 'new',
     card: { title: 'A game card the Game Designer is drafting', summary: null, intent: null, horizon: 'next', rank: null, funded_usd: 0, severity: null },
+    gaveUp: [],
   };
   draftTargetsOpened: string[] = [];
+  // What supply_draft_check answers, and how often it was read.
+  supplyCheck: SupplyDraftCheck = { short: false, reason: 'not_short', floor: {}, runsToday: 0 };
+  supplyChecks = 0;
+  supplyCheckError: Error | null = null;
   drafts: FakeDraft[] = [];
   draftCards: FakeDraftCard[] = [];
   rejectedCards: Array<{ cardId: string; runId: string }> = [];
@@ -485,7 +492,10 @@ export class FakeDb implements Db {
     if (graderRef === draft.maker_ref) throw new Error('db approve_card_draft: The grader ref must differ from the maker ref');
     if (approverRoleId === draft.role_id || approverRoleId === draft.fields.executor_role_id) throw new Error("db approve_card_draft: The approver cannot be the card's proposer, drafter or executor");
     const cardId = draft.target_card_id;
-    this.draftCards.push({ id: cardId, draft_id: draftId, approver_role_id: approverRoleId, grader_ref: graderRef, verdict: { ...verdict }, content_sha256: draft.content_sha256 });
+    const spent = (await this.cardSpend([cardId])).get(cardId) ?? 0;
+    const total = Math.ceil(Math.round((draft.fields.estimate_usd + spent) * 10_000) / 100) / 100;
+    if (total > this.studio.card_max_usd) throw new Error(`db approve_card_draft: The draft's estimate and the card's drafting spend come to $${total}, over the per-card maximum $${this.studio.card_max_usd}`);
+    this.draftCards.push({ id: cardId, funding_target_usd: total, draft_id: draftId, approver_role_id: approverRoleId, grader_ref: graderRef, verdict: { ...verdict }, content_sha256: draft.content_sha256 });
     draft.status = 'approved';
     draft.grader_ref = graderRef;
     draft.card_id = cardId;
@@ -518,6 +528,11 @@ export class FakeDb implements Db {
     if (reasonCodes.length === 0) throw new Error('db withdraw_card_draft: A withdrawal names at least one reason code');
     draft.status = 'withdrawn';
     draft.reason_codes = [...reasonCodes];
+  }
+  async supplyDraftCheck() {
+    this.supplyChecks += 1;
+    if (this.supplyCheckError) throw this.supplyCheckError;
+    return structuredClone(this.supplyCheck);
   }
   // reject_draft_card: only a new card the run opened; a backlog card is left as it was.
   async rejectDraftCard(cardId: string, runId: string) {

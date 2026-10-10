@@ -30,6 +30,7 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { watchSupply, type SupplyWatchState } from './supply-watch.js';
 import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
 import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
   // A running draft_card session's budget, held from the card path by the card it drafts
   // (docs/specs/unattended-roles.md, throttle.ts).
   const jobBudgets = new SessionBudgets();
+  const supplyWatchState: SupplyWatchState = { lastAt: null };
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
   // The Directors' visual review (docs/specs/design-review.md) runs on the card sessions' adapter:
@@ -216,6 +218,8 @@ async function main(): Promise<void> {
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
+    // The card supply's alert when it is short and no draft can be queued (docs/specs/unattended-roles.md).
+    supplyWatch: () => watchSupply({ db, alert, now, log, state: supplyWatchState }),
     drainAt: config.drainAt ?? null,
     // Unattended mode: the one-token call on the studio key that lifts the dispatcher's own credit and
     // spend-limit pauses (credit-probe.ts); attended mode has no studio key and sets no such pause.

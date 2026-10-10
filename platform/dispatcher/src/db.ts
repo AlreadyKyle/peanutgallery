@@ -272,7 +272,9 @@ export interface DraftFields {
 // backlog card (kind backlog, which keeps the board's title and summary and is left as it was if the
 // draft is withdrawn) or a new private seed-1 card (kind new, rejected if it is). opened says how it
 // was found: named on the run, a new card an earlier run left unfinished, the next backlog card, or
-// one just opened. card holds what the prompts show and the session budget reads.
+// one just opened. card holds what the prompts show and the session budget reads. gaveUp lists the
+// cards given up on (draft_target_exhausted): an unfinished new card rejected on the way, and each
+// backlog card passed over for its spend or its failed runs, for the board's alert.
 export interface DraftTarget {
   cardId: string;
   kind: 'backlog' | 'new';
@@ -286,6 +288,27 @@ export interface DraftTarget {
     funded_usd: number;
     severity: string | null;
   };
+  gaveUp: GaveUpTarget[];
+}
+
+export interface GaveUpTarget {
+  cardId: string;
+  kind: 'backlog' | 'new';
+  // card_max (its spend leaves less than a session under the per-card maximum), failed_twice (two
+  // runs failed after spending on it) or withdrawn.
+  why: string;
+  // A new card is rejected; a backlog card is left as it was.
+  rejected: boolean;
+}
+
+// supply_draft_check(): whether the supply is short of the floor, and why no draft_card run may be
+// queued now (null when one may): studio_paused, job_disabled, role_paused, grader_paused,
+// already_queued, daily_limit or not_short.
+export interface SupplyDraftCheck {
+  short: boolean;
+  reason: string | null;
+  floor: Record<string, number>;
+  runsToday: number;
 }
 
 // Why the studio is paused (studio_state.pause_reason): Console credit needed, the usage tier cap,
@@ -412,6 +435,9 @@ export interface Db extends OutboundDb {
   // A withdrawn draft rejects the new card its run opened, with failing_check draft_withdrawn
   // (reject_draft_card); a backlog card is refused, since it is left as it was.
   rejectDraftCard(cardId: string, runId: string): Promise<void>;
+  // Whether the card supply is short and why no draft may be queued (supply_draft_check); it writes
+  // nothing.
+  supplyDraftCheck(): Promise<SupplyDraftCheck>;
   // The visual review (docs/specs/design-review.md): one more revise round on the card, returning the
   // new count (record_review_round); and the visual approval at the card's current content hash
   // (card_content_hash, then record_card_approval), which Postgres refuses when the grader ref equals
@@ -915,7 +941,14 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       if (kind !== 'backlog' && kind !== 'new') throw new Error(`db open_draft_card: unknown kind ${kind}`);
       if (!['named', 'reused', 'backlog', 'new'].includes(opened)) throw new Error(`db open_draft_card: unknown opening ${opened}`);
       const card = (typeof row.card === 'object' && row.card !== null ? row.card : {}) as Row;
+      const gaveUp = (Array.isArray(row.gave_up) ? (row.gave_up as Row[]) : []).map((entry) => ({
+        cardId: text(entry, 'card_id'),
+        kind: (text(entry, 'kind') === 'backlog' ? 'backlog' : 'new') as GaveUpTarget['kind'],
+        why: text(entry, 'why'),
+        rejected: entry.rejected === true,
+      }));
       return {
+        gaveUp,
         cardId: text(row, 'card_id'),
         kind,
         opened: opened as DraftTarget['opened'],
@@ -941,6 +974,15 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async rejectDraftCard(cardId, runId) {
       const { error } = await client.rpc('reject_draft_card', { p_card: cardId, p_run: runId });
       if (error) fail('reject_draft_card', error);
+    },
+
+    async supplyDraftCheck() {
+      const { data, error } = await client.rpc('supply_draft_check');
+      if (error || typeof data !== 'object' || data === null) fail('supply_draft_check', error);
+      const row = data as Row;
+      const floor: Record<string, number> = {};
+      for (const [key, value] of Object.entries(typeof row.floor === 'object' && row.floor !== null ? (row.floor as Row) : {})) floor[key] = Number(value);
+      return { short: row.short === true, reason: optionalText(row, 'reason'), floor, runsToday: num(row, 'runs_today') };
     },
 
     async approveCardDraft(draftId, approverRoleId, graderRef, verdict) {

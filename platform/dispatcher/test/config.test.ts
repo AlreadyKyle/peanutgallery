@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ConfigError, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
+import { ConfigError, DRAFT_SESSION_MIN_USD, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
 
 const REPO = '/repo';
 
@@ -343,5 +345,16 @@ describe('the drain time', () => {
     for (const value of ['2026-10-06T17:00:00', '1791306000', 'soon', '2026-13-45T99:00:00Z']) {
       expect(() => loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: value }, REPO), value).toThrow(ConfigError);
     }
+  });
+});
+
+// docs/specs/unattended-roles.md: the supply gives a card up once its spend leaves less than one draft
+// session under the per-card maximum, in SQL (draft_target_exhausted) and in the handler alike.
+describe('DRAFT_SESSION_MIN_USD', () => {
+  it('is the figure the supply-refill migration gives draft_session_min_usd()', () => {
+    const file = path.resolve(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261010200000_supply_refill.sql');
+    const body = /function public\.draft_session_min_usd\(\)[\s\S]*?select ([0-9.]+)::numeric/.exec(readFileSync(file, 'utf8'));
+    expect(body?.[1]).toBeDefined();
+    expect(Number(body![1])).toBe(DRAFT_SESSION_MIN_USD);
   });
 });

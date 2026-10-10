@@ -67,6 +67,9 @@ export interface TickDeps {
   jobTick?: () => Promise<unknown>;
   // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
   outbound?: () => Promise<unknown>;
+  // The card supply's alert (supply-watch.ts), run after the outbound lane on every tick that is not
+  // halted; it reads the supply at most every 20 minutes.
+  supplyWatch?: () => Promise<unknown>;
   // DISPATCHER_DRAIN_AT (config.ts): from this time no card or job is claimed. Unset or null: never.
   drainAt?: Date | null;
   // Unattended mode: the one-token call on the studio key (credit-probe.ts) that tells whether a pause
@@ -156,10 +159,21 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   await heartbeat(deps);
   if (!halted) await deps.alert.ping();
   if (!halted) await runOutboundLane(deps);
+  if (!halted) await runSupplyWatch(deps);
   return outcome;
 }
 
 // A failed or slow Discord post is logged and never stops the tick.
+// A failed supply read is logged and never stops the tick.
+async function runSupplyWatch(deps: TickDeps): Promise<void> {
+  if (!deps.supplyWatch) return;
+  try {
+    await deps.supplyWatch();
+  } catch (error) {
+    deps.log.warn('supply', 'supply watch failed', { error: errorMessage(error) });
+  }
+}
+
 async function runOutboundLane(deps: TickDeps): Promise<void> {
   if (!deps.outbound) return;
   try {

@@ -8,10 +8,14 @@
 //   a lane, an executor and one estimate; a new card gets all seven. record_card_draft_for keeps the
 //   draft privately against the card, and the dispatcher's checks run (draft-checks.ts);
 // - a draft that passes goes to a separate Game Director session with rubrics/draft-game.md.
-//   Approved writes the draft onto the card through approve_card_draft, which records the draft
-//   approval, so deal_due_cards deals it after the cooling window and the waterfall funds it; revise
-//   starts the next round; flagged, or a third round without approval, withdraws the draft, leaves a
-//   backlog card as it was and rejects a new card (failing_check draft_withdrawn), its spend kept.
+//   Approved writes the draft onto the card through approve_card_draft, which raises the card's
+//   estimate and funding target by its drafting spend (rounded up to the cent, so the ceiling leaves
+//   the build its allowance) and records the draft approval, so deal_due_cards deals it after the
+//   cooling window and the waterfall funds it; revise starts the next round; flagged, a third round
+//   without approval, too little left under the per-card maximum for a session, or a total over it,
+//   gives the card up: the draft is withdrawn, a backlog card left as it was and a new card rejected
+//   (failing_check draft_withdrawn), its spend kept, and the board hears once. A card the open gives
+//   up on (open_draft_card's gave_up) is told to the board once too.
 // Every session is an unattended Managed Agents reader (Read, Glob and Grep, main mounted read-only)
 // on the card sessions' adapter, studio-billed to that card with its role, never the founder's plan;
 // an attended process refuses the run before it opens a card. Each session's budget is
@@ -25,8 +29,8 @@
 import { REPO_MOUNT } from '../adapters/managed.js';
 import { DRAFT_SESSION_MIN_USD } from '../config.js';
 import type { SpendRefusal } from '../credit.js';
-import { checkDraft, seedExecutor, SEED_WRITERS, type CardDraft, type DraftCheckName } from '../draft-checks.js';
-import type { Card, DraftFields, DraftTarget, Role } from '../db.js';
+import { checkDraft, draftTotalUsd, seedExecutor, SEED_WRITERS, type CardDraft, type DraftCheckName } from '../draft-checks.js';
+import type { Card, DraftFields, DraftTarget, GaveUpTarget, Role } from '../db.js';
 import type { JobContext, JobHandler } from '../jobs.js';
 import { errorMessage } from '../log.js';
 import { round4 } from '../pricing.js';
@@ -142,6 +146,8 @@ export interface DesignerContext {
   target: TargetContext;
   repo: RepoContext | null;
   budgetUsd: number;
+  // The card's drafting spend before this session.
+  spentUsd: number;
   floor: Floor | null;
   openCards: readonly TypedCard[];
   executors: readonly string[];
@@ -173,6 +179,7 @@ export function designerPrompt(context: DesignerContext, typed: TypedOutput): st
     '',
     ...targetLines(context.target),
     `Every turn of this session is billed to that card at list price, within a budget of ${usd(context.budgetUsd)}: a short, direct session is the way to stay inside it.`,
+    `The card's drafting has spent ${usd(context.spentUsd)} so far. On approval its funding target is your estimate plus everything its drafting spends, this session and the grading included, rounded up to the cent, and that total must stay within the per-card maximum of ${usd(context.cardMaxUsd)}.`,
     ...repoLine(context.repo),
     '',
     'The cards already open, as typed fields; do not draft a copy of one. A card whose source is community carries no text.',
@@ -252,8 +259,8 @@ export class DraftStop extends Error {
 
 // What the next session on the card may spend: DRAFT_SESSION_MAX_USD, no more than the per-card
 // maximum leaves after the card's studio spend so far (earlier rounds included), and only when the
-// throttle's money covers all of it.
-export async function draftSessionBudget(context: JobContext, workflow: WorkflowDeps, card: Pick<Card, 'id' | 'funded_usd' | 'severity'>): Promise<number> {
+// throttle's money covers all of it. Also the spend it read.
+export async function draftSessionBudget(context: JobContext, workflow: WorkflowDeps, card: Pick<Card, 'id' | 'funded_usd' | 'severity'>): Promise<{ budgetUsd: number; spentUsd: number }> {
   const [studio, spentMap] = await Promise.all([context.db.getStudioState(), context.db.cardSpend([card.id])]);
   if (studio.paused) throw new DraftStop('studio_paused', 'the studio is paused, so no draft session starts');
   const spent = spentMap.get(card.id) ?? 0;
@@ -274,7 +281,7 @@ export async function draftSessionBudget(context: JobContext, workflow: Workflow
     const stopped = short.find(([, left]) => left < budget);
     if (stopped) throw new DraftStop(stopped[0], `a draft session's budget of ${budget} USD is more than the ${stopped[1]} USD left`);
   }
-  return budget;
+  return { budgetUsd: budget, spentUsd: spent };
 }
 
 // The API refused the studio key: every session after this one would fail the same way, so the studio
@@ -309,8 +316,10 @@ export const draftCard: JobHandler = async (context) => {
   if (director.paused) throw new Error('the Game Director is paused');
   if (director.id === designer.id) throw new Error('the grader cannot be the maker');
 
-  // The card every row of the draft names, opened before any session starts.
+  // The card every row of the draft names, opened before any session starts. A card the open gave
+  // up on (an unfinished new card rejected, or a backlog card passed over) is told to the board once.
   const opened: DraftTarget = await context.db.openDraftCard(context.run.id);
+  for (const gone of opened.gaveUp) await context.alert.notifyOnce(`draft_gave_up:${gone.cardId}`, gaveUpMessage(gone));
   const card = { id: opened.cardId, funded_usd: opened.card.funded_usd, severity: opened.card.severity };
   const target: TargetContext =
     opened.kind === 'backlog'
@@ -343,20 +352,48 @@ export const draftCard: JobHandler = async (context) => {
   // the scratch checkout it runs in.
   const repo: RepoContext | null = managed ? { mount: REPO_MOUNT, sha: workspace.baseSha } : null;
   const repoSha = managed ? workspace.baseSha : null;
+
+  // The run gives the card up: a new card is rejected and a backlog card left as it was, so the next
+  // run takes another card; the board hears once.
+  const giveUp = async (reason: string, extra: Record<string, unknown> = {}) => {
+    const rejected = await withdrawn(context, opened);
+    await context.alert.notifyOnce(
+      `draft_withdrawn:${card.id}`,
+      `The card supply's draft of card ${shortId(card.id)} was withdrawn (${reason}): ${rejected ? 'the new card is rejected, its spend kept' : 'the backlog card is left as it was'}, and the next run drafts another card.`,
+    );
+    return { result: 'withdrawn', reason, ...extra, ...about, card_rejected: rejected, base_sha: workspace.baseSha, rounds };
+  };
+  // A session's budget, or the stop that keeps it from starting. Too little left under the per-card
+  // maximum gives the card up; any other stop (the money, a pause) fails the run and leaves the card.
+  const budgetOrStop = async (pending: string | null): Promise<{ budgetUsd: number; spentUsd: number } | { gaveUp: Record<string, unknown> }> => {
+    try {
+      return await draftSessionBudget(context, workflow, card);
+    } catch (error) {
+      if (!(error instanceof DraftStop)) throw error;
+      if (pending) await context.db.withdrawCardDraft(pending, [`stopped_${error.reason}`]);
+      if (error.reason === 'card_max') return { gaveUp: await giveUp('card_max', { detail: error.message }) };
+      throw error;
+    }
+  };
+
   try {
     for (let round = 1; round <= MAX_ROUNDS; round += 1) {
-      const designerBudget = await draftSessionBudget(context, workflow, card);
+      const forDesigner = await budgetOrStop(null);
+      if ('gaveUp' in forDesigner) return forDesigner.gaveUp;
       const made: RoleSessionResult<CardDraft> = await session<CardDraft>(
         {
           role: designer,
           runId: context.run.id,
           label: `designer-${round}`,
           worktree: workspace.path,
-          prompt: designerPrompt({ runId: context.run.id, round, target, repo, budgetUsd: designerBudget, floor: input.floor, openCards, executors, cardMaxUsd: studio.card_max_usd, feedback }, workflow.typed),
+          prompt: designerPrompt(
+            { runId: context.run.id, round, target, repo, budgetUsd: forDesigner.budgetUsd, spentUsd: forDesigner.spentUsd, floor: input.floor, openCards, executors, cardMaxUsd: studio.card_max_usd, feedback },
+            workflow.typed,
+          ),
           schema: 'card-draft',
           repoSha,
         },
-        designerBudget,
+        forDesigner.budgetUsd,
       );
       if (!made.ok) {
         // An answer that is not one valid draft is the schema check's refusal; any other failure is
@@ -379,20 +416,25 @@ export const draftCard: JobHandler = async (context) => {
         estimate_usd: draft.estimate_usd,
       };
       const recorded = await context.db.recordCardDraft(card.id, context.run.id, designer.id, fields, made.ref);
-      const checked = await checkDraft(draft, { readMain: (file) => workspace.readMain(file), scanText: workflow.scanText, cardMaxUsd: studio.card_max_usd, roles });
+      // The grading's budget first: the estimate check counts the drafting spend so far and the least a
+      // grading needs, and the grading may spend only what the estimate leaves under the maximum.
+      const forDirector = await budgetOrStop(recorded.id);
+      if ('gaveUp' in forDirector) return forDirector.gaveUp;
+      const checked = await checkDraft(draft, {
+        readMain: (file) => workspace.readMain(file),
+        scanText: workflow.scanText,
+        cardMaxUsd: studio.card_max_usd,
+        draftingUsd: forDirector.spentUsd,
+        gradingUsd: DRAFT_SESSION_MIN_USD,
+        roles,
+      });
       if (!checked.ok) {
         await context.db.withdrawCardDraft(recorded.id, [`check_${checked.check}`]);
         rounds.push({ round, draft_id: recorded.id, draft: summary(draft), check: { name: checked.check, detail: checked.detail }, verdict: null });
         feedback = { kind: 'refused', check: checked.check, detail: checked.detail, draft };
         continue;
       }
-      let directorBudget: number;
-      try {
-        directorBudget = await draftSessionBudget(context, workflow, card);
-      } catch (error) {
-        if (error instanceof DraftStop) await context.db.withdrawCardDraft(recorded.id, [`stopped_${error.reason}`]);
-        throw error;
-      }
+      const directorBudget = Math.min(forDirector.budgetUsd, Math.floor(round4(studio.card_max_usd - forDirector.spentUsd - draft.estimate_usd) * 100) / 100);
       const graded: RoleSessionResult<DraftVerdict> = await session<DraftVerdict>(
         {
           role: director,
@@ -413,21 +455,37 @@ export const draftCard: JobHandler = async (context) => {
       const verdict: DraftVerdict = graded.value;
       rounds.push({ round, draft_id: recorded.id, draft: summary(draft), check: null, verdict });
       if (verdict.result === 'approved') {
+        // Approval raises the card's target by its drafting spend; a total over the per-card maximum
+        // is refused there, so it is withdrawn here first and the card given up.
+        const spentUsd = (await context.db.cardSpend([card.id])).get(card.id) ?? 0;
+        const totalUsd = draftTotalUsd(draft.estimate_usd, spentUsd);
+        if (totalUsd > studio.card_max_usd) {
+          await context.db.withdrawCardDraft(recorded.id, ['over_card_max']);
+          return giveUp('over_card_max', { estimate_usd: draft.estimate_usd, draft_spend_usd: spentUsd, total_usd: totalUsd });
+        }
         const cardId = await context.db.approveCardDraft(recorded.id, director.id, graded.ref, { result: verdict.result, reason_codes: verdict.reason_codes, round });
-        return { result: 'approved', ...about, card_id: cardId, draft_id: recorded.id, base_sha: workspace.baseSha, rounds };
+        return { result: 'approved', ...about, card_id: cardId, draft_id: recorded.id, estimate_usd: draft.estimate_usd, draft_spend_usd: spentUsd, funding_target_usd: totalUsd, base_sha: workspace.baseSha, rounds };
       }
       await context.db.withdrawCardDraft(recorded.id, verdict.reason_codes);
-      if (verdict.result === 'flagged') {
-        return { result: 'withdrawn', reason: 'flagged', reason_codes: verdict.reason_codes, ...about, card_rejected: await withdrawn(context, opened), base_sha: workspace.baseSha, rounds };
-      }
+      if (verdict.result === 'flagged') return giveUp('flagged', { reason_codes: verdict.reason_codes });
       feedback = { kind: 'revise', reason_codes: verdict.reason_codes, note: verdict.note ?? null, draft };
     }
-    const reason = rounds.every((record) => record.draft_id === null) ? 'no_valid_draft_in_three_rounds' : 'no_approval_in_three_rounds';
-    return { result: 'withdrawn', reason, ...about, card_rejected: await withdrawn(context, opened), base_sha: workspace.baseSha, rounds };
+    return giveUp(rounds.every((record) => record.draft_id === null) ? 'no_valid_draft_in_three_rounds' : 'no_approval_in_three_rounds');
   } finally {
     await workspace.close();
   }
 };
+
+// The board's line for a card the open gave up on.
+export function gaveUpMessage(gone: GaveUpTarget): string {
+  const why =
+    gone.why === 'card_max'
+      ? 'its drafting spend leaves less than one session under the per-card maximum'
+      : gone.why === 'failed_twice'
+        ? 'two draft runs on it failed after spending on it'
+        : 'a draft on it was withdrawn';
+  return `The card supply gave up on card ${shortId(gone.cardId)}: ${why}. ${gone.rejected ? 'The new card is rejected, its spend kept.' : 'The backlog card is passed over until it changes.'} The supply drafts another card.`;
+}
 
 // A withdrawn draft rejects the new card its run opened (failing_check draft_withdrawn, its spend kept
 // on the ledger) and leaves a backlog card as it was. Whether a card was rejected.
