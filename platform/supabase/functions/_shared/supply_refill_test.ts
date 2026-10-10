@@ -127,7 +127,8 @@ async function studio() {
       `insert into public.job_runs (job_name, idem_key, origin, status, card_id, started_at) values ('draft_card', gen_random_uuid()::text, 'schedule', 'running', $1, now()) returning id`,
       [card],
     )).id;
-  const open = async (run: string) => (await row<{ r: { card_id: string; kind: string; opened: string; card: Row } }>(`select public.open_draft_card($1) as r`, [run])).r;
+  const open = async (run: string) =>
+    (await row<{ r: { card_id: string; kind: string; opened: string; card: Row; gave_up: Row[] } }>(`select public.open_draft_card($1) as r`, [run])).r;
   const fields = (over: Row = {}): Row => ({
     title: "Gatherers cost 11",
     summary: "The gatherer costs one more to build.",
@@ -259,6 +260,7 @@ Deno.test("open_draft_card opens the card first: the next backlog card, or a new
         kind: "backlog",
         opened: "backlog",
         card: { title: "Show the next unlock", summary: "A backlog summary.", intent: "It is not built yet.", horizon: "next", rank: 1, funded_usd: 0, severity: null },
+        gave_up: [],
       });
       assertEquals((await b.row<{ n: number }>(`select count(*)::int as n from public.cards`)).n, before);
     });
@@ -418,7 +420,8 @@ Deno.test("enqueue_supply_draft queues one scheduled draft_card run while the su
       const second = await s.enqueue();
       assertEquals(second.queued, true);
       await s.db.query(`update public.job_runs set status = 'failed', reason = 'insufficient_balance', finished_at = now() where id = $1`, [second.run_id]);
-      assertEquals(await s.enqueue(), { queued: false, reason: "daily_limit", runs_today: 2 });
+      const limited = await s.enqueue();
+      assertEquals([limited.queued, limited.reason, limited.runs_today, limited.short], [false, "daily_limit", 2, true]);
       // Yesterday's runs, in New York, do not count.
       await s.db.exec(`update public.job_runs set created_at = (((now() at time zone 'America/New_York')::date)::timestamp at time zone 'America/New_York') - interval '1 minute' where job_name = 'draft_card'`);
       assertEquals((await s.enqueue()).queued, true);
@@ -488,6 +491,129 @@ Deno.test("studio_ranking is retired: no run of it can be queued by the board or
   }
 });
 
+Deno.test("a card is given up on once its spend leaves less than a session under the card maximum, or two runs failed after spending on it, until it changes", OPTS, async (t) => {
+  const s = await studio();
+  try {
+    // A per-card maximum of $1 and the 0.35 a session needs: $0.70 of spend leaves too little.
+    await s.db.exec(`update public.studio_state set card_max_usd = 1 where id = 1`);
+    const spend = async (card: string, usd: number, key: string) =>
+      await s.db.query(`select public.record_usage($1, $2, 'model-id', 100, 0, 10, $3, 'studio', $4)`, [card, s.roles.designer, usd, key]);
+    const exhausted = async (card: string) => (await s.row<{ why: string | null }>(`select public.draft_target_exhausted(c) as why from public.cards c where c.id = $1`, [card])).why;
+    const next = async () => (await s.row<{ id: string | null }>(`select public.next_backlog_card() as id`)).id;
+    // A draft run on the card that fails, having spent on it (or not).
+    const failedRun = async (card: string, spent: number | null, key: string) => {
+      const run = await s.running(card);
+      await s.open(run);
+      if (spent !== null) await spend(card, spent, key);
+      await s.db.query(`select public.finish_job_run($1, 'failed', 'the Game Designer''s session failed: the model call failed', null)`, [run]);
+    };
+    const spentOut = await s.backlog("Spent out", { rank: 1 });
+    const failing = await s.backlog("Fails twice", { rank: 2 });
+    const freeFails = await s.backlog("Fails for free", { rank: 3 });
+
+    await t.step("its spend leaving less than a session under the per-card maximum: card_max, passed over", async () => {
+      assertEquals(await s.row<{ m: string }>(`select public.draft_session_min_usd()::text as m`), { m: "0.35" });
+      await spend(spentOut, 0.7, "spent-out");
+      assertEquals(await exhausted(spentOut), "card_max");
+      assertEquals(await next(), failing);
+    });
+
+    await t.step("two failed runs that spent on it: failed_twice; runs that failed before spending do not count", async () => {
+      await failedRun(failing, 0.05, "fail-1");
+      assertEquals(await exhausted(failing), null, "one failure is not enough");
+      await failedRun(failing, 0.05, "fail-2");
+      assertEquals(await exhausted(failing), "failed_twice");
+      for (const key of ["free-1", "free-2", "free-3"]) await failedRun(freeFails, null, key);
+      assertEquals(await exhausted(freeFails), null, "a run that spent nothing is not the card's failure");
+      assertEquals(await next(), freeFails);
+    });
+
+    await t.step("a backlog card is eligible again once its content changes; its spend still bounds it", async () => {
+      await s.db.query(`update public.cards set intent = 'It is not built yet. The board narrowed it.' where id = $1`, [failing]);
+      assertEquals(await exhausted(failing), null);
+      await s.db.query(`update public.cards set intent = 'It is not built yet. The board narrowed it.' where id = $1`, [spentOut]);
+      assertEquals(await exhausted(spentOut), "card_max");
+    });
+
+    await t.step("open_draft_card rejects an unfinished new card given up on, lists it and the passed-over backlog cards, and opens another", async () => {
+      // The backlog cards out of the way, so the run opens a new card.
+      await s.db.exec(`update public.cards set board_work = true where source = 'board' and id <> '${spentOut}'`);
+      const first = await s.running();
+      const opened = await s.open(first);
+      assertEquals([opened.kind, opened.opened], ["new", "new"]);
+      await spend(opened.card_id, 0.7, "new-spent-out");
+      await s.db.query(`select public.finish_job_run($1, 'failed', 'card_max: too little left', null)`, [first]);
+      const again = await s.open(await s.running());
+      assert(again.card_id !== opened.card_id, "another card is opened");
+      assertEquals(again.opened, "new");
+      assertEquals(again.gave_up, [
+        { card_id: opened.card_id, kind: "new", why: "card_max", rejected: true },
+        { card_id: spentOut, kind: "backlog", why: "card_max", rejected: false },
+      ]);
+      const c = await s.cardRow(opened.card_id);
+      assertEquals([c.stage, c.failing_check, c.actual_usd], ["rejected", "draft_withdrawn", "0.7000"]);
+    });
+  } finally {
+    await s.close();
+  }
+});
+
+Deno.test("approval raises the card's estimate and funding target by its drafting spend, rounded up to the cent, and refuses a total over the card maximum", OPTS, async (t) => {
+  const s = await studio();
+  try {
+    await t.step("estimate 2.50 and $0.123 of drafting spend: the card's estimate and target are 2.63", async () => {
+      const run = await s.running();
+      const card = (await s.open(run)).card_id;
+      await s.db.query(`select public.record_usage($1, $2, 'model-id', 100, 0, 10, 0.123, 'studio', 'drafting')`, [card, s.roles.designer]);
+      const d = await s.draft(card, run);
+      assertEquals(await s.approve(d.id), card);
+      const c = await s.cardRow(card);
+      assertEquals([c.estimate_usd, c.funding_target_usd, c.actual_usd], ["2.6300", "2.6300", "0.1230"]);
+      const a = await s.row<{ verdict: Row; content_sha256: string }>(`select verdict, content_sha256 from public.card_approvals where card_id = $1`, [card]);
+      assertEquals([a.verdict.graded_sha256, a.verdict.draft_spend_usd], [d.content_sha256, 0.123]);
+      assertEquals(a.content_sha256, (await s.row<{ h: string }>(`select public.card_content_hash($1) as h`, [card])).h);
+      assert(a.content_sha256 !== d.content_sha256, "the approval names the card as approved, the target raised");
+      assertEquals(await s.isPublic(card), true);
+      assertEquals((await s.rows<{ id: string }>(`select public.deal_due_cards() as id`)).map((r) => r.id), [card]);
+      // The ceiling, 1.5 times the estimate, leaves the build its whole allowance above the drafting spend.
+      assertEquals((await s.row<{ room: string }>(`select (least(1.5 * estimate_usd, 25) - actual_usd)::numeric(12,4)::text as room from public.cards where id = $1`, [card])).room, "3.8220");
+    });
+
+    await t.step("a total over the per-card maximum is refused and the card is left as it was", async () => {
+      await s.db.exec(`update public.studio_state set card_max_usd = 3 where id = 1`);
+      const run = await s.running();
+      const card = (await s.open(run)).card_id;
+      await s.db.query(`select public.record_usage($1, $2, 'model-id', 100, 0, 10, 0.6, 'studio', 'drafting-2')`, [card, s.roles.designer]);
+      const d = await s.draft(card, run);
+      await s.refuses(`select public.approve_card_draft($1, $2, 'grader-over', '{"result":"approved"}'::jsonb)`, "come to $3.1000, over the per-card maximum $3.0000", [d.id, s.roles.director]);
+      const c = await s.cardRow(card);
+      assertEquals([c.funding_target_usd, c.opens_at, c.stage], ["0.0000", null, "proposed"]);
+    });
+  } finally {
+    await s.close();
+  }
+});
+
+Deno.test("supply_draft_check answers whether the supply is short and why no run may be queued, and writes nothing", OPTS, async () => {
+  const s = await studio();
+  try {
+    const check = async () => (await s.row<{ r: Row }>(`select public.supply_draft_check() as r`)).r;
+    const runs = async () => (await s.row<{ n: number }>(`select count(*)::int as n from public.job_runs`)).n;
+    const before = await runs();
+    assertEquals([(await check()).short, (await check()).reason], [true, null]);
+    await s.db.query(`update public.roles set paused = true where id = $1`, [s.roles.designer]);
+    assertEquals([(await check()).short, (await check()).reason], [true, "role_paused"]);
+    await s.db.query(`update public.roles set paused = false where id = $1`, [s.roles.designer]);
+    await s.db.exec(`update public.studio_state set draft_runs_per_day = 0 where id = 1`);
+    assertEquals([(await check()).short, (await check()).reason, (await check()).runs_today], [true, "daily_limit", 0]);
+    await s.db.exec(`update public.studio_state set card_floor_open = 0, card_floor_big = 0, card_floor_small = 0 where id = 1`);
+    assertEquals([(await check()).short, (await check()).reason], [false, "daily_limit"]);
+    assertEquals(await runs(), before);
+  } finally {
+    await s.close();
+  }
+});
+
 Deno.test("every new function is the service role's, and the migration runs twice", OPTS, async () => {
   const s = await studio();
   try {
@@ -500,6 +626,9 @@ Deno.test("every new function is the service role's, and the migration runs twic
       `select public.card_from_draft_onto(null::public.cards, '{}'::jsonb, null)`,
       `select public.draft_target_kind(null::public.cards, null)`,
       `select public.draft_card_answer(gen_random_uuid(), 'new', 'new')`,
+      `select public.draft_target_exhausted(null::public.cards)`,
+      `select public.draft_session_min_usd()`,
+      `select public.supply_draft_check()`,
     ];
     for (const role of ["anon", "authenticated"]) {
       for (const call of calls) await s.asRole(role, () => s.refuses(call, "permission denied"));
