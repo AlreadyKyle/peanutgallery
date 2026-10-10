@@ -20,13 +20,15 @@
 //
 // A card whose green gate run uploaded design-frames with changed frames is visual
 // (docs/specs/design-review.md): before the merge lock, a Director reviews its frames (visual-review.ts)
-// while a board member is signed in, and the card waits at gated until one is. All pass records a
+// with no board member needed, unattended on the studio's Console credit billed to the card, inside
+// VISUAL_REVIEW_MAX_USD, the claim's budget and the card's ceiling (reviewBudget). All pass records a
 // visual approval and merges; a revise moves the card back to building for a revision session given
 // only the failing criteria, frame names and reason codes, and only what the claim's budget still
 // holds, which is squashed with the change into one commit on the base and gated again, at most twice
 // (cards.review_rounds); after two rounds an
 // all-ages revise rejects the card as a gate failure does, and any other open criterion merges with
-// its verdict recorded. A review that cannot give a verdict is an infrastructure stop.
+// its verdict recorded. A review that cannot give a verdict is an infrastructure stop; one the API
+// refused for credit or at the tier cap pauses the studio and the card, as a build session does.
 //
 // A stop the card did not cause is never a rejection (docs/specs/money-safety.md): a gate that never
 // started or never finished, one GitHub cancelled or could not start, a failure main already had at the
