@@ -35,6 +35,13 @@ export function formatPercent(multiplier: number): string {
   return `${Math.round((multiplier - 1) * 100)}%`;
 }
 
+export function formatDuration(seconds: number): string {
+  const total = Math.max(1, Math.ceil(seconds));
+  if (total < 60) return `${total}s`;
+  if (total < 3600) return `${Math.floor(total / 60)}m ${total % 60}s`;
+  return `${Math.floor(total / 3600)}h ${Math.floor((total % 3600) / 60)}m`;
+}
+
 export function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 }

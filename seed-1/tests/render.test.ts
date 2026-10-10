@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
-import { fill, formatDust, formatPercent, formatRate, groupThousands } from '../render/format';
+import { fill, formatDuration, formatDust, formatPercent, formatRate, groupThousands } from '../render/format';
 import { parseStrings } from '../render/strings';
 import { LIVE_CONFIG_DIR, LIVE_CONTENT_DIR } from './paths';
 
@@ -40,6 +40,18 @@ describe('number formatting', () => {
   });
 });
 
+describe('formatDuration', () => {
+  it('rounds up to whole seconds and picks the unit by size', () => {
+    expect(formatDuration(0.2)).toBe('1s');
+    expect(formatDuration(59)).toBe('59s');
+    expect(formatDuration(60)).toBe('1m 0s');
+    expect(formatDuration(200)).toBe('3m 20s');
+    expect(formatDuration(3599)).toBe('59m 59s');
+    expect(formatDuration(3600)).toBe('1h 0m');
+    expect(formatDuration(7530)).toBe('2h 5m');
+  });
+});
+
 describe('content/strings.json', () => {
   const raw = JSON.parse(readFileSync(join(LIVE_CONTENT_DIR, 'strings.json'), 'utf8')) as unknown;
 
@@ -48,6 +60,7 @@ describe('content/strings.json', () => {
     expect(strings.title).toBe('Dust');
     expect(strings.labels.unlockedCount).toContain('{unlocked}');
     expect(strings.labels.nextUnlock).toContain('{name}');
+    expect(strings.labels.nextUnlockTime).toContain('{time}');
     expect(strings.effects.multiplier).toContain('{percent}');
   });
 

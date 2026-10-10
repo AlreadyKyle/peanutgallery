@@ -11,6 +11,7 @@
     "unlocks": "Unlocks",
     "unlockedCount": "{unlocked} of {total} unlocked",
     "nextUnlock": "Next: {name} at {amount} dust",
+    "nextUnlockTime": "{time} to go",
     "allUnlocked": "Every unlock is open.",
     "unlocksEarned": "{count} unlocks earned"
   },

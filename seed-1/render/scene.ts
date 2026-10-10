@@ -11,7 +11,7 @@ import {
 } from '../sim/sim';
 import { serializeState } from '../sim/save';
 import type { SimState, UnlockRow } from '../sim/types';
-import { fill, formatDust, formatPercent, formatRate } from './format';
+import { fill, formatDuration, formatDust, formatPercent, formatRate } from './format';
 import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
@@ -67,6 +67,7 @@ export class DustScene extends Phaser.Scene {
   private rateText!: Phaser.GameObjects.Text;
   private unlockCountText!: Phaser.GameObjects.Text;
   private nextUnlockText!: Phaser.GameObjects.Text;
+  private nextUnlockTimeText!: Phaser.GameObjects.Text;
   private progressBar!: Phaser.GameObjects.Graphics;
   private progressTop = 0;
   private unitsTop = 0;
@@ -163,12 +164,13 @@ export class DustScene extends Phaser.Scene {
     this.unlockCountText = this.add.text(SCREEN_WIDTH - MARGIN, top, '', textStyle(12, COLORS.muted)).setOrigin(1, 0);
     let y = top + 22;
     this.nextUnlockText = this.add.text(MARGIN, y, '', textStyle(13, COLORS.text));
+    this.nextUnlockTimeText = this.add.text(SCREEN_WIDTH - MARGIN, y + 1, '', textStyle(12, COLORS.muted)).setOrigin(1, 0);
     y += 20;
     this.progressTop = y;
     this.progressBar = this.add.graphics();
     y += 14;
     this.unlockListTop = y;
-    this.unlockSection.add([heading, this.unlockCountText, this.nextUnlockText, this.progressBar]);
+    this.unlockSection.add([heading, this.unlockCountText, this.nextUnlockText, this.nextUnlockTimeText, this.progressBar]);
     for (let i = 0; i < MAX_UNLOCK_LINES; i += 1) {
       const dot = this.add.circle(MARGIN + 6, y + 9, 5, COLORS.bar).setStrokeStyle(1, COLORS.bar);
       const label = this.add.text(MARGIN + 18, y, '', textStyle(12, COLORS.muted));
@@ -217,8 +219,14 @@ export class DustScene extends Phaser.Scene {
     this.progressBar.clear();
     if (next === null) {
       this.setText(this.nextUnlockText, strings.labels.allUnlocked);
+      this.nextUnlockTimeText.setVisible(false);
     } else {
       this.setText(this.nextUnlockText, fill(strings.labels.nextUnlock, { name: next.name, amount: formatDust(next.atTotalDust) }));
+      const seconds = (next.atTotalDust - state.totalDust) / ratePerSecond(state, config);
+      this.setText(this.nextUnlockTimeText, fill(strings.labels.nextUnlockTime, { time: formatDuration(seconds) }));
+      // Never draw over the Next text: hide the time if the two would touch.
+      const fits = this.nextUnlockText.x + this.nextUnlockText.width + 8 <= this.nextUnlockTimeText.x - this.nextUnlockTimeText.width;
+      this.nextUnlockTimeText.setVisible(fits);
       const share = Math.min(1, state.totalDust / next.atTotalDust);
       this.progressBar.fillStyle(COLORS.panel, 1);
       this.progressBar.fillRect(MARGIN, this.progressTop, CONTENT_WIDTH, 8);

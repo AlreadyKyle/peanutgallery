@@ -11,6 +11,7 @@ export interface Strings {
     unlocks: string;
     unlockedCount: string;
     nextUnlock: string;
+    nextUnlockTime: string;
     allUnlocked: string;
     unlocksEarned: string;
   };
@@ -32,6 +33,7 @@ const LABEL_KEYS = [
   'unlocks',
   'unlockedCount',
   'nextUnlock',
+  'nextUnlockTime',
   'allUnlocked',
   'unlocksEarned',
 ] as const;
