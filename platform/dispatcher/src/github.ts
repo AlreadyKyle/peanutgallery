@@ -14,7 +14,6 @@ export interface GitHubOptions {
   signal?: AbortSignal;
 }
 
-export const GATE_CHECK_NAME = 'gate';
 export const REQUEST_TIMEOUT_MS = 30_000;
 const API_BASE = 'https://api.github.com';
 

@@ -18,8 +18,14 @@ if ! deno_ok && ! npm install -g "deno@${DENO_VERSION#v}" > /dev/null 2>&1; then
     echo "cloud-setup: Deno $DENO_VERSION not installed; pnpm test:functions will fail" >&2
   fi
 fi
-# The cloud image ships Chromium under PLAYWRIGHT_BROWSERS_PATH; download it only when it is missing.
-if ! ls "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"/chromium-* > /dev/null 2>&1; then
-  pnpm --filter @backseat/site exec playwright install --with-deps chromium \
-    || echo "cloud-setup: Playwright Chromium not installed; e2e will fail" >&2
+# Playwright's Chromium comes from cdn.playwright.dev, which the Limited network blocks. When the download
+# fails, the Playwright configs and live-check.mjs launch the newest Chromium the cloud image ships
+# instead, through PW_CHROMIUM_PATH.
+if ! pnpm --filter @backseat/site exec playwright install chromium > /dev/null 2>&1; then
+  chrome=$(ls -d "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -1)
+  if [ -n "$chrome" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    echo "export PW_CHROMIUM_PATH=\"$chrome\"" >> "$CLAUDE_ENV_FILE"
+  else
+    echo "cloud-setup: no Playwright Chromium; e2e will fail" >&2
+  fi
 fi

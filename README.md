@@ -16,7 +16,7 @@ Backseat is the working name. The package names (`@backseat/*`) still use it.
 | Dispatcher | GitHub Actions in this repository, unattended | Since 6 October 2026 it runs on GitHub Actions, one run of up to about six hours after another (`docs/specs/actions-host.md`, `docs/PLAN.md` §10 decision 61), and card sessions run as Claude Managed Agents sessions. The founder's Mac is retired as its host, and attended mode leaves the dispatcher (`docs/specs/unattended-roles.md`, §10 decision 66). An always-on paid host waits in `docs/BACKLOG.md`; the server's image, units and runbook are kept for that. |
 | Gate | GitHub Actions workflow `gate` | Runs on every pull request and every push to `main`. |
 
-The repository is private. `main` has no branch protection; the dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha.
+The repository is public (since 6 October 2026). `main` has no branch protection; the dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha.
 
 ## Repository map
 
@@ -57,16 +57,19 @@ Install with `pnpm install --frozen-lockfile`. The dispatcher, the seed and the 
 
 ## Commands
 
-`pnpm verify` at the repository root is the floor for every change. It runs, in order:
+`pnpm verify` at the repository root is the floor for every change. It runs these checks at once (`scripts/verify.sh`) and prints `VERIFY PASS` when all of them pass:
 
 1. `pnpm typecheck`: every package's typecheck.
-2. `pnpm test`: every package's tests (site, board, dispatcher, gate, supabase, seed-1).
+2. The explainer's and the gate's tests. The other packages' tests run inside the two ship-gate dry runs.
 3. `pnpm test:agents`: the role specs and prompts.
 4. `pnpm test:ops`: the ops scripts and env file.
 5. `pnpm test:functions`: the edge function and the migrations in PGlite, under Deno.
-6. `pnpm gate:dry-run`: the ship gate for `seed-1` and `platform`, locally.
+6. The ship gate's dry run for `seed-1` and for `platform`, locally.
 7. `pnpm secret-scan`: tracked files.
 8. `pnpm test:docs`: the docs drift guard (`docs/docs.test.mjs`).
+9. `pnpm test:rename`: the rename checks.
+
+`pnpm verify:changed` runs only the typecheck and tests of the packages a branch touches, plus the docs, secret and rename checks.
 
 Per package:
 
@@ -92,7 +95,7 @@ Per package:
 
 ## How work is done here
 
-- **Spec first.** Every change has a spec under `docs/specs/`, copied from [`TEMPLATE.md`](docs/specs/TEMPLATE.md). A change is done only when every line of its Verification section has been run and the output quoted.
+- **Spec first.** A new feature, or any change to the kernel, money, migrations or the gate, has a spec under `docs/specs/`, copied from [`TEMPLATE.md`](docs/specs/TEMPLATE.md). A bug fix, a small tooling change or a copy fix needs none: its pull request description is the contract. A change is done only when every line of its Verification section has been run and the output quoted.
 - **Production needs the board.** Migrations, function deploys, Stripe endpoint changes and anything else that touches production run only with the board's explicit allow. A spec lists them under "Production steps (need the board's allow)".
 - **Pull requests.** Every change reaches `main` through a pull request with the `gate` check green. The one exception is the revert commit the dispatcher writes after a merged card fails its deploy or smoke.
 - **The kernel.** The files listed in `platform/gate/kernel-paths.txt` enforce the rules no card can change. No agent may edit them; the board does.
