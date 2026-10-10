@@ -1,89 +1,64 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Board, BOARD_LEDE, CANCEL_CONFIRM, FILLED_FROM_CONTROLLER, NO_CARDS, NOT_ON_BOARD, SECOND_FACTOR_LINE, TIER_CAP_LABEL } from './Board';
+import { Board, BOARD_LEDE, CANCEL_CONFIRM, NOT_ON_BOARD, SECOND_FACTOR_LINE } from './Board';
 import {
-  BOARD_CARD_COLUMNS,
-  BOARD_SESSION_TTL_MIN,
+  ACTIONABLE_CARD_COLUMNS,
+  CARD_EVENT_COLUMNS,
   DISPATCHER_STALE_MS,
-  HEARTBEAT_MS,
+  FINDING_COLUMNS,
+  RECENT_CARD_COLUMNS,
   ROLE_COLUMNS,
-  sessionExpiry,
   STUDIO_STATE_POLL_MS,
 } from './lib/board';
-import { formatClock, formatDateTime } from './lib/format';
-import { BOARD_PULLS_URL, FINDING_COLUMNS } from './lib/needs';
-import { NON_CARD_PULLS_LINE, NOTHING_NEEDS_YOU } from './NeedsYou';
+import { formatDateTime } from './lib/format';
+import { CAPS_BY_SQL } from './Status';
 
-type RpcCall = { name: string; args: Record<string, unknown> | undefined };
+// The panel's database calls the old page made and this one never does. Each name is spelt in parts so
+// the spec's grep of platform/board/src (docs/specs/optional-board.md, Verification) finds no call.
+const rpcName = (...words: string[]) => words.join('_');
+const RETIRED_RPCS = [
+  rpcName('board', 'heartbeat'),
+  rpcName('board', 'needs', 'you'),
+  rpcName('set', 'agent', 'mode'),
+  rpcName('set', 'card', 'horizon'),
+  rpcName('set', 'card', 'veto'),
+  rpcName('set', 'cooling', 'window'),
+  rpcName('set', 'role', 'pause'),
+  rpcName('set', 'caps'),
+  rpcName('file', 'directive'),
+  rpcName('file', 'note'),
+];
+const STATE_CHANGING_RPCS = ['set_paused', 'file_card', 'cancel_card', 'resume_card', 'record_credit_purchase', 'enqueue_manual_job', 'set_launched', ...RETIRED_RPCS];
 
+type Call = { name: string; args: Record<string, unknown> | undefined };
 type FakeFactor = { id: string; factor_type: 'totp'; status: 'verified' | 'unverified' };
-
-type FakeStudio = {
-  paused: boolean;
-  agent_mode: string;
-  launched_at: string | null;
-  dispatcher_seen_at: string | null;
-  daily_cap_usd: number;
-  card_max_usd: number;
-  agent_hourly_rate_usd?: number;
-  monthly_cap_usd?: number;
-  credit_studio_daily_cap_usd?: number;
-  anthropic_tier_cap_usd?: number | null;
-  platform_lane_open?: boolean;
-  cooling_window_minutes?: number;
-};
-
-type FakeCard = {
-  id: string;
-  title: string;
-  stage: string;
-  horizon: string | null;
-  rank: number | null;
-  folder: string;
-  lane: string;
-  funding_target_usd: string;
-  funded_usd: string;
-  estimate_usd: string;
-  created_at: string;
-  summary?: string | null;
-  source?: string;
-  drafter_role_id?: string | null;
-  opens_at?: string | null;
-  board_vetoed?: boolean;
-  board_veto_reason?: string | null;
-};
+type Row = Record<string, unknown>;
 
 const fake = vi.hoisted(() => ({
   role: 'board' as string | null,
-  heartbeatFails: false,
   noClient: false,
   signedOut: false,
+  session: null as { user: { id: string; email: string }; access_token: string } | null,
+  // supabase-js's auth listeners: a test delivers SIGNED_IN as another tab's sign-in would.
+  listeners: [] as ((event: string, session: unknown) => void)[],
   otpCalls: [] as Record<string, unknown>[],
-  needs: {} as Record<string, unknown>,
+  studio: {} as Record<string, unknown>,
+  pauseReason: null as string | null,
+  supply: null as Record<string, unknown> | null,
+  cards: [] as Record<string, unknown>[],
+  jobs: [] as Record<string, unknown>[],
+  findings: [] as Record<string, unknown>[],
+  events: [] as Record<string, unknown>[],
   roleRows: [] as Record<string, unknown>[],
-  seenAt: '2026-09-14T12:00:00Z',
-  studio: {} as FakeStudio,
-  cards: [] as FakeCard[],
+  cancelResult: null as Record<string, unknown> | null,
   selects: [] as { table: string; columns: string; filters: string[] }[],
   calls: [] as { name: string; args: Record<string, unknown> | undefined }[],
-  // Supabase Auth MFA: the session's assurance level, the account's factors and every MFA call.
   aal: 'aal2' as 'aal1' | 'aal2',
-  factors: [] as FakeFactor[],
+  factors: [] as { id: string; factor_type: 'totp'; status: 'verified' | 'unverified' }[],
   goodCode: '123456',
   mfaCalls: [] as { name: string; args: Record<string, unknown> | undefined }[],
-  // What cancel_card returns (docs/specs/money-logic.md): the amount it moved on.
-  cancelResult: null as Record<string, unknown> | null,
-  // docs/specs/agent-system-core.md: board_jobs, board_roles and which agent cards card_is_public passes.
-  jobs: [] as Record<string, unknown>[],
-  boardRoles: [] as Record<string, unknown>[],
-  publicCards: [] as string[],
-  // card_supply (docs/specs/studio-reports.md); the default is at the floor, so nothing is short.
-  supply: null as Record<string, unknown> | null,
-  // The open findings rows the board reads (docs/specs/agent-upkeep.md).
-  findings: [] as Record<string, unknown>[],
-  findingsError: null as string | null,
   // An RPC named here is left pending until release() is called, so a test sees a control mid-action.
   held: null as string | null,
   release: () => {},
@@ -91,138 +66,106 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('./lib/supabase', async (importOriginal) => {
   const original = await importOriginal<typeof import('./lib/supabase')>();
-  const session = { user: { email: 'board@mobmachine.games' } };
+  const mfa = (name: string, args: Record<string, unknown> | undefined, data: unknown, error: { message: string } | null = null) => {
+    fake.mfaCalls.push({ name, args });
+    return Promise.resolve({ data, error });
+  };
   const client = {
     auth: {
-      getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : session } }),
+      getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : fake.session } }),
       signInWithOtp: (args: Record<string, unknown>) => {
         fake.otpCalls.push(args);
         return Promise.resolve({ data: {}, error: null });
       },
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      onAuthStateChange: (listener: (event: string, session: unknown) => void) => {
+        fake.listeners.push(listener);
+        return { data: { subscription: { unsubscribe: () => (fake.listeners = fake.listeners.filter((l) => l !== listener)) } } };
+      },
       signOut: () => Promise.resolve({ error: null }),
       mfa: {
-        getAuthenticatorAssuranceLevel: () => {
-          fake.mfaCalls.push({ name: 'getAuthenticatorAssuranceLevel', args: undefined });
-          const verified = fake.factors.some((f) => f.status === 'verified');
-          return Promise.resolve({
-            data: { currentLevel: fake.aal, nextLevel: verified ? 'aal2' : 'aal1', currentAuthenticationMethods: [] },
-            error: null,
-          });
-        },
-        listFactors: () => {
-          fake.mfaCalls.push({ name: 'listFactors', args: undefined });
-          return Promise.resolve({
-            data: { all: [...fake.factors], totp: fake.factors.filter((f) => f.status === 'verified'), phone: [], webauthn: [] },
-            error: null,
-          });
-        },
+        getAuthenticatorAssuranceLevel: () => mfa('getAuthenticatorAssuranceLevel', undefined, { currentLevel: fake.aal }),
+        listFactors: () => mfa('listFactors', undefined, { all: [...fake.factors], totp: fake.factors.filter((f) => f.status === 'verified') }),
         unenroll: (args: { factorId: string }) => {
-          fake.mfaCalls.push({ name: 'unenroll', args });
           fake.factors = fake.factors.filter((f) => f.id !== args.factorId);
-          return Promise.resolve({ data: { id: args.factorId }, error: null });
+          return mfa('unenroll', args, { id: args.factorId });
         },
         enroll: (args: Record<string, unknown>) => {
-          fake.mfaCalls.push({ name: 'enroll', args });
           fake.factors.push({ id: 'f-new', factor_type: 'totp', status: 'unverified' });
-          return Promise.resolve({
-            data: {
-              id: 'f-new',
-              type: 'totp',
-              totp: { qr_code: 'data:image/svg+xml;utf-8,<svg></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/x' },
-            },
-            error: null,
-          });
+          return mfa('enroll', args, { id: 'f-new', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg></svg>', secret: 'JBSWY3DPEHPK3PXP' } });
         },
-        challenge: (args: { factorId: string }) => {
-          fake.mfaCalls.push({ name: 'challenge', args });
-          return Promise.resolve({ data: { id: 'challenge-' + args.factorId, type: 'totp', expires_at: 0 }, error: null });
-        },
+        challenge: (args: { factorId: string }) => mfa('challenge', args, { id: `challenge-${args.factorId}` }),
         verify: (args: { factorId: string; challengeId: string; code: string }) => {
-          fake.mfaCalls.push({ name: 'verify', args });
-          if (args.code !== fake.goodCode) {
-            return Promise.resolve({ data: null, error: { message: 'Invalid TOTP code entered' } });
-          }
+          if (args.code !== fake.goodCode) return mfa('verify', args, null, { message: 'Invalid TOTP code entered' });
           fake.aal = 'aal2';
           fake.factors = fake.factors.map((f) => (f.id === args.factorId ? { ...f, status: 'verified' } : f));
-          return Promise.resolve({ data: { access_token: 'aal2-token' }, error: null });
+          return mfa('verify', args, { access_token: 'aal2-token' });
         },
       },
     },
     rpc: async (name: string, args?: Record<string, unknown>) => {
       fake.calls.push({ name, args });
-      if (name === fake.held) {
-        await new Promise<void>((resolve) => {
-          fake.release = resolve;
-        });
+      if (name === fake.held) await new Promise<void>((done) => (fake.release = done));
+      // The card RPCs change the card as the database does, so the next read gives it back changed.
+      if (name === 'cancel_card' || name === 'resume_card') {
+        fake.cards = fake.cards.map((c) => (c.id === args?.p_card ? { ...c, stage: name === 'cancel_card' ? 'rejected' : 'funded' } : c));
       }
-      if (name === 'board_heartbeat' && fake.heartbeatFails) {
-        return Promise.resolve({ data: null, error: { message: 'heartbeat refused' } });
-      }
-      if (name === 'card_is_public') return Promise.resolve({ data: fake.publicCards.includes(String(args?.p_card)), error: null });
-      // The card RPCs change the card as the database does, so the cards read gives it back changed: a
-      // veto moves a card on now with no money to next, a cancelled card is rejected and leaves the list.
-      if (name === 'set_card_veto' || name === 'cancel_card' || name === 'set_card_horizon') {
-        const id = args?.p_card;
-        fake.cards = fake.cards.map((c) => {
-          if (c.id !== id) return c;
-          if (name === 'cancel_card') return { ...c, stage: 'rejected' };
-          if (name === 'set_card_horizon') return { ...c, horizon: String(args?.p_horizon), rank: (args?.p_rank as number | null) ?? null };
-          const vetoed = args?.p_vetoed === true;
-          return { ...c, board_vetoed: vetoed, board_veto_reason: vetoed ? String(args?.p_reason) : null, horizon: vetoed && c.horizon === 'now' ? 'next' : c.horizon };
-        });
-      }
-      // set_role_pause changes the role, as the database does, so board_roles reads it back changed.
-      if (name === 'set_role_pause') {
-        fake.boardRoles = fake.boardRoles.map((r) =>
-          r.id === args?.p_role ? { ...r, paused: args?.p_paused, paused_reason: args?.p_paused ? args?.p_reason : null } : r,
-        );
-        return Promise.resolve({ data: null, error: null });
+      if (name === 'file_card') {
+        fake.cards = [...fake.cards, { id: 'filed', title: String(args?.p_title), stage: 'proposed', horizon: args?.p_horizon, failing_check: null, updated_at: '2026-10-10T12:00:00Z', estimate_usd: '0.0000' }];
       }
       const data: Record<string, unknown> = {
-        board_jobs: fake.jobs,
-        board_roles: fake.boardRoles,
-        enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
         board_role: fake.role,
-        board_heartbeat: fake.seenAt,
         board_studio_state: fake.studio,
-        board_needs_you: fake.needs,
         card_supply: fake.supply,
-        set_agent_mode: null,
-        set_paused: null,
+        board_jobs: fake.jobs,
         cancel_card: fake.cancelResult,
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
-        file_directive: '4f2c9d1e-7b3a-4e6f-8a90-1c2d3e4f5a6b',
-        file_note: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d',
+        enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
       };
-      return Promise.resolve({ data: data[name] ?? null, error: null });
+      if (name === 'card_supply' && fake.supply === null) return { data: null, error: { message: 'card_supply is unavailable' } };
+      return { data: data[name] ?? null, error: null };
     },
     from: (table: string) => {
-      const record = { table, columns: '', filters: [] as string[] };
-      let only: { column: string; values: string[] } | null = null;
-      fake.selects.push(record);
+      const select = { table, columns: '', filters: [] as string[] };
+      const where: { column: string; values: unknown[] }[] = [];
+      let limit = Infinity;
+      fake.selects.push(select);
       const builder = {
         select(columns: string) {
-          record.columns = columns;
+          select.columns = columns;
           return builder;
         },
-        in(column: string, values: string[]) {
-          record.filters.push(`in ${column} ${values.join(',')}`);
-          only = { column, values };
+        in(column: string, values: unknown[]) {
+          select.filters.push(`in ${column} ${values.join(',')}`);
+          where.push({ column, values });
           return builder;
         },
-        order(column: string) {
-          record.filters.push(`order ${column}`);
+        eq(column: string, value: unknown) {
+          select.filters.push(`eq ${column} ${String(value)}`);
+          where.push({ column, values: [value] });
           return builder;
         },
         is(column: string, value: null) {
-          record.filters.push(`is ${column} ${String(value)}`);
+          select.filters.push(`is ${column} ${String(value)}`);
+          return builder;
+        },
+        order(column: string, options?: { ascending?: boolean }) {
+          select.filters.push(`order ${column} ${options?.ascending === false ? 'desc' : 'asc'}`);
+          return builder;
+        },
+        limit(n: number) {
+          select.filters.push(`limit ${n}`);
+          limit = n;
           return builder;
         },
         returns() {
-          if (table === 'findings' && fake.findingsError !== null) return Promise.resolve({ data: null, error: { message: fake.findingsError } });
-          const cards = fake.cards.filter((c) => only === null || only.values.includes(String(c[only.column as keyof FakeCard])));
-          const data = table === 'cards' ? cards : table === 'public_roles' ? [...fake.roleRows] : table === 'findings' ? [...fake.findings] : [];
+          const tables: Record<string, Record<string, unknown>[]> = {
+            cards: fake.cards,
+            public_roles: fake.roleRows,
+            findings: fake.findings,
+            public_agent_events: fake.events,
+            public_studio: [{ pause_reason: fake.pauseReason }],
+          };
+          const data = (tables[table] ?? []).filter((row) => where.every((w) => w.values.includes(row[w.column]))).slice(0, limit);
           return Promise.resolve({ data, error: null });
         },
       };
@@ -232,41 +175,13 @@ vi.mock('./lib/supabase', async (importOriginal) => {
   return { ...original, getClient: () => (fake.noClient ? null : client) };
 });
 
-function role(id: string, title: string, write_access: boolean): Record<string, unknown> {
-  return { id, title, write_access, state: 'active' };
+const startedAt = new Date('2026-10-10T12:00:00Z');
+
+function card(id: string, title: string, stage: string, more: Row = {}): Row {
+  return { id, title, stage, horizon: 'now', failing_check: null, updated_at: '2026-10-09T10:00:00Z', estimate_usd: '0.0000', ...more };
 }
 
-const ROLE_ROWS = [
-  role('r-platform', 'Platform Builder', true),
-  role('r-director', 'Game Director', true),
-  role('r-builder-a', 'Builder A', true),
-  role('r-host', 'Host', false),
-  { ...role('r-old', 'Builder B', true), state: 'retired' },
-];
-
-const EMPTY_NEEDS = { controller: null, last_credit_purchase: null, incident_reserve_usd: 0, s1_cards: [] };
-
-// docs/specs/agent-system-core.md: two ceiling pauses the rule will not resume and a void card with money.
-const NEEDS_CARDS = {
-  ...EMPTY_NEEDS,
-  rule_blocked: [
-    { id: 'max', title: 'At the maximum', why: 'card_max', actual_usd: 25, card_max_usd: 25 },
-    { id: 'twice', title: 'Paused twice', why: 'resumed_before', actual_usd: 6.75, card_max_usd: 25 },
-    { id: 'vetoed', title: 'Director vetoed', why: 'vetoed', actual_usd: 3, card_max_usd: 25 },
-    { id: 'lane', title: 'Platform code', why: 'closed_lane', actual_usd: 3, card_max_usd: 25 },
-  ],
-  approval_void: [{ id: 'void', title: 'Rewritten', stage: 'proposed', money_usd: 2 }],
-};
-
-const startedAt = new Date('2026-09-14T12:00:00Z');
-const notActive = 'Board session: not active. Keep this page open to run attended agent sessions.';
-
-let visibility: DocumentVisibilityState = 'visible';
-
-function setVisibility(state: DocumentVisibilityState) {
-  visibility = state;
-  document.dispatchEvent(new Event('visibilitychange'));
-}
+const AT_FLOOR = { open: 6, big: 1, small: 5, floor_open: 6, floor_big: 1, floor_small: 1, big_min_usd: '5.0000', small_max_usd: '2.0000' };
 
 async function flush(ms = 0) {
   await act(async () => {
@@ -276,109 +191,51 @@ async function flush(ms = 0) {
 
 async function renderBoard() {
   render(<Board />);
-  // The session, the role and the two-factor state resolve in turn.
-  await flush();
-  await flush();
+  // The session, the role, the two-factor state and the panel's first reads resolve in turn.
+  for (let i = 0; i < 4; i += 1) await flush();
 }
 
-function callsNamed(name: string): RpcCall[] {
-  return fake.calls.filter((call) => call.name === name);
-}
-
-function mfaCallsNamed(name: string): RpcCall[] {
-  return fake.mfaCalls.filter((call) => call.name === name);
-}
-
-const STATE_CHANGING_RPCS = [
-  'set_paused',
-  'set_launched',
-  'set_agent_mode',
-  'file_card',
-  'file_directive',
-  'file_note',
-  'set_caps',
-  'record_credit_purchase',
-  'set_card_horizon',
-  'cancel_card',
-  'resume_card',
-];
-
-/** Every control that needs aal2 is absent. */
-function expectNoSecondFactorControls() {
-  expect(screen.queryByRole('button', { name: 'Pause agents' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Resume agents' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
-  expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'File a card' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'File a directive' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'File a note' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'Set the caps' })).toBeNull();
-  expect(screen.queryByRole('form', { name: 'Record a credit purchase' })).toBeNull();
-  expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
-}
-
-function expectSecondFactorControls() {
-  expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
-  expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
-  expect(screen.getByRole('form', { name: 'File a card' })).toBeTruthy();
-  expect(screen.getByRole('form', { name: 'File a directive' })).toBeTruthy();
-  expect(screen.getByRole('form', { name: 'File a note' })).toBeTruthy();
-  expect(screen.getByRole('form', { name: 'Set the caps' })).toBeTruthy();
-  expect(screen.getByRole('form', { name: 'Record a credit purchase' })).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Cards' })).toBeTruthy();
-  expect(screen.queryByRole('region', { name: 'Two-factor sign-in' })).toBeNull();
-}
-
-async function enterCode(code: string) {
-  fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: code } });
-  fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
-  await flush();
-  await flush();
-}
-
-function activeLine(at: Date): string {
-  return `Board session: active until ${formatClock(sessionExpiry(at))}.`;
-}
+const named = (name: string): Call[] => fake.calls.filter((call) => call.name === name);
+const mfaNamed = (name: string): Call[] => fake.mfaCalls.filter((call) => call.name === name);
+const regions = () => screen.queryAllByRole('region').map((region) => region.getAttribute('aria-label'));
+const form = (name: string) => within(screen.getByRole('form', { name }));
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(startedAt);
   fake.role = 'board';
-  fake.heartbeatFails = false;
   fake.noClient = false;
   fake.signedOut = false;
+  fake.session = { user: { id: 'u-board', email: 'board@mobmachine.games' }, access_token: 'token-1' };
+  fake.listeners = [];
   fake.otpCalls.length = 0;
-  fake.needs = { ...EMPTY_NEEDS };
-  fake.supply = { ...AT_FLOOR };
-  fake.findings = [];
-  fake.findingsError = null;
-  fake.roleRows = [...ROLE_ROWS];
-  fake.seenAt = startedAt.toISOString();
   fake.studio = {
     paused: false,
-    agent_mode: 'attended',
-    launched_at: null,
     dispatcher_seen_at: new Date(startedAt.getTime() - 30_000).toISOString(),
     daily_cap_usd: 100,
     card_max_usd: 25,
   };
+  fake.pauseReason = null;
+  fake.supply = { ...AT_FLOOR };
   fake.cards = [];
-  fake.cancelResult = null;
   fake.jobs = [];
-  fake.boardRoles = [];
-  fake.publicCards = [];
-  fake.held = null;
-  fake.release = () => {};
+  fake.findings = [];
+  fake.events = [];
+  fake.roleRows = [
+    { id: 'r-platform', title: 'Platform Builder', write_access: true, state: 'active' },
+    { id: 'r-director', title: 'Game Director', write_access: true, state: 'active' },
+    { id: 'r-builder-a', title: 'Builder A', write_access: true, state: 'active' },
+    { id: 'r-host', title: 'Host', write_access: false, state: 'active' },
+    { id: 'r-old', title: 'Builder B', write_access: true, state: 'retired' },
+  ];
+  fake.cancelResult = null;
   fake.selects.length = 0;
   fake.calls.length = 0;
   fake.aal = 'aal2';
   fake.factors = [{ id: 'f-1', factor_type: 'totp', status: 'verified' }];
   fake.mfaCalls.length = 0;
-  visibility = 'visible';
-  Object.defineProperty(document, 'visibilityState', {
-    configurable: true,
-    get: () => visibility,
-  });
+  fake.held = null;
+  fake.release = () => {};
 });
 
 afterEach(() => {
@@ -387,945 +244,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Board signed in as a board member', () => {
-  it('heartbeats on load, every 60 s while visible, and on visibilitychange', async () => {
-    await renderBoard();
-    expect(callsNamed('board_heartbeat')).toHaveLength(1);
-    expect(screen.getByText(activeLine(startedAt))).toBeTruthy();
-
-    await flush(HEARTBEAT_MS);
-    expect(callsNamed('board_heartbeat')).toHaveLength(2);
-
-    await act(async () => setVisibility('hidden'));
-    await flush(HEARTBEAT_MS);
-    expect(callsNamed('board_heartbeat')).toHaveLength(2);
-
-    await act(async () => setVisibility('visible'));
-    await flush();
-    expect(callsNamed('board_heartbeat')).toHaveLength(3);
-  });
-
-  it('derives the expiry from the server timestamp, not the client clock', async () => {
-    const serverSeen = new Date('2026-09-14T11:59:00Z');
-    fake.seenAt = serverSeen.toISOString();
-    await renderBoard();
-    expect(screen.getByText(activeLine(serverSeen))).toBeTruthy();
-    expect(screen.queryByText(activeLine(startedAt))).toBeNull();
-  });
-
-  it('reports the session as not active once the TTL passes without a heartbeat', async () => {
-    await renderBoard();
-    await act(async () => setVisibility('hidden'));
-    await flush(BOARD_SESSION_TTL_MIN * 60_000 - 1_000);
-    expect(screen.getByText(activeLine(startedAt))).toBeTruthy();
-    await flush(2_000);
-    expect(screen.getByText(notActive)).toBeTruthy();
-  });
-
-  it('reports the session as not active and shows the error when the heartbeat fails', async () => {
-    fake.heartbeatFails = true;
-    await renderBoard();
-    expect(screen.getByText(notActive)).toBeTruthy();
-    expect(screen.getByText('heartbeat refused')).toBeTruthy();
-  });
-
-  it('sends the pause and resume RPC with the contract argument', async () => {
-    await renderBoard();
-    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
-    await flush();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
-    await flush();
-    expect(callsNamed('set_paused').map((call) => call.args)).toEqual([
-      { p_paused: true },
-      { p_paused: false },
-    ]);
-    expect(screen.getByText('Agents resumed.')).toBeTruthy();
-  });
-
-  it('offers the four pause reasons, sends p_reason only for one that is not the default, and never on resume', async () => {
-    await renderBoard();
-    const select = screen.getByLabelText('Pause reason') as HTMLSelectElement;
-    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
-      ['board', 'Paused by the board'],
-      ['incident', 'A problem we are checking'],
-      ['awaiting_credit', "Waiting for a payout to buy the agents' credit"],
-      ['spend_limit', 'The monthly spend limit'],
-    ]);
-    expect(select.value).toBe('board');
-    fireEvent.change(select, { target: { value: 'incident' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
-    await flush();
-    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
-    await flush();
-    fireEvent.change(select, { target: { value: 'board' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
-    await flush();
-    expect(callsNamed('set_paused').map((call) => call.args)).toEqual([
-      { p_paused: true, p_reason: 'incident' },
-      { p_paused: false },
-      { p_paused: true },
-    ]);
-  });
-
-  it('files a card with the contract argument names and only the card roles as executors', async () => {
-    await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'File a card' }));
-    const executor = form.getByLabelText('Executor') as HTMLSelectElement;
-    // The directors and the Host build no cards, so they are never offered.
-    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A', 'Platform Builder']);
-    expect((form.getByLabelText('Horizon') as HTMLSelectElement).value).toBe('now');
-
-    fireEvent.change(form.getByLabelText('Bucket'), { target: { value: 'game' } });
-    fireEvent.change(form.getByLabelText('Lane'), { target: { value: 'code' } });
-    fireEvent.change(form.getByLabelText('Folder'), { target: { value: 'seed-1' } });
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: ' A second level ' } });
-    fireEvent.change(form.getByLabelText('Public summary'), {
-      target: { value: ' A second level to play once the first is done. ' },
-    });
-    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Add a second stage.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), {
-      target: { value: 'The second level loads.' },
-    });
-    fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '10' } });
-    fireEvent.change(form.getByLabelText('Reason (optional)'), { target: { value: 'Player favourite.' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
-    await flush();
-
-    expect(callsNamed('file_card').map((call) => call.args)).toEqual([
-      {
-        p_bucket: 'game',
-        p_lane: 'code',
-        p_folder: 'seed-1',
-        p_title: 'A second level',
-        p_summary: 'A second level to play once the first is done.',
-        p_intent: 'Add a second stage.',
-        p_acceptance_test: 'The second level loads.',
-        p_funding_target_usd: 10,
-        p_stage: 'proposed',
-        p_executor_role_id: 'r-builder-a',
-        p_board_reason: 'Player favourite.',
-        p_horizon: 'now',
-      },
-    ]);
-    expect(screen.getByText('Card filed as card 1a2b3c4d.')).toBeTruthy();
-  });
-
-  it('files a roadmap card on horizon later with no target', async () => {
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'File a card' });
-    const form = within(formElement);
-    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'later' } });
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Free picks' } });
-    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: 'Choose the next card without paying.' } });
-    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Not built yet.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'Planned.' } });
-    expect((form.getByLabelText('Funding target (USD)') as HTMLInputElement).required).toBe(false);
-    fireEvent.submit(formElement);
-    await flush();
-    const [call] = callsNamed('file_card');
-    expect(call?.args).toMatchObject({ p_title: 'Free picks', p_funding_target_usd: 0, p_horizon: 'later' });
-  });
-
-  it('files a directive with the contract argument names and only write roles as executors', async () => {
-    await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'File a directive' }));
-    const executor = form.getByLabelText('Executor') as HTMLSelectElement;
-    expect([...executor.options].map((option) => option.textContent)).toEqual(['Builder A', 'Platform Builder']);
-
-    fireEvent.change(form.getByLabelText('Bucket'), { target: { value: 'qa' } });
-    fireEvent.change(form.getByLabelText('Lane'), { target: { value: 'code' } });
-    fireEvent.change(form.getByLabelText('Folder'), { target: { value: 'platform' } });
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: ' Fix the meter ' } });
-    fireEvent.change(form.getByLabelText('Intent'), { target: { value: 'The meter shows the pool.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), {
-      target: { value: 'The meter renders the pool balance.' },
-    });
-    fireEvent.change(form.getByLabelText('Estimate (USD)'), { target: { value: '2.50' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Live problem.' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'File a directive' }));
-    await flush();
-
-    expect(callsNamed('file_directive').map((call) => call.args)).toEqual([
-      {
-        p_bucket: 'qa',
-        p_lane: 'code',
-        p_folder: 'platform',
-        p_title: 'Fix the meter',
-        p_intent: 'The meter shows the pool.',
-        p_acceptance_test: 'The meter renders the pool balance.',
-        p_estimate_usd: 2.5,
-        p_board_reason: 'Live problem.',
-        p_executor_role_id: 'r-builder-a',
-      },
-    ]);
-    expect(screen.getByText('Directive filed as card 4f2c9d1e.')).toBeTruthy();
-  });
-
-  it('files a note with the contract argument name', async () => {
-    await renderBoard();
-    fireEvent.change(screen.getByLabelText('Note'), { target: { value: ' Consider a shorter week. ' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'File a note' }));
-    await flush();
-    expect(callsNamed('file_note').map((call) => call.args)).toEqual([
-      { p_text: 'Consider a shorter week.' },
-    ]);
-    expect(screen.getByText('Note filed.')).toBeTruthy();
-  });
-
-  it('accepts a funding target above the per-card spend ceiling, which caps spend and not the target', async () => {
-    fake.studio.card_max_usd = 10;
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'File a card' });
-    const form = within(formElement);
-    const target = form.getByLabelText('Funding target (USD)');
-    expect(target.getAttribute('max')).toBeNull();
-
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'Bigger' } });
-    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: 'A big change.' } });
-    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Costs more.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
-    fireEvent.change(target, { target: { value: '12' } });
-    fireEvent.submit(formElement);
-    await flush();
-
-    expect(screen.getByText('Daily cap $100.00. Card maximum $10.00. No usage tier cap.')).toBeTruthy();
-    expect(callsNamed('file_card').map((call) => call.args?.p_funding_target_usd)).toEqual([12]);
-  });
-
-  it('refuses a blank public summary before calling the database', async () => {
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'File a card' });
-    const form = within(formElement);
-    fireEvent.change(form.getByLabelText('Title'), { target: { value: 'No summary' } });
-    fireEvent.change(form.getByLabelText('Public summary'), { target: { value: '   ' } });
-    fireEvent.change(form.getByLabelText('Intent (for the agents)'), { target: { value: 'Do a thing.' } });
-    fireEvent.change(form.getByLabelText('Acceptance test'), { target: { value: 'It loads.' } });
-    fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '5' } });
-    fireEvent.submit(formElement);
-    await flush();
-
-    expect(form.getByText('A public summary is required.')).toBeTruthy();
-    expect(callsNamed('file_card')).toHaveLength(0);
-  });
-
-  it('caps the public summary at 200 characters, explains it and counts as you type', async () => {
-    await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'File a card' }));
-    const summary = form.getByLabelText('Public summary') as HTMLInputElement;
-    expect(summary.required).toBe(true);
-    expect(summary.maxLength).toBe(200);
-    const hint = form.getByText('One or two plain sentences for supporters. 200 characters at most.');
-    const count = form.getByText('0 / 200');
-    expect(summary.getAttribute('aria-describedby')).toBe(`${hint.id} ${count.id}`);
-
-    fireEvent.change(summary, { target: { value: 'Twelve chars' } });
-    expect(form.getByText('12 / 200')).toBeTruthy();
-    expect(form.queryByText('0 / 200')).toBeNull();
-  });
-});
-
-function card(overrides: Partial<FakeCard>): FakeCard {
-  return {
-    id: '5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
-    title: 'Rename the Gatherer',
-    stage: 'proposed',
-    horizon: 'now',
-    rank: null,
-    folder: 'seed-1',
-    lane: 'config',
-    funding_target_usd: '2.0000',
-    funded_usd: '0.0000',
-    estimate_usd: '0.0000',
-    created_at: '2026-09-15T00:00:00Z',
-    ...overrides,
-  };
-}
-
-function cardForm(title: string) {
-  return within(screen.getByRole('form', { name: `Card ${title}` }));
-}
-
-describe('Board caps and credit', () => {
-  it('shows every cap board_studio_state returns and saves them all with set_caps and a reason', async () => {
-    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500 };
-    await renderBoard();
-    expect(
-      screen.getByText(
-        'Daily cap $100.00. Card maximum $25.00. Hourly rate $4.00. Monthly cap $500.00. Studio daily limit on immediate credit $500.00. No usage tier cap.',
-      ),
-    ).toBeTruthy();
-    const formElement = screen.getByRole('form', { name: 'Set the caps' });
-    const form = within(formElement);
-    expect((form.getByLabelText('Daily spend cap (USD)') as HTMLInputElement).value).toBe('100');
-    fireEvent.change(form.getByLabelText('Monthly spend cap (USD)'), { target: { value: '400' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(form.getByText('A reason is required.')).toBeTruthy();
-    expect(callsNamed('set_caps')).toHaveLength(0);
-
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: ' Match the Console limit. ' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(callsNamed('set_caps').map((call) => call.args)).toEqual([
-      {
-        p_daily_cap_usd: 100,
-        p_card_max_usd: 25,
-        p_agent_hourly_rate_usd: 4,
-        p_monthly_cap_usd: 400,
-        p_credit_studio_daily_cap_usd: 500,
-        p_anthropic_tier_cap_usd: null,
-        p_set_anthropic_tier_cap: true,
-        p_reason: 'Match the Console limit.',
-      },
-    ]);
-    expect(form.getByText('Caps saved.')).toBeTruthy();
-  });
-
-  it('asks for a cap board_studio_state does not return instead of sending a blank', async () => {
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'Set the caps' });
-    const form = within(formElement);
-    expect((form.getByLabelText('Agent hourly rate (USD)') as HTMLInputElement).value).toBe('');
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Tighten.' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(form.getByText('Agent hourly rate (USD) must be a dollar amount of zero or more.')).toBeTruthy();
-    expect(callsNamed('set_caps')).toHaveLength(0);
-  });
-
-  it('records a credit purchase with the contract argument names', async () => {
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'Record a credit purchase' });
-    const form = within(formElement);
-    fireEvent.change(form.getByLabelText('Amount (USD)'), { target: { value: '42.5' } });
-    fireEvent.change(form.getByLabelText('Stripe payout id'), { target: { value: ' po_123 ' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First payout.' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(callsNamed('record_credit_purchase').map((call) => call.args)).toEqual([
-      { p_amount_usd: 42.5, p_stripe_payout_id: 'po_123', p_reason: 'First payout.' },
-    ]);
-    expect(form.getByText('Credit purchase of $42.50 recorded.')).toBeTruthy();
-  });
-});
-
-describe('Board card controls', () => {
-  it('lists every card the board can still move, now first, then by rank', async () => {
-    fake.cards = [
-      card({ id: 'a', title: 'Later card', horizon: 'later', stage: 'proposed', created_at: '2026-09-15T00:00:00Z' }),
-      card({ id: 'b', title: 'Next ranked two', horizon: 'next', rank: 2 }),
-      card({ id: 'c', title: 'Next ranked one', horizon: 'next', rank: 1 }),
-      card({ id: 'd', title: 'Open now', horizon: 'now', stage: 'voted' }),
-      card({ id: 'e', title: 'Old row', horizon: null, stage: 'paused' }),
-    ];
-    await renderBoard();
-    await flush();
-    const cards = screen.getByRole('region', { name: 'Cards' });
-    expect(within(cards).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
-      'Open now',
-      'Old row',
-      'Next ranked one',
-      'Next ranked two',
-      'Later card',
-    ]);
-    expect(fake.selects.filter((select) => select.table === 'cards')).toEqual([
-      {
-        table: 'cards',
-        columns: BOARD_CARD_COLUMNS,
-        filters: ['in stage proposed,designing,voted,funded,paused', 'order created_at'],
-      },
-    ]);
-    expect(cardForm('Next ranked one').getByText('open for funding · horizon next · rank 1 · seed-1 config · $0.00 of $2.00')).toBeTruthy();
-  });
-
-  it('moves a card to now with its rank and target, and to later without a target', async () => {
-    fake.cards = [card({ id: 'n1', title: 'Planned', horizon: 'next', funding_target_usd: '0' })];
-    await renderBoard();
-    await flush();
-    const form = cardForm('Planned');
-    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'now' } });
-    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '3' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Ready.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Move card' }));
-    await flush();
-    expect(form.getByText('A card on horizon now needs a funding target of at least $0.01.')).toBeTruthy();
-    expect(callsNamed('set_card_horizon')).toHaveLength(0);
-
-    fireEvent.change(form.getByLabelText('Funding target (USD)'), { target: { value: '3' } });
-    fireEvent.click(form.getByRole('button', { name: 'Move card' }));
-    await flush();
-    await flush();
-    const after = cardForm('Planned');
-    fireEvent.change(after.getByLabelText('Horizon'), { target: { value: 'later' } });
-    fireEvent.change(after.getByLabelText('Rank'), { target: { value: '' } });
-    fireEvent.change(after.getByLabelText('Reason'), { target: { value: 'Not yet.' } });
-    fireEvent.click(after.getByRole('button', { name: 'Move card' }));
-    await flush();
-    expect(callsNamed('set_card_horizon').map((call) => call.args)).toEqual([
-      { p_card: 'n1', p_horizon: 'now', p_rank: 3, p_reason: 'Ready.', p_target_usd: 3 },
-      { p_card: 'n1', p_horizon: 'later', p_rank: null, p_reason: 'Not yet.' },
-    ]);
-  });
-
-  it('re-ranks a card already on now without sending a target, which set_card_horizon refuses there', async () => {
-    fake.cards = [card({ id: 'k1', title: 'Open now', horizon: 'now', funding_target_usd: '3.0000' })];
-    await renderBoard();
-    await flush();
-    const form = cardForm('Open now');
-    expect(form.queryByLabelText('Funding target (USD)')).toBeNull();
-    expect(form.getByText('A card with money on its bar stays on now; reject it instead.')).toBeTruthy();
-    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '1' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'First in line.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Move card' }));
-    await flush();
-    expect(callsNamed('set_card_horizon').map((call) => call.args)).toEqual([
-      { p_card: 'k1', p_horizon: 'now', p_rank: 1, p_reason: 'First in line.' },
-    ]);
-  });
-
-  it('offers horizon and rank only on cards still open for funding', async () => {
-    fake.cards = [
-      card({ id: 'f1', title: 'Funded one', stage: 'funded', funded_usd: '2.0000' }),
-      card({ id: 'p2', title: 'Paused two', stage: 'paused' }),
-    ];
-    await renderBoard();
-    await flush();
-    for (const [title, line] of [
-      ['Funded one', 'A funded card can only be rejected.'],
-      ['Paused two', 'A paused card can only be rejected or resumed.'],
-    ] as const) {
-      const form = cardForm(title);
-      expect(form.queryByLabelText('Horizon')).toBeNull();
-      expect(form.queryByLabelText('Rank')).toBeNull();
-      expect(form.queryByRole('button', { name: 'Move card' })).toBeNull();
-      expect(form.getByRole('button', { name: 'Reject card' })).toBeTruthy();
-      expect(form.getByText(line)).toBeTruthy();
-    }
-    fireEvent.submit(screen.getByRole('form', { name: 'Card Funded one' }));
-    await flush();
-    expect(callsNamed('set_card_horizon')).toHaveLength(0);
-  });
-
-  it('cancels a card only after the confirm, with the reason', async () => {
-    fake.cards = [card({ id: 'x1', title: 'Retire me' })];
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    await renderBoard();
-    await flush();
-    const form = cardForm('Retire me');
-    fireEvent.click(form.getByRole('button', { name: 'Reject card' }));
-    await flush();
-    expect(form.getByText('A reason is required.')).toBeTruthy();
-    expect(confirm).not.toHaveBeenCalled();
-
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'No longer makes sense.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Reject card' }));
-    await flush();
-    expect(confirm).toHaveBeenCalledWith(CANCEL_CONFIRM);
-    expect(callsNamed('cancel_card')).toHaveLength(0);
-
-    confirm.mockReturnValue(true);
-    fireEvent.click(form.getByRole('button', { name: 'Reject card' }));
-    await flush();
-    expect(callsNamed('cancel_card').map((call) => call.args)).toEqual([{ p_card: 'x1', p_reason: 'No longer makes sense.' }]);
-    // The confirmation says where the card's money goes (docs/specs/money-logic.md).
-    expect(CANCEL_CONFIRM).toBe(
-      'Reject this card? It stops for good with your reason, its unspent money goes to the next cards in line, and this cannot be undone.',
-    );
-  });
-
-  it('says above the list how much unspent money a cancellation moved on, since the cancelled card leaves the list, and focuses it', async () => {
-    fake.cards = [card({ id: 'x2', title: 'Holds money' }), card({ id: 'x3', title: 'Stays' })];
-    fake.cancelResult = { card_id: 'x2', stage: 'rejected', from_stage: 'voted', moved_usd: 1.8, moved_to: [] };
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await renderBoard();
-    await flush();
-    const form = cardForm('Holds money');
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Out of scope.' } });
-    const button = form.getByRole('button', { name: 'Reject card' });
-    button.focus();
-    fireEvent.click(button);
-    await flush();
-    expect(screen.queryByRole('form', { name: 'Card Holds money' })).toBeNull();
-    const cards = within(screen.getByRole('region', { name: 'Cards' }));
-    const notice = cards.getByText('Card Holds money rejected. $1.80 of unspent money moved to the next cards in line.');
-    expect(notice.getAttribute('role')).toBe('status');
-    expect(document.activeElement).toBe(notice);
-    expect(cardForm('Stays').queryByRole('status')).toBeNull();
-  });
-
-  it('keeps the row, its confirmation and focus when a save moves the card', async () => {
-    fake.cards = [card({ id: 'm1', title: 'Moves', horizon: 'now' }), card({ id: 'm2', title: 'Another', horizon: 'next', rank: 1 })];
-    await renderBoard();
-    await flush();
-    const form = cardForm('Moves');
-    fireEvent.change(form.getByLabelText('Horizon'), { target: { value: 'later' } });
-    fireEvent.change(form.getByLabelText('Rank'), { target: { value: '4' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Not yet.' } });
-    const save = form.getByRole('button', { name: 'Move card' });
-    save.focus();
-    fireEvent.submit(screen.getByRole('form', { name: 'Card Moves' }));
-    await flush();
-    const after = cardForm('Moves');
-    expect(after.getByRole('status').textContent).toBe('Card moved.');
-    expect(after.getByText(/horizon later · rank 4/)).toBeTruthy();
-    expect((after.getByLabelText('Horizon') as HTMLSelectElement).value).toBe('later');
-    expect(after.getByRole('button', { name: 'Move card' })).toBe(save);
-    expect(document.activeElement).toBe(save);
-  });
-
-  it('resumes a paused card with a new estimate, and offers resume on paused cards only', async () => {
-    fake.cards = [
-      card({ id: 'p1', title: 'Paused one', stage: 'paused', estimate_usd: '0.5000', funded_usd: '2.0000' }),
-      card({ id: 'o1', title: 'Open one' }),
-    ];
-    await renderBoard();
-    await flush();
-    expect(cardForm('Open one').queryByRole('button', { name: 'Resume card' })).toBeNull();
-    const form = cardForm('Paused one');
-    expect((form.getByLabelText('New estimate (USD)') as HTMLInputElement).value).toBe('0.5');
-    fireEvent.change(form.getByLabelText('New estimate (USD)'), { target: { value: '0.8' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Credit topped up.' } });
-    fireEvent.click(form.getByRole('button', { name: 'Resume card' }));
-    await flush();
-    expect(callsNamed('resume_card').map((call) => call.args)).toEqual([
-      { p_card: 'p1', p_estimate_usd: 0.8, p_reason: 'Credit topped up.' },
-    ]);
-  });
-});
-
-describe('Board studio status', () => {
-  it('loads the studio state once and refreshes it on one 15 s poll', async () => {
-    await renderBoard();
-    expect(callsNamed('board_studio_state')).toHaveLength(1);
-    await flush(STUDIO_STATE_POLL_MS);
-    expect(callsNamed('board_studio_state')).toHaveLength(2);
-  });
-
-  it('has no Go live button, and says the studio goes live on its first credit purchase (decision 62)', async () => {
-    await renderBoard();
-    expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
-    expect(screen.queryByText(/live yet|Live since/)).toBeNull();
-    expect(callsNamed('set_launched')).toHaveLength(0);
-  });
-
-  it('shows no launch line, stamped or not', async () => {
-    fake.studio.launched_at = '2026-09-13T09:00:00Z';
-    await renderBoard();
-    expect(screen.queryByText(/live yet|Live since/)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
-  });
-
-  it('shows no agent mode and no mode control', async () => {
-    await renderBoard();
-    expect(screen.queryByText(/Agent mode/)).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
-  });
-
-  it('reports a fresh dispatcher heartbeat as seen', async () => {
-    await renderBoard();
-    expect(screen.getByText('Dispatcher: seen 30 s ago.')).toBeTruthy();
-  });
-
-  it('reports the dispatcher as not running with no heartbeat', async () => {
-    fake.studio.dispatcher_seen_at = null;
-    await renderBoard();
-    expect(screen.getByText('Dispatcher: not running.')).toBeTruthy();
-  });
-
-  it('reports the dispatcher as not running once its heartbeat is stale', async () => {
-    fake.studio.dispatcher_seen_at = new Date(
-      startedAt.getTime() - DISPATCHER_STALE_MS - 1_000,
-    ).toISOString();
-    await renderBoard();
-    expect(screen.getByText('Dispatcher: not running.')).toBeTruthy();
-  });
-});
-
-describe('Board two-factor sign-in', () => {
-  it('enrols an authenticator app on an account without one, then shows the board controls', async () => {
-    fake.aal = 'aal1';
-    fake.factors = [{ id: 'f-abandoned', factor_type: 'totp', status: 'unverified' }];
-    await renderBoard();
-    const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
-    expect(
-      within(step).getByText(
-        SECOND_FACTOR_LINE,
-      ),
-    ).toBeTruthy();
-    expectNoSecondFactorControls();
-    expect(within(step).queryByRole('form', { name: 'Verify a code' })).toBeNull();
-
-    fireEvent.click(within(step).getByRole('button', { name: 'Set up an authenticator app' }));
-    await flush();
-    await flush();
-    // The abandoned unverified factor is removed before a new one is enrolled.
-    expect(mfaCallsNamed('unenroll').map((call) => call.args)).toEqual([{ factorId: 'f-abandoned' }]);
-    expect(mfaCallsNamed('enroll').map((call) => call.args)).toEqual([{ factorType: 'totp' }]);
-    const qr = within(step).getByRole('img', { name: 'QR code for your authenticator app' });
-    expect(qr.getAttribute('src')).toBe('data:image/svg+xml;utf-8,<svg></svg>');
-    expect(within(step).getByText('JBSWY3DPEHPK3PXP').tagName).toBe('CODE');
-    expectNoSecondFactorControls();
-
-    await enterCode('000000');
-    expect(screen.getByText('Invalid TOTP code entered')).toBeTruthy();
-    expectNoSecondFactorControls();
-
-    await enterCode('123456');
-    expect(mfaCallsNamed('challenge').map((call) => call.args)).toEqual([{ factorId: 'f-new' }, { factorId: 'f-new' }]);
-    expect(mfaCallsNamed('verify').at(-1)?.args).toEqual({ factorId: 'f-new', challengeId: 'challenge-f-new', code: '123456' });
-    expectSecondFactorControls();
-  });
-
-  it('challenges a verified factor on a new aal1 session and never enrols', async () => {
-    fake.aal = 'aal1';
-    await renderBoard();
-    const step = screen.getByRole('region', { name: 'Two-factor sign-in' });
-    expect(within(step).queryByRole('button', { name: 'Set up an authenticator app' })).toBeNull();
-    expect(within(step).queryByRole('img')).toBeNull();
-    expectNoSecondFactorControls();
-
-    await enterCode('12 34');
-    expect(screen.getByText('Enter the 6-digit code from your authenticator app.')).toBeTruthy();
-    expect(mfaCallsNamed('verify')).toHaveLength(0);
-
-    await enterCode('123456');
-    expect(mfaCallsNamed('verify').map((call) => call.args)).toEqual([
-      { factorId: 'f-1', challengeId: 'challenge-f-1', code: '123456' },
-    ]);
-    expect(mfaCallsNamed('enroll')).toHaveLength(0);
-    expectSecondFactorControls();
-  });
-
-  it('skips the step when the session is already aal2', async () => {
-    await renderBoard();
-    expectSecondFactorControls();
-    expect(mfaCallsNamed('challenge')).toHaveLength(0);
-  });
-
-  it('keeps the studio status and the heartbeat running at aal1 while every state-changing control stays hidden', async () => {
-    fake.aal = 'aal1';
-    await renderBoard();
-    expectNoSecondFactorControls();
-    expect(screen.getByText('Agents: running.')).toBeTruthy();
-    expect(screen.queryByText(/Agent mode/)).toBeNull();
-    // The board at the first factor is told what it lacks, not that only the board resumes a role.
-    const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(roles.getByText('Verify your second factor to pause or resume a role.', { exact: false })).toBeTruthy();
-    expect(roles.queryByText('Only the board resumes a role.', { exact: false })).toBeNull();
-    expect(screen.getByText(activeLine(startedAt))).toBeTruthy();
-    expect(callsNamed('board_heartbeat')).toHaveLength(1);
-    expect(callsNamed('board_studio_state')).toHaveLength(1);
-
-    await flush(HEARTBEAT_MS);
-    expect(callsNamed('board_heartbeat')).toHaveLength(2);
-    expect(callsNamed('board_studio_state').length).toBeGreaterThanOrEqual(2);
-    expect(fake.calls.filter((call) => STATE_CHANGING_RPCS.includes(call.name))).toEqual([]);
-  });
-});
-
-describe('Board usage tier cap', () => {
-  it('shows the tier cap, saves a new one with set_caps, and removes it when left blank', async () => {
-    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500, anthropic_tier_cap_usd: 100 };
-    await renderBoard();
-    expect(screen.getByText(/Usage tier cap \$100\.00\./)).toBeTruthy();
-    const formElement = screen.getByRole('form', { name: 'Set the caps' });
-    const form = within(formElement);
-    const tier = form.getByLabelText(TIER_CAP_LABEL) as HTMLInputElement;
-    expect(tier.value).toBe('100');
-    expect(tier.required).toBe(false);
-    fireEvent.change(tier, { target: { value: '500' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Tier 2 on the Console.' } });
-    fireEvent.submit(formElement);
-    await flush();
-    fireEvent.change(form.getByLabelText(TIER_CAP_LABEL), { target: { value: '' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'No tier limit.' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(callsNamed('set_caps').map((call) => [call.args?.p_anthropic_tier_cap_usd, call.args?.p_set_anthropic_tier_cap])).toEqual([
-      [500, true],
-      [null, true],
-    ]);
-  });
-
-  it('refuses a tier cap of zero before calling the database', async () => {
-    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: 500, credit_studio_daily_cap_usd: 500 };
-    await renderBoard();
-    const formElement = screen.getByRole('form', { name: 'Set the caps' });
-    const form = within(formElement);
-    fireEvent.change(form.getByLabelText(TIER_CAP_LABEL), { target: { value: '0' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'x' } });
-    fireEvent.submit(formElement);
-    await flush();
-    expect(form.getByText(`${TIER_CAP_LABEL} must be above zero, or blank for none.`)).toBeTruthy();
-    expect(callsNamed('set_caps')).toHaveLength(0);
-  });
-
-  it('says whether the studio code lane is open', async () => {
-    await renderBoard();
-    expect(screen.getByText('Studio code lane: closed.')).toBeTruthy();
-    cleanup();
-    fake.studio = { ...fake.studio, platform_lane_open: true };
-    await renderBoard();
-    expect(screen.getByText('Studio code lane: open.')).toBeTruthy();
-  });
-});
-
-const RUN = {
-  finished_at: '2026-09-24T07:07:00Z',
-  ok: true,
-  mismatches: 0,
-  credit_purchase_usd: '12.5',
-  minimum_balance_usd: 3.25,
-  settlement_amount: 4.5,
-  settlement_currency: 'cad',
-  disputes_to_answer: [
-    { dispute: 'du_late', status: 'needs_response', due_by: '2026-10-09', amount_usd: 7 },
-    { dispute: 'du_soon', status: 'warning_needs_response', due_by: '2026-10-01', amount_usd: 5 },
-  ],
-  latest_payout: { id: 'po_123', arrival_date: '2026-09-23' },
-};
-
-// card_supply's answer with every floor met: six open cards, one of $5 or more and one under $2.
-const OPEN_CARDS = Array.from({ length: 6 }, (_, i) => ({ id: `0000000${i}-0000-4000-8000-000000000000`, title: `Open card ${i}`, target_usd: i === 0 ? '5.0000' : '1.0000' }));
-const AT_FLOOR = {
-  open: 6,
-  big: 1,
-  small: 5,
-  floor_open: 6,
-  floor_big: 1,
-  floor_small: 1,
-  big_min_usd: '5.0000',
-  small_max_usd: '2.0000',
-  short_open: 0,
-  short_big: 0,
-  short_small: 0,
-  open_cards: OPEN_CARDS,
-};
-// Production's shape on 23 September 2026 (PG-10): six small goal cards and none of $5 or more.
-const SHORT = { ...AT_FLOOR, big: 0, small: 6, short_big: 1, open_cards: OPEN_CARDS.map((c) => ({ ...c, target_usd: '1.0000' })) };
-
-describe('Board card supply (docs/specs/studio-reports.md)', () => {
-  it('shows the supply line under Studio, and nothing in Needs you at the floor', async () => {
-    await renderBoard();
-    await flush();
-    const studio = within(screen.getByRole('region', { name: 'Studio status' }));
-    expect(studio.getByText('Open cards: 6 of a floor of 6 · $5 or more: 1 of 1 · under $2: 5 of 1.')).toBeTruthy();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
-    expect(inbox.queryByText('Card supply is short.')).toBeNull();
-    expect(callsNamed('card_supply').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('lists Card supply is short, and Draft to the floor queues one board-origin draft_card run with the floor and the open cards', async () => {
-    fake.supply = { ...SHORT };
-    await renderBoard();
-    await flush();
-    expect(within(screen.getByRole('region', { name: 'Studio status' })).getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeTruthy();
-    const inbox = screen.getByRole('region', { name: 'Needs you' });
-    expect(within(inbox).queryByText(NOTHING_NEEDS_YOU)).toBeNull();
-    expect(inbox.querySelector('ul.needs > li[data-needs="supply"] strong')?.textContent).toBe('Card supply is short.');
-    const form = screen.getByRole('form', { name: 'Draft to the floor' });
-    fireEvent.submit(form);
-    await flush();
-    // The status line is inside the form, whose 16 px gap clears the focused button's ring.
-    expect(within(form).getByRole('status').textContent).toBe('A reason is required.');
-    expect(callsNamed('enqueue_manual_job')).toHaveLength(0);
-    fireEvent.change(within(form).getByLabelText('Reason'), { target: { value: 'No big card open' } });
-    fireEvent.submit(form);
-    await flush();
-    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
-      { p_job: 'draft_card', p_card: null, p_reason: 'No big card open', p_input: { floor: { short_open: 0, short_big: 1, short_small: 0, big_min_usd: 5, small_max_usd: 2 }, open_cards: OPEN_CARDS.map((c) => c.id) } },
-    ]);
-    expect(within(form).getByRole('status').textContent).toMatch(/^Queued\./);
-  });
-
-  it('asks for the second factor before drafting to the floor', async () => {
-    fake.aal = 'aal1';
-    fake.supply = { ...SHORT };
-    await renderBoard();
-    await flush();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.getByText('Card supply is short.')).toBeTruthy();
-    expect(inbox.queryByRole('button', { name: 'Draft to the floor' })).toBeNull();
-    expect(inbox.getByText('Verify your second factor, then draft to the floor from here.')).toBeTruthy();
-    expect(callsNamed('enqueue_manual_job')).toHaveLength(0);
-  });
-
-  it('says so under Studio when card_supply fails, and lists no supply item', async () => {
-    fake.supply = null;
-    await renderBoard();
-    await flush();
-    expect(within(screen.getByRole('region', { name: 'Studio status' })).getByText('Card supply: card_supply returned nothing')).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
-  });
-});
-
-describe('Board Needs you inbox', () => {
-  it('is the first section, says nothing needs you, and keeps the standing duties when nothing is due', async () => {
-    await renderBoard();
-    const inbox = screen.getByRole('region', { name: 'Needs you' });
-    expect(document.querySelector('main section')?.getAttribute('aria-label')).toBe('Needs you');
-    expect(within(inbox).getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
-    expect(within(inbox).getByText(/No Controller run yet, so there is no credit or Minimum balance figure\./)).toBeTruthy();
-    expect(within(inbox).getByRole('link', { name: "Stripe's disputes" }).getAttribute('href')).toBe('https://dashboard.stripe.com/disputes');
-    expect(within(inbox).getByRole('link', { name: 'hello@clayhouse.studio' }).getAttribute('href')).toBe('mailto:hello@clayhouse.studio');
-    expect(within(inbox).getByRole('link', { name: 'open pull requests not from a card branch' }).getAttribute('href')).toBe(BOARD_PULLS_URL);
-    // docs/specs/agent-upkeep.md: patch updates that pass the policy merge by themselves; every other non-card pull request waits.
-    expect(NON_CARD_PULLS_LINE).toBe(
-      'Dependency patch updates that pass the merge policy merge by themselves. Every other pull request that is not from a card branch waits for your merge:',
-    );
-    expect(within(inbox).getByText(NON_CARD_PULLS_LINE, { exact: false })).toBeTruthy();
-    expect(within(inbox).queryByRole('heading', { name: 'Findings' })).toBeNull();
-    expect(BOARD_PULLS_URL).toBe('https://github.com/AlreadyKyle/peanutgallery/pulls?q=is%3Apr+is%3Aopen+-head%3Acard%2F');
-    expect(decodeURIComponent(new URL(BOARD_PULLS_URL).searchParams.get('q') ?? '')).toBe('is:pr is:open -head:card/');
-    expect(callsNamed('board_needs_you')).toEqual([{ name: 'board_needs_you', args: undefined }]);
-  });
-
-  it('lists disputes by due date, an S1 card, then the credit purchase with the Minimum balance', async () => {
-    fake.needs = { ...EMPTY_NEEDS, controller: RUN, incident_reserve_usd: '0.4', s1_cards: [{ id: 'c-s1', title: 'Fix the save bug', stage: 'funded' }] };
-    await renderBoard();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.queryByText(NOTHING_NEEDS_YOU)).toBeNull();
-    const items = screen.getByRole('region', { name: 'Needs you' }).querySelectorAll('ul.needs > li');
-    expect([...items].map((item) => item.querySelector('strong')?.textContent)).toEqual([
-      'Answer dispute du_soon for $5.00 by 1 Oct 2026.',
-      'Answer dispute du_late for $7.00 by 9 Oct 2026.',
-      'Card Fix the save bug is S1.',
-      'Buy $12.50 of Console credit.',
-    ]);
-    expect(inbox.getAllByRole('link', { name: 'Open the dispute in Stripe' }).map((a) => a.getAttribute('href'))).toEqual([
-      'https://dashboard.stripe.com/disputes/du_soon',
-      'https://dashboard.stripe.com/disputes/du_late',
-    ]);
-    expect(inbox.getByText(/emergency-fund credit: \$0\.40 is in the fund/)).toBeTruthy();
-    expect(inbox.getByText(/raise the/).textContent).toBe("In Stripe, raise the Minimum balance to $3.25 (4.50 CAD in Stripe's currency).");
-    expect(inbox.getByText(/^Controller, 24 Sep 2026, 07:07: the books match Stripe\./)).toBeTruthy();
-  });
-
-  it('fills in the credit form from the Controller figure and the latest payout, and records only on submit', async () => {
-    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
-    await renderBoard();
-    fireEvent.click(screen.getByRole('button', { name: 'Fill in the record form' }));
-    await flush();
-    const form = within(screen.getByRole('form', { name: 'Record a credit purchase' }));
-    expect((form.getByLabelText('Amount (USD)') as HTMLInputElement).value).toBe('12.5');
-    expect((form.getByLabelText('Stripe payout id') as HTMLInputElement).value).toBe('po_123');
-    expect((form.getByLabelText('Reason') as HTMLInputElement).value).toBe('Controller figure of 2026-09-24');
-    expect(form.getByText(FILLED_FROM_CONTROLLER)).toBeTruthy();
-    expect(callsNamed('record_credit_purchase')).toHaveLength(0);
-    fireEvent.submit(screen.getByRole('form', { name: 'Record a credit purchase' }));
-    await flush();
-    expect(callsNamed('record_credit_purchase').map((call) => call.args)).toEqual([
-      { p_amount_usd: 12.5, p_stripe_payout_id: 'po_123', p_reason: 'Controller figure of 2026-09-24' },
-    ]);
-  });
-
-  it('shows the inbox at aal1 but asks for the second factor before filling in the form', async () => {
-    fake.aal = 'aal1';
-    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
-    await renderBoard();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeTruthy();
-    expect(inbox.queryByRole('button', { name: 'Fill in the record form' })).toBeNull();
-    expect(inbox.getByText(/Verify your second factor, then fill in the record form from here\./)).toBeTruthy();
-    expectNoSecondFactorControls();
-  });
-
-  it('drops the credit item once a purchase is recorded after the run, and says why', async () => {
-    fake.needs = { ...EMPTY_NEEDS, controller: RUN, last_credit_purchase: { created_at: '2026-09-24T09:00:00Z', amount_usd: '12.5' } };
-    await renderBoard();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.queryByText('Buy $12.50 of Console credit.')).toBeNull();
-    expect(inbox.getByText('A purchase of $12.50 was recorded after that run. The next run updates the credit figure.')).toBeTruthy();
-  });
-
-  it('lists no credit item when the Controller figure is zero, and names mismatches', async () => {
-    fake.needs = { ...EMPTY_NEEDS, controller: { ...RUN, ok: false, mismatches: 2, credit_purchase_usd: 0, disputes_to_answer: [] } };
-    await renderBoard();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.getByText(NOTHING_NEEDS_YOU)).toBeTruthy();
-    expect(inbox.getByText(/2 mismatches, named in its alert/)).toBeTruthy();
-  });
-
-  // docs/specs/agent-upkeep.md: the Janitor's open findings, oldest first, with kind, subject, figures and time.
-  it('lists the open findings with their kind, subject, detail and opened time, and then something needs the board', async () => {
-    fake.aal = 'aal1';
-    fake.findings = [
-      {
-        fingerprint: 'scan:osv',
-        kind: 'scan',
-        subject: "The weekly scan's osv job failed (failure)",
-        detail: { run: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7', conclusion: 'failure', job: null },
-        opened_at: '2026-09-25T08:00:00Z',
-        last_seen_at: '2026-09-26T08:00:00Z',
-      },
-      {
-        fingerprint: 'schema:table:public.findings',
-        kind: 'schema',
-        subject: 'table:public.findings is in the migrations but not in production',
-        detail: { object: 'table:public.findings', production: null, migrations: 'abc123' },
-        opened_at: '2026-09-24T08:00:00Z',
-        last_seen_at: '2026-09-24T08:00:00Z',
-      },
-      { fingerprint: 'bad', kind: 'gossip', subject: 'not a kind', detail: {}, opened_at: '2026-09-24T08:00:00Z' },
-    ];
-    await renderBoard();
-    const region = screen.getByRole('region', { name: 'Needs you' });
-    const inbox = within(region);
-    expect(inbox.queryByText(NOTHING_NEEDS_YOU)).toBeNull();
-    expect(inbox.getByRole('heading', { level: 3, name: 'Findings' })).toBeTruthy();
-    const items = region.querySelectorAll('ul.findings > li');
-    expect([...items].map((item) => item.querySelector('strong')?.textContent)).toEqual([
-      'Schema drift: table:public.findings is in the migrations but not in production.',
-      "Weekly scan: The weekly scan's osv job failed (failure).",
-    ]);
-    expect(items[0]?.textContent).toContain(`Opened ${formatDateTime('2026-09-24T08:00:00Z')}.`);
-    expect(items[1]?.textContent).toContain(`Opened ${formatDateTime('2026-09-25T08:00:00Z')}, last seen ${formatDateTime('2026-09-26T08:00:00Z')}.`);
-    expect([...(items[0]?.querySelectorAll('.finding-detail li') ?? [])].map((li) => li.textContent)).toEqual(['object: table:public.findings', 'migrations: abc123']);
-    expect(inbox.getByRole('link', { name: 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7' }).getAttribute('href')).toBe(
-      'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7',
-    );
-    expect(fake.selects.filter((select) => select.table === 'findings')).toEqual([
-      { table: 'findings', columns: FINDING_COLUMNS, filters: ['is closed_at null', 'order opened_at'] },
-    ]);
-  });
-
-  it('keeps the duties when the findings cannot be read, and names the failure', async () => {
-    fake.needs = { ...EMPTY_NEEDS, controller: RUN };
-    fake.findingsError = 'permission denied for table findings';
-    await renderBoard();
-    const inbox = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(inbox.getByText('Buy $12.50 of Console credit.')).toBeTruthy();
-    expect(inbox.getByText('Findings: permission denied for table findings')).toBeTruthy();
-  });
-
-  it('shows the error when board_needs_you fails', async () => {
-    fake.needs = null as unknown as Record<string, unknown>;
-    await renderBoard();
-    expect(within(screen.getByRole('region', { name: 'Needs you' })).getByText('board_needs_you returned nothing')).toBeTruthy();
-  });
-});
-
-describe('Board executors', () => {
-  it('reads the roles from public_roles and offers active card roles only, in title order', async () => {
-    await renderBoard();
-    await flush();
-    expect(fake.selects.filter((select) => select.table === 'public_roles')).toEqual([{ table: 'public_roles', columns: ROLE_COLUMNS, filters: [] }]);
-    const executor = within(screen.getByRole('form', { name: 'File a card' })).getByLabelText('Executor') as HTMLSelectElement;
-    expect([...executor.options].map((option) => option.value)).toEqual(['r-builder-a', 'r-platform']);
-  });
-});
-
-describe('Board sign-in', () => {
-  it('says what the board is, and that the sign-in is for board members, by email link and then a code', async () => {
+describe('sign-in', () => {
+  it('says the site is an optional panel, and that sign-in is for board members, by email link and then a code', async () => {
     fake.signedOut = true;
     await renderBoard();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Mob Machine board');
+    expect(BOARD_LEDE).toContain('an optional admin panel; the studio runs without it');
     expect(screen.getByText(BOARD_LEDE)).toBeTruthy();
     const signIn = within(screen.getByRole('region', { name: 'Board sign-in' }));
-    expect(signIn.getByRole('heading', { level: 2 }).textContent).toBe('Board sign-in');
     expect(signIn.getByText(/^For board members only\. Enter your board email/)).toBeTruthy();
-    expect(signIn.getByRole('button', { name: 'Email me a sign-in link' })).toBeTruthy();
+    expect(regions()).toEqual(['Board sign-in']);
   });
 
   it('sends a magic link back to this site that never creates a user', async () => {
@@ -1334,499 +262,574 @@ describe('Board sign-in', () => {
     fireEvent.change(screen.getByLabelText('Board email'), { target: { value: ' board@mobmachine.games ' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
     await flush();
-    expect(fake.otpCalls).toEqual([
-      { email: 'board@mobmachine.games', options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false } },
-    ]);
+    expect(fake.otpCalls).toEqual([{ email: 'board@mobmachine.games', options: { emailRedirectTo: `${window.location.origin}/`, shouldCreateUser: false } }]);
     expect(screen.getByRole('status').textContent).toBe('Check board@mobmachine.games for your sign-in link, and open it in this browser.');
+  });
+
+  it('without a database configuration renders the form and says sign-in is unavailable', async () => {
+    fake.noClient = true;
+    await renderBoard();
+    fireEvent.change(screen.getByLabelText('Board email'), { target: { value: 'board@mobmachine.games' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
+    await flush();
+    expect(screen.getByRole('status').textContent).toBe('The site has no database configuration, so board sign-in is unavailable.');
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('for an email not on the board says so and calls nothing but board_role', async () => {
+    fake.role = null;
+    await renderBoard();
+    await flush(STUDIO_STATE_POLL_MS * 2);
+    expect(screen.getByText(NOT_ON_BOARD)).toBeTruthy();
+    expect(regions()).toEqual([]);
+    expect(fake.calls.map((call) => call.name)).toEqual(['board_role']);
+    expect(fake.selects).toEqual([]);
+    expect(fake.mfaCalls).toEqual([]);
   });
 });
 
-describe('Board signed in as the moderator', () => {
-  it('pauses and resumes at aal1 with no two-factor step', async () => {
+describe('the first factor (aal1)', () => {
+  it('renders only the Two-factor step and calls no state-changing or studio RPC, even after the polls would run', async () => {
+    fake.aal = 'aal1';
+    await renderBoard();
+    expect(regions()).toEqual(['Two-factor sign-in']);
+    expect(within(screen.getByRole('region', { name: 'Two-factor sign-in' })).getByText(SECOND_FACTOR_LINE)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Pause agents' })).toBeNull();
+    expect(screen.queryAllByRole('form').map((f) => f.getAttribute('aria-label'))).toEqual(['Verify a code']);
+    await flush(STUDIO_STATE_POLL_MS * 4);
+    const names = fake.calls.map((call) => call.name);
+    expect(names.filter((name) => STATE_CHANGING_RPCS.includes(name))).toEqual([]);
+    for (const read of ['board_studio_state', 'board_jobs', 'card_supply']) expect(names).not.toContain(read);
+    expect(names).toEqual(['board_role']);
+    expect(fake.selects).toEqual([]);
+  });
+
+  it('enrols an authenticator app on an account without one, refuses a bad code, then opens the panel on Status', async () => {
+    fake.aal = 'aal1';
+    fake.factors = [{ id: 'f-abandoned', factor_type: 'totp', status: 'unverified' }];
+    await renderBoard();
+    const step = within(screen.getByRole('region', { name: 'Two-factor sign-in' }));
+    expect(step.queryByRole('form', { name: 'Verify a code' })).toBeNull();
+    fireEvent.click(step.getByRole('button', { name: 'Set up an authenticator app' }));
+    await flush();
+    await flush();
+    expect(mfaNamed('unenroll').map((call) => call.args)).toEqual([{ factorId: 'f-abandoned' }]);
+    expect(mfaNamed('enroll').map((call) => call.args)).toEqual([{ factorType: 'totp' }]);
+    expect(step.getByRole('img', { name: 'QR code for your authenticator app' }).getAttribute('src')).toBe('data:image/svg+xml;utf-8,<svg></svg>');
+    expect(step.getByText('JBSWY3DPEHPK3PXP').tagName).toBe('CODE');
+
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '000000' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
+    await flush();
+    expect(screen.getByText('Invalid TOTP code entered')).toBeTruthy();
+    expect(regions()).toEqual(['Two-factor sign-in']);
+
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '123456' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
+    for (let i = 0; i < 4; i += 1) await flush();
+    expect(mfaNamed('verify').at(-1)?.args).toEqual({ factorId: 'f-new', challengeId: 'challenge-f-new', code: '123456' });
+    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+  });
+
+  it('challenges a verified factor, refuses a code that is not six digits before calling, and never enrols', async () => {
+    fake.aal = 'aal1';
+    await renderBoard();
+    const step = within(screen.getByRole('region', { name: 'Two-factor sign-in' }));
+    expect(step.queryByRole('button', { name: 'Set up an authenticator app' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '12 34' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
+    await flush();
+    expect(screen.getByText('Enter the 6-digit code from your authenticator app.')).toBeTruthy();
+    expect(mfaNamed('verify')).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '123456' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
+    for (let i = 0; i < 4; i += 1) await flush();
+    expect(mfaNamed('verify').map((call) => call.args)).toEqual([{ factorId: 'f-1', challengeId: 'challenge-f-1', code: '123456' }]);
+    expect(mfaNamed('enroll')).toHaveLength(0);
+    expect(screen.getByRole('region', { name: 'Status' })).toBeTruthy();
+  });
+});
+
+/** Another tab signs in: supabase-js broadcasts the new session to this one. */
+async function signInElsewhere(id: string, email: string, token: string) {
+  fake.session = { user: { id, email }, access_token: token };
+  await act(async () => {
+    for (const listener of fake.listeners) listener('SIGNED_IN', fake.session);
+  });
+  for (let i = 0; i < 4; i += 1) await flush();
+}
+
+const STUDIO_READS = ['board_studio_state', 'card_supply', 'board_jobs'];
+const studioReads = () => [fake.calls.filter((call) => STUDIO_READS.includes(call.name)).length, fake.selects.length];
+
+describe('a new session in another tab', () => {
+  it('keeps the panel through a refresh at aal2', async () => {
+    await renderBoard();
+    await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
+    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+  });
+
+  it('at aal1 for the same board member goes back to the code step, and the panel reads nothing more', async () => {
+    await renderBoard();
+    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+    fake.aal = 'aal1';
+    await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
+    expect(regions()).toEqual(['Two-factor sign-in']);
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
+    expect(named('board_role')).toHaveLength(2);
+  });
+
+  it('at aal1 for another board member goes back to the code step, signed in as them', async () => {
+    await renderBoard();
+    fake.aal = 'aal1';
+    await signInElsewhere('u-other', 'other@mobmachine.games', 'token-3');
+    expect(regions()).toEqual(['Two-factor sign-in']);
+    expect(screen.getByText(/Signed in as other@mobmachine\.games\./)).toBeTruthy();
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
+  });
+
+  it("for the moderator replacing the board's session shows only Pause and resume, and reads no studio state", async () => {
+    await renderBoard();
+    fake.role = 'moderator';
+    fake.aal = 'aal1';
+    await signInElsewhere('u-moderator', 'moderator@mobmachine.games', 'token-4');
+    expect(regions()).toEqual(['Pause and resume']);
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
+  });
+});
+
+describe('the moderator', () => {
+  it('pauses and resumes at aal1 with no two-factor step, reads no studio state and sees nothing else', async () => {
     fake.role = 'moderator';
     fake.aal = 'aal1';
     fake.factors = [];
     await renderBoard();
-    expect(screen.queryByRole('region', { name: 'Two-factor sign-in' })).toBeNull();
+    expect(regions()).toEqual(['Pause and resume']);
+    fireEvent.change(screen.getByLabelText('Pause reason'), { target: { value: 'incident' } });
     fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
     await flush();
     fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
     await flush();
-    expect(callsNamed('set_paused').map((call) => call.args)).toEqual([{ p_paused: true }, { p_paused: false }]);
+    await flush(STUDIO_STATE_POLL_MS * 2);
+    expect(named('set_paused').map((call) => call.args)).toEqual([{ p_paused: true, p_reason: 'incident' }, { p_paused: false }]);
     expect(screen.getByText('Agents resumed.')).toBeTruthy();
+    expect(fake.calls.map((call) => call.name)).toEqual(['board_role', 'set_paused', 'set_paused']);
+    expect(fake.selects).toEqual([]);
     expect(fake.mfaCalls).toEqual([]);
   });
+});
 
-  it('pauses a role at aal1 and is never offered a resume (docs/specs/agent-system-core.md)', async () => {
-    fake.role = 'moderator';
-    fake.aal = 'aal1';
-    fake.factors = [];
-    fake.boardRoles = [
-      { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: false, paused_reason: null },
-      { id: 'r-studio-head', name: 'Studio Head', agent_class: 'planner', state: 'active', paused: true, paused_reason: 'Checking' },
-    ];
+describe('the panel at aal2', () => {
+  it('never calls a retired RPC or card_is_public, and shows no region of the old page, after every part has been used', async () => {
+    fake.cards = [card('c1', 'Faster gatherers', 'paused', { estimate_usd: '1.5000' })];
+    fake.jobs = [{ name: 'tidy_up', runs: [] }];
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await renderBoard();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await flush();
-    const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(roles.getByText('Only the board resumes a role.', { exact: false })).toBeTruthy();
-    // The paused role is listed but never offered to the moderator.
-    const select = roles.getByLabelText('Role') as HTMLSelectElement;
-    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
-      ['Choose a role', false],
-      ['QA', false],
-      ['Studio Head (paused)', true],
-    ]);
-    fireEvent.change(select, { target: { value: 'r-studio-head' } });
-    expect(roles.queryByRole('button', { name: 'Resume Studio Head' })).toBeNull();
-    fireEvent.change(select, { target: { value: 'r-qa' } });
-    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Looks wrong' } });
-    fireEvent.click(roles.getByRole('button', { name: 'Pause QA' }));
+    fireEvent.change(form('Card events').getByLabelText('Card'), { target: { value: 'c1' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Card events' }));
     await flush();
-    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: true, p_reason: 'Looks wrong' }]);
-    expect(roles.getByRole('status').textContent).toBe('QA paused.');
-    expect(roles.getByRole('row', { name: 'QA writer paused: Looks wrong' })).toBeTruthy();
-    expect(roles.getByRole('button', { name: 'Pause' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Pause agents' }));
+    await flush(STUDIO_STATE_POLL_MS * 4);
+    const names = fake.calls.map((call) => call.name);
+    for (const retired of [...RETIRED_RPCS, 'board_roles', 'card_is_public']) expect(names).not.toContain(retired);
+    for (const region of ['Needs you', 'Roles', 'Cooling window', 'File a directive', 'File a note', 'Set the caps', 'Board session', 'Jobs', 'Cards']) {
+      expect(screen.queryByRole('region', { name: region })).toBeNull();
+      expect(screen.queryByRole('form', { name: region })).toBeNull();
+    }
+    expect(regions()).toEqual(['Status', 'Activity', 'Actions', 'Pause and resume']);
   });
 
-  it('shows only pause and resume, and the role pauses, and never heartbeats', async () => {
-    fake.role = 'moderator';
+  it('lists exactly the six actions', async () => {
     await renderBoard();
-    await flush(HEARTBEAT_MS);
-    expect(screen.getByRole('button', { name: 'Pause agents' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Resume agents' })).toBeTruthy();
-    expect(screen.queryByText(/^Board session:/)).toBeNull();
-    expect(screen.queryByRole('form', { name: 'File a directive' })).toBeNull();
-    expect(screen.queryByRole('form', { name: 'File a note' })).toBeNull();
-    expect(screen.queryByRole('form', { name: 'File a card' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Go live' })).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Agent mode' })).toBeNull();
-    expect(callsNamed('board_heartbeat')).toHaveLength(0);
-    expect(callsNamed('board_studio_state')).toHaveLength(0);
-    expect(callsNamed('board_needs_you')).toHaveLength(0);
-    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
+    const actions = within(screen.getByRole('region', { name: 'Actions' }));
+    expect(actions.getByRole('region', { name: 'Pause and resume' })).toBeTruthy();
+    expect(actions.getAllByRole('form').map((f) => f.getAttribute('aria-label'))).toEqual(['File a card', 'Card actions', 'Record a credit purchase', 'Run a job now']);
+    expect(actions.getByRole('button', { name: 'Reject card' })).toBeTruthy();
   });
 });
 
-describe('Board without a database configuration', () => {
-  it('renders the sign-in form and reports that sign-in is unavailable on submit', async () => {
-    fake.noClient = true;
+describe('Status', () => {
+  it('is the first screen: running, the dispatcher seen, the caps read-only with the SQL line, the lane and the supply', async () => {
+    fake.studio = { ...fake.studio, agent_hourly_rate_usd: 4, monthly_cap_usd: '500', credit_studio_daily_cap_usd: 500, anthropic_tier_cap_usd: null };
     await renderBoard();
-    fireEvent.change(screen.getByLabelText('Board email'), {
-      target: { value: 'board@mobmachine.games' },
-    });
-    fireEvent.submit(screen.getByRole('form', { name: 'Sign in' }));
-    await flush();
-    expect(screen.getByRole('status').textContent).toBe(
-      'The site has no database configuration, so board sign-in is unavailable.',
-    );
-    expect(fake.calls).toHaveLength(0);
-  });
-});
-
-describe('Board signed in without membership', () => {
-  it('shows the membership line and no controls', async () => {
-    fake.role = null;
-    await renderBoard();
-    expect(screen.getByText(NOT_ON_BOARD)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Pause agents' })).toBeNull();
-  });
-});
-
-// docs/specs/agent-system-core.md: the cooling window, role pauses, the job list with Run now, each
-// card's veto (undealt and hidden agent cards included) and Needs you's two new lists.
-describe('Board agent system controls', () => {
-  it('shows the cooling window beside the caps and saves it with a reason, refusing more than a week before calling', async () => {
-    fake.studio = { ...fake.studio, cooling_window_minutes: 0 };
-    await renderBoard();
-    const form = within(screen.getByRole('form', { name: 'Set the cooling window' }));
-    expect((form.getByLabelText('Cooling window (minutes)') as HTMLInputElement).value).toBe('0');
-    fireEvent.change(form.getByLabelText('Cooling window (minutes)'), { target: { value: '10081' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Too long' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Set the cooling window' }));
-    await flush();
-    expect(callsNamed('set_cooling_window')).toEqual([]);
-    expect(form.getByText('The cooling window must be a whole number of minutes from 0 to 10,080.')).toBeTruthy();
-    fireEvent.change(form.getByLabelText('Cooling window (minutes)'), { target: { value: '60' } });
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'An hour to look' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Set the cooling window' }));
-    await flush();
-    expect(callsNamed('set_cooling_window').map((call) => call.args)).toEqual([{ p_minutes: 60, p_reason: 'An hour to look' }]);
+    expect(regions()[0]).toBe('Status');
+    const status = within(screen.getByRole('region', { name: 'Status' }));
+    expect(status.getByText('Agents: running.')).toBeTruthy();
+    expect(status.getByText('Dispatcher: seen 30 s ago.')).toBeTruthy();
+    expect(
+      status.getByText('Daily cap $100.00. Card maximum $25.00. Hourly rate $4.00. Monthly cap $500.00. Studio daily limit on immediate credit $500.00. No usage tier cap.'),
+    ).toBeTruthy();
+    expect(status.getByText(CAPS_BY_SQL)).toBeTruthy();
+    expect(status.getByText('Studio code lane: closed.')).toBeTruthy();
+    expect(status.getByText('Open cards: 6 of a floor of 6 · $5 or more: 1 of 1 · under $2: 5 of 1.')).toBeTruthy();
+    expect(status.queryByRole('spinbutton')).toBeNull();
   });
 
-  it("lists each role's class and pause in one row each, pauses and resumes the chosen role with a reason, and keeps the form for the second factor", async () => {
-    fake.boardRoles = [
-      { id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null },
-      { id: 'r-qa', name: 'QA', agent_class: 'writer', state: 'active', paused: true, paused_reason: 'Checking the gate' },
-      { id: 'r-scout', name: 'Old Scout', agent_class: null, state: 'retired', paused: false, paused_reason: null },
-    ];
+  it('says why the studio is paused, from public_studio', async () => {
+    fake.studio = { ...fake.studio, paused: true };
+    fake.pauseReason = 'awaiting_credit';
     await renderBoard();
-    await flush();
-    const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(roles.getAllByRole('row').map((row) => row.textContent)).toEqual([
-      'RoleClassStatus',
-      'Game Directorreviewernot paused',
-      'QAwriterpaused: Checking the gate',
-      'Old Scout (retired)no class yetnot paused',
-    ]);
-    // One form for every role, not a reason field on each row.
-    expect(roles.getAllByRole('textbox')).toHaveLength(1);
-    fireEvent.click(roles.getByRole('button', { name: 'Pause or resume' }));
-    await flush();
-    expect(roles.getByRole('status').textContent).toBe('Choose a role.');
-    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-qa' } });
-    fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
-    await flush();
-    expect(roles.getByRole('status').textContent).toBe('A reason is required.');
-    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Fixed' } });
-    fireEvent.click(roles.getByRole('button', { name: 'Resume QA' }));
-    await flush();
-    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-qa', p_paused: false, p_reason: 'Fixed' }]);
+    expect(screen.getByText("Agents: paused. Reason: Waiting for a payout to buy the agents' credit.")).toBeTruthy();
+    expect(fake.selects.filter((s) => s.table === 'public_studio')[0]).toEqual({ table: 'public_studio', columns: 'pause_reason', filters: ['limit 1'] });
+  });
+
+  it('says the dispatcher is not running with no heartbeat, and stale with an old one', async () => {
+    fake.studio = { ...fake.studio, dispatcher_seen_at: null };
+    await renderBoard();
+    expect(screen.getByText('Dispatcher: not running.')).toBeTruthy();
     cleanup();
-    fake.aal = 'aal1';
+    const old = new Date(startedAt.getTime() - DISPATCHER_STALE_MS - 1_000).toISOString();
+    fake.studio = { ...fake.studio, dispatcher_seen_at: old };
     await renderBoard();
-    await flush();
-    const readOnly = within(screen.getByRole('region', { name: 'Roles' }));
-    expect(readOnly.getByRole('row', { name: 'Game Director reviewer not paused' })).toBeTruthy();
-    expect(readOnly.queryByRole('form', { name: 'Pause or resume a role' })).toBeNull();
-    expect(readOnly.queryByRole('button', { name: /^Pause/ })).toBeNull();
+    expect(screen.getByText(`Dispatcher: stale, last seen ${formatDateTime(old)}.`)).toBeTruthy();
   });
 
-  it('keeps the confirmation and keyboard focus on the button after a role is paused and the list refreshes', async () => {
-    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
+  it('polls board_studio_state every 15 s', async () => {
     await renderBoard();
-    await flush();
-    const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
-    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
-    const button = roles.getByRole('button', { name: 'Pause Game Director' });
-    button.focus();
-    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
-    await flush();
-    expect(callsNamed('set_role_pause').map((call) => call.args)).toEqual([{ p_role: 'r-director', p_paused: true, p_reason: 'Too many loops' }]);
-    expect(roles.getByRole('row', { name: 'Game Director reviewer paused: Too many loops' })).toBeTruthy();
-    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
-    // The same button, still focused, now resumes the role.
-    expect(document.activeElement).toBe(button);
-    expect(button.isConnected).toBe(true);
-    expect(button.textContent).toBe('Resume Game Director');
-    expect((roles.getByLabelText('Reason') as HTMLInputElement).value).toBe('');
+    const first = named('board_studio_state').length;
+    expect(first).toBe(1);
+    await flush(STUDIO_STATE_POLL_MS);
+    expect(named('board_studio_state')).toHaveLength(2);
   });
 
-  it('keeps a busy button focusable, marked aria-disabled rather than disabled, and ignores a second submit while the first runs', async () => {
-    fake.boardRoles = [{ id: 'r-director', name: 'Game Director', agent_class: 'reviewer', state: 'active', paused: false, paused_reason: null }];
-    fake.held = 'set_role_pause';
+  it('names a card supply failure', async () => {
+    fake.supply = null;
     await renderBoard();
+    expect(screen.getByText('Card supply: card_supply is unavailable')).toBeTruthy();
+  });
+});
+
+describe('Activity', () => {
+  it('reads the recent cards, the job runs and the findings once, and again only on Refresh', async () => {
+    await renderBoard();
+    await flush(STUDIO_STATE_POLL_MS * 4);
+    const reads = () => [
+      fake.selects.filter((s) => s.table === 'cards' && s.columns === RECENT_CARD_COLUMNS).length,
+      named('board_jobs').length,
+      fake.selects.filter((s) => s.table === 'findings').length,
+    ];
+    expect(reads()).toEqual([1, 1, 1]);
+    expect(fake.selects.find((s) => s.columns === RECENT_CARD_COLUMNS)).toEqual({ table: 'cards', columns: RECENT_CARD_COLUMNS, filters: ['order updated_at desc', 'limit 25'] });
+    expect(fake.selects.find((s) => s.table === 'findings')).toEqual({ table: 'findings', columns: FINDING_COLUMNS, filters: ['is closed_at null', 'order opened_at asc'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await flush();
-    const roles = within(screen.getByRole('region', { name: 'Roles' }));
-    fireEvent.change(roles.getByLabelText('Role'), { target: { value: 'r-director' } });
-    fireEvent.change(roles.getByLabelText('Reason'), { target: { value: 'Too many loops' } });
-    const button = roles.getByRole('button', { name: 'Pause Game Director' }) as HTMLButtonElement;
-    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    expect(reads()).toEqual([2, 2, 2]);
+  });
+
+  it('shows each recent card with its stage and failing check', async () => {
+    fake.cards = [card('c1', 'Bigger pockets', 'funded', { failing_check: 'tests', updated_at: '2026-10-09T08:00:00Z' }), card('c2', 'Quiet rooms', 'proposed', { horizon: 'next' })];
+    await renderBoard();
+    const items = screen.getByRole('region', { name: 'Activity' }).querySelectorAll('li[data-card]');
+    expect([...items].map((li) => li.textContent)).toEqual([
+      `Bigger pockets · funded · now · failing check: tests · updated ${formatDateTime('2026-10-09T08:00:00Z')}`,
+      `Quiet rooms · proposed · next · updated ${formatDateTime('2026-10-09T10:00:00Z')}`,
+    ]);
+  });
+
+  it('flattens the job runs, newest first and at most 20, with the origin, status and reason in words', async () => {
+    const runs = Array.from({ length: 22 }, (_, i) => ({ id: `r${i}`, origin: 'schedule', status: 'succeeded', reason: null, created_at: `2026-10-0${1 + (i % 9)}T${String(i).padStart(2, '0')}:00:00Z` }));
+    fake.jobs = [
+      { name: 'weekly_report', runs: [{ id: 'skip', origin: 'board', status: 'skipped', reason: 'studio_paused', created_at: '2026-10-10T11:00:00Z' }] },
+      { name: 'tidy_up', runs },
+    ];
+    await renderBoard();
+    const activity = within(screen.getByRole('region', { name: 'Activity' }));
+    const lines = activity.getAllByText(/ · (weekly_report|tidy_up) · /);
+    expect(lines).toHaveLength(20);
+    expect(lines[0]?.textContent).toBe(`${formatDateTime('2026-10-10T11:00:00Z')} · weekly_report · run now · skipped: the studio is paused`);
+  });
+
+  it('lists the open findings with their detail, and a GitHub address as a link', async () => {
+    const run = 'https://github.com/AlreadyKyle/peanutgallery/actions/runs/7';
+    fake.findings = [
+      { fingerprint: 'scan:osv', kind: 'scan', subject: "The weekly scan's osv job failed", detail: { run, job: null }, opened_at: '2026-10-09T08:00:00Z', last_seen_at: '2026-10-10T08:00:00Z' },
+      { fingerprint: 'bad', kind: 'gossip', subject: 'not a kind', detail: {}, opened_at: '2026-10-09T08:00:00Z' },
+    ];
+    await renderBoard();
+    const activity = within(screen.getByRole('region', { name: 'Activity' }));
+    expect(activity.getByText("Weekly scan: The weekly scan's osv job failed.")).toBeTruthy();
+    expect(activity.getByRole('link', { name: run }).getAttribute('href')).toBe(run);
+    expect(activity.queryByText(/not a kind/)).toBeNull();
+  });
+
+  it("shows one chosen card's public agent events, newest first, with the time, type and raw step or line key", async () => {
+    fake.cards = [card('c1', 'Bigger pockets', 'funded')];
+    fake.events = [
+      { id: 'e1', card_id: 'c1', type: 'message', created_at: '2026-10-10T09:00:00Z', step: 'dealt', line_key: 'card_dealt' },
+      { id: 'e2', card_id: 'c1', type: 'commit', created_at: '2026-10-10T08:00:00Z', step: null, line_key: null },
+      { id: 'e3', card_id: 'other', type: 'commit', created_at: '2026-10-10T07:00:00Z', step: null, line_key: null },
+    ];
+    await renderBoard();
+    fireEvent.submit(screen.getByRole('form', { name: 'Card events' }));
     await flush();
-    // A browser moves focus off a focused button when it becomes disabled, so busy never disables.
+    expect(form('Card events').getByRole('status').textContent).toBe('Choose a card.');
+    expect(fake.selects.filter((s) => s.table === 'public_agent_events')).toEqual([]);
+    fireEvent.change(form('Card events').getByLabelText('Card'), { target: { value: 'c1' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Card events' }));
+    await flush();
+    expect(fake.selects.filter((s) => s.table === 'public_agent_events')).toEqual([
+      { table: 'public_agent_events', columns: CARD_EVENT_COLUMNS, filters: ['eq card_id c1', 'order created_at desc', 'limit 50'] },
+    ]);
+    const lines = screen.getByRole('form', { name: 'Card events' }).querySelectorAll('ol li');
+    expect([...lines].map((li) => li.textContent)).toEqual([
+      `${formatDateTime('2026-10-10T09:00:00Z')} · message · step dealt · card_dealt`,
+      `${formatDateTime('2026-10-10T08:00:00Z')} · commit`,
+    ]);
+  });
+});
+
+describe('Actions', () => {
+  it('pauses with a reason, resumes without one, and rereads the status', async () => {
+    await renderBoard();
+    const before = named('board_studio_state').length;
+    const pause = within(screen.getByRole('region', { name: 'Pause and resume' }));
+    fireEvent.change(pause.getByLabelText('Pause reason'), { target: { value: 'spend_limit' } });
+    fireEvent.click(pause.getByRole('button', { name: 'Pause agents' }));
+    await flush();
+    fireEvent.change(pause.getByLabelText('Pause reason'), { target: { value: 'board' } });
+    fireEvent.click(pause.getByRole('button', { name: 'Pause agents' }));
+    await flush();
+    fireEvent.click(pause.getByRole('button', { name: 'Resume agents' }));
+    await flush();
+    expect(named('set_paused').map((call) => call.args)).toEqual([{ p_paused: true, p_reason: 'spend_limit' }, { p_paused: true }, { p_paused: false }]);
+    expect(named('board_studio_state').length).toBe(before + 3);
+  });
+
+  it('files a card as proposed with its horizon, no stage choice, and only the card roles as executors', async () => {
+    await renderBoard();
+    const file = form('File a card');
+    expect(file.queryByRole('radio')).toBeNull();
+    expect(file.queryByRole('group', { name: 'Stage' })).toBeNull();
+    expect([...(file.getByLabelText('Executor') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['r-builder-a', 'r-platform']);
+    expect(fake.selects.find((s) => s.table === 'public_roles')).toEqual({ table: 'public_roles', columns: ROLE_COLUMNS, filters: [] });
+    fireEvent.change(file.getByLabelText('Horizon'), { target: { value: 'later' } });
+    fireEvent.change(file.getByLabelText('Bucket'), { target: { value: 'game' } });
+    fireEvent.change(file.getByLabelText('Lane'), { target: { value: 'code' } });
+    fireEvent.change(file.getByLabelText('Title'), { target: { value: ' A second level ' } });
+    fireEvent.change(file.getByLabelText('Public summary'), { target: { value: ' Somewhere new to play. ' } });
+    fireEvent.change(file.getByLabelText('Intent (for the agents)'), { target: { value: 'Add a stage.' } });
+    fireEvent.change(file.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
+    fireEvent.change(file.getByLabelText('Reason (optional)'), { target: { value: 'Asked for.' } });
+    fireEvent.change(file.getByLabelText('Funding target (USD)'), { target: { value: '3' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+    await flush();
+    expect(named('file_card').map((call) => call.args)).toEqual([
+      {
+        p_bucket: 'game',
+        p_lane: 'code',
+        p_folder: 'seed-1',
+        p_title: 'A second level',
+        p_summary: 'Somewhere new to play.',
+        p_intent: 'Add a stage.',
+        p_acceptance_test: 'check: it loads',
+        p_funding_target_usd: 3,
+        p_stage: 'proposed',
+        p_executor_role_id: 'r-builder-a',
+        p_board_reason: 'Asked for.',
+        p_horizon: 'later',
+      },
+    ]);
+    expect(file.getByText('Card filed as card 1a2b3c4d.')).toBeTruthy();
+  });
+
+  it('counts the summary to 200, refuses a blank one, and refuses a blank or zero target on every horizon before calling', async () => {
+    await renderBoard();
+    const file = form('File a card');
+    const summary = file.getByLabelText('Public summary') as HTMLInputElement;
+    expect(summary.maxLength).toBe(200);
+    expect(file.getByText('0 / 200')).toBeTruthy();
+    fireEvent.change(summary, { target: { value: '   ' } });
+    expect(file.getByText('3 / 200')).toBeTruthy();
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+    await flush();
+    expect(file.getByText('A public summary is required.')).toBeTruthy();
+    fireEvent.change(summary, { target: { value: 'A summary.' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+    await flush();
+    expect(file.getByText('Funding target must be at least $0.01.')).toBeTruthy();
+    // file_card refuses a target of zero or less whatever the horizon, so the roadmap needs one too.
+    const target = file.getByLabelText('Funding target (USD)') as HTMLInputElement;
+    expect(target.required).toBe(true);
+    expect(target.min).toBe('0.01');
+    for (const [horizon, value] of [['later', ''], ['next', '0']] as const) {
+      fireEvent.change(file.getByLabelText('Horizon'), { target: { value: horizon } });
+      fireEvent.change(target, { target: { value } });
+      fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+      await flush();
+      expect(file.getByRole('status').textContent).toBe('Funding target must be at least $0.01.');
+    }
+    expect(named('file_card')).toHaveLength(0);
+  });
+
+  it('offers only the cards that can still be rejected, rejects one after the confirm with the reason, and says how much money moved', async () => {
+    fake.cards = [card('x1', 'Retire me', 'voted'), card('x2', 'Stays', 'proposed'), card('x3', 'Done', 'shipped'), card('x4', 'Gone', 'rejected')];
+    fake.cancelResult = { card_id: 'x1', moved_usd: 1.8 };
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await renderBoard();
+    const actions = form('Card actions');
+    const picker = actions.getByLabelText('Card') as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.textContent)).toEqual(['Choose a card', 'Retire me (voted)', 'Stays (proposed)']);
+    expect(fake.selects.find((s) => s.columns === ACTIONABLE_CARD_COLUMNS)?.filters).toEqual(['in stage proposed,designing,voted,funded,paused', 'order created_at asc']);
+    expect(actions.queryByRole('button', { name: 'Resume card' })).toBeNull();
+
+    fireEvent.change(picker, { target: { value: 'x1' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Reject card' }));
+    await flush();
+    expect(actions.getByRole('status').textContent).toBe('A reason is required.');
+    expect(confirm).not.toHaveBeenCalled();
+    fireEvent.change(actions.getByLabelText('Reason'), { target: { value: 'Out of scope.' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Reject card' }));
+    await flush();
+    expect(confirm).toHaveBeenCalledWith(CANCEL_CONFIRM);
+    expect(named('cancel_card')).toHaveLength(0);
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(actions.getByRole('button', { name: 'Reject card' }));
+    await flush();
+    await flush();
+    expect(named('cancel_card').map((call) => call.args)).toEqual([{ p_card: 'x1', p_reason: 'Out of scope.' }]);
+    expect(actions.getByRole('status').textContent).toBe('Card Retire me rejected. $1.80 of unspent money moved to the next cards in line.');
+    expect([...picker.options].map((o) => o.textContent)).toEqual(['Choose a card', 'Stays (proposed)']);
+  });
+
+  it('says no money moved when a rejection moves none', async () => {
+    fake.cards = [card('x1', 'Empty', 'proposed')];
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await renderBoard();
+    const actions = form('Card actions');
+    fireEvent.change(actions.getByLabelText('Card'), { target: { value: 'x1' } });
+    fireEvent.change(actions.getByLabelText('Reason'), { target: { value: 'No.' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Reject card' }));
+    await flush();
+    await flush();
+    expect(actions.getByRole('status').textContent).toBe('Card Empty rejected. No unspent money moved.');
+  });
+
+  it('rereads the card picker on Refresh and after Resume and File a card, so it never offers a card that moved on', async () => {
+    fake.cards = [card('p1', 'Paused one', 'paused', { estimate_usd: '0.5000' })];
+    await renderBoard();
+    const actions = form('Card actions');
+    const offered = () => [...(actions.getByLabelText('Card') as HTMLSelectElement).options].map((o) => o.textContent);
+    const reads = () => fake.selects.filter((s) => s.columns === ACTIONABLE_CARD_COLUMNS).length;
+    expect(offered()).toEqual(['Choose a card', 'Paused one (paused)']);
+    expect(reads()).toBe(1);
+
+    fake.cards = [...fake.cards, card('v1', 'Voted since', 'voted')];
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await flush();
+    expect(offered()).toEqual(['Choose a card', 'Paused one (paused)', 'Voted since (voted)']);
+    expect(reads()).toBe(2);
+
+    fireEvent.change(actions.getByLabelText('Card'), { target: { value: 'p1' } });
+    fireEvent.change(actions.getByLabelText('Reason'), { target: { value: 'Topped up.' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Resume card' }));
+    await flush();
+    await flush();
+    expect(offered()).toEqual(['Choose a card', 'Paused one (funded)', 'Voted since (voted)']);
+    expect(actions.queryByRole('button', { name: 'Resume card' })).toBeNull();
+
+    const file = form('File a card');
+    fireEvent.change(file.getByLabelText('Title'), { target: { value: 'Filed just now' } });
+    fireEvent.change(file.getByLabelText('Public summary'), { target: { value: 'New.' } });
+    fireEvent.change(file.getByLabelText('Intent (for the agents)'), { target: { value: 'Do it.' } });
+    fireEvent.change(file.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
+    fireEvent.change(file.getByLabelText('Funding target (USD)'), { target: { value: '2' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+    await flush();
+    await flush();
+    expect(offered()).toContain('Filed just now (proposed)');
+    expect(reads()).toBe(4);
+  });
+
+  it('resumes a paused card with a new estimate and the reason', async () => {
+    fake.cards = [card('p1', 'Paused one', 'paused', { estimate_usd: '0.5000' })];
+    await renderBoard();
+    const actions = form('Card actions');
+    fireEvent.change(actions.getByLabelText('Card'), { target: { value: 'p1' } });
+    expect((actions.getByLabelText('New estimate (USD)') as HTMLInputElement).value).toBe('0.5');
+    fireEvent.change(actions.getByLabelText('New estimate (USD)'), { target: { value: '0.8' } });
+    fireEvent.change(actions.getByLabelText('Reason'), { target: { value: 'Credit topped up.' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Resume card' }));
+    await flush();
+    await flush();
+    expect(named('resume_card').map((call) => call.args)).toEqual([{ p_card: 'p1', p_estimate_usd: 0.8, p_reason: 'Credit topped up.' }]);
+    expect(actions.getByRole('status').textContent).toBe('Card Paused one resumed.');
+  });
+
+  it('records a credit purchase with the contract arguments', async () => {
+    await renderBoard();
+    const credit = form('Record a credit purchase');
+    fireEvent.change(credit.getByLabelText('Amount (USD)'), { target: { value: '12.5' } });
+    fireEvent.change(credit.getByLabelText('Stripe payout id'), { target: { value: ' po_123 ' } });
+    fireEvent.change(credit.getByLabelText('Reason'), { target: { value: 'October credit' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Record a credit purchase' }));
+    await flush();
+    expect(named('record_credit_purchase').map((call) => call.args)).toEqual([{ p_amount_usd: 12.5, p_stripe_payout_id: 'po_123', p_reason: 'October credit' }]);
+    expect(credit.getByText('Credit purchase of $12.50 recorded.')).toBeTruthy();
+  });
+
+  it('runs a job now from the board_jobs names with input {} and no card, refusing a blank reason', async () => {
+    fake.jobs = [{ name: 'tidy_up', runs: [] }, { name: 'weekly_report', runs: [] }];
+    await renderBoard();
+    const job = form('Run a job now');
+    const picker = job.getByLabelText('Job') as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.value)).toEqual(['', 'tidy_up', 'weekly_report']);
+    fireEvent.change(picker, { target: { value: 'weekly_report' } });
+    fireEvent.change(job.getByLabelText('Reason'), { target: { value: '  ' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Run a job now' }));
+    await flush();
+    expect(job.getByRole('status').textContent).toBe('A reason is required.');
+    expect(named('enqueue_manual_job')).toHaveLength(0);
+    fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Debugging' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Run a job now' }));
+    await flush();
+    expect(named('enqueue_manual_job').map((call) => call.args)).toEqual([{ p_job: 'weekly_report', p_card: null, p_reason: 'Debugging', p_input: {} }]);
+    expect(job.getByRole('status').textContent).toBe('Queued weekly_report. It runs on the next dispatcher tick.');
+  });
+
+  it('keeps a busy button focusable, marked aria-disabled, and ignores a second press while the first runs', async () => {
+    fake.held = 'set_paused';
+    await renderBoard();
+    const button = screen.getByRole('button', { name: 'Pause agents' }) as HTMLButtonElement;
+    fireEvent.click(button);
+    await flush();
     expect(button.disabled).toBe(false);
     expect(button.getAttribute('aria-disabled')).toBe('true');
-    fireEvent.submit(roles.getByRole('form', { name: 'Pause or resume a role' }));
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: 'Resume agents' }));
     await flush();
-    expect(callsNamed('set_role_pause')).toHaveLength(1);
+    expect(named('set_paused')).toHaveLength(1);
     await act(async () => fake.release());
     await flush();
-    expect(roles.getByRole('status').textContent).toBe('Game Director paused.');
     expect(button.getAttribute('aria-disabled')).toBe('false');
+    expect(screen.getByText('Agents paused.')).toBeTruthy();
   });
+});
 
-  it('ignores Cancel card, Resume card and a veto while another action on the same card runs, with no confirmation shown', async () => {
-    fake.cards = [card({ id: 'busy', title: 'Busy card', horizon: 'next' })];
-    fake.held = 'set_card_horizon';
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await renderBoard();
-    await flush();
-    const form = cardForm('Busy card');
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Move it' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Card Busy card' }));
-    await flush();
-    fireEvent.click(form.getByRole('button', { name: 'Reject card' }));
-    fireEvent.click(form.getByRole('button', { name: 'Veto card' }));
-    await flush();
-    expect(confirm).not.toHaveBeenCalled();
-    expect(callsNamed('cancel_card')).toHaveLength(0);
-    expect(callsNamed('set_card_veto')).toHaveLength(0);
-    await act(async () => fake.release());
-    await flush();
-    confirm.mockRestore();
-  });
+describe('the sources', () => {
+  const files = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => (statSync(join(dir, name)).isDirectory() ? files(join(dir, name)) : [join(dir, name)]));
+  // vitest runs in the package root; jsdom gives import.meta.url an http scheme.
+  const sources = files(resolve(process.cwd(), 'src'));
 
-  it('never disables a control only because its action is running', () => {
-    // Every busy control in the board site keeps its focus the same way (the test above shows one).
-    // vitest runs in the package root; jsdom gives import.meta.url an http scheme.
-    const source = readFileSync(resolve(process.cwd(), 'src/Board.tsx'), 'utf8');
-    expect(source).toMatch(/aria-disabled=\{busy\}/);
-    expect(source).not.toMatch(/(?<![-\w])disabled=\{[^}]*\bbusy\b/);
-  });
-
-  it('lists each job with its last runs, their origin and reason, and queues a board-origin run with typed input', async () => {
-    fake.jobs = [
-      {
-        name: 'weekly_report',
-        role_name: 'Studio Head',
-        calls_model: true,
-        runs_when_paused: true,
-        description: null,
-        runs: [{ id: 'run-1', origin: 'schedule', status: 'skipped', reason: 'not_board_origin', created_at: '2026-09-14T11:00:00Z', finished_at: '2026-09-14T11:00:05Z' }],
-      },
-    ];
-    await renderBoard();
-    await flush();
-    const job = within(screen.getByRole('form', { name: 'Job weekly_report' }));
-    expect(job.getByText('Studio Head · calls a model, on the board plan while you are signed in · runs while the studio is paused')).toBeTruthy();
-    // The origin and the reason in words, never the stored codes; the heading is the job's name in words.
-    expect(job.getByText(`${formatDateTime('2026-09-14T11:00:00Z')} · scheduled · skipped: only the board starts a model run`)).toBeTruthy();
-    expect(job.getByRole('heading', { name: 'Weekly report' })).toBeTruthy();
-    fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '[1]' } });
-    fireEvent.change(job.getByLabelText('Reason'), { target: { value: 'Report now' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Job weekly_report' }));
-    await flush();
-    expect(job.getByText('The input must be a JSON object.')).toBeTruthy();
-    fireEvent.change(job.getByLabelText('Input (JSON, optional)'), { target: { value: '{"floor": 3}' } });
-    fireEvent.submit(screen.getByRole('form', { name: 'Job weekly_report' }));
-    await flush();
-    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([{ p_job: 'weekly_report', p_card: null, p_reason: 'Report now', p_input: { floor: 3 } }]);
-    expect(job.getByText('Queued. It runs while a board member is signed in here.')).toBeTruthy();
-  });
-
-  it('queues Rank now and Draft a game card as board-origin runs with {}, and shows each run\'s typed output', async () => {
-    // The first moved card is listed under Cards, so the output names it by title and links to its row.
-    fake.cards = [card({ id: '11111111-1111-4111-8111-111111111111', title: 'Faster gatherers', rank: 1 })];
-    fake.jobs = [
-      {
-        name: 'studio_ranking',
-        role_name: 'Studio Head',
-        calls_model: true,
-        runs_when_paused: true,
-        description: 'Rank now.',
-        runs: [
-          {
-            id: 'rank-1',
-            origin: 'board',
-            status: 'succeeded',
-            reason: null,
-            created_at: '2026-09-14T11:00:00Z',
-            finished_at: '2026-09-14T11:02:00Z',
-            output: {
-              moves: [
-                { card_id: '11111111-1111-4111-8111-111111111111', from: 3, to: 1 },
-                { card_id: '33333333-3333-4333-8333-333333333333', from: null, to: 4 },
-              ],
-              unapplied: 2,
-            },
-          },
-        ],
-      },
-      {
-        name: 'draft_card',
-        role_name: 'Game Designer',
-        calls_model: true,
-        runs_when_paused: true,
-        description: 'Draft a game card.',
-        runs: [
-          {
-            id: 'draft-1',
-            origin: 'board',
-            status: 'succeeded',
-            reason: null,
-            created_at: '2026-09-14T12:00:00Z',
-            finished_at: '2026-09-14T12:09:00Z',
-            output: {
-              result: 'approved',
-              card_id: '22222222-2222-4222-8222-222222222222',
-              rounds: [
-                { round: 1, draft: { title: 'Gatherers cost 10', summary: 'No change.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: { name: 'already_holds', detail: 'already true on main' }, verdict: null },
-                { round: 2, draft: { title: 'Gatherers cost 11', summary: 'The gatherer costs one more.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: null, verdict: { result: 'revise', reason_codes: ['unclear_text'], note: 'Say dust.' } },
-                { round: 3, draft: { title: 'Gatherers cost 11 dust', summary: 'Building a gatherer costs 11 dust.', lane: 'config', executor: 'Builder A', estimate_usd: 0.5 }, check: null, verdict: { result: 'approved', reason_codes: ['fits_pillars'] } },
-              ],
-            },
-          },
-          {
-            id: 'draft-0',
-            origin: 'board',
-            status: 'succeeded',
-            reason: null,
-            created_at: '2026-09-14T10:00:00Z',
-            finished_at: '2026-09-14T10:05:00Z',
-            output: { result: 'withdrawn', reason: 'flagged', reason_codes: ['duplicate_card'], rounds: [] },
-          },
-        ],
-      },
-    ];
-    await renderBoard();
-    await flush();
-    const rank = within(screen.getByRole('form', { name: 'Job studio_ranking' }));
-    expect(rank.queryByLabelText('Input (JSON, optional)')).toBeNull();
-    // Each moved card on its own line, by title with a link to its row when listed, else by short id.
-    const moves = rank.getAllByRole('listitem').filter((item) => item.parentElement?.tagName === 'OL');
-    expect(moves.map((item) => item.textContent)).toEqual(['Faster gatherers: from rank 3 to rank 1', 'card 33333333: from no rank to rank 4']);
-    expect(within(moves[0]!).getByRole('link', { name: 'Faster gatherers' }).getAttribute('href')).toBe('#card-11111111-1111-4111-8111-111111111111');
-    expect(rank.getByText('2 more kept their ranks.')).toBeTruthy();
-    const draft = within(screen.getByRole('form', { name: 'Job draft_card' }));
-    // The approved card is not listed yet, so it is named by its approved round's title, with no link.
-    expect(draft.getByText('Approved: Gatherers cost 11 dust waits out the cooling window, then is dealt to now.')).toBeTruthy();
-    // Codes read as words: the check, the verdict and its reasons.
-    expect(draft.getByText('Gatherers cost 10 (config, Builder A, $0.50): No change. Refused by the already holds check: already true on main')).toBeTruthy();
-    expect(draft.getByText('Gatherers cost 11 (config, Builder A, $0.50): The gatherer costs one more. Sent back to revise: unclear text. Say dust.')).toBeTruthy();
-    expect(draft.getByText('Gatherers cost 11 dust (config, Builder A, $0.50): Building a gatherer costs 11 dust. Approved: fits pillars.')).toBeTruthy();
-    expect(draft.getByText('Withdrawn: flagged. No card was written.')).toBeTruthy();
-    fireEvent.change(rank.getByLabelText('Reason'), { target: { value: 'New cards on now' } });
-    fireEvent.click(rank.getByRole('button', { name: 'Rank now' }));
-    await flush();
-    fireEvent.change(draft.getByLabelText('Reason'), { target: { value: 'Short of cards' } });
-    fireEvent.click(draft.getByRole('button', { name: 'Draft a game card' }));
-    await flush();
-    expect(callsNamed('enqueue_manual_job').map((call) => call.args)).toEqual([
-      { p_job: 'studio_ranking', p_card: null, p_reason: 'New cards on now', p_input: {} },
-      { p_job: 'draft_card', p_card: null, p_reason: 'Short of cards', p_input: {} },
-    ]);
-    expect(rank.getByText('Queued. It runs while a board member is signed in here.')).toBeTruthy();
-    // Without the second factor the buttons are not offered.
-    cleanup();
-    fake.aal = 'aal1';
-    await renderBoard();
-    await flush();
-    expect(within(screen.getByRole('form', { name: 'Job draft_card' })).queryByRole('button', { name: 'Draft a game card' })).toBeNull();
-  });
-
-  it('marks an undealt agent card and a hidden one, vetoes the undealt one with a reason, and lifts a veto', async () => {
-    fake.cards = [
-      card({ id: 'undealt', title: 'Approved, waiting', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer', opens_at: '2026-09-14T13:00:00Z' }),
-      card({ id: 'hidden', title: 'No current approval', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer' }),
-      card({ id: 'vetoed', title: 'Vetoed card', horizon: 'next', board_vetoed: true, board_veto_reason: 'Off pillar.' }),
-      // A vetoed agent card with an opens_at is not also waiting to be dealt.
-      card({ id: 'vetoed-agent', title: 'Vetoed agent card', horizon: 'next', source: 'agent', drafter_role_id: 'r-designer', opens_at: '2026-09-14T13:00:00Z', board_vetoed: true, board_veto_reason: 'No' }),
-    ];
-    fake.publicCards = ['undealt', 'vetoed-agent'];
-    await renderBoard();
-    await flush();
-    // The status line agrees with the marks: not open for funding while waiting to be dealt or vetoed.
-    expect(cardForm('Approved, waiting').getByText(/^waiting to be dealt · horizon next/)).toBeTruthy();
-    expect(cardForm('Vetoed card').getByText(/^vetoed · horizon next/)).toBeTruthy();
-    expect(cardForm('Vetoed agent card').queryByText(/Waiting to be dealt/)).toBeNull();
-    expect(cardForm('Vetoed agent card').getByText('Vetoed by the board: No. It is never dealt or run.')).toBeTruthy();
-    expect(cardForm('Approved, waiting').getByText(`Waiting to be dealt: moves to now at ${formatDateTime('2026-09-14T13:00:00Z')}.`)).toBeTruthy();
-    expect(cardForm('No current approval').getByText(/^Hidden: written by an agent with no current approval/)).toBeTruthy();
-    expect(cardForm('Vetoed card').getByText('Vetoed by the board: Off pillar. It is never dealt or run.')).toBeTruthy();
-    expect(cardForm('Vetoed card').queryByRole('button', { name: 'Veto card' })).toBeNull();
-    fireEvent.change(cardForm('Approved, waiting').getByLabelText('Reason'), { target: { value: 'Not this week' } });
-    fireEvent.click(cardForm('Approved, waiting').getByRole('button', { name: 'Veto card' }));
-    await flush();
-    fireEvent.change(cardForm('Vetoed card').getByLabelText('Reason'), { target: { value: 'Fine now' } });
-    fireEvent.click(cardForm('Vetoed card').getByRole('button', { name: 'Lift veto' }));
-    await flush();
-    expect(callsNamed('set_card_veto').map((call) => call.args)).toEqual([
-      { p_card: 'undealt', p_vetoed: true, p_reason: 'Not this week' },
-      { p_card: 'vetoed', p_vetoed: false, p_reason: 'Fine now' },
-    ]);
-    // Only agent-written cards are asked about their approval; the board-filed one is not.
-    expect(new Set(callsNamed('card_is_public').map((call) => call.args?.p_card))).toEqual(new Set(['hidden', 'undealt', 'vetoed-agent']));
-  });
-
-  it('vetoes a card on now with one button that keeps focus and says so, though the veto moves the card to next', async () => {
-    fake.cards = [card({ id: 'on-now', title: 'On now', horizon: 'now' }), card({ id: 'on-next', title: 'On next', horizon: 'next', rank: 1 })];
-    await renderBoard();
-    await flush();
-    const form = cardForm('On now');
-    fireEvent.change(form.getByLabelText('Reason'), { target: { value: 'Off pillar' } });
-    const toggle = form.getByRole('button', { name: 'Veto card' });
-    toggle.focus();
-    fireEvent.click(toggle);
-    await flush();
-    const after = cardForm('On now');
-    expect(after.getByRole('status').textContent).toBe('Card vetoed.');
-    expect(after.getByText(/horizon next/)).toBeTruthy();
-    // The same element, now reading Lift veto, still has focus.
-    expect(after.getByRole('button', { name: 'Lift veto' })).toBe(toggle);
-    expect(document.activeElement).toBe(toggle);
-    fireEvent.change(after.getByLabelText('Reason'), { target: { value: 'Back in' } });
-    fireEvent.click(toggle);
-    await flush();
-    expect(cardForm('On now').getByRole('status').textContent).toBe('Veto lifted.');
-    expect(toggle.textContent).toBe('Veto card');
-    expect(document.activeElement).toBe(toggle);
-  });
-
-  it('lists the ceiling pauses the rule will not resume and the cards holding money whose approval is not current, each linking to its row under Cards', async () => {
-    fake.needs = { ...NEEDS_CARDS };
-    fake.cards = [
-      card({ id: 'max', title: 'At the maximum', stage: 'paused' }),
-      card({ id: 'twice', title: 'Paused twice', stage: 'paused' }),
-      card({ id: 'vetoed', title: 'Director vetoed', stage: 'paused' }),
-      card({ id: 'lane', title: 'Platform code', stage: 'paused' }),
-      card({ id: 'void', title: 'Rewritten', source: 'agent', drafter_role_id: 'r-designer' }),
-    ];
-    await renderBoard();
-    await flush();
-    const needs = within(screen.getByRole('region', { name: 'Needs you' }));
-    expect(needs.getByText('Card At the maximum is paused at the card maximum of $25.00.')).toBeTruthy();
-    // resumed_before covers a first resume by the rule or by the board.
-    expect(needs.getByText('Card Paused twice is paused at its ceiling a second time, after it was resumed once.')).toBeTruthy();
-    // The rule also leaves a vetoed card and a closed-lane card to the board.
-    expect(needs.getByText('Card Director vetoed is paused at its ceiling and vetoed, so no session would run it.')).toBeTruthy();
-    expect(needs.getByText('Card Platform code is paused at its ceiling, and the platform code lane is closed.')).toBeTruthy();
-    expect(needs.getAllByRole('link', { name: 'resume it with a new estimate, or reject it, under Cards' }).map((link) => link.getAttribute('href'))).toEqual(['#card-max', '#card-twice', '#card-vetoed', '#card-lane']);
-    expect(needs.getByText('Card Rewritten holds $2.00 but its approval is not current.')).toBeTruthy();
-    expect(needs.getByRole('link', { name: 'Reject it under Cards' }).getAttribute('href')).toBe('#card-void');
-    // Every link has its row on the page.
-    for (const link of needs.getAllByRole('link').filter((a) => a.getAttribute('href')?.startsWith('#'))) {
-      expect(document.getElementById(link.getAttribute('href')!.slice(1)), link.getAttribute('href')!).not.toBeNull();
+  it('never disable a control only because its action is running', () => {
+    for (const file of sources.filter((f) => f.endsWith('.tsx') && !f.endsWith('.test.tsx'))) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/(?<![-\w])disabled=\{[^}]*\bbusy\b/);
     }
   });
 
-  it('names the second factor and links to no card at the first factor, where Cards is not shown', async () => {
-    fake.aal = 'aal1';
-    fake.needs = { ...NEEDS_CARDS };
-    await renderBoard();
-    const region = screen.getByRole('region', { name: 'Needs you' });
-    const needs = within(region);
-    expect(screen.queryByRole('region', { name: 'Cards' })).toBeNull();
-    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
-    expect(needs.getByText(/Verify your second factor, then reject it under Cards, which moves its unspent money/)).toBeTruthy();
-    expect(needs.getAllByText(/The rule will not resume it: verify your second factor, then resume it with a new estimate, or reject it, under Cards\./)).toHaveLength(4);
-  });
-
-  it('links to no card while the cards read has not listed it', async () => {
-    fake.needs = { ...NEEDS_CARDS };
-    fake.cards = [];
-    await renderBoard();
-    await flush();
-    const region = screen.getByRole('region', { name: 'Needs you' });
-    expect(region.querySelectorAll('a[href^="#"]')).toHaveLength(0);
-    expect(within(region).getByText(/Reject it under Cards, which moves its unspent money/)).toBeTruthy();
-  });
-});
-
-describe('Board card rows (docs/specs/simple-board.md)', () => {
-  it('shows each card with its summary, the verbs Move, Veto, Reject and Resume, and says what to do with no cards', async () => {
-    fake.cards = [
-      card({ id: 'o', title: 'On now', summary: 'One more unlock in the game.' }),
-      card({ id: 'p', title: 'Stopped', stage: 'paused' }),
-    ];
-    await renderBoard();
-    await flush();
-    expect(cardForm('On now').getByText('One more unlock in the game.')).toBeTruthy();
-    expect(cardForm('On now').getByRole('button', { name: 'Move card' })).toBeTruthy();
-    expect(cardForm('On now').getByRole('button', { name: 'Veto card' })).toBeTruthy();
-    expect(cardForm('Stopped').getByRole('button', { name: 'Resume card' })).toBeTruthy();
-    expect(cardForm('Stopped').getByRole('button', { name: 'Reject card' })).toBeTruthy();
-  });
-
-  it('says what to do when there are no cards', async () => {
-    fake.cards = [];
-    await renderBoard();
-    await flush();
-    expect(within(screen.getByRole('region', { name: 'Cards' })).getByText(NO_CARDS)).toBeTruthy();
-  });
-
-  it('at the first factor says the page is read-only until the code is in', async () => {
-    fake.aal = 'aal1';
-    await renderBoard();
-    expect(within(screen.getByRole('region', { name: 'Two-factor sign-in' })).getByText(SECOND_FACTOR_LINE)).toBeTruthy();
+  it('name none of the retired RPCs', () => {
+    for (const file of sources) {
+      const text = readFileSync(file, 'utf8');
+      for (const name of RETIRED_RPCS) expect(text.includes(name), `${file} names ${name}`).toBe(false);
+    }
   });
 });
