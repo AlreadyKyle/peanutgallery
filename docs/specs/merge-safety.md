@@ -179,10 +179,10 @@ A mismatch rejects the card `history`, and nothing merges. Each request that thr
   - `SESSION_MAX_MINUTES`;
   - three network git calls at their five-minute timeout;
   - the pull request head wait (1 minute), the gate (20) and the lost-merge poll (1);
-  - two verify windows of the deploy timeout (10) plus the smoke window (5), one for the card and one for a card ahead of it on the merge lock;
+  - two verify windows of the deploy timeout (10) plus the smoke window (15: the smoke gate's 12 and 3), one for the card and one for a card ahead of it on the merge lock;
   - 2 minutes of retries and 10 more.
   
-  That is 139 minutes at the default 60-minute session.
+  That is 159 minutes at the default 60-minute session.
 - Each tick alerts once per card past the limit and leaves the card running. The `stuck:<id>` key is forgotten when the card leaves the running set, so a later claim can alert again.
 
 **The board session.** `boardSessionActive` counts `board_members` rows with `role = 'board'` (the `board_role` enum is `board` or `moderator`). `claimCard` sets `commit_sha` to null with the stage. The site does not read `commit_sha` or event payloads.
@@ -226,7 +226,7 @@ A mismatch rejects the card `history`, and nothing merges. Each request that thr
 - [x] `resumeMerged` runs no smoke or rollback when main has moved, and only records the ship when a `smoke_pass` event for the sha exists.
 - [x] `findCardMerge` takes the newest pull request for the branch and returns its merge sha only when it merged.
 - [x] A tick whose `studio_state` read throws writes no heartbeat and sends no ping.
-- [x] The watchdog alerts once for a card past its limit, alerts again after the card finished and was claimed again, and the limit at a 60-minute session is 139 minutes.
+- [x] The watchdog alerts once for a card past its limit, alerts again after the card finished and was claimed again, and the limit at a 60-minute session is 159 minutes (139 before the smoke window grew).
 - [x] A GitHub, Netlify or smoke request that never answers aborts at its timeout.
 - [x] `boardSessionActive` queries `role=eq.board`, `claimCard` sends `commit_sha: null`, and `findEvent` queries the newest event by `payload_json->>step`.
 

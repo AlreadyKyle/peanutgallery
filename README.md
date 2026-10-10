@@ -13,7 +13,7 @@ Backseat is the working name. The package names (`@backseat/*`) still use it.
 | Game | https://play.mobmachine.games | Netlify site `peanutgallery-seed-1`, base `seed-1`. Phaser 3 and Vite. |
 | Database | Supabase project `lyxndueoeisyqzewflpu` | Postgres holds the money logic (crediting, usage, reversals, the daily hold), the `stripe-webhook` edge function, and pg_cron, which releases held credit hourly. |
 | Payments | Stripe | A Payment Link with a split dropdown, and a webhook to the edge function. |
-| Dispatcher | The founder's Mac, attended | At the cutover it runs unattended on the board's Mac under launchd (`docs/specs/mac-host.md`), and card sessions run as Claude Managed Agents sessions. It moves to a free Google Cloud server once the studio has one (`docs/BACKLOG.md`); the server's image, units and runbook are kept for that. The cutover is on the launch checklist in `docs/ROADMAP.md`. |
+| Dispatcher | GitHub Actions in this repository, unattended | Since 6 October 2026 it runs on GitHub Actions, one run of up to about six hours after another (`docs/specs/actions-host.md`, `docs/PLAN.md` §10 decision 61), and card sessions run as Claude Managed Agents sessions. The founder's Mac is retired as its host, and attended mode leaves the dispatcher (`docs/specs/unattended-roles.md`, §10 decision 66). An always-on paid host waits in `docs/BACKLOG.md`; the server's image, units and runbook are kept for that. |
 | Gate | GitHub Actions workflow `gate` | Runs on every pull request and every push to `main`. |
 
 The repository is private. `main` has no branch protection; the dispatcher merges a card only after the `gate` check has succeeded on the pull request's exact head sha.
@@ -21,7 +21,7 @@ The repository is private. `main` has no branch protection; the dispatcher merge
 ## Repository map
 
 - `platform/site`: the public site.
-- `platform/board`: the board's own site, a kernel folder: the Needs you inbox and every board control.
+- `platform/board`: the board's own site, a kernel folder: an optional admin and debug panel the studio never waits on (`docs/specs/optional-board.md`).
 - `platform/dispatcher`: the Node service that claims funded cards, runs agent sessions, and merges, deploys, smoke-tests and rolls back.
 - `platform/gate`: `ship-gate.sh` and its scans, the deny-lists, the headless bot runner and the kernel path list.
 - `platform/supabase`: migrations, the `stripe-webhook` function, the seed and the operator scripts.
@@ -36,7 +36,7 @@ The repository is private. `main` has no branch protection; the dispatcher merge
 This is what `platform/dispatcher/src/pipeline.ts` does with one card.
 
 1. **Funded.** A card on horizon `now` reaches stage `funded`: its bar fills from contributions, or the board files it as a directive.
-2. **Claimed.** On its one-minute tick the dispatcher checks that the studio is not paused and that its mode matches `studio_state`. In attended mode it needs a board member signed in on the board site; in unattended mode the pool and the caps must cover the card. Then it claims the card and sets it to `building`.
+2. **Claimed.** On its one-minute tick the dispatcher checks that the studio is not paused and that its mode matches `studio_state`. The pool and the caps must cover the card; no board member needs to be signed in (in the attended mode that leaves the dispatcher with `docs/specs/unattended-roles.md`, one had to be). Then it claims the card and sets it to `building`.
 3. **Session.** If the card has a `check:` line, the check must be false before the session. In attended mode a Claude Code session on the founder's Mac makes the change in a worktree on branch `card/<id>-<lane>`; in unattended mode a Claude Managed Agents session makes it against a read-only copy of the repository and hands back a patch, which the dispatcher applies in its own worktree on that branch. The session gets the card, the CLAUDE.md files and the role prompt, and every turn is metered to the ledger. Afterwards the check must be true.
 4. **Lane check.** Any change outside the card's lane, or to a kernel path, rejects the card.
 5. **Pull request.** The dispatcher commits the lane's paths, pushes `card/<id>-<lane>`, opens a pull request and sets the card to `gated`.
@@ -81,7 +81,7 @@ Per package:
 
 - The site: `pnpm --filter @backseat/site dev`. Without the `VITE_` values it renders with no data.
 - The game: `pnpm --filter @backseat/seed-1 dev`.
-- The dispatcher: `pnpm --filter @backseat/dispatcher start`, with `.env` filled in. In attended mode a tick starts nothing until a board member is signed in on the board site. It reads and writes the Supabase project `.env` names, and the studio has one project, the live one, so run it only when you mean to build cards.
+- The dispatcher: `pnpm --filter @backseat/dispatcher start`, with `.env` filled in. Until attended mode leaves the dispatcher (`docs/specs/unattended-roles.md`), an attended tick starts nothing without a board member signed in on the board site. It reads and writes the Supabase project `.env` names, and the studio has one project, the live one, so run it only when you mean to build cards.
 
 ## Other guides
 
@@ -107,7 +107,7 @@ Per package:
 
 ## Glossary
 
-- **Board.** Kyle and whoever joins him. The board acts through its own site (`platform/board`, not linked from the public site): the Needs you inbox, pause, the agent mode, directives, cards and their vetoes, notes, the caps, the cooling window, role pauses, the job list and credit purchases.
+- **Board.** Kyle and whoever joins him. The studio never waits on it (`docs/PLAN.md` §10 decision 66). Its site (`platform/board`, not linked from the public site) is an optional panel: Status, Activity, and Pause and Resume, File a card, Reject a card, Resume a paused card, Record a credit purchase and Run a job now (`docs/specs/optional-board.md`). Its standing duties reach it by ntfy, email and GitHub, and caps change by SQL.
 - **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a funding target, a lane, a folder, an executor role, a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused) and a horizon (now, next, later).
 - **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` outside its kernel paths only, and that lane opens when the board sets `studio_state.platform_lane_open` once its own site is live (PLAN.md §4 Work).
 - **Horizon and backlog.** Only a card on `now` can take money or run. `next` and `later` are the backlog: planned, not built, listed on /roadmap and seeded from `docs/BACKLOG.md`.
@@ -116,10 +116,10 @@ Per package:
 - **Pool.** Customer money available for agent compute, in `pool.balance_usd`. There is no founding budget.
 - **Reserve.** 10% of every contribution after Stripe's fee, taken before the split. Agents never spend it; it covers disputes first.
 - **Emergency fund.** The site's name for the incident reserve: 5% of the agents' share of each contribution, until it holds $500, for urgent bug fixes.
-- **Attended and unattended.** Attended: Claude Code sessions run on the founder's subscription only while a board member is signed in on the board site, billed to the founder. Unattended: Claude Managed Agents sessions run with no one present on the studio's own Anthropic organization (`STUDIO_ANTHROPIC_API_KEY`), billed to the studio and paid from the pool, within the Console credit bought from Stripe payouts.
+- **Attended and unattended.** Attended: Claude Code sessions on the founder's subscription, billed to the founder; before the cutover they ran only while a board member was signed in on the board site, and after `docs/specs/unattended-roles.md` only the hand-run replay eval is attended. Unattended: Claude Managed Agents sessions run with no one present on the studio's own Anthropic organization (`STUDIO_ANTHROPIC_API_KEY`), billed to the card they work on and paid from the pool, within the Console credit bought from Stripe payouts; the Directors' visual review and the Game Designer's drafts run this way too (§10 decision 66).
 - **Directive.** A card the board forces to stage `funded` at priority 0. It skips funding and still passes the gate.
 - **Founder-billed and studio-billed.** Every ledger row's `billed_to`. Founder-billed rows are attended work, tracked privately and never taken from the pool. Studio-billed rows are paid from the pool and shown on the public ledger.
 - **Held.** Agent credit above $50 per contributor per New York day, held 14 days before it reaches the pool (`docs/specs/refunds-and-holds.md`).
 - **D1–D3.** The first three board directives, built by agents through the pipeline (`docs/specs/week1-runs.md`): D1 the unlock list that fits any count, D2 save and resume, D3 the game shell (tab title, icon, studio link and all-ages label).
 - **Live cut.** The smallest set of features needed to go live (`docs/specs/live-cut.md`): the money loop, funding a card, unattended mode, and what is building and what is next on the site. `docs/ROADMAP.md` is the current checklist.
-- **`studio_state`.** The single row of studio settings and status: pause, the agent mode, the spend caps, the launch time, the daily credit limits and hold length, and the dispatcher's heartbeat. The board sets pause, the agent mode, the caps and Go live from the board site.
+- **`studio_state`.** The single row of studio settings and status: pause, the agent mode, the spend caps, the launch time, the daily credit limits and hold length, and the dispatcher's heartbeat. The board pauses and resumes from its panel and changes the caps by SQL (`BOARD-SETUP.md`); the first recorded credit purchase stamps the launch time.

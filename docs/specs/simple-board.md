@@ -2,7 +2,9 @@
 
 Status: built. Card: none. Owner: board.
 
-The board's order of 6 October 2026: the board concept and its sign-in feel weird. Cut the same day to critical fixes and minutes-long wording changes; the bigger, simpler model is one backlog entry, [A simpler board site: triage queue and sign-in](../BACKLOG.md#a-simpler-board-site-triage-queue-and-sign-in). This is a board pull request: `platform/board` and `platform/site/src/lib/legal.ts` are kernel.
+Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): the deferred triage model is dropped; the board's site becomes the optional panel of `optional-board.md`.
+
+The board's order of 6 October 2026: the board concept and its sign-in feel weird. Cut the same day to critical fixes and minutes-long wording changes; the bigger, simpler model was one backlog entry, A simpler board site: triage queue and sign-in, removed when PLAN.md §10 decision 66 made the board's site an optional panel (`optional-board.md`). This is a board pull request: `platform/board` and `platform/site/src/lib/legal.ts` are kernel.
 
 ## Audit
 
@@ -25,7 +27,7 @@ Out: sign-in mechanism, RPCs, schema, money, page order, the Content Security Po
 - [x] Each card row shows its summary; the verbs are Move card, Veto card or Lift veto, Reject card and Resume card, and Needs you says "reject it under Cards".
 - [x] Empty Needs you and empty Cards say what would show and how to get a card.
 - [x] The public card tag reads "Filed by the board" (and "Suggested by the community", "Drafted by an agent"); Who runs it says the board is the people who run the studio and approve what gets built.
-- [x] The deferred model is one backlog entry on next, linked from PLAN.md §4 Not built yet.
+- [x] ~~The deferred model is one backlog entry on next, linked from PLAN.md §4 Not built yet.~~ Superseded by `optional-board.md` (PLAN.md §10 decision 66): the entry is removed and the panel replaces the model.
 
 ## Verification
 

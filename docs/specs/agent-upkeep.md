@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): findings reach the board by ntfy and the panel's Activity list, not Needs you (`optional-board.md`); the replay eval's result is advisory, not a merge gate; and the model-written docs pass and security audit would run as cards of their own, billed to them, rather than wait on an operations percentage.
+
 Series position: after design-review, before copy-pass (the order and each spec's status are in `docs/ROADMAP.md`, "The launch series"). It changes kernel files only. No job here calls a model; the eval runner calls one only when a person runs it at the Mac, on the founder's plan.
 
 ## Problem

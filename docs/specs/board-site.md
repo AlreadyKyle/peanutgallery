@@ -2,6 +2,8 @@
 
 Status: built. Card: none. Owner: board.
 
+Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): the board's site is an optional panel (`optional-board.md`). Needs you is superseded: the panel's first screen is Status, the standing duties reach the board by ntfy, email and GitHub, and `board_needs_you()` stays in the database, uncalled.
+
 The launch plan's Phase 3 "Board on its own site", the first pull request of Wave 2, from the reviews of 23 September 2026: R12 (board sign-in email and sign-ups), R16 (the money, ledger and legal surfaces as kernel, and the payment-host scan) and PG-23 (the "Needs you" inbox). This is a board pull request: it changes kernel files, listed under Scope.
 
 ## Problem
@@ -84,7 +86,7 @@ With nothing due it says "Nothing needs you." Under the list: the latest run's t
 - [x] Production: the board's Netlify site live at its address, with the headers above read back (Evidence, Production).
 - [x] Production: Supabase Auth's site URL and redirect list on the board site only, sign-ups off, the board users' sessions ended (Evidence, Production).
 - [ ] Production: sign-in email through Resend (waits on: the board's `RESEND_SMTP_KEY`, BOARD-SETUP step 2).
-- [ ] The board signs in on the new site and sees Needs you (waits on: the board, BOARD-SETUP step 17; production shows no sign-in since the switch, Evidence).
+- [ ] ~~The board signs in on the new site and sees Needs you (waits on: the board, BOARD-SETUP step 17; production shows no sign-in since the switch, Evidence).~~ Superseded by `optional-board.md`: the board signs in and sees Status.
 - [ ] The moderator's first sign-in, as a Go-live test (waits on: the board naming a moderator, BOARD-SETUP step 16, and Resend).
 - [x] The live check on production shows /board as a 404 naming no netlify.app address but the game's, no route naming the board site's address, and the enforced `form-action` (Evidence, Production).
 - [ ] `platform_lane_open` set once the migration, the board site, the Auth settings and ended sessions, the board's own sign-in and the live check hold, and an hour has passed since the sessions ended: production steps 2 to 6, 8 and 11 (waits on: the board's own sign-in, step 8, then the board's switch, production step 12 and BOARD-SETUP step 26). Resend and the moderator's first sign-in do not hold it up: neither changes what a card's code could reach.
