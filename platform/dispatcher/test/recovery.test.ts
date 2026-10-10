@@ -162,8 +162,8 @@ describe('recoverOrphans', () => {
       [gatedUnmerged.id, 'error', 'gated'],
     ]);
     expect(alert.messages).toEqual([
-      'Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open.',
-      'Card bbbbbbbb was gated when the dispatcher restarted and is paused. Branch card/bbbbbbbb-config and any pull request are left open.',
+      'Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
+      'Card bbbbbbbb was gated when the dispatcher restarted and is paused. Branch card/bbbbbbbb-config and any pull request are left open. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
     ]);
   });
 

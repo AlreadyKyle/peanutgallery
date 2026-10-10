@@ -75,6 +75,7 @@ import { haltDispatcher, haltReason } from './halt.js';
 import { mergeLock } from './lock.js';
 import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
+import { resumeWords } from './pause-checks.js';
 import { resolveRoleModel } from './role-model.js';
 import { runAgentSession, type SessionOutcome } from './session.js';
 import { decideReview, revisionAddendum, runVisualReview, type VisualReviewDeps } from './visual-review.js';
@@ -463,7 +464,9 @@ async function settleFailure(card: Card, roleId: string | null, error: unknown, 
     log.warn('pipeline', `card ${card.id} ${error.stage}`, { check: error.failingCheck, detail: error.message });
     const unwritten = await attempt(deps, `card ${card.id} stage`, () => finalize(card, deps, error.stage, error.failingCheck));
     if (error.failingCheck !== 'dispatcher_stopped' || unwritten) {
-      await deps.alert.notify(`Card ${shortId(card.id)} ${error.stage} (${error.failingCheck}): ${singleLineTitle(card.title)}. ${error.message}${unwrittenNote(unwritten)}`);
+      const body = `${error.message}${unwrittenNote(unwritten)}`;
+      const resume = error.stage === 'paused' ? `${/[.!?]$/.test(body) ? '' : '.'} ${resumeWords(error.failingCheck)}` : '';
+      await deps.alert.notify(`Card ${shortId(card.id)} ${error.stage} (${error.failingCheck}): ${singleLineTitle(card.title)}. ${body}${resume}`);
     }
     return;
   }
@@ -499,11 +502,11 @@ async function settleInfraStop(card: Card, roleId: string | null, error: InfraSt
   } else if (requeue) {
     why = `It stopped before any session ran, so it is back in funded to be claimed again (stop ${count}; it pauses at ${INFRA_REQUEUE_LIMIT} in a row).`;
   } else if (error.afterMerge) {
-    why = 'The change was rolled back as unverified; the card is paused with its money and is not rejected. Resume it from /board once the outage is over.';
+    why = `The change was rolled back as unverified; the card is paused with its money and is not rejected. ${resumeWords(error.failingCheck)}`;
   } else if (stored || error.beforeSession) {
-    why = `It stopped this way ${count} times in a row, so it is paused with its money${stored ? ' and its stored patch' : ''}; resume it from /board once the cause is fixed.`;
+    why = `It stopped this way ${count} times in a row, so it is paused with its money${stored ? ' and its stored patch' : ''}. ${resumeWords(error.failingCheck)}`;
   } else {
-    why = 'It has no stored patch to re-gate, so it is paused with its money rather than starting a new session; resume it from /board once the cause is fixed.';
+    why = `It has no stored patch to re-gate, so it is paused with its money rather than starting a new session now. ${resumeWords(error.failingCheck)}`;
   }
   await deps.alert.notify(`Card ${shortId(card.id)} stopped by infrastructure, not by its change (${error.failingCheck}): ${singleLineTitle(card.title)}. ${error.message}. ${why}${unwrittenNote(unwritten)}`);
 }
@@ -667,7 +670,7 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     await deps.alert.notify(
       `Console credit needed: card ${shortId(card.id)} stopped because the API refused the studio key for credit or its spend limit. ${
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
-      } Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.`,
+      } Buy credit or raise the Console limit, record the purchase on /board. The dispatcher tries the studio key with a one-token call 15 minutes after the pause, then backing off to every 4 hours, and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.`,
     );
     throw new CardStop('paused', REFUSAL_CHECK.credit, run.detail);
   }
@@ -678,7 +681,7 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     await deps.alert.notify(
       `Usage tier cap reached: card ${shortId(card.id)} stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. ${
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
-      } Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.`,
+      } Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it. The dispatcher tries the studio key with a one-token call every hour and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.`,
     );
     throw new CardStop('paused', REFUSAL_CHECK.tier_cap, run.detail);
   }

@@ -150,7 +150,8 @@ Deno.test("event_line_key gives every row of the Event lines table in both tool 
     await t.step("message steps, the fallbacks, and every other type", async () => {
       const steps: [string, string][] = [
         ["smoke_pass", "smoke_passed"], ["requeue", "requeued"], ["infrastructure", "paused_infra"], ["patch_reused", "patch_reused"],
-        ["dealt", "dealt"], ["ceiling_top_up", "topped_up"], ["resume_rule", "resumed"], ["ranked", "ranked"], ["held", "none"],
+        ["dealt", "dealt"], ["ceiling_top_up", "topped_up"], ["resume_rule", "resumed"], ["auto_resume", "auto_resumed"], ["ranked", "ranked"],
+        ["held", "none"], ["studio_resumed", "none"],
       ];
       for (const [step, want] of steps) assertEquals(await key("message", { step, detail: "free text" }), want, step);
       assertEquals(await key("message", { text: "Anything an agent wrote" }), "none");
