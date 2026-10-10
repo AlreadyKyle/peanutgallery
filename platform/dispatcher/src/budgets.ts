@@ -19,7 +19,8 @@ interface Entry {
 export class SessionBudgets {
   private readonly entries = new Map<string, Entry>();
 
-  // An attended session is billed to the founder, so its budget is unbounded (Infinity).
+  // The tick's budget for the claim (throttle.ts planStart); Infinity leaves the ceiling alone to bound
+  // it.
   start(cardId: string, budgetUsd: number): void {
     this.entries.set(cardId, { budgetUsd, spentUsd: 0, baseUsd: 0 });
   }

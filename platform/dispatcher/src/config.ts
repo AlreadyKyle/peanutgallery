@@ -1,8 +1,10 @@
 // Environment parsing for the dispatcher. Every value is validated by hand; a missing or
-// malformed value stops the process before any tick runs.
+// malformed value stops the process before any tick runs. The dispatcher has one mode, unattended
+// (PLAN.md §10 decision 66, docs/specs/unattended-roles.md): AGENT_MODE=attended is warned about and
+// otherwise ignored. The hand-run tools that still run attended on the founder's login (the replay
+// eval and the probe's --attended run) load their values with loadHandRunConfig.
 import path from 'node:path';
 import { modelPrice, parsePriceTable, type PriceTable } from './pricing.js';
-import type { AgentMode } from './throttle.js';
 
 export interface DispatcherConfig {
   // The checkout the dispatcher's own code and node_modules are loaded from.
@@ -12,7 +14,6 @@ export interface DispatcherConfig {
   // The clone git fetches, pushes and adds worktrees from: the code root unless
   // DISPATCHER_REPO_ROOT names another. On the VPS it is a separate clone no code runs from.
   repoRoot: string;
-  agentMode: AgentMode;
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
   githubToken: string;
@@ -42,14 +43,16 @@ export interface DispatcherConfig {
   tickMs: number;
   worktreeRoot: string;
   maxConcurrency: number;
+  // The Claude Code command line the hand-run attended tools run (the replay eval, sandbox:check and
+  // the probe's --attended run); the dispatcher runs no CLI.
   claudeBin: string;
-  boardSessionTtlMin: number;
-  // The studio organisation's key for unattended sessions; null in attended mode, where the
-  // value is ignored. Never the founder's ANTHROPIC_API_KEY, which the dispatcher does not read.
+  // The studio organisation's key, which every session bills; null only in a hand-run tool's
+  // configuration (loadHandRunConfig). Never the founder's ANTHROPIC_API_KEY, which the dispatcher
+  // does not read.
   studioAnthropicApiKey: string | null;
-  // Unattended mode only (null or absent in attended mode): the Managed Agents agent, its pinned
-  // version and the environment every card session runs in, and the read-only GitHub token sessions
-  // clone the repository with (docs/specs/launch-managed.md).
+  // The Managed Agents agent, its pinned version and the environment every card session runs in, and
+  // the read-only GitHub token sessions clone the repository with (docs/specs/launch-managed.md); null
+  // or absent only in a hand-run tool's configuration.
   managed?: ManagedConfig | null;
   // Optional board alerts: pinged every tick, and posted to when a card needs a human.
   healthcheckUrl: string | null;
@@ -185,10 +188,14 @@ export function drainAtEnv(env: Env): Date | null {
   return new Date(time);
 }
 
-export function agentModeEnv(env: Env): AgentMode {
-  const mode = optionalEnv(env, 'AGENT_MODE', 'attended');
-  if (mode !== 'attended' && mode !== 'unattended') throw new ConfigError('AGENT_MODE must be attended or unattended');
-  return mode;
+// AGENT_MODE is no longer read: the dispatcher runs unattended only (PLAN.md §10 decision 66). A
+// value other than unattended is the warning loadConfig gives, and is otherwise ignored, so an old
+// .env never stops the process. The value is a mode name, not a secret.
+export function agentModeWarning(env: Env): string | null {
+  const mode = env.AGENT_MODE?.trim();
+  if (!mode || mode === 'unattended') return null;
+  if (mode === 'attended') return 'AGENT_MODE=attended is ignored: attended mode is retired and the dispatcher runs unattended only (PLAN.md §10 decision 66); remove AGENT_MODE from .env';
+  return `AGENT_MODE=${mode} is ignored: the dispatcher runs unattended only (PLAN.md §10 decision 66); remove AGENT_MODE from .env`;
 }
 
 const GITHUB_REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -202,38 +209,38 @@ export function githubTokenProblem(token: string): string | null {
   return `GITHUB_TOKEN is not a fine-grained token (${FINE_GRAINED_TOKEN_PREFIX}...); create one for this repository alone as BOARD-SETUP.md describes`;
 }
 
-// Unattended mode runs with no one watching, so it refuses a token that can reach more than this
-// repository; attended mode warns at startup (startup.ts).
-export function githubTokenEnv(env: Env, mode: AgentMode): string {
+// The dispatcher runs with no one watching, so it refuses a token that can reach more than this
+// repository. A hand-run tool's configuration takes any token: the person running it is watching.
+export function githubTokenEnv(env: Env, handRun = false): string {
   const token = requireEnv(env, 'GITHUB_TOKEN');
   const problem = githubTokenProblem(token);
-  if (problem && mode === 'unattended') throw new ConfigError(problem);
+  if (problem && !handRun) throw new ConfigError(problem);
   return token;
 }
 const STUDIO_KEY = 'STUDIO_ANTHROPIC_API_KEY';
 const FOUNDER_KEY = 'ANTHROPIC_API_KEY';
 
-// Required in unattended mode, null in attended mode. A studio key equal to the founder's key
-// is refused in either mode: the whole point of the second name is that they differ.
-export function studioApiKeyEnv(env: Env, mode: AgentMode): string | null {
+// Required by the dispatcher, null in a hand-run tool's configuration. A studio key equal to the
+// founder's key is refused either way: the whole point of the second name is that they differ.
+export function studioApiKeyEnv(env: Env, handRun = false): string | null {
   const studio = env[STUDIO_KEY]?.trim();
   const founder = env[FOUNDER_KEY]?.trim();
   if (studio && founder && studio === founder) throw new ConfigError(`${STUDIO_KEY} must differ from ${FOUNDER_KEY}`);
-  if (mode !== 'unattended') return null;
+  if (handRun) return null;
   return requireEnv(env, STUDIO_KEY);
 }
 
-// Fine-grained personal access tokens start with this. Unattended mode runs on no other kind, since a
+// Fine-grained personal access tokens start with this. The dispatcher runs on no other kind, since a
 // classic or OAuth token cannot be limited to this repository and its permissions.
 export const FINE_GRAINED_PREFIX = 'github_pat_';
 
-// Required in unattended mode, null in attended mode. The read token must differ from the write
-// token in either mode, and in unattended mode both must be fine-grained tokens. Startup then proves
-// the read token cannot write (adapters/read-token.ts).
-export function managedEnv(env: Env, mode: AgentMode, githubToken: string): ManagedConfig | null {
+// Required by the dispatcher, null in a hand-run tool's configuration. The read token must differ
+// from the write token either way, and the dispatcher's must both be fine-grained tokens. Startup then
+// proves the read token cannot write (adapters/read-token.ts).
+export function managedEnv(env: Env, githubToken: string, handRun = false): ManagedConfig | null {
   const read = env.GITHUB_READ_TOKEN?.trim();
   if (read && read === githubToken) throw new ConfigError('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN: sessions clone with a token that cannot write');
-  if (mode !== 'unattended') return null;
+  if (handRun) return null;
   const readToken = requireEnv(env, 'GITHUB_READ_TOKEN');
   const agentId = requireEnv(env, 'MANAGED_AGENT_ID');
   const version = Number(requireEnv(env, 'MANAGED_AGENT_VERSION'));
@@ -243,7 +250,7 @@ export function managedEnv(env: Env, mode: AgentMode, githubToken: string): Mana
     ['GITHUB_TOKEN', githubToken],
     ['GITHUB_READ_TOKEN', readToken],
   ] as const) {
-    if (!token.startsWith(FINE_GRAINED_PREFIX)) throw new ConfigError(`${name} must be a fine-grained personal access token (${FINE_GRAINED_PREFIX}...) in unattended mode`);
+    if (!token.startsWith(FINE_GRAINED_PREFIX)) throw new ConfigError(`${name} must be a fine-grained personal access token (${FINE_GRAINED_PREFIX}...)`);
   }
   return { agentId, agentVersion: version, environmentId, readToken };
 }
@@ -285,7 +292,7 @@ export function defaultWorktreeRoot(repoRoot: string): string {
 // read-only check would look at a folder the code is not loaded from. A read-only code root cannot
 // hold the git state and the worktrees the dispatcher writes. Card worktrees live outside the clone,
 // in every mode: a session started inside the clone would read the clone's own CLAUDE.md files and
-// sit next to its .env, and the attended sandbox allows writes to the worktree alone.
+// sit next to its .env, and a hand-run attended session's sandbox allows writes to the worktree alone.
 export function rootsEnv(env: Env, codeRoot: string): Roots {
   const declared = optionalEnv(env, 'DISPATCHER_CODE_ROOT', '');
   if (declared && path.resolve(declared) !== path.resolve(codeRoot)) {
@@ -311,19 +318,36 @@ export function rootsEnv(env: Env, codeRoot: string): Roots {
   return { codeRoot, codeReadonly: readonly === 'required', repoRoot, worktreeRoot };
 }
 
-// codeRoot is the checkout this process runs from; main.ts derives it from its own path.
-export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
+// The dispatcher's configuration: unattended always. codeRoot is the checkout this process runs from;
+// main.ts derives it from its own path. A retired or unknown AGENT_MODE goes to warn (stderr when no
+// warn is given) and changes nothing else.
+export function loadConfig(env: Env, codeRoot: string, warn: (message: string) => void = writeWarning): DispatcherConfig {
+  const warning = agentModeWarning(env);
+  if (warning) warn(warning);
+  return buildConfig(env, codeRoot, false);
+}
+
+function writeWarning(message: string): void {
+  process.stderr.write(`${message}\n`);
+}
+
+// A hand-run tool's configuration (the replay eval, the probe's --attended run): the dispatcher's
+// values with no studio key and no managed ids, since its sessions run attended on the founder's
+// login, and any GitHub token, since a person is running it. AGENT_MODE is not read.
+export function loadHandRunConfig(env: Env, codeRoot: string): DispatcherConfig {
+  return buildConfig(env, codeRoot, true);
+}
+
+function buildConfig(env: Env, codeRoot: string, handRun: boolean): DispatcherConfig {
   const githubRepo = requireEnv(env, 'GITHUB_REPO');
   if (!GITHUB_REPO.test(githubRepo)) throw new ConfigError('GITHUB_REPO must be owner/repo');
-  const agentMode = agentModeEnv(env);
   const modelBuilder = requireEnv(env, 'MODEL_BUILDER');
   const priceTable = priceTableEnv(env);
   pricedModel(modelBuilder, 'MODEL_BUILDER', priceTable);
   const roots = rootsEnv(env, codeRoot);
-  const githubToken = githubTokenEnv(env, agentMode);
+  const githubToken = githubTokenEnv(env, handRun);
   return {
     ...roots,
-    agentMode,
     supabaseUrl: requireEnv(env, 'SUPABASE_URL'),
     supabaseServiceRoleKey: requireEnv(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     githubToken,
@@ -345,9 +369,8 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     tickMs: positiveIntegerEnv(env, 'DISPATCHER_TICK_MS', 60_000),
     maxConcurrency: positiveIntegerEnv(env, 'DISPATCHER_MAX_CONCURRENCY', 1),
     claudeBin: optionalEnv(env, 'CLAUDE_BIN', 'claude'),
-    boardSessionTtlMin: positiveIntegerEnv(env, 'BOARD_SESSION_TTL_MIN', 3),
-    studioAnthropicApiKey: studioApiKeyEnv(env, agentMode),
-    managed: managedEnv(env, agentMode, githubToken),
+    studioAnthropicApiKey: studioApiKeyEnv(env, handRun),
+    managed: managedEnv(env, githubToken, handRun),
     healthcheckUrl: optionalHttpsUrlEnv(env, 'HEALTHCHECK_URL'),
     ntfyTopicUrl: optionalHttpsUrlEnv(env, 'NTFY_TOPIC_URL'),
     discordWebhookShips: discordWebhookEnv(env, 'DISCORD_WEBHOOK_SHIPS'),

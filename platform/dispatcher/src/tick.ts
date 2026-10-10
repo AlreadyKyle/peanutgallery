@@ -1,18 +1,17 @@
 // The Appendix A loop, one tick: hold the dispatcher lease, unpause a studio the dispatcher paused for
 // money once the credit probe passes, deal the approved agent cards whose cooling window has passed,
 // resume the ceiling-paused cards the rule may resume (docs/specs/agent-system-core.md) and the cards
-// paused for a reason that is not theirs (pause-checks.ts, docs/specs/unattended-roles.md), read studio_state, check the board session, read the pool,
-// apply the throttle, select the card, claim it with its session budget, and start its pipeline in
-// the background; then, however the card path ended, the job queue's tick (jobs.ts). The heartbeat
+// paused for a reason that is not theirs (pause-checks.ts, docs/specs/unattended-roles.md), read
+// studio_state and the pool, apply the throttle, select the card, claim it with its session budget,
+// and start its pipeline in the background; then, however the card path ended, the job queue's tick
+// (jobs.ts). No board member need be signed in (PLAN.md §10 decision 66). The heartbeat
 // and the healthcheck ping follow a tick that completed while holding the lease, so a dispatcher
 // whose ticks keep failing, or that another dispatcher has locked out, stops pinging. A halted
 // dispatcher claims nothing, deals nothing, runs no job and does not ping. After the heartbeat, a tick
 // that holds the lease and is not halted runs the outbound lane (outbound.ts, docs/specs/studio-reports.md)
 // inside its own try/catch, so Discord can never delay a card or the heartbeat.
-import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
-import type { PinState } from './cli-pin.js';
 import type { CreditProbeOutcome } from './credit-probe.js';
 import type { Card, Db, Pool, StudioState } from './db.js';
 import { isInfrastructureConclusion, type GateStatus } from './github.js';
@@ -39,8 +38,6 @@ import { shortId } from './worktree.js';
 
 export interface TickDeps {
   db: Db;
-  mode: AgentMode;
-  boardSessionTtlMin: number;
   maxConcurrency: number;
   // Card id to the time its pipeline started, for cards this process is running.
   running: Map<string, Date>;
@@ -60,9 +57,6 @@ export interface TickDeps {
   alert: Alerter;
   // main's head and its gate status (docs/specs/money-safety.md); unset, main is not checked.
   mainGate?: () => Promise<{ sha: string; status: GateStatus }>;
-  // The Claude Code pin against the installed CLI (cli-pin.ts), read before an attended claim; unset,
-  // it is not read.
-  cliPin?: () => Promise<PinState>;
   // The job queue's tick (jobs.ts), run after the card path on every tick that is not halted.
   jobTick?: () => Promise<unknown>;
   // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
@@ -72,9 +66,8 @@ export interface TickDeps {
   supplyWatch?: () => Promise<unknown>;
   // DISPATCHER_DRAIN_AT (config.ts): from this time no card or job is claimed. Unset or null: never.
   drainAt?: Date | null;
-  // Unattended mode: the one-token call on the studio key (credit-probe.ts) that tells whether a pause
-  // the dispatcher set for awaiting_credit or spend_limit can be lifted. Unset (attended mode, where no
-  // such pause is set): never probed.
+  // The one-token call on the studio key (credit-probe.ts) that tells whether a pause the dispatcher
+  // set for awaiting_credit or spend_limit can be lifted. Unset: never probed.
   creditProbe?: () => Promise<CreditProbeOutcome>;
   // The probe's backoff for this process; created on the first tick that needs it when unset.
   studioProbe?: StudioProbeState;
@@ -129,7 +122,7 @@ export function leaseTtlSeconds(tickMs: number): number {
 }
 
 export type TickOutcome =
-  | { action: 'sleep'; reason: SleepReason | 'mode_mismatch' | 'halted' | 'lease_held' | MainReason | 'cli_version' | 'draining' }
+  | { action: 'sleep'; reason: SleepReason | 'halted' | 'lease_held' | MainReason | 'draining' }
   | { action: 'started'; cardId: string }
   | { action: 'claim_lost'; cardId: string };
 
@@ -288,33 +281,19 @@ async function runJobs(deps: TickDeps): Promise<void> {
 async function evaluate(deps: TickDeps): Promise<TickOutcome> {
   const studio = await deps.db.getStudioState();
   if (studio.paused) return { action: 'sleep', reason: 'paused' };
-  if (studio.agent_mode !== deps.mode) {
-    deps.log.warn('tick', 'studio_state.agent_mode differs from the running adapter', { studio: studio.agent_mode, adapter: deps.mode });
-    return { action: 'sleep', reason: 'mode_mismatch' };
-  }
-  const boardSessionActive = await checkBoardSession(deps);
   const pool = await deps.db.getPool();
   const cards = await deps.db.listCardsInStages([...HOLD_STAGES, ...RUNNING_STAGES]);
   const runnable = runnableInOrder(cards, studio.platform_lane_open);
   const decision = canStart({
     paused: studio.paused,
-    mode: deps.mode,
-    boardSessionActive,
     fundedCount: cards.filter((card) => card.stage === 'funded').length,
     runnableCount: runnable.length,
     running: deps.running.size,
-    concurrency: concurrency(pool.balance_usd, studio.agent_hourly_rate_usd, deps.mode, deps.maxConcurrency),
+    concurrency: concurrency(pool.balance_usd, studio.agent_hourly_rate_usd, deps.maxConcurrency),
   });
   if (!decision.ok) return { action: 'sleep', reason: decision.reason };
   const main = await mainBlocks(deps);
   if (main) return { action: 'sleep', reason: main };
-
-  // An attended session is billed to the founder, so the pool bounds nothing: its budget is the card
-  // ceiling alone (session.ts). It runs on the host's Claude Code, so nothing is claimed off the pin.
-  if (deps.mode === 'attended') {
-    if (await offPin(deps)) return { action: 'sleep', reason: 'cli_version' };
-    return claimAndStart(deps, runnable[0]!, Number.POSITIVE_INFINITY);
-  }
 
   const money = await moneyState(deps, studio, pool, cards);
   let first: Stopped | null = null;
@@ -354,29 +333,6 @@ async function mainBlocks(deps: TickDeps): Promise<MainReason | null> {
   return null;
 }
 
-// The attended adapter refuses a Claude Code that is not on its pin, and the card it was given pauses
-// with cli_version (cli-pin.ts, docs/specs/agent-upkeep.md). Claiming then would pause one funded card
-// a tick, each shown stopped until the board resumed it, so while the installed CLI is off its pin no
-// card is claimed: the cards stay funded, the board hears once per installed and pinned version, and
-// claiming resumes by itself once the CLI is back on its pin. A pin that cannot be read counts as off
-// it. The adapter's own check stays, for the role jobs and for an update between this read and a
-// session's start.
-async function offPin(deps: TickDeps): Promise<boolean> {
-  if (!deps.cliPin) return false;
-  let pin: PinState;
-  try {
-    pin = await deps.cliPin();
-  } catch (error) {
-    pin = { ok: false, installed: null, pinned: null, detail: `the Claude Code pin could not be checked: ${errorMessage(error)}` };
-  }
-  if (pin.ok) return false;
-  deps.log.warn('tick', 'claude code is off its pin; claiming nothing', { installed: pin.installed, pinned: pin.pinned });
-  await deps.alert.notifyOnce(
-    `cli_version:${pin.installed ?? 'unknown'}:${pin.pinned ?? 'unknown'}`,
-    `No card is claimed while Claude Code is off its pin, and funded cards keep their money. ${pin.detail}`,
-  );
-  return true;
-}
 
 export type MoneyDeps = Pick<TickDeps, 'db' | 'now' | 'budgets' | 'jobBudgets'>;
 
@@ -437,7 +393,7 @@ async function alertMoney(deps: TickDeps, studio: StudioState, money: MoneyState
     const month = newYorkMonth(now);
     const message =
       studio.monthly_cap_usd === null
-        ? 'studio_state has no monthly cap, so no unattended card starts. Set the monthly cap on /board.'
+        ? 'studio_state has no monthly cap, so no card starts. Set the monthly cap on /board.'
         : `The monthly cap of $${studio.monthly_cap_usd.toFixed(2)} stopped the agents for ${month}.`;
     await deps.alert.notifyOnce(`monthly_cap:${month}`, message);
   } else if (first.reason === 'tier_cap' && studio.anthropic_tier_cap_usd !== null) {
@@ -489,10 +445,6 @@ async function watchStuckCards(deps: TickDeps): Promise<void> {
   }
 }
 
-async function checkBoardSession(deps: TickDeps): Promise<boolean> {
-  if (deps.mode !== 'attended') return true;
-  return deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now());
-}
 
 function startCard(deps: TickDeps, card: Card, budgetUsd: number): void {
   deps.running.set(card.id, deps.now());

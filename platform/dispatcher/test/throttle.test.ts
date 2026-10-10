@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  billingFor,
   canStart,
   ceilingUsd,
   concurrency,
@@ -20,8 +19,6 @@ import {
 
 const base: StartConditions = {
   paused: false,
-  mode: 'attended',
-  boardSessionActive: true,
   fundedCount: 1,
   runnableCount: 1,
   running: 0,
@@ -53,12 +50,6 @@ function moneyCard(overrides: Partial<MoneyCard> & { id: string }): MoneyCard {
   return { stage: 'funded', estimate_usd: 10, actual_usd: 0, funded_usd: 10, severity: null, ...overrides };
 }
 
-describe('billingFor', () => {
-  it('bills attended sessions to the founder and unattended sessions to the studio, never to overhead', () => {
-    expect(billingFor('attended')).toBe('founder');
-    expect(billingFor('unattended')).toBe('studio');
-  });
-});
 
 describe('New York calendar', () => {
   it('counts the day spend only when the pool row is from today in New York', () => {
@@ -141,22 +132,18 @@ describe('tierMonthStart', () => {
 });
 
 describe('concurrency', () => {
-  it('is one in attended mode whatever the balance', () => {
-    expect(concurrency(50, 5, 'attended', 2)).toBe(1);
-    expect(concurrency(0, 5, 'attended', 2)).toBe(1);
-  });
-  it('gives one slot in unattended mode below twice the hourly rate, so a pool under $5 still runs a card', () => {
-    expect(concurrency(3, 5, 'unattended', 2)).toBe(1);
-    expect(concurrency(0, 5, 'unattended', 2)).toBe(1);
-    expect(concurrency(9.99, 5, 'unattended', 2)).toBe(1);
+  it('gives one slot below twice the hourly rate, so a pool under $5 still runs a card', () => {
+    expect(concurrency(3, 5, 2)).toBe(1);
+    expect(concurrency(0, 5, 2)).toBe(1);
+    expect(concurrency(9.99, 5, 2)).toBe(1);
   });
   it('gives two slots once the balance covers two hours', () => {
-    expect(concurrency(10, 5, 'unattended', 2)).toBe(2);
-    expect(concurrency(50, 5, 'unattended', 2)).toBe(2);
+    expect(concurrency(10, 5, 2)).toBe(2);
+    expect(concurrency(50, 5, 2)).toBe(2);
   });
   it('honours the configured maximum, and gives one slot at a zero rate', () => {
-    expect(concurrency(50, 5, 'unattended', 1)).toBe(1);
-    expect(concurrency(50, 0, 'unattended', 2)).toBe(1);
+    expect(concurrency(50, 5, 1)).toBe(1);
+    expect(concurrency(50, 0, 2)).toBe(1);
   });
 });
 
@@ -167,10 +154,7 @@ describe('canStart', () => {
   it('sleeps while paused', () => {
     expect(canStart({ ...base, paused: true })).toEqual({ ok: false, reason: 'paused' });
   });
-  it('sleeps in attended mode without a board session', () => {
-    expect(canStart({ ...base, boardSessionActive: false })).toEqual({ ok: false, reason: 'no_board_session' });
-    expect(canStart({ ...base, mode: 'unattended', boardSessionActive: false })).toEqual({ ok: true });
-  });
+
   it('sleeps with no funded cards, and with funded cards none of which may run', () => {
     expect(canStart({ ...base, fundedCount: 0, runnableCount: 0 })).toEqual({ ok: false, reason: 'no_funded_cards' });
     expect(canStart({ ...base, runnableCount: 0 })).toEqual({ ok: false, reason: 'no_eligible_card' });

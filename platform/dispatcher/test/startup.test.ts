@@ -4,13 +4,13 @@ import path from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentAdapter, ClosedSessions, ManagedControl } from '../src/adapters/types.js';
-import type { DispatcherConfig } from '../src/config.js';
+import { loadConfig, type DispatcherConfig } from '../src/config.js';
 import { StartupError, exitCodeFor } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
-import { CODE_PATHS, checkCodeReadonly, checkMode, checkRoleModels, failStaleJobRuns, startupChecks, unattendedStartup, type StartupDeps } from '../src/startup.js';
+import { CODE_PATHS, checkCodeReadonly, checkRoleModels, failStaleJobRuns, startupChecks, unattendedStartup, type StartupDeps } from '../src/startup.js';
 import { FakeAdapter } from './helpers/fake-adapter.js';
-import { FakeDb, role } from './helpers/fake-db.js';
+import { FakeDb, recordCalls, role } from './helpers/fake-db.js';
 
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }));
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
@@ -19,7 +19,6 @@ const config: DispatcherConfig = {
   codeRoot: '/repo',
   codeReadonly: false,
   repoRoot: '/repo',
-  agentMode: 'unattended',
   supabaseUrl: 'https://db.local',
   supabaseServiceRoleKey: 'service-role',
   githubToken: 'github-token',
@@ -42,7 +41,6 @@ const config: DispatcherConfig = {
   worktreeRoot: '/repo/.worktrees',
   maxConcurrency: 1,
   claudeBin: 'claude',
-  boardSessionTtlMin: 3,
   studioAnthropicApiKey: 'studio-key',
   healthcheckUrl: null,
   ntfyTopicUrl: null,
@@ -72,37 +70,15 @@ class ManagedStub implements ManagedControl {
 
 function unattendedDb(): FakeDb {
   const db = new FakeDb();
-  db.studio.agent_mode = 'unattended';
   return db;
 }
 
 function deps(db: FakeDb, overrides: Partial<StartupDeps> = {}) {
   const managed = new ManagedStub();
-  const adapter: AgentAdapter = Object.assign(new FakeAdapter(async () => {}, { mode: config.agentMode }), { managed });
+  const adapter: AgentAdapter = Object.assign(new FakeAdapter(async () => {}), { managed });
   const built: StartupDeps = { db, adapter, config, log: silent, ...overrides };
   return { deps: built, managed };
 }
-
-describe('checkMode', () => {
-  it('rejects when studio_state.agent_mode differs from AGENT_MODE', async () => {
-    const db = new FakeDb();
-    await expect(checkMode(db, config)).rejects.toThrow(
-      'studio_state.agent_mode is attended but AGENT_MODE is unattended; set the mode from /board or start the dispatcher in the matching mode',
-    );
-    db.studio.agent_mode = '';
-    await expect(checkMode(db, config)).rejects.toThrow('studio_state.agent_mode is unset but AGENT_MODE is unattended');
-  });
-
-  it('is a startup error that exits 1, so the process retries once the board fixes the mode', async () => {
-    const error = await checkMode(new FakeDb(), config).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(StartupError);
-    expect(exitCodeFor(error)).toBe(1);
-  });
-
-  it('resolves when the modes agree', async () => {
-    await expect(checkMode(unattendedDb(), config)).resolves.toBeUndefined();
-  });
-});
 
 // A code root with the folders the check reads, left writable.
 async function codeTree(): Promise<string> {
@@ -188,15 +164,39 @@ describe('startupChecks', () => {
     expect(managed.calls).toEqual(['containment', 'probe']);
   });
 
-  it('checks the mode before containment or a probe, so a mismatched process spends nothing', async () => {
-    const db = new FakeDb();
-    const { deps: startup, managed } = deps(db);
-    await expect(startupChecks(startup)).rejects.toThrow('studio_state.agent_mode is attended but AGENT_MODE is unattended');
-    expect(managed.calls).toEqual([]);
-    expect(db.ledger).toHaveLength(0);
+  // docs/specs/unattended-roles.md, PR5: attended mode is retired. An old .env that still says
+  // AGENT_MODE=attended is warned about and ignored, and startup runs as it always does now: no mode
+  // to agree on, no board session, containment and the probe on the managed adapter.
+  it('starts with AGENT_MODE=attended in .env: the config warns, and startup runs containment and the probe', async () => {
+    const env = {
+      AGENT_MODE: 'attended',
+      GITHUB_REPO: 'owner/repo',
+      MODEL_BUILDER: 'builder-class',
+      PRICE_TABLE_JSON: JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }),
+      SUPABASE_URL: 'https://db.local',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-role',
+      GITHUB_TOKEN: 'github_pat_-fixture-write',
+      GITHUB_READ_TOKEN: 'github_pat_-fixture-read',
+      NETLIFY_AUTH_TOKEN: 'netlify-token',
+      NETLIFY_SITE_ID_SEED: 'site-seed',
+      NETLIFY_SITE_ID_PLATFORM: 'site-platform',
+      STUDIO_ANTHROPIC_API_KEY: 'studio-key',
+      MANAGED_AGENT_ID: 'agent_1',
+      MANAGED_AGENT_VERSION: '1',
+      MANAGED_ENVIRONMENT_ID: 'env_1',
+    };
+    const warnings: string[] = [];
+    const loaded = loadConfig(env, '/repo', (message) => warnings.push(message));
+    expect(warnings).toEqual([expect.stringContaining('AGENT_MODE=attended is ignored')]);
+    expect(loaded.studioAnthropicApiKey).toBe('studio-key');
+    const { db, calls } = recordCalls(new FakeDb());
+    const { deps: startup, managed } = deps(db, { config: loaded });
+    await expect(startupChecks(startup)).resolves.toBeUndefined();
+    expect(managed.calls).toEqual(['containment', 'probe']);
+    expect([...calls].filter((name) => /board|getStudioState/i.test(name))).toEqual([]);
   });
 
-  it('in unattended mode checks containment, then runs the managed probe', async () => {
+  it('checks containment, then runs the managed probe', async () => {
     const { deps: startup, managed } = deps(unattendedDb());
     await startupChecks(startup);
     expect(managed.calls).toEqual(['containment', 'probe']);
@@ -210,31 +210,27 @@ describe('startupChecks', () => {
     expect(managed.calls).toEqual(['containment']);
   });
 
-  it('checks the role models before the probe, in either mode', async () => {
-    for (const agentMode of ['attended', 'unattended'] as const) {
-      const db = new FakeDb();
-      db.studio.agent_mode = agentMode;
-      db.roles = [role({ model: 'mystery-model' })];
-      const { deps: startup, managed } = deps(db, { config: { ...config, agentMode } });
-      await expect(startupChecks(startup)).rejects.toThrow('no price in PRICE_TABLE_JSON for Builder A (mystery-model)');
-      expect(managed.calls).toHaveLength(0);
-    }
-  });
-
-  it('runs no containment check and no probe in attended mode', async () => {
+  it('checks the role models before the probe', async () => {
     const db = new FakeDb();
-    const { deps: startup, managed } = deps(db, { config: { ...config, agentMode: 'attended', studioAnthropicApiKey: null } });
-    await startupChecks(startup);
+    db.roles = [role({ model: 'mystery-model' })];
+    const { deps: startup, managed } = deps(db);
+    await expect(startupChecks(startup)).rejects.toThrow('no price in PRICE_TABLE_JSON for Builder A (mystery-model)');
     expect(managed.calls).toHaveLength(0);
     expect(db.ledger).toHaveLength(0);
   });
 });
 
 describe('unattendedStartup', () => {
-  it('refuses, exit 78, an adapter that is not the managed one: unattended mode never runs a local agent', async () => {
-    const adapter = new FakeAdapter(async () => {}, { mode: 'unattended' });
-    const error = await unattendedStartup({ db: unattendedDb(), adapter, config, log: silent }).catch((caught: unknown) => caught);
-    expect(error).toEqual(new StartupError('unattended mode runs only on the managed adapter, which this process did not build', true));
+  it('refuses, exit 78, an adapter that is not the managed one: the dispatcher never runs a local agent', async () => {
+    for (const mode of ['unattended', 'attended'] as const) {
+      const adapter = new FakeAdapter(async () => {}, { mode });
+      const error = await unattendedStartup({ db: unattendedDb(), adapter, config, log: silent }).catch((caught: unknown) => caught);
+      expect(error).toEqual(new StartupError('the dispatcher runs only on the managed adapter, which this process did not build', true));
+      expect(exitCodeFor(error)).toBe(78);
+    }
+    const attended = Object.assign(new FakeAdapter(async () => {}, { mode: 'attended' }), { managed: new ManagedStub() });
+    const error = await unattendedStartup({ db: unattendedDb(), adapter: attended, config, log: silent }).catch((caught: unknown) => caught);
+    expect(error).toEqual(new StartupError('the dispatcher runs only on the managed adapter, which this process did not build', true));
     expect(exitCodeFor(error)).toBe(78);
   });
 

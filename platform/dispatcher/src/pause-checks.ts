@@ -4,8 +4,9 @@
 // lists are the migration's auto_resume_checks rows; test/pause-checks.test.ts reads the migration and
 // checks every failing check the dispatcher pauses a card with is in one list or the other.
 //
-// free     the dispatcher stopped or restarted, the studio or the board session paused it, the
-//          Console credit or the usage tier refused the key, or Claude Code was off its pin.
+// free     the dispatcher stopped or restarted, the studio paused it, the Console credit or the usage
+//          tier refused the key; board_session, board_review and cli_version stay listed for a card
+//          an attended dispatcher paused before attended mode was retired (PLAN.md §10 decision 66).
 // infra    an outage, or a dispatcher, GitHub, Managed Agents or gate fault.
 // session  the session stopped at a bound below the card's ceiling; a resume starts a new session.
 //

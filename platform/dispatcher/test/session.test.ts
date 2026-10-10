@@ -18,7 +18,6 @@ function deps(db: FakeDb, adapter: FakeAdapter, overrides: Partial<SessionDeps> 
     adapter,
     priceTable: PRICE_TABLE,
     sessionMaxTurns: 60,
-    boardSessionTtlMin: 3,
     watchIntervalMs: 60_000,
     fallbackModel: 'builder-class',
     sessionMaxMs: 60 * 60_000,

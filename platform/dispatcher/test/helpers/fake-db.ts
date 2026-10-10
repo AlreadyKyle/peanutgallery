@@ -160,9 +160,8 @@ export function shipPost(overrides: Partial<ShipPost> = {}): ShipPost {
 }
 
 export class FakeDb implements Db {
-  studio: StudioState = { paused: false, agent_mode: 'attended', daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500, anthropic_tier_cap_usd: null, platform_lane_open: false };
+  studio: StudioState = { paused: false, daily_cap_usd: 100, card_max_usd: 25, agent_hourly_rate_usd: 5, studio_reserve_usd: 0, monthly_cap_usd: 500, anthropic_tier_cap_usd: null, platform_lane_open: false };
   pool: Pool = { balance_usd: 50, reserve_usd: 0, incident_reserve_usd: 0, daily_spent_usd: 0, day: '2026-09-14' };
-  boardActive = true;
   cards: Card[] = [];
   roles: Role[] = [role()];
   ledger: LedgerRow[] = [];
@@ -286,9 +285,7 @@ export class FakeDb implements Db {
   async getPool() {
     return { ...this.pool };
   }
-  async boardSessionActive() {
-    return this.boardActive;
-  }
+
   // dispatcher_cards holds every stage (agent_system_test.ts reads a card at each one), so the fake
   // filters by the stages asked for alone; the executor's pause is read from its role, as the view
   // joins it.
@@ -613,4 +610,18 @@ export class FakeDb implements Db {
   async schemaFingerprint() {
     return { ...this.productionFingerprint };
   }
+}
+
+// The same store, recording the name of every method read through it, so a test can show what a path
+// never calls: no dispatcher path reads a board session (docs/specs/unattended-roles.md, PR5).
+export function recordCalls<T extends object>(db: T): { db: T; calls: Set<string> } {
+  const calls = new Set<string>();
+  const proxy = new Proxy(db, {
+    get(target, name, receiver) {
+      const value: unknown = Reflect.get(target, name, receiver);
+      if (typeof value === 'function' && typeof name === 'string') calls.add(name);
+      return value;
+    },
+  });
+  return { db: proxy, calls };
 }

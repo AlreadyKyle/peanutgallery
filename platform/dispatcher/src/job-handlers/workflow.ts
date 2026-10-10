@@ -23,9 +23,9 @@ export interface Workspace {
 }
 
 export interface WorkflowDeps {
-  // The card sessions' adapter: in unattended mode the managed one, each session a reader on the
-  // studio's Console credit billed to the card it drafts. A role job never runs on the attended
-  // adapter (PLAN.md §10 decision 66): in an attended process its sessions are refused.
+  // The card sessions' adapter: the managed one, each session a reader on the studio's Console credit
+  // billed to the card it drafts. A role job never runs on the attended adapter (PLAN.md §10 decision
+  // 66): the dispatcher builds none, and a caller that passes one has its sessions refused.
   adapter: AgentAdapter;
   // True only for the hand-run replay eval (evals/replay.ts), the attended adapter's one remaining use:
   // the founder's login, an in-memory store and no database row.

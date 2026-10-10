@@ -127,7 +127,7 @@ export interface PipelineDeps {
   stopSignal: AbortSignal;
   now: () => Date;
   fetchFn?: typeof fetch;
-  // Where accepted managed-session patches are kept (card_patches); null in attended mode.
+  // Where accepted managed-session patches are kept (card_patches); null leaves none to re-apply.
   patches?: PatchStore | null;
   timings?: Partial<PipelineTimings>;
   // The session budgets the tick set (budgets.ts); without it a session's budget is its ceiling.
@@ -298,7 +298,6 @@ const PAUSING_OUTCOMES: Partial<Record<SessionOutcome, string>> = {
   ceiling: 'ceiling',
   budget: 'budget',
   turn_cap: 'turn_cap',
-  board_session_lapsed: 'board_session',
   paused_by_board: 'paused_by_board',
   unknown_model: 'unknown_model',
   wall_clock: 'wall_clock',
@@ -644,7 +643,6 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
     adapter: deps.adapter,
     priceTable: deps.config.priceTable,
     sessionMaxTurns: deps.config.sessionMaxTurns,
-    boardSessionTtlMin: deps.config.boardSessionTtlMin,
     watchIntervalMs: deps.config.tickMs,
     fallbackModel: deps.config.modelBuilder,
     sessionMaxMs: deps.config.sessionMaxMinutes * 60_000,
@@ -834,8 +832,8 @@ async function revisionMayStart(building: Building, deps: PipelineDeps): Promise
 }
 
 // A visual revision: the card goes back to building, the builder's new session works on the card's
-// commit in the card's own mode, inside its ceiling (the card's spend read fresh) and, unattended,
-// inside what the claim's throttle budget still holds after the first session (budgets.ts), and the
+// commit, inside its ceiling (the card's spend read fresh) and inside what the claim's throttle budget
+// still holds after the first session (budgets.ts), and the
 // change and the revision become one commit on the base, pushed to the same branch and pull request.
 // It starts only as a claim would (revisionMayStart). No stored patch survives a revision, whatever
 // stops it: the revision session's accepted patch is made against the card's commit, not main, so it

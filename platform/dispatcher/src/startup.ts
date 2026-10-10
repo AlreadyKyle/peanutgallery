@@ -1,15 +1,16 @@
-// Startup rules for the dispatcher: on the VPS its code root must be read-only to it, the database
-// must agree on the agent mode, every writing role's model must have a price, and in unattended mode
-// the containment check and the managed probe must pass, the probe metered as overhead, before any
-// card runs (docs/specs/launch-managed.md). The adapter is passed in, so tests run these rules with a
-// fake Managed Agents client and no network. A failure that cannot change on retry is a fatal
-// StartupError, which main.ts turns into exit 78.
+// Startup rules for the dispatcher: on the VPS its code root must be read-only to it, every writing
+// role's model must have a price, and the containment check and the managed probe must pass, the probe
+// metered as overhead, before any card runs (docs/specs/launch-managed.md). The dispatcher runs
+// unattended only (PLAN.md §10 decision 66), so there is no mode to agree on: studio_state.agent_mode
+// is unattended by a check constraint and is not read. The adapter is passed in, so tests run these
+// rules with a fake Managed Agents client and no network. A failure that cannot change on retry is a
+// fatal StartupError, which main.ts turns into exit 78.
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { access, open, rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { AgentAdapter } from './adapters/types.js';
-import { githubTokenProblem, type DispatcherConfig } from './config.js';
+import type { DispatcherConfig } from './config.js';
 import type { Db } from './db.js';
 import { StartupError } from './exit-code.js';
 import { gitConfigViolations, originUrl } from './gitconfig.js';
@@ -23,20 +24,6 @@ export interface StartupDeps {
   adapter: AgentAdapter;
   config: DispatcherConfig;
   log: Logger;
-}
-
-// The board sets the mode from /board and the process reads its own from AGENT_MODE; when they
-// disagree nothing should run, because the sessions would be billed to the wrong account or
-// gated on the wrong rule. Not fatal: the board fixes it from /board and the next restart, which
-// runs no probe until the modes agree, costs nothing.
-export async function checkMode(db: Db, config: DispatcherConfig): Promise<void> {
-  const studio = await db.getStudioState();
-  if (studio.agent_mode !== config.agentMode) {
-    throw new StartupError(
-      `studio_state.agent_mode is ${studio.agent_mode || 'unset'} but AGENT_MODE is ${config.agentMode}; set the mode from /board or start the dispatcher in the matching mode`,
-      false,
-    );
-  }
 }
 
 // The repository the dispatcher runs git in must carry only the git configuration git itself writes,
@@ -80,7 +67,7 @@ export async function checkRoleModels(db: Db, config: DispatcherConfig, log?: Lo
   }
 }
 
-// Unattended mode runs only on the managed adapter. Before any card: the containment check (the
+// The dispatcher runs only on the managed adapter. Before any card: the containment check (the
 // managed ids, a read-only token that cannot write, the agent and environment exactly as the
 // repository declares them), then the probe, one minimal Managed Agents session billed as overhead.
 // A drifted config, a token that can write or an unpriced probe model cannot change on retry and is
@@ -88,7 +75,7 @@ export async function checkRoleModels(db: Db, config: DispatcherConfig, log?: Lo
 export async function unattendedStartup(deps: StartupDeps): Promise<void> {
   const managed = deps.adapter.managed;
   if (deps.adapter.mode !== 'unattended' || !managed) {
-    throw new StartupError('unattended mode runs only on the managed adapter, which this process did not build', true);
+    throw new StartupError('the dispatcher runs only on the managed adapter, which this process did not build', true);
   }
   await managed.checkContainment();
   deps.log.info('probe', 'running the startup probe', { mode: 'unattended', model: deps.config.modelBuilder, billed_to: 'overhead' });
@@ -148,17 +135,14 @@ export async function failStaleJobRuns(db: Db, holder: string, log: Logger): Pro
   return count;
 }
 
-// The code root check runs first, before any database read. The mode and role model checks run next
-// so a process that could not run a card never spends money on a probe.
+// The code root check runs first, before any database read. The role model check runs next so a
+// process that could not run a card never spends money on a probe. A GitHub token that is not
+// fine-grained never gets this far: the config refuses it (config.ts).
 export async function startupChecks(deps: StartupDeps): Promise<void> {
   if (deps.config.codeReadonly) {
     await checkCodeReadonly(deps.config.codeRoot);
     deps.log.info('startup', 'code root is read-only', { codeRoot: deps.config.codeRoot });
   }
-  // Unattended mode refuses such a token when the config loads (config.ts).
-  const tokenProblem = githubTokenProblem(deps.config.githubToken);
-  if (tokenProblem) deps.log.warn('startup', tokenProblem, { mode: deps.config.agentMode });
-  await checkMode(deps.db, deps.config);
   await checkRoleModels(deps.db, deps.config, deps.log);
-  if (deps.config.agentMode === 'unattended') await unattendedStartup(deps);
+  await unattendedStartup(deps);
 }

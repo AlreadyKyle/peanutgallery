@@ -1,11 +1,11 @@
 // Pure budget throttle from Appendix A: whether a tick may start a card at all, how many sessions may
-// run, and, in unattended mode, how much of the pool one card's session may spend. The pool holds
-// customer money only, so the money rules apply to unattended sessions; an attended session runs on the
-// founder's subscription and needs only a board session and a free slot, with its card ceiling as its
-// only budget.
+// run, and how much of the pool one card's session may spend. The dispatcher runs unattended only
+// (PLAN.md §10 decision 66), so every session is studio spend and the money rules apply to all of
+// them; no session waits on a board member.
 //
-// The money rule (unattended only). spent_c is card c's studio-billed ledger sum, never actual_usd,
-// which also counts founder-billed turns. Every card other than the candidate X holds money:
+// The money rule. spent_c is card c's studio-billed ledger sum, never actual_usd, which also counts
+// turns recorded as the founder's (a session on the wrong account). Every card other than the
+// candidate X holds money:
 // - a proposed, designing, voted, funded or paused card holds the unspent part of its bar,
 //   max(funded_c − spent_c, 0), whatever its horizon;
 // - a building card holds what its sessions may still spend, max(budget_c − sessions_spent_c, 0), from
@@ -29,22 +29,14 @@
 // the balance stops is reported as insufficient_balance, never as the daily cap.
 import { round4 } from './pricing.js';
 
-export type AgentMode = 'attended' | 'unattended';
-
-export function billingFor(mode: AgentMode): 'studio' | 'founder' {
-  return mode === 'attended' ? 'founder' : 'studio';
-}
-
 export type MoneyReason = 'daily_cap' | 'monthly_cap' | 'tier_cap' | 'console_credit' | 'insufficient_balance';
 
-export type SleepReason = 'paused' | 'no_board_session' | 'no_funded_cards' | 'no_eligible_card' | 'concurrency' | MoneyReason;
+export type SleepReason = 'paused' | 'no_funded_cards' | 'no_eligible_card' | 'concurrency' | MoneyReason;
 
 export type StartDecision = { ok: true } | { ok: false; reason: SleepReason };
 
 export interface StartConditions {
   paused: boolean;
-  mode: AgentMode;
-  boardSessionActive: boolean;
   // Cards in stage funded, and those of them a session may run for (select.ts runnable).
   fundedCount: number;
   runnableCount: number;
@@ -52,10 +44,10 @@ export interface StartConditions {
   concurrency: number;
 }
 
-// Whether a tick may try to start a card; the money is checked per card after this (planStart).
+// Whether a tick may try to start a card; the money is checked per card after this (planStart). No
+// board member need be signed in.
 export function canStart(c: StartConditions): StartDecision {
   if (c.paused) return { ok: false, reason: 'paused' };
-  if (c.mode === 'attended' && !c.boardSessionActive) return { ok: false, reason: 'no_board_session' };
   if (c.fundedCount === 0) return { ok: false, reason: 'no_funded_cards' };
   if (c.runnableCount === 0) return { ok: false, reason: 'no_eligible_card' };
   if (c.running >= c.concurrency) return { ok: false, reason: 'concurrency' };
@@ -67,11 +59,9 @@ export function ceilingUsd(estimateUsd: number, cardMaxUsd: number): number {
   return round4(Math.min(1.5 * estimateUsd, cardMaxUsd));
 }
 
-// Attended: one session. Unattended: one session whenever a card's money fits, which planStart
-// decides per card, and two once the balance covers two hours at the hourly rate.
-// DISPATCHER_MAX_CONCURRENCY caps both.
-export function concurrency(balanceUsd: number, hourlyRateUsd: number, mode: AgentMode, maxConcurrency: number): number {
-  if (mode === 'attended') return Math.min(1, maxConcurrency);
+// One session whenever a card's money fits, which planStart decides per card, and two once the
+// balance covers two hours at the hourly rate. DISPATCHER_MAX_CONCURRENCY caps both.
+export function concurrency(balanceUsd: number, hourlyRateUsd: number, maxConcurrency: number): number {
   const slots = hourlyRateUsd > 0 && balanceUsd >= 2 * hourlyRateUsd ? 2 : 1;
   return Math.max(0, Math.min(slots, maxConcurrency));
 }
@@ -228,7 +218,7 @@ export function moneyBounds(state: MoneyState, x: MoneyCard): MoneyBounds {
 
 export type StartPlan = { ok: true; budgetUsd: number; needUsd: number; bounds: MoneyBounds } | { ok: false; reason: MoneyReason; needUsd: number; bounds: MoneyBounds };
 
-// Whether card X may start in unattended mode, and its session budget.
+// Whether card X may start, and its session budget.
 export function planStart(state: MoneyState, x: MoneyCard): StartPlan {
   const bounds = moneyBounds(state, x);
   const needUsd = Math.max(0, round4(x.estimate_usd - (state.spent.get(x.id) ?? 0)));

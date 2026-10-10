@@ -68,7 +68,6 @@ beforeAll(async () => {
     codeRoot: repo,
     codeReadonly: false,
     repoRoot: repo,
-    agentMode: 'attended',
     supabaseUrl: 'https://db.local',
     supabaseServiceRoleKey: 'service-role',
     githubToken: 'github-token',
@@ -91,7 +90,6 @@ beforeAll(async () => {
     worktreeRoot: path.join(dir, '.worktrees'),
     maxConcurrency: 1,
     claudeBin: 'claude',
-    boardSessionTtlMin: 3,
     studioAnthropicApiKey: null,
     healthcheckUrl: null,
     ntfyTopicUrl: null,
@@ -1198,7 +1196,6 @@ describe('runCardPipeline', () => {
 
   it('pauses the studio and the card, keeping its money, when the API says the Console credit ran out, and nothing more is claimed', async () => {
     const c = card();
-    db.studio.agent_mode = 'unattended';
     db.cards = [{ ...c, stage: 'building' }, card({ id: 'aaaaaaaa-0000-4000-8000-00000000000b', priority: 200 })];
     const adapter = new FakeAdapter(
       async (_spec, emit, signal) => {
@@ -1225,7 +1222,6 @@ describe('runCardPipeline', () => {
     const outcome = await tick({
       db,
       mode: 'unattended',
-      boardSessionTtlMin: 3,
       maxConcurrency: 1,
       running: new Map(),
       budgets: new SessionBudgets(),
@@ -1243,7 +1239,6 @@ describe('runCardPipeline', () => {
 
   it("pauses the studio and the card, keeping its money, when the API says the usage tier's monthly cap is reached", async () => {
     const c = card();
-    db.studio.agent_mode = 'unattended';
     db.cards = [{ ...c, stage: 'building' }];
     const tierError =
       'the Managed Agents session could not be created: 429 {"type":"error","error":{"type":"rate_limit_error","message":"You have reached your API usage limits: your organization has crossed its monthly API usage threshold."},"error_code":"enforced_spend_limit_reached"}';
@@ -1287,7 +1282,6 @@ describe('runCardPipeline', () => {
     const tickDeps = {
       db,
       mode: 'attended' as const,
-      boardSessionTtlMin: 3,
       maxConcurrency: 1,
       running: new Map<string, Date>(),
       budgets: new SessionBudgets(),

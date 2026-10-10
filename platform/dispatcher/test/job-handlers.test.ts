@@ -116,7 +116,6 @@ function setup(answers: Answers, input: Record<string, unknown> = { floor: { sho
   const db = new FakeDb();
   db.roles = ROLES.map((r) => ({ ...r }));
   db.studio.card_max_usd = 5;
-  db.studio.agent_mode = 'unattended';
   db.boardActive = false;
   db.draftTarget = structuredClone(target);
   db.openCardRows = [

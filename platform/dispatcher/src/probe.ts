@@ -1,14 +1,16 @@
 // Probe command: prints the verdict as the first line, PASS: or FAIL:, with the details after it.
-// - Attended mode runs the one-turn Claude Code probe on the founder's subscription, meters nothing,
-//   and saves a passing run's raw stream as test/fixtures/probe.jsonl (paths replaced); a failing
-//   run's stream goes to the temp directory for diagnosis and is never committed.
-// - Unattended mode runs what startup runs: the containment check, then one minimal Managed Agents
-//   session billed as overhead (docs/specs/launch-managed.md).
-// - Unattended with --toolchain runs the one-time cutover check instead: a session with the
+// - By default it runs what the dispatcher's startup runs: the containment check, then one minimal
+//   Managed Agents session billed as overhead (docs/specs/launch-managed.md). The dispatcher runs
+//   unattended only (PLAN.md §10 decision 66); AGENT_MODE=attended is warned about and ignored.
+// - --attended, a hand-run tool on the founder's Mac, runs the one-turn Claude Code probe on the
+//   founder's subscription instead, meters nothing, and saves a passing run's raw stream as
+//   test/fixtures/probe.jsonl (paths replaced); a failing run's stream goes to the temp directory for
+//   diagnosis and is never committed. It reads no studio key and no managed id.
+// - --toolchain runs the one-time cutover check instead: a session with the
 //   repository mounted at main's head runs the seed gate's commands once, and their output is read
 //   back and checked (node 22 or later, pnpm 11.0.9, the install and the seed bot exiting 0). Billed
 //   as overhead.
-// - Unattended with --role runs the role probe instead (role-probe.ts): one tiny reader session, as a
+// - --role runs the role probe instead (role-probe.ts): one tiny reader session, as a
 //   Director's visual review runs, on the Director's model (MODEL_DIRECTOR, else MODEL_BUILDER), that
 //   must hold read, glob and grep only and read a mounted PNG fixture back as one word. Billed as
 //   overhead.
@@ -16,10 +18,11 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
+import { AttendedAdapter } from './adapters/attended.js';
 import { createAdapter } from './adapters/factory.js';
-import { ManagedAdapter } from './adapters/managed.js';
 import { createAlerter } from './alert.js';
-import { loadConfig } from './config.js';
+import { defaultCliPin } from './cli-pin.js';
+import { loadConfig, loadHandRunConfig } from './config.js';
 import { createSupabaseDb } from './db.js';
 import { errorMessage, logLine, type LogFields, type Logger, type LogLevel } from './log.js';
 import { round4 } from './pricing.js';
@@ -49,8 +52,8 @@ function detailLogger(details: string[]): Logger {
 }
 
 async function attendedVerdict(details: string[]): Promise<string> {
-  const config = loadConfig(process.env, CODE_ROOT);
-  const adapter = createAdapter(config);
+  const config = loadHandRunConfig(process.env, CODE_ROOT);
+  const adapter = new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
   const raw: string[] = [];
   details.push(`probe: mode ${adapter.mode}; ANTHROPIC_BASE_URL is ${process.env.ANTHROPIC_BASE_URL ? 'set' : 'not set'} in the dispatcher environment`);
   const probe = await runProbe(adapter, {
@@ -63,7 +66,7 @@ async function attendedVerdict(details: string[]): Promise<string> {
   reportInit(initRecord(raw), details);
   const meteredUsd = round4(probe.metering.rows.reduce((total, row) => total + row.usd, 0));
   details.push(`probe: priced at ${meteredUsd} USD at PRICE_TABLE_JSON on a ${probe.metering.basis} basis (${probe.metering.rows.length} rows); the command line reported ${probe.costUsd ?? 'no'} USD`);
-  details.push('probe: attended mode runs on the subscription; nothing metered');
+  details.push('probe: --attended runs on the subscription; nothing metered');
   const target = probe.ok ? FIXTURE : path.join(os.tmpdir(), `backseat-probe-${Date.now()}.jsonl`);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, raw.length > 0 ? `${raw.join('\n')}\n` : '', 'utf8');
@@ -75,12 +78,11 @@ async function attendedVerdict(details: string[]): Promise<string> {
 type UnattendedProbe = 'startup' | 'toolchain' | 'role';
 
 async function unattendedVerdict(details: string[], which: UnattendedProbe): Promise<string> {
-  const config = loadConfig(process.env, CODE_ROOT);
   const log = detailLogger(details);
+  const config = loadConfig(process.env, CODE_ROOT, (message) => log.warn('config', message));
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const alert = createAlerter({ healthcheckUrl: null, ntfyTopicUrl: config.ntfyTopicUrl, log });
   const adapter = createAdapter(config, { db, alert, log, patches: null });
-  if (!(adapter instanceof ManagedAdapter)) return 'FAIL: probe unattended mode did not build the managed adapter';
   await adapter.checkContainment();
   if (which === 'role') {
     const model = config.modelDirector ?? config.modelBuilder;
@@ -104,11 +106,10 @@ async function probeVerdict(details: string[]): Promise<string> {
   loadDotenv({ path: path.join(CODE_ROOT, '.env'), quiet: true });
   const toolchain = process.argv.includes('--toolchain');
   const role = process.argv.includes('--role');
-  if (toolchain && role) return 'FAIL: probe takes --toolchain or --role, not both';
-  if ((process.env.AGENT_MODE ?? 'attended') === 'unattended') return unattendedVerdict(details, toolchain ? 'toolchain' : role ? 'role' : 'startup');
-  if (toolchain) return 'FAIL: --toolchain checks the Managed Agents container; run it with AGENT_MODE=unattended';
-  if (role) return 'FAIL: --role checks a Managed Agents reader session; run it with AGENT_MODE=unattended';
-  return attendedVerdict(details);
+  const attended = process.argv.includes('--attended');
+  if ([toolchain, role, attended].filter(Boolean).length > 1) return 'FAIL: probe takes one of --toolchain, --role or --attended';
+  if (attended) return attendedVerdict(details);
+  return unattendedVerdict(details, toolchain ? 'toolchain' : role ? 'role' : 'startup');
 }
 
 async function main(): Promise<number> {

@@ -143,7 +143,6 @@ describe('the attended adapter and the pin', () => {
     const config = {
       codeRoot: '/code',
       repoRoot: '/repo',
-      agentMode: 'attended',
       claudeBin: 'claude',
     } as unknown as DispatcherConfig;
     const adapter = createAdapter(config) as unknown as { cliPin: { options: { pinFile: string } } | null };
