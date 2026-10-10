@@ -86,7 +86,7 @@ function fakeFetch(account = ACCOUNT, overrides = {}) {
     if (url.pathname === '/rest/v1/rpc/record_dispute_reinstated') return json(200, { found: true, inserted: true, reinstated_usd: 10 });
     if (url.pathname === '/rest/v1/rpc/record_stripe_fee') return json(200, { found: true, inserted: true, replay: false });
     if (url.pathname === '/rest/v1/rpc/ops_database_size') return json(200, 52428800);
-    if (url.pathname === '/rest/v1/controller_runs') return new Response(null, { status: 201 });
+    if (url.pathname === '/rest/v1/controller_runs') return method === 'GET' ? json(200, []) : new Response(null, { status: 201 });
     if (url.origin === 'https://api.github.com') return json(200, { usageItems: [{ product: 'actions', sku: 'Actions Linux', unitType: 'Minutes', quantity: 812 }] });
     return new Response('ok', { status: 200 });
   };
@@ -559,8 +559,34 @@ describe('the quota check', () => {
     assert.equal(evaluateQuota({ databaseBytes: 349 * 1024 * 1024, minutesUsed: 1600, settings }).ok, true);
     const full = evaluateQuota({ databaseBytes: 350 * 1024 * 1024, minutesUsed: 1601, settings });
     assert.deepEqual(failing(full), ['database_size', 'actions_minutes']);
-    const unread = evaluateQuota({ databaseBytes: 1, minutesUsed: 0, minutesError: 'github billing usage: http 403', settings });
-    assert.match(unread.checks[1].items[0].fix, /Plan read permission/);
+    const unread = evaluateQuota({ databaseBytes: 1, minutesUsed: 0, minutesError: 'github billing usage: http 403', minutesStatus: 403, settings });
+    assert.match(unread.checks[1].items[0].fix, /Plan: Read to the dispatcher's fine-grained token/);
+    const fixFor = (status) => evaluateQuota({ databaseBytes: 1, minutesUsed: 0, minutesError: `github billing usage: http ${status}`, minutesStatus: status, settings }).checks[1].items[0].fix;
+    assert.match(fixFor(403), /Plan: Read/);
+    assert.match(fixFor(401), /expired or was revoked/);
+    assert.match(fixFor(404), /GITHUB_BILLING_USER/);
+  });
+
+  test('alerts a failure once, again when it changes, and again only after seven days', async () => {
+    const forbidden = { 'GET https://api.github.com/users/AlreadyKyle/settings/billing/usage': () => new Response('{}', { status: 403 }) };
+    const run = async (previous, now, overrides = forbidden) => {
+      const { fetchFn, calls } = fakeFetch(ACCOUNT, { ...overrides, 'GET https://fixture.supabase.local/rest/v1/controller_runs': () => new Response(JSON.stringify(previous), { status: 200 }) });
+      const row = await runQuota({ env: QUOTA_ENV, fetchFn, now, out: sink() });
+      return { row, ntfy: calls.filter((call) => call.url === 'https://ntfy.sh/fixture-topic') };
+    };
+    const first = await run([], NOW);
+    assert.equal(first.ntfy.length, 1);
+    assert.match(first.ntfy[0].body, /actions_minutes: the billing usage could not be read \(github billing usage: http 403\)\. add Account permissions, Plan: Read/);
+    assert.equal(first.row.figures.alerted, true);
+    const sent = { started_at: NOW.toISOString(), figures: first.row.figures };
+    const nextDay = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+    const repeat = await run([{ started_at: nextDay.toISOString(), figures: {} }, sent], nextDay);
+    assert.equal(repeat.ntfy.length, 0);
+    assert.equal(repeat.row.figures.alerted, undefined);
+    const changed = await run([sent], nextDay, { 'GET https://api.github.com/users/AlreadyKyle/settings/billing/usage': () => new Response('{}', { status: 401 }) });
+    assert.equal(changed.ntfy.length, 1);
+    const weekLater = await run([sent], new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000));
+    assert.equal(weekLater.ntfy.length, 1);
   });
 
   test("reads this month's usage with the dispatcher token, writes a quota row and alerts on a limit", async () => {

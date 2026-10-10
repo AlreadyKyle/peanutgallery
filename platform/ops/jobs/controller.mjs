@@ -20,8 +20,8 @@
 //   payment whose dispute fee this run booked is compared on the next run;
 // - each paid payout's balance transactions sum to its amount;
 // - the webhook events Stripe could not deliver in the last 30 days;
-// - the Console credit bought covers the studio and overhead spend, and Stripe's balance covers the
-//   Minimum balance figure.
+// - Stripe's balance covers the Minimum balance figure.
+// Spend above the Console credit recorded at /board is not a mismatch (PLAN.md §10 decision 65).
 // What it computes for the board:
 // - the next Console credit purchase: the remaining ceilings of funded cards, plus overhead spent
 //   since the last purchase, less the credit left; never more than the agent money Stripe has paid out and not

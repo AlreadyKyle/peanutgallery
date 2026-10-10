@@ -207,7 +207,26 @@ export function supabaseClient({ url, key, fetchFn = fetch }) {
       });
       await readJson(response, `supabase insert ${table}`);
     },
+    // A PostgREST read: query is the search string, such as 'job=eq.quota&order=created_at.desc&limit=20'.
+    async select(table, query) {
+      const response = await fetchFn(`${base}/rest/v1/${table}?${query}`, { method: 'GET', headers, signal: AbortSignal.timeout(30_000) });
+      return readJson(response, `supabase select ${table}`);
+    },
   };
+}
+
+// An alert repeats only when it says something new: a failure whose signature differs from the last
+// one the board was told about, or the same failure once REPEAT_ALERT_DAYS have passed since it was
+// last sent. previous holds a job's recent controller_runs rows, newest first; a row the board was
+// alerted for carries figures.alerted and figures.alert_signature.
+export const REPEAT_ALERT_DAYS = 7;
+export function alertSignature(checks) {
+  return JSON.stringify(checks.filter((c) => !c.ok).map((c) => [c.name, c.items.map((item) => item.error ?? item.fix ?? null)]));
+}
+export function shouldAlert({ signature, previous, now, repeatDays = REPEAT_ALERT_DAYS }) {
+  const last = previous.find((row) => row.figures?.alerted === true);
+  if (!last || last.figures.alert_signature !== signature) return true;
+  return now.getTime() - new Date(last.started_at).getTime() >= repeatDays * 24 * 60 * 60 * 1000;
 }
 
 // The board's alerts: one ntfy post, and a healthchecks.io ping (success, or /fail).
