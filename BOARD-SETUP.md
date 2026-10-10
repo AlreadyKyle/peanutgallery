@@ -607,7 +607,7 @@ phone (`docs/PLAN.md` §10 decision 55). Nothing to do.
 The agent-upkeep pull request (`docs/specs/agent-upkeep.md`) pins Claude Code at 2.1.283, the
 version the Mac updated itself to, on which the attended sandbox check passed in both layouts on
 26 September 2026. Attended sessions now run only on the pinned version: on any other, a card pauses
-with `cli_version` and a role job fails, and the daily check lists it in Needs you. Until you run
+with `cli_version` and a role job fails, and the daily check alerts by ntfy. Until you run
 this, Claude Code keeps updating itself, and each update pauses attended sessions until I run the
 sandbox check on the new version and move the pin in a pull request you merge.
 
@@ -663,7 +663,7 @@ No agent touches Stripe; these are yours.
   free game; no rewards") and ask whether a restricted category applies. Keep their reply. If they
   say it needs approval, tell me before anything else; otherwise nothing waits for a written OK.
 - **Minimum balance.** Settings → Payouts → Minimum balance. Turn it on. It holds a fixed amount,
-  which you raise after each payout to the figure the board site's Needs you inbox shows (the
+  which you raise after each payout to the figure the Controller's alert names (the
   reserve plus held money plus typical fees, computed by the Controller). The Controller alerts if
   Stripe's balance falls below it.
 - **Minimum amount.** Stays $1, your call on 23 September 2026. Leave Radar on its default:
@@ -962,8 +962,8 @@ so they sound like you, put the clip's link in each, and post them in the order 
   Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
 - **The Janitor and dependency updates (nothing to do now).** The agent-upkeep pull request
-  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings show in Needs you under
-  Findings and reach ntfy once each, and Dependabot. Four things to know, none blocking:
+  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings reach ntfy once each (and show in Needs you under
+  Findings until the panel replaces it), and Dependabot. Four things to know, none blocking:
   1. The weekly scan (`janitor.yml`, osv-scanner and an offline link check) runs on Actions
      minutes, so its first run waits for Actions (see **GitHub Actions minutes**). Until it has run,
      the daily check has no scan result to list.
