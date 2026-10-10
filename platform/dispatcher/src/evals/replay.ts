@@ -2,14 +2,17 @@
 // at the Mac: pnpm eval:replay -- --set draft --k 3.
 // - After loading .env it deletes STUDIO_ANTHROPIC_API_KEY and ANTHROPIC_API_KEY from its own
 //   environment, so its sessions can only sign in with the founder's Claude login (the Max plan).
-// - It refuses when CI or GITHUB_ACTIONS is set or AGENT_MODE is unattended: it runs attended only.
+// - It refuses when CI or GITHUB_ACTIONS is set or AGENT_MODE is unattended (as a dispatcher host's
+//   env file sets it): it runs attended only, the attended adapter's one remaining use besides
+//   sandbox:check and the probe's --attended run (PLAN.md §10 decision 66).
 // - It writes no database row: the sessions run through the real attended adapter (with the Claude
 //   Code pin) and the draft handler's own steps, against an in-memory store that refuses every other
-//   call.
+//   call. It reads no board session: nothing in it waits on a board member.
 // - It runs each case k times. A case passes when all k runs meet its expectation; pass^k for a set
 //   is the share of its cases that pass. It writes platform/agents/evals/results/<UTC stamp>.json
 //   with the commit, the CLI version, the model ids and pass^k per set, and exits 1 when a set is
-//   below baseline.json.
+//   below baseline.json. The result is advisory, not a merge gate: the gate reports a guarded change
+//   that has none (platform/agents/evals.test.mjs).
 import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,7 +21,7 @@ import { promisify } from 'node:util';
 import { config as loadDotenv } from 'dotenv';
 import { AttendedAdapter } from '../adapters/attended.js';
 import { claudeVersionReader, defaultCliPin, parseClaudeVersion } from '../cli-pin.js';
-import { loadConfig, type DispatcherConfig } from '../config.js';
+import { loadHandRunConfig, type DispatcherConfig } from '../config.js';
 import type { Db, DraftFields, DraftTarget, OpenCardRow, RecordUsageResult, Role, StudioState, UsageInput } from '../db.js';
 import { draftCard, directorPrompt, type DraftVerdict } from '../job-handlers/draft-card.js';
 import { gitWorkspace, sessionDeps, type WorkflowDeps } from '../job-handlers/workflow.js';
@@ -243,9 +246,6 @@ export function inMemoryStore(roles: readonly Role[], studio: StudioState, openC
     async recordUsage(_input: UsageInput): Promise<RecordUsageResult> {
       return { ledger_id: 'eval', balance_usd: 0, daily_spent_usd: 0, actual_usd: 0 };
     },
-    async boardSessionActive() {
-      return true;
-    },
     async roleState() {
       return { paused: false, state: 'active' };
     },
@@ -359,12 +359,11 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   const { set, k } = parseArgs(process.argv.slice(2));
-  const config = loadConfig({ ...process.env, AGENT_MODE: 'attended' }, CODE_ROOT);
+  const config = loadHandRunConfig(process.env, CODE_ROOT);
   const cases = await loadCases(set);
   const roles = await specRoles();
   const studio: StudioState = {
     paused: false,
-    agent_mode: 'attended',
     daily_cap_usd: 0,
     card_max_usd: config.cardMaxUsd,
     agent_hourly_rate_usd: 0,

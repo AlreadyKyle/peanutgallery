@@ -1,6 +1,5 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { AttendedAdapter } from '../src/adapters/attended.js';
 import { createAdapter } from '../src/adapters/factory.js';
 import { ManagedAdapter } from '../src/adapters/managed.js';
 import { UnattendedAdapter } from '../src/adapters/unattended.js';
@@ -15,7 +14,6 @@ const base: DispatcherConfig = {
   codeRoot: '/repo',
   codeReadonly: false,
   repoRoot: '/repo',
-  agentMode: 'attended',
   supabaseUrl: 'https://db.local',
   supabaseServiceRoleKey: 'service-role',
   githubToken: 'github-token',
@@ -38,7 +36,6 @@ const base: DispatcherConfig = {
   worktreeRoot: '/repo/.worktrees',
   maxConcurrency: 1,
   claudeBin: 'claude',
-  boardSessionTtlMin: 3,
   studioAnthropicApiKey: null,
   healthcheckUrl: null,
   ntfyTopicUrl: null,
@@ -49,17 +46,12 @@ const base: DispatcherConfig = {
 
 describe('createAdapter', () => {
   const managed = { agentId: AGENT_ID, agentVersion: 3, environmentId: ENVIRONMENT_ID, readToken: 'github_pat_-fixture-read' };
-  const unattended: DispatcherConfig = { ...base, codeRoot: CODE_ROOT, agentMode: 'unattended', studioAnthropicApiKey: 'studio-key', managed };
+  const unattended: DispatcherConfig = { ...base, codeRoot: CODE_ROOT, studioAnthropicApiKey: 'studio-key', managed };
   const adapterDeps = () => ({ db: new FakeDb(), alert: new RecordingAlerter(), log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })), patches: null, client: new FakeManagedClient() });
 
-  it('builds the attended adapter for attended mode', () => {
-    const adapter = createAdapter(base);
-    expect(adapter).toBeInstanceOf(AttendedAdapter);
-    expect(adapter.mode).toBe('attended');
-    expect(adapter.managed).toBeUndefined();
-  });
-
-  it('builds the managed adapter for unattended mode, reading the agent and environment files from the code root, whatever CLAUDE_BIN says', () => {
+  // docs/specs/unattended-roles.md, PR5: the dispatcher has one mode; only the hand-run tools build the
+  // attended adapter.
+  it('builds the managed adapter, reading the agent and environment files from the code root, whatever CLAUDE_BIN says', () => {
     const adapter = createAdapter({ ...unattended, claudeBin: '/nowhere/claude' }, adapterDeps());
     expect(adapter).toBeInstanceOf(UnattendedAdapter);
     expect(adapter).toBeInstanceOf(ManagedAdapter);
@@ -67,9 +59,9 @@ describe('createAdapter', () => {
     expect(adapter.managed).toBe(adapter);
   });
 
-  it('refuses unattended mode without the studio key, the managed ids or the ledger it meters to', () => {
-    expect(() => createAdapter({ ...unattended, studioAnthropicApiKey: null }, adapterDeps())).toThrow('STUDIO_ANTHROPIC_API_KEY is required in unattended mode');
-    expect(() => createAdapter({ ...unattended, managed: null }, adapterDeps())).toThrow('GITHUB_READ_TOKEN and the managed agent and environment ids are required in unattended mode');
-    expect(() => createAdapter(unattended)).toThrow('unattended mode meters to the ledger');
+  it('refuses a configuration without the studio key or the managed ids, as a hand-run tool loads one, rather than build an attended adapter', () => {
+    expect(() => createAdapter({ ...unattended, studioAnthropicApiKey: null }, adapterDeps())).toThrow('STUDIO_ANTHROPIC_API_KEY is required: the dispatcher runs unattended only');
+    expect(() => createAdapter({ ...unattended, managed: null }, adapterDeps())).toThrow('GITHUB_READ_TOKEN and the managed agent and environment ids are required: the dispatcher runs unattended only');
+    expect(() => createAdapter(base, adapterDeps())).toThrow('STUDIO_ANTHROPIC_API_KEY is required');
   });
 });

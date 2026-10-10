@@ -6,7 +6,7 @@ import { createLogger } from '../src/log.js';
 import { stuckAfterMs } from '../src/pipeline.js';
 import { currentMoneyState, drainState, jobsHoldUsd, leaseTtlSeconds, newStudioProbeState, tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
-import { FakeDb, NOW, card } from './helpers/fake-db.js';
+import { FakeDb, NOW, card, recordCalls } from './helpers/fake-db.js';
 
 // A pipeline that is still running, so the card keeps its session budget while the test reads it.
 const stillRunning = () => new Promise<void>(() => undefined);
@@ -14,8 +14,6 @@ const stillRunning = () => new Promise<void>(() => undefined);
 function deps(db: FakeDb, started: string[], overrides: Partial<TickDeps> = {}): TickDeps {
   return {
     db,
-    mode: 'attended',
-    boardSessionTtlMin: 3,
     maxConcurrency: 1,
     running: new Map<string, Date>(),
     budgets: new SessionBudgets(),
@@ -139,7 +137,7 @@ describe('tick: auto-resume and the credit probe', () => {
     return db;
   }
 
-  it('never probes a pause the board, the moderator or an incident set, nor without a probe (attended mode)', async () => {
+  it('never probes a pause the board, the moderator or an incident set, nor without a probe', async () => {
     let probes = 0;
     const creditProbe = async () => {
       probes += 1;
@@ -360,16 +358,15 @@ describe('tick', () => {
     expect(await tick(deps(db, started))).toEqual({ action: 'sleep', reason: 'no_funded_cards' });
   });
 
-  it('holds what a building session may still spend, and nothing for a gated card it does not run, in unattended mode', async () => {
+  it('holds what a building session may still spend, and nothing for a gated card it does not run', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
     const budgets = new SessionBudgets();
     budgets.start('a', 4);
     db.cards = [card({ id: 'a', stage: 'building', estimate_usd: 4 }), card({ id: 'g', stage: 'gated', estimate_usd: 4 }), card({ id: 'b', estimate_usd: 2 })];
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2 }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2 }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
     budgets.record('a', 3);
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
     expect(budgets.budgetFor('b')).toBe(3);
     expect(db.stagesRead.at(-1)).toEqual(['proposed', 'designing', 'voted', 'funded', 'paused', 'building', 'gated']);
   });
@@ -377,42 +374,38 @@ describe('tick', () => {
   // docs/specs/design-review.md: a gated card may still start a visual revision on its claim's budget.
   it('holds what a gated card it still runs may spend on a revision, until the pipeline closes the budget', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
     const budgets = new SessionBudgets();
     budgets.start('g', 5);
     budgets.record('g', 1);
     db.cards = [card({ id: 'g', stage: 'gated', estimate_usd: 4 }), card({ id: 'b', estimate_usd: 2 })];
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2 }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2 }))).toEqual({ action: 'sleep', reason: 'insufficient_balance' });
     budgets.close('g');
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'b' });
   });
 
-  it('starts a runnable card in unattended mode with a pool under the hourly rate', async () => {
+  it('starts a runnable card with a pool under the hourly rate', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 3;
     db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
     const budgets = new SessionBudgets();
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, [], { budgets, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
     expect(budgets.budgetFor(card().id)).toBe(3);
   });
 
   it('starts a card on its own bar and keeps another card bar from it', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 20;
     db.cards = [card({ id: 'a', estimate_usd: 10, funded_usd: 10, priority: 1 }), card({ id: 'c', estimate_usd: 10, funded_usd: 10, priority: 2 })];
     const budgets = new SessionBudgets();
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'a' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2, runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'a' });
     expect(budgets.budgetFor('a')).toBe(10);
-    expect(await tick(deps(db, [], { mode: 'unattended', budgets, maxConcurrency: 2, running: new Map([['a', NOW]]), runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'c' });
+    expect(await tick(deps(db, [], { budgets, maxConcurrency: 2, running: new Map([['a', NOW]]), runCard: stillRunning }))).toEqual({ action: 'started', cardId: 'c' });
     expect(budgets.budgetFor('c')).toBe(10);
   });
 
   it('starts a funded card unattended with no Console credit recorded, and sends no credit alert (PLAN.md §10 decision 65)', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.pool.balance_usd = 5;
     db.creditPurchased = 0;
     db.ledger = [
@@ -420,13 +413,12 @@ describe('tick', () => {
     ];
     db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
     const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, [], { alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
     expect(alert.messages).toEqual([]);
   });
 
   it('starts nothing once the month-to-date studio spend reaches the monthly cap, and alerts once', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.studio.monthly_cap_usd = 5;
     db.ledger = [
       { id: 'l1', created_at: '2026-09-02T12:00:00.000Z', billed_to: 'studio', card_id: 'old', role_id: null, model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd: 5, request_id: 'old/1' },
@@ -434,26 +426,24 @@ describe('tick', () => {
     ];
     db.cards = [card()];
     const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'monthly_cap' });
     expect(alert.messages).toEqual(['The monthly cap of $5.00 stopped the agents for 2026-09.']);
     // Only September's row counts; August's does not.
     db.studio.monthly_cap_usd = 10;
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'started', cardId: card().id });
   });
 
   it('reads the spend totals once a tick, from the New York month start and the tier month start', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.cards = [card()];
-    expect((await tick(deps(db, [], { mode: 'unattended', runCard: stillRunning }))).action).toBe('started');
+    expect((await tick(deps(db, [], { runCard: stillRunning }))).action).toBe('started');
     // NOW is 14 September 2026: New York's month began at 04:00 UTC, UTC's at midnight.
     expect(db.spendTotalsCalls).toEqual([['2026-09-01T04:00:00.000Z', '2026-09-01T00:00:00.000Z']]);
   });
 
   it('stays below the usage tier cap the board reported, counting the tier month, and alerts once', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.studio.monthly_cap_usd = 500;
     db.studio.anthropic_tier_cap_usd = 100;
     const row = (id: string, created_at: string, billed_to: 'studio' | 'overhead' | 'founder', usd: number) =>
@@ -468,19 +458,18 @@ describe('tick', () => {
     ];
     db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
     const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'tier_cap' });
     expect(alert.messages).toEqual([
       'The usage tier cap of $100.00 a month stopped the agents: the studio key has spent $99.00 since 2026-09-01T00:00:00.000Z. It clears when the month turns, or when Anthropic raises the tier and the new limit is reported.',
     ]);
     // No tier cap reported: the monthly cap alone bounds the month.
     db.studio.anthropic_tier_cap_usd = null;
-    expect(await tick(deps(db, [], { mode: 'unattended', alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, [], { alert, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
   });
 
   it('alerts the usage tier cap once across the month turn in UTC, New York and Los Angeles, and again in the next tier month', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.studio.monthly_cap_usd = 500;
     db.studio.anthropic_tier_cap_usd = 100;
     const row = (id: string, created_at: string, usd: number) =>
@@ -488,7 +477,7 @@ describe('tick', () => {
     db.ledger = [row('sep', '2026-09-15T12:00:00.000Z', 99)];
     db.cards = [card({ estimate_usd: 2, funded_usd: 2 })];
     const alert = new RecordingAlerter();
-    const at = (iso: string) => tick(deps(db, [], { mode: 'unattended', alert, now: () => new Date(iso) }));
+    const at = (iso: string) => tick(deps(db, [], { alert, now: () => new Date(iso) }));
     expect(await at('2026-09-30T12:00:00.000Z')).toEqual({ action: 'sleep', reason: 'tier_cap' });
     // Spend in October's first half hour, which September's window counts too.
     db.ledger.push(row('oct', '2026-10-01T00:30:00.000Z', 99));
@@ -524,42 +513,39 @@ describe('tick', () => {
     expect(await tick(deps(db, []))).toEqual({ action: 'started', cardId: 'site' });
   });
 
-  it('sleeps while paused, without a board session or at the concurrency limit', async () => {
+  it('sleeps while paused or at the concurrency limit', async () => {
     const db = new FakeDb();
     db.cards = [card()];
     db.studio.paused = true;
     expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'paused' });
     db.studio.paused = false;
-    db.boardActive = false;
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'no_board_session' });
-    db.boardActive = true;
     expect(await tick(deps(db, [], { running: new Map([['other-card', NOW]]) }))).toEqual({ action: 'sleep', reason: 'concurrency' });
     expect(db.cards[0]?.stage).toBe('funded');
   });
 
-  it('sleeps at the daily cap in unattended mode, alerting once a day and counting only today', async () => {
+  it('sleeps at the daily cap, alerting once a day and counting only today', async () => {
     const db = new FakeDb();
-    db.studio.agent_mode = 'unattended';
     db.cards = [card()];
     db.pool.daily_spent_usd = 99;
     const alert = new RecordingAlerter();
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
-    expect(await tick(deps(db, [], { mode: 'unattended', alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
+    expect(await tick(deps(db, [], { alert }))).toEqual({ action: 'sleep', reason: 'daily_cap' });
     expect(alert.messages).toEqual(['The daily cap of $100.00 stopped the agents for 2026-09-14.']);
     expect(alert.pings).toBe(2);
     db.pool.day = '2026-09-13';
-    expect(await tick(deps(db, [], { mode: 'unattended' }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, []))).toEqual({ action: 'started', cardId: card().id });
   });
 
-  it('starts a card in attended mode with an empty pool, over the cap, with no credit and above the balance, on its full ceiling', async () => {
+  // docs/specs/unattended-roles.md, PR5: one mode, so no card starts outside the money rules, however
+  // the pool stands; there is no attended path that skipped them.
+  it('starts no card on an empty pool or over the daily cap', async () => {
     const db = new FakeDb();
     db.pool = { ...db.pool, balance_usd: 0, daily_spent_usd: 500 };
-    db.creditPurchased = 0;
-    db.studio.monthly_cap_usd = null;
-    db.cards = [card({ estimate_usd: 12 }), card({ id: 'other', estimate_usd: 5, funded_usd: 5, priority: 200 })];
+    db.cards = [card({ estimate_usd: 12 })];
     const budgets = new SessionBudgets();
-    expect(await tick(deps(db, [], { budgets, runCard: stillRunning }))).toEqual({ action: 'started', cardId: card().id });
-    expect(budgets.budgetFor(card().id)).toBe(Number.POSITIVE_INFINITY);
+    expect((await tick(deps(db, [], { budgets, runCard: stillRunning }))).action).toBe('sleep');
+    expect(budgets.budgetFor(card().id)).toBeUndefined();
+    expect(db.claims).toBe(0);
   });
 
   it('ticks only while it holds the lease: a second dispatcher claims nothing and does not ping until the lease lapses', async () => {
@@ -592,23 +578,17 @@ describe('tick', () => {
     expect(leaseTtlSeconds(60 * 60_000)).toBe(3600);
   });
 
-  it('sleeps when studio_state.agent_mode differs from the adapter', async () => {
-    const db = new FakeDb();
+  // docs/specs/unattended-roles.md, PR5: the dispatcher refuses no run for want of a board session.
+  it('starts a funded card with no board member signed in, and reads no board session on the way', async () => {
+    const { db, calls } = recordCalls(new FakeDb());
     db.cards = [card()];
-    db.studio.agent_mode = 'unattended';
-    expect(await tick(deps(db, []))).toEqual({ action: 'sleep', reason: 'mode_mismatch' });
-  });
-
-  it('starts a funded card in unattended mode with no board session', async () => {
-    const db = new FakeDb();
-    db.cards = [card()];
-    db.studio.agent_mode = 'unattended';
-    db.boardActive = false;
     const started: string[] = [];
-    expect(await tick(deps(db, started, { mode: 'unattended' }))).toEqual({ action: 'started', cardId: card().id });
+    expect(await tick(deps(db, started, { jobTick: async () => undefined }))).toEqual({ action: 'started', cardId: card().id });
     expect(db.cards[0]?.stage).toBe('building');
     await Promise.resolve();
     expect(started).toEqual([card().id]);
+    expect(calls.has('claimCard')).toBe(true);
+    expect([...calls].filter((name) => /board|session/i.test(name))).toEqual([]);
   });
 
   it('writes the heartbeat and pings once per completed tick, and goes on when the write fails', async () => {
@@ -663,7 +643,7 @@ describe('tick', () => {
         finish = resolve;
       });
     await tick(deps(db, [], { budgets, runCard }));
-    expect(budgets.budgetFor(card().id)).toBe(Number.POSITIVE_INFINITY);
+    expect(budgets.budgetFor(card().id)).toBe(3);
     finish();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(budgets.budgetFor(card().id)).toBeUndefined();
@@ -741,44 +721,6 @@ describe('tick', () => {
     expect(started).toEqual([card().id, card().id]);
   });
 
-  // docs/specs/agent-upkeep.md: a claim off the pin would only pause the card with cli_version, one
-  // funded card a tick.
-  it('claims nothing in attended mode while Claude Code is off its pin, alerts once per version, and claims again once it is back on', async () => {
-    const db = new FakeDb();
-    db.cards = [card(), card({ id: 'second' })];
-    const started: string[] = [];
-    const alert = new RecordingAlerter();
-    let pin: import('../src/cli-pin.js').PinState = { ok: false, installed: '2.1.290', pinned: '2.1.283', detail: 'Claude Code 2.1.290 is installed but the pin is 2.1.283.' };
-    const cliPin = async () => pin;
-    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'sleep', reason: 'cli_version' });
-    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'sleep', reason: 'cli_version' });
-    expect(alert.messages).toEqual(['No card is claimed while Claude Code is off its pin, and funded cards keep their money. Claude Code 2.1.290 is installed but the pin is 2.1.283.']);
-    expect(db.claims).toBe(0);
-    expect(db.cards.map((c) => [c.stage, c.failing_check ?? null])).toEqual([
-      ['funded', null],
-      ['funded', null],
-    ]);
-    // A pin that cannot be read counts as off it.
-    const unreadable = async (): Promise<never> => {
-      throw new Error('pin file missing');
-    };
-    expect(await tick(deps(db, started, { alert, cliPin: unreadable }))).toEqual({ action: 'sleep', reason: 'cli_version' });
-    expect(alert.messages.at(-1)).toMatch(/the Claude Code pin could not be checked: pin file missing$/);
-    pin = { ok: true, version: '2.1.283' };
-    expect(await tick(deps(db, started, { alert, cliPin }))).toEqual({ action: 'started', cardId: card().id });
-    expect(started).toEqual([card().id]);
-  });
-
-  it('does not read the pin in unattended mode, where card sessions run on Managed Agents', async () => {
-    const db = new FakeDb();
-    let reads = 0;
-    const cliPin = async () => {
-      reads += 1;
-      return { ok: false as const, installed: null, pinned: null, detail: 'off' };
-    };
-    await tick(deps(db, [], { mode: 'unattended', cliPin }));
-    expect(reads).toBe(0);
-  });
 
   it("claims nothing while main's gate cannot be read, so no session is spent on a card that could not be pushed", async () => {
     const db = new FakeDb();

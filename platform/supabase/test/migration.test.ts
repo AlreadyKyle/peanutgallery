@@ -2528,3 +2528,56 @@ describe("anon-negative-test covers the supply-refill functions", () => {
     for (const name of functions.filter((f) => f !== "job_runs_job_enabled")) expect(probes, name).toContain(`["${name}", {`);
   });
 });
+
+// retire-attended (docs/specs/unattended-roles.md, PR5; docs/PLAN.md §10 decision 66): the dispatcher
+// has one mode. studio_state.agent_mode is held at unattended, set_agent_mode refuses after its board
+// checks with the same privileges, and the board heartbeat stays, uncalled by the dispatcher.
+const RETIRE_ATTENDED_FILE = "20261010300000_retire_attended.sql";
+
+describe("retire-attended migration", () => {
+  const text = launchFile(RETIRE_ATTENDED_FILE);
+  const body = withoutComments(text);
+
+  it("comes after supply-refill and sets a lock timeout first", () => {
+    const names = readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith(".sql")).sort();
+    expect(names.indexOf(RETIRE_ATTENDED_FILE)).toBeGreaterThan(names.indexOf("20261010200000_supply_refill.sql"));
+    expect(names.indexOf("20261010200000_supply_refill.sql")).toBeGreaterThan(0);
+    expect(body.split("\n")[0]).toBe(LOCK_TIMEOUT);
+  });
+
+  it("can run twice: every statement is guarded, idempotent or replaces what it creates", () => {
+    const statements = body
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => /^(create|alter|drop|update|insert)\b/.test(statement) && !/^create or replace function/.test(statement));
+    expect(statements).toEqual([
+      "update public.studio_state set agent_mode = 'unattended' where agent_mode is distinct from 'unattended'",
+      "alter table public.studio_state alter column agent_mode set default 'unattended'",
+      "alter table public.studio_state alter column agent_mode set not null",
+      "alter table public.studio_state drop constraint if exists studio_state_agent_mode_unattended",
+      "alter table public.studio_state add constraint studio_state_agent_mode_unattended check (agent_mode = 'unattended')",
+    ]);
+  });
+
+  it("keeps set_agent_mode's signature, board and second-factor checks and grants, and then refuses every call", () => {
+    const block = functionBlockIn(text, "set_agent_mode");
+    expect(block).toContain("public.set_agent_mode(p_mode text) returns void");
+    expect(block).toContain("security definer");
+    expect(block).toContain("set search_path = public");
+    const membership = block.indexOf("raise exception 'Board membership is required';");
+    const factor = block.indexOf(AAL2_CHECK);
+    const retired = block.indexOf("raise exception 'attended mode is retired';");
+    expect(membership).toBeGreaterThan(0);
+    expect(factor).toBeGreaterThan(membership);
+    expect(retired).toBeGreaterThan(factor);
+    expect(block).not.toContain("update public.studio_state");
+    expect(text).toContain("revoke all on function public.set_agent_mode(text) from public, anon;");
+    expect(text).toContain("grant execute on function public.set_agent_mode(text) to authenticated, service_role;");
+    expect(text.match(/^grant /gm)).toHaveLength(1);
+  });
+
+  it("drops nothing and leaves board_heartbeat and board_members.last_seen_at alone", () => {
+    expect(body).not.toMatch(/\bdrop (function|table|column|view|policy|trigger)\b/);
+    expect(body).not.toMatch(/board_heartbeat|board_members|last_seen_at/);
+  });
+});

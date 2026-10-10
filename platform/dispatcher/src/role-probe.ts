@@ -1,4 +1,4 @@
-// The role probe (pnpm --filter @backseat/dispatcher probe --role, unattended only): one tiny managed
+// The role probe (pnpm --filter @backseat/dispatcher probe --role, on the managed adapter): one tiny managed
 // reader session, as a Director's visual review runs, that proves live what the unit tests prove
 // against a fake: the session create's tools override leaves the agent read, glob and grep and nothing
 // else, a file uploaded through the Files API is mounted where the prompt says, and the session can
@@ -58,7 +58,7 @@ export function normalizedAnswer(text: string): string {
 export async function runRoleProbe(adapter: AgentAdapter, opts: { codeRoot: string; model: string; timeoutMs?: number }): Promise<RoleProbeResult> {
   const result: RoleProbeResult = { ok: false, reason: null, sessionId: null, tools: [], toolCalls: [], answer: '', turns: 0 };
   const fail = (reason: string): RoleProbeResult => ({ ...result, ok: false, reason });
-  if (adapter.mode !== 'unattended') return fail('the role probe runs the managed adapter; set AGENT_MODE=unattended');
+  if (adapter.mode !== 'unattended') return fail('the role probe runs the managed adapter, which this process did not build');
   const spec = roleProbeSpec(opts.codeRoot, opts.model);
   let start: Extract<AgentEvent, { type: 'start' }> | null = null;
   let end: EndEvent | null = null;

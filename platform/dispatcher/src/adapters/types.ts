@@ -1,10 +1,11 @@
-// The agent adapter interface. Attended mode runs Claude Code on the founder's subscription on the
-// Mac; unattended mode runs each card as a Claude Managed Agents session on the studio organisation's
-// key, in a container Anthropic hosts, so no agent-written code runs where the dispatcher runs.
-import type { AgentMode } from '../throttle.js';
+// The agent adapter interface. The dispatcher runs unattended only (PLAN.md §10 decision 66): each
+// card runs as a Claude Managed Agents session on the studio organisation's key, in a container
+// Anthropic hosts, so no agent-written code runs where the dispatcher runs. The attended adapter
+// (Claude Code on the founder's subscription) is left for the hand-run tools alone: the replay eval,
+// sandbox:check and the probe's --attended run.
 import type { TurnUsage } from '../pricing.js';
 
-export type { AgentMode };
+export type AgentMode = 'attended' | 'unattended';
 
 export type CardFolder = 'seed-1' | 'platform';
 

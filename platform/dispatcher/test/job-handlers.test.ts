@@ -23,7 +23,7 @@ import type { MoneyState } from '../src/throttle.js';
 import { AGENTS_DIR, TypedOutput } from '../src/typed-output.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeAdapter, usageEvent } from './helpers/fake-adapter.js';
-import { FakeDb, NOW, role } from './helpers/fake-db.js';
+import { FakeDb, NOW, recordCalls, role } from './helpers/fake-db.js';
 import { AGENT_ID, CODE_ROOT, ENVIRONMENT_ID, FakeManagedClient, FILES, type FakeSession } from './helpers/fake-managed.js';
 import { mockFetch } from './helpers/mock-fetch.js';
 
@@ -116,8 +116,6 @@ function setup(answers: Answers, input: Record<string, unknown> = { floor: { sho
   const db = new FakeDb();
   db.roles = ROLES.map((r) => ({ ...r }));
   db.studio.card_max_usd = 5;
-  db.studio.agent_mode = 'unattended';
-  db.boardActive = false;
   db.draftTarget = structuredClone(target);
   db.openCardRows = [
     cardRow(IDS.a, { rank: 2 }),
@@ -231,10 +229,9 @@ function money(overrides: Partial<MoneyState> = {}): MoneyState {
 describe('draft_card, unattended and billed to the card it drafts', () => {
   it('opens the card first, then runs the Designer and the Director as managed readers on main with no board member signed in, every ledger row studio-billed to that card', async () => {
     const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('approved', ['fits_pillars'])] });
-    t.db.boardSessionActive = async () => {
-      throw new Error('draft_card reads no board session');
-    };
-    const output = await draftCard(t.context);
+    const recorded = recordCalls(t.db);
+    const output = await draftCard({ ...t.context, db: recorded.db });
+    expect([...recorded.calls].filter((name) => /board/i.test(name))).toEqual([]);
     expect(t.db.draftTargetsOpened).toEqual(['run-1']);
     expect(t.db.jobRuns[0]!.card_id).toBe(NEW_CARD);
     expect(t.sessions.map((s) => [s.kind, s.purpose, s.cardId, s.repoSha])).toEqual([
@@ -391,7 +388,7 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     expect(t.db.draftCards).toEqual([]);
   });
 
-  it('refuses to run in an attended process, before it opens a card, since a draft is never billed to the founder', async () => {
+  it('refuses an attended adapter, which only a hand-run tool builds, before it opens a card, since a draft is never billed to the founder', async () => {
     const t = setup({ designer: [JSON.stringify(DRAFT)] });
     t.workflow.adapter = { mode: 'attended', preflight: async () => undefined, run: async () => ({ exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'success', totalCostUsd: 0, numTurns: 0, isError: false }) };
     await expect(draftCard({ ...t.context, mode: 'attended' })).rejects.toThrow('draft_card runs only unattended');

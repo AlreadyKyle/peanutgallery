@@ -5,7 +5,7 @@ import { parsePriceTable, priceUsage, round4 } from '../src/pricing.js';
 import { ceilingUsd, runAgentSession, sessionPrompt, type SessionDeps } from '../src/session.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeOptions, type FakeScript } from './helpers/fake-adapter.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
-import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
+import { FakeDb, NOW, card, recordCalls, role } from './helpers/fake-db.js';
 import type { UsageInput } from '../src/db.js';
 
 // USD per million tokens; 1000 input + N output tokens cost 0.003 + N × 0.000015.
@@ -18,7 +18,6 @@ function deps(db: FakeDb, adapter: FakeAdapter, overrides: Partial<SessionDeps> 
     adapter,
     priceTable: PRICE_TABLE,
     sessionMaxTurns: 60,
-    boardSessionTtlMin: 3,
     watchIntervalMs: 60_000,
     fallbackModel: 'builder-class',
     sessionMaxMs: 60 * 60_000,
@@ -131,10 +130,10 @@ describe('runAgentSession metering', () => {
     });
     expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 3 turns', turns: 3, sessionId: 'session-1' });
     expect(db.ledger.map((row) => row.usd)).toEqual([0.0045, 0.006]);
-    expect(db.ledger[0]).toMatchObject({ billed_to: 'founder', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 100 });
+    expect(db.ledger[0]).toMatchObject({ billed_to: 'studio', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 100 });
     expect(db.cards[0]?.actual_usd).toBe(0.0105);
-    // Attended turns run on the founder's subscription: priced and charged to the card, not the pool.
-    expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
+    // The session billed the studio key, as its init line showed: charged to the card and the pool.
+    expect(db.pool).toMatchObject({ balance_usd: 49.9895, daily_spent_usd: 0.0105 });
     expect(db.events.map((event) => event.type)).toEqual(['start', 'message', 'tool_call', 'tool_result']);
     // The result line agrees with the turns, so there is nothing to settle and nothing to alert.
     expect(alert.messages).toEqual([]);
@@ -163,7 +162,7 @@ describe('runAgentSession metering', () => {
       [10, 0.0032],
       [4980, 0.0746],
     ]);
-    expect(db.ledger[2]).toMatchObject({ billed_to: 'founder', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 0 });
+    expect(db.ledger[2]).toMatchObject({ billed_to: 'studio', card_id: card().id, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 0 });
     expect(db.cards[0]?.actual_usd).toBe(priced);
     expect(alert.messages).toEqual([]);
   });
@@ -214,7 +213,7 @@ describe('runAgentSession metering', () => {
           basis: 'estimate',
           rows: [{ model: 'builder-class', input_tokens: 1000, cached_tokens: 0, output_tokens: 1924, usd: 0.0319, request_id: expect.stringMatching(/\/settle\/1$/) }],
           unwritten_rows: [],
-          billed_to: 'founder',
+          billed_to: 'studio',
           fallback_models: [],
           mismatch: false,
           anomaly: false,
@@ -431,7 +430,7 @@ describe('runAgentSession metering', () => {
     expect(alert.messages).toEqual([expect.stringContaining('Model side-model is missing from PRICE_TABLE_JSON')]);
   });
 
-  it('records an unattended session with no init line as the founder\'s spend and alerts', async () => {
+  it('records a session with no init line as the founder\'s spend and alerts', async () => {
     const db = new FakeDb();
     const { alert } = await run(
       db,
@@ -460,7 +459,7 @@ describe('runAgentSession metering', () => {
     expect(result).toMatchObject({ outcome: 'wall_clock' });
   });
 
-  it('bills unattended turns to the studio and takes them from the pool', async () => {
+  it('bills turns to the studio and takes them from the pool', async () => {
     const db = new FakeDb();
     const { result } = await run(
       db,
@@ -543,18 +542,27 @@ describe('runAgentSession metering', () => {
     expect(db.ledger).toHaveLength(0);
   });
 
-  it('refuses an attended session that bills an API key', async () => {
+  // docs/specs/unattended-roles.md, PR5: no card session runs on the founder's plan. An attended
+  // adapter (only a hand-run tool builds one) signs in with the subscription, so its session is
+  // refused as one on the wrong account.
+  it('refuses a session on an attended adapter, which bills the founder plan and not the studio key', async () => {
     const db = new FakeDb();
-    const { result } = await run(db, async (_spec, emit) => {
-      await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
-      await emit(usageEvent(1, 10));
-    });
-    expect(result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (ANTHROPIC_API_KEY)' });
+    const { result } = await run(
+      db,
+      async (_spec, emit) => {
+        await emit(startEvent(undefined, 'none'));
+        await emit(usageEvent(1, 10));
+      },
+      {},
+      {},
+      { mode: 'attended' },
+    );
+    expect(result).toMatchObject({ outcome: 'refused', detail: 'session is billed to the wrong account (none)' });
     expect(db.ledger).toHaveLength(0);
     expect(db.events[0]?.payload).toMatchObject({
       mode: 'attended',
-      api_key_source: 'ANTHROPIC_API_KEY',
-      refusal: 'session is billed to the wrong account (ANTHROPIC_API_KEY)',
+      api_key_source: 'none',
+      refusal: 'session is billed to the wrong account (none)',
     });
   });
 
@@ -592,20 +600,9 @@ describe('runAgentSession metering', () => {
     expect(db.ledger).toEqual([expect.objectContaining({ billed_to: 'founder', usd: 0.0045 })]);
     expect(db.pool).toMatchObject({ balance_usd: 50, daily_spent_usd: 0 });
     expect(alert.messages).toEqual([expect.stringContaining('the init line reported apiKeySource none')]);
-
-    const attended = await run(
-      new FakeDb(),
-      async (_spec, emit) => {
-        await emit(startEvent(undefined, 'ANTHROPIC_API_KEY'));
-      },
-      {},
-      {},
-      { modelUsage },
-    );
-    expect(attended.alert.messages).toEqual([expect.stringContaining('the init line reported apiKeySource ANTHROPIC_API_KEY')]);
   });
 
-  it('refuses an unattended session that bills anything but the studio key', async () => {
+  it('refuses a session that bills anything but the studio key', async () => {
     const db = new FakeDb();
     const { result } = await run(
       db,
@@ -651,19 +648,11 @@ describe('runAgentSession metering', () => {
 });
 
 describe('runAgentSession watch', () => {
-  it('aborts when the board session lapses', async () => {
-    const db = new FakeDb();
-    db.boardActive = false;
-    const { result } = await run(db, async (_spec, emit, signal) => {
-      await emit(startEvent());
-      await untilAborted(signal, 2000);
-    }, { watchIntervalMs: 5 });
-    expect(result).toMatchObject({ outcome: 'board_session_lapsed' });
-  });
-
-  it('lets an unattended session run on when no board member is signed in', async () => {
-    const db = new FakeDb();
-    db.boardActive = false;
+  // docs/specs/unattended-roles.md, PR5: the watch reads the studio and the executor role, never a
+  // board session.
+  it('runs on with no board member signed in, the watch reading no board session', async () => {
+    const recorded = recordCalls(new FakeDb());
+    const db = recorded.db;
     const { result } = await run(
       db,
       async (_spec, emit, signal) => {
@@ -679,6 +668,8 @@ describe('runAgentSession watch', () => {
     expect(result).toEqual({ outcome: 'completed', detail: 'session completed in 1 turns', turns: 1, sessionId: 'session-1' });
     expect(db.ledger).toHaveLength(1);
     expect(db.events[0]?.payload).toMatchObject({ mode: 'unattended', api_key_source: 'ANTHROPIC_API_KEY' });
+    expect(recorded.calls.has('roleState')).toBe(true);
+    expect([...recorded.calls].filter((name) => /board/i.test(name))).toEqual([]);
   });
 
   it('aborts when the board pauses the studio', async () => {

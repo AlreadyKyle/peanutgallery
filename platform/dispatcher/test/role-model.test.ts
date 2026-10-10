@@ -7,9 +7,8 @@ import type { DispatcherConfig } from '../src/config.js';
 import { StartupError } from '../src/exit-code.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
-import { checkRoleModels, startupChecks } from '../src/startup.js';
+import { checkRoleModels } from '../src/startup.js';
 import { resolveRoleModel, roleModelTokens } from '../src/role-model.js';
-import { FakeAdapter } from './helpers/fake-adapter.js';
 import { FakeDb, role } from './helpers/fake-db.js';
 
 // The checkout these tests run from, whose platform/agents specs the dispatcher reads.
@@ -36,7 +35,6 @@ function config(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
     codeRoot: dir,
     codeReadonly: false,
     repoRoot: dir,
-    agentMode: 'attended',
     supabaseUrl: 'https://db.local',
     supabaseServiceRoleKey: 'service-role',
     githubToken: 'github_pat_fake-token',
@@ -59,7 +57,6 @@ function config(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
     worktreeRoot: `${dir}-worktrees`,
     maxConcurrency: 1,
     claudeBin: 'claude',
-    boardSessionTtlMin: 3,
     studioAnthropicApiKey: null,
     healthcheckUrl: null,
     ntfyTopicUrl: null,
@@ -133,19 +130,3 @@ describe('checkRoleModels', () => {
   });
 });
 
-describe('startupChecks in attended mode', () => {
-  it('warns about a GITHUB_TOKEN that is not fine-grained, and runs no probe', async () => {
-    const db = new FakeDb();
-    db.roles = [role({ name: 'Builder A' })];
-    const { log, lines } = capture();
-    await startupChecks({
-      db,
-      adapter: new FakeAdapter(async () => undefined),
-      config: config({ githubToken: 'gho_fake-token' }),
-      log,
-    });
-    expect(lines()).toEqual([
-      expect.objectContaining({ level: 'warn', msg: 'GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as BOARD-SETUP.md describes', mode: 'attended' }),
-    ]);
-  });
-});

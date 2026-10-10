@@ -1,9 +1,10 @@
 // studio_state row 1 for seed.ts. The row is inserted when it is missing and never updated: the
-// board sets the agent mode and the caps from /board, and a seed run from a machine whose .env is
-// stale (the Mac after the VPS cutover) must not flip the live dispatcher back to attended.
+// board sets the caps, and a seed run from a machine whose .env is stale must not overwrite them.
+// The agent mode is always unattended (docs/PLAN.md §10 decision 66; the retire-attended migration
+// holds it there with a check constraint), so .env's AGENT_MODE is not read.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { requireEnv, requireUsd, type Env } from "./env.js";
+import { requireUsd, type Env } from "./env.js";
 
 export interface StudioStateSeed {
   id: 1;
@@ -23,13 +24,16 @@ export interface LiveStudioState {
 
 export const LIVE_COLUMNS = "agent_mode, daily_cap_usd, card_max_usd, agent_hourly_rate_usd";
 
+/** The dispatcher's one mode (docs/specs/unattended-roles.md, PR5). */
+export const AGENT_MODE = "unattended";
+
 export function studioStateSeed(env: Env): StudioStateSeed {
   return {
     id: 1,
     daily_cap_usd: requireUsd(env, "POOL_DAILY_CAP_USD"),
     card_max_usd: requireUsd(env, "CARD_MAX_USD"),
     agent_hourly_rate_usd: requireUsd(env, "AGENT_HOURLY_RATE_USD"),
-    agent_mode: requireEnv(env, "AGENT_MODE"),
+    agent_mode: AGENT_MODE,
   };
 }
 
@@ -44,7 +48,7 @@ export function studioStateDrift(seed: StudioStateSeed, live: LiveStudioState): 
   const lines: string[] = [];
   if (live.agent_mode !== seed.agent_mode) {
     lines.push(
-      `studio_state warning: .env AGENT_MODE is ${seed.agent_mode} but the live agent_mode is ${live.agent_mode ?? "unset"}; not written (set the mode from /board)`,
+      `studio_state warning: the live agent_mode is ${live.agent_mode ?? "unset"}, not ${seed.agent_mode}; not written (apply 20261010300000_retire_attended.sql)`,
     );
   }
   for (const cap of CAPS) {

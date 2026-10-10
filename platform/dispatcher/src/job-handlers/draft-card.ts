@@ -18,7 +18,8 @@
 //   up on (open_draft_card's gave_up) is told to the board once too.
 // Every session is an unattended Managed Agents reader (Read, Glob and Grep, main mounted read-only)
 // on the card sessions' adapter, studio-billed to that card with its role, never the founder's plan;
-// an attended process refuses the run before it opens a card. Each session's budget is
+// an attended adapter (only a hand-run tool builds one) is refused before a card is opened, but for
+// the replay eval's allowAttended. Each session's budget is
 // DRAFT_SESSION_MAX_USD, no more than the per-card maximum leaves on the card, and it starts only when
 // the throttle's money covers it (the balance after every other card's hold, the daily, monthly and
 // tier caps); while it runs, what it may still spend is held from the card path. A studio pause stops

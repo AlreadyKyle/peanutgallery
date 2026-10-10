@@ -33,7 +33,7 @@ export class FakeAdapter implements AgentAdapter {
   constructor(script: FakeScript, options: FakeOptions = {}) {
     this.script = script;
     this.end = options;
-    this.mode = options.mode ?? 'attended';
+    this.mode = options.mode ?? 'unattended';
   }
 
   async preflight(spec: SessionSpec): Promise<void> {
@@ -84,9 +84,9 @@ export class FakeAdapter implements AgentAdapter {
   }
 }
 
-// Claude Code reports apiKeySource 'none' for a subscription sign-in, which is what an attended
-// session must show; an unattended session must show 'ANTHROPIC_API_KEY'.
-export function startEvent(tools: string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'], apiKeySource: string | null = 'none'): AgentEvent {
+// A card session must show 'ANTHROPIC_API_KEY', the studio key (session.ts). Claude Code reports
+// apiKeySource 'none' for a subscription sign-in, which only a hand-run attended session shows.
+export function startEvent(tools: string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash'], apiKeySource: string | null = 'ANTHROPIC_API_KEY'): AgentEvent {
   return { type: 'start', sessionId: 'session-1', model: 'builder-class', tools, apiKeySource };
 }
 

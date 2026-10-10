@@ -1,7 +1,7 @@
 // The job queue's dispatcher half (src/jobs.ts, docs/specs/agent-system-core.md): each skip reason, a
 // model run of any origin starting with no board member signed in (docs/specs/unattended-roles.md),
-// a code run in both modes, one job at a time, a throwing handler, a missing handler, and a studio or
-// role pause stopping a running job.
+// a code run, one job at a time, a throwing handler, a missing handler, and a studio or role pause
+// stopping a running job.
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import type { AgentAdapter } from '../src/adapters/types.js';
@@ -9,7 +9,7 @@ import type { Job, JobOrigin } from '../src/db.js';
 import { jobTick, skipReason, type JobHandler, type JobState, type JobTickDeps } from '../src/jobs.js';
 import { createLogger } from '../src/log.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
-import { FakeDb, NOW, role } from './helpers/fake-db.js';
+import { FakeDb, NOW, recordCalls, role } from './helpers/fake-db.js';
 
 const HOLDER = 'dispatcher-a';
 
@@ -26,8 +26,8 @@ function setup(jobs: Job[]) {
   const stopper = new AbortController();
   const make = (handlers: Record<string, JobHandler>, overrides: Partial<JobTickDeps> = {}): JobTickDeps => ({
     db,
-    mode: 'attended',
-    adapter: { mode: 'attended' } as unknown as AgentAdapter,
+    mode: 'unattended',
+    adapter: { mode: 'unattended' } as unknown as AgentAdapter,
     log: createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() })),
     alert: new RecordingAlerter(),
     now: () => NOW,
@@ -86,34 +86,27 @@ describe('jobTick', () => {
     expect([t.status(code.id).status, t.status(code.id).output]).toEqual(['succeeded', {}]);
   });
 
-  it('starts a model run of any origin with no board member signed in, in either studio mode, and never reads a board session', async () => {
-    for (const mode of ['attended', 'unattended'] as const) {
-      for (const origin of ['schedule', 'board', 'event', 'operator'] as const) {
-        const t = setup([job({ name: 'draft_card', calls_model: true })]);
-        t.db.studio.agent_mode = mode;
-        let boardReads = 0;
-        t.db.boardSessionActive = async () => {
-          boardReads += 1;
-          return false;
-        };
-        const run = await t.enqueue('draft_card', origin);
-        const ran: string[] = [];
-        expect(await jobTick(t.make({ draft_card: async ({ run: started, mode: seen }) => void ran.push(`${started.origin}:${seen}`) }, { mode }))).toEqual({
-          action: 'started',
-          runId: run.id,
-          job: 'draft_card',
-        });
-        await t.settle();
-        expect(ran).toEqual([`${origin}:${mode}`]);
-        expect(t.status(run.id).status).toBe('succeeded');
-        expect(boardReads).toBe(0);
-      }
+  it('starts a model run of any origin with no board member signed in, and never reads a board session', async () => {
+    for (const origin of ['schedule', 'board', 'event', 'operator'] as const) {
+      const t = setup([job({ name: 'draft_card', calls_model: true })]);
+      const { db, calls } = recordCalls(t.db);
+      const run = await t.enqueue('draft_card', origin);
+      const ran: string[] = [];
+      expect(await jobTick(t.make({ draft_card: async ({ run: started, mode: seen }) => void ran.push(`${started.origin}:${seen}`) }, { db }))).toEqual({
+        action: 'started',
+        runId: run.id,
+        job: 'draft_card',
+      });
+      await t.settle();
+      expect(ran).toEqual([`${origin}:unattended`]);
+      expect(t.status(run.id).status).toBe('succeeded');
+      expect(calls.has('claimJobRun')).toBe(true);
+      expect([...calls].filter((name) => /board/i.test(name))).toEqual([]);
     }
   });
 
   it('keeps a running model job running with no board member signed in, and stops it when the studio pauses', async () => {
     const t = setup([job({ name: 'draft_card', calls_model: true })]);
-    t.db.boardActive = false;
     const quiet = await t.enqueue('draft_card', 'schedule');
     await jobTick(
       t.make({
@@ -158,16 +151,12 @@ describe('jobTick', () => {
     expect([t.status(queued.id).status, t.status(queued.id).reason]).toEqual(['skipped', 'studio_paused']);
   });
 
-  it('starts a code run in both modes', async () => {
-    for (const mode of ['attended', 'unattended'] as const) {
-      const t = setup([job({ name: 'code_job' })]);
-      t.db.studio.agent_mode = mode;
-      t.db.boardActive = false;
-      const run = await t.enqueue('code_job', 'schedule');
-      expect(await jobTick(t.make({ code_job: async () => ({ mode }) }, { mode }))).toEqual({ action: 'started', runId: run.id, job: 'code_job' });
-      await t.settle();
-      expect([t.status(run.id).status, t.status(run.id).output]).toEqual(['succeeded', { mode }]);
-    }
+  it('starts a code run', async () => {
+    const t = setup([job({ name: 'code_job' })]);
+    const run = await t.enqueue('code_job', 'schedule');
+    expect(await jobTick(t.make({ code_job: async ({ mode }) => ({ mode }) }))).toEqual({ action: 'started', runId: run.id, job: 'code_job' });
+    await t.settle();
+    expect([t.status(run.id).status, t.status(run.id).output]).toEqual(['succeeded', { mode: 'unattended' }]);
   });
 
   it('runs one job at a time', async () => {

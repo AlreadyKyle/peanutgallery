@@ -1,25 +1,25 @@
-// One role session (docs/specs/agent-workflows.md, docs/specs/design-review.md): the Studio Head's
-// ranking, a Game Designer round or a Game Director grade, and a Director's visual review of a card's
-// frames. It runs on one of two adapters:
+// One role session (docs/specs/agent-workflows.md, docs/specs/design-review.md): a Game Designer round
+// or a Game Director grade, and a Director's visual review of a card's frames. It runs on one of two
+// adapters:
 // - the managed adapter (unattended, on the studio's Console credit): the writer agent with its tools
 //   overridden to read, glob and grep, the role prompt as its system prompt and the files it reads
 //   uploaded and mounted (adapters/managed.ts runRole). The adapter writes the ledger rows itself,
 //   billed to the card the session is for (studio) or, for no card, to overhead, with the role;
 // - the attended adapter (claude -p on the founder's plan), only where the caller allows it
-//   (allowAttended: the role jobs for now, the replay evals, and the visual review of an attended
-//   process). Its turns are metered as card sessions are (metering.ts) and written billed to the
-//   founder with the role and no card, each row under its own request id, so a replayed write is
+//   (allowAttended: the hand-run replay eval alone; the dispatcher builds no attended adapter, PLAN.md
+//   §10 decision 66). Its turns are metered as card sessions are (metering.ts) and written billed to
+//   the founder with the role and no card, each row under its own request id, so a replayed write is
 //   recorded once.
 // Either way:
 // - the session holds exactly its role spec's tools, which may only be Read, Glob, Grep and Bash
 //   (Bash as the folder's package scripts), never Write, Edit, a web tool, an MCP tool or a fallback
 //   model; the start event must show no other tool, and the account the adapter bills;
-// - in an unattended process it holds no Bash either: the seed's scripts are agent-written code, and
-//   no agent-written code runs on the unattended dispatcher's host (PLAN §6, decision 25), so there a
-//   role session reads with Read, Glob and Grep only, and nothing is installed for it;
+// - on the dispatcher it holds no Bash either: the seed's scripts are agent-written code, and no
+//   agent-written code runs on the dispatcher's host (PLAN §6, decision 25), so there a role session
+//   reads with Read, Glob and Grep only, and nothing is installed for it;
 // - it stops when the role is paused, the job is stopped, the API refuses the studio key for credit
 //   or at its tier cap, or it runs past its turn cap, budget or wall clock. No board member need be
-//   signed in: a model-calling job's own watch (jobs.ts) stops it when the board session lapses;
+//   signed in, and nothing reads a board session;
 // - its final message must be exactly one object valid against the job's schema (typed-output.ts),
 //   or the session fails and the caller writes nothing.
 import { readFile } from 'node:fs/promises';
@@ -50,8 +50,8 @@ export interface RoleSessionDeps {
   // True lets the session run on the attended adapter (claude -p, billed to the founder). Without it
   // an attended adapter is refused.
   allowAttended?: boolean;
-  // Whether a session may run its folder's package scripts (Bash): true only when this process runs
-  // attended; the unattended host runs no agent-written code.
+  // Whether a session may run its folder's package scripts (Bash): true only for a hand-run attended
+  // session; the dispatcher's host runs no agent-written code.
   scripts: boolean;
   typed: TypedOutput;
   priceTable: PriceTable;

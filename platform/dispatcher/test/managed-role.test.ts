@@ -362,8 +362,8 @@ describe('the role probe', () => {
     answers(widened.client, 'red');
     widened.client.sessionAgent = (agent) => ({ ...agent, tools: agentFromFile().tools });
     expect((await runRoleProbe(widened.adapter, { codeRoot: CODE_ROOT, model: 'director-class' })).reason).toMatch(/refused before it ran/);
-    const attended = new FakeAdapter(async () => undefined);
-    expect(await runRoleProbe(attended, { codeRoot: CODE_ROOT, model: 'director-class' })).toMatchObject({ ok: false, reason: expect.stringContaining('AGENT_MODE=unattended') });
+    const attended = new FakeAdapter(async () => undefined, { mode: 'attended' });
+    expect(await runRoleProbe(attended, { codeRoot: CODE_ROOT, model: 'director-class' })).toMatchObject({ ok: false, reason: 'the role probe runs the managed adapter, which this process did not build' });
     expect(attended.specs).toEqual([]);
   });
 

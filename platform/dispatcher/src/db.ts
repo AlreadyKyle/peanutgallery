@@ -7,13 +7,12 @@ export type CardLane = 'config' | 'code';
 
 export interface StudioState {
   paused: boolean;
-  agent_mode: string;
   daily_cap_usd: number;
   card_max_usd: number;
   agent_hourly_rate_usd: number;
   studio_reserve_usd: number;
   // The monthly spend cap that mirrors the Console limit; null when studio_state has no such column,
-  // which unattended mode treats as a cap of zero.
+  // which the throttle treats as a cap of zero.
   monthly_cap_usd: number | null;
   // The monthly cap of the studio organisation's Anthropic usage tier, as the board reported it; null
   // when unset or when studio_state has no such column, which adds no bound (throttle.ts).
@@ -175,9 +174,11 @@ export interface Deploy {
   created_at: string;
 }
 
-// Who pays for a turn: the founder's subscription in attended mode, the pool in unattended mode.
-// 'overhead' is the unattended startup probe's spend: public, paid from the studio share, never
-// taken from the pool (20260922000000_ledger_overhead.sql).
+// Who pays for a turn: the pool ('studio'), billed to the card the session works on. 'founder' is
+// what a session on the wrong account spent before it was refused (session.ts) and a hand-run
+// attended role session's turns (role-session.ts), never the pool's. 'overhead' is the startup
+// probe's spend: public, paid from the studio share, never taken from the pool
+// (20260922000000_ledger_overhead.sql).
 export type Billing = 'studio' | 'founder' | 'overhead';
 
 // card_id and role_id are null for spend that belongs to no card: the startup probe. request_id
@@ -367,7 +368,6 @@ export interface Db extends OutboundDb {
   // dispatcher was alive.
   dispatcherHeartbeat(now: Date): Promise<void>;
   getPool(): Promise<Pool>;
-  boardSessionActive(ttlMinutes: number, now: Date): Promise<boolean>;
   // The cards at the stages asked for, from dispatcher_cards, which holds every stage: a tick asks for
   // the hold stages and building, startup recovery for building and gated.
   listCardsInStages(stages: string[]): Promise<Card[]>;
@@ -606,7 +606,6 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       const row = data as Row;
       return {
         paused: row.paused === true,
-        agent_mode: text(row, 'agent_mode'),
         daily_cap_usd: num(row, 'daily_cap_usd'),
         card_max_usd: num(row, 'card_max_usd'),
         agent_hourly_rate_usd: num(row, 'agent_hourly_rate_usd'),
@@ -661,14 +660,6 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       };
     },
 
-    // Only a board member's heartbeat counts. A moderator can be signed in to /board, but an
-    // attended session runs on the founder's subscription and needs the board present.
-    async boardSessionActive(ttlMinutes, now) {
-      const since = new Date(now.getTime() - ttlMinutes * 60_000).toISOString();
-      const { data, error } = await client.from('board_members').select('email').eq('role', 'board').gte('last_seen_at', since).limit(1);
-      if (error) fail('board_members', error);
-      return rows(data).length > 0;
-    },
 
     // dispatcher_cards: every card, with the approval, the vetoes and the executor's pause that
     // runnable() reads. The view keeps no stage list, so the stages asked for are the stages read.

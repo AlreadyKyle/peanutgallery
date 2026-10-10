@@ -1,10 +1,11 @@
 // The Directors' visual review (docs/specs/design-review.md). When a card's green gate run uploaded
 // design-frames with changed frames, role sessions review them: the Game Director for a seed-1 card,
-// the Platform Director for a platform/site card. No board member need be signed in. In an unattended
-// process each session runs on the managed adapter as a reader (read, glob and grep, no patch), on the
-// studio's Console credit billed to the card it reviews with the Director's role, the frames uploaded
-// and mounted at FRAMES_MOUNT; in an attended process it runs through claude -p in the folder of
-// frames, billed to the founder (role-session.ts). Either way the session holds exactly its role spec's
+// the Platform Director for a platform/site card. No board member need be signed in. Each session runs
+// on the managed adapter as a reader (read, glob and grep, no patch), on the studio's Console credit
+// billed to the card it reviews with the Director's role, the frames uploaded and mounted at
+// FRAMES_MOUNT (PLAN.md §10 decision 66); role-session.ts can still run one through claude -p in the
+// folder of frames, billed to the founder, for a caller that allows the attended adapter, which the
+// dispatcher never builds. Either way the session holds exactly its role spec's
 // tools (Read, Glob and Grep: no Bash, Write, Edit, web or MCP tool, no fallback model) and answers
 // with one object valid against visual-verdict.schema.json whose every frame is one it was shown.
 // Anything else records nothing and the review fails, which the pipeline treats as an infrastructure

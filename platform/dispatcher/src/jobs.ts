@@ -30,7 +30,7 @@ export interface JobContext {
   // The job's role, or null for a job with none.
   role: Role | null;
   // The card sessions' mode and adapter. A model-calling handler runs its sessions on this adapter
-  // (the managed one, in unattended mode), billed to the card it works on.
+  // (the managed one: the dispatcher runs unattended only), billed to the card it works on.
   mode: AgentMode;
   db: Db;
   adapter: AgentAdapter;

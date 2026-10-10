@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { ConfigError, DRAFT_SESSION_MIN_USD, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
+import { describe, expect, it, vi } from 'vitest';
+import { ConfigError, DRAFT_SESSION_MIN_USD, agentModeWarning, defaultWorktreeRoot, githubTokenProblem, loadConfig, loadHandRunConfig, type Env } from '../src/config.js';
 
 const REPO = '/repo';
 
-const FULL: Env = {
+// What a hand-run tool's configuration needs (loadHandRunConfig): no studio key and no managed ids.
+const BASE: Env = {
   GITHUB_REPO: 'owner/repo',
   SUPABASE_URL: 'https://db.local',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role',
@@ -18,15 +19,18 @@ const FULL: Env = {
   PRICE_TABLE_JSON: JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } }),
 };
 
-// What unattended mode needs beyond FULL: the managed ids and the read-only token, with both GitHub
-// tokens fine-grained.
+// What the dispatcher needs beyond BASE: the studio key, the managed ids and the read-only token, with
+// both GitHub tokens fine-grained. The dispatcher runs unattended only (PLAN.md §10 decision 66).
 const MANAGED: Env = {
   GITHUB_TOKEN: 'github_pat_-fixture-write',
   GITHUB_READ_TOKEN: 'github_pat_-fixture-read',
   MANAGED_AGENT_ID: 'agent_fixture',
   MANAGED_AGENT_VERSION: '3',
   MANAGED_ENVIRONMENT_ID: 'env_fixture',
+  STUDIO_ANTHROPIC_API_KEY: 'studio-key',
 };
+
+const FULL: Env = { ...BASE, ...MANAGED };
 
 describe('loadConfig', () => {
   it('applies the documented defaults', () => {
@@ -35,7 +39,6 @@ describe('loadConfig', () => {
       codeRoot: REPO,
       codeReadonly: false,
       repoRoot: REPO,
-      agentMode: 'attended',
       githubRepo: 'owner/repo',
       poolDailyCapUsd: 100,
       cardMaxUsd: 25,
@@ -47,11 +50,10 @@ describe('loadConfig', () => {
       worktreeRoot: '/repo-worktrees',
       maxConcurrency: 1,
       claudeBin: 'claude',
-      boardSessionTtlMin: 3,
       sessionMaxMinutes: 60,
       modelDirector: null,
       modelHost: null,
-      studioAnthropicApiKey: null,
+      studioAnthropicApiKey: 'studio-key',
       healthcheckUrl: null,
       ntfyTopicUrl: null,
       discordWebhookShips: null,
@@ -65,9 +67,6 @@ describe('loadConfig', () => {
     const config = loadConfig(
       {
         ...FULL,
-        ...MANAGED,
-        AGENT_MODE: 'unattended',
-        STUDIO_ANTHROPIC_API_KEY: 'studio-key',
         POOL_DAILY_CAP_USD: '40',
         CARD_MAX_USD: '10',
         VISUAL_REVIEW_MAX_USD: '0.5',
@@ -78,7 +77,6 @@ describe('loadConfig', () => {
         DISPATCHER_WORKTREE_ROOT: '/var/lib/backseat/worktrees',
         DISPATCHER_MAX_CONCURRENCY: '2',
         CLAUDE_BIN: '/opt/claude',
-        BOARD_SESSION_TTL_MIN: '5',
         SESSION_MAX_MINUTES: '90',
         MODEL_DIRECTOR: 'builder-class',
         MODEL_HOST: 'builder-class',
@@ -88,7 +86,6 @@ describe('loadConfig', () => {
       REPO,
     );
     expect(config).toMatchObject({
-      agentMode: 'unattended',
       poolDailyCapUsd: 40,
       cardMaxUsd: 10,
       visualReviewMaxUsd: 0.5,
@@ -99,7 +96,6 @@ describe('loadConfig', () => {
       worktreeRoot: '/var/lib/backseat/worktrees',
       maxConcurrency: 2,
       claudeBin: '/opt/claude',
-      boardSessionTtlMin: 5,
       sessionMaxMinutes: 90,
       modelDirector: 'builder-class',
       modelHost: 'builder-class',
@@ -115,7 +111,7 @@ describe('loadConfig', () => {
       expect(() => loadConfig(without(name), REPO), name).toThrow(name);
     }
     expect(() => loadConfig({ ...FULL, GITHUB_REPO: 'not-a-repo' }, REPO)).toThrow(new ConfigError('GITHUB_REPO must be owner/repo'));
-    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'manual' }, REPO)).toThrow('AGENT_MODE must be attended or unattended');
+
     expect(() => loadConfig({ ...FULL, CARD_MAX_USD: '-1' }, REPO)).toThrow('CARD_MAX_USD must be a non-negative number');
     expect(() => loadConfig({ ...FULL, CARD_MAX_USD: 'ten' }, REPO)).toThrow('CARD_MAX_USD must be a non-negative number');
     expect(() => loadConfig({ ...FULL, SESSION_MAX_TURNS: '0' }, REPO)).toThrow('SESSION_MAX_TURNS must be a positive integer');
@@ -134,6 +130,63 @@ describe('loadConfig', () => {
       expect(() => loadConfig({ ...FULL, [name]: 'unpriced-model' }, REPO), name).toThrow(new ConfigError(`${name} has no row in PRICE_TABLE_JSON`));
     }
     expect(loadConfig({ ...FULL, MODEL_DIRECTOR: '  ', MODEL_HOST: '' }, REPO)).toMatchObject({ modelDirector: null, modelHost: null });
+  });
+});
+
+// docs/specs/unattended-roles.md, PR5: the dispatcher has one mode. AGENT_MODE=attended, as an old
+// .env still says, is warned about and otherwise ignored, so it never stops the process.
+describe('AGENT_MODE, retired', () => {
+  it('warns on AGENT_MODE=attended and otherwise ignores it: the configuration is the one without it', () => {
+    const warned: string[] = [];
+    const config = loadConfig({ ...FULL, AGENT_MODE: 'attended' }, REPO, (message) => warned.push(message));
+    expect(warned).toEqual([
+      'AGENT_MODE=attended is ignored: attended mode is retired and the dispatcher runs unattended only (PLAN.md §10 decision 66); remove AGENT_MODE from .env',
+    ]);
+    const quiet: string[] = [];
+    expect(config).toEqual(loadConfig(FULL, REPO, (message) => quiet.push(message)));
+    expect(quiet).toEqual([]);
+    expect(config.studioAnthropicApiKey).toBe('studio-key');
+    expect(config.managed).toMatchObject({ agentId: 'agent_fixture' });
+  });
+
+  it('still requires everything the dispatcher runs on, whatever AGENT_MODE says', () => {
+    expect(() => loadConfig({ ...BASE, AGENT_MODE: 'attended' }, REPO, () => undefined)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY is not set'));
+    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'attended', GITHUB_TOKEN: 'gho_fake-token' }, REPO, () => undefined)).toThrow('GITHUB_TOKEN is not a fine-grained token');
+  });
+
+  it('warns on any other value too, and says nothing for unattended or none', () => {
+    expect(agentModeWarning({ AGENT_MODE: 'manual' })).toBe('AGENT_MODE=manual is ignored: the dispatcher runs unattended only (PLAN.md §10 decision 66); remove AGENT_MODE from .env');
+    for (const value of [undefined, '', '  ', 'unattended', ' unattended ']) expect(agentModeWarning({ AGENT_MODE: value }), String(value)).toBeNull();
+  });
+
+  it('writes the warning to stderr when no warn is given', () => {
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      loadConfig({ ...FULL, AGENT_MODE: 'attended' }, REPO);
+      expect(write).toHaveBeenCalledWith(expect.stringContaining('AGENT_MODE=attended is ignored'));
+    } finally {
+      write.mockRestore();
+    }
+  });
+});
+
+// The hand-run tools that still run attended on the founder's login (the replay eval, the probe's
+// --attended run) load the same values with no studio key and no managed ids.
+describe('loadHandRunConfig', () => {
+  it('needs no studio key, managed ids or read token, and holds none', () => {
+    const config = loadHandRunConfig(BASE, REPO);
+    expect(config).toMatchObject({ studioAnthropicApiKey: null, managed: null, githubToken: 'github_pat_fake-token', claudeBin: 'claude' });
+    expect(loadHandRunConfig({ ...FULL, AGENT_MODE: 'attended' }, REPO)).toMatchObject({ studioAnthropicApiKey: null, managed: null });
+  });
+
+  it('takes a GitHub token that is not fine-grained, since a person is running it', () => {
+    expect(loadHandRunConfig({ ...BASE, GITHUB_TOKEN: 'gho_fake-token' }, REPO).githubToken).toBe('gho_fake-token');
+  });
+
+  it('still refuses a studio key equal to the founder key, a read token equal to the write token and a missing value', () => {
+    expect(() => loadHandRunConfig({ ...BASE, STUDIO_ANTHROPIC_API_KEY: 'same-key', ANTHROPIC_API_KEY: 'same-key' }, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY');
+    expect(() => loadHandRunConfig({ ...BASE, GITHUB_READ_TOKEN: BASE.GITHUB_TOKEN }, REPO)).toThrow('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN');
+    expect(() => loadHandRunConfig({ ...BASE, MODEL_BUILDER: '' }, REPO)).toThrow('MODEL_BUILDER is not set');
   });
 });
 
@@ -169,12 +222,12 @@ describe('the code, repository and worktree roots', () => {
     expect(loadConfig({ ...FULL, DISPATCHER_REPO_ROOT: '../work' }, REPO).worktreeRoot).toBe('/work-worktrees');
   });
 
-  it('refuses a worktree root inside the clone, in every mode', () => {
+  it('refuses a worktree root inside the clone, for the dispatcher and a hand-run tool alike', () => {
     const refusal = new ConfigError('DISPATCHER_WORKTREE_ROOT must be outside the repository clone /repo; leave it unset for /repo-worktrees');
     expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '.worktrees' }, REPO)).toThrow(refusal);
     expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '/repo/.worktrees' }, REPO)).toThrow(refusal);
     expect(() => loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '.' }, REPO)).toThrow(refusal);
-    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', DISPATCHER_WORKTREE_ROOT: '/repo/trees' }, REPO)).toThrow(refusal);
+    expect(() => loadHandRunConfig({ ...BASE, DISPATCHER_WORKTREE_ROOT: '/repo/trees' }, REPO)).toThrow(refusal);
     expect(loadConfig({ ...FULL, DISPATCHER_WORKTREE_ROOT: '/repo-other/trees' }, REPO).worktreeRoot).toBe('/repo-other/trees');
   });
 
@@ -206,69 +259,54 @@ describe('the GitHub token', () => {
     }
   });
 
-  it('refuses a gh sign-in or classic token in unattended mode', () => {
+  it('refuses a gh sign-in or classic token', () => {
     for (const token of ['gho_fake-token', 'ghp_fake-token']) {
-      expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', GITHUB_TOKEN: token }, REPO)).toThrow(
+      expect(() => loadConfig({ ...FULL, GITHUB_TOKEN: token }, REPO)).toThrow(
         new ConfigError('GITHUB_TOKEN is not a fine-grained token (github_pat_...); create one for this repository alone as BOARD-SETUP.md describes'),
       );
     }
-    expect(loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).githubToken).toBe('github_pat_-fixture-write');
-  });
-
-  it('accepts one in attended mode, where startup warns instead', () => {
-    expect(loadConfig({ ...FULL, GITHUB_TOKEN: 'gho_fake-token' }, REPO).githubToken).toBe('gho_fake-token');
+    expect(loadConfig(FULL, REPO).githubToken).toBe('github_pat_-fixture-write');
   });
 });
 
 describe('the studio key', () => {
-  it('is required in unattended mode', () => {
-    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended' }, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY is not set'));
-    expect(() => loadConfig({ ...FULL, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: '   ' }, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY');
+  it('is required', () => {
+    expect(() => loadConfig({ ...FULL, STUDIO_ANTHROPIC_API_KEY: '' }, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY is not set'));
+    expect(() => loadConfig({ ...FULL, STUDIO_ANTHROPIC_API_KEY: '   ' }, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY');
   });
 
-  it('is read in unattended mode', () => {
-    const config = loadConfig({ ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key', ANTHROPIC_API_KEY: 'founder-key' }, REPO);
+  it('is read', () => {
+    const config = loadConfig({ ...FULL, ANTHROPIC_API_KEY: 'founder-key' }, REPO);
     expect(config.studioAnthropicApiKey).toBe('studio-key');
   });
 
   it('must differ from the founder key', () => {
     const env = { ...FULL, STUDIO_ANTHROPIC_API_KEY: 'same-key', ANTHROPIC_API_KEY: 'same-key' };
-    expect(() => loadConfig({ ...env, AGENT_MODE: 'unattended' }, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY'));
-    expect(() => loadConfig(env, REPO)).toThrow('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY');
-  });
-
-  it('is null and ignored in attended mode', () => {
-    expect(loadConfig({ ...FULL, STUDIO_ANTHROPIC_API_KEY: 'studio-key' }, REPO).studioAnthropicApiKey).toBeNull();
-    expect(loadConfig({ ...FULL, AGENT_MODE: 'attended', STUDIO_ANTHROPIC_API_KEY: '' }, REPO).studioAnthropicApiKey).toBeNull();
+    expect(() => loadConfig(env, REPO)).toThrow(new ConfigError('STUDIO_ANTHROPIC_API_KEY must differ from ANTHROPIC_API_KEY'));
   });
 });
 
 describe('the managed agent settings', () => {
-  const unattended: Env = { ...FULL, ...MANAGED, AGENT_MODE: 'unattended', STUDIO_ANTHROPIC_API_KEY: 'studio-key' };
+  const unattended: Env = FULL;
 
-  it('are read in unattended mode', () => {
+  it('are read', () => {
     expect(loadConfig(unattended, REPO).managed).toEqual({ agentId: 'agent_fixture', agentVersion: 3, environmentId: 'env_fixture', readToken: 'github_pat_-fixture-read' });
   });
 
-  it('are required in unattended mode, one by one', () => {
+  it('are required, one by one', () => {
     for (const name of ['GITHUB_READ_TOKEN', 'MANAGED_AGENT_ID', 'MANAGED_AGENT_VERSION', 'MANAGED_ENVIRONMENT_ID']) {
       expect(() => loadConfig({ ...unattended, [name]: '' }, REPO), name).toThrow(new ConfigError(`${name} is not set`));
     }
     expect(() => loadConfig({ ...unattended, MANAGED_AGENT_VERSION: '2.5' }, REPO)).toThrow('MANAGED_AGENT_VERSION must be a positive integer');
   });
 
-  it('refuse a read token equal to the write token, in either mode', () => {
+  it('refuse a read token equal to the write token', () => {
     expect(() => loadConfig({ ...unattended, GITHUB_READ_TOKEN: MANAGED.GITHUB_TOKEN }, REPO)).toThrow(new ConfigError('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN: sessions clone with a token that cannot write'));
-    expect(() => loadConfig({ ...FULL, GITHUB_READ_TOKEN: FULL.GITHUB_TOKEN }, REPO)).toThrow('GITHUB_READ_TOKEN must differ from GITHUB_TOKEN');
   });
 
-  it('refuse a GitHub token that is not fine-grained in unattended mode', () => {
+  it('refuse a GitHub token that is not fine-grained', () => {
     expect(() => loadConfig({ ...unattended, GITHUB_TOKEN: 'gho_oauth_fixture' }, REPO)).toThrow('GITHUB_TOKEN is not a fine-grained token (github_pat_...)');
     expect(() => loadConfig({ ...unattended, GITHUB_READ_TOKEN: 'ghp_classic_fixture' }, REPO)).toThrow('GITHUB_READ_TOKEN must be a fine-grained personal access token');
-  });
-
-  it('are null and not required in attended mode', () => {
-    expect(loadConfig(FULL, REPO).managed).toBeNull();
   });
 });
 

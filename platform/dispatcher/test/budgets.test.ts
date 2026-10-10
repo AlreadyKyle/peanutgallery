@@ -54,7 +54,7 @@ describe('SessionBudgets', () => {
     expect(budgets.nextSession('b')).toBe(0);
   });
 
-  it('keeps an attended session unbounded', () => {
+  it('keeps an unbounded budget unbounded', () => {
     const budgets = new SessionBudgets();
     budgets.start('a', Number.POSITIVE_INFINITY);
     budgets.record('a', 4);

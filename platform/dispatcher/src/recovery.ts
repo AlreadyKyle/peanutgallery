@@ -1,7 +1,7 @@
 // Cards a previous process left mid-flight. Every orphan's worktree is pruned; a remote branch and any
 // open pull request stay as they are and are named in the event (the next claim force-pushes the same
 // branch).
-// - In unattended mode every Managed Agents session the previous process left open is closed first:
+// - Every Managed Agents session the previous process left open is closed first:
 //   interrupted if it still runs, every model request in its history metered under its event id
 //   (written once however often this runs), settled to the platform's list cost and archived. A patch
 //   its agent submitted that no one answered is stored for the card, so resuming it re-gates the patch
@@ -41,8 +41,8 @@ export interface RecoveryDeps {
   // The merge sha of a gated card with none recorded, or null when its pull request did not merge;
   // pipeline.ts findCardMerge in production.
   lookupMerge: (card: Card) => Promise<string | null>;
-  // Unattended mode: closes the Managed Agents sessions the previous process left, keyed by card id
-  // (the managed adapter's closeOrphans). Absent in attended mode.
+  // Closes the Managed Agents sessions the previous process left, keyed by card id
+  // (the managed adapter's closeOrphans). Tests that need no session leave it unset.
   closeSessions?: () => Promise<Map<string, ClosedSessions>>;
 }
 

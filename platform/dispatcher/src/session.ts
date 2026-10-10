@@ -1,16 +1,20 @@
 // One metered agent session for a card: builds the prompt, meters every turn through
 // record_usage, settles the session against its result line (metering.ts), enforces the cost, turn
-// and wall-clock ceilings, and aborts when the board session lapses, the board pauses the studio, or
-// the board or the moderator pauses the card's executor role.
+// and wall-clock ceilings, and aborts when the board pauses the studio, or the board or the moderator
+// pauses the card's executor role. No board member need be signed in (PLAN.md §10 decision 66).
 //
-// The session's dollar budget is the card's remaining ceiling. In unattended mode the tick also
-// passes the budget the throttle allowed (throttle.ts planStart), and the session stops at the lower
-// of the two: reaching the ceiling is outcome ceiling, reaching the throttle's budget first is outcome
-// budget. An API error that says the Console credit or spend limit ran out is credit_exhausted; one that
-// says the organisation reached its usage tier's monthly cap is tier_cap (credit.ts).
+// The session's dollar budget is the card's remaining ceiling. The tick also passes the budget the
+// throttle allowed (throttle.ts planStart), and the session stops at the lower of the two: reaching
+// the ceiling is outcome ceiling, reaching the throttle's budget first is outcome budget. An API error
+// that says the Console credit or spend limit ran out is credit_exhausted; one that says the
+// organisation reached its usage tier's monthly cap is tier_cap (credit.ts).
+//
+// Every session bills the studio key and nothing else. Its spend goes to the studio only once its init
+// line shows that key; a session on any other account is refused, and what it spent before the refusal
+// is recorded as the founder's, never the pool's (the wrong-account guard).
 import { randomUUID } from 'node:crypto';
-import { SessionPaused, type AgentAdapter, type AgentEvent, type AgentMode, type EndEvent, type SessionSpec } from './adapters/types.js';
-import { refusedTools } from './adapters/attended.js';
+import { SessionPaused, type AgentAdapter, type AgentEvent, type EndEvent, type SessionSpec } from './adapters/types.js';
+import { refusedTools } from './adapters/tool-names.js';
 import type { Alerter } from './alert.js';
 import { spendRefusal } from './credit.js';
 import type { Billing, Card, Db, Role, StudioState } from './db.js';
@@ -18,23 +22,22 @@ import { errorMessage, type Logger } from './log.js';
 import { SessionMeter, isSyntheticModel, type MeterRow } from './metering.js';
 import { modelPrice, round4, type PriceTable } from './pricing.js';
 import path from 'node:path';
-import { billingFor, ceilingUsd } from './throttle.js';
+import { ceilingUsd } from './throttle.js';
 import { retry } from './time.js';
 import { KERNEL_NAMES, lanePaths, protectedPaths, shortId, singleLineTitle } from './worktree.js';
 
 export type SessionOutcome =
   | 'completed'
   | 'ceiling'
-  // The throttle's budget, below the ceiling, was reached (unattended).
+  // The throttle's budget, below the ceiling, was reached.
   | 'budget'
-  // The throttle's budget was nothing by the time the session started (unattended).
+  // The throttle's budget was nothing by the time the session started.
   | 'insufficient_balance'
   // An API error said the Console credit or spend limit ran out.
   | 'credit_exhausted'
   // An API error said the organisation reached its usage tier's monthly cap.
   | 'tier_cap'
   | 'turn_cap'
-  | 'board_session_lapsed'
   | 'paused_by_board'
   // The board or the moderator paused the card's executor role (docs/specs/agent-system-core.md).
   | 'role_paused'
@@ -63,7 +66,6 @@ export interface SessionDeps {
   adapter: AgentAdapter;
   priceTable: PriceTable;
   sessionMaxTurns: number;
-  boardSessionTtlMin: number;
   watchIntervalMs: number;
   fallbackModel: string;
   // The longest a session may run before it is interrupted, in milliseconds.
@@ -75,7 +77,7 @@ export interface SessionDeps {
   stopSignal: AbortSignal;
   now: () => Date;
   // The budget the tick allowed this card's session (throttle.ts); unset or Infinity leaves the
-  // ceiling as the only budget, as for every attended session.
+  // ceiling as the only budget.
   budgetUsd?: number;
   // Told the session's running spend estimate after every metered turn (budgets.ts).
   onSpend?: (usd: number) => void;
@@ -98,10 +100,8 @@ export function roleTools(role: Role): string[] {
 }
 
 // The -p prompt is the card, its money, its design spec when it has one, and the definition of
-// done. The role prompt file is appended to the system prompt by the adapter. Attended, Claude Code
-// reads the CLAUDE.md files from the worktree; unattended, the managed adapter puts the role prompt
-// and the root and folder CLAUDE.md at the base commit in the session's system prompt, and adds its
-// own finishing section after this prompt.
+// done. The managed adapter puts the role prompt and the root and folder CLAUDE.md at the base commit
+// in the session's system prompt, and adds its own finishing section after this prompt.
 export function sessionPrompt(card: Card, allowedPaths: readonly string[], ceilingUsd: number): string {
   const designSpec = card.design_spec_url?.trim();
   const locked = protectedPaths(allowedPaths);
@@ -148,11 +148,9 @@ function trimPayload(value: unknown): unknown {
   return { truncated: true, chars: json.length, head: json.slice(0, PAYLOAD_LIMIT) };
 }
 
-// An unattended session must bill the studio key and nothing else; an attended session must
-// not bill a key at all, since the founder's subscription is the account it runs on.
-export function billedToWrongAccount(mode: AgentMode, apiKeySource: string | null): boolean {
-  if (mode === 'unattended') return apiKeySource !== API_KEY_SOURCE;
-  return apiKeySource === API_KEY_SOURCE;
+// A session must bill the studio key and nothing else.
+export function billedToWrongAccount(apiKeySource: string | null): boolean {
+  return apiKeySource !== API_KEY_SOURCE;
 }
 
 function zeroUsage(usage: { input_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; output_tokens: number }): boolean {
@@ -160,10 +158,10 @@ function zeroUsage(usage: { input_tokens: number; cache_creation_input_tokens: n
 }
 
 // Why the init line refuses the session, or null when it may run.
-function startRefusal(mode: AgentMode, event: Extract<AgentEvent, { type: 'start' }>): string | null {
+function startRefusal(event: Extract<AgentEvent, { type: 'start' }>): string | null {
   const refused = refusedTools(event.tools);
   if (refused.length > 0) return `session exposes excluded tools: ${refused.join(', ')}`;
-  if (billedToWrongAccount(mode, event.apiKeySource)) return `session is billed to the wrong account (${event.apiKeySource ?? 'unreported'})`;
+  if (billedToWrongAccount(event.apiKeySource)) return `session is billed to the wrong account (${event.apiKeySource ?? 'unreported'})`;
   return null;
 }
 
@@ -177,8 +175,8 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   }
   const throttleBudget = deps.budgetUsd ?? Number.POSITIVE_INFINITY;
   const budget = round4(Math.min(remaining, throttleBudget));
-  // Only an unattended budget can be below the ceiling; one that is nothing starts no session, and
-  // the card goes back to funded rather than to a refusal.
+  // A throttle budget that is nothing starts no session, and the card goes back to funded rather than
+  // to a refusal.
   if (budget <= 0) {
     return { outcome: 'insufficient_balance', detail: `the throttle allowed ${throttleBudget} USD for this session`, turns: 0 };
   }
@@ -222,16 +220,11 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   const watch = setInterval(() => {
     void (async () => {
       try {
-        const [active, state, executor] = await Promise.all([
-          deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now()),
-          deps.db.getStudioState(),
-          deps.db.roleState(role.id),
-        ]);
-        if (deps.adapter.mode === 'attended' && !active) abort('board_session_lapsed', 'no board member seen within the session window');
+        const [state, executor] = await Promise.all([deps.db.getStudioState(), deps.db.roleState(role.id)]);
         if (state.paused) abort('paused_by_board', 'the board paused agents');
         if (executor.paused) abort('role_paused', `the executor role ${role.name} was paused`);
       } catch (error) {
-        deps.log.warn('session', 'board session check failed', { error: errorMessage(error) });
+        deps.log.warn('session', 'session watch failed', { error: errorMessage(error) });
       }
     })();
   }, deps.watchIntervalMs);
@@ -240,8 +233,8 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   // Row ids are unique under the card and this run, so a retried write is recorded once.
   const meter = new SessionMeter(deps.priceTable, `${card.id}/${randomUUID()}`, spec.model);
   const retryMs = deps.ledgerRetryMs ?? LEDGER_RETRY_MS;
-  // Who paid. An unattended session bills the pool only once its init line shows the studio key; until
-  // then, and for a session on the wrong account, the spend is recorded as the founder's.
+  // Who paid. A session bills the pool only once its init line shows the studio key; until then, and
+  // for a session on the wrong account, the spend is recorded as the founder's.
   const account: Account = { billedTo: 'founder', verified: false, started: false, apiKeySource: null };
   // The managed adapter writes its own ledger rows (one per model request, then runtime and settle
   // rows to the platform's list cost), so the session records none and settles nothing.
@@ -279,12 +272,12 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
       case 'start': {
         sessionId = event.sessionId ?? null;
         // The refusal is decided, and the session interrupted, before anything is written.
-        const refusal = startRefusal(deps.adapter.mode, event);
+        const refusal = startRefusal(event);
         adapterMetered = event.ledger === 'adapter';
         account.started = true;
         account.apiKeySource = event.apiKeySource;
-        if (!billedToWrongAccount(deps.adapter.mode, event.apiKeySource)) {
-          account.billedTo = billingFor(deps.adapter.mode);
+        if (!billedToWrongAccount(event.apiKeySource)) {
+          account.billedTo = 'studio';
           account.verified = true;
         }
         if (refusal) abort('refused', refusal);
@@ -389,12 +382,12 @@ export async function runAgentSession(card: Card, role: Role, worktree: string, 
   return { outcome: 'completed', detail: `session completed in ${result.numTurns ?? result.turns} turns`, turns: result.turns, sessionId };
 }
 
-// Why the spend was recorded as the founder's rather than the mode's account, when it was.
-function accountProblem(mode: AgentMode, account: Account): string[] {
-  if (account.started && billedToWrongAccount(mode, account.apiKeySource)) {
+// Why the spend was recorded as the founder's rather than the studio's, when it was.
+function accountProblem(account: Account): string[] {
+  if (account.started && billedToWrongAccount(account.apiKeySource)) {
     return [`the init line reported apiKeySource ${account.apiKeySource ?? 'unreported'}, so the spend was recorded as the founder's`];
   }
-  if (!account.started && mode === 'unattended') return ["no init line confirmed the studio key, so the spend was recorded as the founder's"];
+  if (!account.started) return ["no init line confirmed the studio key, so the spend was recorded as the founder's"];
   return [];
 }
 
@@ -411,7 +404,7 @@ interface SettleContext {
 
 interface Account {
   billedTo: Billing;
-  // The init line confirmed the account the mode bills.
+  // The init line confirmed the studio key.
   verified: boolean;
   // An init line arrived, and the key source it reported.
   started: boolean;
@@ -422,7 +415,7 @@ interface Account {
 // fails its three tries is named with its usd in the error event and the alert, for the board to
 // post by hand, never written again by a second settle. A session settled on an estimate, with
 // mismatched model names, with a turn model priced at fallback rates, with an overcount, with rows
-// left unwritten, or unattended with no init line is written up as an error event and alerted once.
+// left unwritten, or with no init line is written up as an error event and alerted once.
 // A side model priced at fallback rates is alerted once per process, not once per session. The rows
 // are logged before they are written, so a write that hangs or fails leaves them in the log.
 async function settle({ card, role, deps, meter, end, record, account, turns }: SettleContext): Promise<void> {
@@ -479,7 +472,7 @@ async function settle({ card, role, deps, meter, end, record, account, turns }: 
     ...(premiumTiers.length > 0 ? [`turns ran at a premium tier and were priced at the table's highest rates, which may be below the tier's price: ${premiumTiers.join('; ')}`] : []),
     ...(settled.overcountUsd > 0 ? [`the rows recorded ${settled.overcountUsd} USD above the settled total`] : []),
     ...(unwritten.length > 0 ? [`rows not written, to post by hand: ${unwritten.map((row) => `${row.request_id} ${row.model} ${row.usd} USD`).join(', ')}`] : []),
-    ...(metered ? accountProblem(deps.adapter.mode, account) : []),
+    ...(metered ? accountProblem(account) : []),
   ];
   if (problems.length === 0 && sideFallbacks.length === 0) return;
 

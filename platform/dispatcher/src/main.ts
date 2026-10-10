@@ -1,11 +1,11 @@
 // Dispatcher entry: loads .env from the repository root, validates configuration, takes the
 // dispatcher lease (waiting while another dispatcher holds it), finishes job runs a previous process
-// left running as failed, checks that the database agrees on the agent mode, checks containment and
-// probes the account in unattended mode, closes Managed Agents sessions and recovers cards left
-// mid-flight by a previous process, and runs the tick loop, which also drains the job queue
-// (jobs.ts), until SIGINT or SIGTERM. Stopping leaves studio_state.paused alone, so a
-// restart resumes work, releases the lease once running cards have stopped, and a restart also
-// clears a halt.
+// left running as failed, checks containment and probes the account, closes Managed Agents sessions
+// and recovers cards left mid-flight by a previous process, and runs the tick loop, which also drains
+// the job queue (jobs.ts), until SIGINT or SIGTERM. It runs unattended only (PLAN.md §10 decision 66):
+// every session is a Managed Agents session on the studio key, and no path waits on a board member.
+// Stopping leaves studio_state.paused alone, so a restart resumes work, releases the lease once
+// running cards have stopped, and a restart also clears a halt.
 // With DISPATCHER_DRAIN_AT set (a host with a bounded run, docs/specs/actions-host.md), the tick claims
 // nothing from that time and the process exits 0 once nothing it started is still running.
 // A startup error marked fatal exits 78, which systemd does not restart; any other exits 1.
@@ -14,7 +14,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { readFile } from 'node:fs/promises';
-import { defaultCliPin } from './cli-pin.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
 import { createDiscordPoster } from './discord.js';
@@ -67,12 +66,13 @@ async function acquireLease(db: Db, holder: string, ttlSeconds: number, tickMs: 
 
 async function main(): Promise<void> {
   loadDotenv({ path: path.join(CODE_ROOT, '.env'), quiet: true });
-  const config = loadConfig(process.env, CODE_ROOT);
+  // AGENT_MODE=attended is warned about and otherwise ignored (config.ts).
+  const config = loadConfig(process.env, CODE_ROOT, (message) => log.warn('config', message));
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
   const poster = createDiscordPoster({ ships: config.discordWebhookShips, weekly: config.discordWebhookWeekly, log });
-  // Accepted managed-session patches, re-applied when their card re-queues; attended cards have none.
-  const patches = config.agentMode === 'unattended' ? createSupabasePatchStore(config.supabaseUrl, config.supabaseServiceRoleKey) : null;
+  // Accepted managed-session patches, re-applied when their card re-queues.
+  const patches = createSupabasePatchStore(config.supabaseUrl, config.supabaseServiceRoleKey);
   const adapter = createAdapter(config, { db, alert, log, patches });
   const stop = new AbortController();
   const running = new Map<string, Date>();
@@ -84,17 +84,15 @@ async function main(): Promise<void> {
   const supplyWatchState: SupplyWatchState = { lastAt: null };
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
-  // The Directors' visual review (docs/specs/design-review.md) runs on the card sessions' adapter:
-  // unattended, a managed reader session on the studio's Console credit billed to the card, with no
-  // board member needed; attended, claude -p on the founder's plan. Its budget is set per review
-  // (pipeline.ts reviewBudget).
+  // The Directors' visual review (docs/specs/design-review.md) runs on the card sessions' adapter: a
+  // managed reader session on the studio's Console credit billed to the card, with no board member
+  // needed. Its budget is set per review (pipeline.ts reviewBudget).
   const visual: PipelineVisual = {
     framesRoot: config.worktreeRoot,
     review: {
       db,
       session: {
         adapter,
-        allowAttended: adapter.mode === 'attended',
         stopWhenStudioPaused: true,
         typed,
         priceTable: config.priceTable,
@@ -132,13 +130,6 @@ async function main(): Promise<void> {
   log.info('main', 'dispatcher lease held', { holder: leaseHolder, ttlSeconds });
   await failStaleJobRuns(db, leaseHolder, log);
   await startupChecks({ db, adapter, config, log });
-  // The Claude Code pin (cli-pin.ts): in attended mode the tick claims no card while the CLI is off
-  // it, and every attended session, role jobs included, checks it again before it starts.
-  const cliPin = defaultCliPin(config.codeRoot, config.claudeBin);
-  const pin = await cliPin.state();
-  if (pin.ok) log.info('main', 'claude code is on its pin', { version: pin.version });
-  else log.warn('main', 'claude code is not on its pin; no card is claimed and attended sessions refuse to start', { installed: pin.installed, pinned: pin.pinned, detail: pin.detail });
-  const managed = adapter.managed;
   await recoverOrphans({
     db,
     config,
@@ -148,7 +139,7 @@ async function main(): Promise<void> {
     now,
     resume: (card: Card) => resumeMerged(card, pipeline),
     lookupMerge: (card: Card) => findCardMerge(card, pipeline),
-    ...(managed ? { closeSessions: () => managed.closeOrphans() } : {}),
+    closeSessions: () => adapter.closeOrphans(),
   });
   // A dependency merge upkeep_merge left without a verdict is verified by a run queued now.
   await queuePendingUpkeep(db, alert, log);
@@ -157,7 +148,7 @@ async function main(): Promise<void> {
   const upkeep = upkeepDeps(config, mainGate);
   // draft_card (docs/specs/unattended-roles.md, PR4): its sessions run on the card sessions' adapter,
   // unattended managed readers billed to the card they draft, each within DRAFT_SESSION_MAX_USD and the
-  // money the tick reads; an attended process refuses the run.
+  // money the tick reads.
   const workflow: WorkflowDeps = {
     adapter,
     draftSessionMaxUsd: config.draftSessionMaxUsd,
@@ -174,7 +165,7 @@ async function main(): Promise<void> {
     rubric: () => readFile(path.join(AGENTS_DIR, 'rubrics', 'draft-game.md'), 'utf8'),
   };
   log.info('main', 'dispatcher started', {
-    mode: config.agentMode,
+    mode: adapter.mode,
     tickMs: config.tickMs,
     repo: config.githubRepo,
     code: config.codeRoot,
@@ -182,11 +173,9 @@ async function main(): Promise<void> {
     worktrees: config.worktreeRoot,
   });
 
-  const studioKey = adapter.mode === 'unattended' ? config.studioAnthropicApiKey : null;
+  const studioKey = config.studioAnthropicApiKey;
   const deps = {
     db,
-    mode: adapter.mode,
-    boardSessionTtlMin: config.boardSessionTtlMin,
     maxConcurrency: config.maxConcurrency,
     running,
     budgets,
@@ -199,8 +188,6 @@ async function main(): Promise<void> {
     alert,
     runCard: (card: Card) => runCardPipeline(card, pipeline),
     mainGate,
-    // An attended card session runs on this host's Claude Code: nothing is claimed off its pin.
-    ...(adapter.mode === 'attended' ? { cliPin: () => cliPin.state() } : {}),
     jobTick: () =>
       jobTick({
         db,
@@ -221,8 +208,8 @@ async function main(): Promise<void> {
     // The card supply's alert when it is short and no draft can be queued (docs/specs/unattended-roles.md).
     supplyWatch: () => watchSupply({ db, alert, now, log, state: supplyWatchState }),
     drainAt: config.drainAt ?? null,
-    // Unattended mode: the one-token call on the studio key that lifts the dispatcher's own credit and
-    // spend-limit pauses (credit-probe.ts); attended mode has no studio key and sets no such pause.
+    // The one-token call on the studio key that lifts the dispatcher's own credit and spend-limit
+    // pauses (credit-probe.ts).
     ...(studioKey ? { creditProbe: () => probeCredit({ client: sdkProbeClient(studioKey), db, priceTable: config.priceTable }) } : {}),
     studioProbe: newStudioProbeState(),
   };

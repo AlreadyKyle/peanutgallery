@@ -192,7 +192,8 @@ jobs:
       # The rest of pnpm verify: the checks phase runs the dispatcher, supabase and site tests only.
       - name: Gate tests
         run: pnpm --filter @backseat/gate test
-      # The eval rule compares the change with the commit detect compared (docs/specs/agent-upkeep.md).
+      # The eval rule compares the change with the commit detect compared (docs/specs/agent-upkeep.md);
+      # a missing replay result is reported in this log, advisory and not a merge gate (PLAN.md §10 decision 66).
       - name: Agent role spec tests
         env:
           EVAL_BASE: ${{ needs.detect.outputs.base }}

@@ -207,7 +207,8 @@ describe('no database row', () => {
         await emit({ type: 'start', sessionId: `s-${prompts.length}`, model: 'director-class', tools: spec.roleTools, apiKeySource: 'none' });
         await emit(usageEvent(1, 100, 'director-class'));
       },
-      { result: (spec) => (spec.prompt.startsWith('Draft a game card') ? JSON.stringify(draft) : JSON.stringify(approved)) },
+      // The replay's attended adapter, on the founder's login: its one remaining use.
+      { mode: 'attended', result: (spec) => (spec.prompt.startsWith('Draft a game card') ? JSON.stringify(draft) : JSON.stringify(approved)) },
     );
     let opened = 0;
     const workflow: WorkflowDeps = {

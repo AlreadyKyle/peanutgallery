@@ -53,7 +53,6 @@ const MAC_DOTENV = {
   DISPATCHER_WORKTREE_ROOT: '/Users/board/peanutgallery/.worktrees',
   DISPATCHER_MAX_CONCURRENCY: '1',
   CLAUDE_BIN: '/Users/board/.local/bin/claude',
-  BOARD_SESSION_TTL_MIN: '',
   MANAGED_AGENT_ID: 'agent_fixture',
   MANAGED_AGENT_VERSION: '3',
   MANAGED_ENVIRONMENT_ID: 'env_fixture',

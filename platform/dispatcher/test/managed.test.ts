@@ -887,7 +887,6 @@ describe('runAgentSession on the managed adapter', () => {
       adapter: h.adapter,
       priceTable: TABLE,
       sessionMaxTurns: 60,
-      boardSessionTtlMin: 3,
       watchIntervalMs: 60_000,
       fallbackModel: 'builder-class',
       sessionMaxMs: 60_000,
@@ -902,7 +901,6 @@ describe('runAgentSession on the managed adapter', () => {
 
   it('bills the pool from the adapter rows alone: no command-line init or result line, no settle of its own and no metering alert', async () => {
     const h = harness();
-    h.db.studio.agent_mode = 'unattended';
     const patch = await costPatch();
     runsFixture(h.client, patch);
     const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
@@ -920,7 +918,6 @@ describe('runAgentSession on the managed adapter', () => {
   // very words in the last message of a session that ended with no patch.
   it("does not read the agent's own last reply as a credit refusal when its session ends with no patch", async () => {
     const h = harness();
-    h.db.studio.agent_mode = 'unattended';
     let idles = 0;
     h.client.react = (session, event) => {
       if (event.type !== 'user.message') return;
@@ -938,7 +935,6 @@ describe('runAgentSession on the managed adapter', () => {
 
   it('interrupts at the turn cap and ends as turn_cap', async () => {
     const h = harness();
-    h.db.studio.agent_mode = 'unattended';
     const patch = await costPatch();
     runsFixture(h.client, patch);
     const react = h.client.react;
@@ -953,7 +949,6 @@ describe('runAgentSession on the managed adapter', () => {
 
   it('ends as adapter_paused, naming the failing check, when the adapter starts no session for a reason that is not the card', async () => {
     const h = harness({ fetchFn: github({ status: 429, json: { message: 'API rate limit exceeded' } }).fetchFn });
-    h.db.studio.agent_mode = 'unattended';
     const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
     expect(run).toMatchObject({ outcome: 'adapter_paused', failingCheck: 'read_token', turns: 0 });
     expect(h.client.sessions_).toEqual([]);
@@ -963,7 +958,6 @@ describe('runAgentSession on the managed adapter', () => {
 
   it("ends as tier_cap when the session create meets the usage tier's cap, so the pipeline pauses the studio", async () => {
     const h = harness();
-    h.db.studio.agent_mode = 'unattended';
     h.client.failCreate = Anthropic.APIError.generate(429, { type: 'error', error: { type: 'rate_limit_error', message: TIER_MESSAGE } }, undefined, new Headers());
     const run = await runAgentSession(card({ stage: 'building' }), role(), repo, h.db.studio, sessionDeps(h));
     expect(run.outcome).toBe('tier_cap');
@@ -972,7 +966,6 @@ describe('runAgentSession on the managed adapter', () => {
 
   it('ends as tier_cap when a running session reports the cap in a session.error event, keeping its error code', async () => {
     const h = harness();
-    h.db.studio.agent_mode = 'unattended';
     h.client.react = (session, event) => {
       if (event.type === 'user.message') {
         session.emit(
