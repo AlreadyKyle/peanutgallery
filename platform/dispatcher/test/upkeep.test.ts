@@ -268,7 +268,7 @@ interface MergeFixture {
   behind: number;
   mergeBase: string;
   headGate: Reply;
-  comments: Array<{ body: string; created_at: string }>;
+  comments: Array<{ body: string; created_at: string; author_association: string }>;
   version: string;
   main: GateStatus;
   // main's ref as GitHub reads it; whether pull request 7 is still open, and merged.
@@ -381,7 +381,7 @@ function mergeSetup(f: MergeFixture) {
     if (method === 'GET' && url === `${GITHUB}/issues/7/comments?per_page=100`) return { status: 200, json: f.comments };
     if (method === 'POST' && url === `${GITHUB}/issues/7/comments`) {
       posted.push((body as { body: string }).body);
-      f.comments.push({ body: (body as { body: string }).body, created_at: NOW.toISOString() });
+      f.comments.push({ body: (body as { body: string }).body, created_at: NOW.toISOString(), author_association: 'OWNER' });
       return { status: 201, json: {} };
     }
     if (method === 'GET' && url === `${GITHUB}/actions/runs?head_sha=${HEAD}&per_page=50`) return f.headGate;
@@ -540,6 +540,18 @@ describe('upkeep_merge', () => {
     const second = await decide(f);
     expect(second.output.decisions).toEqual([{ pr: 7, result: 'waiting_for_rebase', detail: expect.stringMatching(/a rebase was asked for/) }]);
     expect(second.posted).toEqual([]);
+  });
+
+  it("does not count a stranger's @dependabot rebase as the request: it still asks itself", async () => {
+    const f = mergeFixture();
+    f.behind = 2;
+    f.mergeBase = OLD_MAIN;
+    f.contents[`platform/site/package.json@${OLD_MAIN}`] = f.contents[`platform/site/package.json@${MAIN}`]!;
+    f.contents[`pnpm-lock.yaml@${OLD_MAIN}`] = f.contents[`pnpm-lock.yaml@${MAIN}`]!;
+    f.comments.push({ body: '@dependabot rebase', created_at: NOW.toISOString(), author_association: 'NONE' });
+    const t = await decide(f);
+    expect(t.output.decisions).toEqual([{ pr: 7, result: 'rebase_requested', detail: expect.stringMatching(/commented @dependabot rebase/) }]);
+    expect(t.posted).toEqual(['@dependabot rebase']);
   });
 
   it('merges nothing while the studio is paused, or while main is red', async () => {
