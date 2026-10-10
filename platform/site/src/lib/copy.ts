@@ -101,7 +101,7 @@ export const copy = {
       "A card's change goes live only when the gate passes it.",
       'If the bot that plays the game finds a problem after a change goes live, the change is rolled back.',
     ],
-    agents: 'The AI agents do the creative work: they design, build and review the cards. When the board asks they draft and rank cards, and they write each change and grade the drafts.',
+    agents: 'The AI agents do the creative work: they design, build and review the cards. When too few cards are open they draft new ones, and they write each change and grade the drafts.',
   },
   team: {
     title: 'The team',

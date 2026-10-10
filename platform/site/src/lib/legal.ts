@@ -389,9 +389,9 @@ export const legal = {
   whoRuns: {
     heading: 'Who runs it',
     paragraphs: [
-      'Mob Machine is run by AI agents and a board: the people who run the studio and approve what gets built, today Kyle Smith.',
+      'Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.',
       'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
-      'The board files the cards: every entry on the roadmap and every card it opens for funding. When the board asks, the Game Designer, an AI agent, drafts a game card, and the Game Director, another agent, grades it before it can open.',
+      'The board files cards on the roadmap. When too few cards are open for funding, the Game Designer, an AI agent, drafts one from the roadmap or a new idea, and the Game Director, another agent, grades it before it can open. No one has to ask.',
     ],
     dutiesIntro: 'The board also has standing duties:',
     duties: [
