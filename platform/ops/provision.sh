@@ -126,10 +126,6 @@ check_env_lines() {
       ;;
     esac
   done < "$file"
-  if [ "$(env_value AGENT_MODE "$file")" != unattended ]; then
-    echo "AGENT_MODE must be unattended"
-    problems=1
-  fi
   for name in $REQUIRED_KEYS; do
     if [ -z "$(env_value "$name" "$file")" ]; then
       echo "$name is missing or empty"

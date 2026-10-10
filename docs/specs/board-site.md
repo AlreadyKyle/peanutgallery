@@ -89,7 +89,7 @@ With nothing due it says "Nothing needs you." Under the list: the latest run's t
 - [ ] ~~The board signs in on the new site and sees Needs you (waits on: the board, BOARD-SETUP step 17; production shows no sign-in since the switch, Evidence).~~ Superseded by `optional-board.md`: the board signs in and sees Status.
 - [ ] The moderator's first sign-in, as a Go-live test (waits on: the board naming a moderator, BOARD-SETUP step 16, and Resend).
 - [x] The live check on production shows /board as a 404 naming no netlify.app address but the game's, no route naming the board site's address, and the enforced `form-action` (Evidence, Production).
-- [ ] `platform_lane_open` set once the migration, the board site, the Auth settings and ended sessions, the board's own sign-in and the live check hold, and an hour has passed since the sessions ended: production steps 2 to 6, 8 and 11 (waits on: the board's own sign-in, step 8, then the board's switch, production step 12 and BOARD-SETUP step 26). Resend and the moderator's first sign-in do not hold it up: neither changes what a card's code could reach.
+- [ ] `platform_lane_open` set once the migration, the board site, the Auth settings and ended sessions and the live check hold, and an hour has passed since the sessions ended: production steps 2 to 6 and 11 (waits on: the board's switch, by SQL, production step 12 and BOARD-SETUP step 26). The board's own sign-in (step 8) no longer holds it up: the board's site is optional (`optional-board.md`, PLAN.md §10 decision 66). Resend and the moderator's first sign-in do not hold it up: neither changes what a card's code could reach.
 
 ## Verification
 

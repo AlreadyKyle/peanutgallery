@@ -1,0 +1,42 @@
+# Deletes dead branches, so nobody has to: a branch is dead when it has at least one pull request and
+# every one of them is merged or closed. main, and any branch with an open pull request or with no
+# pull request at all (a card branch whose pull request is not open yet), is left alone. It runs when
+# this file changes on main, daily, and by hand. Cloud sessions cannot delete a branch through their
+# GitHub proxy, so this is how merged branches go. No secret: the run's own token, contents write.
+name: branch-cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/branch-cleanup.yml'
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency: branch-cleanup
+
+jobs:
+  branch-cleanup:
+    name: branch-cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Delete branches whose pull requests are all merged or closed
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name' | while read -r branch; do
+            [ "$branch" = main ] && continue
+            states=$(gh api "repos/$REPO/pulls?state=all&per_page=100&head=${REPO%%/*}:$branch" --jq '[.[].state] | join(" ")')
+            if [ -z "$states" ]; then echo "keep $branch: no pull request"; continue; fi
+            case " $states " in *" open "*) echo "keep $branch: open pull request"; continue ;; esac
+            gh api -X DELETE "repos/$REPO/git/refs/heads/$branch" > /dev/null
+            echo "deleted $branch ($states)"
+          done

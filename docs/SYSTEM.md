@@ -79,7 +79,7 @@ vetoed by the board ─► never dealt or run; one on now with no money moves to
 - an approver role that is paused, retired, or outside the reviewer and planner classes (a writer only for qa_verify);
 - a draft verdict other than approved.
 
-On a card that needs an approval, a hashed field changes only through a board control or the draft path (`cards_agent_text_guard`), and a board edit through `set_card_horizon` records a board approval of the new content. Recording an approval changes nothing on the card.
+On a card that needs an approval, a hashed field changes only through a board control or the draft path (`cards_agent_text_guard`), and a board edit (made by SQL or a reviewed script, since the board's panel no longer calls `set_card_horizon`; docs/PLAN.md §4) records a board approval of the new content. Recording an approval changes nothing on the card.
 
 ## The two role jobs
 

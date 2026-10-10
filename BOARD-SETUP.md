@@ -189,8 +189,8 @@ identity, `/api/live` and the live check, fill in the spec's Evidence, and merge
 Sources: `docs/ROADMAP.md` (the launch checklist), `docs/PLAN.md` §10 (the decisions),
 `platform/ops/README.md` (the runbook, with The Mac host at its end), `docs/specs/mac-host.md`,
 `docs/specs/money-safety.md`, `docs/specs/board-site.md`, `.env.example`. The board has its own site
-(`docs/specs/board-site.md`); "/board" and "the board's site" both mean it. It opens on the **Needs
-you** inbox.
+(`docs/specs/board-site.md`); "/board" and "the board's site" both mean it. It opens on **Status**
+(`docs/specs/optional-board.md`).
 
 The numbered sections below are the steps as the ROADMAP and the specs cite them ("BOARD-SETUP step 22"),
 in four sections; the checklist above points at them. The **Done** entries at the bottom keep the
@@ -761,30 +761,30 @@ before. After the code, the first thing you see is **Status**, then Activity and
 
 **Optional now.** Under `docs/PLAN.md` §10 decision 66 the studio never waits on a board sign-in: the
 role jobs and the visual review run unattended (`docs/specs/unattended-roles.md`). Signing in is still
-how you use the panel, and opening the platform code lane (step 26) waits on it.
+how you use the panel; opening the platform code lane (step 26) does not wait on it.
 
 **Tell me:** "signed in on the board site."
 
 #### 18. Studio daily credit limit
 
-Keep $500, or set the number the scale pull request proposes, in the Caps form on the board's site
-(second factor), or by SQL once the form is gone (see **Pause when the board site is down**). Besides the $50 a day of immediate agent credit per payer, all payers together get
+Keep $500, or set the number the scale pull request proposes, by SQL (see **Change the caps by SQL**,
+under **Pause when the board site is down**); the board's site shows the caps read-only. Besides the $50 a day of immediate agent credit per payer, all payers together get
 at most this much immediate agent credit per New York day, and credit above it is held 14 days. The
-same form now takes the usage tier cap (step 22).
+usage tier cap (step 22) is set the same way.
 
 **Tell me:** "keep $500", or the number you set.
 
-#### 26. Open the platform code lane (after step 17)
+#### 26. Open the platform code lane
 
 **Why.** The Platform Builder builds studio cards in `platform/site` only while
 `studio_state.platform_lane_open` is true, and it is false. It was kept closed until the board had its
 own site, so no card's code could share an origin with the board's controls
-(`docs/specs/board-site.md`, production step 12). Everything else it waits on holds: the board site
+(`docs/specs/board-site.md`, production step 12). Everything it waits on holds: the board site
 and its headers, Supabase Auth on it with sign-ups off, the old sessions ended, and the live check.
-Your own sign-in there (step 17) is the last precondition. /team draws the Platform Builder outside
+Your sign-in there (step 17) is optional and does not hold it up; opening it is your decision. /team draws the Platform Builder outside
 Running until the lane opens.
 
-**Do this.** Once you have signed in on the board's site, tell me. I take a dump, set the flag with
+**Do this.** Tell me your decision. I take a dump, set the flag with
 your allow, read it back, and check /team shows the Platform Builder under Running.
 
 **Tell me:** "open the platform lane", or "keep it closed".
@@ -856,8 +856,8 @@ purchase come from the studio share.
 4. Optional (`docs/PLAN.md` §10 decisions 65 and 66): record the purchase on the board's site
    (second factor), with the amount on the Console receipt and the Stripe payout id. The studio key's
    real Console balance is the limit on unattended spend, not the recorded total.
-5. Tell me the tier the Console's **Limits** page shows. Its monthly limit goes in the Caps form as
-   the usage tier cap.
+5. Tell me the tier the Console's **Limits** page shows. Its monthly limit is the usage tier cap; set it
+   by SQL (see **Change the caps by SQL**).
 6. In the same visit, raise Stripe's **Minimum balance** (Settings → Payouts) to the figure the inbox
    shows.
 
@@ -1025,7 +1025,9 @@ decision 66). If you do none of them, the studio pauses or stays as it is. Nothi
 
 ### Standing items, outside the order
 
-- **GitHub Actions minutes.** On 23 September 2026 the account's included Actions minutes ran out,
+- **GitHub Actions minutes. Done:** the repository has been public since 6 October 2026 (way 2 below),
+  so standard runners are free and the gate workflow runs on Actions again; the local gate is the
+  fallback only. Nothing to reply. The history: on 23 September 2026 the account's included Actions minutes ran out,
   and with its $0 spending limit every gate job is refused within seconds. You said "just do
   everything locally for now", so the gate workflow is disabled and I merge board pull requests on
   the local gate, the same checks run on your Mac (`scripts/local-gate.sh`, `docs/specs/local-gate.md`).
@@ -1168,9 +1170,9 @@ changes.
 A card's funding target no longer depends on the per-card maximum, which now limits only what agents
 may spend on one card (`docs/PLAN.md` §10 decision 28). `docs/PLAN.md` §4 Kernel makes spend caps
 a rule no card may edit; it fixes that caps exist, not their values, and §6 Budget throttle keeps
-them in `studio_state`, edited from /board. So the numbers are yours: the caps form at /board sets
+them in `studio_state`, edited from /board. So the numbers are yours: you set
 the daily cap, the card maximum, the hourly rate, the monthly cap and the studio-wide daily limit on
-immediate credit, with your second factor. Removing the caps outright is a kernel change I would argue against, because
+immediate credit by SQL (see **Change the caps by SQL**); the board's site shows them read-only. Removing the caps outright is a kernel change I would argue against, because
 they are what stops a looping agent draining customer money. Nothing to reply unless you want
 different numbers.
 

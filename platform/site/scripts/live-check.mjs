@@ -41,14 +41,12 @@
 // /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
-// security headers from netlify.toml, the enforced and report-only policies' full values included,
+// security headers from netlify.toml, the enforced policy's full value included,
 // run against any address that is not local; a local `vite preview` sends them too
 // (vite.config.ts), so they are checked there when present.
 //
-// frame-ancestors, connect-src and form-action are enforced; the rest of the policy is report-only and blocks
-// nothing, so the only sign it would break the site is a report. Every page listens for
-// securitypolicyviolation, which fires for enforced and report-only policies alike, and any report
-// fails the run whatever the console printed (docs/specs/site-truth-pass.md, docs/specs/launch-site.md).
+// The whole policy is enforced, so a violation blocks something on the page. Every page listens for
+// securitypolicyviolation, and any report fails the run whatever the console printed (docs/specs/site-truth-pass.md, docs/specs/launch-site.md).
 //
 // The data checks need the site's /api documents. A local `vite preview` has no Netlify Function, so
 // it has none; --allow-no-data turns those checks into SKIP lines instead of failures.
@@ -126,21 +124,16 @@ const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD',
 const STRIPE_LINK = /^https:\/\/buy\.stripe\.com\/[A-Za-z0-9]+$/;
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 // The headers netlify.toml sends on every path, by exact value (docs/specs/site-truth-pass.md).
-const REPORT_ONLY_POLICY =
+const ENFORCED_POLICY =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; " +
   "connect-src 'self'; " +
-  "object-src 'none'; base-uri 'self'; form-action 'self'";
-const ENFORCED_POLICY =
-  "frame-ancestors 'none'; " +
-  "connect-src 'self'; " +
-  "form-action 'self'";
+  "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 const SECURITY_HEADERS = [
   ['x-frame-options', 'DENY'],
   ['x-content-type-options', 'nosniff'],
   ['referrer-policy', 'strict-origin-when-cross-origin'],
   ['permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
   ['content-security-policy', ENFORCED_POLICY],
-  ['content-security-policy-report-only', REPORT_ONLY_POLICY],
 ];
 
 const results = [];
