@@ -1,9 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import {
   buckets,
   cancelCard,
-  fetchActionableCards,
   fetchCardRoles,
   fileCard,
   folders,
@@ -227,31 +226,27 @@ function FileCardForm({ client, onFiled }: { client: SupabaseClient; onFiled: ()
 
 /**
  * One card picker over the cards that can still be rejected, and a reason: Reject (cancel_card, after
- * the confirm), and for a paused card a new estimate and Resume (resume_card). The form stays mounted
- * when a rejected card leaves the list, so its status line is announced and focus stays on the button.
+ * the confirm), and for a paused card a new estimate and Resume (resume_card). The cards come from the
+ * Activity load, so Refresh and every action reread them. The form stays mounted when a rejected card
+ * leaves the list, so its status line is announced and focus stays on the button.
  */
-function CardActionsForm({ client, onChanged }: { client: SupabaseClient; onChanged: () => Promise<void> }) {
+function CardActionsForm({
+  client,
+  cards,
+  loadError,
+  onChanged,
+}: {
+  client: SupabaseClient;
+  cards: ActionableCard[] | null;
+  loadError: string;
+  onChanged: () => Promise<void>;
+}) {
   const estimateHintId = useId();
-  const [cards, setCards] = useState<ActionableCard[] | null>(null);
-  const [loadError, setLoadError] = useState('');
   const [chosen, setChosen] = useState('');
   const [reason, setReason] = useState('');
   const [estimate, setEstimate] = useState('');
   const { busy, message, setMessage, run } = useAction();
   const card = (cards ?? []).find((option) => option.id === chosen) ?? null;
-
-  const reload = useCallback(async () => {
-    try {
-      setCards(await fetchActionableCards(client));
-      setLoadError('');
-    } catch (error) {
-      setLoadError(errorMessage(error));
-    }
-  }, [client]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   function choose(id: string) {
     setChosen(id);
@@ -280,7 +275,7 @@ function CardActionsForm({ client, onChanged }: { client: SupabaseClient; onChan
       const moved = await cancelCard(client, go.card.id, go.why);
       setChosen('');
       setReason('');
-      await Promise.all([reload(), onChanged()]);
+      await onChanged();
       const money = moved > 0 ? `${formatUsd(moved)} of unspent money moved to the next cards in line.` : 'No unspent money moved.';
       return `Card ${go.card.title} rejected. ${money}`;
     });
@@ -298,7 +293,7 @@ function CardActionsForm({ client, onChanged }: { client: SupabaseClient; onChan
     await run(async () => {
       await resumeCard(client, go.card.id, value, go.why);
       setReason('');
-      await Promise.all([reload(), onChanged()]);
+      await onChanged();
       return `Card ${go.card.title} resumed.`;
     });
   }
@@ -468,11 +463,16 @@ function RunJobForm({ client, jobs, onQueued }: { client: SupabaseClient; jobs: 
 export function Actions({
   client,
   jobs,
+  cards,
+  cardsError,
   onStudioChanged,
   onActivityChanged,
 }: {
   client: SupabaseClient;
   jobs: string[];
+  /** The cards Reject and Resume offer, from the Activity load. */
+  cards: ActionableCard[] | null;
+  cardsError: string;
   onStudioChanged: () => Promise<void>;
   onActivityChanged: () => Promise<void>;
 }) {
@@ -481,7 +481,7 @@ export function Actions({
       <h2>Actions</h2>
       <PauseControls client={client} onChanged={onStudioChanged} nested />
       <FileCardForm client={client} onFiled={onActivityChanged} />
-      <CardActionsForm client={client} onChanged={onActivityChanged} />
+      <CardActionsForm client={client} cards={cards} loadError={cardsError} onChanged={onActivityChanged} />
       <CreditPurchaseForm client={client} />
       <RunJobForm client={client} jobs={jobs} onQueued={onActivityChanged} />
     </section>

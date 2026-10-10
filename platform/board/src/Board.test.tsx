@@ -104,6 +104,9 @@ vi.mock('./lib/supabase', async (importOriginal) => {
       if (name === 'cancel_card' || name === 'resume_card') {
         fake.cards = fake.cards.map((c) => (c.id === args?.p_card ? { ...c, stage: name === 'cancel_card' ? 'rejected' : 'funded' } : c));
       }
+      if (name === 'file_card') {
+        fake.cards = [...fake.cards, { id: 'filed', title: String(args?.p_title), stage: 'proposed', horizon: args?.p_horizon, failing_check: null, updated_at: '2026-10-10T12:00:00Z', estimate_usd: '0.0000' }];
+      }
       const data: Record<string, unknown> = {
         board_role: fake.role,
         board_studio_state: fake.studio,
@@ -647,6 +650,42 @@ describe('Actions', () => {
     await flush();
     await flush();
     expect(actions.getByRole('status').textContent).toBe('Card Empty rejected. No unspent money moved.');
+  });
+
+  it('rereads the card picker on Refresh and after Resume and File a card, so it never offers a card that moved on', async () => {
+    fake.cards = [card('p1', 'Paused one', 'paused', { estimate_usd: '0.5000' })];
+    await renderBoard();
+    const actions = form('Card actions');
+    const offered = () => [...(actions.getByLabelText('Card') as HTMLSelectElement).options].map((o) => o.textContent);
+    const reads = () => fake.selects.filter((s) => s.columns === ACTIONABLE_CARD_COLUMNS).length;
+    expect(offered()).toEqual(['Choose a card', 'Paused one (paused)']);
+    expect(reads()).toBe(1);
+
+    fake.cards = [...fake.cards, card('v1', 'Voted since', 'voted')];
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await flush();
+    expect(offered()).toEqual(['Choose a card', 'Paused one (paused)', 'Voted since (voted)']);
+    expect(reads()).toBe(2);
+
+    fireEvent.change(actions.getByLabelText('Card'), { target: { value: 'p1' } });
+    fireEvent.change(actions.getByLabelText('Reason'), { target: { value: 'Topped up.' } });
+    fireEvent.click(actions.getByRole('button', { name: 'Resume card' }));
+    await flush();
+    await flush();
+    expect(offered()).toEqual(['Choose a card', 'Paused one (funded)', 'Voted since (voted)']);
+    expect(actions.queryByRole('button', { name: 'Resume card' })).toBeNull();
+
+    const file = form('File a card');
+    fireEvent.change(file.getByLabelText('Title'), { target: { value: 'Filed just now' } });
+    fireEvent.change(file.getByLabelText('Public summary'), { target: { value: 'New.' } });
+    fireEvent.change(file.getByLabelText('Intent (for the agents)'), { target: { value: 'Do it.' } });
+    fireEvent.change(file.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
+    fireEvent.change(file.getByLabelText('Funding target (USD)'), { target: { value: '2' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+    await flush();
+    await flush();
+    expect(offered()).toContain('Filed just now (proposed)');
+    expect(reads()).toBe(4);
   });
 
   it('resumes a paused card with a new estimate and the reason', async () => {

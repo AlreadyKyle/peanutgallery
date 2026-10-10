@@ -14,7 +14,14 @@ export function Panel({ client }: { client: SupabaseClient }) {
     <>
       <StudioStatus client={client} studio={studio} />
       <Activity client={client} activity={activity} />
-      <Actions client={client} jobs={activity.jobs?.names ?? []} onStudioChanged={studio.refresh} onActivityChanged={activity.refresh} />
+      <Actions
+        client={client}
+        jobs={activity.jobs?.names ?? []}
+        cards={activity.actionable}
+        cardsError={activity.errors.actionable}
+        onStudioChanged={studio.refresh}
+        onActivityChanged={activity.refresh}
+      />
     </>
   );
 }

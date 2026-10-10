@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
+  fetchActionableCards,
   fetchBoardJobs,
   fetchCardEvents,
   fetchFindings,
   fetchRecentCards,
+  type ActionableCard,
   type AgentEvent,
   type BoardJobs,
   type Finding,
@@ -14,12 +16,17 @@ import {
 import { formatDateTime } from './lib/format';
 import { errorMessage } from './lib/supabase';
 
-/** One read each of the recent cards, the job runs and the findings; each fails on its own. */
+/**
+ * One read each of the recent cards, the job runs, the findings and the cards Actions can still reject
+ * or resume; each fails on its own. Refresh, and every action that changes a card, rereads them all,
+ * so the card picker never offers a card that has moved on.
+ */
 export type ActivityLoad = {
   cards: RecentCard[] | null;
   jobs: BoardJobs | null;
   findings: Finding[] | null;
-  errors: { cards: string; jobs: string; findings: string };
+  actionable: ActionableCard[] | null;
+  errors: { cards: string; jobs: string; findings: string; actionable: string };
   busy: boolean;
   refresh: () => Promise<void>;
 };
@@ -37,16 +44,23 @@ export function useActivity(client: SupabaseClient): ActivityLoad {
   const [cards, setCards] = useState<RecentCard[] | null>(null);
   const [jobs, setJobs] = useState<BoardJobs | null>(null);
   const [findings, setFindings] = useState<Finding[] | null>(null);
-  const [errors, setErrors] = useState({ cards: '', jobs: '', findings: '' });
+  const [actionable, setActionable] = useState<ActionableCard[] | null>(null);
+  const [errors, setErrors] = useState({ cards: '', jobs: '', findings: '', actionable: '' });
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
-    const [c, j, f] = await Promise.all([settle(fetchRecentCards(client)), settle(fetchBoardJobs(client)), settle(fetchFindings(client))]);
+    const [c, j, f, a] = await Promise.all([
+      settle(fetchRecentCards(client)),
+      settle(fetchBoardJobs(client)),
+      settle(fetchFindings(client)),
+      settle(fetchActionableCards(client)),
+    ]);
     if (c.value !== null) setCards(c.value);
     if (j.value !== null) setJobs(j.value);
     if (f.value !== null) setFindings(f.value);
-    setErrors({ cards: c.error, jobs: j.error, findings: f.error });
+    if (a.value !== null) setActionable(a.value);
+    setErrors({ cards: c.error, jobs: j.error, findings: f.error, actionable: a.error });
     setBusy(false);
   }, [client]);
 
@@ -54,7 +68,7 @@ export function useActivity(client: SupabaseClient): ActivityLoad {
     void refresh();
   }, [refresh]);
 
-  return { cards, jobs, findings, errors, busy, refresh };
+  return { cards, jobs, findings, actionable, errors, busy, refresh };
 }
 
 const ORIGIN_WORDS: Record<string, string> = {
