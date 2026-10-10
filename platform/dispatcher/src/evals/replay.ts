@@ -325,7 +325,6 @@ function liveWorkflow(config: DispatcherConfig): WorkflowDeps {
     resolveModel: (role) => resolveRoleModel(role, config).model,
     sessionMaxTurns: config.sessionMaxTurns,
     sessionMaxMs: config.sessionMaxMinutes * 60_000,
-    boardSessionTtlMin: config.boardSessionTtlMin,
     watchIntervalMs: config.tickMs,
     scanText: (strings) => scanPublicText(strings),
     openWorkspace: (runId) => gitWorkspace(config.repoRoot, config.worktreeRoot, runId, gitAuthEnv(config.githubToken)),

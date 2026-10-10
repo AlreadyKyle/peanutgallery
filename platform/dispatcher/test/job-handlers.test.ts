@@ -120,7 +120,6 @@ function setup(answers: Answers, job: 'studio_ranking' | 'draft_card', input: Re
     priceTable: PRICE_TABLE,
     sessionMaxTurns: 20,
     sessionMaxMs: 60_000,
-    boardSessionTtlMin: 3,
     watchIntervalMs: 5,
     scanText: async (strings) => {
       scanned.push([...strings]);

@@ -1,17 +1,23 @@
-// One attended role-job session (src/role-session.ts, docs/specs/agent-workflows.md): exactly the
-// role spec's tools and never Write, Edit, a web tool, an MCP tool or a fallback model; founder
-// ledger rows with the role, written once per request id; a failed model call or an answer that is
-// not one schema-valid object fails the session.
+// One role session (src/role-session.ts, docs/specs/agent-workflows.md): exactly the role spec's
+// tools and never Write, Edit, a web tool, an MCP tool or a fallback model; attended (where the caller
+// allows it), founder ledger rows with the role, written once per request id; managed, a reader spec
+// with the role prompt as its system prompt and no rows written here, the adapter writing them; a
+// failed model call or an answer that is not one schema-valid object fails the session; no board
+// member need be signed in; a credit or tier-cap refusal is named.
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { claudeArgs } from '../src/adapters/claude-cli.js';
 import type { Role } from '../src/db.js';
 import { createLogger } from '../src/log.js';
-import { parsePriceTable } from '../src/pricing.js';
+import { parsePriceTable, round4 } from '../src/pricing.js';
+import { SessionPaused } from '../src/adapters/types.js';
 import { roleSessionSpec, roleToolProblem, runRoleSession, type RoleSessionDeps, type RoleSessionRequest } from '../src/role-session.js';
 import { TypedOutput } from '../src/typed-output.js';
 import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeOptions, type FakeScript } from './helpers/fake-adapter.js';
-import { FakeDb, NOW, role } from './helpers/fake-db.js';
+import { FakeDb, role } from './helpers/fake-db.js';
+import { CODE_ROOT } from './helpers/fake-managed.js';
 
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'director-class': { input: 5, output: 25, cache_read: 0.5, cache_write_5m: 6.25, cache_write_1h: 10 } }));
 const typed = new TypedOutput();
@@ -34,16 +40,15 @@ function setup(script: FakeScript, options: FakeOptions = {}) {
   const deps: RoleSessionDeps = {
     db,
     adapter,
+    allowAttended: true,
     scripts: true,
     typed,
     priceTable: PRICE_TABLE,
     maxTurns: 20,
     maxMs: 60_000,
-    boardSessionTtlMin: 3,
     watchIntervalMs: 5,
     log: createLogger(new Writable({ write: (_c, _e, cb) => cb() })),
     stopSignal: stop.signal,
-    now: () => NOW,
     ledgerRetryMs: 1,
   };
   return { db, adapter, deps, stop };
@@ -178,15 +183,115 @@ describe('runRoleSession', () => {
     }
   });
 
-  it('stops when the board session lapses, and runs only attended', async () => {
+  it('needs no signed-in board member, and stops when its role is paused', async () => {
+    const absent = setup(oneTurn);
+    absent.db.boardActive = false;
+    expect(await runRoleSession(request(), absent.deps)).toMatchObject({ ok: true });
     const t = setup(async (_spec, emit, signal) => {
       await emit(startEvent(READ_SET));
-      t.db.boardActive = false;
+      t.db.roles = [{ ...director, paused: true }, designer];
       await untilAborted(signal, 1000);
     });
-    expect(await runRoleSession(request(), t.deps)).toMatchObject({ ok: false, reason: 'board_session_lapsed' });
-    const managed = setup(oneTurn, { mode: 'unattended' });
-    expect(await runRoleSession(request(), managed.deps)).toMatchObject({ ok: false, reason: 'a role job runs attended, on the founder plan' });
-    expect(managed.adapter.specs).toHaveLength(0);
+    expect(await runRoleSession(request(), t.deps)).toMatchObject({ ok: false, reason: 'role_paused' });
+  });
+
+  it("stops when the studio is paused, where the caller asks (a Director's review)", async () => {
+    const t = setup(async (_spec, emit, signal) => {
+      await emit(startEvent(READ_SET));
+      t.db.studio = { ...t.db.studio, paused: true };
+      await untilAborted(signal, 1000);
+    });
+    expect(await runRoleSession(request(), { ...t.deps, stopWhenStudioPaused: true })).toMatchObject({ ok: false, reason: 'studio_paused' });
+  });
+
+  it('runs on the attended adapter only where the caller allows it', async () => {
+    const t = setup(oneTurn);
+    const { allowAttended: _allowed, ...withoutAllow } = t.deps;
+    expect(await runRoleSession(request(), withoutAllow)).toMatchObject({ ok: false, reason: 'a role session runs on the managed adapter; this caller does not allow the attended one' });
+    expect(t.adapter.specs).toHaveLength(0);
+  });
+});
+
+describe('runRoleSession on the managed adapter', () => {
+  const PROMPT_ROOT = CODE_ROOT;
+  const managedStart = (tools = ['read', 'glob', 'grep'], apiKeySource: string | null = 'ANTHROPIC_API_KEY') =>
+    ({ type: 'start', sessionId: 'sesn_review', model: 'director-class', tools, apiKeySource, ledger: 'adapter' }) as const;
+
+  function managed(script: FakeScript, options: FakeOptions = {}) {
+    const t = setup(script, { mode: 'unattended', ...options });
+    const { allowAttended: _allowed, ...deps } = t.deps;
+    return { ...t, deps: { ...deps, scripts: false } };
+  }
+
+  it("builds a reader spec: the role prompt read from the checkout as its system prompt, the card it bills, the files it mounts and no Bash", async () => {
+    const t = managed(async (_spec, emit) => {
+      await emit(managedStart());
+      await emit(usageEvent(1, 400, 'director-class'));
+    });
+    const files = [{ path: '/frames/site/home-375.after.png', mountPath: '/mnt/session/uploads/frames/site/home-375.after.png' }];
+    const result = await runRoleSession(request({ promptRoot: PROMPT_ROOT, cardId: 'card-1', files, repoSha: null }), t.deps);
+    expect(result).toMatchObject({ ok: true, ref: 'claude:sesn_review' });
+    const spec = t.adapter.specs[0]!;
+    expect(spec.purpose).toBe('role');
+    expect(spec.roleTools).toEqual(READ_SET);
+    expect(spec.roleId).toBe(director.id);
+    expect(spec.role).toEqual({
+      cardId: 'card-1',
+      system: readFileSync(path.join(PROMPT_ROOT, director.prompt_path!), 'utf8'),
+      repoSha: null,
+      files,
+      label: 'director-1 run-1',
+    });
+  });
+
+  it('writes no ledger row itself when the adapter writes them, and still reports its spend and stops at its budget', async () => {
+    const spends: number[] = [];
+    const t = managed(async (_spec, emit, signal) => {
+      await emit(managedStart());
+      await emit(usageEvent(1, 400, 'director-class'));
+      await emit(usageEvent(2, 400, 'director-class'));
+      await untilAborted(signal, 1000);
+    });
+    // Each turn is at least 1000 input tokens at 5 and 400 output at 25 per million, 0.015 USD, and the
+    // live estimate adds what the stream under-reports.
+    const result = await runRoleSession(request({ promptRoot: PROMPT_ROOT, budgetUsd: 0.05, onSpend: (usd) => spends.push(usd) }), t.deps);
+    expect(result).toMatchObject({ ok: false, reason: 'budget' });
+    expect(spends).toHaveLength(2);
+    expect(spends[0]).toBeGreaterThanOrEqual(0.015);
+    expect(spends[0]).toBeLessThan(0.05);
+    expect(spends[1]).toBeGreaterThanOrEqual(0.05);
+    if (!result.ok) expect(result.usd).toBe(round4(spends[1]!));
+    expect(t.db.ledger).toEqual([]);
+  });
+
+  it('refuses a start event that shows a write tool, bash, or an account other than the studio key', async () => {
+    for (const start of [managedStart(['read', 'glob', 'grep', 'write']), managedStart(['read', 'bash']), managedStart(['read', 'glob', 'grep'], 'none')]) {
+      const t = managed(async (_spec, emit, signal) => {
+        await emit(start);
+        await untilAborted(signal, 1000);
+      });
+      const result = await runRoleSession(request({ promptRoot: PROMPT_ROOT }), t.deps);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.reason).toMatch(/tools a role job may not hold: (write|bash)|not the studio key/);
+    }
+  });
+
+  it('names a credit or tier-cap refusal, from an API error event or from the adapter pausing', async () => {
+    const credit = managed(async (_spec, emit, signal) => {
+      await emit(managedStart());
+      await emit({ type: 'error', message: 'session error: {"type":"billing_error","message":"Your credit balance is too low to access the Anthropic API."}' });
+      await untilAborted(signal, 1000);
+    });
+    expect(await runRoleSession(request({ promptRoot: PROMPT_ROOT }), credit.deps)).toMatchObject({ ok: false, refusal: 'credit' });
+    const tier = managed(async () => {
+      throw new SessionPaused('usage_tier_cap', 'the Managed Agents session could not be created: enforced_spend_limit_reached');
+    });
+    expect(await runRoleSession(request({ promptRoot: PROMPT_ROOT }), tier.deps)).toMatchObject({ ok: false, refusal: 'tier_cap' });
+    const other = managed(async () => {
+      throw new SessionPaused('stream_lost', 'the event stream dropped');
+    });
+    const lost = await runRoleSession(request({ promptRoot: PROMPT_ROOT }), other.deps);
+    expect(lost).toMatchObject({ ok: false, reason: 'the event stream dropped' });
+    expect(lost).not.toHaveProperty('refusal');
   });
 });
