@@ -247,7 +247,8 @@ test.describe('every route', () => {
     await page.setViewportSize({ width: 375, height: 812 });
     for (const path of ROUTES) {
       await settle(page, path);
-      await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+      // Through the CSSOM: the enforced style-src refuses an injected <style> tag.
+      await page.evaluate(() => document.documentElement.style.setProperty('font-size', '200%', 'important'));
       expect(await overflowsHorizontally(page), path).toBe(false);
     }
   });
