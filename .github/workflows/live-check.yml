@@ -61,7 +61,7 @@ jobs:
           done
           echo "Netlify did not deploy $GITHUB_SHA within 20 minutes"; exit 1
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile --ignore-scripts
