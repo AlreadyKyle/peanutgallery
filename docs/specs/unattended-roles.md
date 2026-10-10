@@ -32,8 +32,8 @@ Common to every part: no dispatcher path reads a board session. Each model call 
 ### PR4: the card supply refills itself, and ranking is a rule
 
 - While `card_supply()` is short of the floor, the dispatcher (or a pg_cron schedule) queues one `draft_card` run with origin `schedule`, never two at once.
-- Its target is the next seed-1 backlog card: a board goal card at stage proposed on next or later with `board_work` false and no drafter, next before later, then by rank, then by age. With none, the run is skipped with reason `no_backlog_card` and the board is told once by ntfy.
-- The Game Designer fills that card's intent, acceptance test (`check:` lines), executor, lane and one estimate, which is also its funding target; the dispatcher's checks and the Game Director's grading in a separate session run as today, at most three rounds. Approved writes the fields through the draft path, sets the drafter and records a draft approval on that card; `deal_due_cards` deals it to now after the cooling window and the waterfall funds it. Flagged, or a third round without approval, leaves the backlog card as it was.
+- Its target is the card the dispatcher opens first, so every row of the draft names a card: the next seed-1 backlog card (a board goal card at stage proposed on next or later with `board_work` false and no drafter, next before later, then by rank, then by age), or with none a new seed-1 card at stage proposed on next, private until approved, with the Game Designer as drafter.
+- The Game Designer fills that card's intent, acceptance test (`check:` lines), executor, lane and one estimate, which is also its funding target; the dispatcher's checks and the Game Director's grading in a separate session run as today, at most three rounds. Approved writes the fields through the draft path, sets the drafter and records a draft approval on that card; `deal_due_cards` deals it to now after the cooling window and the waterfall funds it. Flagged, or a third round without approval, leaves a backlog card as it was and rejects a new card with `failing_check` `draft_withdrawn`, its spend kept on the ledger.
 - Both sessions bill their rows to that card's id.
 - `file-backlog` leaves a card that has a drafter alone, so a later run never overwrites a drafted card's fields.
 - Ranking is the backlog's rank, then age. The `studio_ranking` job is retired: no schedule, no board button; its handler is removed and its `jobs` row disabled.
@@ -60,7 +60,7 @@ PR3
 
 PR4
 - [ ] With the supply short, a `draft_card` run with origin `schedule` is queued with no board action, and never two at once.
-- [ ] The run drafts the next seed-1 backlog card by horizon, rank and age, skipping board work and drafted cards.
+- [ ] The run drafts the next seed-1 backlog card by horizon, rank and age, skipping board work and drafted cards, and with none opens a new private seed-1 card; a withdrawn draft rejects a new card and leaves a backlog card as it was.
 - [ ] An approved draft fills that card's fields, records a draft approval on it, and `deal_due_cards` deals it.
 - [ ] Both sessions' ledger rows are studio-billed with that card's id.
 - [ ] No pg_cron job, board control or handler starts `studio_ranking`.
@@ -77,7 +77,7 @@ PR5
 - The e2e specs the change touches, before the gate, on their own `E2E_PORT`.
 - Live, PR2: a visual card gets a Director verdict with no board member signed in; its ledger rows quoted.
 - Live, PR3: card 802b9b7a returns from paused to funded with an `auto_resume` event; the event row quoted.
-- Live, PR4: a scheduled `draft_card` drafts a seed-1 backlog card that is dealt and funded with no board action; the job run, the approval and the allocation quoted.
+- Live, PR4: a scheduled `draft_card` drafts a seed-1 card that is dealt and funded with no board action; the job run, the approval and the allocation quoted.
 - PR5: `git grep boardSessionActive platform/dispatcher/src` prints nothing.
 - After each merge: `node platform/site/scripts/live-check.mjs`, its first line `PASS ... failed=0`.
 
@@ -88,5 +88,5 @@ Added as each pull request merges.
 ## Decisions
 
 - 2026-10-10: every model call is work on a card and is billed to that card, so role work needs no overhead budget and the money rules are unchanged (PLAN.md §10 decision 66).
-- 2026-10-10: the refill skips backlog cards marked board work, because the dispatcher refuses a draft that touches a kernel path; drafting one would spend money on a certain refusal.
+- 2026-10-10: the refill skips backlog cards marked board work, because the dispatcher refuses a draft that touches a kernel path; drafting one would spend money on a certain refusal. With no eligible backlog card the dispatcher opens a new seed-1 card first, so the draft has a card to bill and the supply never waits on the backlog (today both seed-1 backlog entries are board work).
 - 2026-10-10: the replay eval is advisory, because it can run only on the founder's login and the studio must not wait on it.

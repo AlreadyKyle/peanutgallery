@@ -35,7 +35,7 @@ Funded cards build on their own (`docs/PLAN.md` §10 decision 65): the dispatche
 GitHub Actions and spends the studio key's Console balance. Keep that balance topped up in the studio
 organisation; recording a purchase at /board is optional.
 
-Closed by `docs/PLAN.md` §10 decision 66: **41** (the card supply refills itself from the seed-1 backlog,
+Closed by `docs/PLAN.md` §10 decision 66: **41** (the card supply refills itself,
 `docs/specs/unattended-roles.md`) and **39** (the dispatcher runs unattended on GitHub Actions since 6
 October 2026).
 
@@ -125,10 +125,9 @@ Then a 24-hour soak on GitHub Actions; your Mac can sleep.
 ### Step 41: Draft to the floor: CLOSED 10 October 2026
 
 Closed by `docs/PLAN.md` §10 decision 66: the card supply refills itself. While it is short, a scheduled
-`draft_card` drafts the next seed-1 backlog card, unattended and billed to that card
-(`docs/specs/unattended-roles.md`); there is no button and nothing for you to do. One thing to know: the
-refill skips backlog cards marked board work, and today both seed-1 entries in `docs/BACKLOG.md` are
-marked `board: yes`, so it has nothing to draft until a seed-1 game entry marked `board: no` is added.
+`draft_card` drafts the next seed-1 backlog card that is not board work or, with none, a new seed-1
+card, unattended and billed to that card (`docs/specs/unattended-roles.md`); there is no button and
+nothing for you to do.
 The old steps are kept as history. More detail: `docs/specs/launch-card-floor.md`. Your call on 1 October 2026: this is not a blocker. The
 six open cards can be funded as they are. The session adds one big card ($5 or more), because the floor
 wants one; the spec says to run it before the first stranger is invited, so until you do, the six are all
@@ -1016,7 +1015,7 @@ decision 66). If you do none of them, the studio pauses or stays as it is. Nothi
   money on; it is hidden and takes no money until then. Money it already spent stays on its bar, and a card
   that has shipped is left to the sweep.
 - ~~**A card supply short of its floor.**~~ No longer a duty (`docs/PLAN.md` §10 decision 66): the
-  supply refills itself from the seed-1 backlog (`docs/specs/unattended-roles.md`). The floor's
+  supply refills itself (`docs/specs/unattended-roles.md`). The floor's
   defaults change by a board pull request.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
   GitHub notifies you of every open pull request that is not from a `card/` branch: the dispatcher
