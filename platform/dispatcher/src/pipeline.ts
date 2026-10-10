@@ -987,7 +987,27 @@ async function waitForGatePass(card: Card, role: Role, commit: CommitInfo, deps:
   if (infra) throw new InfraStop(infra.check, infra.detail, false);
   const detail = `gate concluded ${gate.state === 'fail' ? gate.conclusion : gate.state}`;
   await deps.db.insertEvent(card.id, role.id, 'gate_fail', { sha: commit.sha, pr: commit.prNumber, detail });
+  if (await gateMayRetry(card, deps)) {
+    await deps.db.insertEvent(card.id, role.id, 'message', { step: 'gate_retry', sha: commit.sha, pr: commit.prNumber, detail });
+    throw new Requeue(
+      ['gated'],
+      'gate_retry',
+      `the gate on ${commit.sha.slice(0, 8)} ${detail}. A gate check can fail once on a flake, so the card goes back to funded once and its stored patch is gated again on a new commit, with no new session; a second failure rejects it`,
+      false,
+    );
+  }
   throw new CardStop('rejected', 'gate', detail);
+}
+
+// A card's own gate failure rejects it, except once: with a stored patch to gate again (no new
+// session, nothing spent but Actions minutes) and no earlier retry, it goes back to funded and the next
+// claim pushes the same change as a new commit, which starts a fresh gate run. The dispatcher's token
+// cannot re-run a workflow (Actions read only, PLAN.md §10 decision 30), so a new commit is the retry.
+async function gateMayRetry(card: Card, deps: PipelineDeps): Promise<boolean> {
+  if (!deps.patches) return false;
+  const stored = await deps.patches.latest(card.id).catch(() => null);
+  if (!stored) return false;
+  return (await deps.db.findEvent(card.id, 'gate_retry')) === null;
 }
 
 // Why a gate that did not pass is not the card's failure, or null when it is. A completed failure is
