@@ -1,7 +1,7 @@
 // A role job's typed answer (src/typed-output.ts, docs/specs/agent-workflows.md): exactly one object
 // valid against the job's schema, or the session fails.
 import { describe, expect, it } from 'vitest';
-import { SCHEMA_NAMES, TypedOutput, unwrapAnswer } from '../src/typed-output.js';
+import { clipNote, SCHEMA_NAMES, TypedOutput, unwrapAnswer, VERDICT_NOTE_MAX } from '../src/typed-output.js';
 
 const typed = new TypedOutput();
 
@@ -36,6 +36,28 @@ describe('TypedOutput', () => {
       expect(parsed.ok, String(text)).toBe(false);
     }
     expect(unwrapAnswer('```json\n{}\n```\n```json\n{}\n```')).toContain('```');
+  });
+
+  it("clips a draft verdict's note over 600 characters to at most 600, ending in an ellipsis, and refuses any other violation as before", () => {
+    const long = 'Say which unit the cost is in and name the config row. '.repeat(17).slice(0, 900);
+    const parsed = typed.parse<{ note: string }>('draft-verdict', JSON.stringify({ result: 'revise', reason_codes: ['unclear_text'], note: long }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(Array.from(parsed.value.note).length).toBeLessThanOrEqual(VERDICT_NOTE_MAX);
+      expect(parsed.value.note.endsWith('…')).toBe(true);
+      expect(long.startsWith(parsed.value.note.slice(0, -1))).toBe(true);
+      expect(parsed.value.note).not.toMatch(/\s…$/);
+    }
+    // At exactly the limit the note is kept whole; a word with no space is cut mid-word.
+    expect(clipNote('x'.repeat(600))).toBe('x'.repeat(600));
+    expect(clipNote('x'.repeat(900))).toBe(`${'x'.repeat(599)}…`);
+    expect(Array.from(clipNote('😀'.repeat(900))).length).toBe(600);
+    // A long note does not mend anything else, and only the draft verdict's note is clipped.
+    const other = typed.parse('draft-verdict', JSON.stringify({ result: 'approved', reason_codes: ['unclear_text'], note: long }));
+    expect(other.ok).toBe(false);
+    if (!other.ok) expect(other.error).toContain('draft-verdict.schema.json');
+    expect(typed.parse('draft-verdict', JSON.stringify({ result: 'revise', reason_codes: ['unclear_text'], note: 7 })).ok).toBe(false);
+    expect(typed.parse('card-draft', JSON.stringify({ ...DRAFT, summary: 'x'.repeat(900) })).ok).toBe(false);
   });
 
   it('refuses an object the schema does not allow, naming the schema', () => {

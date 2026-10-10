@@ -92,11 +92,12 @@ const FACE_CARDS: Record<Face, Card> = {
   live: sampleCard('sample-live', { ...c.live, stage: 'live', shape: 'oneoff', funding_target_usd: 0, spent_usd: 0.24, live_at: iso(90) }),
   paused: sampleCard('sample-paused', { ...c.paused, funded_usd: 0.75 }),
   rejected: sampleCard('sample-rejected', { ...c.rejected, folder: 'platform', bucket: 'studio', shape: 'oneoff', funding_target_usd: 0 }),
+  planned: sampleCard('sample-planned', { ...c.planned, horizon: 'next', funding_target_usd: 0 }),
 };
 
 /** The faces in two groups by anatomy, so a row never mixes a card that takes money with one that does not. */
 const MONEY_FACES: readonly Face[] = ['open', 'picked', 'funded', 'paused'];
-const WORK_FACES: readonly Face[] = ['building', 'checks', 'live', 'rejected'];
+const WORK_FACES: readonly Face[] = ['planned', 'building', 'checks', 'live', 'rejected'];
 
 function sampleSnapshot(cards: Card[], contributors: Record<string, number>): Snapshot {
   return {
@@ -397,7 +398,7 @@ function FaceGroup({ id, heading, faces }: { id: string; heading: string; faces:
             card={FACE_CARDS[face]}
             snapshot={FACE_SNAPSHOT}
             mode="sample"
-            face={face === 'paused' || face === 'rejected' ? face : undefined}
+            face={face === 'paused' || face === 'rejected' || face === 'planned' ? face : undefined}
             stamp={face === 'live'}
             reason={face === 'rejected' ? c.reason : undefined}
           />

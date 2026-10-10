@@ -57,6 +57,12 @@ export type CardGroups = {
   queued: Card[];
   /** Live, newest first. Never fundable, so never in fund. */
   shipped: Card[];
+  /**
+   * Next up (home's first lane, docs/specs/home-flow.md): the roadmap's cards not held by the board,
+   * an approved agent card waiting to open first, then cards for players or the studio, then board
+   * work; each in roadmap order, next before later.
+   */
+  next: Card[];
 };
 
 /**
@@ -76,7 +82,36 @@ export function groupCards(cards: readonly Card[], place: (card: Card) => number
       .sort((a, b) => (place(a) ?? 0) - (place(b) ?? 0) || plannedOrder(a, b)),
     queued: runnable.filter((card) => card.stage === QUEUED_STAGE),
     shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
+    next: nextUp(cards),
   };
+}
+
+/** How soon a planned card is next up: an approved agent card waiting to open, a card that funds, then board work. */
+function nextRank(card: Card): number {
+  if (card.opens_at) return 0;
+  return card.board_work === true ? 2 : 1;
+}
+
+/** Home's Next up lane: the roadmap's cards, held cards left out, in the order they come up. */
+export function nextUp(cards: readonly Card[]): Card[] {
+  const planned = plannedCards(cards);
+  const order = [...planned.next, ...planned.later].filter((card) => card.board_vetoed !== true);
+  // A stable sort keeps the roadmap's order (next before later, rank, age) within each kind.
+  return order.map((card, index) => ({ card, index })).sort((a, b) => nextRank(a.card) - nextRank(b.card) || a.index - b.index).map(({ card }) => card);
+}
+
+/**
+ * Home's flow (docs/specs/home-flow.md): four lanes in the order a card moves through them. Building
+ * holds the cards being built or checked, then the funded cards waiting for the agents.
+ */
+export const FLOW_LANES = ['next', 'fund', 'building', 'shipped'] as const;
+export type FlowLane = (typeof FLOW_LANES)[number];
+
+/** Each lane shows at most this many cards; the rest are a link away. */
+export const FLOW_LANE_CARDS = 3;
+
+export function flowLanes(groups: CardGroups): Record<FlowLane, Card[]> {
+  return { next: groups.next, fund: groups.fund, building: [...groups.now, ...groups.queued], shipped: groups.shipped };
 }
 
 /** Roadmap order: ranked cards first, lowest rank first, then the oldest. */
@@ -103,12 +138,13 @@ export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Car
 }
 
 /**
- * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage.
+ * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage;
+ * planned is drawn only in home's Next up lane, which passes it (a roadmap card takes no money).
  * Paused and rejected faces are drawn only on the design guide; /ledger lists stopped cards as rows
  * (Stopped.tsx), never as faces (docs/specs/money-surfaces.md).
  */
-export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected';
-export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected'];
+export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected' | 'planned';
+export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected', 'planned'];
 
 export function faceOf(card: Card): Face {
   if (card.stage === 'building') return 'building';

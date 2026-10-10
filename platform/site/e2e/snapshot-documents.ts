@@ -137,6 +137,7 @@ export function toDocuments(studio: StudioFixture, builtAt = '2026-09-22T12:00:0
       paused: studio.paused,
       platform_lane_open: false,
       pause_reason: studio.paused ? (studio.pauseReason ?? null) : null,
+      ...(studio.supply === undefined ? {} : { supply: studio.supply }),
     },
     totals: studio.totals,
     money: studio.money,

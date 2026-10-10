@@ -203,6 +203,23 @@ export type Role = {
 export const ENRICHMENTS = ['funding', 'spend', 'studio', 'totals', 'events', 'deploys', 'roles', 'money', 'stopped', 'cardTitles'] as const;
 export type Enrichment = (typeof ENRICHMENTS)[number];
 
+/**
+ * Whether the agents are drafting a card, from public_supply (docs/specs/home-flow.md): fixed codes
+ * and counts, never card text. Home's Next up lane says when the Game Designer is drafting.
+ */
+export type Supply = {
+  /** A draft run is queued or running now. */
+  drafting: boolean;
+  /** Fewer cards are open than the floor asks for. */
+  short: boolean;
+  /** Why no draft may be queued now (daily_limit, not_short, ...), or null when one may. */
+  reason: string | null;
+  runs_today: number;
+  run_limit: number;
+  /** The next time the supply is checked (an ISO time). */
+  next_check_at: string | null;
+};
+
 export type Snapshot = {
   pool: Pool | null;
   cards: Card[];
@@ -237,6 +254,11 @@ export type Snapshot = {
    * without it (a sample or a test) leaves it out, and /team then shows no cost or ships.
    */
   roleStats?: Record<string, RoleStats>;
+  /**
+   * Whether the agents are drafting, from the studio row's supply; absent before the database
+   * carries it, and in a sample or a test, which reads as not drafting.
+   */
+  supply?: Supply | null;
   /** The enrichments that failed to load, in ENRICHMENTS order. */
   missing: Enrichment[];
 };
@@ -477,6 +499,22 @@ function totalsFrom(row: Doc): LedgerTotals {
   };
 }
 
+/** The studio row's supply, or null when it is missing or malformed: it never rejects a load. */
+export function supplyFrom(value: unknown): Supply | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const doc = value as Record<string, unknown>;
+  const count = (key: string) => (typeof doc[key] === 'number' && Number.isFinite(doc[key]) ? (doc[key] as number) : 0);
+  const textOr = (key: string) => (typeof doc[key] === 'string' && doc[key] !== '' ? (doc[key] as string) : null);
+  return {
+    drafting: doc.drafting === true,
+    short: doc.short === true,
+    reason: textOr('reason'),
+    runs_today: count('runs_today'),
+    run_limit: count('run_limit'),
+    next_check_at: textOr('next_check_at'),
+  };
+}
+
 /** The Snapshot the pages read, from the two documents. Throws on a missing key, a wrong type or a malformed figure. */
 export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
   const live = checked('/api/live', liveDoc, REQUIRED_KEYS.live);
@@ -550,6 +588,7 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
     money: books,
     stopped,
     roleStats: roleStatsFrom(live.role_stats),
+    supply: supplyFrom(studio.supply),
     missing: ENRICHMENTS.filter((name) => missing.has(name)),
   };
 }

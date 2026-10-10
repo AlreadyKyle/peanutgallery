@@ -58,28 +58,41 @@ export type CardFaceProps = {
    * visible face's links point at stays unique.
    */
   ghost?: boolean;
+  /**
+   * Home's flow (docs/specs/home-flow.md): the index, the title and the bottom block, no summary; a
+   * live face says how it was built instead of Play.
+   */
+  compact?: boolean;
 };
+
+/** A Next up card's line: approved and opening soon, board work, or planned. */
+export function plannedLine(card: Card): string {
+  if (card.opens_at && card.horizon !== 'now') return copy.roadmap.opensSoon;
+  return card.board_work === true ? copy.flow.boardWork : copy.flow.planned;
+}
 
 /**
  * One card, in the face its stage gives. In example mode (/how-it-works) it renders no link, button
  * or disclosure at all, whatever the Payment Link says, so an illustration can never take a payment.
  */
-export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false }: CardFaceProps) {
+export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, reason, changed = [], focusable = false, watch = true, ghost = false, compact = false }: CardFaceProps) {
   const env = siteEnv();
   const shown = face ?? faceOf(card);
   const titleId = `${mode}-title-${card.id}`;
   const playable = shown === 'live' && card.folder === 'seed-1' && env.playUrl !== '';
   const byline = writtenBy(card, snapshot);
-  const summary = blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>;
+  const Title = compact ? 'h4' : 'h3';
+  const summary = compact || blank(card.summary) ? null : <p className="card-summary">{card.summary}</p>;
   return (
-    <li className="card" data-face={shown} data-card={card.id}>
+    <li className="card" data-face={shown} data-card={card.id} data-compact={compact ? 'true' : undefined}>
       <p className="card-index">
         <SuitTag suit={categoryOf(card)} />
         <StateTag face={shown} stamp={stamp && shown === 'live'} />
       </p>
-      <h3 id={ghost ? undefined : titleId} tabIndex={focusable ? -1 : undefined}>
+      {/* In home's flow a card sits under its lane's h3, so its title is an h4. */}
+      <Title id={ghost ? undefined : titleId} tabIndex={focusable ? -1 : undefined}>
         {card.title}
-      </h3>
+      </Title>
       {/* The byline shares the summary's block, so a card keeps its four parts and a card no agent
           wrote is laid out exactly as before (styles.css, the card subgrid). */}
       {byline === null ? (
@@ -91,7 +104,20 @@ export function CardFace({ card, snapshot, mode = 'live', face, stamp = false, r
         </div>
       )}
       <div className="card-bottom">
-        {shown === 'rejected' ? (
+        {shown === 'planned' ? (
+          <p className="card-meta">{plannedLine(card)}</p>
+        ) : shown === 'live' && compact ? (
+          <>
+            <p className="card-meta">{shippedCaption(card, snapshot, sourceLabel(card.source))}</p>
+            {mode === 'live' ? (
+              <p className="card-watch">
+                <Link to={`/card/${card.id}`} aria-describedby={titleId}>
+                  {copy.cardPage.watchWasBuilt}
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : shown === 'rejected' ? (
           <>
             {reason === undefined ? null : <p className="card-meta">{reason}</p>}
             {/* A real card's own page says where its money went, card by card, below the face. */}

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { BuildingNow, FundBoard, PlannedNext, QueuedList, ShippedList } from '../components/Cards';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
+import { MachineFlow } from '../components/Flow';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { Announcer } from '../components/Announcer';
@@ -9,7 +9,6 @@ import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
 import { MoreLink } from '../components/MoreLink';
 import { TeamStrip } from '../components/TeamStrip';
-import { plannedCards } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
@@ -18,15 +17,12 @@ import { teamStrip } from '../lib/roster';
 import type { Snapshot } from '../lib/source';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
-// Home, in the board's order (DESIGN.md, Home), on bands: what the studio is and its state (the
-// signal plate); what is building, what to fund and what is queued, the only band with cards
-// (paper); the team (ink); what shipped and what is planned next (paper); where the money goes
-// (ink). A band with nothing to show is not drawn, and the bands after it take their colour from
-// their new place.
+// Home, in the board's order (DESIGN.md, Home; docs/specs/home-flow.md), on bands: what the studio
+// is and its state (the signal plate); how the cards move, the four lanes from Next up to Shipped,
+// the only band with cards (paper); the team (ink); where the money goes. A band with nothing to show
+// is not drawn, and the bands after it take their colour from their new place.
 
-/** Home shows the latest three shipped cards, the next three planned and the five latest agent actions. */
-export const HOME_SHIPPED = 3;
-export const HOME_PLANNED = 3;
+/** Home shows the five latest agent actions. */
 export const HOME_ACTIONS = 5;
 
 /** "6 cards are open for funding.", with the figure at 600. */
@@ -56,7 +52,13 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   return (
     <p className="status-line">
       <span>
-        {fund.length === 0 ? copy.status.openNone : <Count n={fund.length} words={copy.status.open} />}
+        {fund.length > 0 ? (
+          <Count n={fund.length} words={copy.status.open} />
+        ) : view.snapshot.supply?.drafting === true ? (
+          copy.status.drafting
+        ) : (
+          copy.status.openNone
+        )}
         {now.length === 0 ? null : (
           <>
             {' '}
@@ -98,14 +100,15 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
   );
 }
 
-function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
+/** How the cards move: the four lanes, or the loading or unavailable line while there is no snapshot. */
+function FlowSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const view = live.view;
   return (
-    <section className="section" aria-labelledby="fund">
-      <h2 id="fund">{copy.fund}</h2>
-      <p>{copy.fundIntro}</p>
+    <section className="section flow" aria-labelledby="flow">
+      <h2 id="flow">{copy.flow.title}</h2>
+      <p>{copy.flow.intro}</p>
       {view !== null ? (
-        <FundBoard snapshot={view.snapshot} cards={view.groups.fund} changed={live.changed} />
+        <MachineFlow snapshot={view.snapshot} groups={view.groups} changed={live.changed} />
       ) : studio.state === 'loading' ? (
         <p className="muted" aria-busy="true">
           {copy.loadingCards}
@@ -131,21 +134,6 @@ function TeamSection({ view }: { view: HomeView }) {
           <MoreLink to="/team">{copy.team.meetAll}</MoreLink>
         </p>
       </section>
-    </div>
-  );
-}
-
-function RoadmapSection({ view }: { view: HomeView }) {
-  const shipped = view.groups.shipped.slice(0, HOME_SHIPPED);
-  const planned = plannedCards(view.snapshot.cards);
-  const next = [...planned.next, ...planned.later].slice(0, HOME_PLANNED);
-  if (shipped.length === 0 && next.length === 0) return null;
-  return (
-    <div className="band">
-      <div className="pair">
-        <ShippedList cards={shipped} snapshot={view.snapshot} />
-        <PlannedNext cards={next} />
-      </div>
     </div>
   );
 }
@@ -195,12 +183,9 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
-        {view === null ? null : <BuildingNow cards={view.groups.now} snapshot={view.snapshot} />}
-        <FundSection studio={studio} live={live} />
-        {view === null ? null : <QueuedList cards={view.groups.queued} />}
+        <FlowSection studio={studio} live={live} />
       </div>
       {view === null ? null : <TeamSection view={view} />}
-      {view === null ? null : <RoadmapSection view={view} />}
       <div className="band">
         <MoneySection studio={studio} view={view} />
       </div>

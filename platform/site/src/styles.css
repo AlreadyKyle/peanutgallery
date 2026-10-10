@@ -801,8 +801,14 @@ button.link:hover:not(:disabled) {
   transform: rotate(-3deg);
 }
 
-.card h3 {
+.card h3,
+.card h4 {
   margin-bottom: var(--space-2);
+}
+
+/* Home's flow: a compact card's title keeps the card title's size under its lane's h3. */
+.card h4 {
+  font-size: var(--size-body);
 }
 
 .card-summary {
@@ -1983,6 +1989,184 @@ input[type='radio'] {
 /* The guide's Do and Don't lists are one section's two halves, so they stack closer. */
 .rules-pair {
   row-gap: var(--space-4);
+}
+
+/* Home's flow (docs/specs/home-flow.md): one section, four lanes in the order a card moves through
+   them. On a phone and a tablet the lanes stack, joined by a vertical rail through their numbered
+   steps; from 64rem they sit in four equal columns and the rail runs across the steps. Each lane
+   holds at most three compact cards, or a dashed tile saying what happens next, so no lane is ever
+   blank. Ink and paper only, on the paper band. */
+.flow-lanes {
+  display: grid;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-lane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: 2.75rem;
+}
+
+/* The step: a numbered ring on the rail. */
+.flow-step {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+}
+
+.flow-step-number {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rail: from a step's ring to the next lane's. */
+.flow-lane:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 2rem;
+  bottom: calc(-1 * var(--space-4));
+  left: calc(1rem - 1px);
+  width: 2px;
+  background: var(--ink);
+}
+
+.flow-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+  min-height: 2rem;
+  margin-bottom: var(--space-1);
+}
+
+.flow-count {
+  color: var(--text-muted);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-who {
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+/* The Game Designer's state, a glyph beside its words; while it drafts, the line is ink and strong. */
+.flow-agent {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.flow-agent > .glyph {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.flow-agent[data-drafting] {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+}
+
+.flow-cards {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card[data-compact] {
+  padding: var(--space-2);
+}
+
+.card[data-compact] .card-index {
+  margin-bottom: var(--space-1);
+}
+
+.card[data-compact] h4 {
+  margin-bottom: var(--space-1);
+}
+
+.card[data-compact] .card-watch {
+  margin: var(--space-1) 0 0;
+}
+
+/* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
+.flow-empty {
+  padding: var(--space-2);
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.flow-empty-title {
+  font-weight: var(--weight-bold);
+}
+
+.flow-empty .button {
+  margin-top: var(--space-2);
+}
+
+.flow-lane > .more {
+  margin: var(--space-2) 0 0;
+}
+
+.flow-lane .fund-agreement {
+  margin: var(--space-2) 0 0;
+}
+
+@media (min-width: 64rem) {
+  /* The lanes share five rows (CSS subgrid): the step, the heading, who acts, the cards and the more
+     link, so every lane's first card starts on one line and the links line up under the longest. */
+  .flow-lanes {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(3, auto) 1fr auto;
+    gap: 0 var(--space-3);
+  }
+
+  .flow-lane {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-items: start;
+    padding-left: 0;
+  }
+
+  .flow-step {
+    position: static;
+    margin-bottom: var(--space-2);
+  }
+
+  /* The rail runs across from this step's ring to the next lane's. */
+  .flow-lane:not(:last-child)::before {
+    top: calc(1rem - 1px);
+    bottom: auto;
+    left: 2rem;
+    right: calc(-1 * var(--space-3));
+    width: auto;
+    height: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .flow-lane:not(:last-child)::before {
+    background: CanvasText;
+  }
 }
 
 /* Wider screens ------------------------------------------------------------ */
