@@ -41,7 +41,10 @@ export const ROLE_JOB_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash'
 const NEVER_TOOLS = ['Write', 'Edit', 'NotebookEdit', 'MultiEdit', 'write', 'edit'];
 
 export interface RoleSessionDeps {
-  db: Pick<Db, 'recordUsage' | 'roleState'>;
+  db: Pick<Db, 'recordUsage' | 'roleState' | 'getStudioState'>;
+  // True stops the session when the studio is paused (the board's pause, an incident or a money
+  // pause), as a card session stops: a Director's review billed to the card.
+  stopWhenStudioPaused?: boolean;
   // The managed adapter, or the attended adapter where allowAttended says so.
   adapter: AgentAdapter;
   // True lets the session run on the attended adapter (claude -p, billed to the founder). Without it
@@ -175,6 +178,7 @@ export async function runRoleSession<T>(request: RoleSessionRequest, deps: RoleS
     void (async () => {
       try {
         if ((await deps.db.roleState(role.id)).paused) abort('role_paused');
+        else if (deps.stopWhenStudioPaused && (await deps.db.getStudioState()).paused) abort('studio_paused');
       } catch (error) {
         deps.log.warn('role-session', 'watch failed', { run: request.runId, error: errorMessage(error) });
       }

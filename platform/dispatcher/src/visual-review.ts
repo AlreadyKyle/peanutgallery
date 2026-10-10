@@ -23,6 +23,7 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { UPLOADS_DIR } from './adapters/managed.js';
 import type { CardFolder, RoleSessionFile } from './adapters/types.js';
+import { VISUAL_REVIEW_MIN_USD } from './config.js';
 import type { SpendRefusal } from './credit.js';
 import type { Card, Db, Role } from './db.js';
 import { framePair, type Frames } from './frames.js';
@@ -160,7 +161,7 @@ export function reviewPrompt(input: ReviewPromptInput, typed: TypedOutput): stri
 }
 
 export interface VisualReviewDeps {
-  db: Pick<Db, 'listActiveRoles' | 'recordUsage' | 'roleState'>;
+  db: Pick<Db, 'getStudioState' | 'listActiveRoles' | 'recordUsage' | 'roleState'>;
   // The role session's limits, adapter and schemas (role-session.ts); its db is the one above.
   session: Omit<RoleSessionDeps, 'db' | 'scripts'>;
   // rubrics/visual.md from this process's checkout.
@@ -235,9 +236,15 @@ export async function runVisualReview(input: ReviewInput, deps: VisualReviewDeps
   const batches = reviewBatches(input.frames.changed);
   const verdicts: VisualVerdict[] = [];
   const refs: string[] = [];
+  // Every batch gets its share before any is paid for: a budget too small for all of them fails here,
+  // before a cent is spent, never after earlier batches were paid for and their verdicts discarded.
+  if (input.budgetUsd / batches.length < VISUAL_REVIEW_MIN_USD) {
+    return { kind: 'failed', reason: `the review's budget of ${input.budgetUsd} USD is under ${VISUAL_REVIEW_MIN_USD} USD for each of its ${batches.length} batches` };
+  }
   let spentBefore = 0;
   for (const [index, batch] of batches.entries()) {
-    const left = Math.round((input.budgetUsd - spentBefore) * 10_000) / 10_000;
+    // This batch's share of what is left, so an earlier batch's unspent share rolls forward.
+    const left = Math.round(((input.budgetUsd - spentBefore) / (batches.length - index)) * 10_000) / 10_000;
     if (!(left > 0)) return { kind: 'failed', reason: `the review's budget of ${input.budgetUsd} USD was spent before batch ${index + 1} of ${batches.length}` };
     const { shown, files } = await batchFrames(input.frames.dir, batch, managed);
     const base = spentBefore;

@@ -98,6 +98,7 @@ async function main(): Promise<void> {
       session: {
         adapter,
         allowAttended: adapter.mode === 'attended',
+        stopWhenStudioPaused: true,
         typed,
         priceTable: config.priceTable,
         resolveModel,

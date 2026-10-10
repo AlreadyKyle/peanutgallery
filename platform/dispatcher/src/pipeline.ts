@@ -757,7 +757,10 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
       if (outcome.kind === 'stopped') throw new CardStop('paused', 'dispatcher_stopped', 'dispatcher stopped during the visual review');
       if (outcome.kind === 'failed') {
         if (outcome.refusal) await stopForSpendRefusal(card, outcome.refusal, outcome.reason, deps);
-        throw new InfraStop('visual_review', outcome.reason, false);
+        if ((await deps.db.getStudioState()).paused) throw new CardStop('paused', 'paused_by_board', `the studio was paused during the visual review: ${outcome.reason}`);
+        // A paid review that failed pauses the card: requeued, it would re-gate free and pay for the
+        // review again on every claim. Resume by rule retries it a bounded number of times.
+        throw new CardStop('paused', 'visual_review', outcome.reason);
       }
       const { verdict, director } = outcome;
       const decision = decideReview(verdict, rounds);
@@ -796,6 +799,7 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
 // funded, so the tick sizes a new budget from the money there is then.
 async function reviewBudget(card: Card, deps: PipelineDeps): Promise<number> {
   const [studio, fresh] = await Promise.all([deps.db.getStudioState(), deps.db.getCard(card.id)]);
+  if (studio.paused) throw new CardStop('paused', 'paused_by_board', 'the studio is paused, so the visual review did not start');
   const actual = fresh?.actual_usd ?? card.actual_usd;
   const ceiling = ceilingUsd((fresh ?? card).estimate_usd, studio.card_max_usd);
   const ceilingLeft = round4(ceiling - actual);

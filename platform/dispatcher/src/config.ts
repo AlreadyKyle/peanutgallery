@@ -99,8 +99,10 @@ export function numberEnv(env: Env, name: string, fallback: number): number {
   return value;
 }
 
-// Below this a visual review does not start: the card pauses at its ceiling or goes back to funded.
-export const VISUAL_REVIEW_MIN_USD = 0.1;
+// Below this a visual review (or one batch of it) does not start: the card pauses at its ceiling or
+// goes back to funded. It covers one managed session's withheld margin (one large request) with room
+// to work, so a session never starts with less than a cent to spend.
+export const VISUAL_REVIEW_MIN_USD = 0.35;
 
 export function visualReviewMaxUsdEnv(env: Env): number {
   const value = numberEnv(env, 'VISUAL_REVIEW_MAX_USD', 1);
