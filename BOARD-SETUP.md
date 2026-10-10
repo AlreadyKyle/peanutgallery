@@ -493,18 +493,18 @@ For each one:
    Add a line `GITHUB_READ_TOKEN=` followed by it to `.env.vps`. **Set on 23 September 2026.**
    Before the cutover I prove it cannot write: a push with it must answer 403, and the unattended
    startup refuses to run otherwise.
-3. **The Mac's token** (attended runs on your Mac): the same permissions as the host's token, Actions
-   read and Plan read included. **Not needed while the Mac runs attended:** attended mode accepts the
-   gh sign-in token with a warning, and the unattended dispatcher on the Mac host uses the host's own
-   token (5.1), not this one. Optional hardening, whenever you choose:
+3. **The Mac's token** (the hand-run tools on your Mac, such as the replay eval's scratch checkouts):
+   the same permissions as the host's token, Actions read and Plan read included. **Not needed:** the
+   hand-run tools accept the gh sign-in token, and the dispatcher, which runs unattended only on GitHub
+   Actions, uses the host's own token (5.1), not this one. Optional hardening, whenever you choose:
 
    https://github.com/settings/personal-access-tokens/new?name=peanutgallery-mac&description=Mob+Machine+Mac+dispatcher&target_name=AlreadyKyle&expires_in=366&contents=write&pull_requests=write&actions=read
 
    In `.env` at the repository root, replace the value of `GITHUB_TOKEN` with it. Today that value
    is the gh command-line tool's own sign-in token (it starts `gho_`), which reaches every
    repository on your account and has no Workflows limit. You can keep the gh sign-in for your own
-   use; it just must not be the value in `.env`. Unattended mode refuses a token that is not
-   fine-grained, and attended mode warns about one.
+   use; it just must not be the value in `.env`. The dispatcher refuses a token that is not
+   fine-grained; the hand-run tools take any.
 
 **Unblocks:** unattended mode and the cutover (5.1 and 5.2, both set). 5.3 unblocks nothing.
 
@@ -535,8 +535,9 @@ prints it.
 2. Put the URLs in `.env` as `DISCORD_WEBHOOK_SHIPS=…` and `DISCORD_WEBHOOK_WEEKLY=…`. The dispatcher
    refuses to start with a value that is not a Discord webhook address, naming the key only.
 3. Turn on AutoMod (Settings → Safety Setup).
-4. Restart the attended dispatcher so it reads them. At the cutover, `make-dispatcher-env.sh` and
-   `install.sh` carry them to the Mac host.
+4. Tell me: I write the dispatcher's env file again with `make-dispatcher-env.sh`, which carries them,
+   and set the `DISPATCHER_ENV` secret from it (`platform/ops/README.md`, The GitHub Actions host);
+   the next run reads them.
 
 A card that went live more than 6 hours before the lane is switched on is never posted, and only the
 newest weekly report is, so switching it on does not flood the channels. A report is posted only
@@ -605,9 +606,10 @@ phone (`docs/PLAN.md` §10 decision 55). Nothing to do.
 
 The agent-upkeep pull request (`docs/specs/agent-upkeep.md`) pins Claude Code at 2.1.283, the
 version the Mac updated itself to, on which the attended sandbox check passed in both layouts on
-26 September 2026. Attended sessions now run only on the pinned version: on any other, a card pauses
-with `cli_version` and a role job fails, and the daily check alerts by ntfy. Until you run
-this, Claude Code keeps updating itself, and each update pauses attended sessions until I run the
+26 September 2026. The dispatcher runs no Claude Code since attended mode left it (`docs/PLAN.md`
+§10 decision 66): only the hand-run tools at the Mac do, the replay eval and the sandbox check, and
+they run only on the pinned version, while the daily check alerts by ntfy on any other. Until you run
+this, Claude Code keeps updating itself, and each update stops the replay eval until I run the
 sandbox check on the new version and move the pin in a pull request you merge.
 
 In Terminal on the Mac:
@@ -622,7 +624,7 @@ anything else in that file, and prints `PASS: claude-code pinned 2.1.283`. If it
 saying another version is installed, send me the line: I check the new version and move the pin
 first.
 
-**Unblocks:** attended builds that stay on a checked version.
+**Unblocks:** a replay eval that stays on a checked version.
 
 **Tell me:** "Claude Code is pinned", with the PASS line.
 
@@ -924,16 +926,16 @@ so they sound like you, put the clip's link in each, and post them in the order 
   card it works on. Nothing waits on you.
 - **Rank now and Draft a game card: retired by `docs/PLAN.md` §10 decision 66.** Ranking is the
   backlog's rank, then age, and drafting runs on its own when the card supply is short, unattended and
-  billed to the card it drafts (`docs/specs/unattended-roles.md`). Until that is built, both still run
-  only while you are signed in at /board, on your Max plan, billed to you.
+  billed to the card it drafts (`docs/specs/unattended-roles.md`). Nothing runs on your Max plan any
+  more, and nothing waits for you to sign in.
 - **The visual review (nothing to do now).** The design-review pull request
   (`docs/specs/design-review.md`) makes the files that set the look yours: the tokens, the Card, the
   glyphs, motion, the route list, the site's public and brand files and the game's favicon change
   only by a pull request you merge, so a new page or screen is yours too. When a card's change draws
   a page or the game differently, its gate draws before and after frames and a Director reviews them
   once its gate is green. Under `docs/PLAN.md` §10 decision 66 the review runs at once, unattended and
-  billed to the card (`docs/specs/unattended-roles.md`); until that is built it runs only while you are
-  signed in at /board, on your Max plan, billed to you, and a visual card waits at gated until you are. The first seed-1 card that changes `seed-1/render/` after launch is the first live
+  billed to the card (`docs/specs/unattended-roles.md`), and the card waits at gated only while it
+  runs. The first seed-1 card that changes `seed-1/render/` after launch is the first live
   review. The gate's `frames` job runs only on GitHub Actions, so it waits on Actions minutes (see
   **GitHub Actions minutes**); the local gate cannot run it.
 - **The copy pass (nothing to do now).** The copy-pass pull request (`docs/specs/copy-pass.md`)
@@ -1042,12 +1044,14 @@ decision 66). If you do none of them, the studio pauses or stays as it is. Nothi
   cards included, merges on the Actions gate again.
 
   **Tell me:** "Actions is back" and which of the three.
-- **Claude Code on the Mac: the pinned version.** Attended sessions need 2.1.280 or newer, because
-  2.1.139 refuses `claude-opus-5-5`, the model every running role uses (`docs/PLAN.md` §10 decision
-  36), and they run only on the version in `platform/ops/mac/claude-code-pin.json` (2.1.283 now).
-  `claude --version` shows yours. Tell me before you update it: I run the attended sandbox check
-  (`pnpm --filter @backseat/dispatcher sandbox:check --positive`) on a new version and move the pin
-  in a pull request you merge, before any card runs on it.
+- **Claude Code on the Mac: the pinned version.** Only the hand-run tools run it now (the replay
+  eval and the sandbox check; the dispatcher has no attended mode, `docs/PLAN.md` §10 decision 66).
+  Their attended sessions need 2.1.280 or newer, because 2.1.139 refuses `claude-opus-5-5`, the model
+  every running role uses (`docs/PLAN.md` §10 decision 36), and they run only on the version in
+  `platform/ops/mac/claude-code-pin.json` (2.1.283 now). `claude --version` shows yours. Tell me
+  before you update it: I run the attended sandbox check (`pnpm --filter @backseat/dispatcher
+  sandbox:check --positive`) on a new version and move the pin in a pull request you merge, before
+  the replay eval runs on it.
 - **HST review at $15k.** When cumulative contributions reach $15,000, review GST/HST
   registration. Registration is required past the $30,000 small-supplier threshold, and Stripe tiers
   with named benefits are sales, so register before tiers ship (`docs/PLAN.md` §5 Canada admin). An
