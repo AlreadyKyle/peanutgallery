@@ -231,7 +231,7 @@ for (const path of ['/', '/roadmap', '/contribute']) {
       const first = document.querySelector('main a.choice-primary');
       const firstAgreement = first?.nextElementSibling ?? null;
       for (const a of document.querySelectorAll(`main a[href^="${link}"]`)) {
-        const grid = a.closest('ul.card-grid');
+        const grid = a.closest('ul.card-grid, ul.fund-grid');
         const underGrid = grid !== null && [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling].some((el) => el?.classList.contains('fund-agreement') === true && hasAgreement(el));
         const inCard = underGrid;
         const onContribute = location.pathname === '/contribute' && hasAgreement(firstAgreement) && firstAgreement?.tagName === 'P';

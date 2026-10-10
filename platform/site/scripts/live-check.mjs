@@ -225,7 +225,7 @@ function linksWithoutAgreement(page) {
     const underFirst = location.pathname === '/contribute' && line?.tagName === 'P' && has(line);
     return [...document.querySelectorAll('main a[href^="https://buy.stripe.com/"]')]
       .filter((a) => {
-        const grid = a.closest('ul.card-grid');
+        const grid = a.closest('ul.card-grid, ul.fund-grid');
         const next = grid === null ? [] : [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling];
         return !underFirst && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
       })

@@ -314,7 +314,7 @@ describe('Landing', () => {
     ]);
     // No filter chips, no old sections, no Right now panel, no How it works steps, no fixed rules.
     expect(screen.queryByRole('group', { name: copy.filterLabel })).toBeNull();
-    for (const old of [copy.now, copy.fund, copy.queued, copy.shipped, copy.plannedNext]) expect(screen.queryByRole('heading', { level: 2, name: old })).toBeNull();
+    for (const old of ['Building now', "Fund what's next", 'Queued', 'Shipped', 'Planned next']) expect(screen.queryByRole('heading', { level: 2, name: old })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(screen.queryByText(legal.fixedRulesIntro)).toBeNull();
     // Each card page link is a Watch link: on the building face and on each shipped face (supporter-pages).

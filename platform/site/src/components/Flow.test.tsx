@@ -102,6 +102,8 @@ afterEach(() => {
 describe('MachineFlow', () => {
   it('draws four lanes in the order a card moves, each headed by its name and count and saying who acts in it', () => {
     renderFlow(snapshot([...planned(1), ...open(2), card({ id: 'b', title: 'Building', stage: 'building' })]));
+    // The lanes set their own heights, so the layout audit leaves the list's balance alone.
+    expect(document.querySelector('ol.flow-lanes')?.getAttribute('data-balance')).toBe('ignore');
     const lanes = [...document.querySelectorAll('ol.flow-lanes > li.flow-lane')];
     expect(lanes.map((li) => li.getAttribute('data-lane'))).toEqual(['next', 'fund', 'building', 'shipped']);
     expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
@@ -280,6 +282,22 @@ describe('MachineFlow', () => {
       expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['live', 'live', 'live']);
       expect(within(faces[0]!).getByRole('link', { name: copy.cardPage.watchWasBuilt }).getAttribute('href')).toBe('/card/l3');
       expect(within(lane('shipped')).queryByRole('link', { name: copy.playTheGame })).toBeNull();
+    });
+
+    it('keeps the live face for a card shipped from horizon next or later: only Next up draws the planned face', () => {
+      const shipped = [
+        card({ id: 'ln', title: 'Shipped from next', stage: 'live', shape: 'oneoff', funding_target_usd: 0, horizon: 'next', live_at: '2026-09-16T00:00:00Z' }),
+        card({ id: 'll', title: 'Shipped from later', stage: 'live', shape: 'oneoff', funding_target_usd: 0, horizon: 'later', live_at: '2026-09-15T00:00:00Z' }),
+      ];
+      renderFlow(snapshot([...shipped, card({ id: 'p', title: 'Still planned', horizon: 'next' })]));
+      expect(titles('shipped')).toEqual(['Shipped from next', 'Shipped from later']);
+      const faces = [...lane('shipped').querySelectorAll('li.card')] as HTMLElement[];
+      expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['live', 'live']);
+      expect(faces.map((li) => within(li).getByRole('link', { name: copy.cardPage.watchWasBuilt }).getAttribute('href'))).toEqual(['/card/ln', '/card/ll']);
+      expect(lane('shipped').textContent).not.toContain(copy.flow.planned);
+      // A live card is not on the roadmap; Next up keeps only the planned card, on the planned face.
+      expect(titles('next')).toEqual(['Still planned']);
+      expect(lane('next').querySelector('li.card')?.getAttribute('data-face')).toBe('planned');
     });
 
     it('stands in a tile for an empty lane', () => {

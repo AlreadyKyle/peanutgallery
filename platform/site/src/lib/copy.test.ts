@@ -82,17 +82,18 @@ describe('copy rules', () => {
       ...Object.values(copy.status.open),
       copy.status.openNone,
       ...Object.values(copy.status.building),
-      copy.now,
-      copy.fund,
-      copy.fundIntro,
-      copy.showAllCards,
-      copy.queued,
-      copy.queuedIntro,
-      copy.queuedEmpty,
+      copy.status.drafting,
+      copy.flow.title,
+      copy.flow.intro,
+      ...Object.values(copy.flow.lanes).flatMap((lane) => Object.values(lane)),
+      copy.flow.drafting,
+      copy.flow.draftingIdle,
+      copy.flow.draftingDone,
+      copy.flow.boardWork,
+      copy.flow.planned,
+      legal.pickForMe,
+      legal.nextInLineNone,
       copy.team.title,
-      copy.shipped,
-      copy.plannedNext,
-      copy.roadmapLink,
       legal.fundAgreement,
       legal.moneyHeading,
       legal.splitLine,
@@ -158,7 +159,7 @@ describe('launch copy', () => {
     expect(legal.explainer.beats[0]!.line).toBe(copy.pitchTitle);
     const index = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
     expect(index).not.toMatch(/\bDust\b/);
-    for (const text of [copy.pitchTitle, copy.pitchBody, copy.footer, copy.fundIntro, copy.playFree, copy.categories.game, copy.categoryNotes.game]) {
+    for (const text of [copy.pitchTitle, copy.pitchBody, copy.footer, copy.flow.intro, ...Object.values(copy.flow.lanes).flatMap((lane) => Object.values(lane)), copy.playFree, copy.categories.game, copy.categoryNotes.game]) {
       expect(text).not.toMatch(/\bDust\b/);
     }
   });

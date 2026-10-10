@@ -1,10 +1,12 @@
-// A card the Game Designer drafted (docs/specs/agent-workflows.md): its face on the fund grid and
-// its row on /roadmap carry "Written by the Game Designer, an AI agent", and no card the board filed
-// does; side by side, the byline keeps a track of its own above the funding bar. Set E2E_SCREENSHOTS
-// to a folder to save each page at each width.
+// A card the Game Designer drafted (docs/specs/agent-workflows.md): its face in home's Fund now lane
+// and its row on /roadmap carry "Written by the Game Designer, an AI agent", and no card the board
+// filed does; the byline ends above the funding bar. The full faces' rhythm on a card grid is
+// measured on the design guide, the grid home no longer draws (docs/specs/home-flow.md). Set
+// E2E_SCREENSHOTS to a folder to save each page at each width.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
+import { GUIDE_PATH } from '../src/pages/Guide';
 import { DEFAULT_STUDIO, expect, fundingOrder, moneyRow, overflowsHorizontally, test, WIDTHS } from './fixtures';
 
 const SHOTS = process.env.E2E_SCREENSHOTS ?? '';
@@ -30,7 +32,7 @@ const drafted = (fields: Record<string, unknown>): Record<string, unknown> => ({
 // Dealt to now and open for funding, first in line.
 const DEALT = drafted({ id: '00000000-0000-4000-8000-0000000000a1', title: 'Gatherers cost 11', summary: 'The gatherer costs one more to build.', horizon: 'now' });
 // Approved and waiting out the cooling window on next.
-const WAITING = drafted({ id: '00000000-0000-4000-8000-0000000000a2', title: 'Sweepers cost 12', summary: 'The sweeper costs one more to build.', horizon: 'next', rank: 4 });
+const WAITING = drafted({ id: '00000000-0000-4000-8000-0000000000a2', title: 'Sweepers cost 12', summary: 'The sweeper costs one more to build.', horizon: 'next', rank: 4, opens_at: '2026-09-23T00:00:00Z' });
 // A fourth open card the board filed, so the drafted card shares its row at two columns and at three.
 const FILED = { ...RENAME, id: '00000000-0000-4000-8000-0000000000a3', title: 'Sweepers glow at night', summary: 'The sweeper lights up after dark.', funded_usd: '0.0000', rank: null };
 
@@ -46,12 +48,15 @@ for (const viewport of WIDTHS) {
   test.describe(`at ${viewport.width}px`, () => {
     test.use({ viewport });
 
-    test('the drafted card on the fund grid says the Game Designer wrote it, and no other card says so', async ({ page }) => {
+    test('the drafted cards say the Game Designer wrote them, and no other card says so', async ({ page }) => {
       await page.goto('/');
-      const face = page.locator(`li.card[data-card="${DEALT.id}"]`);
+      // The dealt card in Fund now, and the approved one waiting to open first in Next up.
+      const face = page.locator(`.fund-grid li.card[data-card="${DEALT.id}"]`);
       await expect(face.locator('.card-byline')).toHaveText(BYLINE);
-      await expect(face.locator('.card-summary + .card-byline')).toHaveCount(1);
-      await expect(page.locator('.card-byline')).toHaveCount(1);
+      const waiting = page.locator(`li.flow-lane[data-lane="next"] li.card[data-card="${WAITING.id}"]`);
+      await expect(waiting.locator('.card-byline')).toHaveText(BYLINE);
+      await expect(waiting.locator('.card-meta').last()).toHaveText('Approved, opens soon');
+      await expect(page.locator('.card-byline')).toHaveCount(2);
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'home-agent-card', viewport.width);
     });
@@ -68,27 +73,17 @@ for (const viewport of WIDTHS) {
   });
 }
 
-// Side by side from 48rem, a card's parts share its row's tracks (styles.css, the card subgrid). The
-// byline has a track of its own, so it never sits on the funding bar, and every bar in its row still
-// lines up.
-for (const viewport of [{ width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
-  test(`at ${viewport.width}px the byline ends above the bottom block, and the bars in its row line up`, async ({ page }) => {
+// On the compact face in home's flow the byline sits under the title and ends above the bottom block,
+// so it never lands on the funding bar.
+for (const viewport of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
+  test(`at ${viewport.width}px the byline ends above the bottom block`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
     const face = page.locator(`li.card[data-card="${DEALT.id}"]`);
     await expect(face.locator('.card-byline')).toHaveText(BYLINE);
-    const [summary, byline, bottom] = await Promise.all(['.card-summary', '.card-byline', '.card-bottom'].map((part) => face.locator(part).boundingBox()));
-    expect(byline!.y).toBeGreaterThanOrEqual(summary!.y + summary!.height);
+    const [title, byline, bottom] = await Promise.all(['h4', '.card-byline', '.card-bottom'].map((part) => face.locator(part).boundingBox()));
+    expect(byline!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
     expect(byline!.y + byline!.height).toBeLessThanOrEqual(bottom!.y);
-    const bars = await page.evaluate((id) => {
-      const card = document.querySelector(`li.card[data-card="${id}"]`)!;
-      const top = card.getBoundingClientRect().top;
-      return [...card.parentElement!.children]
-        .filter((other) => Math.abs(other.getBoundingClientRect().top - top) < 1)
-        .map((other) => other.querySelector('.card-bottom')!.getBoundingClientRect().top);
-    }, String(DEALT.id));
-    expect(bars.length, 'the drafted card shares its row').toBeGreaterThan(1);
-    for (const bar of bars) expect(Math.abs(bar - bars[0]!)).toBeLessThanOrEqual(1);
     await screenshot(page, 'home-agent-card-row', viewport.width);
   });
 }
@@ -109,31 +104,16 @@ async function textToBottom(page: Page): Promise<{ byline: boolean; gap: number 
   );
 }
 
-for (const viewport of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
-  test(`at ${viewport.width}px a card with no byline keeps 16px from its summary to its bottom block, and the byline keeps at least that`, async ({ page }) => {
-    await page.setViewportSize(viewport);
-    await page.goto('/');
-    await expect(page.locator('.card-byline')).toHaveCount(1);
-    const gaps = await textToBottom(page);
-    expect(gaps.filter((g) => !g.byline).length).toBeGreaterThanOrEqual(2);
-    for (const { byline, gap } of gaps) {
-      if (byline) expect(gap).toBeGreaterThanOrEqual(15);
-      else expect(Math.abs(gap - 16), `summary to bottom block ${gap}px`).toBeLessThanOrEqual(1);
-    }
-  });
-}
-
-test.describe('with no card an agent wrote, as on the live studio today', () => {
+test.describe('the full faces on a card grid, on the design guide', () => {
   test.use({ studio: DEFAULT_STUDIO });
 
-  for (const viewport of [{ width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
+  for (const viewport of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
     test(`at ${viewport.width}px every card keeps 16px from its summary to its bottom block`, async ({ page }) => {
       await page.setViewportSize(viewport);
-      await page.goto('/');
+      await page.goto(GUIDE_PATH);
       await expect(page.locator('.card-grid > li.card').first()).toBeVisible();
-      await expect(page.locator('.card-byline')).toHaveCount(0);
       const gaps = await textToBottom(page);
-      expect(gaps.length).toBeGreaterThan(0);
+      expect(gaps.length).toBeGreaterThan(2);
       for (const { gap } of gaps) expect(Math.abs(gap - 16), `summary to bottom block ${gap}px`).toBeLessThanOrEqual(1);
     });
   }

@@ -39,17 +39,6 @@ export const copy = {
     drafting: 'The agents are drafting the next card.',
     building: { one: '1 card', many: '{n} cards', restOne: 'is being built.', restMany: 'are being built.' },
   },
-  now: 'Building now',
-  fund: "Fund what's next",
-  fundIntro:
-    "Fund a card to grow the games and the studio. When a card's bar fills, the agents build it.",
-  // A phone shows the first three cards of the grid until the viewer asks for the rest.
-  showAllCards: 'Show all {n} cards',
-  queued: 'Queued',
-  queuedIntro: 'Fully funded and waiting for the agents.',
-  queuedEmpty: 'No cards are queued.',
-  shipped: 'Shipped',
-  plannedNext: 'Planned next',
   roadmapLink: 'See the roadmap',
   playTheGame: 'Play the game',
   filterLabel: 'Show cards for',
@@ -94,7 +83,7 @@ export const copy = {
       },
       building: {
         title: 'Building',
-        who: 'A builder agent writes the change and the gate checks it.',
+        who: 'A builder agent writes the change, and automated checks test it.',
         empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
         lastBuilt: 'Last built: {title}, live {date}.',
       },
