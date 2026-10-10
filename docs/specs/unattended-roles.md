@@ -25,7 +25,7 @@ Common to every part: no dispatcher path reads a board session. Each model call 
 
 ### PR3: paused cards resume by rule, and the credit pause lifts itself
 
-- Besides the existing first-ceiling rule, a card paused for any reason but those below resumes with no one acting: at most 3 times a day and 8 times in all per card, at most 2 of them for a session's own limits (budget, wall clock or turn cap), with exponential backoff between tries. Each resume writes a public `auto_resume` event and moves the card from paused to funded.
+- Besides the existing first-ceiling rule, a card paused for any reason but those below resumes with no one acting: at most 3 times a day and 8 times in all per card, at most 2 of them for a stop whose retry is paid work (a session's budget, wall clock or turn cap, a failed visual review, or a patch conflict that needs a new session), with exponential backoff between tries. Each resume writes a public `auto_resume` event and moves the card from paused to funded.
 - It never resumes while the studio is paused, past the card's ceiling, or for a card paused for `horizon`, `vetoed`, `read_token` or `unknown_model`, or paused at its ceiling a second time; those wait for the board.
 - A studio pause the dispatcher set with reason `awaiting_credit` or `spend_limit` lifts itself when a one-token credit probe on the studio key succeeds, with backoff between probes; the probe's row is studio overhead, as the startup probe's is. A pause with reason `incident` or `board` stays until the board resumes.
 

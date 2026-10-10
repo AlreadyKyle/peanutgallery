@@ -19,7 +19,6 @@ export const AUTO_RESUME_CHECKS: Readonly<Record<AutoResumeKind, readonly string
   infra: [
     'outage',
     'frames',
-    'visual_review',
     'dispatcher_error',
     'pr_head',
     'stream_lost',
@@ -28,7 +27,6 @@ export const AUTO_RESUME_CHECKS: Readonly<Record<AutoResumeKind, readonly string
     'system_prompt',
     'repo_skills',
     'card_spend',
-    'patch_conflict',
     'deploy_timeout',
     'post_merge_outage',
     'adapter',
@@ -37,7 +35,7 @@ export const AUTO_RESUME_CHECKS: Readonly<Record<AutoResumeKind, readonly string
     'gate_infrastructure',
     'main_red',
   ],
-  session: ['budget', 'wall_clock', 'turn_cap'],
+  session: ['budget', 'wall_clock', 'turn_cap', 'visual_review', 'patch_conflict'],
 };
 
 export const MANUAL_CHECKS: readonly string[] = ['ceiling', 'horizon', 'vetoed', 'read_token', 'unknown_model'];
