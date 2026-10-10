@@ -28,7 +28,6 @@ export interface WorkflowDeps {
   resolveModel?: (role: Role) => string;
   sessionMaxTurns: number;
   sessionMaxMs: number;
-  boardSessionTtlMin: number;
   watchIntervalMs: number;
   // The gate's banned-phrases.sh over agent-written text a stranger can read (public-text.ts).
   scanText: (strings: readonly string[]) => Promise<PublicTextResult>;
@@ -88,6 +87,9 @@ export function sessionDeps(context: JobContext, workflow: WorkflowDeps): RoleSe
   return {
     db: context.db,
     adapter: workflow.roleAdapter,
+    // The role jobs still run on the attended adapter (docs/specs/agent-workflows.md); jobs.ts stops a
+    // model-calling run once no board member is signed in.
+    allowAttended: true,
     // Bash (the folder's package scripts) only in an attended process: the unattended host runs no
     // agent-written code (PLAN §6, decision 25).
     scripts: context.mode === 'attended',
@@ -96,11 +98,9 @@ export function sessionDeps(context: JobContext, workflow: WorkflowDeps): RoleSe
     ...(workflow.resolveModel === undefined ? {} : { resolveModel: workflow.resolveModel }),
     maxTurns: workflow.sessionMaxTurns,
     maxMs: workflow.sessionMaxMs,
-    boardSessionTtlMin: workflow.boardSessionTtlMin,
     watchIntervalMs: workflow.watchIntervalMs,
     log: context.log,
     stopSignal: context.stopSignal,
-    now: context.now,
     ...(workflow.ledgerRetryMs === undefined ? {} : { ledgerRetryMs: workflow.ledgerRetryMs }),
   };
 }

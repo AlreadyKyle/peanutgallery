@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import type { AgentCreateParams } from '@anthropic-ai/sdk/resources/beta/agents/agents';
+import type { AgentCreateParams, BetaManagedAgentsAgentToolset20260401Params } from '@anthropic-ai/sdk/resources/beta/agents/agents';
 import type { EnvironmentCreateParams } from '@anthropic-ai/sdk/resources/beta/environments/environments';
 import type { ManagedAgent, ManagedEnvironment } from './managed-client.js';
 
@@ -92,6 +92,35 @@ export function agentProblems(
   const have = enabledToolNames(agent.tools).sort();
   const forbidden = have.filter((name) => (FORBIDDEN_MANAGED_TOOLS as readonly string[]).includes(name) || name.startsWith('mcp__'));
   if (forbidden.length > 0) problems.push(`enabled tools include ${forbidden.join(', ')}`);
+  if (have.join(',') !== want.join(',')) problems.push(`tools are ${have.join(', ') || 'none'}, not ${want.join(', ')}`);
+  if ((agent.mcp_servers ?? []).length > 0) problems.push(`MCP servers configured: ${agent.mcp_servers.map((server) => server.name).join(', ')}`);
+  if ((agent.skills ?? []).length > 0) problems.push(`skills attached: ${agent.skills.map((skill) => skill.skill_id).join(', ')}`);
+  if (agent.multiagent) problems.push('a multiagent roster is configured');
+  if (agent.model?.speed === 'fast') problems.push('the model runs at fast speed');
+  return problems;
+}
+
+// A role session on the managed adapter (a Director's visual review) runs as the writer agent with its
+// tools overridden at session create to these three and nothing else: it reads, answers in its final
+// message and changes no file.
+export const READER_TOOLS = ['read', 'glob', 'grep'] as const;
+
+// The tools override for a reader session: the toolset with every tool off but read, glob and grep, and
+// no custom tool (submit_patch is the writer's).
+export function readerToolset(): BetaManagedAgentsAgentToolset20260401Params {
+  return {
+    type: TOOLSET_TYPE,
+    default_config: { enabled: false, permission_policy: { type: 'always_allow' } },
+    configs: TOOLSET_TOOLS.map((name) => ({ name, enabled: (READER_TOOLS as readonly string[]).includes(name) })) as BetaManagedAgentsAgentToolset20260401Params['configs'],
+  };
+}
+
+// What a reader session's agent (as the session create returns it) holds beyond read, glob and grep, as
+// one line per problem. Empty means it is a reader and nothing more.
+export function readerProblems(agent: Pick<ManagedAgent, 'tools' | 'mcp_servers' | 'skills' | 'model'> & { multiagent?: unknown }): string[] {
+  const problems: string[] = [];
+  const have = enabledToolNames(agent.tools).sort();
+  const want = [...READER_TOOLS].sort();
   if (have.join(',') !== want.join(',')) problems.push(`tools are ${have.join(', ') || 'none'}, not ${want.join(', ')}`);
   if ((agent.mcp_servers ?? []).length > 0) problems.push(`MCP servers configured: ${agent.mcp_servers.map((server) => server.name).join(', ')}`);
   if ((agent.skills ?? []).length > 0) problems.push(`skills attached: ${agent.skills.map((skill) => skill.skill_id).join(', ')}`);

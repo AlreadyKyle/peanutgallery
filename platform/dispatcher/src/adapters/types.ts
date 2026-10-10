@@ -29,6 +29,32 @@ export interface SessionSpec {
   roleId?: string | null;
   // The lane's paths, which a patch the managed adapter receives must stay inside.
   allowedPaths?: readonly string[];
+  // What the session is for: a card's build (the default) or a role session that reads and answers
+  // in its final message (role-session.ts). The managed adapter runs a role session as a reader: only
+  // read, glob and grep, the files below mounted, and no patch.
+  purpose?: 'card' | 'role';
+  // A role session's setup on the managed adapter; required there when purpose is 'role'.
+  role?: RoleSessionSetup;
+}
+
+// A file a managed role session reads: the local path uploaded through the Files API, mounted read-only
+// in the container at mountPath.
+export interface RoleSessionFile {
+  path: string;
+  mountPath: string;
+}
+
+export interface RoleSessionSetup {
+  // The card the session is billed to (studio, with the card and spec.roleId), or null for a session
+  // that is no card's (overhead, with spec.roleId).
+  cardId: string | null;
+  // The whole system prompt: the role prompt as read from the dispatcher's own checkout.
+  system: string;
+  // A commit of the repository to mount read-only at the repository mount, or null for none.
+  repoSha: string | null;
+  files: RoleSessionFile[];
+  // The session's title and log label, as review-1.
+  label: string;
 }
 
 // One model's totals from the result line's modelUsage block. cost_usd is the command line's own
@@ -67,7 +93,8 @@ export type AgentEvent =
   | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean }
   | { type: 'message'; text: string }
   // usage is the result line's session total, null when the line has none; modelUsage is empty when
-  // the line has no modelUsage block.
+  // the line has no modelUsage block. result is the session's final message: a role session's typed
+  // answer. A managed card session leaves it empty.
   | {
       type: 'end';
       subtype: string;

@@ -1,7 +1,7 @@
 // The slice of the Anthropic SDK the managed adapter uses (client.beta.agents, environments, sessions
 // and files), typed with the SDK's own types so the adapter's requests are checked against the real
 // API shapes. Tests pass a fake with the same surface; production passes sdkManagedClient().
-import Anthropic from '@anthropic-ai/sdk';
+import Anthropic, { toFile } from '@anthropic-ai/sdk';
 import type { BetaManagedAgentsAgent, AgentRetrieveParams } from '@anthropic-ai/sdk/resources/beta/agents/agents';
 import type { BetaEnvironment } from '@anthropic-ai/sdk/resources/beta/environments/environments';
 import type { BetaFileMetadata, FileListParams } from '@anthropic-ai/sdk/resources/beta/files';
@@ -30,6 +30,17 @@ export interface EventStream extends AsyncIterable<StreamEvent> {
 // (managed-agents-environments.md, Session outputs).
 export const MANAGED_AGENTS_BETA = 'managed-agents-2026-04-01';
 
+// A file to upload through the Files API, to mount in a session (a role session's frames).
+export interface UploadFile {
+  filename: string;
+  bytes: Buffer;
+  mimeType: string;
+}
+
+// Uploads expire on their own after this long, so one a stopped process could not delete does not
+// stay: the session that mounts it copies it in when it starts.
+export const UPLOAD_EXPIRES_SECONDS = 24 * 60 * 60;
+
 export interface ManagedClient {
   agents: {
     retrieve(agentId: string, params?: AgentRetrieveParams): Promise<ManagedAgent>;
@@ -52,6 +63,7 @@ export interface ManagedClient {
     list(params: FileListParams): AsyncIterable<OutputFile>;
     download(fileId: string): Promise<Response>;
     delete(fileId: string): Promise<unknown>;
+    upload(file: UploadFile): Promise<OutputFile>;
   };
 }
 
@@ -78,6 +90,8 @@ export function sdkManagedClient(apiKey: string): ManagedClient {
       list: (params) => beta.files.list({ ...params, betas: [...(params.betas ?? []), MANAGED_AGENTS_BETA] }),
       download: (fileId) => beta.files.download(fileId),
       delete: (fileId) => beta.files.delete(fileId),
+      upload: async (file) =>
+        beta.files.upload({ file: await toFile(file.bytes, file.filename, { type: file.mimeType }), expires_in_seconds: UPLOAD_EXPIRES_SECONDS }),
     },
   };
 }

@@ -33,6 +33,7 @@ const config: DispatcherConfig = {
   priceTable: PRICE_TABLE,
   poolDailyCapUsd: 100,
   cardMaxUsd: 25,
+  visualReviewMaxUsd: 1,
   sessionMaxTurns: 60,
   sessionMaxMinutes: 60,
   agentHourlyRateUsd: 5,

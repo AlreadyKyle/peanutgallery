@@ -37,6 +37,7 @@ describe('loadConfig', () => {
       githubRepo: 'owner/repo',
       poolDailyCapUsd: 100,
       cardMaxUsd: 25,
+      visualReviewMaxUsd: 1,
       sessionMaxTurns: 60,
       agentHourlyRateUsd: 5,
       tickMs: 60_000,
@@ -66,6 +67,7 @@ describe('loadConfig', () => {
         STUDIO_ANTHROPIC_API_KEY: 'studio-key',
         POOL_DAILY_CAP_USD: '40',
         CARD_MAX_USD: '10',
+        VISUAL_REVIEW_MAX_USD: '0.5',
         SESSION_MAX_TURNS: '30',
         AGENT_HOURLY_RATE_USD: '4',
         DISPATCHER_TICK_MS: '5000',
@@ -85,6 +87,7 @@ describe('loadConfig', () => {
       agentMode: 'unattended',
       poolDailyCapUsd: 40,
       cardMaxUsd: 10,
+      visualReviewMaxUsd: 0.5,
       sessionMaxTurns: 30,
       agentHourlyRateUsd: 4,
       tickMs: 5000,
@@ -116,6 +119,8 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, HEALTHCHECK_URL: 'http://hc-ping.com/check-id' }, REPO)).toThrow('HEALTHCHECK_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, NTFY_TOPIC_URL: 'ntfy topic' }, REPO)).toThrow('NTFY_TOPIC_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, SESSION_MAX_MINUTES: '0' }, REPO)).toThrow('SESSION_MAX_MINUTES must be a positive integer');
+    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: '0.05' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be at least 0.1');
+    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: 'one' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be a non-negative number');
   });
 
   it('refuses a model with no row in the price table', () => {

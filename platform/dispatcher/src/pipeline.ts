@@ -43,8 +43,8 @@ import { parseChecks, evaluateCheck, AcceptanceGrammarError, type ConfigCheck } 
 import type { AgentAdapter, CardFolder } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
-import type { DispatcherConfig } from './config.js';
-import { REFUSAL_CHECK } from './credit.js';
+import { VISUAL_REVIEW_MIN_USD, type DispatcherConfig } from './config.js';
+import { REFUSAL_CHECK, type SpendRefusal } from './credit.js';
 import type { Card, CardPatch, Db, Role } from './db.js';
 import { gitConfigViolations } from './gitconfig.js';
 import {
@@ -76,7 +76,8 @@ import { mergeLock } from './lock.js';
 import { errorMessage, type Logger } from './log.js';
 import { restoreDeploy, siteUrl, waitForDeploy, type NetlifyOptions } from './netlify.js';
 import { resolveRoleModel } from './role-model.js';
-import { runAgentSession, type SessionOutcome } from './session.js';
+import { ceilingUsd, runAgentSession, type SessionOutcome } from './session.js';
+import { round4 } from './pricing.js';
 import { decideReview, revisionAddendum, runVisualReview, type VisualReviewDeps } from './visual-review.js';
 import { mergedServedFiles, runSmoke, SMOKE_GATE_TIMEOUT_MS, type SmokeResult } from './smoke.js';
 import { retry } from './time.js';
@@ -661,32 +662,38 @@ async function agentSession(card: Card, role: Role, worktree: Worktree, deps: Pi
   // as after an infrastructure stop, and runnable() leaves it until the board resumes the role
   // (docs/specs/agent-system-core.md).
   if (run.outcome === 'role_paused') throw new Requeue(['building'], 'role_paused', run.detail, false);
-  if (run.outcome === 'credit_exhausted') {
-    // The next session would fail the same way, so the studio stops until the board buys credit.
+  if (run.outcome === 'credit_exhausted') return stopForSpendRefusal(card, 'credit', run.detail, deps);
+  if (run.outcome === 'tier_cap') return stopForSpendRefusal(card, 'tier_cap', run.detail, deps);
+  const pausing = PAUSING_OUTCOMES[run.outcome];
+  if (pausing) throw new CardStop('paused', pausing, run.detail);
+  if (run.outcome === 'refused') throw new CardStop('rejected', 'tool_allowlist', run.detail);
+  await deps.db.insertEvent(card.id, role.id, 'error', { step: 'session', message: run.detail });
+  throw new CardStop('rejected', 'session', run.detail);
+}
+
+// The API refused the studio key: for credit (or the Console spend limit), or at the usage tier's
+// monthly cap. The next session, a card's or a review's, would fail the same way, so the studio pauses
+// and the card pauses with its money kept. Always throws.
+async function stopForSpendRefusal(card: Card, refusal: SpendRefusal, detail: string, deps: PipelineDeps): Promise<never> {
+  if (refusal === 'credit') {
+    // The studio stops until the board buys credit.
     const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: Console credit needed (card ${shortId(card.id)})`, deps.now(), 'awaiting_credit'));
     await deps.alert.notify(
       `Console credit needed: card ${shortId(card.id)} stopped because the API refused the studio key for credit or its spend limit. ${
         unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
       } Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.`,
     );
-    throw new CardStop('paused', REFUSAL_CHECK.credit, run.detail);
+    throw new CardStop('paused', REFUSAL_CHECK.credit, detail);
   }
-  if (run.outcome === 'tier_cap') {
-    // Buying credit does not clear it: the organisation's usage tier caps its spend for the month, so
-    // the studio stops until the month turns or Anthropic raises the tier.
-    const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: usage tier cap reached (card ${shortId(card.id)})`, deps.now(), 'spend_limit'));
-    await deps.alert.notify(
-      `Usage tier cap reached: card ${shortId(card.id)} stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. ${
-        unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
-      } Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.`,
-    );
-    throw new CardStop('paused', REFUSAL_CHECK.tier_cap, run.detail);
-  }
-  const pausing = PAUSING_OUTCOMES[run.outcome];
-  if (pausing) throw new CardStop('paused', pausing, run.detail);
-  if (run.outcome === 'refused') throw new CardStop('rejected', 'tool_allowlist', run.detail);
-  await deps.db.insertEvent(card.id, role.id, 'error', { step: 'session', message: run.detail });
-  throw new CardStop('rejected', 'session', run.detail);
+  // Buying credit does not clear it: the organisation's usage tier caps its spend for the month, so the
+  // studio stops until the month turns or Anthropic raises the tier.
+  const unpaused = await attempt(deps, 'studio pause', () => deps.db.pauseStudio(`dispatcher: usage tier cap reached (card ${shortId(card.id)})`, deps.now(), 'spend_limit'));
+  await deps.alert.notify(
+    `Usage tier cap reached: card ${shortId(card.id)} stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. ${
+      unpaused ? `The studio could not be paused (${unpaused}); pause it from /board.` : 'The studio is paused.'
+    } Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.`,
+  );
+  throw new CardStop('paused', REFUSAL_CHECK.tier_cap, detail);
 }
 
 // The builder session a visual approval names as its maker: claude:<session id>, the form a role
@@ -738,10 +745,18 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
         deps.log.info('pipeline', `card ${card.id} draws nothing differently; no visual review`, { sha: commit.sha, artifact: frames !== null });
         return commit;
       }
-      const outcome = await runVisualReview({ card, frames, sha: commit.sha, gateUrl: null, review }, visual.review);
-      stopCheck(deps, 'while the visual review waited or ran');
+      const budgetUsd = await reviewBudget(card, deps);
+      const budgets = deps.budgets;
+      const outcome = await runVisualReview(
+        { card, frames, sha: commit.sha, gateUrl: null, review, budgetUsd, ...(budgets ? { onSpend: (usd: number) => budgets.record(card.id, usd) } : {}) },
+        visual.review,
+      );
+      stopCheck(deps, 'while the visual review ran');
       if (outcome.kind === 'stopped') throw new CardStop('paused', 'dispatcher_stopped', 'dispatcher stopped during the visual review');
-      if (outcome.kind === 'failed') throw new InfraStop('visual_review', outcome.reason, false);
+      if (outcome.kind === 'failed') {
+        if (outcome.refusal) await stopForSpendRefusal(card, outcome.refusal, outcome.reason, deps);
+        throw new InfraStop('visual_review', outcome.reason, false);
+      }
       const { verdict, director } = outcome;
       const decision = decideReview(verdict, rounds);
       await deps.db.insertEvent(card.id, director.id, 'message', { step: 'visual_review', decision, review, rounds_used: rounds, sha: commit.sha, grader_ref: outcome.ref, criteria: verdict.criteria });
@@ -750,7 +765,7 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
         throw new CardStop('rejected', 'visual_review:all_ages', `after ${rounds} revise rounds the ${director.name} still found the frames not suitable for all ages`);
       }
       if (decision === 'merge' || decision === 'merge_open') {
-        if (building.maker.ref !== null && building.maker.ref === outcome.ref) throw new InfraStop('visual_review', 'the review session is the builder session', false);
+        if (building.maker.ref !== null && outcome.refs.includes(building.maker.ref)) throw new InfraStop('visual_review', 'the review session is the builder session', false);
         await deps.db.recordVisualApproval({
           cardId: card.id,
           verdict: { ...verdict, decision, review, sha: commit.sha },
@@ -769,6 +784,27 @@ async function visualReview(building: Building, first: CommitInfo, deps: Pipelin
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+}
+
+// What one visual review may spend: VISUAL_REVIEW_MAX_USD, no more than the claim's budget still holds
+// after the card's earlier sessions (budgets.ts; a new session of the claim starts), and no more than
+// is left under the card's ceiling (its spend read fresh, so the build and earlier reviews count). The
+// review is billed to the card. Below VISUAL_REVIEW_MIN_USD no review starts: short of the ceiling the
+// card pauses there, as a session that reaches it does; short of the claim's budget it goes back to
+// funded, so the tick sizes a new budget from the money there is then.
+async function reviewBudget(card: Card, deps: PipelineDeps): Promise<number> {
+  const [studio, fresh] = await Promise.all([deps.db.getStudioState(), deps.db.getCard(card.id)]);
+  const actual = fresh?.actual_usd ?? card.actual_usd;
+  const ceiling = ceilingUsd((fresh ?? card).estimate_usd, studio.card_max_usd);
+  const ceilingLeft = round4(ceiling - actual);
+  if (ceilingLeft < VISUAL_REVIEW_MIN_USD) {
+    throw new CardStop('paused', 'ceiling', `the card has spent ${actual} USD of its ${ceiling} USD ceiling, too little left for the visual review`);
+  }
+  const claimLeft = deps.budgets?.nextSession(card.id) ?? Number.POSITIVE_INFINITY;
+  if (claimLeft < VISUAL_REVIEW_MIN_USD) {
+    throw new Requeue(['gated'], 'insufficient_balance', `the claim's session budget holds ${claimLeft} USD, too little for the visual review`, false);
+  }
+  return round4(Math.min(deps.config.visualReviewMaxUsd, claimLeft, ceilingLeft));
 }
 
 // A revision starts only as a claim would: not while the board has agents paused (the card pauses),

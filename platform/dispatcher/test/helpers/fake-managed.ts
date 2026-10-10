@@ -4,7 +4,7 @@
 // managed-agents-events.md (test/fixtures/managed-session.json), and are doc-derived, not recorded.
 import path from 'node:path';
 import type { EventSendParams } from '@anthropic-ai/sdk/resources/beta/sessions/events';
-import type { EventStream, ManagedAgent, ManagedClient, ManagedEnvironment, ManagedSession, OutputFile, SessionCreateParams, SessionEvent, StreamEvent } from '../../src/adapters/managed-client.js';
+import type { EventStream, ManagedAgent, ManagedClient, ManagedEnvironment, ManagedSession, OutputFile, SessionCreateParams, SessionEvent, StreamEvent, UploadFile } from '../../src/adapters/managed-client.js';
 import { loadManagedFiles, type AgentFile } from '../../src/adapters/managed-config.js';
 
 export const CODE_ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -179,6 +179,12 @@ export class FakeManagedClient implements ManagedClient {
   failCreate: Error | null = null;
   // Every stream open throws this, as a connection that cannot be made does.
   failStream: Error | null = null;
+  // Files uploaded through the Files API, by id.
+  readonly uploads = new Map<string, UploadFile>();
+  // The upload after this many succeed throws; null never.
+  failUploadAfter: number | null = null;
+  // Changes the agent a session create returns, as an API that ignored an override would.
+  sessionAgent: ((agent: ManagedSession['agent']) => ManagedSession['agent']) | null = null;
   private fileCounter = 0;
 
   session(id: string): FakeSession {
@@ -229,19 +235,23 @@ export class FakeManagedClient implements ManagedClient {
       const ref = typeof params.agent === 'string' ? { id: params.agent } : params.agent;
       const overrides = 'type' in ref && ref.type === 'agent_with_overrides' ? ref : null;
       const model = overrides?.model ? (typeof overrides.model === 'string' ? { id: overrides.model } : { id: overrides.model.id, speed: overrides.model.speed ?? 'standard' }) : this.agent.model;
-      const agent: ManagedSession['agent'] = {
+      // A tools override replaces the list, and the response lists every toolset tool with its
+      // effective switch, as for the agent file.
+      const tools = overrides?.tools !== undefined ? agentFromFile({ ...FILES.agent, tools: overrides.tools }).tools : this.agent.tools;
+      const created: ManagedSession['agent'] = {
         id: this.agent.id,
         description: this.agent.description,
-        mcp_servers: this.agent.mcp_servers,
+        mcp_servers: overrides?.mcp_servers !== undefined ? (overrides.mcp_servers as ManagedAgent['mcp_servers']) : this.agent.mcp_servers,
         model: model as ManagedAgent['model'],
         multiagent: null,
         name: this.agent.name,
-        skills: this.agent.skills,
+        skills: overrides?.skills !== undefined ? (overrides.skills as unknown as ManagedAgent['skills']) : this.agent.skills,
         system: overrides && overrides.system !== undefined ? overrides.system : this.agent.system,
-        tools: this.agent.tools,
+        tools,
         type: 'agent',
         version: this.agent.version,
       };
+      const agent = this.sessionAgent ? this.sessionAgent(created) : created;
       const session = new FakeSession(`sesn_${this.sessions_.length + 1}`, params, agent);
       this.sessions_.push(session);
       return session.snapshot();
@@ -305,6 +315,21 @@ export class FakeManagedClient implements ManagedClient {
     delete: async (fileId: string) => {
       this.deletedFiles.push(fileId);
       return {};
+    },
+    upload: async (file: UploadFile) => {
+      if (this.failUploadAfter !== null && this.uploads.size >= this.failUploadAfter) throw new Error('upload refused');
+      this.fileCounter += 1;
+      const meta: OutputFile = {
+        id: `file_up_${this.fileCounter}`,
+        created_at: `t${String(this.fileCounter).padStart(4, '0')}`,
+        filename: file.filename,
+        mime_type: file.mimeType,
+        size_bytes: file.bytes.byteLength,
+        type: 'file',
+        downloadable: false,
+      };
+      this.uploads.set(meta.id, file);
+      return meta;
     },
   };
 }
