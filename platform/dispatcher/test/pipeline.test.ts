@@ -2011,13 +2011,41 @@ describe('the visual review', () => {
 
   it('gives a review no more than the ceiling still holds', async () => {
     const { db, c } = setupDb({ estimate_usd: 1 });
-    await earlierSpend(db, c.id, 1.2);
+    await earlierSpend(db, c.id, 1.0);
     const review = managedReviewer([JSON.stringify(verdict())]);
     await runCardPipeline(c, managedVisualDeps(db, builder().adapter, review.adapter, visualRemote().fetchFn));
-    // $1.50 less the $1.20 before and the build's own few tenths of a cent, under the $1 review cap.
-    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeLessThan(0.3);
-    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeGreaterThan(0.29);
+    // $1.50 less the $1.00 before and the build's own few tenths of a cent, under the $1 review cap.
+    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeLessThan(0.5);
+    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeGreaterThan(0.49);
     expect(db.cards[0]).toMatchObject({ stage: 'live' });
+  });
+
+  it('pauses a card whose paid review failed even with a stored patch, so a requeue never pays for the review again', async () => {
+    const { db, c } = setupDb();
+    const patches = new MemoryPatchStore();
+    const build = storingBuilder(patches, c.id, { mode: 'unattended' });
+    const review = managedReviewer(['The frames look fine to me.']);
+    await runCardPipeline(c, { ...managedVisualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), patches, infraStops: new Map() });
+    expect(patches.rows).toHaveLength(1);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'visual_review' });
+  });
+
+  it('starts no review while the studio is paused, and pauses the card for the board', async () => {
+    const { db, c } = setupDb();
+    const review = managedReviewer([JSON.stringify(verdict())]);
+    const deps = managedVisualDeps(db, builder().adapter, review.adapter, visualRemote().fetchFn);
+    const getStudio = db.getStudioState.bind(db);
+    let reads = 0;
+    // The studio is paused while the gate runs: the build saw it unpaused, the review sees it paused.
+    db.getStudioState = async () => {
+      const studio = await getStudio();
+      reads += 1;
+      return review.adapter.specs.length === 0 && db.cards[0]?.stage === 'gated' ? { ...studio, paused: true, pause_reason: 'board', paused_by: 'board@mobmachine.games' } : studio;
+    };
+    await runCardPipeline(c, deps);
+    expect(reads).toBeGreaterThan(0);
+    expect(review.adapter.specs).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'paused_by_board' });
   });
 
   it('pauses the studio and the card when the API refuses the review for credit', async () => {

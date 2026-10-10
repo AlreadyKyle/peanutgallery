@@ -195,6 +195,15 @@ describe('runRoleSession', () => {
     expect(await runRoleSession(request(), t.deps)).toMatchObject({ ok: false, reason: 'role_paused' });
   });
 
+  it("stops when the studio is paused, where the caller asks (a Director's review)", async () => {
+    const t = setup(async (_spec, emit, signal) => {
+      await emit(startEvent(READ_SET));
+      t.db.studio = { ...t.db.studio, paused: true, pause_reason: 'board', paused_by: 'board@mobmachine.games' };
+      await untilAborted(signal, 1000);
+    });
+    expect(await runRoleSession(request(), { ...t.deps, stopWhenStudioPaused: true })).toMatchObject({ ok: false, reason: 'studio_paused' });
+  });
+
   it('runs on the attended adapter only where the caller allows it', async () => {
     const t = setup(oneTurn);
     const { allowAttended: _allowed, ...withoutAllow } = t.deps;

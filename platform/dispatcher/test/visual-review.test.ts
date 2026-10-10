@@ -315,12 +315,23 @@ describe('runVisualReview', () => {
       expect(adapter.specs[1]!.role!.files.map((file) => file.mountPath)).toEqual([`${FRAMES_MOUNT}/site/frame-12.after.png`]);
       expect(adapter.specs[0]!.prompt).toContain('batch 1 of 2');
       expect(adapter.specs[0]!.prompt).not.toContain('site/frame-12.png');
-      expect(adapter.specs[1]!.maxBudgetUsd).toBeLessThan(adapter.specs[0]!.maxBudgetUsd);
+      // Each batch gets its share up front ($5 over 2), and the first batch's unspent share rolls forward.
+      expect(adapter.specs[0]!.maxBudgetUsd).toBe(2.5);
+      expect(adapter.specs[1]!.maxBudgetUsd).toBeGreaterThanOrEqual(adapter.specs[0]!.maxBudgetUsd);
       expect(outcome).toMatchObject({ kind: 'verdict', ref: 'claude:sesn_1+claude:sesn_2', refs: ['claude:sesn_1', 'claude:sesn_2'] });
       if (outcome.kind === 'verdict') {
         expect(outcome.verdict.criteria.legibility).toEqual({ verdict: 'revise', frame: 'site/frame-12.png', reason_code: 'dead_space' });
         expect(outcome.verdict.criteria.intent).toEqual({ verdict: 'pass', frame: 'site/frame-0.png', reason_code: 'meets' });
       }
+    });
+
+    it('fails before any session when the budget cannot give every batch its minimum share', async () => {
+      const changed = Array.from({ length: 13 }, (_, i) => `site/frame-${i}.png`);
+      const { adapter, deps } = managed(() => JSON.stringify(verdict({}, 'site/frame-0.png')));
+      const outcome = await runVisualReview({ ...input(card({ folder: 'platform' }), changed), budgetUsd: 0.6 }, deps);
+      expect(outcome).toMatchObject({ kind: 'failed' });
+      if (outcome.kind === 'failed') expect(outcome.reason).toContain('for each of its 2 batches');
+      expect(adapter.specs).toEqual([]);
     });
 
     it('fails a batch whose verdict names a frame from another batch', async () => {

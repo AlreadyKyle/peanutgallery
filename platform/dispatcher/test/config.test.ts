@@ -119,7 +119,7 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, HEALTHCHECK_URL: 'http://hc-ping.com/check-id' }, REPO)).toThrow('HEALTHCHECK_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, NTFY_TOPIC_URL: 'ntfy topic' }, REPO)).toThrow('NTFY_TOPIC_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, SESSION_MAX_MINUTES: '0' }, REPO)).toThrow('SESSION_MAX_MINUTES must be a positive integer');
-    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: '0.05' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be at least 0.1');
+    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: '0.05' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be at least 0.35');
     expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: 'one' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be a non-negative number');
   });
 
