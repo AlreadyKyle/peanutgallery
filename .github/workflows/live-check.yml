@@ -1,8 +1,8 @@
 # The live check of the deployed site (platform/site/scripts/live-check.mjs), run on Actions, so the
 # studio checks production with nobody watching:
 # - after every push to main that changes what the site's build reads (the same paths netlify.toml's
-#   ignore rule watches), once Netlify has deployed it: the job waits until /version.json names the
-#   pushed commit, and fails if that takes more than 20 minutes;
+#   ignore rule watches) or this file, once Netlify has deployed it: the job waits until /version.json
+#   names a build current for the pushed commit, and fails if that takes more than 20 minutes;
 # - once a day, against whatever is live;
 # - by hand (workflow_dispatch), against any base URL.
 # A failed run notifies the repository's owner by GitHub's usual email. Cloud sessions cannot reach
@@ -19,6 +19,7 @@ on:
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'tsconfig.base.json'
+      - '.github/workflows/live-check.yml'
   schedule:
     - cron: '37 6 * * *'
   workflow_dispatch:
@@ -43,13 +44,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      # Netlify skips a build that changes nothing the site reads, so the live build is current once
+      # it names this commit or an earlier one that differs from it only outside those paths.
       - name: Wait for Netlify to deploy this commit
         if: github.event_name == 'push'
         run: |
           for i in $(seq 1 40); do
             live=$(curl -fsS --max-time 10 "$BASE_URL/version.json?t=$(date +%s)" | sed -n 's/.*"sha":"\([0-9a-f]*\)".*/\1/p' || true)
-            if [ "$live" = "$GITHUB_SHA" ]; then echo "deployed $live"; exit 0; fi
+            if [ -n "$live" ] && git cat-file -e "$live^{commit}" 2>/dev/null \
+              && git diff --quiet "$live" "$GITHUB_SHA" -- platform/site pnpm-lock.yaml package.json pnpm-workspace.yaml tsconfig.base.json; then
+              echo "live $live is current for $GITHUB_SHA"; exit 0
+            fi
             echo "live ${live:-unknown}, waiting for $GITHUB_SHA"; sleep 30
           done
           echo "Netlify did not deploy $GITHUB_SHA within 20 minutes"; exit 1
