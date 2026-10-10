@@ -20,7 +20,7 @@ Checked against your Mac, Stripe, the Admin console, GitHub and production on 1 
 everything that can be done from the Mac; what is left needs you at a Google or board-site screen, a
 second factor, a decision, or money. The path to shipping:
 
-**Post the announcement now (`docs/PLAN.md` §10 decision 64). Funded cards build on their own (decision 65).** Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
+**Post the announcement now (`docs/PLAN.md` §10 decision 64). Funded cards build on their own (decision 65), and the studio never waits on you (decision 66).** The board site is optional, an admin and debug panel like a hosting dashboard: your standing duties reach you by ntfy, email and GitHub, not through it. Recording the credit purchase stamps the launch time; there is no Go live button (`docs/PLAN.md` §10 decision 62).
 
 ## What's left, in order
 
@@ -29,13 +29,15 @@ While the first payout is on its way (days):
 
 Now:
 - [ ] **40** Post the announcement (`docs/launch/`, the order in its README)
+- [ ] **Token:** add Account → Plan: Read to the dispatcher's fine-grained token and extend it past 23 October 2026 (GitHub → Settings → Developer settings → Fine-grained tokens → the host's token → **Edit** to add the permission, then **Regenerate token** with a later expiry; regenerating gives a new value, so replace `VPS_GITHUB_TOKEN` in `.env.vps` and I rebuild the dispatcher's Actions secret from it). More detail: Reference 5.
 
 Funded cards build on their own (`docs/PLAN.md` §10 decision 65): the dispatcher runs unattended on
 GitHub Actions and spends the studio key's Console balance. Keep that balance topped up in the studio
 organisation; recording a purchase at /board is optional.
 
-Whenever you want a big card open to fund:
-- [ ] **41** Draft to the floor (not a blocker: your call, 1 October 2026)
+Closed by `docs/PLAN.md` §10 decision 66: **41** (the card supply refills itself,
+`docs/specs/unattended-roles.md`) and **39** (the dispatcher runs unattended on GitHub Actions since 6
+October 2026).
 
 Later or optional: **21** regenerate the host's GitHub token before 23 October 2026, **6** Search
 Console, **26** the Twitch handle, and Dependabot's #114 under **Later**.
@@ -67,7 +69,7 @@ More detail: Reference 19.
 More detail: Reference 21. Payouts are on and the bank account works: the Controller's dry run on 1
 October 2026 read one paid payout, 0.94 CAD arriving on 22 September 2026 (your test payment). Wait for a
 payout that includes a player's money; it can take 7 to 14 days after their payment. The Controller's
-daily run and the board site's **Needs you** inbox then show it, and the credit to buy.
+daily run then reports it by ntfy, with the credit to buy.
 
 **Reply:** "the first payout arrived", when you see it.
 
@@ -77,22 +79,23 @@ daily run and the board site's **Needs you** inbox then show it, and the credit 
 
 ### Step 38: Buy Console credit from that payout, then after every payout
 
-More detail: Reference 22. Never your own money. The board site's **Needs you** inbox shows the amount.
+More detail: Reference 22. Never your own money. The Controller's ntfy alert names the amount (the board site's Needs you inbox shows it too until `docs/specs/optional-board.md` is built).
 
 1. console.anthropic.com → switch to the **studio** organisation, not your personal one.
-2. **Billing** → buy prepaid credit for the amount the inbox shows. Below the Console's minimum? Wait
+2. **Billing** → buy prepaid credit for the amount the alert names. Below the Console's minimum? Wait
    for the next payout.
 3. Auto-reload **off**. Set the Console's monthly limit to the cap the board site shows.
-4. Board site → Needs you → **Fill in the record form**. Change the amount to the Console receipt's if
-   it differs. **Record purchase** (second factor).
-5. Stripe → Settings → Payouts → **Minimum balance**: raise it to the figure the inbox shows.
+4. Optional (`docs/PLAN.md` §10 decisions 65 and 66): board site → **Record a credit purchase**, with
+   the Console receipt's amount (second factor). The first recorded purchase stamps the launch time.
+5. Stripe → Settings → Payouts → **Minimum balance**: raise it to the figure the alert names.
 6. Read the tier off the Console's **Limits** page.
 
 **Reply:** "credit bought and recorded", and the tier.
 
-### Step 39: The cutover (20 minutes with me, then a day)
+### Step 39: The cutover: CLOSED, unattended since 6 October 2026
 
-More detail: Reference 23. I drive and prompt you at each point. You do four things:
+The dispatcher runs unattended on GitHub Actions since 6 October 2026 (`docs/PLAN.md` §10 decisions 61
+and 66), so there is nothing left to do here. Kept as history. More detail: Reference 23. The steps were:
 
 1. **Pause** on the board site, when I say.
 2. Set the agent mode to **unattended** on the board site (second factor), when I say.
@@ -117,11 +120,15 @@ Then a 24-hour soak on GitHub Actions; your Mac can sleep.
 
 ---
 
-## 4. Whenever you want a big card open to fund
+## 4. The card supply
 
-### Step 41: Draft to the floor (2 minutes, you; not a blocker)
+### Step 41: Draft to the floor: CLOSED 10 October 2026
 
-More detail: `docs/specs/launch-card-floor.md`. Your call on 1 October 2026: this is not a blocker. The
+Closed by `docs/PLAN.md` §10 decision 66: the card supply refills itself. While it is short, a scheduled
+`draft_card` drafts the next seed-1 backlog card that is not board work or, with none, a new seed-1
+card, unattended and billed to that card (`docs/specs/unattended-roles.md`); there is no button and
+nothing for you to do.
+The old steps are kept as history. More detail: `docs/specs/launch-card-floor.md`. Your call on 1 October 2026: this is not a blocker. The
 six open cards can be funded as they are. The session adds one big card ($5 or more), because the floor
 wants one; the spec says to run it before the first stranger is invited, so until you do, the six are all
 there is. It needs your authenticator code, which I cannot enter: the board-site session I opened asked
@@ -148,7 +155,8 @@ identity, `/api/live` and the live check, fill in the spec's Evidence, and merge
 
 ## 5. Later, and optional
 
-- **Step 21: regenerate the host's GitHub token before it expires on 23 October 2026.** GitHub →
+- **Step 21: regenerate the host's GitHub token before it expires on 23 October 2026** (the **Token**
+  item at the top adds Account → Plan: Read at the same time). GitHub →
   Settings → Developer settings → Fine-grained tokens → the token → **Regenerate token** (it keeps its
   permissions), then replace `VPS_GITHUB_TOKEN` in `.env.vps` (`open -e ~/GitHub/peanutgallery/.env.vps`). An expired token stops the unattended
   dispatcher. More detail: Reference 5. **Reply:** "the host token is regenerated."
@@ -598,7 +606,7 @@ phone (`docs/PLAN.md` §10 decision 55). Nothing to do.
 The agent-upkeep pull request (`docs/specs/agent-upkeep.md`) pins Claude Code at 2.1.283, the
 version the Mac updated itself to, on which the attended sandbox check passed in both layouts on
 26 September 2026. Attended sessions now run only on the pinned version: on any other, a card pauses
-with `cli_version` and a role job fails, and the daily check lists it in Needs you. Until you run
+with `cli_version` and a role job fails, and the daily check alerts by ntfy. Until you run
 this, Claude Code keeps updating itself, and each update pauses attended sessions until I run the
 sandbox check on the new version and move the pin in a pull request you merge.
 
@@ -654,7 +662,7 @@ No agent touches Stripe; these are yours.
   free game; no rewards") and ask whether a restricted category applies. Keep their reply. If they
   say it needs approval, tell me before anything else; otherwise nothing waits for a written OK.
 - **Minimum balance.** Settings → Payouts → Minimum balance. Turn it on. It holds a fixed amount,
-  which you raise after each payout to the figure the board site's Needs you inbox shows (the
+  which you raise after each payout to the figure the Controller's alert names (the
   reserve plus held money plus typical fees, computed by the Controller). The Controller alerts if
   Stripe's balance falls below it.
 - **Minimum amount.** Stays $1, your call on 23 September 2026. Leave Radar on its default:
@@ -746,19 +754,19 @@ its own `netlify.app` address. It is live, and its address is in `.env` as `BOAR
 (`grep BOARD_SITE_URL .env` in the Terminal tab shows it). Bookmark it; nothing on the public site
 links to it, and mobmachine.games/board is now a plain not found page. Everyone was signed out at
 the switch. Sign in there by magic link; your authenticator app carries over, so enter its code as
-before. The first thing you see is the **Needs you** inbox, which is usually empty.
+before. The first thing you see is the **Needs you** inbox, which is usually empty (Status, once
+`docs/specs/optional-board.md` is built).
 
-**Still to do.** On 26 September 2026 production shows no sign-in since the switch: your last board
-heartbeat is from 20 September 2026 and no session exists. Until you sign in there, nothing that runs
-only while a board member is signed in can run: launch-card-floor's **Draft to the floor** session,
-the other role jobs and the visual review. Opening the platform code lane (step 26) waits on it too.
+**Optional now.** Under `docs/PLAN.md` §10 decision 66 the studio never waits on a board sign-in: the
+role jobs and the visual review run unattended (`docs/specs/unattended-roles.md`). Signing in is still
+how you use the panel, and opening the platform code lane (step 26) waits on it.
 
 **Tell me:** "signed in on the board site."
 
 #### 18. Studio daily credit limit
 
 Keep $500, or set the number the scale pull request proposes, in the Caps form on the board's site
-(second factor). Besides the $50 a day of immediate agent credit per payer, all payers together get
+(second factor), or by SQL once the form is gone (see **Pause when the board site is down**). Besides the $50 a day of immediate agent credit per payer, all payers together get
 at most this much immediate agent credit per New York day, and credit above it is held 14 days. The
 same form now takes the usage tier cap (step 22).
 
@@ -826,8 +834,9 @@ first payout that includes a player's money. The new-account delay started with 
 **Why.** Unattended cards bill the studio organisation's key, not your Max subscription. Console
 credit is bought only from money Stripe has paid out (decision 23), never with your own.
 
-**How much.** The Controller computes it every day with one formula, and the board site's **Needs
-you** inbox shows it as soon as a payout leaves agent money that is not credit yet: the remaining
+**How much.** The Controller computes it every day with one formula, and alerts by ntfy (and, until
+`docs/specs/optional-board.md` is built, the board site's **Needs you** inbox shows it) as soon as a
+payout leaves agent money that is not credit yet: the remaining
 ceilings of funded cards, plus overhead spent since the last purchase, less the credit left, and
 never more than the agent money Stripe has paid out and not yet converted, plus that overhead. The
 reserve, the emergency fund and held money are never in it. Fees, currency conversion and HST on the
@@ -843,10 +852,9 @@ purchase come from the studio share.
    minimum purchase, wait for the next payout; never add your own money.
 3. Keep **auto-reload off**, and set the Console's monthly spend limit to the monthly cap the
    board's site shows.
-4. On the board's site, press **Fill in the record form** in the inbox (second factor). It fills in
-   the amount, the Stripe payout id and a reason from the Controller's figure. Change the amount to
-   the one on the Console receipt if it differs, then **Record purchase**. The dispatcher never lets
-   unattended sessions spend more than the credit recorded.
+4. Optional (`docs/PLAN.md` §10 decisions 65 and 66): record the purchase on the board's site
+   (second factor), with the amount on the Console receipt and the Stripe payout id. The studio key's
+   real Console balance is the limit on unattended spend, not the recorded total.
 5. Tell me the tier the Console's **Limits** page shows. Its monthly limit goes in the Caps form as
    the usage tier cap.
 6. In the same visit, raise Stripe's **Minimum balance** (Settings → Payouts) to the figure the inbox
@@ -858,7 +866,9 @@ next payout's purchase clears it.
 
 **Tell me:** "credit bought and recorded", and the tier.
 
-#### 23. Cutover and soak (about twenty minutes with me, then a day)
+#### 23. Cutover and soak: done, unattended on GitHub Actions since 6 October 2026
+
+Kept as history (`docs/PLAN.md` §10 decisions 61 and 66).
 
 I prompt you at each point. Only one dispatcher ever runs: the dispatcher lease guarantees it, and
 from here the attended dispatcher is not started while the host runs. The host is GitHub Actions in
@@ -909,23 +919,21 @@ so they sound like you, put the clip's link in each, and post them in the order 
   (`docs/specs/agent-system-core.md`) ships the cooling window at 0, so an approved agent card moves
   to now on the next dispatcher tick. If you want time to look first, set it on the board's site
   (Cooling window, second factor, up to 10,080 minutes). You can also pause a role or veto a card
-  there. There is no operations percentage: no role job spends studio money, and model role jobs run
-  only when you start them from the board's site while you are signed in there. Nothing waits on you.
-- **Rank now and Draft a game card (optional, when you want them).** The agent-workflows pull
-  request (`docs/specs/agent-workflows.md`) adds both to the Jobs list on the board's site, at the
-  second factor. Each runs only while you are signed in there, on your Max plan, billed to you on the
-  ledger, never from supporters' or studio money. Launch-card-floor's drafting session is started with
-  **Draft to the floor** in Needs you (see **Your standing duties**), not Draft a game card: be signed
-  in at /board for it. A drafted card waits out the cooling window before it is dealt to now; you can
-  veto it there as with any card.
+  there. Under `docs/PLAN.md` §10 decision 66 these leave the board site (`docs/specs/optional-board.md`);
+  their functions stay, and the window changes by SQL. Model role jobs run unattended, each billed to the
+  card it works on. Nothing waits on you.
+- **Rank now and Draft a game card: retired by `docs/PLAN.md` §10 decision 66.** Ranking is the
+  backlog's rank, then age, and drafting runs on its own when the card supply is short, unattended and
+  billed to the card it drafts (`docs/specs/unattended-roles.md`). Until that is built, both still run
+  only while you are signed in at /board, on your Max plan, billed to you.
 - **The visual review (nothing to do now).** The design-review pull request
   (`docs/specs/design-review.md`) makes the files that set the look yours: the tokens, the Card, the
   glyphs, motion, the route list, the site's public and brand files and the game's favicon change
   only by a pull request you merge, so a new page or screen is yours too. When a card's change draws
   a page or the game differently, its gate draws before and after frames and a Director reviews them
-  once its gate is green, only while you are signed in at /board, on your Max plan, billed to you on
-  the ledger: be signed in when a visual card's gate turns green, or it waits at gated with its money
-  on its bar. The first seed-1 card that changes `seed-1/render/` after launch is the first live
+  once its gate is green. Under `docs/PLAN.md` §10 decision 66 the review runs at once, unattended and
+  billed to the card (`docs/specs/unattended-roles.md`); until that is built it runs only while you are
+  signed in at /board, on your Max plan, billed to you, and a visual card waits at gated until you are. The first seed-1 card that changes `seed-1/render/` after launch is the first live
   review. The gate's `frames` job runs only on GitHub Actions, so it waits on Actions minutes (see
   **GitHub Actions minutes**); the local gate cannot run it.
 - **The copy pass (nothing to do now).** The copy-pass pull request (`docs/specs/copy-pass.md`)
@@ -953,8 +961,8 @@ so they sound like you, put the clip's link in each, and post them in the order 
   Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
 - **The Janitor and dependency updates (nothing to do now).** The agent-upkeep pull request
-  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings show in Needs you under
-  Findings and reach ntfy once each, and Dependabot. Four things to know, none blocking:
+  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings reach ntfy once each (and show in Needs you under
+  Findings until the panel replaces it), and Dependabot. Four things to know, none blocking:
   1. The weekly scan (`janitor.yml`, osv-scanner and an offline link check) runs on Actions
      minutes, so its first run waits for Actions (see **GitHub Actions minutes**). Until it has run,
      the daily check has no scan result to list.
@@ -986,33 +994,34 @@ so they sound like you, put the clip's link in each, and post them in the order 
 ### Your standing duties
 
 These are the only standing actions left with the board, the ones the money rule and the kernel
-force. Each shows in the board site's **Needs you** inbox when it is due; the inbox is usually empty.
-If you do none of them, the studio pauses or stays as it is. Nothing else waits on you.
+force. They reach you by ntfy, email and GitHub (the Controller's and the Janitor's alerts, Stripe's
+own emails, the open pull requests), not through the board site, which is optional (`docs/PLAN.md` §10
+decision 66). If you do none of them, the studio pauses or stays as it is. Nothing else waits on you.
 
-- **After each payout:** buy Console credit and raise Stripe's Minimum balance (step 22). The inbox
-  lists it once a payout leaves agent money that is not credit yet.
+- **After each payout:** buy Console credit and raise Stripe's Minimum balance (step 22). The
+  Controller alerts once a payout leaves agent money that is not credit yet.
 - **Refunds** asked for at hello@clayhouse.studio: refund each one in Stripe within 14 days of the
-  contribution. A standing line in the inbox; no script refunds.
-- **Disputes:** answer each in Stripe before its due date. The Controller alerts, and the inbox lists
+  contribution. The request arrives by email; no script refunds.
+- **Disputes:** answer each in Stripe before its due date. The Controller alerts, and Stripe emails
   each one with its date.
-- **The emergency fund:** convert its credit when an S1 card needs it. The inbox lists S1 cards that
-  may draw on it.
-- **A card the resume rule will not resume:** one paused at its ceiling at the card maximum, or a
-  second time. Resume it with a new estimate or cancel it. The inbox lists each one.
+- **The emergency fund:** convert its credit when an S1 card needs it. You set a card's severity, so
+  you know when one does.
+- **A card the resume rule will not resume:** one paused at its ceiling at the card maximum or a
+  second time, or for its horizon, a veto, the read token or an unknown model. Resume it with a new
+  estimate or reject it. The Janitor's daily check alerts by ntfy for a card paused at its ceiling, and
+  the panel's Activity lists paused cards.
 - **A card holding money whose approval is not current:** its text was changed outside a board
   control, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
-  money on; the inbox lists each one until then. Money it already spent stays on its bar, and a card
+  money on; it is hidden and takes no money until then. Money it already spent stays on its bar, and a card
   that has shipped is left to the sweep.
-- **A card supply short of its floor** (`docs/specs/studio-reports.md`): fewer than 6 cards open for
-  funding, none of $5 or more, or none under $2. Press **Draft to the floor** with a reason at the
-  second factor and keep the board site open while the Game Designer drafts; each draft is checked,
-  graded and cooled like any card. The inbox lists it while the supply is short. Nothing drafts on
-  its own until an operations percentage exists. The floor's defaults change by a board pull request.
+- ~~**A card supply short of its floor.**~~ No longer a duty (`docs/PLAN.md` §10 decision 66): the
+  supply refills itself (`docs/specs/unattended-roles.md`). The floor's
+  defaults change by a board pull request.
 - **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
-  The inbox links every open pull request that is not from a `card/` branch: the dispatcher merges
-  only those, so every other one waits for you.
-- **New models:** add a price-table row to `.env` before any role uses a new model. The board site
-  cannot read `.env`, so the inbox does not list this one; I tell you when a model change needs it.
+  GitHub notifies you of every open pull request that is not from a `card/` branch: the dispatcher
+  merges only those, so every other one waits for you.
+- **New models:** add a price-table row to `.env` before any role uses a new model. The Janitor's
+  daily check alerts when a model has no row; I tell you when a model change needs it.
 
 ### Standing items, outside the order
 
@@ -1055,14 +1064,17 @@ If Netlify has paused the sites (a usage limit, above) or the board's site is do
 reason, the Pause button is gone with it. Two ways to stop the agents without Netlify, either one
 enough:
 
-1. **Stop the dispatcher on the Mac.** In Terminal on the host Mac:
+1. **Switch the dispatcher's host off.** In Terminal (`platform/ops/README.md`, The GitHub Actions
+   host):
 
    ```sh
-   launchctl bootout gui/$(id -u)/studio.peanutgallery.dispatcher
+   gh variable set DISPATCHER_HOST --repo AlreadyKyle/peanutgallery --body off
+   gh run list --repo AlreadyKyle/peanutgallery --workflow dispatcher.yml --status in_progress
+   gh run cancel <run id> --repo AlreadyKyle/peanutgallery
    ```
 
-   It finishes and meters any running session, then stops; once healthchecks.io is set up (step 6)
-   it emails you that the dispatcher is down. `platform/ops/mac/install.sh --start` starts it again.
+   No run starts while it is off; healthchecks.io emails you that the dispatcher is down. Set it `on`
+   and start a run to bring it back.
 
 2. **Pause the studio in the database.** Supabase dashboard → the project → **SQL Editor**, paste
    this one statement and **Run**. It does what the board site's Pause (`set_paused(true)`) does,
@@ -1074,6 +1086,16 @@ enough:
    ```
 
    Resume from the board's site once it is back.
+
+**Change the caps by SQL.** The board site shows the caps read-only once
+`docs/specs/optional-board.md` is built, so change them in the same SQL Editor. Take a dump first
+(`docs/specs/money-safety.md`); the per-card maximum must not exceed the daily cap; and unlike
+`set_caps`, a raw update records no board action, so tell me the reason and I add it to the next
+pull request:
+
+```sql
+update public.studio_state set daily_cap_usd = …, monthly_cap_usd = …, card_max_usd = … where id = 1;
+```
 
 ### What only you can do
 
@@ -1087,12 +1109,12 @@ enough:
 - The database password in `.env`, for the migration history repair.
 - The Discord webhooks and AutoMod.
 - Subscribing to the ntfy topic on your phone.
-- Signing in on the board's own site, and saying when to open the platform code lane.
+- Saying when to open the platform code lane (signing in on the board's own site is optional).
 - Passkeys on every account.
 - Naming a moderator.
 - The call on how the first player arrives, and the share if you choose it.
 - Confirming Stripe payouts and the bank account.
-- Buying Console credit after each payout and recording it on the board's site.
+- Buying Console credit after each payout; recording it on the board's site is optional.
 - Go live, and posting the announcement.
 - Deleting the local `KEYS.md`.
 - Reviewing HST registration at $15k.
