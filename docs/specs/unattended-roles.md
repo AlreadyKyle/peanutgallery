@@ -52,11 +52,11 @@ PR2
 - [ ] The review session holds only Read, Glob and Grep.
 
 PR3
-- [ ] A card paused for `wall_clock` returns to funded with an `auto_resume` event and no board action.
-- [ ] A card is auto-resumed at most 3 times a day, 8 times in all and twice for session limits, with backoff between tries.
-- [ ] A card paused for `horizon`, `vetoed`, `read_token`, `unknown_model` or a second ceiling is never auto-resumed.
-- [ ] No card is auto-resumed while the studio is paused or past its ceiling.
-- [ ] A studio paused for `awaiting_credit` or `spend_limit` is unpaused after a successful one-token probe; one paused for `incident` or `board` is not.
+- [x] A card paused for `wall_clock` returns to funded with an `auto_resume` event and no board action.
+- [x] A card is auto-resumed at most 3 times a day, 8 times in all and twice for session limits, with backoff between tries.
+- [x] A card paused for `horizon`, `vetoed`, `read_token`, `unknown_model` or a second ceiling is never auto-resumed.
+- [x] No card is auto-resumed while the studio is paused or past its ceiling.
+- [x] A studio paused for `awaiting_credit` or `spend_limit` is unpaused after a successful one-token probe; one paused for `incident` or `board` is not.
 
 PR4
 - [ ] With the supply short, a `draft_card` run with origin `schedule` is queued with no board action, and never two at once.
@@ -84,6 +84,8 @@ PR5
 ## Evidence
 
 Added as each pull request merges.
+
+- PR3 (tests): `platform/supabase/functions/_shared/auto_resume_test.ts` "auto_resume_due: a seeded check resumes to funded with its event and public line; a manual one waits" (session-kind stops such as `wall_clock` included), "auto_resume_due: refusals" (studio paused, veto, closed lane, approval, paused executor, no room under the ceiling), "auto_resume_due: bounds and backoff" and "dispatcher_resume_studio lifts only the dispatcher's own credit and spend-limit pauses"; `platform/dispatcher/test/tick.test.ts` (the probe, its backoff, a refused unpause, an incident taking over a money pause); `platform/dispatcher/test/pause-checks.test.ts` (every pausing check in `src` classified). The live check (card 802b9b7a back to funded with an `auto_resume` event) waits on the merge and the migrations.
 
 ## Decisions
 
