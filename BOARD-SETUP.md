@@ -79,7 +79,7 @@ daily run then reports it by ntfy, with the credit to buy.
 
 ### Step 38: Buy Console credit from that payout, then after every payout
 
-More detail: Reference 22. Never your own money. The Controller's ntfy alert names the amount (the board site's Needs you inbox shows it too until `docs/specs/optional-board.md` is built).
+More detail: Reference 22. Never your own money. The Controller's ntfy alert names the amount.
 
 1. console.anthropic.com → switch to the **studio** organisation, not your personal one.
 2. **Billing** → buy prepaid credit for the amount the alert names. Below the Console's minimum? Wait
@@ -754,8 +754,8 @@ its own `netlify.app` address. It is live, and its address is in `.env` as `BOAR
 (`grep BOARD_SITE_URL .env` in the Terminal tab shows it). Bookmark it; nothing on the public site
 links to it, and mobmachine.games/board is now a plain not found page. Everyone was signed out at
 the switch. Sign in there by magic link; your authenticator app carries over, so enter its code as
-before. The first thing you see is the **Needs you** inbox, which is usually empty (Status, once
-`docs/specs/optional-board.md` is built).
+before. After the code, the first thing you see is **Status**, then Activity and Actions
+(`docs/specs/optional-board.md`).
 
 **Optional now.** Under `docs/PLAN.md` §10 decision 66 the studio never waits on a board sign-in: the
 role jobs and the visual review run unattended (`docs/specs/unattended-roles.md`). Signing in is still
@@ -834,8 +834,7 @@ first payout that includes a player's money. The new-account delay started with 
 **Why.** Unattended cards bill the studio organisation's key, not your Max subscription. Console
 credit is bought only from money Stripe has paid out (decision 23), never with your own.
 
-**How much.** The Controller computes it every day with one formula, and alerts by ntfy (and, until
-`docs/specs/optional-board.md` is built, the board site's **Needs you** inbox shows it) as soon as a
+**How much.** The Controller computes it every day with one formula, and alerts by ntfy as soon as a
 payout leaves agent money that is not credit yet: the remaining
 ceilings of funded cards, plus overhead spent since the last purchase, less the credit left, and
 never more than the agent money Stripe has paid out and not yet converted, plus that overhead. The
@@ -917,10 +916,9 @@ so they sound like you, put the clip's link in each, and post them in the order 
 
 - **Cooling window, role pauses and vetoes (optional).** The agent-system pull request
   (`docs/specs/agent-system-core.md`) ships the cooling window at 0, so an approved agent card moves
-  to now on the next dispatcher tick. If you want time to look first, set it on the board's site
-  (Cooling window, second factor, up to 10,080 minutes). You can also pause a role or veto a card
-  there. Under `docs/PLAN.md` §10 decision 66 these leave the board site (`docs/specs/optional-board.md`);
-  their functions stay, and the window changes by SQL. Model role jobs run unattended, each billed to the
+  to now on the next dispatcher tick. Under `docs/PLAN.md` §10 decision 66 the board's site no longer
+  sets the window, pauses a role or vetoes a card (`docs/specs/optional-board.md`); their functions
+  stay, and the window (up to 10,080 minutes) changes by SQL. Model role jobs run unattended, each billed to the
   card it works on. Nothing waits on you.
 - **Rank now and Draft a game card: retired by `docs/PLAN.md` §10 decision 66.** Ranking is the
   backlog's rank, then age, and drafting runs on its own when the card supply is short, unattended and
@@ -961,8 +959,8 @@ so they sound like you, put the clip's link in each, and post them in the order 
   Actions minutes** under **Standing items**.
 - **Dreaming research-preview access,** only when memory comes back on the roadmap.
 - **The Janitor and dependency updates (nothing to do now).** The agent-upkeep pull request
-  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings reach ntfy once each (and show in Needs you under
-  Findings until the panel replaces it), and Dependabot. Four things to know, none blocking:
+  (`docs/specs/agent-upkeep.md`) adds a daily drift check, whose findings reach ntfy once each (and show on the board's panel
+  under Activity, Findings), and Dependabot. Four things to know, none blocking:
   1. The weekly scan (`janitor.yml`, osv-scanner and an offline link check) runs on Actions
      minutes, so its first run waits for Actions (see **GitHub Actions minutes**). Until it has run,
      the daily check has no scan result to list.
@@ -1087,8 +1085,8 @@ enough:
 
    Resume from the board's site once it is back.
 
-**Change the caps by SQL.** The board site shows the caps read-only once
-`docs/specs/optional-board.md` is built, so change them in the same SQL Editor. Take a dump first
+**Change the caps by SQL.** The board site shows the caps read-only
+(`docs/specs/optional-board.md`), so change them in the same SQL Editor. Take a dump first
 (`docs/specs/money-safety.md`); the per-card maximum must not exceed the daily cap; and unlike
 `set_caps`, a raw update records no board action, so tell me the reason and I add it to the next
 pull request:
