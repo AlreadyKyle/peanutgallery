@@ -25,7 +25,7 @@ Common to every part: no dispatcher path reads a board session. Each model call 
 
 ### PR3: paused cards resume by rule, and the credit pause lifts itself
 
-- Besides the existing first-ceiling rule, a card paused for any reason but those below resumes with no one acting: at most 3 times a day and 8 times in all per card, at most 2 of them for a session's own limits (budget, wall clock or turn cap), with exponential backoff between tries. Each resume writes a public `auto_resume` event and moves the card from paused to funded.
+- Besides the existing first-ceiling rule, a card paused for any reason but those below resumes with no one acting: at most 3 times a day and 8 times in all per card, at most 2 of them for a stop whose retry is paid work (a session's budget, wall clock or turn cap, a failed visual review, or a patch conflict that needs a new session), with exponential backoff between tries. Each resume writes a public `auto_resume` event and moves the card from paused to funded.
 - It never resumes while the studio is paused, past the card's ceiling, or for a card paused for `horizon`, `vetoed`, `read_token` or `unknown_model`, or paused at its ceiling a second time; those wait for the board.
 - A studio pause the dispatcher set with reason `awaiting_credit` or `spend_limit` lifts itself when a one-token credit probe on the studio key succeeds, with backoff between probes; the probe's row is studio overhead, as the startup probe's is. A pause with reason `incident` or `board` stays until the board resumes.
 
@@ -52,11 +52,11 @@ PR2
 - [x] The review session holds only Read, Glob and Grep.
 
 PR3
-- [ ] A card paused for `wall_clock` returns to funded with an `auto_resume` event and no board action.
-- [ ] A card is auto-resumed at most 3 times a day, 8 times in all and twice for session limits, with backoff between tries.
-- [ ] A card paused for `horizon`, `vetoed`, `read_token`, `unknown_model` or a second ceiling is never auto-resumed.
-- [ ] No card is auto-resumed while the studio is paused or past its ceiling.
-- [ ] A studio paused for `awaiting_credit` or `spend_limit` is unpaused after a successful one-token probe; one paused for `incident` or `board` is not.
+- [x] A card paused for `wall_clock` returns to funded with an `auto_resume` event and no board action.
+- [x] A card is auto-resumed at most 3 times a day, 8 times in all and twice for session limits, with backoff between tries.
+- [x] A card paused for `horizon`, `vetoed`, `read_token`, `unknown_model` or a second ceiling is never auto-resumed.
+- [x] No card is auto-resumed while the studio is paused or past its ceiling.
+- [x] A studio paused for `awaiting_credit` or `spend_limit` is unpaused after a successful one-token probe; one paused for `incident` or `board` is not.
 
 PR4
 - [ ] With the supply short, a `draft_card` run with origin `schedule` is queued with no board action, and never two at once.
@@ -87,6 +87,7 @@ Added as each pull request merges.
 
 - PR2 (tests): `platform/dispatcher/test/visual-review.test.ts` "starts at once with no board member signed in" and "mounts each changed frame at FRAMES_MOUNT, names those paths in the prompt, bills the card and writes no row itself"; `platform/dispatcher/test/managed-role.test.ts` "creates the session with exactly the reader tools…", "writes the review's ledger rows to the card it reviews, studio-billed with the Director's role…", "readerProblems passes the reader override and names anything more" and "interrupts a session that calls a tool it does not hold…". The live check of a Director verdict on a real card, its ledger rows quoted, waits on the merge.
 - PR2 (live, 10 October 2026, before the merge): `probe --role` against the studio organisation printed `PASS: role model=claude-opus-5-5 tools=glob,grep,read answer=red billed_to=overhead` with `tool_calls=read /mnt/session/uploads/probe/probe-red.png turns=2` (session `sesn_01VFpfs25e1EZGGhMLKE9USf`, list cost $0.02): the override holds, an absolute mount path under `/mnt/session/uploads` is where the file lands, and the reader reads a PNG.
+- PR3 (tests): `platform/supabase/functions/_shared/auto_resume_test.ts` "auto_resume_due: a seeded check resumes to funded with its event and public line; a manual one waits" (session-kind stops such as `wall_clock` included), "auto_resume_due: refusals" (studio paused, veto, closed lane, approval, paused executor, no room under the ceiling), "auto_resume_due: bounds and backoff" and "dispatcher_resume_studio lifts only the dispatcher's own credit and spend-limit pauses"; `platform/dispatcher/test/tick.test.ts` (the probe, its backoff, a refused unpause, an incident taking over a money pause); `platform/dispatcher/test/pause-checks.test.ts` (every pausing check in `src` classified). The live check (card 802b9b7a back to funded with an `auto_resume` event) waits on the merge and the migrations.
 
 ## Decisions
 

@@ -149,6 +149,19 @@ describe('createSupabaseDb queries', () => {
     expect(seen[0]?.body).toEqual({ paused: true, paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString(), pause_reason: 'awaiting_credit' });
   });
 
+  it('an incident pause also takes over only a dispatcher money pause, so the credit probe can never lift it', async () => {
+    const { fetchFn, seen } = rest([]);
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect(seen).toHaveLength(2);
+    expect(seen[0]?.url.searchParams.get('paused')).toBe('eq.false');
+    const take = seen[1]!;
+    expect(take.method).toBe('PATCH');
+    expect(take.url.searchParams.get('paused')).toBe('eq.true');
+    expect(take.url.searchParams.get('pause_reason')).toBe('in.(awaiting_credit,spend_limit)');
+    expect(take.url.searchParams.get('paused_by')).toBe('like.dispatcher:%');
+    expect(take.body).toEqual({ paused: true, paused_by: 'dispatcher: the revert of card 4c2f5a1e failed', paused_at: NOW.toISOString(), pause_reason: 'incident' });
+  });
+
   it('reads the cards a tick chooses from dispatcher_cards, with the approval, the vetoes and the executor pause', async () => {
     const { fetchFn, seen } = rest([{ id: 'a', stage: 'funded', source: 'agent', needs_approval: true, approved: false, board_vetoed: true, executor_paused: true }]);
     const cards = await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).listCardsInStages(['funded', 'building']);
@@ -314,6 +327,30 @@ describe('createSupabaseDb queries', () => {
     expect((await studio({ paused: false, platform_lane_open: false })).platform_lane_open).toBe(false);
     expect((await studio({ paused: false, platform_lane_open: 'true' })).platform_lane_open).toBe(false);
     expect((await studio({ paused: false, platform_lane_open: true })).platform_lane_open).toBe(true);
+  });
+
+  it("reads why, by whom and when the studio is paused, and none of it while it is not", async () => {
+    const studio = (json: unknown) =>
+      createSupabaseDb('https://db.local', 'service-role', { fetchFn: mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json } : undefined)).fetchFn }).getStudioState();
+    const paused = await studio({ paused: true, pause_reason: 'awaiting_credit', paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: '2026-10-10T12:00:00+00:00' });
+    expect([paused.pause_reason, paused.paused_by, paused.paused_at]).toEqual(['awaiting_credit', 'dispatcher: Console credit needed (card 4c2f5a1e)', '2026-10-10T12:00:00+00:00']);
+    const running = await studio({ paused: false, pause_reason: 'board', paused_by: 'x', paused_at: '2026-10-10T12:00:00+00:00' });
+    expect([running.pause_reason, running.paused_by, running.paused_at]).toEqual([null, null, null]);
+  });
+
+  it('calls auto_resume_due and dispatcher_resume_studio, and fails loudly on an error', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => {
+      if (method !== 'POST') return undefined;
+      if (url.endsWith('/rpc/auto_resume_due')) return { status: 200, json: { resumed: 1, results: [{ card_id: 'card-4', resumed: true, from_check: 'dispatcher_restart', kind: 'free', n: 1 }] } };
+      if (url.endsWith('/rpc/dispatcher_resume_studio')) return { status: 200, json: true };
+      return undefined;
+    });
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.autoResumeDue()).toEqual({ resumed: 1, results: [{ card_id: 'card-4', resumed: true, from_check: 'dispatcher_restart', kind: 'free', n: 1 }] });
+    expect(await db.dispatcherResumeStudio('credit_probe_ok', { model: 'm' })).toBe(true);
+    expect(calls.map((call) => call.body)).toEqual([{}, { p_reason: 'credit_probe_ok', p_detail: { model: 'm' } }]);
+    const refused = mockFetch((method) => (method === 'POST' ? { status: 400, json: { message: 'permission denied for function auto_resume_due' } } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: refused.fetchFn }).autoResumeDue()).rejects.toThrow('db auto_resume_due: permission denied');
   });
 
   it('clears commit_sha when it claims a card', async () => {

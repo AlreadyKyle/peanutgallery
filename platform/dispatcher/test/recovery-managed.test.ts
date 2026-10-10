@@ -138,6 +138,6 @@ describe('recoverOrphans with managed sessions', () => {
     const alert = new RecordingAlerter();
     await recoverOrphans(deps(db, alert, async () => new Map()));
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'dispatcher_restart' });
-    expect(alert.messages).toEqual(['Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open.']);
+    expect(alert.messages).toEqual(['Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.']);
   });
 });

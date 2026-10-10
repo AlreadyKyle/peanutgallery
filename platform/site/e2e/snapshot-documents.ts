@@ -24,6 +24,7 @@ const STEP_KEYS: Record<string, string> = {
   dealt: 'dealt',
   ceiling_top_up: 'topped_up',
   resume_rule: 'resumed',
+  auto_resume: 'auto_resumed',
   ranked: 'ranked',
 };
 const TYPE_KEYS: Record<string, string> = {

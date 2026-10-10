@@ -16,6 +16,7 @@ import type {
   JobRun,
   OpenCardRow,
   OpenFinding,
+  PauseReason,
   PostKind,
   ProducerSignal,
   ReportPost,
@@ -184,6 +185,11 @@ export class FakeDb implements Db {
   resumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
   resumeCalls = 0;
   resumeError: Error | null = null;
+  // What auto_resume_due answers, how often it was called, and every dispatcher_resume_studio call.
+  autoResumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
+  autoResumeCalls = 0;
+  autoResumeError: Error | null = null;
+  studioResumes: { reason: string; detail: Record<string, unknown> }[] = [];
   // The role jobs (docs/specs/agent-workflows.md): the open cards the handlers read, the drafts, the
   // cards approval inserted, the rankings applied, and the failure an RPC is set to raise.
   openCardRows: OpenCardRow[] = [];
@@ -204,9 +210,13 @@ export class FakeDb implements Db {
   async getStudioState() {
     return { ...this.studio };
   }
-  async pauseStudio(by: string, _now: Date, reason: string) {
-    if (this.studio.paused) return;
+  async pauseStudio(by: string, now: Date, reason: PauseReason) {
+    const moneyPause = this.studio.paused && (this.studio.pause_reason === 'awaiting_credit' || this.studio.pause_reason === 'spend_limit') && (this.studio.paused_by ?? '').startsWith('dispatcher:');
+    if (this.studio.paused && !(reason === 'incident' && moneyPause)) return;
     this.studio.paused = true;
+    this.studio.paused_by = by;
+    this.studio.pause_reason = reason;
+    this.studio.paused_at = now.toISOString();
     this.pausedBy = by;
     this.pauseReason = reason;
   }
@@ -336,6 +346,19 @@ export class FakeDb implements Db {
     this.resumeCalls += 1;
     if (this.resumeError) throw this.resumeError;
     return this.resumeResult;
+  }
+  async autoResumeDue() {
+    this.autoResumeCalls += 1;
+    if (this.autoResumeError) throw this.autoResumeError;
+    return this.autoResumeResult;
+  }
+  // dispatcher_resume_studio's rule: only a pause the dispatcher set for awaiting_credit or spend_limit.
+  async dispatcherResumeStudio(reason: string, detail: Record<string, unknown>) {
+    this.studioResumes.push({ reason, detail });
+    const s = this.studio;
+    if (!s.paused || (s.pause_reason !== 'awaiting_credit' && s.pause_reason !== 'spend_limit') || !(s.paused_by ?? '').startsWith('dispatcher:')) return false;
+    this.studio = { ...s, paused: false, pause_reason: null, paused_by: null, paused_at: null };
+    return true;
   }
   // enqueue_job_run: a key once, one queued scheduled run per job, and a board parent's origin.
   async enqueueJobRun(input: EnqueueInput) {
