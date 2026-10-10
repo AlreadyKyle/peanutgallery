@@ -1,9 +1,12 @@
-// The replay eval set's gate rule (docs/specs/agent-upkeep.md, platform/agents/evals/README.md): a
-// change to a role prompt, a rubric, a schema or the managed agent definition under platform/agents/
-// must add a result file in platform/agents/evals/results/ whose every set is at or above
-// baseline.json. The change is the diff against the gate's base (EVAL_BASE, which gate.yml and
-// scripts/local-gate.sh set to the commit they compare with), or origin/main's merge base locally.
-// A baseline moves only in a board pull request that gives the reason.
+// The replay eval set in the gate (docs/specs/agent-upkeep.md, platform/agents/evals/README.md). The
+// replay result is advisory, not a merge gate (docs/PLAN.md §10 decision 66, amending decision 52;
+// docs/specs/unattended-roles.md, PR5): it runs only on the founder's login, and the studio must not
+// wait on it. A change to a role prompt, a rubric, a schema or the managed agent definition under
+// platform/agents/ that adds no result file in platform/agents/evals/results/, or one below
+// baseline.json, or before any baseline exists, passes, and the gate log reports what is missing. The
+// change is the diff against the gate's base (EVAL_BASE, which gate.yml and scripts/local-gate.sh set
+// to the commit they compare with), or origin/main's merge base locally. A baseline still moves only
+// in a board pull request that gives the reason, and one that moves without it fails.
 // Run from the repository root: node --test platform/agents/evals.test.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -21,7 +24,9 @@ export const BASELINE = `${EVALS}/baseline.json`;
 /**
  * The rule on one change. changes: [{ status, path }] as git's --name-status gives them (A, M, D, R...);
  * read(path): the file's JSON at the change's head, or null when it has none.
- * @returns {{ ok: boolean, reason: string }}
+ * A guarded change with no new result, a result below the baseline or no baseline yet passes with a
+ * report, the advisory line the gate log prints; only a baseline that moves without its reason fails.
+ * @returns {{ ok: boolean, reason: string, report?: string }}
  */
 export function evalRule(changes, read) {
   const baselineChanged = changes.some((c) => c.path === BASELINE);
@@ -33,22 +38,33 @@ export function evalRule(changes, read) {
   }
   const guarded = changes.filter((c) => GUARDED.test(c.path)).map((c) => c.path);
   if (guarded.length === 0) return { ok: true, reason: 'no prompt, rubric, schema or agent definition changed' };
+  const advisory = (report) => ({ ok: true, reason: `advisory: ${report}`, report });
   const added = changes.filter((c) => c.status.startsWith('A') && RESULT.test(c.path)).map((c) => c.path).sort();
   if (added.length === 0) {
-    return { ok: false, reason: `${guarded.join(', ')} changed, and no result file was added in ${EVALS}/results/: run pnpm eval:replay -- --set draft --k 3 at the Mac and commit its result` };
+    return advisory(`${guarded.join(', ')} changed, and no replay result was added in ${EVALS}/results/: run pnpm eval:replay -- --set draft --k 3 at the Mac and commit its result`);
   }
   const baseline = read(BASELINE);
   if (!baseline || typeof baseline.sets !== 'object' || baseline.sets === null) {
-    return { ok: false, reason: `${guarded.join(', ')} changed, and ${BASELINE} does not exist yet: the board sets it from a first attended run` };
+    return advisory(`${guarded.join(', ')} changed, and ${BASELINE} does not exist yet: the board sets it from a first attended run`);
   }
   const newest = added.at(-1);
   const result = read(newest);
-  if (!result || typeof result.sets !== 'object' || result.sets === null) return { ok: false, reason: `${newest} holds no sets` };
+  if (!result || typeof result.sets !== 'object' || result.sets === null) return advisory(`${newest} holds no sets`);
   const below = Object.entries(baseline.sets).filter(([name, floor]) => !(typeof result.sets[name]?.pass_k === 'number' && result.sets[name].pass_k >= floor));
   if (below.length > 0) {
-    return { ok: false, reason: `${newest} is below ${BASELINE}: ${below.map(([name, floor]) => `${name} ${result.sets[name]?.pass_k ?? 'missing'} < ${floor}`).join('; ')}` };
+    return advisory(`${newest} is below ${BASELINE}: ${below.map(([name, floor]) => `${name} ${result.sets[name]?.pass_k ?? 'missing'} < ${floor}`).join('; ')}`);
   }
   return { ok: true, reason: `${newest} is at or above the baseline for every set` };
+}
+
+/**
+ * The line the gate log prints for a verdict: the missing or lower replay result, marked advisory, or
+ * null when there is nothing to report.
+ * @param {{ report?: string }} verdict
+ * @returns {string | null}
+ */
+export function gateReport(verdict) {
+  return verdict.report ? `replay eval, advisory and not a merge gate (docs/PLAN.md §10 decision 66): ${verdict.report}` : null;
 }
 
 function git(args) {
@@ -75,36 +91,47 @@ describe('the eval rule on fixture changes', () => {
   const prompt = { status: 'M', path: 'platform/agents/prompts/game-director.md' };
   const result = (name) => ({ status: 'A', path: `${EVALS}/results/${name}.json` });
 
-  test('a change with no guarded file passes, with or without a result', () => {
-    assert.equal(evalRule([{ status: 'M', path: 'platform/site/src/App.tsx' }, { status: 'M', path: 'platform/agents/janitor.json' }], files()).ok, true);
+  test('a change with no guarded file passes, with or without a result, and reports nothing', () => {
+    const verdict = evalRule([{ status: 'M', path: 'platform/site/src/App.tsx' }, { status: 'M', path: 'platform/agents/janitor.json' }], files());
+    assert.equal(verdict.ok, true);
+    assert.equal(gateReport(verdict), null);
   });
 
+  // docs/specs/unattended-roles.md, PR5: the replay result is advisory (PLAN.md §10 decision 66).
   for (const guarded of ['platform/agents/prompts/game-designer.md', 'platform/agents/rubrics/draft-game.md', 'platform/agents/schemas/card-draft.schema.json', 'platform/agents/managed/agent.yaml']) {
-    test(`a change to ${guarded} with no new result fails`, () => {
+    test(`a change to ${guarded} with no new result passes, and the gate log reports the missing result`, () => {
       const verdict = evalRule([{ status: 'M', path: guarded }], files());
-      assert.equal(verdict.ok, false);
-      assert.match(verdict.reason, /no result file was added/);
+      assert.equal(verdict.ok, true);
+      assert.equal(
+        gateReport(verdict),
+        `replay eval, advisory and not a merge gate (docs/PLAN.md §10 decision 66): ${guarded} changed, and no replay result was added in ${EVALS}/results/: run pnpm eval:replay -- --set draft --k 3 at the Mac and commit its result`,
+      );
     });
   }
 
-  test('a modified result file is not a new one', () => {
-    assert.equal(evalRule([prompt, { status: 'M', path: `${EVALS}/results/20260926T120000Z.json` }], files()).ok, false);
+  test('a modified result file is not a new one: the change passes and the missing result is reported', () => {
+    const verdict = evalRule([prompt, { status: 'M', path: `${EVALS}/results/20260926T120000Z.json` }], files());
+    assert.equal(verdict.ok, true);
+    assert.match(gateReport(verdict), /no replay result was added/);
   });
 
-  test('a new result below the baseline fails, naming the set', () => {
+  test('a new result below the baseline passes, and the report names the set', () => {
     const verdict = evalRule([prompt, result('20260926T120000Z')], files({ [`${EVALS}/results/20260926T120000Z.json`]: { sets: { draft: { pass_k: 0.5 } } } }));
-    assert.equal(verdict.ok, false);
-    assert.match(verdict.reason, /draft 0\.5 < 0\.75/);
+    assert.equal(verdict.ok, true);
+    assert.match(gateReport(verdict), /is below platform\/agents\/evals\/baseline\.json: draft 0\.5 < 0\.75/);
   });
 
-  test('a new result missing a set the baseline names fails', () => {
-    assert.equal(evalRule([prompt, result('20260926T120000Z')], files({ [`${EVALS}/results/20260926T120000Z.json`]: { sets: {} } })).ok, false);
+  test('a new result missing a set the baseline names passes, and the report names it missing', () => {
+    const verdict = evalRule([prompt, result('20260926T120000Z')], files({ [`${EVALS}/results/20260926T120000Z.json`]: { sets: {} } }));
+    assert.equal(verdict.ok, true);
+    assert.match(gateReport(verdict), /draft missing < 0\.75/);
   });
 
-  test('the same change passes with a new result at or above the baseline', () => {
+  test('the same change passes with a new result at or above the baseline, and reports nothing', () => {
     for (const passK of [0.75, 1]) {
       const verdict = evalRule([prompt, result('20260926T120000Z')], files({ [`${EVALS}/results/20260926T120000Z.json`]: { sets: { draft: { pass_k: passK } } } }));
       assert.equal(verdict.ok, true, verdict.reason);
+      assert.equal(gateReport(verdict), null);
     }
   });
 
@@ -113,13 +140,14 @@ describe('the eval rule on fixture changes', () => {
       [`${EVALS}/results/20260926T120000Z.json`]: { sets: { draft: { pass_k: 1 } } },
       [`${EVALS}/results/20260926T130000Z.json`]: { sets: { draft: { pass_k: 0.5 } } },
     }));
-    assert.equal(verdict.ok, false);
+    assert.equal(verdict.ok, true);
+    assert.match(gateReport(verdict), /20260926T130000Z\.json is below/);
   });
 
-  test('with no baseline yet a guarded change fails, and the board sets it from a first run', () => {
+  test('with no baseline yet a guarded change passes, and the report says the board sets it from a first run', () => {
     const verdict = evalRule([prompt, result('20260926T120000Z')], (p) => (p.endsWith('20260926T120000Z.json') ? { sets: { draft: { pass_k: 1 } } } : null));
-    assert.equal(verdict.ok, false);
-    assert.match(verdict.reason, /does not exist yet/);
+    assert.equal(verdict.ok, true);
+    assert.match(gateReport(verdict), /does not exist yet: the board sets it from a first attended run/);
   });
 
   test('a baseline that moves gives its reason', () => {
@@ -153,9 +181,12 @@ describe('the eval set in the repository', () => {
     }
   });
 
-  test("this change meets the rule against the gate's base", () => {
+  // The gate log carries the advisory line: test:agents prints it as this test's diagnostic.
+  test("this change meets the rule against the gate's base, and the gate log reports a missing replay result", (t) => {
     const base = process.env.EVAL_BASE?.trim() || 'origin/main';
     const verdict = evalRule(changesAgainst(base), readAtHead);
+    const report = gateReport(verdict);
+    if (report) t.diagnostic(`${report} (compared with ${base})`);
     assert.equal(verdict.ok, true, `${verdict.reason} (compared with ${base})`);
   });
 });
