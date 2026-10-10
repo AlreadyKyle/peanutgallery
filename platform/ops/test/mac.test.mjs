@@ -529,8 +529,11 @@ describe('backup-mac.sh', () => {
     const flat = (text) => text.replace(/\s+/g, ' ').trim();
     const dumped = new Set(['public', 'money']);
 
-    const jobs = [...sql.matchAll(/cron\.schedule\(('[^']+', '[^']+', '[^']+')\)/g)].map((match) => match[1]);
-    for (const name of ['credit-held-contributions', 'waterfall-sweep']) assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
+    // A schedule's command is single-quoted or, when it quotes a job name itself, dollar-quoted ($c$).
+    const jobs = [...sql.matchAll(/cron\.schedule\(('[^']+', '[^']+', (?:'[^']+'|\$c\$[\s\S]*?\$c\$))\)/g)].map((match) => match[1]);
+    for (const name of ['credit-held-contributions', 'waterfall-sweep', 'janitor', 'upkeep_merge', 'supply-draft']) {
+      assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
+    }
     for (const job of jobs) assert.ok(after.includes(`select cron.schedule(${job});`), `after-restore.sql schedules ${job}`);
 
     const triggers = [...sql.matchAll(/create (?:or replace )?trigger (\w+)\s+([^;]*?\son (\w+)\.\w+[^;]*);/gi)].filter((match) => !dumped.has(match[3].toLowerCase()));

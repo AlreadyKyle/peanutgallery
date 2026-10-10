@@ -29,6 +29,8 @@ const base: DispatcherConfig = {
   priceTable: parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } })),
   poolDailyCapUsd: 100,
   cardMaxUsd: 25,
+  visualReviewMaxUsd: 1,
+  draftSessionMaxUsd: 0.75,
   sessionMaxTurns: 60,
   sessionMaxMinutes: 60,
   agentHourlyRateUsd: 5,

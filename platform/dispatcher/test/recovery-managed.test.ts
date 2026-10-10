@@ -47,6 +47,8 @@ beforeAll(async () => {
     priceTable: parsePriceTable(JSON.stringify({ 'builder-class': { input: 3, output: 15, cache_read: 0.3, cache_write_5m: 3.75, cache_write_1h: 6 } })),
     poolDailyCapUsd: 100,
     cardMaxUsd: 25,
+    visualReviewMaxUsd: 1,
+    draftSessionMaxUsd: 0.75,
     sessionMaxTurns: 60,
     sessionMaxMinutes: 60,
     agentHourlyRateUsd: 5,
@@ -137,6 +139,6 @@ describe('recoverOrphans with managed sessions', () => {
     const alert = new RecordingAlerter();
     await recoverOrphans(deps(db, alert, async () => new Map()));
     expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'dispatcher_restart' });
-    expect(alert.messages).toEqual(['Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open.']);
+    expect(alert.messages).toEqual(['Card aaaaaaaa was building when the dispatcher restarted and is paused. Branch card/aaaaaaaa-config and any pull request are left open. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.']);
   });
 });

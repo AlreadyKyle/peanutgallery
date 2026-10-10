@@ -7,7 +7,9 @@
 // - paths: every file a check names is in seed-1, inside the lane's paths and outside the kernel;
 // - already_holds: no check line is already true on main, read at the run's base sha;
 // - deny_list: the gate's banned-phrases.sh passes every text field, trademarks included;
-// - estimate: the estimate, which is the funding target, is within card_max_usd;
+// - estimate: the estimate is within card_max_usd, and so is the funding target approval sets, the
+//   estimate plus the card's drafting spend, with room left for the least a grading session needs,
+//   rounded up to the cent;
 // - executor: the executor is an active, unpaused writer that builds seed-1 cards.
 import { AcceptanceGrammarError, evaluateCheck, parseChecks, type ConfigCheck } from './acceptance.js';
 import type { Role } from './db.js';
@@ -37,8 +39,19 @@ export interface DraftCheckDeps {
   readMain: (file: string) => Promise<string | null>;
   scanText: (strings: readonly string[]) => Promise<PublicTextResult>;
   cardMaxUsd: number;
+  // What the card's drafting has spent so far, and the least its grading session needs: approval
+  // raises the card's target by its drafting spend (20261010200000_supply_refill.sql), so the estimate
+  // plus both, rounded up to the cent, must stay within cardMaxUsd. Unset is nothing.
+  draftingUsd?: number;
+  gradingUsd?: number;
   // The roles that are not retired.
   roles: readonly Role[];
+}
+
+// The card's estimate and funding target once a draft is approved: the Designer's estimate plus the
+// card's drafting spend, rounded up to the cent, as approve_card_draft sets them.
+export function draftTotalUsd(estimateUsd: number, draftingUsd: number): number {
+  return Math.ceil(Math.round((estimateUsd + draftingUsd) * 10_000) / 100) / 100;
 }
 
 // The executor the draft names, when it is an active, unpaused writer for seed-1.
@@ -94,6 +107,15 @@ export async function checkDraft(draft: CardDraft, deps: DraftCheckDeps): Promis
 
   if (draft.estimate_usd > deps.cardMaxUsd) {
     return { ok: false, check: 'estimate', detail: `the estimate $${draft.estimate_usd} is above the per-card maximum $${deps.cardMaxUsd}` };
+  }
+  const drafting = deps.draftingUsd ?? 0;
+  const grading = deps.gradingUsd ?? 0;
+  if (drafting + grading > 0 && draftTotalUsd(draft.estimate_usd, drafting + grading) > deps.cardMaxUsd) {
+    return {
+      ok: false,
+      check: 'estimate',
+      detail: `the estimate $${draft.estimate_usd} plus the $${drafting} this card's drafting has spent and the $${grading} its grading needs at least comes to $${draftTotalUsd(draft.estimate_usd, drafting + grading).toFixed(2)}, above the per-card maximum $${deps.cardMaxUsd}`,
+    };
   }
 
   if (!seedExecutor(draft.executor, deps.roles)) {

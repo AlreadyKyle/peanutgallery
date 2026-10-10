@@ -22,6 +22,7 @@ import { FakeAdapter, startEvent, untilAborted, usageEvent, type FakeScript } fr
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
 import { githubGitRoute, type CompareFile } from './helpers/github-git.js';
+import { CODE_ROOT } from './helpers/fake-managed.js';
 import { mockFetch, type FetchCall, type Reply } from './helpers/mock-fetch.js';
 
 const silent = createLogger(new Writable({ write: (_chunk, _enc, cb) => cb() }));
@@ -81,6 +82,8 @@ beforeAll(async () => {
     priceTable: PRICE_TABLE,
     poolDailyCapUsd: 100,
     cardMaxUsd: 25,
+    visualReviewMaxUsd: 1,
+    draftSessionMaxUsd: 0.75,
     sessionMaxTurns: 60,
     sessionMaxMinutes: 60,
     agentHourlyRateUsd: 5,
@@ -355,7 +358,7 @@ describe('runCardPipeline', () => {
     expect(db.deploys.filter((row) => row.is_green)).toEqual([OLDER_GREEN]);
     expect(alert.messages).toEqual([
       `Card 4c2f5a1e was reverted on main (revert-): post-merge check failed: ${detail}`,
-      `Card 4c2f5a1e stopped by infrastructure, not by its change (post_merge_outage): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}. The change was rolled back as unverified; the card is paused with its money and is not rejected. Resume it from /board once the outage is over.`,
+      `Card 4c2f5a1e stopped by infrastructure, not by its change (post_merge_outage): spawn table row gatherer: baseCost changes from 10 to 11. ${detail}. The change was rolled back as unverified; the card is paused with its money and is not rejected. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.`,
     ]);
   });
 
@@ -1092,7 +1095,7 @@ describe('runCardPipeline', () => {
       await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn, undefined, alert), infraStops });
       expect(db.cards[0]).toMatchObject({ stage: expected, failing_check: 'dispatcher_error' });
     }
-    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money; resume it from \/board/);
+    expect(alert.messages.at(-1)).toMatch(/It stopped this way 3 times in a row, so it is paused with its money\. It resumes on its own once nothing blocks it/);
     expect(adapter.specs).toEqual([]);
   });
 
@@ -1118,7 +1121,7 @@ describe('runCardPipeline', () => {
     expect(urls(calls).some((call) => call.startsWith('PUT'))).toBe(false);
     expect(db.deploys).toEqual([]);
     expect(alert.messages).toEqual([
-      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged',
+      'Card 4c2f5a1e paused (paused_by_board): spawn table row gatherer: baseCost changes from 10 to 11. the board paused the studio while the card was in the gate; it was not merged. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
     ]);
   });
 
@@ -1216,8 +1219,8 @@ describe('runCardPipeline', () => {
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages).toEqual([
-      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board, then unpause. The card is paused and keeps its money.',
-      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low',
+      'Console credit needed: card 4c2f5a1e stopped because the API refused the studio key for credit or its spend limit. The studio is paused. Buy credit or raise the Console limit, record the purchase on /board. The dispatcher tries the studio key with a one-token call 15 minutes after the pause, then backing off to every 4 hours, and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.',
+      'Card 4c2f5a1e paused (console_credit): spawn table row gatherer: baseCost changes from 10 to 11. the API refused the studio key for credit: Credit balance is too low. It resumes on its own once nothing blocks it (at most 3 times a day and 8 in all, backing off from 15 minutes), or from /board sooner.',
     ]);
     const outcome = await tick({
       db,
@@ -1262,7 +1265,7 @@ describe('runCardPipeline', () => {
     expect(db.ledger).toEqual([]);
     expect(calls).toEqual([]);
     expect(alert.messages[0]).toBe(
-      "Usage tier cap reached: card 4c2f5a1e stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. The studio is paused. Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it, then unpause. The card is paused and keeps its money.",
+      "Usage tier cap reached: card 4c2f5a1e stopped because the API says the studio organisation has reached the monthly usage limit of its Anthropic tier. The studio is paused. Buying credit does not clear it: the limit resets when the month turns, or sooner if Anthropic raises the tier (Console, Limits). Report the tier's monthly limit so the dispatcher stops below it. The dispatcher tries the studio key with a one-token call every hour and unpauses the studio on its own once the call goes through. The card is paused, keeps its money and resumes on its own after the studio does.",
     );
     expect(alert.messages[1]).toMatch(/^Card 4c2f5a1e paused \(usage_tier_cap\): /);
     expect(alert.messages).toHaveLength(2);
@@ -1586,13 +1589,35 @@ describe('a paid card and an infrastructure failure', () => {
     expect(alert.messages[0]).toMatch(/It has no stored patch to re-gate, so it is paused with its money rather than starting a new session/);
   });
 
-  it("still rejects a card whose own change fails the gate on a green base", async () => {
-    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
-    const { fetchFn, calls } = remote({ gate: RUN('completed', 'failure') });
-    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), timings: SLOW, patches, infraStops: new Map() });
+  it("gates a stored patch once more after its own change fails on a green base, then rejects it", async () => {
+    const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
+    const first = remote({ gate: RUN('completed', 'failure') });
+    await runCardPipeline(c, { ...deps(db, adapter, first.fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    // Once: back to funded with the patch kept, so the next claim gates it again on a new commit.
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'gate_retry' });
+    expect(patches.rows).toHaveLength(1);
+    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(1);
+    expect(db.events.find((e) => e.payload.step === 'gate_retry')).toMatchObject({ type: 'message', payload: { detail: 'gate concluded failure' } });
+    expect(urls(first.calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
+
+    // The second failure rejects it, and no session ever ran.
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    const second = remote({ gate: RUN('completed', 'failure') });
+    await runCardPipeline(c, { ...deps(db, adapter, second.fetchFn), timings: SLOW, patches, infraStops: new Map() });
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
-    expect(db.events.at(-1)).toMatchObject({ type: 'gate_fail', payload: { detail: 'gate concluded failure' } });
-    expect(urls(calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
+    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(2);
+    expect(sessions()).toBe(0);
+  });
+
+  it('a retried gate that passes carries the card on', async () => {
+    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000016');
+    await runCardPipeline(c, { ...deps(db, adapter, remote({ gate: RUN('completed', 'failure') }).fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'gate_retry' });
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'live' });
   });
 
   it('still rolls back and rejects a card whose gate fails at the merge sha, and pauses one whose gate there was cancelled', async () => {
@@ -1696,11 +1721,9 @@ describe('the visual review', () => {
         framesRoot: path.join(dir, 'frames'),
         review: {
           db,
-          session: { adapter: review, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, boardSessionTtlMin: 3, watchIntervalMs: 5, log: silent, stopSignal: stop.signal, now: () => NOW, ledgerRetryMs: 1 },
+          session: { adapter: review, allowAttended: true, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, watchIntervalMs: 5, log: silent, stopSignal: stop.signal, ledgerRetryMs: 1 },
           rubric: async () => 'THE RUBRIC',
           promptRoot: repo,
-          budgetUsd: 5,
-          waitIntervalMs: 5,
         },
       },
     };
@@ -1937,7 +1960,7 @@ describe('the visual review', () => {
     expect(budgets.remaining().get(c.id)).toBe(0);
   });
 
-  it("sends the card back to funded with its first patch, and counts no round, when the claim's budget is spent", async () => {
+  it("sends the card back to funded with its first patch, starting no review and counting no round, when the claim's budget is spent", async () => {
     const { db, c } = setupDb({ estimate_usd: 10 });
     const budgets = new SessionBudgets();
     budgets.start(c.id, 3);
@@ -1947,8 +1970,135 @@ describe('the visual review', () => {
     const review = reviewer([JSON.stringify(verdict(LEGIBILITY))]);
     await runCardPipeline(c, { ...visualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), budgets, patches });
     expect(build.sessions()).toBe(1);
+    expect(review.reviews()).toBe(0);
     expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'insufficient_balance', review_rounds: 0 });
     expect(patches.rows.map((row) => row.baseSha)).toEqual([initialSha]);
+  });
+
+  // A Director reviewing on the managed adapter: the adapter writes the ledger, the start event says so.
+  function managedReviewer(answers: string[], outputTokens = 50) {
+    let n = 0;
+    const adapter = new FakeAdapter(
+      async (_spec, emit) => {
+        n += 1;
+        await emit({ type: 'start', sessionId: `sesn_review_${n}`, model: 'builder-class', tools: ['read', 'glob', 'grep'], apiKeySource: 'ANTHROPIC_API_KEY', ledger: 'adapter' });
+        await emit(usageEvent(1, outputTokens));
+      },
+      { mode: 'unattended', result: () => answers[Math.min(n, answers.length) - 1] ?? '' },
+    );
+    return { adapter, reviews: () => n };
+  }
+
+  // What the card's earlier sessions put on the ledger; the card's spend is read from it at gated.
+  const earlierSpend = (db: FakeDb, cardId: string, usd: number) =>
+    db.recordUsage({ billed_to: 'studio', card_id: cardId, role_id: 'role-builder-a', model: 'builder-class', input_tokens: 0, cached_tokens: 0, output_tokens: 0, usd, request_id: `earlier-${cardId}` });
+
+  function managedVisualDeps(db: FakeDb, build: FakeAdapter, review: FakeAdapter, fetchFn: typeof fetch, alert = new RecordingAlerter()): PipelineDeps {
+    const base = visualDeps(db, build, review, fetchFn, alert);
+    const { allowAttended: _allowed, ...session } = base.visual!.review.session;
+    // The managed session's system prompt is the Director's prompt file, read from the code checkout.
+    return { ...base, visual: { ...base.visual!, review: { ...base.visual!.review, session, promptRoot: CODE_ROOT } } };
+  }
+
+  it("counts the review's spend against the claim's budget, so a revision gets only what is left after the build and the review", async () => {
+    const { db, c } = setupDb({ estimate_usd: 10 });
+    const budgets = new SessionBudgets();
+    budgets.start(c.id, 3);
+    const build = storingBuilder(new MemoryPatchStore(), c.id, { mode: 'unattended', outputTokens: 100_000 });
+    // The review reads with 10,000 output tokens, about $0.15 at $15 a million.
+    const review = managedReviewer([JSON.stringify(verdict(LEGIBILITY)), JSON.stringify(verdict())], 10_000);
+    await runCardPipeline(c, { ...managedVisualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), budgets });
+    expect(db.cards[0]).toMatchObject({ stage: 'live', review_rounds: 1 });
+    // The first review may spend VISUAL_REVIEW_MAX_USD, under what the claim and the ceiling still hold.
+    expect(review.adapter.specs[0]?.maxBudgetUsd).toBe(config.visualReviewMaxUsd);
+    expect(review.adapter.specs[0]?.role?.cardId).toBe(c.id);
+    const [, revision] = build.adapter.specs;
+    // Without the review the revision would get about $1.497 (see the test above); the review's $0.15
+    // or more came off it.
+    expect(revision?.maxBudgetUsd).toBeLessThan(1.35);
+    expect(revision?.maxBudgetUsd).toBeGreaterThan(1.2);
+    // The review on the managed adapter writes no founder row: its rows are the adapter's, on the card.
+    expect(db.ledger.filter((row) => row.role_id === director.id)).toEqual([]);
+  });
+
+  it('pauses the card at its ceiling, with no review, when too little of the ceiling is left for one', async () => {
+    // A $1 estimate makes a $1.50 ceiling; the card had spent $1.45 before this claim.
+    const { db, c } = setupDb({ estimate_usd: 1 });
+    await earlierSpend(db, c.id, 1.45);
+    const review = managedReviewer([JSON.stringify(verdict())]);
+    await runCardPipeline(c, managedVisualDeps(db, builder().adapter, review.adapter, visualRemote().fetchFn));
+    expect(review.reviews()).toBe(0);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'ceiling', review_rounds: 0 });
+    expect(db.approvals).toEqual([]);
+  });
+
+  it('gives a review no more than the ceiling still holds', async () => {
+    const { db, c } = setupDb({ estimate_usd: 1 });
+    await earlierSpend(db, c.id, 1.0);
+    const review = managedReviewer([JSON.stringify(verdict())]);
+    await runCardPipeline(c, managedVisualDeps(db, builder().adapter, review.adapter, visualRemote().fetchFn));
+    // $1.50 less the $1.00 before and the build's own few tenths of a cent, under the $1 review cap.
+    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeLessThan(0.5);
+    expect(review.adapter.specs[0]?.maxBudgetUsd).toBeGreaterThan(0.49);
+    expect(db.cards[0]).toMatchObject({ stage: 'live' });
+  });
+
+  it('pauses a card whose paid review failed even with a stored patch, so a requeue never pays for the review again', async () => {
+    const { db, c } = setupDb();
+    const patches = new MemoryPatchStore();
+    const build = storingBuilder(patches, c.id, { mode: 'unattended' });
+    const review = managedReviewer(['The frames look fine to me.']);
+    await runCardPipeline(c, { ...managedVisualDeps(db, build.adapter, review.adapter, visualRemote().fetchFn), patches, infraStops: new Map() });
+    expect(patches.rows).toHaveLength(1);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'visual_review' });
+  });
+
+  it('starts no review while the studio is paused, and pauses the card for the board', async () => {
+    const { db, c } = setupDb();
+    const review = managedReviewer([JSON.stringify(verdict())]);
+    const deps = managedVisualDeps(db, builder().adapter, review.adapter, visualRemote().fetchFn);
+    const getStudio = db.getStudioState.bind(db);
+    let reads = 0;
+    // The studio is paused while the gate runs: the build saw it unpaused, the review sees it paused.
+    db.getStudioState = async () => {
+      const studio = await getStudio();
+      reads += 1;
+      return review.adapter.specs.length === 0 && db.cards[0]?.stage === 'gated' ? { ...studio, paused: true } : studio;
+    };
+    await runCardPipeline(c, deps);
+    expect(reads).toBeGreaterThan(0);
+    expect(review.adapter.specs).toEqual([]);
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'paused_by_board' });
+  });
+
+  it('pauses the studio and the card when the API refuses the review for credit', async () => {
+    const { db, c } = setupDb();
+    const alert = new RecordingAlerter();
+    const review = new FakeAdapter(
+      async () => {
+        throw new SessionPaused('console_credit', 'the Managed Agents session could not be created: Your credit balance is too low to access the Anthropic API.');
+      },
+      { mode: 'unattended' },
+    );
+    await runCardPipeline(c, managedVisualDeps(db, builder().adapter, review, visualRemote().fetchFn, alert));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'console_credit', review_rounds: 0 });
+    expect(db.studio.paused).toBe(true);
+    expect(db.pauseReason).toBe('awaiting_credit');
+    expect(alert.messages.some((message) => message.startsWith('Console credit needed: card 5a5a5a5a stopped'))).toBe(true);
+    expect(db.approvals).toEqual([]);
+  });
+
+  it('pauses the studio at the usage tier cap when the API refuses the review there', async () => {
+    const { db, c } = setupDb();
+    const review = new FakeAdapter(
+      async () => {
+        throw new SessionPaused('usage_tier_cap', 'the Managed Agents session could not be created: enforced_spend_limit_reached');
+      },
+      { mode: 'unattended' },
+    );
+    await runCardPipeline(c, managedVisualDeps(db, builder().adapter, review, visualRemote().fetchFn));
+    expect(db.cards[0]).toMatchObject({ stage: 'paused', failing_check: 'usage_tier_cap' });
+    expect(db.pauseReason).toBe('spend_limit');
   });
 
   it('starts no revision while the board has agents paused or the executor is paused, and counts no round', async () => {

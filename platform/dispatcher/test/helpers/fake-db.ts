@@ -10,18 +10,20 @@ import type {
   Deploy,
   DeployInput,
   DraftFields,
+  DraftTarget,
+  SupplyDraftCheck,
   EnqueueInput,
   Finding,
   Job,
   JobRun,
   OpenCardRow,
   OpenFinding,
+  PauseReason,
   PostKind,
   ProducerSignal,
   ReportPost,
   ShipPost,
   Pool,
-  RankingMove,
   RecordUsageResult,
   Role,
   StudioState,
@@ -94,9 +96,11 @@ export interface EventRow {
   payload: Record<string, unknown>;
 }
 
-// A draft as card_drafts keeps it (20260924400000_agent_workflows.sql).
+// A draft as card_drafts keeps it (20260924400000_agent_workflows.sql), against the card it drafts
+// (20261010200000_supply_refill.sql).
 export interface FakeDraft {
   id: string;
+  target_card_id: string;
   job_run_id: string | null;
   role_id: string;
   fields: DraftFields;
@@ -108,9 +112,11 @@ export interface FakeDraft {
   card_id: string | null;
 }
 
-// A card approval_card_draft inserted, as the handler tests read it.
+// A draft approve_card_draft wrote onto its card, with the approval it recorded, as the handler tests
+// read it: the card's estimate and funding target raised by its drafting spend, rounded up to the cent.
 export interface FakeDraftCard {
   id: string;
+  funding_target_usd: number;
   draft_id: string;
   approver_role_id: string;
   grader_ref: string;
@@ -184,15 +190,32 @@ export class FakeDb implements Db {
   resumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
   resumeCalls = 0;
   resumeError: Error | null = null;
-  // The role jobs (docs/specs/agent-workflows.md): the open cards the handlers read, the drafts, the
-  // cards approval inserted, the rankings applied, and the failure an RPC is set to raise.
+  // What auto_resume_due answers, how often it was called, and every dispatcher_resume_studio call.
+  autoResumeResult: { resumed: number; results: Record<string, unknown>[] } = { resumed: 0, results: [] };
+  autoResumeCalls = 0;
+  autoResumeError: Error | null = null;
+  studioResumes: { reason: string; detail: Record<string, unknown> }[] = [];
+  // draft_card (docs/specs/unattended-roles.md): the open cards the handler reads, the card
+  // open_draft_card answers (a new card unless a test sets a backlog one), the drafts, the drafts
+  // approval wrote onto their card, the new cards a withdrawal rejected, and the failure an RPC is set
+  // to raise.
   openCardRows: OpenCardRow[] = [];
-  // Cards a payment on hold names: card_money_held is true for them though their bar may be empty.
-  heldCardIds = new Set<string>();
+  draftTarget: DraftTarget = {
+    cardId: 'card-drafted-1',
+    kind: 'new',
+    opened: 'new',
+    card: { title: 'A game card the Game Designer is drafting', summary: null, intent: null, horizon: 'next', rank: null, funded_usd: 0, severity: null },
+    gaveUp: [],
+  };
+  draftTargetsOpened: string[] = [];
+  // What supply_draft_check answers, and how often it was read.
+  supplyCheck: SupplyDraftCheck = { short: false, reason: 'not_short', floor: {}, runsToday: 0 };
+  supplyChecks = 0;
+  supplyCheckError: Error | null = null;
   drafts: FakeDraft[] = [];
   draftCards: FakeDraftCard[] = [];
-  rankings: Array<{ runId: string; order: string[]; moves: RankingMove[] }> = [];
-  rpcError: Partial<Record<'recordCardDraft' | 'approveCardDraft' | 'withdrawCardDraft' | 'applyCardRanking', Error>> = {};
+  rejectedCards: Array<{ cardId: string; runId: string }> = [];
+  rpcError: Partial<Record<'openDraftCard' | 'recordCardDraft' | 'approveCardDraft' | 'withdrawCardDraft' | 'rejectDraftCard', Error>> = {};
   // The outbound lane (docs/specs/studio-reports.md): the kill switch, the cards gone live, the
   // published reports newest first, the outbox rows and every outbox call, in order.
   killSwitchFired = false;
@@ -204,9 +227,13 @@ export class FakeDb implements Db {
   async getStudioState() {
     return { ...this.studio };
   }
-  async pauseStudio(by: string, _now: Date, reason: string) {
-    if (this.studio.paused) return;
+  async pauseStudio(by: string, now: Date, reason: PauseReason) {
+    const moneyPause = this.studio.paused && (this.studio.pause_reason === 'awaiting_credit' || this.studio.pause_reason === 'spend_limit') && (this.studio.paused_by ?? '').startsWith('dispatcher:');
+    if (this.studio.paused && !(reason === 'incident' && moneyPause)) return;
     this.studio.paused = true;
+    this.studio.paused_by = by;
+    this.studio.pause_reason = reason;
+    this.studio.paused_at = now.toISOString();
     this.pausedBy = by;
     this.pauseReason = reason;
   }
@@ -337,6 +364,19 @@ export class FakeDb implements Db {
     if (this.resumeError) throw this.resumeError;
     return this.resumeResult;
   }
+  async autoResumeDue() {
+    this.autoResumeCalls += 1;
+    if (this.autoResumeError) throw this.autoResumeError;
+    return this.autoResumeResult;
+  }
+  // dispatcher_resume_studio's rule: only a pause the dispatcher set for awaiting_credit or spend_limit.
+  async dispatcherResumeStudio(reason: string, detail: Record<string, unknown>) {
+    this.studioResumes.push({ reason, detail });
+    const s = this.studio;
+    if (!s.paused || (s.pause_reason !== 'awaiting_credit' && s.pause_reason !== 'spend_limit') || !(s.paused_by ?? '').startsWith('dispatcher:')) return false;
+    this.studio = { ...s, paused: false, pause_reason: null, paused_by: null, paused_at: null };
+    return true;
+  }
   // enqueue_job_run: a key once, one queued scheduled run per job, and a board parent's origin.
   async enqueueJobRun(input: EnqueueInput) {
     const parent = input.parentRunId ? this.jobRuns.find((r) => r.id === input.parentRunId) : undefined;
@@ -419,23 +459,29 @@ export class FakeDb implements Db {
   async openCards() {
     return this.openCardRows.map((row) => ({ ...row }));
   }
-  // rankable_cards: on now, open for funding, and no money on the bar or on hold, in funding order.
-  async rankableCards() {
-    return this.openCardRows
-      .filter((row) => row.horizon === 'now' && ['proposed', 'designing', 'voted'].includes(row.stage) && row.funded_usd === 0 && !this.heldCardIds.has(row.id))
-      .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER))
-      .map((row) => row.id);
+  // open_draft_card: the card the run is billed to, named on the run.
+  async openDraftCard(runId: string) {
+    if (this.rpcError.openDraftCard) throw this.rpcError.openDraftCard;
+    const run = this.jobRuns.find((r) => r.id === runId);
+    if (run) run.card_id = this.draftTarget.cardId;
+    this.draftTargetsOpened.push(runId);
+    return structuredClone(this.draftTarget);
   }
-  async recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string) {
+  async recordCardDraft(cardId: string, runId: string, roleId: string, fields: DraftFields, makerRef: string) {
     if (this.rpcError.recordCardDraft) throw this.rpcError.recordCardDraft;
+    if (cardId !== this.draftTarget.cardId) throw new Error(`db record_card_draft_for: Card ${cardId} is not a card a draft may fill`);
     // As card_from_draft refuses: blank text after trimming, or an estimate that rounds to 0 at 4 places.
     for (const key of ['title', 'summary', 'intent', 'acceptance_test'] as const) {
-      if (fields[key].trim() === '') throw new Error(`db record_card_draft: A draft needs its ${key}`);
+      if (fields[key].trim() === '') throw new Error(`db record_card_draft_for: A draft needs its ${key}`);
     }
-    if (!(Math.round(fields.estimate_usd * 10_000) / 10_000 > 0)) throw new Error('db record_card_draft: The estimate must be above zero');
+    if (!(Math.round(fields.estimate_usd * 10_000) / 10_000 > 0)) throw new Error('db record_card_draft_for: The estimate must be above zero');
+    const target = this.draftTarget;
+    if (target.kind === 'backlog' && (fields.title !== target.card.title || fields.summary !== target.card.summary)) {
+      throw new Error("db record_card_draft_for: A backlog card keeps the board's title and summary");
+    }
     const id = `draft-${this.drafts.length + 1}`;
     const content_sha256 = `sha-${JSON.stringify(fields)}`;
-    this.drafts.push({ id, job_run_id: runId, role_id: roleId, fields: { ...fields }, content_sha256, status: 'drafted', reason_codes: [], maker_ref: makerRef, grader_ref: null, card_id: null });
+    this.drafts.push({ id, target_card_id: cardId, job_run_id: runId, role_id: roleId, fields: { ...fields }, content_sha256, status: 'drafted', reason_codes: [], maker_ref: makerRef, grader_ref: null, card_id: null });
     return { id, content_sha256 };
   }
   async approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>) {
@@ -445,8 +491,11 @@ export class FakeDb implements Db {
     if (verdict.result !== 'approved') throw new Error('db approve_card_draft: Only an approved verdict approves a draft');
     if (graderRef === draft.maker_ref) throw new Error('db approve_card_draft: The grader ref must differ from the maker ref');
     if (approverRoleId === draft.role_id || approverRoleId === draft.fields.executor_role_id) throw new Error("db approve_card_draft: The approver cannot be the card's proposer, drafter or executor");
-    const cardId = `card-from-${draftId}`;
-    this.draftCards.push({ id: cardId, draft_id: draftId, approver_role_id: approverRoleId, grader_ref: graderRef, verdict: { ...verdict }, content_sha256: draft.content_sha256 });
+    const cardId = draft.target_card_id;
+    const spent = (await this.cardSpend([cardId])).get(cardId) ?? 0;
+    const total = Math.ceil(Math.round((draft.fields.estimate_usd + spent) * 10_000) / 100) / 100;
+    if (total > this.studio.card_max_usd) throw new Error(`db approve_card_draft: The draft's estimate and the card's drafting spend come to $${total}, over the per-card maximum $${this.studio.card_max_usd}`);
+    this.draftCards.push({ id: cardId, funding_target_usd: total, draft_id: draftId, approver_role_id: approverRoleId, grader_ref: graderRef, verdict: { ...verdict }, content_sha256: draft.content_sha256 });
     draft.status = 'approved';
     draft.grader_ref = graderRef;
     draft.card_id = cardId;
@@ -480,27 +529,16 @@ export class FakeDb implements Db {
     draft.status = 'withdrawn';
     draft.reason_codes = [...reasonCodes];
   }
-  // apply_card_ranking, for ranked cards: the named cards trade the ranks they hold, in the order
-  // given, and a card holding money is refused. The PGlite test covers unranked cards, ties and the
-  // ten-change cut (agent_workflows_test.ts).
-  async applyCardRanking(runId: string, order: readonly string[]) {
-    if (this.rpcError.applyCardRanking) throw this.rpcError.applyCardRanking;
-    const cards = order.map((id) => {
-      const card = this.openCardRows.find((row) => row.id === id);
-      if (!card) throw new Error(`db apply_card_ranking: Card ${id} does not exist`);
-      if (card.funded_usd !== 0 || this.heldCardIds.has(id)) throw new Error(`db apply_card_ranking: Card ${id} holds money`);
-      if (card.rank === null) throw new Error('FakeDb: rank unranked cards on PGlite, not here');
-      return card;
-    });
-    const places = cards.map((card) => card.rank!).sort((a, b) => a - b);
-    const moves: RankingMove[] = [];
-    cards.forEach((card, index) => {
-      if (card.rank === places[index]) return;
-      moves.push({ card_id: card.id, from: card.rank, to: places[index]! });
-      card.rank = places[index]!;
-    });
-    this.rankings.push({ runId, order: [...order], moves });
-    return { moves, unapplied: 0 };
+  async supplyDraftCheck() {
+    this.supplyChecks += 1;
+    if (this.supplyCheckError) throw this.supplyCheckError;
+    return structuredClone(this.supplyCheck);
+  }
+  // reject_draft_card: only a new card the run opened; a backlog card is left as it was.
+  async rejectDraftCard(cardId: string, runId: string) {
+    if (this.rpcError.rejectDraftCard) throw this.rpcError.rejectDraftCard;
+    if (cardId !== this.draftTarget.cardId || this.draftTarget.kind !== 'new') throw new Error(`db reject_draft_card: Card ${cardId} is not a new card a draft opened; a backlog card is left as it was`);
+    this.rejectedCards.push({ cardId, runId });
   }
   async postingStop() {
     this.outboxCalls.push('postingStop');

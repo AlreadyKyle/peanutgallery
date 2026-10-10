@@ -36,6 +36,7 @@
 //    wrote their spend to the card, so the card's spend is read again and the new session's budget
 //    lowered by it.
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Alerter } from '../alert.js';
@@ -49,15 +50,17 @@ import { fallbackPrice, modelPrice, priceWith, round4, type PriceTable } from '.
 import { sleep } from '../time.js';
 import { git, headSha, shortId } from '../worktree.js';
 import { refusedTools } from './tool-names.js';
-import { agentProblems, enabledToolNames, environmentProblems, SUBMIT_PATCH, type ManagedFiles } from './managed-config.js';
+import { agentProblems, enabledToolNames, environmentProblems, READER_TOOLS, readerProblems, readerToolset, SUBMIT_PATCH, type ManagedFiles } from './managed-config.js';
 import type { EventStream, ManagedClient, ManagedSession, OutputFile, SessionEvent, StreamEvent } from './managed-client.js';
 import { ManagedMeter, listCostUsd, turnUsage, type ManagedBilling, type SettleReport } from './managed-meter.js';
 import { checkReadToken } from './read-token.js';
-import { SessionPaused, type AgentAdapter, type AgentEvent, type ClosedSessions, type EventSink, type ManagedControl, type SessionResult, type SessionSpec } from './types.js';
+import { SessionPaused, type AgentAdapter, type AgentEvent, type ClosedSessions, type EventSink, type ManagedControl, type RoleSessionSetup, type SessionResult, type SessionSpec } from './types.js';
 
 export const API_KEY_SOURCE = 'ANTHROPIC_API_KEY';
 export const REPO_MOUNT = '/workspace/peanutgallery';
 export const OUTPUTS_DIR = '/mnt/session/outputs';
+// Where a role session's uploaded files are mounted, each at its own path below.
+export const UPLOADS_DIR = '/mnt/session/uploads';
 export const TOOLCHAIN_FILE = 'toolchain.txt';
 // A system prompt may be up to 100,000 characters (managed-agents-core.md, agent configuration).
 export const SYSTEM_PROMPT_LIMIT = 100_000;
@@ -73,8 +76,11 @@ export const TOOLCHAIN_BUDGET_CENTS = 100;
 export const PROBE_PROMPT = 'Reply with the single word ready. Run no tool.';
 const SPENT_REQUIRED = "a managed card session needs the card's spend its budget was worked out from (spentUsd)";
 
-export type SessionPurpose = 'card' | 'probe' | 'toolchain' | 'check';
-const PURPOSES: readonly string[] = ['card', 'probe', 'toolchain', 'check'];
+export type SessionPurpose = 'card' | 'role' | 'probe' | 'toolchain' | 'check';
+const PURPOSES: readonly string[] = ['card', 'role', 'probe', 'toolchain', 'check'];
+// A file a role session mounts is no larger than this.
+export const ROLE_FILE_MAX_BYTES = 25 * 1024 * 1024;
+const ROLE_SETUP_REQUIRED = 'a managed role session needs its setup (spec.role)';
 
 export interface ManagedTimings {
   // How long an interrupted session is drained before the dispatcher stops reading it.
@@ -159,6 +165,8 @@ interface DriveOptions {
   firstMessage: string;
   onSubmit: ((event: CustomToolUse) => Promise<SubmitVerdict>) | null;
   remind: boolean;
+  // When set, a tool call to any other tool is a violation (a reader session's read, glob and grep).
+  allowedTools?: readonly string[];
 }
 
 export interface DriveResult {
@@ -418,6 +426,10 @@ class SessionDriver {
       case 'agent.tool_use':
         this.toolUses += 1;
         await this.opts.onEvent({ type: 'tool_call', toolUseId: event.id, name: event.name, input: event.input });
+        if (this.opts.allowedTools && !this.opts.allowedTools.includes(event.name)) {
+          await this.violation(`the session used tool ${event.name}, which it does not hold`);
+          return;
+        }
         if (event.evaluated_permission === 'ask') {
           await this.send([{ type: 'user.tool_confirmation', tool_use_id: event.id, result: 'deny', deny_message: 'No tool call waits for approval in this studio.' }]);
         }
@@ -562,6 +574,14 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     const refused = refusedTools(spec.roleTools);
     if (refused.length > 0) throw new Error(`role tools include excluded tools: ${refused.join(', ')}`);
     if (spec.maxBudgetUsd <= 0) throw new Error('session budget must be positive');
+    if (spec.purpose === 'role') {
+      if (!spec.role) throw new Error(ROLE_SETUP_REQUIRED);
+      if (spec.role.system.length > SYSTEM_PROMPT_LIMIT) throw new Error(`the system prompt is ${spec.role.system.length} characters, over the ${SYSTEM_PROMPT_LIMIT} limit`);
+      for (const file of spec.role.files) {
+        if (!file.mountPath.startsWith(`${UPLOADS_DIR}/`) || file.mountPath.split('/').includes('..')) throw new Error(`a role session's file mounts under ${UPLOADS_DIR}, not at ${file.mountPath}`);
+      }
+      return;
+    }
     if (!spec.allowedPaths || spec.allowedPaths.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
     if (spec.spentUsd === undefined) throw new Error(SPENT_REQUIRED);
   }
@@ -731,8 +751,15 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     if (listed.length > 0) throw new Error('the base commit has a .claude/skills folder, which Managed Agents would load into the session');
   }
 
+  // A card session, and a role session for a card (a Director's review of its frames), bill the studio
+  // with the card; a role session for no card is overhead with its role; the probe and the toolchain
+  // check are overhead with neither.
   private billing(purpose: SessionPurpose, metadata: Record<string, string>): ManagedBilling {
     if (purpose === 'card') return { billed_to: 'studio', card_id: metadata.card_id ?? null, role_id: metadata.role_id || null };
+    if (purpose === 'role') {
+      if (metadata.card_id) return { billed_to: 'studio', card_id: metadata.card_id, role_id: metadata.role_id || null };
+      return { billed_to: 'overhead', card_id: null, role_id: metadata.role_id || null };
+    }
     return { billed_to: 'overhead', card_id: null, role_id: null };
   }
 
@@ -818,6 +845,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   }
 
   async run(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
+    if (spec.purpose === 'role') return this.runRole(spec, onEvent, signal);
     const allowed = spec.allowedPaths ?? [];
     if (allowed.length === 0) throw new Error('a managed session needs the lane paths its patch must stay inside');
     const spentUsd = spec.spentUsd;
@@ -942,7 +970,152 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
     return this.result(drive);
   }
 
-  private endEvent(drive: DriveResult, meter: ManagedMeter, model: string, listUsd: number | null): AgentEvent {
+  // --- a role session ----------------------------------------------------------------------------
+
+  // Uploads a role session's files through the Files API; on any failure the ones already uploaded
+  // are deleted and the error thrown.
+  private async uploadRoleFiles(setup: RoleSessionSetup): Promise<Array<{ fileId: string; mountPath: string }>> {
+    const uploaded: Array<{ fileId: string; mountPath: string }> = [];
+    try {
+      for (const file of setup.files) {
+        const bytes = await readFile(file.path);
+        if (bytes.byteLength > ROLE_FILE_MAX_BYTES) throw new Error(`${file.path} is over the ${ROLE_FILE_MAX_BYTES}-byte limit`);
+        const meta = await this.client.files.upload({ filename: path.basename(file.path), bytes, mimeType: file.path.endsWith('.png') ? 'image/png' : 'application/octet-stream' });
+        uploaded.push({ fileId: meta.id, mountPath: file.mountPath });
+      }
+    } catch (error) {
+      await this.deleteUploads(uploaded.map((entry) => entry.fileId));
+      throw error;
+    }
+    return uploaded;
+  }
+
+  private async deleteUploads(fileIds: readonly string[]): Promise<void> {
+    for (const fileId of fileIds) {
+      await this.client.files.delete(fileId).catch((error: unknown) => this.log.warn('managed', 'uploaded file not deleted; it expires on its own', { file: fileId, error: errorMessage(error) }));
+    }
+  }
+
+  // A role session (a Director's visual review): the writer agent with its tools overridden to read,
+  // glob and grep and no custom tool, no MCP server and no skill, the role's system prompt, the
+  // uploaded files mounted read-only (and the repository at a commit, when the setup names one), a
+  // dollar budget, and metadata naming the card it is billed to and the role. It answers in its final
+  // message, which the end event carries; it submits no patch and is sent no reminder. Its spend is on
+  // the ledger as for a card session, billed to the card (studio) or, for no card, to overhead. The
+  // uploads are deleted however it ends.
+  private async runRole(spec: SessionSpec, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
+    const setup = spec.role;
+    if (!setup) throw new Error(ROLE_SETUP_REQUIRED);
+    const cents = budgetCents(spec.maxBudgetUsd, this.marginUsd(spec.model));
+    if (cents < 1) {
+      this.log.warn('managed', `role session ${setup.label} has less than a cent of budget after the margin; no session`, { max_budget_usd: spec.maxBudgetUsd });
+      return { exitCode: 0, killed: false, killReason: null, turns: 0, endSubtype: 'error_max_budget_usd', totalCostUsd: 0, numTurns: 0, isError: false };
+    }
+    if (signal.aborted) {
+      return { exitCode: null, killed: true, killReason: String(signal.reason ?? 'aborted'), turns: 0, endSubtype: null, totalCostUsd: null, numTurns: 0, isError: false };
+    }
+    if (setup.repoSha) await this.assertReadToken();
+    let uploads: Array<{ fileId: string; mountPath: string }>;
+    try {
+      uploads = await this.uploadRoleFiles(setup);
+    } catch (error) {
+      throw new SessionPaused('managed_api', `the role session's files could not be uploaded, so no session was started: ${errorMessage(error)}`);
+    }
+    try {
+      return await this.driveRole(spec, setup, cents, uploads, onEvent, signal);
+    } finally {
+      await this.deleteUploads(uploads.map((entry) => entry.fileId));
+    }
+  }
+
+  private async driveRole(spec: SessionSpec, setup: RoleSessionSetup, cents: number, uploads: Array<{ fileId: string; mountPath: string }>, onEvent: EventSink, signal: AbortSignal): Promise<SessionResult> {
+    const metadata = { purpose: 'role', card_id: setup.cardId ?? '', role_id: spec.roleId ?? '', label: setup.label.slice(0, 200), run: randomUUID() };
+    let session: ManagedSession;
+    try {
+      session = await this.client.sessions.create({
+        agent: {
+          type: 'agent_with_overrides',
+          id: this.opts.agentId,
+          version: this.opts.agentVersion,
+          model: { id: spec.model, speed: 'standard' },
+          system: setup.system,
+          tools: [readerToolset()],
+          mcp_servers: [],
+          skills: [],
+        },
+        environment_id: this.opts.environmentId,
+        title: setup.label,
+        resources: [
+          ...(setup.repoSha
+            ? [
+                {
+                  type: 'github_repository' as const,
+                  url: `https://github.com/${this.opts.githubRepo}`,
+                  authorization_token: this.opts.readToken,
+                  mount_path: REPO_MOUNT,
+                  checkout: { type: 'commit' as const, sha: setup.repoSha },
+                },
+              ]
+            : []),
+          ...uploads.map((upload) => ({ type: 'file' as const, file_id: upload.fileId, mount_path: upload.mountPath })),
+        ],
+        budget: { type: 'limit', max_list_cost: { amount: String(cents), currency: 'USD' } },
+        metadata,
+      });
+    } catch (error) {
+      // As for a card session: an event first, so a refusal for credit or at the tier cap is seen for
+      // what it is, and the API's whole answer kept.
+      const message = `the Managed Agents session could not be created: ${errorMessage(error)}`;
+      await onEvent({ type: 'error', message });
+      const refusal = spendRefusal(message);
+      throw new SessionPaused(refusal ? REFUSAL_CHECK[refusal] : 'managed_api', message);
+    }
+    const sessionId = session.id;
+    const meter = this.meter(sessionId, spec.model, this.billing('role', metadata));
+    const label = `role ${setup.label}`;
+    let driver: SessionDriver | null = null;
+    let drive: DriveResult;
+    try {
+      const problems = readerProblems(session.agent);
+      if (session.agent.model.id !== spec.model) problems.push(`the session model is ${session.agent.model.id}, not ${spec.model}`);
+      if (session.agent.version !== this.opts.agentVersion) problems.push(`the session runs agent version ${session.agent.version}, not ${this.opts.agentVersion}`);
+      if (problems.length > 0) throw new Error(`managed role session ${sessionId} refused before it ran: ${problems.join('; ')}`);
+      await onEvent({ type: 'start', sessionId, model: session.agent.model.id, tools: enabledToolNames(session.agent.tools), apiKeySource: API_KEY_SOURCE, ledger: 'adapter' });
+      await onEvent({
+        type: 'message',
+        text: `managed role session ${sessionId}: agent ${this.opts.agentId} version ${session.agent.version} as a reader (${READER_TOOLS.join(', ')}), model ${session.agent.model.id}, budget ${cents} cents, ${uploads.length} file(s) mounted${setup.repoSha ? `, repository at ${setup.repoSha}` : ''}`,
+      });
+      driver = new SessionDriver(this, {
+        sessionId,
+        model: spec.model,
+        meter,
+        onEvent,
+        signal,
+        firstMessage: spec.prompt,
+        onSubmit: null,
+        remind: false,
+        allowedTools: READER_TOOLS,
+      });
+      drive = await driver.drive();
+    } catch (error) {
+      const settled = await this.finish(sessionId, meter, null, label, { prompted: driver?.prompted ?? false, ended: false });
+      if (!settled.settled) this.log.warn('managed', 'role session left unarchived after an error', { session: sessionId });
+      throw error;
+    }
+    const settled = await this.finish(sessionId, meter, drive.lastUsage, label, drive);
+    const listUsd = settled.report?.listCostUsd ?? listCostUsd(drive.lastUsage?.list_cost);
+    if (listUsd !== null && listUsd > spec.maxBudgetUsd + 0.005) {
+      await this.opts.alert.notify(`Role session ${setup.label}: session ${sessionId} spent ${listUsd} USD against a budget of ${spec.maxBudgetUsd} USD. The ledger records the true amount.`);
+    }
+    const answer = drive.stop === 'end_turn' ? (drive.messages.at(-1) ?? '') : '';
+    await onEvent(this.endEvent(drive, meter, spec.model, listUsd, answer));
+    if (drive.stop === 'stream_lost') throw new SessionPaused('stream_lost', `session ${sessionId}: ${drive.errors.join('; ')}`);
+    if (drive.stop === 'ledger_refused') throw new SessionPaused('ledger', `session ${sessionId} was interrupted: ${drive.errors.join('; ')}`);
+    return this.result(drive);
+  }
+
+  // result is a role session's final message (its typed answer); a card session's is empty.
+  private endEvent(drive: DriveResult, meter: ManagedMeter, model: string, listUsd: number | null, result = ''): AgentEvent {
     const usage = meter.usage();
     return {
       type: 'end',
@@ -950,9 +1123,9 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
       isError: this.isError(drive.stop),
       totalCostUsd: listUsd,
       numTurns: drive.turns,
-      // Never the agent's own reply: session.ts reads an error result for a credit or spend-limit
+      // Never a card agent's own reply: session.ts reads an error result for a credit or spend-limit
       // refusal, and only the API's words count for that. The API's errors reach it as error events.
-      result: '',
+      result,
       usage,
       modelUsage: [
         {
@@ -995,7 +1168,7 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   private async settleOrphan(session: ManagedSession): Promise<SettleOutcome> {
     const metadata = session.metadata ?? {};
     const purpose = metadata.purpose as SessionPurpose;
-    const label = purpose === 'card' ? `orphan card ${shortId(metadata.card_id ?? '')}` : `orphan ${purpose}`;
+    const label = purpose === 'card' ? `orphan card ${shortId(metadata.card_id ?? '')}` : purpose === 'role' ? `orphan role ${metadata.label ?? ''}` : `orphan ${purpose}`;
     if (session.status === 'running' || session.status === 'rescheduling') {
       await this.client.sessions.events.send(session.id, { events: [{ type: 'user.interrupt' }] }).catch((error: unknown) =>
         this.log.warn('managed', 'orphan interrupt not sent', { session: session.id, error: errorMessage(error) }),
@@ -1097,7 +1270,9 @@ export class ManagedAdapter implements AgentAdapter, ManagedControl {
   }
 
   async probe(): Promise<void> {
-    await this.closeOrphans((session) => session.metadata?.purpose !== 'card');
+    // Not a card's or a role's session: those belong to a running dispatcher, whose startup recovery
+    // closes any it left.
+    await this.closeOrphans((session) => session.metadata?.purpose !== 'card' && session.metadata?.purpose !== 'role');
     const { session, meter, drive } = await this.overheadSession('probe', PROBE_PROMPT, PROBE_BUDGET_CENTS, undefined);
     const settled = await this.finish(session.id, meter, drive.lastUsage, 'startup probe', drive);
     if (settled.report && settled.report.unwritten.length > 0) {

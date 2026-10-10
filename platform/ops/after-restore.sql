@@ -40,7 +40,12 @@ $$;
 -- 20260920000000_refunds_and_holds.sql: held credit is released hourly.
 -- 20260924200000_money_logic.sql: leftovers are released and Not on a card yet drained.
 -- 20260925100000_reports_supply.sql: the last ended New York week's report is published hourly.
+-- 20260925300000_agent_upkeep.sql: the Janitor's daily check and hourly patch merge are queued.
+-- 20261010200000_supply_refill.sql: a draft is queued every 20 minutes while the card supply is short.
 create extension if not exists pg_cron with schema pg_catalog;
 select cron.schedule('credit-held-contributions', '17 * * * *', 'select public.credit_held_contributions()');
 select cron.schedule('waterfall-sweep', '*/5 * * * *', 'select public.waterfall_sweep()');
 select cron.schedule('weekly-report', '7 * * * *', 'select public.publish_weekly_report()');
+select cron.schedule('janitor', '0 8 * * *', $c$select public.enqueue_job_run('janitor', 'schedule')$c$);
+select cron.schedule('upkeep_merge', '15 * * * *', $c$select public.enqueue_job_run('upkeep_merge', 'schedule')$c$);
+select cron.schedule('supply-draft', '*/20 * * * *', $c$select public.enqueue_supply_draft()$c$);

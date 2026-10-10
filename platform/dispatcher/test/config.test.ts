@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ConfigError, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
+import { ConfigError, DRAFT_SESSION_MIN_USD, defaultWorktreeRoot, githubTokenProblem, loadConfig, type Env } from '../src/config.js';
 
 const REPO = '/repo';
 
@@ -37,6 +39,8 @@ describe('loadConfig', () => {
       githubRepo: 'owner/repo',
       poolDailyCapUsd: 100,
       cardMaxUsd: 25,
+      visualReviewMaxUsd: 1,
+      draftSessionMaxUsd: 0.75,
       sessionMaxTurns: 60,
       agentHourlyRateUsd: 5,
       tickMs: 60_000,
@@ -66,6 +70,8 @@ describe('loadConfig', () => {
         STUDIO_ANTHROPIC_API_KEY: 'studio-key',
         POOL_DAILY_CAP_USD: '40',
         CARD_MAX_USD: '10',
+        VISUAL_REVIEW_MAX_USD: '0.5',
+        DRAFT_SESSION_MAX_USD: '0.5',
         SESSION_MAX_TURNS: '30',
         AGENT_HOURLY_RATE_USD: '4',
         DISPATCHER_TICK_MS: '5000',
@@ -85,6 +91,8 @@ describe('loadConfig', () => {
       agentMode: 'unattended',
       poolDailyCapUsd: 40,
       cardMaxUsd: 10,
+      visualReviewMaxUsd: 0.5,
+      draftSessionMaxUsd: 0.5,
       sessionMaxTurns: 30,
       agentHourlyRateUsd: 4,
       tickMs: 5000,
@@ -116,6 +124,9 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, HEALTHCHECK_URL: 'http://hc-ping.com/check-id' }, REPO)).toThrow('HEALTHCHECK_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, NTFY_TOPIC_URL: 'ntfy topic' }, REPO)).toThrow('NTFY_TOPIC_URL must be an https URL');
     expect(() => loadConfig({ ...FULL, SESSION_MAX_MINUTES: '0' }, REPO)).toThrow('SESSION_MAX_MINUTES must be a positive integer');
+    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: '0.05' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be at least 0.35');
+    expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: 'one' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be a non-negative number');
+    expect(() => loadConfig({ ...FULL, DRAFT_SESSION_MAX_USD: '0.2' }, REPO)).toThrow('DRAFT_SESSION_MAX_USD must be at least 0.35');
   });
 
   it('refuses a model with no row in the price table', () => {
@@ -334,5 +345,16 @@ describe('the drain time', () => {
     for (const value of ['2026-10-06T17:00:00', '1791306000', 'soon', '2026-13-45T99:00:00Z']) {
       expect(() => loadConfig({ ...FULL, DISPATCHER_DRAIN_AT: value }, REPO), value).toThrow(ConfigError);
     }
+  });
+});
+
+// docs/specs/unattended-roles.md: the supply gives a card up once its spend leaves less than one draft
+// session under the per-card maximum, in SQL (draft_target_exhausted) and in the handler alike.
+describe('DRAFT_SESSION_MIN_USD', () => {
+  it('is the figure the supply-refill migration gives draft_session_min_usd()', () => {
+    const file = path.resolve(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261010200000_supply_refill.sql');
+    const body = /function public\.draft_session_min_usd\(\)[\s\S]*?select ([0-9.]+)::numeric/.exec(readFileSync(file, 'utf8'));
+    expect(body?.[1]).toBeDefined();
+    expect(Number(body![1])).toBe(DRAFT_SESSION_MIN_USD);
   });
 });

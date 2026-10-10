@@ -1,6 +1,7 @@
-// The Appendix A loop, one tick: hold the dispatcher lease, deal the approved agent cards whose
-// cooling window has passed and resume the ceiling-paused cards the rule may resume
-// (docs/specs/agent-system-core.md), read studio_state, check the board session, read the pool,
+// The Appendix A loop, one tick: hold the dispatcher lease, unpause a studio the dispatcher paused for
+// money once the credit probe passes, deal the approved agent cards whose cooling window has passed,
+// resume the ceiling-paused cards the rule may resume (docs/specs/agent-system-core.md) and the cards
+// paused for a reason that is not theirs (pause-checks.ts, docs/specs/unattended-roles.md), read studio_state, check the board session, read the pool,
 // apply the throttle, select the card, claim it with its session budget, and start its pipeline in
 // the background; then, however the card path ended, the job queue's tick (jobs.ts). The heartbeat
 // and the healthcheck ping follow a tick that completed while holding the lease, so a dispatcher
@@ -12,6 +13,7 @@ import type { AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { SessionBudgets } from './budgets.js';
 import type { PinState } from './cli-pin.js';
+import type { CreditProbeOutcome } from './credit-probe.js';
 import type { Card, Db, Pool, StudioState } from './db.js';
 import { isInfrastructureConclusion, type GateStatus } from './github.js';
 import { haltReason } from './halt.js';
@@ -44,6 +46,9 @@ export interface TickDeps {
   running: Map<string, Date>;
   // The session budget of each card this process is running.
   budgets: SessionBudgets;
+  // The running role job's session budget, by the card it is billed to (a draft_card session); unset
+  // is none.
+  jobBudgets?: SessionBudgets;
   // This process's name on the dispatcher lease, and how long each claim holds it.
   leaseHolder: string;
   leaseTtlSeconds: number;
@@ -62,8 +67,46 @@ export interface TickDeps {
   jobTick?: () => Promise<unknown>;
   // The outbound lane (outbound.ts), run after the heartbeat on every tick that is not halted.
   outbound?: () => Promise<unknown>;
+  // The card supply's alert (supply-watch.ts), run after the outbound lane on every tick that is not
+  // halted; it reads the supply at most every 20 minutes.
+  supplyWatch?: () => Promise<unknown>;
   // DISPATCHER_DRAIN_AT (config.ts): from this time no card or job is claimed. Unset or null: never.
   drainAt?: Date | null;
+  // Unattended mode: the one-token call on the studio key (credit-probe.ts) that tells whether a pause
+  // the dispatcher set for awaiting_credit or spend_limit can be lifted. Unset (attended mode, where no
+  // such pause is set): never probed.
+  creditProbe?: () => Promise<CreditProbeOutcome>;
+  // The probe's backoff for this process; created on the first tick that needs it when unset.
+  studioProbe?: StudioProbeState;
+}
+
+// The pause the credit probe is backing off on, how many probes it has refused, and when the next may run.
+export interface StudioProbeState {
+  key: string | null;
+  failures: number;
+  nextAt: number;
+}
+
+export function newStudioProbeState(): StudioProbeState {
+  return { key: null, failures: 0, nextAt: 0 };
+}
+
+// awaiting_credit is probed 15 minutes after the pause, then after 30, 60 and 120 minutes, then every
+// 4 hours; spend_limit, which clears only when the month turns or the tier rises, every hour.
+export const CREDIT_PROBE_FIRST_MS = 15 * 60_000;
+export const CREDIT_PROBE_MAX_MS = 4 * 60 * 60_000;
+export const SPEND_LIMIT_PROBE_MS = 60 * 60_000;
+
+export function probeDelayMs(reason: 'awaiting_credit' | 'spend_limit', failures: number): number {
+  if (reason === 'spend_limit') return SPEND_LIMIT_PROBE_MS;
+  return Math.min(CREDIT_PROBE_MAX_MS, CREDIT_PROBE_FIRST_MS * 2 ** failures);
+}
+
+// Only a pause the dispatcher set for money it could not spend is probed: never the board's or the
+// moderator's (paused_by is their email), and never an incident.
+function probedPause(studio: StudioState): 'awaiting_credit' | 'spend_limit' | null {
+  if (!studio.paused || !(studio.paused_by ?? '').startsWith('dispatcher:')) return null;
+  return studio.pause_reason === 'awaiting_credit' || studio.pause_reason === 'spend_limit' ? studio.pause_reason : null;
 }
 
 export type DrainState = 'off' | 'draining' | 'drained';
@@ -104,6 +147,7 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   // Draining claims no card and starts no job; the cards and the job already running carry on, and
   // the heartbeat, the ping and the outbound lane go on until main exits.
   const draining = deps.drainAt != null && deps.now().getTime() >= deps.drainAt.getTime();
+  if (!halted) await resumeStudio(deps);
   if (!halted) await dealAndResume(deps);
   let outcome: TickOutcome;
   try {
@@ -115,10 +159,21 @@ export async function tick(deps: TickDeps): Promise<TickOutcome> {
   await heartbeat(deps);
   if (!halted) await deps.alert.ping();
   if (!halted) await runOutboundLane(deps);
+  if (!halted) await runSupplyWatch(deps);
   return outcome;
 }
 
 // A failed or slow Discord post is logged and never stops the tick.
+// A failed supply read is logged and never stops the tick.
+async function runSupplyWatch(deps: TickDeps): Promise<void> {
+  if (!deps.supplyWatch) return;
+  try {
+    await deps.supplyWatch();
+  } catch (error) {
+    deps.log.warn('supply', 'supply watch failed', { error: errorMessage(error) });
+  }
+}
+
 async function runOutboundLane(deps: TickDeps): Promise<void> {
   if (!deps.outbound) return;
   try {
@@ -130,8 +185,75 @@ async function runOutboundLane(deps: TickDeps): Promise<void> {
   }
 }
 
-// Dealing and resume by rule are the database's (deal_due_cards, resume_due_by_rule); each is
-// logged and never stops the tick.
+// A studio the dispatcher paused for awaiting_credit or spend_limit is unpaused once the credit probe
+// answers ok (dispatcher_resume_studio, which refuses any other pause). The probe runs at most once per
+// probeDelayMs, counted from the pause and then from each refusal, and the board hears once when the
+// studio resumes. A failed read, probe or write is logged and never stops the tick; the studio then
+// stays paused.
+async function resumeStudio(deps: TickDeps): Promise<void> {
+  if (!deps.creditProbe) return;
+  const state = (deps.studioProbe ??= newStudioProbeState());
+  let studio: StudioState;
+  try {
+    studio = await deps.db.getStudioState();
+  } catch (error) {
+    deps.log.warn('tick', 'studio_state could not be read for the credit probe', { error: errorMessage(error) });
+    return;
+  }
+  const reason = probedPause(studio);
+  if (reason === null) {
+    state.key = null;
+    return;
+  }
+  const now = deps.now().getTime();
+  const key = `${reason}:${studio.paused_at ?? ''}`;
+  if (state.key !== key) {
+    const since = studio.paused_at ? Date.parse(studio.paused_at) : Number.NaN;
+    state.key = key;
+    state.failures = 0;
+    state.nextAt = (Number.isFinite(since) ? since : now) + probeDelayMs(reason, 0);
+  }
+  if (now < state.nextAt) return;
+  let probe: CreditProbeOutcome;
+  try {
+    probe = await deps.creditProbe();
+  } catch (error) {
+    probe = { outcome: 'error', model: null, detail: errorMessage(error) };
+  }
+  if (probe.outcome !== 'ok') {
+    state.failures += 1;
+    state.nextAt = now + probeDelayMs(reason, state.failures);
+    deps.log.info('tick', 'the credit probe was refused; the studio stays paused', { reason, probe, failures: state.failures, nextProbeAt: new Date(state.nextAt).toISOString() });
+    return;
+  }
+  let resumed: boolean;
+  try {
+    resumed = await deps.db.dispatcherResumeStudio('credit_probe_ok', { pause_reason: reason, paused_by: studio.paused_by ?? null, paused_at: studio.paused_at ?? null, model: probe.model, usd: probe.usd });
+  } catch (error) {
+    state.failures += 1;
+    state.nextAt = now + probeDelayMs(reason, state.failures);
+    deps.log.warn('tick', 'dispatcher_resume_studio failed; the studio stays paused', { error: errorMessage(error) });
+    return;
+  }
+  if (!resumed) {
+    // The database refused (the pause became an incident's or the board's, or the kill switch fired):
+    // keep backing off, so a refusal never turns into a probe on every tick.
+    state.failures += 1;
+    state.nextAt = now + probeDelayMs(reason, state.failures);
+    deps.log.info('tick', 'the credit probe passed but the studio was not unpaused: its pause is no longer the dispatcher\'s', { reason });
+    return;
+  }
+  state.key = null;
+  deps.log.info('tick', 'the credit probe passed; the studio is unpaused', { reason, model: probe.model, usd: probe.usd });
+  const what = reason === 'awaiting_credit' ? 'Console credit' : "the usage tier's monthly cap";
+  await deps.alert.notifyOnce(
+    `studio_resumed:${key}`,
+    `The studio is unpaused: the dispatcher paused it for ${what}, and a one-token call on the studio key went through again. Cards paused for it resume on their own.`,
+  );
+}
+
+// Dealing, resume by rule and auto-resume are the database's (deal_due_cards, resume_due_by_rule,
+// auto_resume_due); each is logged and never stops the tick.
 async function dealAndResume(deps: TickDeps): Promise<void> {
   try {
     const dealt = await deps.db.dealDueCards();
@@ -144,6 +266,12 @@ async function dealAndResume(deps: TickDeps): Promise<void> {
     if (resumed.results.length > 0) deps.log.info('tick', `${resumed.resumed} card(s) resumed by rule`, { results: resumed.results });
   } catch (error) {
     deps.log.warn('tick', 'resume_due_by_rule failed', { error: errorMessage(error) });
+  }
+  try {
+    const auto = await deps.db.autoResumeDue();
+    if (auto.resumed > 0) deps.log.info('tick', `${auto.resumed} card(s) resumed on their own`, { results: auto.results.filter((result) => result.resumed === true) });
+  } catch (error) {
+    deps.log.warn('tick', 'auto_resume_due failed', { error: errorMessage(error) });
   }
 }
 
@@ -250,9 +378,25 @@ async function offPin(deps: TickDeps): Promise<boolean> {
   return true;
 }
 
+export type MoneyDeps = Pick<TickDeps, 'db' | 'now' | 'budgets' | 'jobBudgets'>;
+
+// What the running role job's sessions may still spend.
+export function jobsHoldUsd(jobBudgets: SessionBudgets | undefined): number {
+  let total = 0;
+  for (const left of jobBudgets?.remaining().values() ?? []) total += left;
+  return Math.round(total * 10_000) / 10_000;
+}
+
+// The money state as a tick reads it, for a role job's session to check its budget against
+// (job-handlers/draft-card.ts): the studio, the pool and every card that can hold money, read fresh.
+export async function currentMoneyState(deps: MoneyDeps): Promise<MoneyState> {
+  const [studio, pool, cards] = await Promise.all([deps.db.getStudioState(), deps.db.getPool(), deps.db.listCardsInStages([...HOLD_STAGES, ...RUNNING_STAGES])]);
+  return moneyState(deps, studio, pool, cards);
+}
+
 // Two reads, both summed in the database: each card's studio spend (dispatcher_card_spend) and the spend
 // totals (studio_spend_totals), so a tick never downloads the ledger.
-async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
+async function moneyState(deps: MoneyDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
   const now = deps.now();
   const [spent, totals] = await Promise.all([deps.db.cardSpend(cards.map((card) => card.id)), deps.db.spendTotals(newYorkMonthStart(now), tierMonthStart(now))]);
   return {
@@ -271,6 +415,7 @@ async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards
     cards,
     spent,
     running: deps.budgets.remaining(),
+    jobsUsd: jobsHoldUsd(deps.jobBudgets),
   };
 }
 

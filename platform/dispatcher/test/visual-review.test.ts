@@ -1,11 +1,14 @@
 // The Directors' visual review (src/visual-review.ts, docs/specs/design-review.md): the end rule's
 // full table; the revision feedback holds only criteria, frame names and reason codes; the review
-// waits for a signed-in board member; the Game Director reviews seed-1 and the Platform Director
-// platform/site; the session holds Read, Glob and Grep only, in the frames folder, with the prompt
-// read from the dispatcher's own checkout; a final message that is not one valid verdict naming
-// changed frames fails the review; its model calls write founder rows with the Director's role and no
-// card, and a replayed request id writes nothing.
-import { mkdtemp, rm } from 'node:fs/promises';
+// starts with no board member signed in; the Game Director reviews seed-1 and the Platform Director
+// platform/site; the session holds Read, Glob and Grep only, with the prompt read from the
+// dispatcher's own checkout; attended, it works in the frames folder and its model calls write
+// founder rows with the Director's role and no card, a replayed request id writing nothing; managed,
+// the frames are mounted at FRAMES_MOUNT, the prompt names those paths and the session bills the card;
+// more than twelve changed frames are reviewed in batches whose verdicts combine worst-of; a final
+// message that is not one valid verdict naming frames it was shown fails the review; a credit refusal
+// is named.
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -15,9 +18,14 @@ import type { Card, Role } from '../src/db.js';
 import { createLogger } from '../src/log.js';
 import { parsePriceTable } from '../src/pricing.js';
 import { TypedOutput } from '../src/typed-output.js';
+import { SessionPaused } from '../src/adapters/types.js';
 import {
+  combineVerdicts,
   decideReview,
+  FRAMES_MOUNT,
   MAX_REVIEW_ROUNDS,
+  REVIEW_BATCH_FRAMES,
+  reviewBatches,
   openCriteria,
   revisionAddendum,
   REVIEWERS,
@@ -28,8 +36,10 @@ import {
   type VisualReviewDeps,
   type VisualVerdict,
 } from '../src/visual-review.js';
+import type { SessionSpec } from '../src/adapters/types.js';
 import { FakeAdapter, usageEvent, type FakeOptions } from './helpers/fake-adapter.js';
-import { FakeDb, NOW, card, role } from './helpers/fake-db.js';
+import { FakeDb, card, role } from './helpers/fake-db.js';
+import { CODE_ROOT } from './helpers/fake-managed.js';
 
 const PRICE_TABLE = parsePriceTable(JSON.stringify({ 'director-class': { input: 5, output: 25, cache_read: 0.5, cache_write_5m: 6.25, cache_write_1h: 10 } }));
 const READ_SET = ['Read', 'Glob', 'Grep'];
@@ -92,10 +102,44 @@ describe('the revision feedback', () => {
 
 describe('the review prompt', () => {
   it("names the card's intent and acceptance test, the gate, every changed frame, the rubric and the schema", () => {
-    const prompt = reviewPrompt({ card: card({ intent: 'Show the team.', acceptance_test: 'gate and smoke' }), sha: SHA, gateUrl: null, review: 1, changed: CHANGED, rubric: 'THE RUBRIC' }, typed);
-    for (const line of ['Show the team.', 'gate and smoke', SHA, '- site/home-375.png', '- site/team-1440.png', 'THE RUBRIC', 'platform/agents/schemas/visual-verdict.schema.json']) {
+    const frames = [
+      { frame: CHANGED[0]!, before: `${FRAMES_MOUNT}/site/home-375.before.png`, after: `${FRAMES_MOUNT}/site/home-375.after.png` },
+      { frame: CHANGED[1]!, before: null, after: `${FRAMES_MOUNT}/site/team-1440.after.png` },
+    ];
+    const prompt = reviewPrompt({ card: card({ intent: 'Show the team.', acceptance_test: 'gate and smoke' }), sha: SHA, gateUrl: null, review: 1, frames, rubric: 'THE RUBRIC' }, typed);
+    for (const line of [
+      'Show the team.',
+      'gate and smoke',
+      SHA,
+      `- site/home-375.png: before ${FRAMES_MOUNT}/site/home-375.before.png; after ${FRAMES_MOUNT}/site/home-375.after.png`,
+      `- site/team-1440.png: before (none: the base did not draw it); after ${FRAMES_MOUNT}/site/team-1440.after.png`,
+      'THE RUBRIC',
+      'platform/agents/schemas/visual-verdict.schema.json',
+    ]) {
       expect(prompt).toContain(line);
     }
+    expect(prompt).not.toContain('batch');
+    expect(reviewPrompt({ card: card(), sha: SHA, gateUrl: null, review: 1, frames, batch: { index: 2, count: 3 }, rubric: '' }, typed)).toContain('batch 2 of 3 of the changed frames');
+  });
+});
+
+describe('batches', () => {
+  it('splits the changed frames into batches of at most twelve, in order', () => {
+    expect(REVIEW_BATCH_FRAMES).toBe(12);
+    const names = Array.from({ length: 25 }, (_, i) => `site/f${i}.png`);
+    expect(reviewBatches(names).map((batch) => batch.length)).toEqual([12, 12, 1]);
+    expect(reviewBatches(names).flat()).toEqual(names);
+    expect(reviewBatches(CHANGED)).toEqual([CHANGED]);
+  });
+
+  it('combines worst-of per criterion, naming the first batch that sends a criterion back', () => {
+    const first = verdict({ intent: { verdict: 'revise', frame: 'site/a.png', reason_code: 'misses_intent' } }, 'site/a.png');
+    const second = verdict({ intent: { verdict: 'revise', frame: 'site/b.png', reason_code: 'worse_than_before' }, legibility: { verdict: 'revise', frame: 'site/b.png', reason_code: 'dead_space' } }, 'site/b.png');
+    const combined = combineVerdicts([first, second]);
+    expect(combined.criteria.intent).toEqual({ verdict: 'revise', frame: 'site/a.png', reason_code: 'misses_intent' });
+    expect(combined.criteria.legibility).toEqual({ verdict: 'revise', frame: 'site/b.png', reason_code: 'dead_space' });
+    expect(combined.criteria.fit).toEqual({ verdict: 'pass', frame: 'site/a.png', reason_code: 'meets' });
+    expect(combineVerdicts([verdict()])).toEqual(verdict());
   });
 });
 
@@ -103,6 +147,9 @@ describe('runVisualReview', () => {
   let dir: string;
   beforeAll(async () => {
     dir = await mkdtemp(path.join(os.tmpdir(), 'backseat-review-'));
+    // home-375 has a before frame; team-1440 is new.
+    await mkdir(path.join(dir, 'site'), { recursive: true });
+    for (const file of ['site/home-375.before.png', 'site/home-375.after.png', 'site/team-1440.after.png']) await writeFile(path.join(dir, file), 'png');
   });
   afterAll(async () => {
     await rm(dir, { recursive: true, force: true });
@@ -121,22 +168,20 @@ describe('runVisualReview', () => {
     const stop = new AbortController();
     const deps: VisualReviewDeps = {
       db,
-      session: { adapter, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, boardSessionTtlMin: 3, watchIntervalMs: 5, log: silent, stopSignal: stop.signal, now: () => NOW, ledgerRetryMs: 1 },
+      session: { adapter, allowAttended: true, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, watchIntervalMs: 5, log: silent, stopSignal: stop.signal, ledgerRetryMs: 1 },
       rubric: async () => 'THE RUBRIC',
       promptRoot: '/code-root',
-      budgetUsd: 5,
-      waitIntervalMs: 5,
     };
     return { db, adapter, deps, stop };
   }
 
-  const input = (c: Card) => ({ card: c, frames: { dir, changed: CHANGED }, sha: SHA, gateUrl: null, review: 1 });
+  const input = (c: Card, changed: string[] = CHANGED) => ({ card: c, frames: { dir, changed }, sha: SHA, gateUrl: null, review: 1, budgetUsd: 5 });
 
   it('runs the Platform Director for a platform/site card and the Game Director for a seed-1 card, each with Read, Glob and Grep only, in the frames folder', async () => {
     for (const [folder, director] of [['platform', platformDirector], ['seed-1', gameDirector]] as const) {
       const { adapter, deps } = setup(JSON.stringify(verdict()));
       const outcome = await runVisualReview(input(card({ folder })), deps);
-      expect(outcome).toMatchObject({ kind: 'verdict', ref: 'claude:review-session', director: { id: director.id } });
+      expect(outcome).toMatchObject({ kind: 'verdict', ref: 'claude:review-session', refs: ['claude:review-session'], director: { id: director.id } });
       expect(REVIEWERS[folder]).toBe(director.name);
       const spec = adapter.specs[0]!;
       expect(spec.roleId).toBe(director.id);
@@ -151,6 +196,9 @@ describe('runVisualReview', () => {
         expect(name).not.toMatch(/^(Bash|Write|Edit|MultiEdit|NotebookEdit|WebFetch|WebSearch)\b|^mcp__/);
       }
       expect(args[args.indexOf('--mcp-config') + 1]).toBe('{"mcpServers":{}}');
+      // Attended, the prompt names the frames in the folder the session works in.
+      expect(spec.prompt).toContain(`- site/home-375.png: before ${path.join(dir, 'site/home-375.before.png')}; after ${path.join(dir, 'site/home-375.after.png')}`);
+      expect(spec.prompt).toContain(`- site/team-1440.png: before (none: the base did not draw it); after ${path.join(dir, 'site/team-1440.after.png')}`);
     }
   });
 
@@ -182,7 +230,7 @@ describe('runVisualReview', () => {
 
   it('fails when the verdict rests on a frame the gate did not change', async () => {
     const { deps } = setup(JSON.stringify(verdict({}, 'site/contact-768.png')));
-    expect(await runVisualReview(input(card({ folder: 'platform' })), deps)).toEqual({ kind: 'failed', reason: 'the verdict names frames the gate did not change: site/contact-768.png, site/contact-768.png, site/contact-768.png, site/contact-768.png' });
+    expect(await runVisualReview(input(card({ folder: 'platform' })), deps)).toEqual({ kind: 'failed', reason: 'the verdict names frames it was not shown: site/contact-768.png, site/contact-768.png, site/contact-768.png, site/contact-768.png' });
   });
 
   it('fails when the Director is paused or missing, and starts no session', async () => {
@@ -195,24 +243,115 @@ describe('runVisualReview', () => {
     expect([...paused.adapter.specs, ...missing.adapter.specs]).toEqual([]);
   });
 
-  it('waits at gated until a board member signs in, and starts nothing while none is', async () => {
+  it('starts at once with no board member signed in', async () => {
     const { db, adapter, deps } = setup(JSON.stringify(verdict()));
     db.boardActive = false;
-    const pending = runVisualReview(input(card({ folder: 'platform' })), deps);
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(adapter.specs).toEqual([]);
-    db.boardActive = true;
-    expect((await pending).kind).toBe('verdict');
+    expect((await runVisualReview(input(card({ folder: 'platform' })), deps)).kind).toBe('verdict');
     expect(adapter.specs).toHaveLength(1);
   });
 
-  it('stops without a session when the dispatcher stops while it waits', async () => {
-    const { db, adapter, deps, stop } = setup(JSON.stringify(verdict()));
-    db.boardActive = false;
-    const pending = runVisualReview(input(card({ folder: 'platform' })), deps);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+  it('stops without a session when the dispatcher has stopped', async () => {
+    const { adapter, deps, stop } = setup(JSON.stringify(verdict()));
     stop.abort('dispatcher stopping');
-    expect(await pending).toEqual({ kind: 'stopped' });
+    expect(await runVisualReview(input(card({ folder: 'platform' })), deps)).toEqual({ kind: 'stopped' });
     expect(adapter.specs).toEqual([]);
+  });
+
+  describe('on the managed adapter', () => {
+    function managed(answer: string | ((spec: SessionSpec) => string), usageTokens = 400) {
+      const db = new FakeDb();
+      db.roles = [role(), gameDirector, platformDirector];
+      let n = 0;
+      const adapter = new FakeAdapter(
+        async (_spec, emit) => {
+          n += 1;
+          await emit({ type: 'start', sessionId: `sesn_${n}`, model: 'director-class', tools: ['read', 'glob', 'grep'], apiKeySource: 'ANTHROPIC_API_KEY', ledger: 'adapter' });
+          await emit(usageEvent(1, usageTokens, 'director-class'));
+        },
+        { mode: 'unattended', result: answer },
+      );
+      const deps: VisualReviewDeps = {
+        db,
+        session: { adapter, typed, priceTable: PRICE_TABLE, maxTurns: 20, maxMs: 60_000, watchIntervalMs: 5, log: silent, stopSignal: new AbortController().signal, ledgerRetryMs: 1 },
+        rubric: async () => 'THE RUBRIC',
+        promptRoot: CODE_ROOT,
+      };
+      return { db, adapter, deps };
+    }
+
+    it('mounts each changed frame at FRAMES_MOUNT, names those paths in the prompt, bills the card and writes no row itself', async () => {
+      const { db, adapter, deps } = managed(JSON.stringify(verdict()));
+      const c = card({ folder: 'platform' });
+      const spends: number[] = [];
+      const outcome = await runVisualReview({ ...input(c), onSpend: (usd) => spends.push(usd) }, deps);
+      expect(outcome).toMatchObject({ kind: 'verdict', ref: 'claude:sesn_1', director: { id: platformDirector.id } });
+      const spec = adapter.specs[0]!;
+      expect(spec.purpose).toBe('role');
+      expect(spec.roleTools).toEqual(READ_SET);
+      expect(spec.maxBudgetUsd).toBe(5);
+      expect(spec.role).toMatchObject({ cardId: c.id, repoSha: null });
+      expect(spec.role!.files).toEqual([
+        { path: path.join(dir, 'site/home-375.before.png'), mountPath: `${FRAMES_MOUNT}/site/home-375.before.png` },
+        { path: path.join(dir, 'site/home-375.after.png'), mountPath: `${FRAMES_MOUNT}/site/home-375.after.png` },
+        { path: path.join(dir, 'site/team-1440.after.png'), mountPath: `${FRAMES_MOUNT}/site/team-1440.after.png` },
+      ]);
+      expect(spec.prompt).toContain(`- site/home-375.png: before ${FRAMES_MOUNT}/site/home-375.before.png; after ${FRAMES_MOUNT}/site/home-375.after.png`);
+      expect(spec.prompt).toContain(`- site/team-1440.png: before (none: the base did not draw it); after ${FRAMES_MOUNT}/site/team-1440.after.png`);
+      expect(spec.prompt).not.toContain(dir);
+      expect(spends.length).toBeGreaterThan(0);
+      expect(db.ledger).toEqual([]);
+    });
+
+    it('reviews more than twelve changed frames in batches, each session shown only its own, the verdicts combined worst-of and the budget shared', async () => {
+      const changed = Array.from({ length: 13 }, (_, i) => `site/frame-${i}.png`);
+      const { adapter, deps } = managed((spec) =>
+        spec.prompt.includes('site/frame-12.png')
+          ? JSON.stringify(verdict({ legibility: { verdict: 'revise', frame: 'site/frame-12.png', reason_code: 'dead_space' } }, 'site/frame-12.png'))
+          : JSON.stringify(verdict({}, 'site/frame-0.png')),
+      );
+      const outcome = await runVisualReview(input(card({ folder: 'platform' }), changed), deps);
+      expect(adapter.specs).toHaveLength(2);
+      expect(adapter.specs[0]!.role!.files.map((file) => file.mountPath)).toEqual(changed.slice(0, 12).map((frame) => `${FRAMES_MOUNT}/${frame.replace('.png', '.after.png')}`));
+      expect(adapter.specs[1]!.role!.files.map((file) => file.mountPath)).toEqual([`${FRAMES_MOUNT}/site/frame-12.after.png`]);
+      expect(adapter.specs[0]!.prompt).toContain('batch 1 of 2');
+      expect(adapter.specs[0]!.prompt).not.toContain('site/frame-12.png');
+      // Each batch gets its share up front ($5 over 2), and the first batch's unspent share rolls forward.
+      expect(adapter.specs[0]!.maxBudgetUsd).toBe(2.5);
+      expect(adapter.specs[1]!.maxBudgetUsd).toBeGreaterThanOrEqual(adapter.specs[0]!.maxBudgetUsd);
+      expect(outcome).toMatchObject({ kind: 'verdict', ref: 'claude:sesn_1+claude:sesn_2', refs: ['claude:sesn_1', 'claude:sesn_2'] });
+      if (outcome.kind === 'verdict') {
+        expect(outcome.verdict.criteria.legibility).toEqual({ verdict: 'revise', frame: 'site/frame-12.png', reason_code: 'dead_space' });
+        expect(outcome.verdict.criteria.intent).toEqual({ verdict: 'pass', frame: 'site/frame-0.png', reason_code: 'meets' });
+      }
+    });
+
+    it('fails before any session when the budget cannot give every batch its minimum share', async () => {
+      const changed = Array.from({ length: 13 }, (_, i) => `site/frame-${i}.png`);
+      const { adapter, deps } = managed(() => JSON.stringify(verdict({}, 'site/frame-0.png')));
+      const outcome = await runVisualReview({ ...input(card({ folder: 'platform' }), changed), budgetUsd: 0.6 }, deps);
+      expect(outcome).toMatchObject({ kind: 'failed' });
+      if (outcome.kind === 'failed') expect(outcome.reason).toContain('for each of its 2 batches');
+      expect(adapter.specs).toEqual([]);
+    });
+
+    it('fails a batch whose verdict names a frame from another batch', async () => {
+      const changed = Array.from({ length: 13 }, (_, i) => `site/frame-${i}.png`);
+      const { deps } = managed(JSON.stringify(verdict({}, 'site/frame-0.png')));
+      expect(await runVisualReview(input(card({ folder: 'platform' }), changed), deps)).toMatchObject({ kind: 'failed', reason: expect.stringContaining('names frames it was not shown: site/frame-0.png') });
+    });
+
+    it('names a credit refusal so the pipeline can pause the studio', async () => {
+      const db = new FakeDb();
+      db.roles = [role(), gameDirector, platformDirector];
+      const adapter = new FakeAdapter(
+        async () => {
+          throw new SessionPaused('console_credit', 'the Managed Agents session could not be created: credit balance is too low');
+        },
+        { mode: 'unattended' },
+      );
+      const { deps } = managed('');
+      const outcome = await runVisualReview(input(card({ folder: 'platform' })), { ...deps, db, session: { ...deps.session, adapter } });
+      expect(outcome).toMatchObject({ kind: 'failed', refusal: 'credit' });
+    });
   });
 });

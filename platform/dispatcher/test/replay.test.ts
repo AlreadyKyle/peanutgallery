@@ -211,12 +211,13 @@ describe('no database row', () => {
     );
     let opened = 0;
     const workflow: WorkflowDeps = {
-      roleAdapter: adapter,
+      adapter,
+      allowAttended: true,
+      draftSessionMaxUsd: 5,
       typed: new TypedOutput(),
       priceTable: parsePriceTable(JSON.stringify({ 'director-class': { input: 5, output: 25, cache_read: 0.5, cache_write_5m: 6.25, cache_write_1h: 10 } })),
       sessionMaxTurns: 20,
       sessionMaxMs: 60_000,
-      boardSessionTtlMin: 3,
       watchIntervalMs: 5,
       scanText: async () => ({ ok: true }),
       openWorkspace: async () => {

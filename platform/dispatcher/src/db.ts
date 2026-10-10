@@ -21,6 +21,19 @@ export interface StudioState {
   // Whether the platform code lane is open (select.ts, docs/specs/board-site.md); false when unset or
   // when studio_state has no such column.
   platform_lane_open: boolean;
+  // Why the studio is paused, who paused it and when (studio_state.pause_reason, paused_by and
+  // paused_at); null or absent while it is not paused. The tick's credit probe (tick.ts) reads them:
+  // only a pause the dispatcher set for awaiting_credit or spend_limit is probed and lifted.
+  pause_reason?: PauseReason | null;
+  paused_by?: string | null;
+  paused_at?: string | null;
+}
+
+// What auto_resume_due answers (20261010000000_auto_resume.sql): how many paused cards went back to
+// funded, and a line for each card it considered, resumed or skipped with the reason.
+export interface AutoResumeResult {
+  resumed: number;
+  results: Record<string, unknown>[];
 }
 
 export interface Pool {
@@ -117,13 +130,16 @@ export interface Role {
   paused: boolean;
 }
 
-// A job the queue runs (public.jobs): its role, whether it calls a model, and whether it runs
-// while the studio is paused.
+// A job the queue runs (public.jobs): its role, whether it calls a model, whether it runs while the
+// studio is paused, and whether it is enabled. A disabled job (studio_ranking, retired by PLAN.md
+// §10 decision 66) takes no run, and the queue skips any run of it; a database without the column
+// reads every job as enabled.
 export interface Job {
   name: string;
   role_id: string | null;
   calls_model: boolean;
   runs_when_paused: boolean;
+  enabled: boolean;
 }
 
 export type JobOrigin = 'board' | 'schedule' | 'event' | 'operator';
@@ -239,8 +255,9 @@ export interface OpenCardRow {
   funded_usd: number;
 }
 
-// The card fields a draft carries into record_card_draft: the card as approval inserts it, apart
-// from what approval sets itself (20260924400000_agent_workflows.sql).
+// The card fields a draft carries into record_card_draft_for: what approval writes onto the card it
+// drafts, apart from what approval sets itself (20261010200000_supply_refill.sql). A backlog card's
+// title and summary are the board's own.
 export interface DraftFields {
   title: string;
   summary: string;
@@ -251,10 +268,47 @@ export interface DraftFields {
   estimate_usd: number;
 }
 
-export interface RankingMove {
-  card_id: string;
-  from: number | null;
-  to: number;
+// The card a draft_card run is billed to, opened before any session (open_draft_card): a seed-1
+// backlog card (kind backlog, which keeps the board's title and summary and is left as it was if the
+// draft is withdrawn) or a new private seed-1 card (kind new, rejected if it is). opened says how it
+// was found: named on the run, a new card an earlier run left unfinished, the next backlog card, or
+// one just opened. card holds what the prompts show and the session budget reads. gaveUp lists the
+// cards given up on (draft_target_exhausted): an unfinished new card rejected on the way, and each
+// backlog card passed over for its spend or its failed runs, for the board's alert.
+export interface DraftTarget {
+  cardId: string;
+  kind: 'backlog' | 'new';
+  opened: 'named' | 'reused' | 'backlog' | 'new';
+  card: {
+    title: string;
+    summary: string | null;
+    intent: string | null;
+    horizon: string;
+    rank: number | null;
+    funded_usd: number;
+    severity: string | null;
+  };
+  gaveUp: GaveUpTarget[];
+}
+
+export interface GaveUpTarget {
+  cardId: string;
+  kind: 'backlog' | 'new';
+  // card_max (its spend leaves less than a session under the per-card maximum), failed_twice (two
+  // runs failed after spending on it) or withdrawn.
+  why: string;
+  // A new card is rejected; a backlog card is left as it was.
+  rejected: boolean;
+}
+
+// supply_draft_check(): whether the supply is short of the floor, and why no draft_card run may be
+// queued now (null when one may): studio_paused, job_disabled, role_paused, grader_paused,
+// already_queued, daily_limit or not_short.
+export interface SupplyDraftCheck {
+  short: boolean;
+  reason: string | null;
+  floor: Record<string, number>;
+  runsToday: number;
 }
 
 // Why the studio is paused (studio_state.pause_reason): Console credit needed, the usage tier cap,
@@ -344,6 +398,12 @@ export interface Db extends OutboundDb {
   // Resumes each card paused at its ceiling for the first time whose bar covers a new ceiling
   // (resume_due_by_rule); how many resumed and each card's result.
   resumeDueByRule(): Promise<{ resumed: number; results: Record<string, unknown>[] }>;
+  // Resumes each card paused for a check that resumes on its own (pause-checks.ts), within its
+  // bounds (auto_resume_due); nothing while the studio is paused.
+  autoResumeDue(): Promise<AutoResumeResult>;
+  // Unpauses the studio only while the dispatcher itself paused it for awaiting_credit or
+  // spend_limit (dispatcher_resume_studio); whether it did.
+  dispatcherResumeStudio(reason: string, detail: Record<string, unknown>): Promise<boolean>;
   // The job queue (docs/specs/agent-system-core.md).
   enqueueJobRun(input: EnqueueInput): Promise<{ id: string; created: boolean }>;
   // The oldest queued runs, oldest first, up to limit.
@@ -361,23 +421,29 @@ export interface Db extends OutboundDb {
   jobs(): Promise<Job[]>;
   // A role's pause and state, read each watch.
   roleState(roleId: string): Promise<{ paused: boolean; state: string }>;
-  // The role jobs (docs/specs/agent-workflows.md): cards on now and next at the open stages and
-  // funded, for the ranking and the Designer's context.
+  // draft_card (docs/specs/unattended-roles.md, PR4): cards on now and next at the open stages and
+  // funded, for the Designer's and the Director's context.
   openCards(): Promise<OpenCardRow[]>;
-  // The cards a ranking may name (rankable_cards): on now, open for funding, and holding no money on
-  // their bar or on hold, by the one test apply_card_ranking refuses on; in funding order.
-  rankableCards(): Promise<string[]>;
-  recordCardDraft(runId: string | null, roleId: string, fields: DraftFields, makerRef: string): Promise<{ id: string; content_sha256: string }>;
-  // The card id; the approval's verdict carries the grader's reason codes.
+  // The card a running draft_card run is billed to, named on the run before any session starts.
+  openDraftCard(runId: string): Promise<DraftTarget>;
+  // One round's draft, kept privately against the card it drafts (record_card_draft_for).
+  recordCardDraft(cardId: string, runId: string, roleId: string, fields: DraftFields, makerRef: string): Promise<{ id: string; content_sha256: string }>;
+  // Writes the approved draft onto its card and records the draft approval; the card id. The
+  // approval's verdict carries the grader's reason codes.
   approveCardDraft(draftId: string, approverRoleId: string, graderRef: string, verdict: Record<string, unknown>): Promise<string>;
   withdrawCardDraft(draftId: string, reasonCodes: readonly string[]): Promise<void>;
+  // A withdrawn draft rejects the new card its run opened, with failing_check draft_withdrawn
+  // (reject_draft_card); a backlog card is refused, since it is left as it was.
+  rejectDraftCard(cardId: string, runId: string): Promise<void>;
+  // Whether the card supply is short and why no draft may be queued (supply_draft_check); it writes
+  // nothing.
+  supplyDraftCheck(): Promise<SupplyDraftCheck>;
   // The visual review (docs/specs/design-review.md): one more revise round on the card, returning the
   // new count (record_review_round); and the visual approval at the card's current content hash
   // (card_content_hash, then record_card_approval), which Postgres refuses when the grader ref equals
   // the maker ref. The approval's id.
   recordReviewRound(cardId: string): Promise<number>;
   recordVisualApproval(input: VisualApprovalInput): Promise<string>;
-  applyCardRanking(runId: string, order: readonly string[]): Promise<{ moves: RankingMove[]; unapplied: number }>;
   // The Janitor (docs/specs/agent-upkeep.md): record_finding is true when the finding is new or
   // reopened, close_finding when an open one closed; the open findings; producer_signals(); and
   // production's schema_fingerprint(), key to md5.
@@ -548,12 +614,22 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
         monthly_cap_usd: row.monthly_cap_usd === null || row.monthly_cap_usd === undefined ? null : num(row, 'monthly_cap_usd'),
         anthropic_tier_cap_usd: row.anthropic_tier_cap_usd === null || row.anthropic_tier_cap_usd === undefined ? null : num(row, 'anthropic_tier_cap_usd'),
         platform_lane_open: row.platform_lane_open === true,
+        pause_reason: row.paused === true ? (optionalText(row, 'pause_reason') as PauseReason | null) : null,
+        paused_by: row.paused === true ? optionalText(row, 'paused_by') : null,
+        paused_at: row.paused === true ? optionalText(row, 'paused_at') : null,
       };
     },
 
     async pauseStudio(by, now, reason) {
-      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason }).eq('id', 1).eq('paused', false);
+      const row = { paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason };
+      const { error } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', false);
       if (error) fail('studio_state pause', error);
+      // An incident outranks the dispatcher's own money pause: it takes that pause over, so the credit
+      // probe (which lifts only awaiting_credit and spend_limit) can never lift an incident.
+      if (reason === 'incident') {
+        const { error: escalate } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', true).in('pause_reason', ['awaiting_credit', 'spend_limit']).like('paused_by', 'dispatcher:%');
+        if (escalate) fail('studio_state pause (incident over a money pause)', escalate);
+      }
     },
 
     async claimLease(holder, ttlSeconds) {
@@ -738,6 +814,19 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       return { resumed: num(row, 'resumed'), results: Array.isArray(row.results) ? (row.results as Record<string, unknown>[]) : [] };
     },
 
+    async autoResumeDue() {
+      const { data, error } = await client.rpc('auto_resume_due');
+      if (error) fail('auto_resume_due', error);
+      const row = (data ?? {}) as Row;
+      return { resumed: num(row, 'resumed'), results: Array.isArray(row.results) ? (row.results as Record<string, unknown>[]) : [] };
+    },
+
+    async dispatcherResumeStudio(reason, detail) {
+      const { data, error } = await client.rpc('dispatcher_resume_studio', { p_reason: reason, p_detail: detail });
+      if (error) fail('dispatcher_resume_studio', error);
+      return data === true;
+    },
+
     async enqueueJobRun(input) {
       const { data, error } = await client.rpc('enqueue_job_run', {
         p_job: input.job,
@@ -797,13 +886,15 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     },
 
     async jobs() {
-      const { data, error } = await client.from('jobs').select('name, role_id, calls_model, runs_when_paused');
+      // Every column, so a database the supply-refill migration has not reached yet still reads.
+      const { data, error } = await client.from('jobs').select('*');
       if (error) fail('jobs', error);
       return rows(data).map((row) => ({
         name: text(row, 'name'),
         role_id: optionalText(row, 'role_id'),
         calls_model: row.calls_model === true,
         runs_when_paused: row.runs_when_paused === true,
+        enabled: row.enabled !== false,
       }));
     },
 
@@ -841,17 +932,57 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
       }));
     },
 
-    async rankableCards() {
-      const { data, error } = await client.rpc('rankable_cards');
-      if (error || !Array.isArray(data)) fail('rankable_cards', error);
-      return (data as unknown[]).map((id) => String(id));
+    async openDraftCard(runId) {
+      const { data, error } = await client.rpc('open_draft_card', { p_run: runId });
+      if (error || !data) fail('open_draft_card', error);
+      const row = data as Row;
+      const kind = text(row, 'kind');
+      const opened = text(row, 'opened');
+      if (kind !== 'backlog' && kind !== 'new') throw new Error(`db open_draft_card: unknown kind ${kind}`);
+      if (!['named', 'reused', 'backlog', 'new'].includes(opened)) throw new Error(`db open_draft_card: unknown opening ${opened}`);
+      const card = (typeof row.card === 'object' && row.card !== null ? row.card : {}) as Row;
+      const gaveUp = (Array.isArray(row.gave_up) ? (row.gave_up as Row[]) : []).map((entry) => ({
+        cardId: text(entry, 'card_id'),
+        kind: (text(entry, 'kind') === 'backlog' ? 'backlog' : 'new') as GaveUpTarget['kind'],
+        why: text(entry, 'why'),
+        rejected: entry.rejected === true,
+      }));
+      return {
+        gaveUp,
+        cardId: text(row, 'card_id'),
+        kind,
+        opened: opened as DraftTarget['opened'],
+        card: {
+          title: text(card, 'title'),
+          summary: optionalText(card, 'summary'),
+          intent: optionalText(card, 'intent'),
+          horizon: text(card, 'horizon'),
+          rank: card.rank === null || card.rank === undefined ? null : num(card, 'rank'),
+          funded_usd: num(card, 'funded_usd'),
+          severity: optionalText(card, 'severity'),
+        },
+      };
     },
 
-    async recordCardDraft(runId, roleId, fields, makerRef) {
-      const { data, error } = await client.rpc('record_card_draft', { p_run: runId, p_role: roleId, p_fields: fields, p_maker_ref: makerRef });
-      if (error || !data) fail('record_card_draft', error);
+    async recordCardDraft(cardId, runId, roleId, fields, makerRef) {
+      const { data, error } = await client.rpc('record_card_draft_for', { p_card: cardId, p_run: runId, p_role: roleId, p_fields: fields, p_maker_ref: makerRef });
+      if (error || !data) fail('record_card_draft_for', error);
       const row = data as Row;
       return { id: text(row, 'id'), content_sha256: text(row, 'content_sha256') };
+    },
+
+    async rejectDraftCard(cardId, runId) {
+      const { error } = await client.rpc('reject_draft_card', { p_card: cardId, p_run: runId });
+      if (error) fail('reject_draft_card', error);
+    },
+
+    async supplyDraftCheck() {
+      const { data, error } = await client.rpc('supply_draft_check');
+      if (error || typeof data !== 'object' || data === null) fail('supply_draft_check', error);
+      const row = data as Row;
+      const floor: Record<string, number> = {};
+      for (const [key, value] of Object.entries(typeof row.floor === 'object' && row.floor !== null ? (row.floor as Row) : {})) floor[key] = Number(value);
+      return { short: row.short === true, reason: optionalText(row, 'reason'), floor, runsToday: num(row, 'runs_today') };
     },
 
     async approveCardDraft(draftId, approverRoleId, graderRef, verdict) {
@@ -933,17 +1064,6 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     async withdrawCardDraft(draftId, reasonCodes) {
       const { error } = await client.rpc('withdraw_card_draft', { p_draft: draftId, p_reason_codes: [...reasonCodes] });
       if (error) fail('withdraw_card_draft', error);
-    },
-
-    async applyCardRanking(runId, order) {
-      const { data, error } = await client.rpc('apply_card_ranking', { p_run: runId, p_order: [...order] });
-      if (error || !data) fail('apply_card_ranking', error);
-      const row = data as Row;
-      const moves = Array.isArray(row.moves) ? (row.moves as Row[]) : [];
-      return {
-        moves: moves.map((move) => ({ card_id: text(move, 'card_id'), from: move.from === null || move.from === undefined ? null : num(move, 'from'), to: num(move, 'to') })),
-        unapplied: num(row, 'unapplied'),
-      };
     },
 
     async postingStop() {

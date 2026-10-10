@@ -1,6 +1,7 @@
 // The job queue's dispatcher half (src/jobs.ts, docs/specs/agent-system-core.md): each skip reason, a
-// model run waiting for the board, a code run in both modes, one job at a time, a throwing handler,
-// a missing handler, and a studio or role pause stopping a running job.
+// model run of any origin starting with no board member signed in (docs/specs/unattended-roles.md),
+// a code run in both modes, one job at a time, a throwing handler, a missing handler, and a studio or
+// role pause stopping a running job.
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import type { AgentAdapter } from '../src/adapters/types.js';
@@ -13,7 +14,7 @@ import { FakeDb, NOW, role } from './helpers/fake-db.js';
 const HOLDER = 'dispatcher-a';
 
 function job(overrides: Partial<Job> = {}): Job {
-  return { name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: false, ...overrides };
+  return { name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: false, enabled: true, ...overrides };
 }
 
 function setup(jobs: Job[]) {
@@ -31,7 +32,6 @@ function setup(jobs: Job[]) {
     alert: new RecordingAlerter(),
     now: () => NOW,
     leaseHolder: HOLDER,
-    boardSessionTtlMin: 3,
     watchIntervalMs: 5,
     state,
     stopSignal: stopper.signal,
@@ -47,85 +47,115 @@ function setup(jobs: Job[]) {
 }
 
 describe('skipReason', () => {
-  it('names role_paused, studio_paused and not_board_origin, in that order, and lets a startable run through', () => {
+  it('names job_disabled, role_paused and studio_paused, in that order, and lets a model run of any origin through', () => {
     const model = job({ calls_model: true });
-    expect(skipReason(model, { origin: 'schedule' }, { paused: true }, { paused: true })).toBe('role_paused');
-    expect(skipReason(model, { origin: 'schedule' }, { paused: false }, { paused: true })).toBe('studio_paused');
-    expect(skipReason(model, { origin: 'schedule' }, { paused: false }, { paused: false })).toBe('not_board_origin');
-    expect(skipReason(model, { origin: 'board' }, null, { paused: false })).toBeNull();
-    expect(skipReason(job({ runs_when_paused: true }), { origin: 'operator' }, null, { paused: true })).toBeNull();
+    expect(skipReason(job({ calls_model: true, enabled: false }), { paused: true }, { paused: true })).toBe('job_disabled');
+    expect(skipReason(model, { paused: true }, { paused: true })).toBe('role_paused');
+    expect(skipReason(model, { paused: false }, { paused: true })).toBe('studio_paused');
+    expect(skipReason(model, { paused: false }, { paused: false })).toBeNull();
+    expect(skipReason(model, null, { paused: false })).toBeNull();
+    expect(skipReason(job({ runs_when_paused: true }), null, { paused: true })).toBeNull();
+    // A model call is studio spend on a card: a paused studio stops it whatever the jobs row says (a
+    // database the supply-refill migration has not reached still has draft_card runs_when_paused).
+    expect(skipReason(job({ calls_model: true, runs_when_paused: true }), null, { paused: true })).toBe('studio_paused');
   });
 });
 
 describe('jobTick', () => {
   it('finishes a run that cannot start as skipped with its reason and starts the next one that can', async () => {
     const t = setup([
+      job({ name: 'retired_job', calls_model: true, runs_when_paused: true, enabled: false }),
       job({ name: 'paused_role_job', role_id: 'role-studio-head' }),
       job({ name: 'studio_only' }),
-      job({ name: 'model_job', calls_model: true, runs_when_paused: true }),
       job({ name: 'code_job', runs_when_paused: true }),
     ]);
     t.db.roles[1]!.paused = true;
     t.db.studio.paused = true;
+    const retired = await t.enqueue('retired_job', 'board');
     const roleRun = await t.enqueue('paused_role_job', 'board');
     const studioRun = await t.enqueue('studio_only', 'board');
-    const scheduledModel = await t.enqueue('model_job', 'schedule');
     const code = await t.enqueue('code_job', 'schedule');
     const ran: string[] = [];
-    const outcome = await jobTick(t.make({ code_job: async ({ run }) => void ran.push(run.id) }));
+    const outcome = await jobTick(t.make({ code_job: async ({ run }) => void ran.push(run.id), retired_job: async () => ({ ran: true }) }));
     expect(outcome).toEqual({ action: 'started', runId: code.id, job: 'code_job' });
+    expect([t.status(retired.id).status, t.status(retired.id).reason]).toEqual(['skipped', 'job_disabled']);
     expect([t.status(roleRun.id).status, t.status(roleRun.id).reason]).toEqual(['skipped', 'role_paused']);
     expect([t.status(studioRun.id).status, t.status(studioRun.id).reason]).toEqual(['skipped', 'studio_paused']);
-    expect([t.status(scheduledModel.id).status, t.status(scheduledModel.id).reason]).toEqual(['skipped', 'not_board_origin']);
     await t.settle();
     expect(ran).toEqual([code.id]);
     expect([t.status(code.id).status, t.status(code.id).output]).toEqual(['succeeded', {}]);
   });
 
-  it('leaves a board-origin model run queued while no board member is signed in, in either studio mode and paused or not, and moves on', async () => {
+  it('starts a model run of any origin with no board member signed in, in either studio mode, and never reads a board session', async () => {
     for (const mode of ['attended', 'unattended'] as const) {
-      for (const paused of [false, true]) {
-        const t = setup([job({ name: 'studio_ranking', calls_model: true, runs_when_paused: true }), job({ name: 'code_job', runs_when_paused: true })]);
+      for (const origin of ['schedule', 'board', 'event', 'operator'] as const) {
+        const t = setup([job({ name: 'draft_card', calls_model: true })]);
         t.db.studio.agent_mode = mode;
-        t.db.studio.paused = paused;
-        t.db.boardActive = false;
-        const model = await t.enqueue('studio_ranking', 'board');
-        const code = await t.enqueue('code_job', 'operator');
-        expect(await jobTick(t.make({ code_job: async () => ({ ok: true }) }, { mode }))).toEqual({ action: 'started', runId: code.id, job: 'code_job' });
-        await t.settle();
-        expect(t.status(model.id).status).toBe('queued');
-        expect(await jobTick(t.make({}, { mode }))).toEqual({ action: 'idle', skipped: 0, waiting: 1 });
-        expect(t.status(model.id).status).toBe('queued');
-        // A board member signs in at /board: the run starts, in either studio mode.
-        t.db.boardActive = true;
+        let boardReads = 0;
+        t.db.boardSessionActive = async () => {
+          boardReads += 1;
+          return false;
+        };
+        const run = await t.enqueue('draft_card', origin);
         const ran: string[] = [];
-        expect(await jobTick(t.make({ studio_ranking: async ({ run, mode: seen }) => void ran.push(`${run.id}:${seen}`) }, { mode }))).toEqual({
+        expect(await jobTick(t.make({ draft_card: async ({ run: started, mode: seen }) => void ran.push(`${started.origin}:${seen}`) }, { mode }))).toEqual({
           action: 'started',
-          runId: model.id,
-          job: 'studio_ranking',
+          runId: run.id,
+          job: 'draft_card',
         });
         await t.settle();
-        expect(ran).toEqual([`${model.id}:${mode}`]);
-        expect(t.status(model.id).status).toBe('succeeded');
+        expect(ran).toEqual([`${origin}:${mode}`]);
+        expect(t.status(run.id).status).toBe('succeeded');
+        expect(boardReads).toBe(0);
       }
     }
   });
 
-  it('stops a running model job at the next watch once no board member is signed in', async () => {
-    const t = setup([job({ name: 'studio_ranking', calls_model: true, runs_when_paused: true })]);
-    t.db.boardActive = true;
-    const run = await t.enqueue('studio_ranking', 'board');
+  it('keeps a running model job running with no board member signed in, and stops it when the studio pauses', async () => {
+    const t = setup([job({ name: 'draft_card', calls_model: true })]);
+    t.db.boardActive = false;
+    const quiet = await t.enqueue('draft_card', 'schedule');
     await jobTick(
       t.make({
-        studio_ranking: async ({ stopSignal }) => {
-          t.db.boardActive = false;
+        draft_card: async ({ stopSignal }) => {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          return { aborted: stopSignal.aborted };
+        },
+      }),
+    );
+    await t.settle();
+    expect([t.status(quiet.id).status, t.status(quiet.id).output]).toEqual(['succeeded', { aborted: false }]);
+    const paused = await t.enqueue('draft_card', 'schedule');
+    await jobTick(
+      t.make({
+        draft_card: async ({ stopSignal }) => {
+          t.db.studio.paused = true;
           await new Promise<void>((resolve) => stopSignal.addEventListener('abort', () => resolve(), { once: true }));
           return { stopped: String(stopSignal.reason) };
         },
       }),
     );
     await t.settle();
-    expect([t.status(run.id).status, t.status(run.id).reason]).toEqual(['failed', 'board_session_lapsed']);
+    expect([t.status(paused.id).status, t.status(paused.id).reason]).toEqual(['failed', 'studio_paused']);
+  });
+
+  it('stops a model job when the studio pauses even if its row says it runs while paused, and skips one queued then', async () => {
+    const t = setup([job({ name: 'draft_card', calls_model: true, runs_when_paused: true })]);
+    const running = await t.enqueue('draft_card', 'schedule');
+    await jobTick(
+      t.make({
+        draft_card: async ({ stopSignal }) => {
+          t.db.studio.paused = true;
+          await new Promise<void>((resolve) => stopSignal.addEventListener('abort', () => resolve(), { once: true }));
+          return { stopped: String(stopSignal.reason) };
+        },
+      }),
+    );
+    await t.settle();
+    expect([t.status(running.id).status, t.status(running.id).reason]).toEqual(['failed', 'studio_paused']);
+    const queued = await t.enqueue('draft_card', 'board');
+    expect(await jobTick(t.make({ draft_card: async () => ({ ran: true }) }))).toEqual({ action: 'idle', skipped: 1 });
+    expect([t.status(queued.id).status, t.status(queued.id).reason]).toEqual(['skipped', 'studio_paused']);
   });
 
   it('starts a code run in both modes', async () => {
@@ -178,7 +208,7 @@ describe('jobTick', () => {
     const t = setup([job({ name: 'code_job' })]);
     const run = await t.enqueue('code_job', 'operator');
     t.db.lease = { holder: 'someone-else', expiresAt: NOW.getTime() + 300_000 };
-    expect(await jobTick(t.make({ code_job: async () => undefined }))).toEqual({ action: 'idle', skipped: 0, waiting: 0 });
+    expect(await jobTick(t.make({ code_job: async () => undefined }))).toEqual({ action: 'idle', skipped: 0 });
     expect(t.status(run.id).status).toBe('queued');
   });
 

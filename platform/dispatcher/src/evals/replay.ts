@@ -19,7 +19,7 @@ import { config as loadDotenv } from 'dotenv';
 import { AttendedAdapter } from '../adapters/attended.js';
 import { claudeVersionReader, defaultCliPin, parseClaudeVersion } from '../cli-pin.js';
 import { loadConfig, type DispatcherConfig } from '../config.js';
-import type { Db, DraftFields, OpenCardRow, RecordUsageResult, Role, StudioState, UsageInput } from '../db.js';
+import type { Db, DraftFields, DraftTarget, OpenCardRow, RecordUsageResult, Role, StudioState, UsageInput } from '../db.js';
 import { draftCard, directorPrompt, type DraftVerdict } from '../job-handlers/draft-card.js';
 import { gitWorkspace, sessionDeps, type WorkflowDeps } from '../job-handlers/workflow.js';
 import type { JobContext } from '../jobs.js';
@@ -218,11 +218,25 @@ export function inMemoryStore(roles: readonly Role[], studio: StudioState, openC
     async openCards() {
       return openCards.map((card) => ({ ...card }));
     },
-    async recordCardDraft(_run: string | null, _role: string, _fields: DraftFields, _ref: string) {
+    // A new card for every run, as the supply's draft opens one when no backlog card is eligible.
+    async openDraftCard(run: string): Promise<DraftTarget> {
+      return {
+        cardId: `eval-card-${run}`,
+        kind: 'new',
+        opened: 'new',
+        card: { title: 'A game card the Game Designer is drafting', summary: null, intent: null, horizon: 'next', rank: null, funded_usd: 0, severity: null },
+        gaveUp: [],
+      };
+    },
+    async cardSpend() {
+      return new Map<string, number>();
+    },
+    async recordCardDraft(_card: string, _run: string, _role: string, _fields: DraftFields, _ref: string) {
       drafts += 1;
       return { id: `eval-draft-${drafts}`, content_sha256: '0'.repeat(64) };
     },
     async withdrawCardDraft() {},
+    async rejectDraftCard() {},
     async approveCardDraft(draftId: string) {
       return `eval-card-for-${draftId}`;
     },
@@ -273,7 +287,7 @@ export async function specRoles(agentsDir: string = AGENTS_DIR): Promise<Role[]>
 export function draftRunners(workflow: WorkflowDeps, roles: readonly Role[], studio: StudioState, stop: AbortSignal): Runners {
   const log = createLogger(new Writable({ write: (_c, _e, cb) => cb() }));
   const typed = workflow.typed;
-  const adapter = workflow.roleAdapter;
+  const adapter = workflow.adapter;
   const db = inMemoryStore(roles, studio);
   const role = (name: string) => {
     const found = roles.find((r) => r.name === name);
@@ -282,7 +296,7 @@ export function draftRunners(workflow: WorkflowDeps, roles: readonly Role[], stu
   };
   const context = (run: string, input: Record<string, unknown>, jobRole: Role): JobContext => ({
     run: { id: run, job_name: 'draft_card', origin: 'board', status: 'running', card_id: null, input, parent_run_id: null, created_at: new Date().toISOString() },
-    job: { name: 'draft_card', role_id: jobRole.id, calls_model: true, runs_when_paused: true },
+    job: { name: 'draft_card', role_id: jobRole.id, calls_model: true, runs_when_paused: false, enabled: true },
     role: jobRole,
     mode: 'attended',
     db,
@@ -316,16 +330,19 @@ export function draftRunners(workflow: WorkflowDeps, roles: readonly Role[], stu
   };
 }
 
-// The real attended adapter, with the Claude Code pin, as the dispatcher's role jobs run.
+// The real attended adapter, with the Claude Code pin: the replay is the attended adapter's one use
+// (docs/specs/unattended-roles.md), on the founder's login with no database row, so its workflow alone
+// allows it. No money is read: nothing is billed to a card.
 function liveWorkflow(config: DispatcherConfig): WorkflowDeps {
   return {
-    roleAdapter: new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) }),
+    adapter: new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) }),
+    allowAttended: true,
+    draftSessionMaxUsd: config.cardMaxUsd,
     typed: new TypedOutput(),
     priceTable: config.priceTable,
     resolveModel: (role) => resolveRoleModel(role, config).model,
     sessionMaxTurns: config.sessionMaxTurns,
     sessionMaxMs: config.sessionMaxMinutes * 60_000,
-    boardSessionTtlMin: config.boardSessionTtlMin,
     watchIntervalMs: config.tickMs,
     scanText: (strings) => scanPublicText(strings),
     openWorkspace: (runId) => gitWorkspace(config.repoRoot, config.worktreeRoot, runId, gitAuthEnv(config.githubToken)),

@@ -138,6 +138,8 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["deal_due_cards", {}],
   ["resume_card_by_rule", { p_card: NO_CARD }],
   ["resume_due_by_rule", {}],
+  ["auto_resume_due", {}],
+  ["dispatcher_resume_studio", { p_reason: "anon-negative-test", p_detail: {} }],
   ["enqueue_job_run", { p_job: "anon_negative_test", p_origin: "operator" }],
   ["claim_job_run", { p_run: NO_CARD, p_holder: "anon-negative-test" }],
   ["finish_job_run", { p_run: NO_CARD, p_status: "skipped", p_reason: "anon-negative-test", p_output: null }],
@@ -158,6 +160,20 @@ const RPC_PROBES: Array<[string, Record<string, unknown>]> = [
   ["rankable_cards", {}],
   ["card_ranking_places", { p_order: [] }],
   ["apply_card_ranking", { p_run: NO_CARD, p_order: [] }],
+  // supply-refill (docs/specs/unattended-roles.md, PR4): the card supply's draft, the service role's
+  // and pg_cron's alone. Each names no card, no run and no role, so even a wrong grant opens,
+  // queues, records or rejects nothing.
+  ["enqueue_supply_draft", {}],
+  ["supply_draft_check", {}],
+  ["open_draft_card", { p_run: NO_CARD }],
+  ["next_backlog_card", {}],
+  ["reject_draft_card", { p_card: NO_CARD, p_run: NO_CARD }],
+  ["record_card_draft_for", { p_card: NO_CARD, p_run: null, p_role: NO_CARD, p_fields: {}, p_maker_ref: "" }],
+  ["draft_card_answer", { p_card: NO_CARD, p_kind: "new", p_opened: "new" }],
+  ["draft_session_min_usd", {}],
+  ["draft_target_exhausted", { c: {} }],
+  ["draft_target_kind", { c: {}, p_designer: null }],
+  ["card_from_draft_onto", { p_card: {}, p_fields: {}, p_role: null }],
   // studio-reports: the hourly publish, pg_cron's alone, with a Tuesday it refuses before it reads
   // anything; and the board's supply count, which only reads.
   ["publish_weekly_report", { p_week_start: "2000-01-04" }],
