@@ -6,8 +6,9 @@
 // - model: each MODEL_* value needs a row in PRICE_TABLE_JSON, must be listed by the Anthropic API's
 //   /v1/models when the studio key is set (a free read), and must equal the model ids of the newest
 //   eval result, when there is one;
-// - cli: claude --version must equal the pin (every attended session, role jobs included, runs on
-//   this host's Claude Code);
+// - cli: retired. The dispatcher runs on Actions with no Claude Code (attended mode left it in
+//   d0f1e0d); the pin is still enforced where Claude Code runs, the attended adapter and the hand-run
+//   tools. The check runs empty, so it closes a cli finding an earlier run left open;
 // - scan: each failed job of the newest completed janitor.yml run on main, linking the run;
 // - producer: each producer_signals() row.
 // A finding new or reopened (record_finding true) sends one ntfy message; one seen again sends
@@ -102,19 +103,6 @@ export async function modelFindings(deps: UpkeepDeps): Promise<Finding[]> {
   return findings;
 }
 
-export async function cliFindings(deps: UpkeepDeps): Promise<Finding[]> {
-  const pin = await deps.cliPin();
-  if (pin.ok) return [];
-  return [
-    {
-      fingerprint: 'cli:version',
-      kind: 'cli',
-      subject: `Claude Code ${pin.installed ?? '(unread)'} is installed but the pin is ${pin.pinned ?? '(unread)'}`,
-      detail: { installed: pin.installed, pinned: pin.pinned, detail: pin.detail },
-    },
-  ];
-}
-
 export async function scanFindings(github: GitHubOptions): Promise<Finding[]> {
   const run = await latestCompletedRun(github, SCAN_WORKFLOW, 'main');
   if (run === null) return [];
@@ -173,7 +161,7 @@ export const janitor: JobHandler = async (context) => {
       },
     },
     { kind: 'model', run: () => modelFindings(deps) },
-    { kind: 'cli', run: () => cliFindings(deps) },
+    { kind: 'cli', run: async () => [] },
     { kind: 'scan', run: () => scanFindings(github) },
     { kind: 'producer', run: async () => (await context.db.producerSignals()).map(producerFinding) },
   ];

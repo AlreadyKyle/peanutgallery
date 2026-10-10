@@ -1,6 +1,6 @@
 # Unattended roles: the studio never waits on the board
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board. PR2 to PR5 are merged; only the production migration and the live checks remain.
 
 The runtime of `docs/PLAN.md` §10 decision 66 (10 October 2026, the board). Four board pull requests in order, each from main after the one before has merged on a green gate: PR2 the visual review, PR3 auto-resume and the studio's auto-unpause, PR4 the self-refilling card supply and the end of `studio_ranking`, PR5 attended mode and the board heartbeat out of the dispatcher. PR1 was the docs (`docs/optional-board` branch); the board's panel is `docs/specs/optional-board.md`. Every part is kernel, so each is a board pull request.
 

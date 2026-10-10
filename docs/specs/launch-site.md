@@ -71,7 +71,7 @@ Out: the migrations, the RPCs and their refusals (DB); the dispatcher's lane clo
 - `node platform/site/scripts/live-check.mjs http://127.0.0.1:<port> --allow-no-data` against a local `vite preview` of a build with the public Payment Link and no database values
 - `node platform/site/scripts/live-check.mjs` against production (waits on: B's migrations 000000 to 000400 applied, then this branch deployed)
 - /board, signed in with the second factor: set a card's horizon and rank on a backlog card, then save the caps unchanged with a reason, and see both recorded (waits on: the board's TOTP)
-- /board two-factor enrolment watched in Chromium and Safari with DevTools open and no Content Security Policy report, now with `connect-src` enforced (waits on: the board's TOTP)
+- ~~/board two-factor enrolment watched in Chromium and Safari with DevTools open and no Content Security Policy report, now with `connect-src` enforced (waits on: the board's TOTP)~~ Obsolete (2026-10-10): /board left the public site (cb846e3), and the site's full Content Security Policy is enforced (`site-truth-pass.md`).
 
 ## Evidence
 

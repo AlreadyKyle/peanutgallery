@@ -12,7 +12,7 @@ In:
 - Every public string in `platform/site/src/lib/copy.ts` checked against what exists, and each false one replaced.
 - The snapshot load split into core (pool, cards) and enrichment (everything else), with the failed enrichments named in `Snapshot.missing`.
 - A `stale` flag on the ready state, a timeout on every query so a hung request counts as a failure, and the notices and "Not available right now." lines that use them.
-- Security headers in `platform/site/netlify.toml`, with the full Content Security Policy report-only.
+- Security headers in `platform/site/netlify.toml`, with the full Content Security Policy report-only. Enforced since 2026-10-10 (Decisions).
 - `live-check.mjs` checks the headers against any non-local address, and fails on any Content Security Policy report a page raises.
 - Dead code left by PR 30: `copy.recentWork`, the `.panel-heading` rule, LedgerSummary's unused `events` prop and its stale comment.
 - BRAND.md, and the Next game note in `site-layout.md`.
@@ -20,7 +20,7 @@ In:
 Out:
 - Any database change. The site reads no new column; `live_at` is a later change.
 - The pitch line (PLAN.md §2), the art policy's mention of agent avatars (PLAN.md §4 policy wording), the "founding contributions" wording (PLAN.md §6) and the Next game chip (a board decision in `site-layout.md`).
-- Enforcing the full Content Security Policy, and a reporting endpoint. Only `frame-ancestors` is enforced; the conditions for enforcing the rest are under Security headers.
+- Enforcing the full Content Security Policy, and a reporting endpoint. Only `frame-ancestors` is enforced; the conditions for enforcing the rest are under Security headers. (2026-10-10: the full policy is enforced; see Decisions. There is still no reporting endpoint.)
 - `/board`, which keeps its own literals and is not public.
 
 ## Behaviour
@@ -74,13 +74,14 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
   - `default-src 'self'`.
   - `script-src 'self'`: the built `index.html` loads one same-origin module script and has no inline script. The Supabase realtime worker is off by default and not enabled.
   - `style-src 'self'`: one same-origin stylesheet and no inline `<style>`. The funding bar's width is set by React through the CSSOM, which `style-src` does not govern.
-  - `img-src 'self' data:`: the mark, the favicons and the preview image are same-origin; the /board QR code from Supabase MFA enrolment is a `data:` URL.
+  - `img-src 'self' data:`: the mark, the favicons and the preview image are same-origin; the /board QR code from Supabase MFA enrolment was a `data:` URL while /board was on this site.
   - `font-src 'self'`: the site uses the system font stacks and loads no web font.
   - `connect-src 'self' https://lyxndueoeisyqzewflpu.supabase.co wss://lyxndueoeisyqzewflpu.supabase.co`: `/version.json` (freshness) is same-origin; the REST, auth and realtime traffic goes to the `VITE_SUPABASE_URL` host over https and wss.
   - `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`: no plugins, no `<base>`, and the /board forms submit through JavaScript. The Payment Link, Play, Discord and the footer's "Created by Clayhouse" credit are links, which `connect-src` and `form-action` do not govern.
 - The report-only policy blocks nothing and has no reporting endpoint, so the live check is how a report is seen (below). The full policy is enforced only after both:
   - clean live checks against https://peanutgallery.games, with no Content Security Policy report on any route; and
   - a manual /board two-factor enrolment by a board member with DevTools open, in Chromium and in Safari, with no report in either console. That path, with the `data:` QR code and the auth calls, is the one the live check cannot reach. Each run is recorded in this spec's Evidence with the date, the browser and its version, and the console result.
+- 2026-10-10: the second condition no longer applies. /board left the public site (cb846e3; it lives on its own site, `platform/board`, and the public /board is a 404), so no page on this site runs the enrolment, and every route the live check and the e2e load raises no report. `netlify.toml` now sends the whole policy as one enforced `Content-Security-Policy`, `frame-ancestors 'none'` included, and no report-only header.
 - `netlify.toml` had no other `[[headers]]` rule and no `_headers` file exists. The redirects do not conflict: `for = "/*"` matches the request path, so an SPA route such as `/ledger`, rewritten to `/index.html`, gets the headers. The live check reads them on `/ledger` for that reason.
 
 **Live check.** Against any base URL that is not localhost, 127.0.0.1 or [::1], `live-check.mjs` checks the five enforced headers and the report-only policy's full value on `/` and `/ledger`, by exact value. Against a local preview, which sends no headers, it prints a SKIP line. On every run, local or not, each page registers a `securitypolicyviolation` listener before any script runs (`addInitScript`, reporting through `exposeFunction`), and any report, enforced or report-only, fails the run: once per width across every route, and once for the landing and contribute interactions. Chromium does not report a report-only violation as a console error, so the console check alone would miss one. `netlify-headers.test.ts` keeps the script's expected values equal to `netlify.toml`.
@@ -99,7 +100,7 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
 - [x] `live-check.mjs` checks the headers, the report-only value included, against a non-local address and skips them locally.
 - [x] `live-check.mjs` fails on any Content Security Policy report, whatever the console printed.
 - [x] Live: after deploy, `node platform/site/scripts/live-check.mjs` passes against https://peanutgallery.games, header and policy report lines included.
-- [ ] Before enforcing the full policy: clean live checks against production, and the /board two-factor enrolment in Chromium and Safari with DevTools open and no report, each recorded under Evidence.
+- [x] Before enforcing the full policy: clean live checks against production, and the /board two-factor enrolment in Chromium and Safari with DevTools open and no report, each recorded under Evidence. Closed 2026-10-10: the production live checks were clean (2026-09-20 Evidence) and the enrolment left this site with /board (cb846e3), so the full policy is enforced (Evidence, 2026-10-10).
 
 ## Verification
 
@@ -173,6 +174,16 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
   Chromium and in Safari with DevTools open and no CSP report raised, each recorded here. The board
   enrolled on 20 September but nobody was watching the console, so it does not count.
 
+2026-10-10, the full policy enforced, and the last criterion closed.
+
+- /board left the public site in cb846e3 (PR #140): the board lives on its own site, `platform/board`,
+  and the public /board is a 404. The enrolment path the live check could not reach is no longer on
+  this site, so the 2026-09-20 open item no longer applies.
+- `platform/site/netlify.toml` sends one enforced `Content-Security-Policy` with `default-src`,
+  `script-src`, `style-src`, `img-src 'self' data:`, `font-src`, `connect-src`, `object-src 'none'`,
+  `base-uri`, `form-action` and `frame-ancestors 'none'`, and no `Content-Security-Policy-Report-Only`.
+  Every e2e run and live check fails on any Content Security Policy report, and they run with none.
+
 ## Decisions
 
 - 2026-09-16: founder-billed agent work stays tracked and unpublished (board, settled). The copy says the public ledger adds the cost of every agent turn paid for with contributions, rather than every dollar and token.
@@ -182,6 +193,7 @@ Every query, the card-title lookup included, carries `.abortSignal(AbortSignal.t
 - 2026-09-16: a failed refresh keeps the figures and says so, instead of blanking them. A visitor sees the last known amounts, marked as possibly out of date.
 - 2026-09-16: only `frame-ancestors` is enforced. The full policy runs report-only until production shows it raises nothing, because a wrong enforced policy would blank the site.
 - 2026-09-16 (review): no reporting endpoint. The live check listens for `securitypolicyviolation` instead, and enforcing waits on clean production checks plus a manual /board enrolment in Chromium and Safari.
+- 2026-10-10: the full policy is enforced. The production checks were clean, and the /board enrolment condition lapsed when /board left the public site (cb846e3). Every e2e run and live check still fails on any report.
 - 2026-09-16 (review): the footer says only what is true of every game, with no funding claim.
 - 2026-09-16 (review): one live region per page. The meter's copy of the stale line is visual only, so a screen reader does not hear it twice.
 - 2026-09-16 (review): every query times out after 10 seconds, so a hung request marks figures stale like a failed one.

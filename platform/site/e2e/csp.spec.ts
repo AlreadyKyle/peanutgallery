@@ -6,8 +6,7 @@ import { PLAY_URL, SUPABASE_URL } from './fixture-env';
 import { expect, test } from './fixtures';
 
 // vite preview sends netlify.toml's headers (vite.config.ts), so this run loads every page under the
-// production Content Security Policy: frame-ancestors, connect-src and form-action enforced, the full
-// policy report-only. Any report, enforced or report-only, fails a page load; a connection to a host outside
+// production Content Security Policy, the whole policy enforced. Any report fails a page load; a connection to a host outside
 // connect-src is refused.
 const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page', '/design-kit-7q4m'];
 const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.url)), 'utf8');
@@ -26,11 +25,13 @@ async function watchPolicy(page: Page): Promise<string[]> {
   return reports;
 }
 
-test('the preview sends the enforced policy from netlify.toml: frame-ancestors, connect-src to the site alone, and form-action', async ({ page }) => {
-  expect(enforced).toBe("frame-ancestors 'none'; connect-src 'self'; form-action 'self'");
+test('the preview sends the enforced policy from netlify.toml, connect-src to the site alone, and no report-only copy', async ({ page }) => {
+  expect(enforced).toContain("script-src 'self';");
+  expect(enforced).toContain("connect-src 'self';");
+  expect(enforced).toContain("frame-ancestors 'none'");
   const response = await page.goto('/');
   expect(response?.headers()['content-security-policy']).toBe(enforced);
-  expect(response?.headers()['content-security-policy-report-only']).toContain("connect-src 'self';");
+  expect(response?.headers()['content-security-policy-report-only']).toBeUndefined();
 });
 
 test('every route loads its data from the site\'s own /api under the policy with no report', async ({ page }) => {

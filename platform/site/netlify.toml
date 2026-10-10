@@ -122,13 +122,12 @@
   status = 200
 
 # Security headers on every path, the SPA rewrite included (docs/specs/site-truth-pass.md).
-# frame-ancestors, connect-src and form-action are enforced: the page may connect only to itself, so
-# script on this origin cannot send data anywhere else (docs/specs/launch-site.md) nor reach the
-# database (docs/specs/site-snapshot.md: its figures come from /api on this origin), and no form on it
-# may post anywhere but here (docs/specs/board-site.md). It does not stop a link to another host: the
-# gate's payment-host scan fails a build that carries a payment address other than the Payment Link
-# above. The full policy stays report-only: the script, the stylesheet and every image are
-# same-origin.
+# The whole policy is enforced: the script, the stylesheet, the fonts and every image are same-origin
+# (img-src also allows data:). The page may connect only to itself, so script on this origin cannot
+# send data anywhere else (docs/specs/launch-site.md) nor reach the database (docs/specs/site-snapshot.md:
+# its figures come from /api on this origin), and no form on it may post anywhere but here
+# (docs/specs/board-site.md). It does not stop a link to another host: the gate's payment-host scan
+# fails a build that carries a payment address other than the Payment Link above.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -136,8 +135,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    Content-Security-Policy = "frame-ancestors 'none'; connect-src 'self'; form-action 'self'"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # Vite names every file under /assets by a hash of its contents, so a new build never reuses a name
 # and each file can be kept for a year without a revalidation (docs/specs/site-snapshot.md).

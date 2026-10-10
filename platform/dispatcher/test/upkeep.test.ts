@@ -11,7 +11,6 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { stringify as stringifyYaml } from 'yaml';
 import type { AgentAdapter } from '../src/adapters/types.js';
-import type { PinState } from '../src/cli-pin.js';
 import type { GateStatus } from '../src/github.js';
 import { janitor, schemaFindings } from '../src/job-handlers/janitor.js';
 import { isPatchBump, lockfileChanges, neverList, packageJsonChanges, queuePendingUpkeep, upkeepMerge, type Decision } from '../src/job-handlers/upkeep-merge.js';
@@ -68,7 +67,6 @@ describe('janitor', () => {
   interface JanitorFixture {
     production: Record<string, string>;
     migrations: Record<string, string>;
-    pin: PinState;
     evalIds: Record<string, string> | null;
     listed: string[];
     scanJobs: Array<{ name: string; conclusion: string }>;
@@ -79,7 +77,6 @@ describe('janitor', () => {
     return {
       production: { 'table:public.cards': 'aaa', 'function:public.f()': 'bbb', 'table:public.stray': 'ccc' },
       migrations: { 'table:public.cards': 'aaa', 'function:public.f()': 'bbx', 'view:public.v': 'ddd' },
-      pin: { ok: false, installed: '2.1.283', pinned: '2.1.280', detail: 'Claude Code 2.1.283 is installed but the pin is 2.1.280.' },
       evalIds: { MODEL_DIRECTOR: 'claude-director-old' },
       listed: ['claude-director'],
       scanJobs: [
@@ -111,7 +108,6 @@ describe('janitor', () => {
         if (f.fingerprintError) throw f.fingerprintError;
         return f.migrations;
       },
-      cliPin: async () => f.pin,
       newestEvalResult: async () => (f.evalIds === null ? null : { file: 'platform/agents/evals/results/2026-09-26T000000Z.json', model_ids: f.evalIds }),
       servedFiles: async () => [],
     };
@@ -137,13 +133,12 @@ describe('janitor', () => {
       'model:MODEL_DIRECTOR:price',
       'model:MODEL_BUILDER:listed',
       'model:MODEL_DIRECTOR:eval',
-      'cli:version',
       'scan:osv',
       'producer:unclaimed:11111111-1111-4111-8111-111111111111',
       'producer:overrun:22222222-2222-4222-8222-222222222222',
       'producer:throughput:2026-W39',
     ]);
-    expect(t.alert.messages).toHaveLength(11);
+    expect(t.alert.messages).toHaveLength(10);
     const subjects = Object.fromEntries(t.db.findings.map((x) => [x.fingerprint, x.subject]));
     expect(subjects['schema:function:public.f()']).toBe('function:public.f() differs between production and the migrations');
     expect(subjects['schema:table:public.stray']).toBe('table:public.stray is in production but no migration makes it');
@@ -151,7 +146,6 @@ describe('janitor', () => {
     expect(subjects['model:MODEL_DIRECTOR:price']).toBe('MODEL_DIRECTOR claude-director has no row in PRICE_TABLE_JSON');
     expect(subjects['model:MODEL_BUILDER:listed']).toBe('MODEL_BUILDER claude-builder is not listed by the Anthropic API');
     expect(subjects['model:MODEL_DIRECTOR:eval']).toBe('MODEL_DIRECTOR is claude-director but the newest eval result ran claude-director-old');
-    expect(subjects['cli:version']).toBe('Claude Code 2.1.283 is installed but the pin is 2.1.280');
     expect(t.db.findings.find((x) => x.fingerprint === 'scan:osv')?.detail).toMatchObject({ run: 'https://github.com/owner/repo/actions/runs/77', conclusion: 'failure' });
     expect(subjects['producer:throughput:2026-W39']).toMatch(/^1 cards shipped in the last seven days, fewer than half the 4 the week before, with 2 funded cards waiting$/);
     expect(t.alert.messages[0]).toBe("Janitor: function:public.f() differs between production and the migrations. It is listed under Findings in the board panel's Activity.");
@@ -173,16 +167,16 @@ describe('janitor', () => {
     const f = fixture();
     const t = setup(f);
     await janitor(t.ctx);
+    const drifted = f.migrations;
     f.migrations = { ...f.production };
-    f.pin = { ok: true, version: '2.1.280' };
     const output = (await janitor(t.ctx)) as { closed: string[] };
-    expect(output.closed).toEqual(['schema:function:public.f()', 'schema:table:public.stray', 'schema:view:public.v', 'cli:version']);
+    expect(output.closed).toEqual(['schema:function:public.f()', 'schema:table:public.stray', 'schema:view:public.v']);
     expect((await t.db.openFindings()).map((x) => x.fingerprint)).toEqual(['model:MODEL_DIRECTOR:eval', 'scan:osv']);
     // Seen again after closing, a finding reopens and is sent again.
-    f.pin = { ok: false, installed: '2.1.284', pinned: '2.1.280', detail: 'x' };
+    f.migrations = drifted;
     const sent = t.alert.messages.length;
-    expect(((await janitor(t.ctx)) as { opened: string[] }).opened).toEqual(['cli:version']);
-    expect(t.alert.messages).toHaveLength(sent + 1);
+    expect(((await janitor(t.ctx)) as { opened: string[] }).opened).toEqual(['schema:function:public.f()', 'schema:table:public.stray', 'schema:view:public.v']);
+    expect(t.alert.messages).toHaveLength(sent + 3);
   });
 
   it('closes nothing of a check that could not run, and names why', async () => {
@@ -268,7 +262,7 @@ interface MergeFixture {
   behind: number;
   mergeBase: string;
   headGate: Reply;
-  comments: Array<{ body: string; created_at: string }>;
+  comments: Array<{ body: string; created_at: string; author_association: string }>;
   version: string;
   main: GateStatus;
   // main's ref as GitHub reads it; whether pull request 7 is still open, and merged.
@@ -381,7 +375,7 @@ function mergeSetup(f: MergeFixture) {
     if (method === 'GET' && url === `${GITHUB}/issues/7/comments?per_page=100`) return { status: 200, json: f.comments };
     if (method === 'POST' && url === `${GITHUB}/issues/7/comments`) {
       posted.push((body as { body: string }).body);
-      f.comments.push({ body: (body as { body: string }).body, created_at: NOW.toISOString() });
+      f.comments.push({ body: (body as { body: string }).body, created_at: NOW.toISOString(), author_association: 'OWNER' });
       return { status: 201, json: {} };
     }
     if (method === 'GET' && url === `${GITHUB}/actions/runs?head_sha=${HEAD}&per_page=50`) return f.headGate;
@@ -419,7 +413,6 @@ function mergeSetup(f: MergeFixture) {
     fetchFn,
     mainGate: async () => ({ sha: MAIN, status: f.main }),
     migrationsFingerprint: async () => ({}),
-    cliPin: async () => ({ ok: true, version: '2.1.280' }),
     newestEvalResult: async () => null,
     servedFiles: async () => [{ path: 'seed-1/config/cost.json', route: '/config/cost.json', mode: '100644', blob: gitBlobId(SERVED) }],
     timings: { deployIntervalMs: 1, deployTimeoutMs: 200, gateIntervalMs: 1, gateTimeoutMs: 200, retryDelayMs: 1, mergeStateTimeoutMs: 20, mergeStateIntervalMs: 1 },
@@ -540,6 +533,18 @@ describe('upkeep_merge', () => {
     const second = await decide(f);
     expect(second.output.decisions).toEqual([{ pr: 7, result: 'waiting_for_rebase', detail: expect.stringMatching(/a rebase was asked for/) }]);
     expect(second.posted).toEqual([]);
+  });
+
+  it("does not count a stranger's @dependabot rebase as the request: it still asks itself", async () => {
+    const f = mergeFixture();
+    f.behind = 2;
+    f.mergeBase = OLD_MAIN;
+    f.contents[`platform/site/package.json@${OLD_MAIN}`] = f.contents[`platform/site/package.json@${MAIN}`]!;
+    f.contents[`pnpm-lock.yaml@${OLD_MAIN}`] = f.contents[`pnpm-lock.yaml@${MAIN}`]!;
+    f.comments.push({ body: '@dependabot rebase', created_at: NOW.toISOString(), author_association: 'NONE' });
+    const t = await decide(f);
+    expect(t.output.decisions).toEqual([{ pr: 7, result: 'rebase_requested', detail: expect.stringMatching(/commented @dependabot rebase/) }]);
+    expect(t.posted).toEqual(['@dependabot rebase']);
   });
 
   it('merges nothing while the studio is paused, or while main is red', async () => {
