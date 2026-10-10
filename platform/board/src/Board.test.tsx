@@ -554,6 +554,7 @@ describe('Actions', () => {
     fireEvent.change(file.getByLabelText('Intent (for the agents)'), { target: { value: 'Add a stage.' } });
     fireEvent.change(file.getByLabelText('Acceptance test'), { target: { value: 'check: it loads' } });
     fireEvent.change(file.getByLabelText('Reason (optional)'), { target: { value: 'Asked for.' } });
+    fireEvent.change(file.getByLabelText('Funding target (USD)'), { target: { value: '3' } });
     fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
     await flush();
     expect(named('file_card').map((call) => call.args)).toEqual([
@@ -565,7 +566,7 @@ describe('Actions', () => {
         p_summary: 'Somewhere new to play.',
         p_intent: 'Add a stage.',
         p_acceptance_test: 'check: it loads',
-        p_funding_target_usd: 0,
+        p_funding_target_usd: 3,
         p_stage: 'proposed',
         p_executor_role_id: 'r-builder-a',
         p_board_reason: 'Asked for.',
@@ -575,7 +576,7 @@ describe('Actions', () => {
     expect(file.getByText('Card filed as card 1a2b3c4d.')).toBeTruthy();
   });
 
-  it('counts the summary to 200, refuses a blank one and a card on now with no target before calling', async () => {
+  it('counts the summary to 200, refuses a blank one, and refuses a blank or zero target on every horizon before calling', async () => {
     await renderBoard();
     const file = form('File a card');
     const summary = file.getByLabelText('Public summary') as HTMLInputElement;
@@ -590,6 +591,17 @@ describe('Actions', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
     await flush();
     expect(file.getByText('Funding target must be at least $0.01.')).toBeTruthy();
+    // file_card refuses a target of zero or less whatever the horizon, so the roadmap needs one too.
+    const target = file.getByLabelText('Funding target (USD)') as HTMLInputElement;
+    expect(target.required).toBe(true);
+    expect(target.min).toBe('0.01');
+    for (const [horizon, value] of [['later', ''], ['next', '0']] as const) {
+      fireEvent.change(file.getByLabelText('Horizon'), { target: { value: horizon } });
+      fireEvent.change(target, { target: { value } });
+      fireEvent.submit(screen.getByRole('form', { name: 'File a card' }));
+      await flush();
+      expect(file.getByRole('status').textContent).toBe('Funding target must be at least $0.01.');
+    }
     expect(named('file_card')).toHaveLength(0);
   });
 

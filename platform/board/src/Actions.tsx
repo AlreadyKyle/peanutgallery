@@ -116,11 +116,10 @@ function FileCardForm({ client, onFiled }: { client: SupabaseClient; onFiled: ()
       setMessage('A public summary is required.');
       return;
     }
-    // A roadmap card may leave the target blank; it gets one when it moves to now.
-    const roadmap = form.horizon !== 'now';
-    const target = form.funding_target_usd.trim() === '' && roadmap ? 0 : Number(form.funding_target_usd);
-    if (!Number.isFinite(target) || target < (roadmap ? 0 : 0.01)) {
-      setMessage(roadmap ? 'Funding target must be a dollar amount of zero or more.' : 'Funding target must be at least $0.01.');
+    // file_card refuses a target of zero or less on every horizon, the roadmap's included.
+    const target = dollars(form.funding_target_usd);
+    if (target === null || target < 0.01) {
+      setMessage('Funding target must be at least $0.01.');
       return;
     }
     if (executor === '') {
@@ -150,7 +149,7 @@ function FileCardForm({ client, onFiled }: { client: SupabaseClient; onFiled: ()
   return (
     <form className="stack" onSubmit={submit} aria-label="File a card">
       <h3>File a card</h3>
-      <p>A card on now opens for funding; one on next or later goes on the roadmap and takes no money.</p>
+      <p>A card on now opens for funding; one on next or later goes on the roadmap and takes no money until it moves to now. Every card needs a funding target.</p>
       <label>
         Horizon
         <select value={form.horizon} onChange={(event) => update('horizon', event.target.value as Horizon)}>
@@ -196,9 +195,9 @@ function FileCardForm({ client, onFiled }: { client: SupabaseClient; onFiled: ()
         <input
           type="number"
           inputMode="decimal"
-          min={form.horizon === 'now' ? '0.01' : '0'}
+          min="0.01"
           step="0.01"
-          required={form.horizon === 'now'}
+          required
           value={form.funding_target_usd}
           onChange={(event) => update('funding_target_usd', event.target.value)}
         />
