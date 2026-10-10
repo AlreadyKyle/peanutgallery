@@ -199,7 +199,7 @@ export const janitor: JobHandler = async (context) => {
       recorded += 1;
       if (await context.db.recordFinding(finding)) {
         opened.push(finding.fingerprint);
-        await context.alert.notify(`Janitor: ${finding.subject}. It is listed under Needs you.`);
+        await context.alert.notify(`Janitor: ${finding.subject}. It is listed under Findings in the board panel's Activity.`);
       }
     }
   }

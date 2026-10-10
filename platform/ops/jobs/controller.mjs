@@ -30,8 +30,8 @@
 //   payment (board_test in controller_figures) is left out;
 // - the Minimum balance figure: the 10% reserve, plus held money, plus the Stripe fees on the last
 //   30 days' charges (what Stripe would keep if every one were refunded);
-// - the newest paid payout, whose id the board's Needs you inbox fills into the credit purchase form
-//   (docs/specs/board-site.md).
+// - the newest paid payout, whose id the board may give the panel's optional Record a credit purchase
+//   form (docs/specs/optional-board.md).
 import { readFileSync } from 'node:fs';
 import { alerter, floor2, jobEnvProblems, JobEnvError, round2, round4, stripeApiVersion, stripeReader, supabaseClient, toCents } from './lib.mjs';
 

@@ -17,7 +17,8 @@
 #   and DISPATCHER_DRAIN_AT: the run's start plus DRAIN_AFTER_MINUTES (300). From then the dispatcher
 #   claims nothing and exits 0 once nothing it started is running. At the run's start plus
 #   HARD_STOP_AFTER_MINUTES (350) it gets SIGTERM, which interrupts, meters and archives a running
-#   session (recovery pauses that card at the next start), and SIGKILL 90 seconds later.
+#   session (the next start pauses that card, and it resumes on its own, within bounds), and SIGKILL
+#   90 seconds later.
 # - Actions logs are public, so the dispatcher's output goes to $RUNNER_TEMP/host/logs/dispatcher.log
 #   only, which the workflow encrypts with age before it uploads it. The public log gets this script's
 #   own lines and a fixed line per lifecycle message (lifecycle_lines), never a field of the log.
@@ -258,7 +259,7 @@ run() {
   redispatch=$(redispatch_now false "$drained" "$hard" "$ran")
   output redispatch "$redispatch"
   if [ "$hard" = true ]; then
-    alert "Mob Machine dispatcher reached its hard stop on GitHub Actions with work still running; recovery pauses that card at the next start"
+    alert "Mob Machine dispatcher reached its hard stop on GitHub Actions with work still running; the card is paused at the next start and resumes on its own"
   elif [ "$status" != 0 ]; then
     alert "Mob Machine dispatcher exited $status on GitHub Actions after ${ran}s; the next run starts it again"
     exit 1

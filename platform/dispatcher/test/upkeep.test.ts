@@ -154,7 +154,7 @@ describe('janitor', () => {
     expect(subjects['cli:version']).toBe('Claude Code 2.1.283 is installed but the pin is 2.1.280');
     expect(t.db.findings.find((x) => x.fingerprint === 'scan:osv')?.detail).toMatchObject({ run: 'https://github.com/owner/repo/actions/runs/77', conclusion: 'failure' });
     expect(subjects['producer:throughput:2026-W39']).toMatch(/^1 cards shipped in the last seven days, fewer than half the 4 the week before, with 2 funded cards waiting$/);
-    expect(t.alert.messages[0]).toBe('Janitor: function:public.f() differs between production and the migrations. It is listed under Needs you.');
+    expect(t.alert.messages[0]).toBe("Janitor: function:public.f() differs between production and the migrations. It is listed under Findings in the board panel's Activity.");
     // The studio key's model list is a free read, sent with the key and nothing else.
     expect(t.calls.filter((c) => c.url.startsWith('https://api.anthropic.com'))).toHaveLength(1);
   });
