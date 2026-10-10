@@ -205,9 +205,10 @@ describe('How it works', () => {
     renderPage(null);
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
     const text = who.textContent ?? '';
-    expect(text).toContain('Mob Machine is run by AI agents and a board: the people who run the studio and approve what gets built, today Kyle Smith.');
+    expect(text).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
     expect(text).toMatch(/pause the agents, cancel, veto or move a card, and change the spending caps/);
-    expect(text).toMatch(/The board files the cards: every entry on the roadmap and every card it opens for funding\./);
+    expect(text).toMatch(/The board files cards on the roadmap\./);
+    expect(text).toMatch(/When too few cards are open for funding, the Game Designer, an AI agent, drafts one.*No one has to ask\./);
     // PLAN.md §4 The Board's standing duties, one item each.
     expect(within(who).getAllByRole('listitem')).toHaveLength(6);
     for (const duty of [/model credit/, /within 14 days/, /bank dispute/, /emergency fund/, /merge/, /price of each new model/]) expect(text).toMatch(duty);

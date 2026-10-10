@@ -256,7 +256,7 @@ describe('Team', () => {
     const { container } = renderTeam(sourceOf(snapshot()));
     await screen.findByRole('region', { name: team.running });
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
-    expect(who.textContent).toContain('Mob Machine is run by AI agents and a board: the people who run the studio and approve what gets built, today Kyle Smith.');
+    expect(who.textContent).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
     expect(within(who).getAllByRole('listitem')).toHaveLength(legal.whoRuns.duties.length);
     expect(who.textContent).not.toMatch(/publish|public list|with (its|their) reasons?/i);
     const bands = [...container.querySelectorAll('main > .band')];
