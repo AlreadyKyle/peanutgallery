@@ -21,6 +21,10 @@ const STATES_FILE = process.env.E2E_FRAME_STATES ?? '';
 const STATES = [0, 600, 3_600, 21_600];
 const START = Date.parse('2026-01-01T12:00:00Z');
 const RUN_MS = 3_000;
+// The page clock's tick (its performance.now()) the game's first frame runs at in every draw.
+const FIRST_FRAME_TICK = 1_000;
+// Phaser caps a gap of more than its 60 fps step (16.7 ms) at that step in its first frames.
+const STEP_MS = 17;
 
 const here = (file: string): string => fileURLToPath(new URL(file, import.meta.url));
 // Read as text, never imported: render/scene.ts is card code.
@@ -40,6 +44,7 @@ function stateAt(seconds: number): string {
 interface Drawn {
   canvas: Buffer;
   page: Buffer;
+  frames: number;
   refused: string[];
 }
 
@@ -77,12 +82,21 @@ async function draw(browser: Browser, baseURL: string, save: string, viewport: {
   const canvas = page.locator('#game canvas');
   await canvas.waitFor();
   await page.waitForFunction(() => (window as unknown as { framesRequested: number }).framesRequested > 0);
-  // The paused clock stopped a few real milliseconds into the document, a different few each time,
-  // and Phaser took its start time there. A jump to a fixed time makes the first frame's gap over
-  // 200 ms, which Phaser replaces with its steady step, so every draw runs the same frames.
-  await page.clock.pauseAt(START + 2_000);
+  // The page clock paused with its tick count (its performance.now(), which Phaser and the clock's
+  // animation frames run on) at the real milliseconds between the two clock calls above, a different
+  // few each draw, and Phaser took its start time there. The clock runs animation frames on a 16 ms
+  // grid of ticks, so a jump of a fixed time put each draw at a different place on the grid: a draw
+  // ran a frame more or fewer, with different gaps, and the game drew a different amount of dust
+  // (docs/specs/frames-determinism.md). The jump goes to a fixed tick instead, so every draw runs the
+  // same frames at the same ticks; its gap is over Phaser's steady step, which Phaser caps at that step.
+  const paused = await page.evaluate(() => ({ ticks: performance.now(), now: Date.now() }));
+  if (paused.ticks > FIRST_FRAME_TICK - STEP_MS) {
+    throw new Error(`the page clock paused at tick ${paused.ticks}, past ${FIRST_FRAME_TICK - STEP_MS}`);
+  }
+  await page.clock.pauseAt(paused.now + FIRST_FRAME_TICK - paused.ticks);
   await page.clock.runFor(RUN_MS);
-  const drawn = { canvas: await canvas.screenshot(), page: await page.screenshot({ fullPage: true }), refused };
+  const frames = await page.evaluate(() => (window as unknown as { framesRequested: number }).framesRequested);
+  const drawn = { canvas: await canvas.screenshot(), page: await page.screenshot({ fullPage: true }), frames, refused };
   await context.close();
   return drawn;
 }
@@ -109,6 +123,7 @@ for (const seconds of STATES) {
     const second = await draw(browser, baseURL!, saved, { width: 1280, height: 720 });
     expect(first.refused).toEqual([]);
     expect(second.refused).toEqual([]);
+    expect(second.frames, 'two draws of the same state ran a different number of frames').toBe(first.frames);
     expect(first.canvas.equals(second.canvas), 'two draws of the same state differ').toBe(true);
     save(`game-${seconds}.png`, first.canvas);
   });
@@ -119,6 +134,8 @@ test('draws the page at 375px the same way twice', async ({ browser, baseURL }) 
   const first = await draw(browser, baseURL!, saved, { width: 375, height: 812 });
   const second = await draw(browser, baseURL!, saved, { width: 375, height: 812 });
   expect(first.refused).toEqual([]);
+  expect(second.refused).toEqual([]);
+  expect(second.frames, 'two draws of the page ran a different number of frames').toBe(first.frames);
   expect(first.page.equals(second.page), 'two draws of the page differ').toBe(true);
   save('page-375.png', first.page);
 });
