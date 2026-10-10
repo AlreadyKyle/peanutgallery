@@ -1,7 +1,8 @@
 // Claude Code adapter: one session per card through the claude command line with a fixed tool
-// allowlist, no MCP servers, no web or sub-agent tools, and an allowlisted environment. Only attended
-// mode runs it, on the founder's Mac and subscription (attended.ts); unattended mode runs Managed
-// Agents sessions instead (managed.ts).
+// allowlist, no MCP servers, no web or sub-agent tools, and an allowlisted environment. Only the
+// hand-run attended tools run it (the replay eval, sandbox:check and probe --attended), on the
+// founder's Mac and subscription (attended.ts); the dispatcher runs Managed Agents sessions only
+// (managed.ts, PLAN.md §10 decision 66).
 import { spawn, type ChildProcess } from 'node:child_process';
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
