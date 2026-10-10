@@ -99,7 +99,7 @@ export function probeDelayMs(reason: 'awaiting_credit' | 'spend_limit', failures
 // Only a pause the dispatcher set for money it could not spend is probed: never the board's or the
 // moderator's (paused_by is their email), and never an incident.
 function probedPause(studio: StudioState): 'awaiting_credit' | 'spend_limit' | null {
-  if (!studio.paused || !(studio.paused_by ?? '').startsWith('dispatcher')) return null;
+  if (!studio.paused || !(studio.paused_by ?? '').startsWith('dispatcher:')) return null;
   return studio.pause_reason === 'awaiting_credit' || studio.pause_reason === 'spend_limit' ? studio.pause_reason : null;
 }
 
@@ -218,11 +218,15 @@ async function resumeStudio(deps: TickDeps): Promise<void> {
     deps.log.warn('tick', 'dispatcher_resume_studio failed; the studio stays paused', { error: errorMessage(error) });
     return;
   }
-  state.key = null;
   if (!resumed) {
+    // The database refused (the pause became an incident's or the board's, or the kill switch fired):
+    // keep backing off, so a refusal never turns into a probe on every tick.
+    state.failures += 1;
+    state.nextAt = now + probeDelayMs(reason, state.failures);
     deps.log.info('tick', 'the credit probe passed but the studio was not unpaused: its pause is no longer the dispatcher\'s', { reason });
     return;
   }
+  state.key = null;
   deps.log.info('tick', 'the credit probe passed; the studio is unpaused', { reason, model: probe.model, usd: probe.usd });
   const what = reason === 'awaiting_credit' ? 'Console credit' : "the usage tier's monthly cap";
   await deps.alert.notifyOnce(

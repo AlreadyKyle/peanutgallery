@@ -211,7 +211,8 @@ export class FakeDb implements Db {
     return { ...this.studio };
   }
   async pauseStudio(by: string, now: Date, reason: PauseReason) {
-    if (this.studio.paused) return;
+    const moneyPause = this.studio.paused && (this.studio.pause_reason === 'awaiting_credit' || this.studio.pause_reason === 'spend_limit') && (this.studio.paused_by ?? '').startsWith('dispatcher:');
+    if (this.studio.paused && !(reason === 'incident' && moneyPause)) return;
     this.studio.paused = true;
     this.studio.paused_by = by;
     this.studio.pause_reason = reason;
@@ -355,7 +356,7 @@ export class FakeDb implements Db {
   async dispatcherResumeStudio(reason: string, detail: Record<string, unknown>) {
     this.studioResumes.push({ reason, detail });
     const s = this.studio;
-    if (!s.paused || (s.pause_reason !== 'awaiting_credit' && s.pause_reason !== 'spend_limit') || !(s.paused_by ?? '').startsWith('dispatcher')) return false;
+    if (!s.paused || (s.pause_reason !== 'awaiting_credit' && s.pause_reason !== 'spend_limit') || !(s.paused_by ?? '').startsWith('dispatcher:')) return false;
     this.studio = { ...s, paused: false, pause_reason: null, paused_by: null, paused_at: null };
     return true;
   }

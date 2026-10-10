@@ -574,8 +574,15 @@ export function createSupabaseDb(url: string, serviceRoleKey: string, options: S
     },
 
     async pauseStudio(by, now, reason) {
-      const { error } = await client.from('studio_state').update({ paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason }).eq('id', 1).eq('paused', false);
+      const row = { paused: true, paused_by: by, paused_at: now.toISOString(), pause_reason: reason };
+      const { error } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', false);
       if (error) fail('studio_state pause', error);
+      // An incident outranks the dispatcher's own money pause: it takes that pause over, so the credit
+      // probe (which lifts only awaiting_credit and spend_limit) can never lift an incident.
+      if (reason === 'incident') {
+        const { error: escalate } = await client.from('studio_state').update(row).eq('id', 1).eq('paused', true).in('pause_reason', ['awaiting_credit', 'spend_limit']).like('paused_by', 'dispatcher:%');
+        if (escalate) fail('studio_state pause (incident over a money pause)', escalate);
+      }
     },
 
     async claimLease(holder, ttlSeconds) {

@@ -230,6 +230,44 @@ describe('tick: auto-resume and the credit probe', () => {
     await tick(deps(db, [], { now: () => new Date(NOW.getTime() + 20 * MIN), alert, creditProbe, studioProbe: newStudioProbeState() }));
     expect([db.studio.paused, alert.messages]).toEqual([true, []]);
   });
+
+  it('keeps backing off after the database refuses to unpause, so a refusal never probes on every tick', async () => {
+    const db = pausedFor('awaiting_credit');
+    db.dispatcherResumeStudio = async () => false;
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'ok' as const, model: 'm', usd: 0 };
+    };
+    const studioProbe = newStudioProbeState();
+    let at = NOW.getTime() + 20 * MIN;
+    const d = deps(db, [], { now: () => new Date(at), creditProbe, studioProbe });
+    await tick(d);
+    for (let minute = 1; minute <= 10; minute += 1) {
+      at += MIN;
+      await tick(d);
+    }
+    expect(probes).toBe(1);
+  });
+
+  it('an incident takes over the dispatcher\'s credit pause, and the probe never lifts it', async () => {
+    const db = pausedFor('awaiting_credit');
+    await db.pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect([db.studio.paused, db.studio.pause_reason]).toEqual([true, 'incident']);
+    let probes = 0;
+    const creditProbe = async () => {
+      probes += 1;
+      return { outcome: 'ok' as const, model: 'm', usd: 0 };
+    };
+    await tick(deps(db, [], { now: () => new Date(NOW.getTime() + 24 * 60 * MIN), creditProbe, studioProbe: newStudioProbeState() }));
+    expect([db.studio.paused, db.studio.pause_reason, probes]).toEqual([true, 'incident', 0]);
+  });
+
+  it('an incident does not take over the board\'s pause', async () => {
+    const db = pausedFor('board', 'board@mobmachine.games');
+    await db.pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect([db.studio.pause_reason, db.studio.paused_by]).toEqual(['board', 'board@mobmachine.games']);
+  });
 });
 
 // docs/specs/studio-reports.md: Discord runs after the heartbeat, only with the lease and not halted,

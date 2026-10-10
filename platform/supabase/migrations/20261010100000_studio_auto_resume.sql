@@ -36,7 +36,7 @@ begin
   if not v_state.paused
     or v_state.pause_reason is null
     or v_state.pause_reason not in ('awaiting_credit', 'spend_limit')
-    or coalesce(v_state.paused_by, '') not like 'dispatcher%'
+    or coalesce(v_state.paused_by, '') not like 'dispatcher:%'
     or v_state.kill_switch_fired_at is not null then
     return false;
   end if;

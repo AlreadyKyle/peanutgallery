@@ -149,6 +149,19 @@ describe('createSupabaseDb queries', () => {
     expect(seen[0]?.body).toEqual({ paused: true, paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: NOW.toISOString(), pause_reason: 'awaiting_credit' });
   });
 
+  it('an incident pause also takes over only a dispatcher money pause, so the credit probe can never lift it', async () => {
+    const { fetchFn, seen } = rest([]);
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).pauseStudio('dispatcher: the revert of card 4c2f5a1e failed', NOW, 'incident');
+    expect(seen).toHaveLength(2);
+    expect(seen[0]?.url.searchParams.get('paused')).toBe('eq.false');
+    const take = seen[1]!;
+    expect(take.method).toBe('PATCH');
+    expect(take.url.searchParams.get('paused')).toBe('eq.true');
+    expect(take.url.searchParams.get('pause_reason')).toBe('in.(awaiting_credit,spend_limit)');
+    expect(take.url.searchParams.get('paused_by')).toBe('like.dispatcher:%');
+    expect(take.body).toEqual({ paused: true, paused_by: 'dispatcher: the revert of card 4c2f5a1e failed', paused_at: NOW.toISOString(), pause_reason: 'incident' });
+  });
+
   it('reads the cards a tick chooses from dispatcher_cards, with the approval, the vetoes and the executor pause', async () => {
     const { fetchFn, seen } = rest([{ id: 'a', stage: 'funded', source: 'agent', needs_approval: true, approved: false, board_vetoed: true, executor_paused: true }]);
     const cards = await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).listCardsInStages(['funded', 'building']);
