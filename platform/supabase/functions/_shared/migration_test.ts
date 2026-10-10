@@ -1291,7 +1291,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "the board files Next cards, stamps the launch, sets the agent mode and reads studio_state",
+      "the board files Next cards, stamps the launch, is refused the retired agent mode and reads studio_state",
       async () => {
         await signInAs(BOARD_EMAIL, "aal2");
         // The test row was inserted with defaults, so the per-card maximum is 0 until set.
