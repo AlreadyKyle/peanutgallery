@@ -4,7 +4,7 @@ import { SessionBudgets } from '../src/budgets.js';
 import { haltDispatcher, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
 import { stuckAfterMs } from '../src/pipeline.js';
-import { drainState, leaseTtlSeconds, tick, type TickDeps } from '../src/tick.js';
+import { currentMoneyState, drainState, jobsHoldUsd, leaseTtlSeconds, tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
 
@@ -615,5 +615,24 @@ describe('tick: draining', () => {
     expect(drainState(NOW, NOW, 1, false)).toBe('draining');
     expect(drainState(after, NOW, 0, true)).toBe('draining');
     expect(drainState(after, NOW, 0, false)).toBe('drained');
+  });
+});
+
+// docs/specs/unattended-roles.md: a running draft_card session's budget, by the card it drafts, is in
+// the money state the tick and the draft's own sessions read.
+describe('the money state with a running role job', () => {
+  it('counts what the running draft session may still spend, and nothing once it ends', async () => {
+    const db = new FakeDb();
+    db.cards = [card({ id: 'funded-card', stage: 'funded' })];
+    const budgets = new SessionBudgets();
+    const jobBudgets = new SessionBudgets();
+    expect(jobsHoldUsd(undefined)).toBe(0);
+    jobBudgets.start('drafted-card', 0.75);
+    jobBudgets.record('drafted-card', 0.2);
+    expect(jobsHoldUsd(jobBudgets)).toBe(0.55);
+    const state = await currentMoneyState({ db, now: () => NOW, budgets, jobBudgets });
+    expect([state.jobsUsd, state.balanceUsd, state.cards.map((c) => c.id)]).toEqual([0.55, 50, ['funded-card']]);
+    jobBudgets.finish('drafted-card');
+    expect((await currentMoneyState({ db, now: () => NOW, budgets, jobBudgets })).jobsUsd).toBe(0);
   });
 });

@@ -343,3 +343,17 @@ describe('planStart', () => {
     });
   });
 });
+
+// A running draft_card session (docs/specs/unattended-roles.md): its card is on next and holds no bar
+// money, so what the session may still spend is held from every card and every cap, as a building
+// card's is.
+describe('a running role job', () => {
+  it("holds what its session may still spend from the balance, the daily, monthly and tier caps", () => {
+    const x = moneyCard({ id: 'x', estimate_usd: 2, funded_usd: 2 });
+    const free = planStart(money({ balanceUsd: 10, cards: [x], tierCapUsd: 50 }), x);
+    const held = planStart(money({ balanceUsd: 10, cards: [x], tierCapUsd: 50, jobsUsd: 0.75 }), x);
+    expect(free).toMatchObject({ ok: true, bounds: { availableUsd: 10, dailyUsd: 100, monthlyUsd: 500, tierUsd: 50 } });
+    expect(held).toMatchObject({ ok: true, bounds: { availableUsd: 9.25, dailyUsd: 99.25, monthlyUsd: 499.25, tierUsd: 49.25 } });
+    expect(planStart(money({ balanceUsd: 2.5, cards: [x], jobsUsd: 0.75 }), x)).toMatchObject({ ok: false, reason: 'insufficient_balance' });
+  });
+});

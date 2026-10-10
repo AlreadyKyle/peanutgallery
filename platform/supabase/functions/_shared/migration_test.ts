@@ -4056,6 +4056,7 @@ Deno.test("migrations on PGlite", {
           "controller_figures",
           "credit_held_contributions",
           "deal_due_cards",
+          "draft_card_answer",
           "draft_target_kind",
           "enqueue_job_run",
           "enqueue_supply_draft",

@@ -51,7 +51,7 @@ function config(over: Partial<UpkeepDeps['config']> = {}): UpkeepDeps['config'] 
 function context(db: FakeDb, upkeep: UpkeepDeps, job: 'janitor' | 'upkeep_merge', alert = new RecordingAlerter()): JobContext {
   return {
     run: { id: `run-${job}`, job_name: job, origin: 'schedule', status: 'running', card_id: null, input: {}, parent_run_id: null, created_at: NOW.toISOString() },
-    job: { name: job, role_id: 'role-janitor', calls_model: false, runs_when_paused: job === 'janitor' },
+    job: { name: job, role_id: 'role-janitor', calls_model: false, runs_when_paused: job === 'janitor', enabled: true },
     role: null,
     mode: 'attended',
     db,
@@ -209,7 +209,7 @@ describe('janitor', () => {
   it('runs while the studio is paused and writes only findings and its job run', async () => {
     const t = setup(fixture());
     t.db.studio.paused = true;
-    expect(skipReason({ name: 'janitor', role_id: null, calls_model: false, runs_when_paused: true }, { origin: 'schedule' }, null, { paused: true })).toBeNull();
+    expect(skipReason({ name: 'janitor', role_id: null, calls_model: false, runs_when_paused: true, enabled: true }, null, { paused: true })).toBeNull();
     const output = (await janitor(t.ctx)) as { opened: string[] };
     expect(output.opened.length).toBeGreaterThan(0);
     expect(t.db.findingWrites.every((w) => w.startsWith('record:') || w.startsWith('close:'))).toBe(true);
@@ -330,7 +330,7 @@ function mergeContext(db: FakeDb, upkeep: UpkeepDeps, alert: RecordingAlerter, s
   return {
     ...context(db, upkeep, 'upkeep_merge', alert),
     run: { id: runId, job_name: 'upkeep_merge', origin: 'schedule', status: 'running', card_id: null, input: {}, parent_run_id: null, created_at: NOW.toISOString() },
-    job: { name: 'upkeep_merge', role_id: 'role-janitor', calls_model: false, runs_when_paused: true },
+    job: { name: 'upkeep_merge', role_id: 'role-janitor', calls_model: false, runs_when_paused: true, enabled: true },
     stopSignal: stop.signal,
   };
 }
@@ -546,7 +546,7 @@ describe('upkeep_merge', () => {
     const paused = mergeSetup(mergeFixture());
     paused.db.studio.paused = true;
     // It runs while the studio is paused, so a merge it left pending is still settled (below).
-    expect(skipReason({ name: 'upkeep_merge', role_id: null, calls_model: false, runs_when_paused: true }, { origin: 'schedule' }, null, { paused: true })).toBeNull();
+    expect(skipReason({ name: 'upkeep_merge', role_id: null, calls_model: false, runs_when_paused: true, enabled: true }, null, { paused: true })).toBeNull();
     expect(await upkeepMerge(paused.ctx)).toEqual({ skipped: 'studio_paused', decisions: [], pending: null });
     expect(paused.calls).toEqual([]);
 

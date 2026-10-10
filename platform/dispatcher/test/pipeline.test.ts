@@ -83,6 +83,7 @@ beforeAll(async () => {
     poolDailyCapUsd: 100,
     cardMaxUsd: 25,
     visualReviewMaxUsd: 1,
+    draftSessionMaxUsd: 0.75,
     sessionMaxTurns: 60,
     sessionMaxMinutes: 60,
     agentHourlyRateUsd: 5,

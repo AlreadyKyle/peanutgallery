@@ -34,6 +34,7 @@ const config: DispatcherConfig = {
   poolDailyCapUsd: 100,
   cardMaxUsd: 25,
   visualReviewMaxUsd: 1,
+  draftSessionMaxUsd: 0.75,
   sessionMaxTurns: 60,
   sessionMaxMinutes: 60,
   agentHourlyRateUsd: 5,
@@ -152,7 +153,7 @@ describe('checkCodeReadonly', () => {
 describe('failStaleJobRuns', () => {
   it('finishes every job run still marked running as failed with dispatcher_restart, once the lease is held, and logs the count', async () => {
     const db = new FakeDb();
-    db.jobList = [{ name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: false }];
+    db.jobList = [{ name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: false, enabled: true }];
     const lines: string[] = [];
     const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
     await expect(failStaleJobRuns(db, 'mac/1/abcd', log)).rejects.toThrow('Only the dispatcher lease holder');

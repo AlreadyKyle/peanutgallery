@@ -127,7 +127,7 @@ async function studio() {
       `insert into public.job_runs (job_name, idem_key, origin, status, card_id, started_at) values ('draft_card', gen_random_uuid()::text, 'schedule', 'running', $1, now()) returning id`,
       [card],
     )).id;
-  const open = async (run: string) => (await row<{ r: { card_id: string; kind: string; opened: string } }>(`select public.open_draft_card($1) as r`, [run])).r;
+  const open = async (run: string) => (await row<{ r: { card_id: string; kind: string; opened: string; card: Row } }>(`select public.open_draft_card($1) as r`, [run])).r;
   const fields = (over: Row = {}): Row => ({
     title: "Gatherers cost 11",
     summary: "The gatherer costs one more to build.",
@@ -177,7 +177,9 @@ Deno.test("next_backlog_card takes the next seed-1 backlog card by horizon, then
       drafted: await s.backlog("Drafted, rank 0", { rank: 0 }),
       vetoed: await s.backlog("Vetoed, rank 0", { rank: 0 }),
       onNow: await s.backlog("On now, rank 0", { rank: 0 }),
+      noSummary: await s.backlog("No summary, rank 0", { rank: 0 }),
     };
+    await s.db.query(`update public.cards set summary = null where id = $1`, [skipped.noSummary]);
     await s.db.query(`update public.cards set drafter_role_id = $2 where id = $1`, [skipped.drafted, s.roles.designer]);
     await s.db.query(`update public.cards set board_vetoed = true, board_veto_reason = 'No.' where id = $1`, [skipped.vetoed]);
     await s.db.query(`update public.cards set horizon = 'now' where id = $1`, [skipped.onNow]);
@@ -235,7 +237,8 @@ Deno.test("open_draft_card opens the card first: the next backlog card, or a new
 
     await t.step("a run that names its card keeps it, and one naming a card a draft may not fill is refused", async () => {
       const card = await s.backlog("Named", { rank: 9 });
-      assertEquals(await s.open(await s.running(card)), { card_id: card, kind: "backlog", opened: "named" });
+      const named = await s.open(await s.running(card));
+      assertEquals([named.card_id, named.kind, named.opened], [card, "backlog", "named"]);
       const work = await s.backlog("Kernel work", { boardWork: true });
       await s.refuses(`select public.open_draft_card($1)`, "is not a card a draft may fill", [await s.running(work)]);
       const queued = (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin) values ('draft_card', 'queued-one', 'schedule') returning id`)).id;
@@ -251,7 +254,12 @@ Deno.test("open_draft_card opens the card first: the next backlog card, or a new
       const card = await b.backlog("Show the next unlock", { rank: 1 });
       const before = (await b.row<{ n: number }>(`select count(*)::int as n from public.cards`)).n;
       const opened = await b.open(await b.running());
-      assertEquals(opened, { card_id: card, kind: "backlog", opened: "backlog" });
+      assertEquals(opened, {
+        card_id: card,
+        kind: "backlog",
+        opened: "backlog",
+        card: { title: "Show the next unlock", summary: "A backlog summary.", intent: "It is not built yet.", horizon: "next", rank: 1, funded_usd: 0, severity: null },
+      });
       assertEquals((await b.row<{ n: number }>(`select count(*)::int as n from public.cards`)).n, before);
     });
   } finally {
@@ -491,6 +499,7 @@ Deno.test("every new function is the service role's, and the migration runs twic
       `select public.enqueue_supply_draft()`,
       `select public.card_from_draft_onto(null::public.cards, '{}'::jsonb, null)`,
       `select public.draft_target_kind(null::public.cards, null)`,
+      `select public.draft_card_answer(gen_random_uuid(), 'new', 'new')`,
     ];
     for (const role of ["anon", "authenticated"]) {
       for (const call of calls) await s.asRole(role, () => s.refuses(call, "permission denied"));

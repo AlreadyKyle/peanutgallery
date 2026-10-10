@@ -1,20 +1,20 @@
 // The job queue's dispatcher half (docs/specs/agent-system-core.md). pg_cron and the board queue
-// runs in job_runs (enqueue_job_run, enqueue_manual_job); each tick starts at most one, one job at a
-// time beside the card sessions:
+// runs in job_runs (enqueue_job_run, enqueue_manual_job, enqueue_supply_draft); each tick starts at
+// most one, one job at a time beside the card sessions:
 // - it reads the oldest queued runs and takes the first that can start, finishing each earlier one
-//   that cannot as skipped with its reason: role_paused (the job's role is paused), studio_paused
-//   (the studio is paused and the job does not run while it is), not_board_origin (a model-calling
-//   run the board did not queue: no role job spends studio or supporter money, so a model call runs
-//   only attended, on the board's plan, billed to the founder);
-// - a board-origin model-calling run waits, queued, while no board member is signed in at /board
-//   (the heartbeat attended card sessions use), in either studio mode, and the tick moves on;
+//   that cannot as skipped with its reason: job_disabled (the job is retired, as studio_ranking is),
+//   role_paused (the job's role is paused), studio_paused (the studio is paused and the job does not
+//   run while it is);
+// - a model-calling run starts like a code run, from any origin, with no board member signed in: its
+//   sessions run unattended on the card sessions' adapter, billed to the card they work on
+//   (PLAN.md §10 decision 66, docs/specs/unattended-roles.md);
 // - it claims the run under the dispatcher lease, runs its handler (job-handlers/index.ts) in the
 //   background and finishes the run with the handler's output, or as failed with the error. A job
 //   with no handler fails with no_handler.
 // A running job's stopSignal fires at the next watch after its role pauses, or the studio pauses and
-// the job does not run while it is paused, or (for a model-calling job) no board member is signed in
-// any more, or the dispatcher stops; the run then fails with that reason. A job that runs while the
-// studio is paused keeps running through a studio pause; its role's pause still stops it.
+// the job does not run while it is paused, or the dispatcher stops; the run then fails with that
+// reason. A job that runs while the studio is paused keeps running through a studio pause; its role's
+// pause still stops it.
 import type { AgentAdapter, AgentMode } from './adapters/types.js';
 import type { Alerter } from './alert.js';
 import type { Db, Job, JobRun, Role, StudioState } from './db.js';
@@ -28,16 +28,14 @@ export interface JobContext {
   job: Job;
   // The job's role, or null for a job with none.
   role: Role | null;
-  // The card sessions' mode. A model-calling handler runs its session on the founder's plan through an
-  // attended adapter of its own, whatever this mode is: `adapter` is the card sessions' adapter, which
-  // in unattended mode bills the studio's key, and no role job spends studio or supporter money.
+  // The card sessions' mode and adapter. A model-calling handler runs its sessions on this adapter
+  // (the managed one, in unattended mode), billed to the card it works on.
   mode: AgentMode;
   db: Db;
   adapter: AgentAdapter;
   log: Logger;
   alert: Alerter;
-  // Fires when the job's role or the studio pauses, a model-calling job's board member signs out, or
-  // the dispatcher stops; the handler stops then.
+  // Fires when the job's role or the studio pauses, or the dispatcher stops; the handler stops then.
   stopSignal: AbortSignal;
   now: () => Date;
   // What the role jobs run with (docs/specs/agent-workflows.md); absent where none is configured.
@@ -49,8 +47,8 @@ export interface JobContext {
 // A handler returns the run's output, a JSON object, or nothing.
 export type JobHandler = (context: JobContext) => Promise<Record<string, unknown> | void>;
 
-export type SkipReason = 'role_paused' | 'studio_paused' | 'not_board_origin';
-export type StopReason = 'role_paused' | 'studio_paused' | 'board_session_lapsed' | 'dispatcher_stopping';
+export type SkipReason = 'job_disabled' | 'role_paused' | 'studio_paused';
+export type StopReason = 'role_paused' | 'studio_paused' | 'dispatcher_stopping';
 
 // The reason a thrown handler's run fails with when the error carries no message: finish_job_run
 // refuses a failed run with an empty reason, which would leave the run marked running.
@@ -70,7 +68,6 @@ export interface JobTickDeps {
   now: () => Date;
   // This process's name on the dispatcher lease; claim_job_run refuses any other.
   leaseHolder: string;
-  boardSessionTtlMin: number;
   // How often a running job's role and the studio are read.
   watchIntervalMs: number;
   state: JobState;
@@ -84,16 +81,17 @@ export interface JobTickDeps {
 export type JobTickOutcome =
   | { action: 'busy'; runId: string; job: string }
   | { action: 'started'; runId: string; job: string }
-  | { action: 'idle'; skipped: number; waiting: number };
+  | { action: 'idle'; skipped: number };
 
 // How many queued runs a tick reads.
 export const QUEUE_WINDOW = 50;
 
-// Why a queued run cannot start, or null when it may.
-export function skipReason(job: Job, run: Pick<JobRun, 'origin'>, role: Pick<Role, 'paused'> | null, studio: Pick<StudioState, 'paused'>): SkipReason | null {
+// Why a queued run cannot start, or null when it may. Its origin does not matter: a model-calling run
+// the schedule queued starts as one the board queued does.
+export function skipReason(job: Job, role: Pick<Role, 'paused'> | null, studio: Pick<StudioState, 'paused'>): SkipReason | null {
+  if (!job.enabled) return 'job_disabled';
   if (role?.paused) return 'role_paused';
   if (studio.paused && !job.runs_when_paused) return 'studio_paused';
-  if (job.calls_model && run.origin !== 'board') return 'not_board_origin';
   return null;
 }
 
@@ -101,13 +99,11 @@ export async function jobTick(deps: JobTickDeps): Promise<JobTickOutcome> {
   const current = deps.state.running;
   if (current) return { action: 'busy', runId: current.runId, job: current.job };
   const runs = await deps.db.queuedRuns(QUEUE_WINDOW);
-  if (runs.length === 0) return { action: 'idle', skipped: 0, waiting: 0 };
+  if (runs.length === 0) return { action: 'idle', skipped: 0 };
   const [studio, jobs] = await Promise.all([deps.db.getStudioState(), deps.db.jobs()]);
   const byName = new Map(jobs.map((job) => [job.name, job]));
   const roles = new Map<string, Role>();
-  let boardPresent: boolean | null = null;
   let skipped = 0;
-  let waiting = 0;
   for (const run of runs) {
     const job = byName.get(run.job_name);
     if (!job) continue;
@@ -116,26 +112,19 @@ export async function jobTick(deps: JobTickDeps): Promise<JobTickOutcome> {
       role = roles.get(job.role_id) ?? (await deps.db.getRole(job.role_id));
       roles.set(job.role_id, role);
     }
-    const skip = skipReason(job, run, role, studio);
+    const skip = skipReason(job, role, studio);
     if (skip) {
       await deps.db.finishJobRun(run.id, 'skipped', skip, null);
       deps.log.info('jobs', `job run ${run.id} skipped`, { job: job.name, origin: run.origin, reason: skip });
       skipped += 1;
       continue;
     }
-    if (job.calls_model) {
-      boardPresent ??= await deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now());
-      if (!boardPresent) {
-        waiting += 1;
-        continue;
-      }
-    }
     if (!(await deps.db.claimJobRun(run.id, deps.leaseHolder))) continue;
     start(deps, run, job, role);
     deps.log.info('jobs', `job run ${run.id} started`, { job: job.name, origin: run.origin });
     return { action: 'started', runId: run.id, job: job.name };
   }
-  return { action: 'idle', skipped, waiting };
+  return { action: 'idle', skipped };
 }
 
 function start(deps: JobTickDeps, run: JobRun, job: Job, role: Role | null): void {
@@ -151,16 +140,9 @@ function start(deps: JobTickDeps, run: JobRun, job: Job, role: Role | null): voi
   const watch = setInterval(() => {
     void (async () => {
       try {
-        const [studio, roleState, boardPresent] = await Promise.all([
-          deps.db.getStudioState(),
-          job.role_id ? deps.db.roleState(job.role_id) : Promise.resolve(null),
-          // A model call runs only attended, on the founder's plan (R33): once no board member is signed
-          // in, a model-calling run stops, as an attended card session does.
-          job.calls_model ? deps.db.boardSessionActive(deps.boardSessionTtlMin, deps.now()) : Promise.resolve(true),
-        ]);
+        const [studio, roleState] = await Promise.all([deps.db.getStudioState(), job.role_id ? deps.db.roleState(job.role_id) : Promise.resolve(null)]);
         if (roleState?.paused) halt('role_paused');
         else if (studio.paused && !job.runs_when_paused) halt('studio_paused');
-        else if (!boardPresent) halt('board_session_lapsed');
       } catch (error) {
         deps.log.warn('jobs', 'job watch failed', { run: run.id, error: errorMessage(error) });
       }

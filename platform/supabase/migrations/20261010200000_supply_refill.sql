@@ -86,7 +86,8 @@ create index if not exists card_drafts_target_idx on public.card_drafts (target_
 
 -- d. Which cards a draft may fill -----------------------------------------------------
 -- backlog: a board goal card filed for seed-1, at proposed on next or later,
--- not board work, never drafted, not waiting to be dealt and vetoed by no one.
+-- not board work, never drafted, not waiting to be dealt and vetoed by no one,
+-- with a title and a summary a draft can carry unchanged.
 -- new: a card a draft run opened, still private: source agent, the drafter
 -- p_designer, at proposed on next or later, not waiting to be dealt, with no
 -- approval, vetoed by no one. Null for any other card.
@@ -101,7 +102,9 @@ as $$
     when c.id is null or c.folder <> 'seed-1' or c.shape <> 'goal' or c.stage <> 'proposed'
       or c.horizon not in ('next', 'later') or c.opens_at is not null
       or c.board_vetoed or c.director_stance = 'vetoed' then null
-    when c.source = 'board' and not c.board_work and c.drafter_role_id is null then 'backlog'
+    -- A backlog card keeps the board's title and summary, so they must be ones a draft can carry.
+    when c.source = 'board' and not c.board_work and c.drafter_role_id is null
+      and btrim(coalesce(c.summary, '')) <> '' and btrim(c.title) <> '' and char_length(btrim(c.title)) <= 120 then 'backlog'
     when c.source = 'agent' and p_designer is not null and c.drafter_role_id = p_designer
       and not exists (select 1 from public.card_approvals a where a.card_id = c.id) then 'new'
   end
@@ -135,7 +138,27 @@ $$;
 
 -- f. open_draft_card ---------------------------------------------------------------------
 -- The card a running draft_card run is billed to, named on the run before any
--- session starts. kind is backlog or new; opened says how it was found.
+-- session starts. kind is backlog or new; opened says how it was found; card
+-- carries the fields the Designer's prompt shows and the session budget reads.
+
+create or replace function public.draft_card_answer(p_card uuid, p_kind text, p_opened text) returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'card_id', c.id,
+    'kind', p_kind,
+    'opened', p_opened,
+    'card', jsonb_build_object(
+      'title', c.title, 'summary', c.summary, 'intent', c.intent, 'horizon', c.horizon, 'rank', c.rank,
+      'funded_usd', c.funded_usd, 'severity', c.severity
+    )
+  )
+  from public.cards c
+  where c.id = p_card
+$$;
 
 create or replace function public.open_draft_card(p_run uuid) returns jsonb
 language plpgsql
@@ -172,7 +195,7 @@ begin
     if v_kind is null then
       raise exception 'Card % is not a card a draft may fill', v_run.card_id;
     end if;
-    return jsonb_build_object('card_id', v_run.card_id, 'kind', v_kind, 'opened', 'named');
+    return public.draft_card_answer(v_run.card_id, v_kind, 'named');
   end if;
 
   select c.id into v_id
@@ -205,7 +228,7 @@ begin
     v_kind := 'new';
   end if;
   update public.job_runs set card_id = v_id where id = p_run;
-  return jsonb_build_object('card_id', v_id, 'kind', v_kind, 'opened', v_opened);
+  return public.draft_card_answer(v_id, v_kind, v_opened);
 end;
 $$;
 
@@ -544,6 +567,8 @@ revoke all on function public.draft_target_kind(public.cards, uuid) from public,
 grant execute on function public.draft_target_kind(public.cards, uuid) to service_role;
 revoke all on function public.next_backlog_card() from public, anon, authenticated;
 grant execute on function public.next_backlog_card() to service_role;
+revoke all on function public.draft_card_answer(uuid, text, text) from public, anon, authenticated;
+grant execute on function public.draft_card_answer(uuid, text, text) to service_role;
 revoke all on function public.open_draft_card(uuid) from public, anon, authenticated;
 grant execute on function public.open_draft_card(uuid) to service_role;
 revoke all on function public.card_from_draft_onto(public.cards, jsonb, uuid) from public, anon, authenticated;

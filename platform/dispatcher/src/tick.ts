@@ -44,6 +44,9 @@ export interface TickDeps {
   running: Map<string, Date>;
   // The session budget of each card this process is running.
   budgets: SessionBudgets;
+  // The running role job's session budget, by the card it is billed to (a draft_card session); unset
+  // is none.
+  jobBudgets?: SessionBudgets;
   // This process's name on the dispatcher lease, and how long each claim holds it.
   leaseHolder: string;
   leaseTtlSeconds: number;
@@ -250,9 +253,25 @@ async function offPin(deps: TickDeps): Promise<boolean> {
   return true;
 }
 
+export type MoneyDeps = Pick<TickDeps, 'db' | 'now' | 'budgets' | 'jobBudgets'>;
+
+// What the running role job's sessions may still spend.
+export function jobsHoldUsd(jobBudgets: SessionBudgets | undefined): number {
+  let total = 0;
+  for (const left of jobBudgets?.remaining().values() ?? []) total += left;
+  return Math.round(total * 10_000) / 10_000;
+}
+
+// The money state as a tick reads it, for a role job's session to check its budget against
+// (job-handlers/draft-card.ts): the studio, the pool and every card that can hold money, read fresh.
+export async function currentMoneyState(deps: MoneyDeps): Promise<MoneyState> {
+  const [studio, pool, cards] = await Promise.all([deps.db.getStudioState(), deps.db.getPool(), deps.db.listCardsInStages([...HOLD_STAGES, ...RUNNING_STAGES])]);
+  return moneyState(deps, studio, pool, cards);
+}
+
 // Two reads, both summed in the database: each card's studio spend (dispatcher_card_spend) and the spend
 // totals (studio_spend_totals), so a tick never downloads the ledger.
-async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
+async function moneyState(deps: MoneyDeps, studio: StudioState, pool: Pool, cards: readonly Card[]): Promise<MoneyState> {
   const now = deps.now();
   const [spent, totals] = await Promise.all([deps.db.cardSpend(cards.map((card) => card.id)), deps.db.spendTotals(newYorkMonthStart(now), tierMonthStart(now))]);
   return {
@@ -271,6 +290,7 @@ async function moneyState(deps: TickDeps, studio: StudioState, pool: Pool, cards
     cards,
     spent,
     running: deps.budgets.remaining(),
+    jobsUsd: jobsHoldUsd(deps.jobBudgets),
   };
 }
 

@@ -219,12 +219,32 @@ describe('createSupabaseDb queries', () => {
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: rest([]).fetchFn }).latestJobRunOutput('upkeep_merge', 'pending')).toBeNull();
   });
 
-  it('reads the rankable cards from rankable_cards, the test apply_card_ranking refuses on, and refuses an answer that is not a list', async () => {
-    const { fetchFn, calls } = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: ['card-1', 'card-2'] } : undefined));
-    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn }).rankableCards()).toEqual(['card-1', 'card-2']);
-    expect(calls.map((call) => call.body)).toEqual([{}]);
-    const wrong = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/rankable_cards') ? { status: 200, json: null } : undefined));
-    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: wrong.fetchFn }).rankableCards()).rejects.toThrow('db rankable_cards');
+  it('opens the card a draft is billed to through open_draft_card, keeps each draft against it and rejects a new one through reject_draft_card', async () => {
+    const answer = {
+      card_id: 'card-1',
+      kind: 'backlog',
+      opened: 'backlog',
+      card: { title: 'Show the next unlock', summary: 'A summary.', intent: 'It is not built yet.', horizon: 'later', rank: 4, funded_usd: '0.0000', severity: null },
+    };
+    const open = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/open_draft_card') ? { status: 200, json: answer } : undefined));
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: open.fetchFn }).openDraftCard('run-1')).toEqual({
+      cardId: 'card-1',
+      kind: 'backlog',
+      opened: 'backlog',
+      card: { title: 'Show the next unlock', summary: 'A summary.', intent: 'It is not built yet.', horizon: 'later', rank: 4, funded_usd: 0, severity: null },
+    });
+    expect(open.calls.map((call) => call.body)).toEqual([{ p_run: 'run-1' }]);
+    const odd = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/open_draft_card') ? { status: 200, json: { ...answer, kind: 'platform' } } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: odd.fetchFn }).openDraftCard('run-1')).rejects.toThrow('unknown kind platform');
+
+    const fields = { title: 'T', summary: 'S', intent: 'I', acceptance_test: 'check: config seed-1/config/a.json x == 1', lane: 'config' as const, executor_role_id: 'role-b', estimate_usd: 1 };
+    const record = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/record_card_draft_for') ? { status: 200, json: { id: 'draft-1', content_sha256: 'a'.repeat(64) } } : undefined));
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: record.fetchFn }).recordCardDraft('card-1', 'run-1', 'role-d', fields, 'claude:s1')).toEqual({ id: 'draft-1', content_sha256: 'a'.repeat(64) });
+    expect(record.calls.map((call) => call.body)).toEqual([{ p_card: 'card-1', p_run: 'run-1', p_role: 'role-d', p_fields: fields, p_maker_ref: 'claude:s1' }]);
+
+    const reject = mockFetch((method, url) => (method === 'POST' && url.endsWith('/rpc/reject_draft_card') ? { status: 200, json: null } : undefined));
+    await createSupabaseDb('https://db.local', 'service-role', { fetchFn: reject.fetchFn }).rejectDraftCard('card-1', 'run-1');
+    expect(reject.calls.map((call) => call.body)).toEqual([{ p_card: 'card-1', p_run: 'run-1' }]);
   });
 
   it('reads the oldest queued runs first, the jobs and a role\'s pause', async () => {
@@ -235,8 +255,16 @@ describe('createSupabaseDb queries', () => {
     expect(queued.seen[0]?.url.searchParams.get('status')).toBe('eq.queued');
     expect(queued.seen[0]?.url.searchParams.get('order')).toBe('created_at.asc,id.asc');
     expect(queued.seen[0]?.url.searchParams.get('limit')).toBe('50');
-    const jobs = rest([{ name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: true }]);
-    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: jobs.fetchFn }).jobs()).toEqual([{ name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: true }]);
+    // enabled is read when the column exists, and a database without it reads every job as enabled.
+    const jobs = rest([
+      { name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: true },
+      { name: 'studio_ranking', role_id: 'role-head', calls_model: true, runs_when_paused: true, enabled: false },
+    ]);
+    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: jobs.fetchFn }).jobs()).toEqual([
+      { name: 'tidy_up', role_id: null, calls_model: false, runs_when_paused: true, enabled: true },
+      { name: 'studio_ranking', role_id: 'role-head', calls_model: true, runs_when_paused: true, enabled: false },
+    ]);
+    expect(jobs.seen[0]?.url.searchParams.get('select')).toBe('*');
     const state = mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/roles') ? { status: 200, json: { paused: true, state: 'active' } } : undefined));
     expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: state.fetchFn }).roleState('role-1')).toEqual({ paused: true, state: 'active' });
     expect(state.calls[0]?.url).toContain('id=eq.role-1');

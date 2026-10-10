@@ -38,6 +38,7 @@ describe('loadConfig', () => {
       poolDailyCapUsd: 100,
       cardMaxUsd: 25,
       visualReviewMaxUsd: 1,
+      draftSessionMaxUsd: 0.75,
       sessionMaxTurns: 60,
       agentHourlyRateUsd: 5,
       tickMs: 60_000,
@@ -68,6 +69,7 @@ describe('loadConfig', () => {
         POOL_DAILY_CAP_USD: '40',
         CARD_MAX_USD: '10',
         VISUAL_REVIEW_MAX_USD: '0.5',
+        DRAFT_SESSION_MAX_USD: '0.5',
         SESSION_MAX_TURNS: '30',
         AGENT_HOURLY_RATE_USD: '4',
         DISPATCHER_TICK_MS: '5000',
@@ -88,6 +90,7 @@ describe('loadConfig', () => {
       poolDailyCapUsd: 40,
       cardMaxUsd: 10,
       visualReviewMaxUsd: 0.5,
+      draftSessionMaxUsd: 0.5,
       sessionMaxTurns: 30,
       agentHourlyRateUsd: 4,
       tickMs: 5000,
@@ -121,6 +124,7 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...FULL, SESSION_MAX_MINUTES: '0' }, REPO)).toThrow('SESSION_MAX_MINUTES must be a positive integer');
     expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: '0.05' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be at least 0.35');
     expect(() => loadConfig({ ...FULL, VISUAL_REVIEW_MAX_USD: 'one' }, REPO)).toThrow('VISUAL_REVIEW_MAX_USD must be a non-negative number');
+    expect(() => loadConfig({ ...FULL, DRAFT_SESSION_MAX_USD: '0.2' }, REPO)).toThrow('DRAFT_SESSION_MAX_USD must be at least 0.35');
   });
 
   it('refuses a model with no row in the price table', () => {
