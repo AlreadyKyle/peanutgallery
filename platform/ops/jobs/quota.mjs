@@ -7,7 +7,7 @@
 //   default 400, of the ACTIONS_MINUTES_INCLUDED, default 2,000 (GitHub Free), are left.
 // Supabase egress and Netlify bandwidth and build minutes are not read here: they come from the
 // providers' own usage emails to the board, so no account-wide token sits on the VPS.
-import { alerter, jobEnvProblems, JobEnvError, supabaseClient } from './lib.mjs';
+import { alerter, alertSignature, jobEnvProblems, JobEnvError, shouldAlert, supabaseClient } from './lib.mjs';
 
 export const DEFAULTS = { DATABASE_ALERT_MB: 350, ACTIONS_MINUTES_INCLUDED: 2000, ACTIONS_MINUTES_FLOOR: 400 };
 const MB = 1024 * 1024;
@@ -22,7 +22,15 @@ export function actionsMinutes(report) {
     .reduce((total, item) => total + Number(item.quantity ?? item.grossQuantity ?? 0), 0);
 }
 
-export function evaluateQuota({ databaseBytes, minutesUsed, minutesError, settings }) {
+// What the board does about a billing usage read that failed, by the HTTP status GitHub returned.
+export function billingReadFix(status) {
+  if (status === 403) return "add Account permissions, Plan: Read to the dispatcher's fine-grained token (GitHub, Settings, Developer settings, Fine-grained tokens); editing it keeps its value";
+  if (status === 401) return 'the token has expired or was revoked: regenerate VPS_GITHUB_TOKEN with Plan: Read and update QUOTA_ENV in the ops repository';
+  if (status === 404) return 'GitHub has no billing usage for GITHUB_BILLING_USER: check it names the account that owns the repositories';
+  return "check the dispatcher's token and its Plan: Read permission";
+}
+
+export function evaluateQuota({ databaseBytes, minutesUsed, minutesError, minutesStatus = null, settings }) {
   const alertBytes = settings.DATABASE_ALERT_MB * MB;
   const database = {
     name: 'database_size',
@@ -32,14 +40,14 @@ export function evaluateQuota({ databaseBytes, minutesUsed, minutesError, settin
   };
   let actions;
   if (minutesError) {
-    actions = { name: 'actions_minutes', ok: false, detail: 'the billing usage could not be read', items: [{ error: minutesError, fix: "check that the dispatcher's token has the Plan read permission" }] };
+    actions = { name: 'actions_minutes', ok: false, detail: 'the billing usage could not be read', items: [{ error: minutesError, fix: billingReadFix(minutesStatus) }] };
   } else {
     const left = settings.ACTIONS_MINUTES_INCLUDED - minutesUsed;
     actions = {
       name: 'actions_minutes',
       ok: left >= settings.ACTIONS_MINUTES_FLOOR,
       detail: `${minutesUsed} of ${settings.ACTIONS_MINUTES_INCLUDED} minutes used this month, ${left} left`,
-      items: left >= settings.ACTIONS_MINUTES_FLOOR ? [] : [{ minutes_used: minutesUsed, minutes_left: left, floor: settings.ACTIONS_MINUTES_FLOOR, fix: 'when the minutes run out the gate stops starting and nothing merges: make the repository public or move the checks (docs/ROADMAP.md, Actions minutes)' }],
+      items: left >= settings.ACTIONS_MINUTES_FLOOR ? [] : [{ minutes_used: minutesUsed, minutes_left: left, floor: settings.ACTIONS_MINUTES_FLOOR, fix: "the studio repository is public, so these are the ops repository's daily jobs: when they run out the Controller, quota and backup jobs stop running (docs/ROADMAP.md, Actions minutes)" }],
     };
   }
   const checks = [database, actions];
@@ -57,6 +65,7 @@ export async function runQuota({ env, fetchFn = fetch, now = new Date(), dryRun 
   const databaseBytes = Number(await db.rpc('ops_database_size'));
   let minutesUsed = 0;
   let minutesError = null;
+  let minutesStatus = null;
   try {
     const url = new URL(`https://api.github.com/users/${env.GITHUB_BILLING_USER}/settings/billing/usage`);
     url.searchParams.set('year', String(now.getUTCFullYear()));
@@ -67,17 +76,34 @@ export async function runQuota({ env, fetchFn = fetch, now = new Date(), dryRun 
       signal: AbortSignal.timeout(30_000),
     });
     const text = await response.text();
-    if (!response.ok) throw new Error(`github billing usage: http ${response.status}`);
+    if (!response.ok) {
+      minutesStatus = response.status;
+      throw new Error(`github billing usage: http ${response.status}`);
+    }
     minutesUsed = actionsMinutes(JSON.parse(text));
   } catch (error) {
     minutesError = error.message;
   }
-  const result = evaluateQuota({ databaseBytes, minutesUsed, minutesError, settings });
-  const row = { job: 'quota', started_at: now.toISOString(), ok: result.ok, mismatches: result.mismatches, checks: result.checks, figures: result.figures };
+  const result = evaluateQuota({ databaseBytes, minutesUsed, minutesError, minutesStatus, settings });
+  // The same failure alerts once, then again only after REPEAT_ALERT_DAYS (lib.mjs shouldAlert). If
+  // the earlier rows cannot be read, it alerts.
+  let alert = false;
+  const signature = result.ok ? null : alertSignature(result.checks);
+  if (!result.ok && !dryRun) {
+    let previous = [];
+    try {
+      previous = await db.select('controller_runs', 'select=started_at,figures&job=eq.quota&order=started_at.desc&limit=60');
+    } catch {
+      previous = [];
+    }
+    alert = shouldAlert({ signature, previous: Array.isArray(previous) ? previous : [], now });
+  }
+  const figures = alert ? { ...result.figures, alerted: true, alert_signature: signature } : result.figures;
+  const row = { job: 'quota', started_at: now.toISOString(), ok: result.ok, mismatches: result.mismatches, checks: result.checks, figures };
   if (!dryRun) {
     await db.insert('controller_runs', row);
-    if (!result.ok) {
-      await alerts.notify(`Quotas: ${result.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}. ${c.items.map((item) => item.fix).join(' ')}`).join('\n')}`);
+    if (alert) {
+      await alerts.notify(`Quotas: ${result.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}${c.items.map((item) => (item.error ? ` (${item.error})` : '')).join('')}. ${c.items.map((item) => item.fix).join(' ')}`).join('\n')}`);
     }
     await alerts.ping(result.ok);
   }
