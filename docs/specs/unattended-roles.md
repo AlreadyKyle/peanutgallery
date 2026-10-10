@@ -47,9 +47,9 @@ Common to every part: no dispatcher path reads a board session. Each model call 
 ## Acceptance criteria
 
 PR2
-- [ ] A visual card whose gate passed with changed frames gets a Director verdict with no board session in the database.
-- [ ] The review's ledger rows are billed to the studio with that card's id and the Director's role, and none is billed to the founder.
-- [ ] The review session holds only Read, Glob and Grep.
+- [x] A visual card whose gate passed with changed frames gets a Director verdict with no board session in the database.
+- [x] The review's ledger rows are billed to the studio with that card's id and the Director's role, and none is billed to the founder.
+- [x] The review session holds only Read, Glob and Grep.
 
 PR3
 - [ ] A card paused for `wall_clock` returns to funded with an `auto_resume` event and no board action.
@@ -84,6 +84,9 @@ PR5
 ## Evidence
 
 Added as each pull request merges.
+
+- PR2 (tests): `platform/dispatcher/test/visual-review.test.ts` "starts at once with no board member signed in" and "mounts each changed frame at FRAMES_MOUNT, names those paths in the prompt, bills the card and writes no row itself"; `platform/dispatcher/test/managed-role.test.ts` "creates the session with exactly the reader tools…", "writes the review's ledger rows to the card it reviews, studio-billed with the Director's role…", "readerProblems passes the reader override and names anything more" and "interrupts a session that calls a tool it does not hold…". The live check of a Director verdict on a real card, its ledger rows quoted, waits on the merge.
+- PR2 (live, 10 October 2026, before the merge): `probe --role` against the studio organisation printed `PASS: role model=claude-opus-5-5 tools=glob,grep,read answer=red billed_to=overhead` with `tool_calls=read /mnt/session/uploads/probe/probe-red.png turns=2` (session `sesn_01VFpfs25e1EZGGhMLKE9USf`, list cost $0.02): the override holds, an absolute mount path under `/mnt/session/uploads` is where the file lands, and the reader reads a PNG.
 
 ## Decisions
 

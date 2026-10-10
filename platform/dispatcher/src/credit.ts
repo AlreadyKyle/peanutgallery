@@ -41,3 +41,10 @@ export const REFUSAL_CHECK: Record<SpendRefusal, string> = {
   credit: 'console_credit',
   tier_cap: 'usage_tier_cap',
 };
+
+// The refusal a failing check names, or null: an adapter's SessionPaused carries the check.
+export function refusalForCheck(check: string | null | undefined): SpendRefusal | null {
+  if (check === REFUSAL_CHECK.credit) return 'credit';
+  if (check === REFUSAL_CHECK.tier_cap) return 'tier_cap';
+  return null;
+}

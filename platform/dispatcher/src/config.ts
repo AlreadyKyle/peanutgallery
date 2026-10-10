@@ -28,6 +28,9 @@ export interface DispatcherConfig {
   priceTable: PriceTable;
   poolDailyCapUsd: number;
   cardMaxUsd: number;
+  // The most a Director's visual review of one card's frames may spend per review, at list price
+  // (docs/specs/design-review.md); its sessions also stay inside the card's ceiling and claim budget.
+  visualReviewMaxUsd: number;
   sessionMaxTurns: number;
   // The longest one agent session may run before it is interrupted.
   sessionMaxMinutes: number;
@@ -93,6 +96,17 @@ export function numberEnv(env: Env, name: string, fallback: number): number {
   if (!raw) return fallback;
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) throw new ConfigError(`${name} must be a non-negative number`);
+  return value;
+}
+
+// Below this a visual review (or one batch of it) does not start: the card pauses at its ceiling or
+// goes back to funded. It covers one managed session's withheld margin (one large request) with room
+// to work, so a session never starts with less than a cent to spend.
+export const VISUAL_REVIEW_MIN_USD = 0.35;
+
+export function visualReviewMaxUsdEnv(env: Env): number {
+  const value = numberEnv(env, 'VISUAL_REVIEW_MAX_USD', 1);
+  if (value < VISUAL_REVIEW_MIN_USD) throw new ConfigError(`VISUAL_REVIEW_MAX_USD must be at least ${VISUAL_REVIEW_MIN_USD}`);
   return value;
 }
 
@@ -309,6 +323,7 @@ export function loadConfig(env: Env, codeRoot: string): DispatcherConfig {
     priceTable,
     poolDailyCapUsd: numberEnv(env, 'POOL_DAILY_CAP_USD', 100),
     cardMaxUsd: numberEnv(env, 'CARD_MAX_USD', 25),
+    visualReviewMaxUsd: visualReviewMaxUsdEnv(env),
     sessionMaxTurns: positiveIntegerEnv(env, 'SESSION_MAX_TURNS', 60),
     sessionMaxMinutes: positiveIntegerEnv(env, 'SESSION_MAX_MINUTES', 60),
     agentHourlyRateUsd: numberEnv(env, 'AGENT_HOURLY_RATE_USD', 5),

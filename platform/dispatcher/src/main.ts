@@ -77,38 +77,39 @@ async function main(): Promise<void> {
   const running = new Map<string, Date>();
   const now = () => new Date();
   const budgets = new SessionBudgets();
-  // The role jobs and the Directors' visual review run attended through claude -p on the founder's
-  // plan in either studio mode (docs/specs/agent-workflows.md, docs/specs/design-review.md), so an
-  // unattended process keeps an attended adapter for them. Its Read, Glob and Grep deny rules name the
-  // code clone too, whose .env holds the dispatcher's keys, and there its sessions hold no Bash
-  // (role-session.ts), since the host runs no agent-written code.
+  // The role jobs still run attended through claude -p on the founder's plan in either studio mode
+  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them. Its
+  // Read, Glob and Grep deny rules name the code clone too, whose .env holds the dispatcher's keys, and
+  // there its sessions hold no Bash (role-session.ts), since the host runs no agent-written code.
   const roleAdapter =
     adapter.mode === 'attended'
       ? adapter
       : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
+  // The Directors' visual review (docs/specs/design-review.md) runs on the card sessions' adapter:
+  // unattended, a managed reader session on the studio's Console credit billed to the card, with no
+  // board member needed; attended, claude -p on the founder's plan. Its budget is set per review
+  // (pipeline.ts reviewBudget).
   const visual: PipelineVisual = {
     framesRoot: config.worktreeRoot,
     review: {
       db,
       session: {
-        adapter: roleAdapter,
+        adapter,
+        allowAttended: adapter.mode === 'attended',
+        stopWhenStudioPaused: true,
         typed,
         priceTable: config.priceTable,
         resolveModel,
         maxTurns: config.sessionMaxTurns,
         maxMs: config.sessionMaxMinutes * 60_000,
-        boardSessionTtlMin: config.boardSessionTtlMin,
         watchIntervalMs: config.tickMs,
         log,
         stopSignal: stop.signal,
-        now,
       },
       rubric: () => readFile(path.join(AGENTS_DIR, 'rubrics', 'visual.md'), 'utf8'),
       promptRoot: config.codeRoot,
-      budgetUsd: config.cardMaxUsd,
-      waitIntervalMs: config.tickMs,
     },
   };
   const pipeline: PipelineDeps = { db, adapter, config, log, alert, stopSignal: stop.signal, now, budgets, patches, infraStops: new Map(), visual };
@@ -164,7 +165,6 @@ async function main(): Promise<void> {
     resolveModel,
     sessionMaxTurns: config.sessionMaxTurns,
     sessionMaxMs: config.sessionMaxMinutes * 60_000,
-    boardSessionTtlMin: config.boardSessionTtlMin,
     watchIntervalMs: config.tickMs,
     scanText: (strings) => scanPublicText(strings),
     openWorkspace: (runId) => gitWorkspace(config.repoRoot, config.worktreeRoot, runId, gitAuthEnv(config.githubToken)),
