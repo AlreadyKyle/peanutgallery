@@ -112,9 +112,20 @@ async function main(): Promise<void> {
       }
     }
     for (const change of plan.update) {
+      // The plan's untouchable test repeated as filters, so a card a draft filled (or the board vetoed)
+      // between the read and this write is left alone: the supply's draft_card fills backlog cards
+      // with no one acting (docs/specs/unattended-roles.md).
       check(
         `cards update ${change.id}`,
-        await db.from("cards").update(change.patch).eq("id", change.id).eq("stage", "proposed").neq("horizon", "now"),
+        await db
+          .from("cards")
+          .update(change.patch)
+          .eq("id", change.id)
+          .eq("stage", "proposed")
+          .neq("horizon", "now")
+          .is("drafter_role_id", null)
+          .is("opens_at", null)
+          .eq("board_vetoed", false),
       );
     }
     if (plan.remove.length > 0) {

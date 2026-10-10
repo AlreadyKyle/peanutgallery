@@ -13,7 +13,9 @@
 //   running it;
 // - a gated card this process still runs holds the same, since a visual revision may still spend it
 //   (docs/specs/design-review.md), until the pipeline closes its budget;
-// - any other gated card, and a live or rejected card, holds nothing.
+// - any other gated card, and a live or rejected card, holds nothing;
+// - a running draft_card session holds what it may still spend, as a building card does
+//   (docs/specs/unattended-roles.md).
 // available_X = balance − studio reserve − Σ holds of the other cards; an S1 card may add the incident
 // reserve. X starts when what it still needs, max(estimate_X − spent_X, 0), fits available_X, what is
 // left of the daily cap, what is left of the monthly cap, what is left under the usage tier's monthly
@@ -171,6 +173,10 @@ export interface MoneyState {
   spent: ReadonlyMap<string, number>;
   // What each session this process runs may still spend (budgets.ts).
   running: ReadonlyMap<string, number>;
+  // What the running role job's sessions may still spend (a draft_card session billed to the card it
+  // drafts, docs/specs/unattended-roles.md): held from the balance and every cap like a building
+  // card's, since its card holds no bar money to pay it from. Unset is nothing.
+  jobsUsd?: number;
 }
 
 export function holdUsd(card: MoneyCard, state: Pick<MoneyState, 'spent' | 'running' | 'cardMaxUsd'>): number {
@@ -207,9 +213,10 @@ export interface MoneyBounds {
 }
 
 export function moneyBounds(state: MoneyState, x: MoneyCard): MoneyBounds {
-  const others = state.cards.filter((card) => card.id !== x.id).reduce((total, card) => total + holdUsd(card, state), 0);
+  const jobs = Math.max(0, state.jobsUsd ?? 0);
+  const others = state.cards.filter((card) => card.id !== x.id).reduce((total, card) => total + holdUsd(card, state), 0) + jobs;
   const incident = x.severity === 's1' ? state.incidentReserveUsd : 0;
-  const running = runningHoldUsd(state);
+  const running = runningHoldUsd(state) + jobs;
   return {
     availableUsd: round4(state.balanceUsd - state.studioReserveUsd - others + incident),
     dailyUsd: round4(state.dailyCapUsd - state.spentTodayUsd - running),

@@ -276,6 +276,14 @@ describe("file-backlog --apply", () => {
     }
   });
 
+  it("updates a backlog card only while it has no drafter, is not waiting to be dealt and is not vetoed, so a card a draft filled meanwhile is not changed (docs/specs/unattended-roles.md)", () => {
+    expect(script.match(/\.update\(change\.patch\)/g)).toHaveLength(1);
+    const call = script.slice(script.indexOf(".update(change.patch)"), script.indexOf(");", script.indexOf(".update(change.patch)")));
+    for (const filter of ['.eq("id", change.id)', '.eq("stage", "proposed")', '.neq("horizon", "now")', '.is("drafter_role_id", null)', '.is("opens_at", null)', '.eq("board_vetoed", false)']) {
+      expect(call, filter).toContain(filter);
+    }
+  });
+
   it("prints a refused delete with the database's message, which names the constraint, and deletes nothing", () => {
     expect(script).toContain("throw new Error(`cards delete refused, nothing deleted: ${deleted.error.message}");
   });

@@ -754,6 +754,9 @@ Deno.test("criterion 7, SQL half: the job queue", OPTS, async (t) => {
     // agent-workflows (20260924400000) seeds studio_ranking and draft_card before any role exists.
     await s.db.exec(`insert into public.jobs (name, role_id, calls_model, runs_when_paused) values ('studio_ranking', '${s.roles.studioHead}', true, true), ('tidy_up', null, false, false)
       on conflict (name) do update set role_id = excluded.role_id`);
+    // supply-refill (20261010200000) retires studio_ranking; the queue is the same for any job, so these
+    // steps enable its row and use it as a model-calling job.
+    await s.db.exec(`update public.jobs set enabled = true where name = 'studio_ranking'`);
     const enqueue = async (job: string, origin: string, key: string | null = null, parent: string | null = null) =>
       (await s.row<{ r: { id: string; created: boolean } }>(`select public.enqueue_job_run($1, $2, $3, null, '{}'::jsonb, $4) as r`, [job, origin, key, parent])).r;
 

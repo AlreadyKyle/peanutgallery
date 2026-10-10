@@ -4,7 +4,7 @@ import { SessionBudgets } from '../src/budgets.js';
 import { haltDispatcher, resetHalt } from '../src/halt.js';
 import { createLogger } from '../src/log.js';
 import { stuckAfterMs } from '../src/pipeline.js';
-import { drainState, leaseTtlSeconds, newStudioProbeState, tick, type TickDeps } from '../src/tick.js';
+import { currentMoneyState, drainState, jobsHoldUsd, leaseTtlSeconds, newStudioProbeState, tick, type TickDeps } from '../src/tick.js';
 import { RecordingAlerter } from './helpers/fake-alert.js';
 import { FakeDb, NOW, card } from './helpers/fake-db.js';
 
@@ -272,6 +272,30 @@ describe('tick: auto-resume and the credit probe', () => {
 
 // docs/specs/studio-reports.md: Discord runs after the heartbeat, only with the lease and not halted,
 // and a throwing or hanging poster never touches the rest of the tick.
+describe('tick: the card supply alert', () => {
+  it('runs after the outbound lane, not while halted, and a throwing read leaves the tick unaffected', async () => {
+    const db = new FakeDb();
+    db.cards = [card()];
+    const order: string[] = [];
+    const lines: string[] = [];
+    const log = createLogger(new Writable({ write: (chunk, _enc, cb) => { lines.push(String(chunk)); cb(); } }));
+    const supplyWatch = async () => {
+      order.push('supply');
+      throw new Error('db supply_draft_check: down');
+    };
+    expect(await tick(deps(db, [], { log, supplyWatch, outbound: async () => void order.push('outbound') }))).toEqual({ action: 'started', cardId: card().id });
+    expect(order).toEqual(['outbound', 'supply']);
+    expect(lines.map((line) => JSON.parse(line)).filter((line) => line.scope === 'supply').map((line) => line.msg)).toEqual(['supply watch failed']);
+    haltDispatcher('test halt');
+    try {
+      await tick(deps(db, [], { supplyWatch }));
+    } finally {
+      resetHalt();
+    }
+    expect(order).toEqual(['outbound', 'supply']);
+  });
+});
+
 describe('tick: the outbound lane', () => {
   it('runs after the heartbeat, and a throwing poster leaves the card path, the jobs and the heartbeat unaffected', async () => {
     const db = new FakeDb();
@@ -803,5 +827,24 @@ describe('tick: draining', () => {
     expect(drainState(NOW, NOW, 1, false)).toBe('draining');
     expect(drainState(after, NOW, 0, true)).toBe('draining');
     expect(drainState(after, NOW, 0, false)).toBe('drained');
+  });
+});
+
+// docs/specs/unattended-roles.md: a running draft_card session's budget, by the card it drafts, is in
+// the money state the tick and the draft's own sessions read.
+describe('the money state with a running role job', () => {
+  it('counts what the running draft session may still spend, and nothing once it ends', async () => {
+    const db = new FakeDb();
+    db.cards = [card({ id: 'funded-card', stage: 'funded' })];
+    const budgets = new SessionBudgets();
+    const jobBudgets = new SessionBudgets();
+    expect(jobsHoldUsd(undefined)).toBe(0);
+    jobBudgets.start('drafted-card', 0.75);
+    jobBudgets.record('drafted-card', 0.2);
+    expect(jobsHoldUsd(jobBudgets)).toBe(0.55);
+    const state = await currentMoneyState({ db, now: () => NOW, budgets, jobBudgets });
+    expect([state.jobsUsd, state.balanceUsd, state.cards.map((c) => c.id)]).toEqual([0.55, 50, ['funded-card']]);
+    jobBudgets.finish('drafted-card');
+    expect((await currentMoneyState({ db, now: () => NOW, budgets, jobBudgets })).jobsUsd).toBe(0);
   });
 });

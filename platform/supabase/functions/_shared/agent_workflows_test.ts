@@ -319,10 +319,13 @@ Deno.test("the card text guard accepts agent text from the board and draft paths
 type Moves = { moves: { card_id: string; from: number | null; to: number }[]; unapplied: number };
 
 // A studio_ranking run marked running, the ranking applied from it, and the cards step 2 funds, in
-// its order, as "title@rank" ("-" for no rank).
+// its order, as "title@rank" ("-" for no rank). supply-refill (20261010200000) retires studio_ranking
+// and apply_card_ranking stays in the database, uncalled; these tests enable the job's row to run it.
 function ranking(s: Awaited<ReturnType<typeof studio>>) {
-  const running = async (job = "studio_ranking") =>
-    (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin, status) values ($1, gen_random_uuid()::text, 'board', 'running') returning id`, [job])).id;
+  const running = async (job = "studio_ranking") => {
+    await s.db.exec(`update public.jobs set enabled = true where name = 'studio_ranking'`);
+    return (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin, status) values ($1, gen_random_uuid()::text, 'board', 'running') returning id`, [job])).id;
+  };
   const rank = async (order: string[]) => (await s.row<{ r: Moves }>(`select public.apply_card_ranking($1, $2::uuid[]) as r`, [await running(), order])).r;
   const line = async () =>
     (await s.rows<{ t: string }>(`select c.title || '@' || coalesce(c.rank::text, '-') as t from money.funding_order() f join public.cards c on c.id = f.card_id order by f.position`)).map((r) => r.t);
