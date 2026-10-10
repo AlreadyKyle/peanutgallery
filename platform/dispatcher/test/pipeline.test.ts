@@ -1588,13 +1588,35 @@ describe('a paid card and an infrastructure failure', () => {
     expect(alert.messages[0]).toMatch(/It has no stored patch to re-gate, so it is paused with its money rather than starting a new session/);
   });
 
-  it("still rejects a card whose own change fails the gate on a green base", async () => {
-    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
-    const { fetchFn, calls } = remote({ gate: RUN('completed', 'failure') });
-    await runCardPipeline(c, { ...deps(db, adapter, fetchFn), timings: SLOW, patches, infraStops: new Map() });
+  it("gates a stored patch once more after its own change fails on a green base, then rejects it", async () => {
+    const { db, c, patches, adapter, sessions } = await withPatch('eeeeeeee-0000-4000-8000-000000000015');
+    const first = remote({ gate: RUN('completed', 'failure') });
+    await runCardPipeline(c, { ...deps(db, adapter, first.fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    // Once: back to funded with the patch kept, so the next claim gates it again on a new commit.
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'gate_retry' });
+    expect(patches.rows).toHaveLength(1);
+    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(1);
+    expect(db.events.find((e) => e.payload.step === 'gate_retry')).toMatchObject({ type: 'message', payload: { detail: 'gate concluded failure' } });
+    expect(urls(first.calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
+
+    // The second failure rejects it, and no session ever ran.
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    const second = remote({ gate: RUN('completed', 'failure') });
+    await runCardPipeline(c, { ...deps(db, adapter, second.fetchFn), timings: SLOW, patches, infraStops: new Map() });
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'gate' });
-    expect(db.events.at(-1)).toMatchObject({ type: 'gate_fail', payload: { detail: 'gate concluded failure' } });
-    expect(urls(calls).filter((call) => CHECK_RUNS.exec(call.slice(4))?.[1] === initialSha)).toHaveLength(1);
+    expect(db.events.filter((e) => e.type === 'gate_fail')).toHaveLength(2);
+    expect(sessions()).toBe(0);
+  });
+
+  it('a retried gate that passes carries the card on', async () => {
+    const { db, c, patches, adapter } = await withPatch('eeeeeeee-0000-4000-8000-000000000016');
+    await runCardPipeline(c, { ...deps(db, adapter, remote({ gate: RUN('completed', 'failure') }).fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'funded', failing_check: 'gate_retry' });
+    db.cards[0]!.stage = 'building';
+    await git(['update-ref', 'refs/heads/main', initialSha], origin);
+    await runCardPipeline(c, { ...deps(db, adapter, remote().fetchFn), timings: SLOW, patches, infraStops: new Map() });
+    expect(db.cards[0]).toMatchObject({ stage: 'live' });
   });
 
   it('still rolls back and rejects a card whose gate fails at the merge sha, and pauses one whose gate there was cancelled', async () => {

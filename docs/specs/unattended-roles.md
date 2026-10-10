@@ -28,6 +28,7 @@ Common to every part: no dispatcher path reads a board session. Each model call 
 - Besides the existing first-ceiling rule, a card paused for any reason but those below resumes with no one acting: at most 3 times a day and 8 times in all per card, at most 2 of them for a stop whose retry is paid work (a session's budget, wall clock or turn cap, a failed visual review, or a patch conflict that needs a new session), with exponential backoff between tries. Each resume writes a public `auto_resume` event and moves the card from paused to funded.
 - It never resumes while the studio is paused, past the card's ceiling, or for a card paused for `horizon`, `vetoed`, `read_token` or `unknown_model`, or paused at its ceiling a second time; those wait for the board.
 - A studio pause the dispatcher set with reason `awaiting_credit` or `spend_limit` lifts itself when a one-token credit probe on the studio key succeeds, with backoff between probes; the probe's row is studio overhead, as the startup probe's is. A pause with reason `incident` or `board` stays until the board resumes.
+- A card whose own change fails the gate on a green base, with a stored patch and no earlier retry, goes back to funded once (`gate_retry`), and the next claim gates the same patch again on a new commit with no new session; a second failure rejects it. The dispatcher's token cannot re-run a workflow (Actions read only, PLAN.md §10 decision 30), so a new commit is the retry.
 
 ### PR4: the card supply refills itself, and ranking is a rule
 
@@ -57,6 +58,7 @@ PR3
 - [x] A card paused for `horizon`, `vetoed`, `read_token`, `unknown_model` or a second ceiling is never auto-resumed.
 - [x] No card is auto-resumed while the studio is paused or past its ceiling.
 - [x] A studio paused for `awaiting_credit` or `spend_limit` is unpaused after a successful one-token probe; one paused for `incident` or `board` is not.
+- [x] A card whose own change fails the gate once, with a stored patch, is gated again once on a new commit with no new session, and rejected on a second failure.
 
 PR4
 - [ ] With the supply short, a `draft_card` run with origin `schedule` is queued with no board action, and never two at once.
@@ -88,8 +90,11 @@ Added as each pull request merges.
 - PR2 (tests): `platform/dispatcher/test/visual-review.test.ts` "starts at once with no board member signed in" and "mounts each changed frame at FRAMES_MOUNT, names those paths in the prompt, bills the card and writes no row itself"; `platform/dispatcher/test/managed-role.test.ts` "creates the session with exactly the reader tools…", "writes the review's ledger rows to the card it reviews, studio-billed with the Director's role…", "readerProblems passes the reader override and names anything more" and "interrupts a session that calls a tool it does not hold…". The live check of a Director verdict on a real card, its ledger rows quoted, waits on the merge.
 - PR2 (live, 10 October 2026, before the merge): `probe --role` against the studio organisation printed `PASS: role model=claude-opus-5-5 tools=glob,grep,read answer=red billed_to=overhead` with `tool_calls=read /mnt/session/uploads/probe/probe-red.png turns=2` (session `sesn_01VFpfs25e1EZGGhMLKE9USf`, list cost $0.02): the override holds, an absolute mount path under `/mnt/session/uploads` is where the file lands, and the reader reads a PNG.
 - PR3 (tests): `platform/supabase/functions/_shared/auto_resume_test.ts` "auto_resume_due: a seeded check resumes to funded with its event and public line; a manual one waits" (session-kind stops such as `wall_clock` included), "auto_resume_due: refusals" (studio paused, veto, closed lane, approval, paused executor, no room under the ceiling), "auto_resume_due: bounds and backoff" and "dispatcher_resume_studio lifts only the dispatcher's own credit and spend-limit pauses"; `platform/dispatcher/test/tick.test.ts` (the probe, its backoff, a refused unpause, an incident taking over a money pause); `platform/dispatcher/test/pause-checks.test.ts` (every pausing check in `src` classified). The live check (card 802b9b7a back to funded with an `auto_resume` event) waits on the merge and the migrations.
+- Gate retry (tests): `platform/dispatcher/test/pipeline.test.ts` "gates a stored patch once more after its own change fails on a green base, then rejects it" and "a retried gate that passes carries the card on".
 
 ## Decisions
+
+- 2026-10-10: one gate retry before a rejection. On its first live claim after PR3, card 802b9b7a's stored patch failed the gate's frames check ("two draws of the same state differ", run 38073885527) and was rejected; a re-run of the same commit's failed job passed. A gate check that can flake must not end a card, and the dispatcher's token cannot re-run a workflow, so the card is gated once more on a new commit.
 
 - 2026-10-10: every model call is work on a card and is billed to that card, so role work needs no overhead budget and the money rules are unchanged (PLAN.md §10 decision 66).
 - 2026-10-10: the refill skips backlog cards marked board work, because the dispatcher refuses a draft that touches a kernel path; drafting one would spend money on a certain refusal. With no eligible backlog card the dispatcher opens a new seed-1 card first, so the draft has a card to bill and the supply never waits on the backlog (today both seed-1 backlog entries are board work).
