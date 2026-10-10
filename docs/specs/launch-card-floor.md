@@ -2,6 +2,8 @@
 
 Status: agreed. Card: none. Owner: board.
 
+Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): superseded. The card supply refills itself: a scheduled `draft_card` drafts the next seed-1 backlog card when `card_supply()` is short, unattended and billed to that card, so no attended session and no Draft to the floor are needed. The status stays agreed as a record; nothing in it will run.
+
 Series position: last in the launch series, after copy-pass (the order is in `docs/ROADMAP.md`, "The launch series"). It uses studio-reports' `card_supply()` and Draft to the floor, agent-workflows' `draft_card` job, agent-system-core's approvals and dealing, and money-logic's `public_money.funding_order`. It is a board pull request of docs only: this spec's Evidence and its ROADMAP row (the spec and the row land first, with the series). The work itself is one attended production session.
 
 It covers the launch plan's Phase 2 "Card supply" (PG-10), Phase 5's "The first public cards are chosen for first-pass success" (L16) and "the launch cards are open to fund", and the launch clip (PG-15).
@@ -34,15 +36,15 @@ Out:
 
 ## Acceptance criteria
 
-- [ ] A dump is taken before the session. `card_supply()` is quoted before and after it, and `ledger-identity.ts` PASSes after it. After the session every shortfall is 0, or Evidence names each remaining shortfall and records that no approved draft reached it.
-- [ ] Every card created during the session came from a board-origin `draft_card` run started by Draft to the floor, and each run's job run id is quoted. Each such card:
+- [ ] ~~A dump is taken before the session. `card_supply()` is quoted before and after it, and `ledger-identity.ts` PASSes after it. After the session every shortfall is 0, or Evidence names each remaining shortfall and records that no approved draft reached it.~~ Superseded by `unattended-roles.md` (PR4).
+- [ ] ~~Every card created during the session came from a board-origin `draft_card` run started by Draft to the floor, and each run's job run id is quoted. Each such card:~~ Superseded by `unattended-roles.md` (PR4).
   - is a seed-1 card drafted by the Game Designer;
   - has a draft approval row whose grader ref differs from its maker ref, and whose approver role is neither its proposer nor its executor;
   - has a target equal to its approved draft's `estimate_usd`, a whole multiple of $0.50;
   - has a `check:` line that the run's check results show false on main;
   - sits in a lane where a seed-1 card has already gone live.
   The Game Designer's and Game Director's ledger rows from the session are all billed to the founder.
-- [ ] Once dealt, each new card is in production's `/api/live` `funding_order`, and the live check PASSes. Evidence names one card in `funding_order` as the launch-clip candidate, with the visible change it makes.
+- [ ] ~~Once dealt, each new card is in production's `/api/live` `funding_order`, and the live check PASSes. Evidence names one card in `funding_order` as the launch-clip candidate, with the visible change it makes.~~ Superseded by `unattended-roles.md` (PR4).
 
 ## Verification
 
