@@ -147,7 +147,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/announce-now.md` | built | the three site lines and the game's og:image served in production |
 | `specs/no-pause-no-golive.md` | built | apply `20261006000000_launch_stamp.sql` to production after merge, then the site deploy and the live check |
 | `specs/unattended-roles.md` | agreed | PR2 to PR5 (PLAN.md §10 decision 66): the visual review and drafting unattended and billed to the card, auto-resume and the credit unpause, the self-refilling supply, attended mode and the heartbeat out of the dispatcher |
-| `specs/optional-board.md` | agreed | the board's site as an optional panel: Status, Activity and six Actions, the second factor once per sign-in, no migration |
+| `specs/optional-board.md` | built | the board's site as an optional panel: Status, Activity and six Actions, the second factor once per sign-in, no migration |
 
 ## Standing facts for any session
 
