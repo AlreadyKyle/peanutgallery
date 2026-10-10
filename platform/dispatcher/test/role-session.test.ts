@@ -198,7 +198,7 @@ describe('runRoleSession', () => {
   it("stops when the studio is paused, where the caller asks (a Director's review)", async () => {
     const t = setup(async (_spec, emit, signal) => {
       await emit(startEvent(READ_SET));
-      t.db.studio = { ...t.db.studio, paused: true, pause_reason: 'board', paused_by: 'board@mobmachine.games' };
+      t.db.studio = { ...t.db.studio, paused: true };
       await untilAborted(signal, 1000);
     });
     expect(await runRoleSession(request(), { ...t.deps, stopWhenStudioPaused: true })).toMatchObject({ ok: false, reason: 'studio_paused' });

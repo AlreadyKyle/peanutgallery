@@ -2040,7 +2040,7 @@ describe('the visual review', () => {
     db.getStudioState = async () => {
       const studio = await getStudio();
       reads += 1;
-      return review.adapter.specs.length === 0 && db.cards[0]?.stage === 'gated' ? { ...studio, paused: true, pause_reason: 'board', paused_by: 'board@mobmachine.games' } : studio;
+      return review.adapter.specs.length === 0 && db.cards[0]?.stage === 'gated' ? { ...studio, paused: true } : studio;
     };
     await runCardPipeline(c, deps);
     expect(reads).toBeGreaterThan(0);
