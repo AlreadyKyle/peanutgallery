@@ -12,7 +12,8 @@
     "unlockedCount": "{unlocked} of {total} unlocked",
     "nextUnlock": "Next: {name} at {amount} dust",
     "allUnlocked": "Every unlock is open.",
-    "unlocksEarned": "{count} unlocks earned"
+    "unlocksEarned": "{count} unlocks earned",
+    "strikeGain": "+{amount}"
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {

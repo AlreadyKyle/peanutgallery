@@ -33,6 +33,7 @@ const COLORS = {
   panelEdge: 0x2b3440,
   accent: 0xd9a441,
   accentDown: 0xb8862f,
+  accentText: '#d9a441',
   buttonOff: 0x3a4352,
   bar: 0x6fa8dc,
   text: '#e8e6df',
@@ -116,12 +117,28 @@ export class DustScene extends Phaser.Scene {
     this.add.text(SCREEN_WIDTH / 2, top + 41, strings.strikeDescription, textStyle(12, COLORS.dark)).setOrigin(0.5);
     button.on('pointerdown', () => {
       button.setFillStyle(COLORS.accentDown);
+      const before = this.state.dust;
       this.state = apply(this.state, this.data_.config, { type: 'strike' });
+      this.showStrikeGain(this.state.dust - before, top);
       this.refresh();
     });
     button.on('pointerup', () => button.setFillStyle(COLORS.accent));
     button.on('pointerout', () => button.setFillStyle(COLORS.accent));
     return top + height;
+  }
+
+  private showStrikeGain(amount: number, buttonTop: number): void {
+    const text = this.add
+      .text(SCREEN_WIDTH / 2, buttonTop - 4, fill(this.data_.strings.labels.strikeGain, { amount: formatDust(amount) }), textStyle(16, COLORS.accentText, 'bold'))
+      .setOrigin(0.5, 1);
+    this.tweens.add({
+      targets: text,
+      y: text.y - 30,
+      alpha: 0,
+      duration: 800,
+      ease: 'Quad.easeOut',
+      onComplete: () => text.destroy(),
+    });
   }
 
   private createUnitRows(top: number): number {

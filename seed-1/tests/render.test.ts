@@ -48,6 +48,7 @@ describe('content/strings.json', () => {
     expect(strings.title).toBe('Dust');
     expect(strings.labels.unlockedCount).toContain('{unlocked}');
     expect(strings.labels.nextUnlock).toContain('{name}');
+    expect(strings.labels.strikeGain).toContain('{amount}');
     expect(strings.effects.multiplier).toContain('{percent}');
   });
 
