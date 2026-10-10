@@ -145,7 +145,7 @@ Deno.test("auto_resume_checks: seeded by kind, read by the service role only", O
   try {
     const seeded = await s.rows<{ failing_check: string; kind: string }>(`select failing_check, kind from public.auto_resume_checks order by kind, failing_check`);
     const byKind = (kind: string) => seeded.filter((r) => r.kind === kind).map((r) => r.failing_check);
-    assertEquals(byKind("session"), ["budget", "turn_cap", "wall_clock"]);
+    assertEquals(byKind("session"), ["budget", "patch_conflict", "turn_cap", "visual_review", "wall_clock"]);
     assert(byKind("free").includes("dispatcher_restart") && byKind("free").includes("console_credit"));
     assert(byKind("infra").includes("gate_infrastructure") && byKind("infra").includes("main_red"));
     for (const manual of ["ceiling", "horizon", "vetoed", "read_token", "unknown_model"]) {
