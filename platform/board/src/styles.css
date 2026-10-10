@@ -188,128 +188,37 @@ button.link:hover:not(:disabled, [aria-disabled='true']) {
   background: none;
 }
 
-/* The Needs you inbox: one box per duty that is due. */
-.needs {
+/* Activity's lists: one hairline row each, in small text. A finding's figures sit under its line. */
+.lines {
   margin: 0 0 var(--space-2);
   padding: 0;
   list-style: none;
+  font-size: var(--size-small);
 }
 
-.needs > li {
-  padding: var(--space-2);
-  border: 1px solid var(--ink);
-  border-radius: var(--radius);
+.lines > li {
+  padding-block: var(--space-1);
+  border-top: 1px solid var(--line);
 }
 
-.needs > li + li {
-  margin-top: var(--space-2);
+.lines > li:last-child {
+  border-bottom: 1px solid var(--line);
 }
 
-.needs ol {
-  margin: var(--space-1) 0 0;
-  padding-left: var(--space-3);
-}
-
-.needs ol li + li {
-  margin-top: var(--space-1);
-}
-
-/* A finding's figures under its line: small text, one per line, long addresses wrapping. */
-.findings p:not(:last-child) {
-  margin-bottom: var(--space-1);
+.stack .lines {
+  margin: 0;
 }
 
 .finding-detail {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--size-small);
   color: var(--muted);
 }
 
 section > h3 {
   margin-top: var(--space-3);
   margin-bottom: var(--space-1);
-}
-
-.standing {
-  margin: 0;
-  padding-left: var(--space-3);
-}
-
-/* Card controls: one form per card, hairlines between them. */
-.board-cards {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.board-cards > li {
-  padding-block: var(--space-2);
-  border-top: 1px solid var(--line);
-}
-
-.board-cards > li:last-child {
-  border-bottom: 1px solid var(--line);
-}
-
-/* Roles: one hairline row each in small text, the columns aligned, and one form under them. The
-   name and the class keep to one line (the page's overflow-wrap would otherwise split their words to
-   narrow the column) and the status takes the rest of the row, where a long reason wraps. */
-.role-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--size-small);
-}
-
-.role-table th:not(:last-child),
-.role-table td:not(:last-child) {
-  white-space: nowrap;
-}
-
-.role-table th,
-.role-table td {
-  padding: var(--space-1) var(--space-2) var(--space-1) 0;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-.role-table th:last-child,
-.role-table td:last-child {
-  width: 100%;
-  padding-right: 0;
-}
-
-/* On a phone the role's name may wrap between its words, so the status keeps room for a long reason;
-   a word is never split. */
-@media (max-width: 30rem) {
-  .role-table tbody th {
-    white-space: normal;
-    overflow-wrap: normal;
-    word-break: normal;
-  }
-}
-
-.role-table thead th {
-  padding-top: 0;
-  color: var(--muted);
-}
-
-.role-table tbody th {
-  font-weight: var(--weight-strong);
-}
-
-/* The role form's confirmation: always mounted so it is announced, and no space while empty. */
-.role-status:not(:empty) {
-  margin-top: var(--space-2);
-}
-
-/* What the public does not see about a card, and a job's recent runs: short plain lists. */
-.marks,
-.job-runs {
-  margin: 0;
-  padding-left: var(--space-3);
 }
 
 /* Forms ------------------------------------------------------------------ */
@@ -336,11 +245,6 @@ section > h3 {
   margin-top: var(--space-2);
 }
 
-/* A row of a hairline list starts at its rule's padding, the same above and below its content. */
-.board-cards > li > .stack {
-  margin-top: 0;
-}
-
 /* Every headed block, a .stack form included, sits the same 40 px below the block before it. */
 section + section,
 section + form,
@@ -357,13 +261,13 @@ form + .stack {
   gap: var(--space-2);
 }
 
-/* A control, a row of them or a fieldset placed straight in a section keeps the forms' 16 px rhythm
-   below it, as a paragraph does, so a focus ring never runs into the next control. */
-section > :is(label, .row, fieldset, button) {
+/* A control or a row of them placed straight in a section keeps the forms' 16 px rhythm below it, as
+   a paragraph does, so a focus ring never runs into the next control. */
+section > :is(label, .row, button) {
   margin-bottom: var(--space-2);
 }
 
-section > :is(label, .row, fieldset, button):last-child {
+section > :is(label, .row, button):last-child {
   margin-bottom: 0;
 }
 
@@ -383,26 +287,6 @@ label {
   font-weight: var(--weight-strong);
 }
 
-fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-}
-
-legend {
-  padding: 0;
-  margin-bottom: 0.25rem;
-  font-weight: var(--weight-strong);
-}
-
-label.choice {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--space-1);
-  font-weight: var(--weight-body);
-}
-
 input,
 select,
 textarea {
@@ -415,14 +299,6 @@ textarea {
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-}
-
-input[type='radio'] {
-  width: auto;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--ink);
 }
 
 .error {
