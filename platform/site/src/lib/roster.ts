@@ -4,7 +4,8 @@ import type { Role, Snapshot } from './source';
 /**
  * The roles that build cards, and the folder each builds in. teamStatus reads it: a card role whose
  * folder is closed starts when the board opens the lane, whatever the roster says. The Studio Head, the Game Designer and
- * the Game Director run the board's Rank now and Draft a game card and build no card; the rest of the
+ * the Game Director build no card: the Designer drafts and the Director grades when too few cards are open, and
+ * the Studio Head's ranking is retired (docs/specs/unattended-roles.md); the rest of the
  * roster has no job that runs yet: note triage, the report, the stream and outside research are
  * backlog cards. The board's own site keeps the same list for its executor choice
  * (platform/board/src/lib/board.ts).

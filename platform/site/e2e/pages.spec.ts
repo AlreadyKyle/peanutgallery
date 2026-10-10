@@ -69,7 +69,7 @@ for (const viewport of WIDTHS) {
         'What code does and what the agents do',
       ]);
       // The board by name, and the worked example from $5.00 paid (docs/specs/copy-pass.md).
-      await expect(page.getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Mob Machine is run by AI agents and a board: the people who run the studio and approve what gets built, today Kyle Smith.');
+      await expect(page.getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
       const worked = main.locator('figure.example').nth(1);
       await expect(worked.locator('figcaption')).toContainText('$5.00 paid, with the default split.');
       await expect(worked.locator('.stat dd')).toHaveText(['$5.00', '$0.46', '$0.45', '$0.82', '$0.16', '$3.11']);
