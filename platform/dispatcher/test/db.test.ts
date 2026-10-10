@@ -316,6 +316,30 @@ describe('createSupabaseDb queries', () => {
     expect((await studio({ paused: false, platform_lane_open: true })).platform_lane_open).toBe(true);
   });
 
+  it("reads why, by whom and when the studio is paused, and none of it while it is not", async () => {
+    const studio = (json: unknown) =>
+      createSupabaseDb('https://db.local', 'service-role', { fetchFn: mockFetch((method, url) => (method === 'GET' && url.includes('/rest/v1/studio_state') ? { status: 200, json } : undefined)).fetchFn }).getStudioState();
+    const paused = await studio({ paused: true, pause_reason: 'awaiting_credit', paused_by: 'dispatcher: Console credit needed (card 4c2f5a1e)', paused_at: '2026-10-10T12:00:00+00:00' });
+    expect([paused.pause_reason, paused.paused_by, paused.paused_at]).toEqual(['awaiting_credit', 'dispatcher: Console credit needed (card 4c2f5a1e)', '2026-10-10T12:00:00+00:00']);
+    const running = await studio({ paused: false, pause_reason: 'board', paused_by: 'x', paused_at: '2026-10-10T12:00:00+00:00' });
+    expect([running.pause_reason, running.paused_by, running.paused_at]).toEqual([null, null, null]);
+  });
+
+  it('calls auto_resume_due and dispatcher_resume_studio, and fails loudly on an error', async () => {
+    const { fetchFn, calls } = mockFetch((method, url) => {
+      if (method !== 'POST') return undefined;
+      if (url.endsWith('/rpc/auto_resume_due')) return { status: 200, json: { resumed: 1, results: [{ card_id: 'card-4', resumed: true, from_check: 'dispatcher_restart', kind: 'free', n: 1 }] } };
+      if (url.endsWith('/rpc/dispatcher_resume_studio')) return { status: 200, json: true };
+      return undefined;
+    });
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
+    expect(await db.autoResumeDue()).toEqual({ resumed: 1, results: [{ card_id: 'card-4', resumed: true, from_check: 'dispatcher_restart', kind: 'free', n: 1 }] });
+    expect(await db.dispatcherResumeStudio('credit_probe_ok', { model: 'm' })).toBe(true);
+    expect(calls.map((call) => call.body)).toEqual([{}, { p_reason: 'credit_probe_ok', p_detail: { model: 'm' } }]);
+    const refused = mockFetch((method) => (method === 'POST' ? { status: 400, json: { message: 'permission denied for function auto_resume_due' } } : undefined));
+    await expect(createSupabaseDb('https://db.local', 'service-role', { fetchFn: refused.fetchFn }).autoResumeDue()).rejects.toThrow('db auto_resume_due: permission denied');
+  });
+
   it('clears commit_sha when it claims a card', async () => {
     const { fetchFn, seen } = rest([]);
     const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn });
