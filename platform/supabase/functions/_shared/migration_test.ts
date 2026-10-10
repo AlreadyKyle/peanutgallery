@@ -280,6 +280,7 @@ Deno.test("migrations on PGlite", {
         "20261010100000_studio_auto_resume.sql",
         "20261010200000_supply_refill.sql",
         "20261010300000_retire_attended.sql",
+        "20261011000000_home_flow_supply.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -4105,7 +4106,8 @@ Deno.test("migrations on PGlite", {
         // which run as the caller too (site-snapshot.md). supporter-pages adds the event line
         // helper public_agent_events calls, a card's own document and the /thanks answer.
         // studio-reports adds the weekly reports' document (docs/specs/studio-reports.md).
-        const everyone = ["card_is_public", "event_line_key", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
+        // home-flow-supply adds the drafting status site_live() carries in its studio entry.
+        const everyone = ["card_is_public", "event_line_key", "public_supply", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [

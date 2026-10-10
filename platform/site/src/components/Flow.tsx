@@ -147,8 +147,11 @@ export function MachineFlow({
   changed?: Readonly<Record<string, readonly SpecRow[]>>;
 }) {
   const lanes = flowLanes(groups);
+  // A lane is as long as the cards in it, like a column on a board: Shipped holds three while Building
+  // may hold a tile, so the lanes are uneven by nature. Their rows are shared (styles.css), so every
+  // lane's first card starts on one line; the balance audit leaves them be (scripts/layout-audit.mjs).
   return (
-    <ol className="flow-lanes">
+    <ol className="flow-lanes" data-balance="ignore">
       {FLOW_LANES.map((lane, index) => (
         <li key={lane} className="flow-lane" data-lane={lane} aria-labelledby={`lane-${lane}`}>
           <LaneHead lane={lane} step={index + 1} count={lanes[lane].length} />

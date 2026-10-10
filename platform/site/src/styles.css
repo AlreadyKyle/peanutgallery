@@ -2009,7 +2009,7 @@ input[type='radio'] {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding-left: 2.75rem;
+  padding-left: calc(2rem + var(--space-2));
 }
 
 /* The step: a numbered ring on the rail. */

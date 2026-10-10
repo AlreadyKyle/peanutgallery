@@ -588,7 +588,8 @@ export function snapshotFrom(liveDoc: unknown, cardsDoc: unknown): Snapshot {
     money: books,
     stopped,
     roleStats: roleStatsFrom(live.role_stats),
-    supply: supplyFrom(studio.supply),
+    // Left out until the database carries it, so a snapshot reads the same as before it existed.
+    ...(studio.supply === undefined ? {} : { supply: supplyFrom(studio.supply) }),
     missing: ENRICHMENTS.filter((name) => missing.has(name)),
   };
 }
