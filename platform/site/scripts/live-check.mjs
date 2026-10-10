@@ -285,7 +285,7 @@ async function open(page, path) {
   return response;
 }
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
 try {
   for (const [width, height] of [
     [375, 812],

@@ -21,6 +21,8 @@ export default defineConfig({
     baseURL: E2E_ORIGIN,
     browserName: 'chromium',
     viewport: { width: 375, height: 812 },
+    // PW_CHROMIUM_PATH: a cloud session whose network blocks Playwright's download uses the image's Chromium (scripts/cloud-setup.sh).
+    launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH || undefined },
   },
   webServer: {
     command: `${vite} build --outDir dist-e2e --emptyOutDir --logLevel warn && ${vite} preview --outDir dist-e2e --host 127.0.0.1 --port ${E2E_PORT} --strictPort`,

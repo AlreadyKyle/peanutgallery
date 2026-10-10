@@ -8,8 +8,24 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 DENO_VERSION=v2.7.13
 pnpm install --frozen-lockfile
-if ! command -v deno > /dev/null || [ "v$(deno --version | head -1 | awk '{print $2}')" != "$DENO_VERSION" ]; then
-  curl -fsSL https://deno.land/install.sh | DENO_INSTALL="$HOME/.deno" sh -s -- "$DENO_VERSION" -y > /dev/null
-  [ -n "${CLAUDE_ENV_FILE:-}" ] && echo "export PATH=\"$HOME/.deno/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+# Deno comes from npm: the cloud environment's default (Limited) network allows the package registries
+# but not deno.land. The installer from deno.land is the fallback for an environment that allows it.
+deno_ok() { command -v deno > /dev/null && [ "v$(deno --version | head -1 | awk '{print $2}')" = "$DENO_VERSION" ]; }
+if ! deno_ok && ! npm install -g "deno@${DENO_VERSION#v}" > /dev/null 2>&1; then
+  if curl -fsSL https://deno.land/install.sh | DENO_INSTALL="$HOME/.deno" sh -s -- "$DENO_VERSION" -y > /dev/null; then
+    [ -z "${CLAUDE_ENV_FILE:-}" ] || echo "export PATH=\"$HOME/.deno/bin:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+  else
+    echo "cloud-setup: Deno $DENO_VERSION not installed; pnpm test:functions will fail" >&2
+  fi
 fi
-pnpm --filter @backseat/site exec playwright install --with-deps chromium
+# Playwright's Chromium comes from cdn.playwright.dev, which the Limited network blocks. When the download
+# fails, the Playwright configs and live-check.mjs launch the newest Chromium the cloud image ships
+# instead, through PW_CHROMIUM_PATH.
+if ! pnpm --filter @backseat/site exec playwright install chromium > /dev/null 2>&1; then
+  chrome=$(ls -d "${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -1)
+  if [ -n "$chrome" ] && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    echo "export PW_CHROMIUM_PATH=\"$chrome\"" >> "$CLAUDE_ENV_FILE"
+  else
+    echo "cloud-setup: no Playwright Chromium; e2e will fail" >&2
+  fi
+fi
