@@ -1,0 +1,38 @@
+# The live check of the deployed site (platform/site/scripts/live-check.mjs), run on Actions. Cloud
+# sessions run under a network policy that may not reach mobmachine.games, so they start this workflow
+# (workflow_dispatch) and read its log instead of running the script themselves. Its first line must
+# read `PASS ... failed=0`. Read-only, no secret.
+name: live-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Site to check'
+        required: false
+        default: 'https://mobmachine.games'
+
+permissions:
+  contents: read
+
+concurrency: live-check
+
+jobs:
+  live-check:
+    name: live-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @backseat/site exec playwright install --with-deps chromium
+      - name: Live check
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: node platform/site/scripts/live-check.mjs "$BASE_URL"

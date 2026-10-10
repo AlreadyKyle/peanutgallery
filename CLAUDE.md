@@ -53,3 +53,6 @@ Sessions that died mid-run (a usage limit or the machine shutting down stops a s
 ## Cloud sessions
 
 Code work runs in Claude Code cloud sessions; `scripts/cloud-setup.sh` (the SessionStart hook) installs the packages, Deno and Playwright's Chromium there. `.env` and `.env.vps` never go to the cloud, so production migrations, database dumps and anything else that reads a secret run in a local session on the board's Mac.
+
+- The cloud environment's default network level (Limited) reaches the package registries and GitHub but not mobmachine.games, peanutgallery.games or deno.land. `scripts/cloud-setup.sh` installs Deno from npm for that reason, and uses the Chromium the cloud image ships.
+- For the live check from a cloud session, start the `live-check` workflow (`.github/workflows/live-check.yml`, workflow_dispatch) and quote the first line of its log; run `live-check.mjs` directly only when the session can reach the site (the board added the domains under the environment's Allowed domains).
