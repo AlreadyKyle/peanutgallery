@@ -1,12 +1,15 @@
-// What the two role jobs share (docs/specs/agent-workflows.md): the attended adapter and the limits
-// their sessions run under, the scratch checkout of main, the public-text filter, and the typed
-// reduction every card passes through before a prompt sees it.
+// What the role job draft_card runs with (docs/specs/agent-workflows.md, docs/specs/unattended-roles.md):
+// the card sessions' adapter and the limits its sessions run under, the money they are checked
+// against, the scratch checkout of main, the public-text filter, and the typed reduction every card
+// passes through before a prompt sees it.
 import type { AgentAdapter } from '../adapters/types.js';
+import type { SessionBudgets } from '../budgets.js';
 import type { OpenCardRow, Role } from '../db.js';
 import type { JobContext } from '../jobs.js';
 import type { PriceTable } from '../pricing.js';
 import type { PublicTextResult } from '../public-text.js';
 import type { RoleSessionDeps } from '../role-session.js';
+import type { MoneyState } from '../throttle.js';
 import type { TypedOutput } from '../typed-output.js';
 import { createScratchWorktree, readFileAtSha, removeWorktree } from '../worktree.js';
 
@@ -20,8 +23,20 @@ export interface Workspace {
 }
 
 export interface WorkflowDeps {
-  // claude -p on the founder's plan, whatever mode the card sessions run in.
-  roleAdapter: AgentAdapter;
+  // The card sessions' adapter: in unattended mode the managed one, each session a reader on the
+  // studio's Console credit billed to the card it drafts. A role job never runs on the attended
+  // adapter (PLAN.md §10 decision 66): in an attended process its sessions are refused.
+  adapter: AgentAdapter;
+  // True only for the hand-run replay eval (evals/replay.ts), the attended adapter's one remaining use:
+  // the founder's login, an in-memory store and no database row.
+  allowAttended?: boolean;
+  // The most one session may spend (DRAFT_SESSION_MAX_USD).
+  draftSessionMaxUsd: number;
+  // The money state as the tick reads it (tick.ts currentMoneyState), which each session's budget must
+  // fit; unset checks only the per-card maximum.
+  money?: () => Promise<MoneyState>;
+  // Where a running session's budget is held from the card path (tick.ts jobBudgets).
+  jobBudgets?: SessionBudgets;
   typed: TypedOutput;
   priceTable: PriceTable;
   // The model each role runs on (role-model.ts resolveRoleModel), as card sessions resolve it.
@@ -86,13 +101,15 @@ export function requireWorkflow(context: JobContext): WorkflowDeps {
 export function sessionDeps(context: JobContext, workflow: WorkflowDeps): RoleSessionDeps {
   return {
     db: context.db,
-    adapter: workflow.roleAdapter,
-    // The role jobs still run on the attended adapter (docs/specs/agent-workflows.md); jobs.ts stops a
-    // model-calling run once no board member is signed in.
-    allowAttended: true,
-    // Bash (the folder's package scripts) only in an attended process: the unattended host runs no
-    // agent-written code (PLAN §6, decision 25).
-    scripts: context.mode === 'attended',
+    adapter: workflow.adapter,
+    // Unattended only, billed to the card (PLAN.md §10 decision 66): never the founder's plan, but for
+    // the hand-run replay eval.
+    allowAttended: workflow.allowAttended === true,
+    // A session spends studio money on its card, so a studio pause stops it as it stops a card session.
+    stopWhenStudioPaused: true,
+    // No Bash on the managed adapter: a reader runs no agent-written code (PLAN §6, decision 25). The
+    // replay at the Mac keeps seed-1's package scripts, as the Designer's role spec holds them.
+    scripts: workflow.allowAttended === true && context.mode === 'attended',
     typed: workflow.typed,
     priceTable: workflow.priceTable,
     ...(workflow.resolveModel === undefined ? {} : { resolveModel: workflow.resolveModel }),

@@ -14,7 +14,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { readFile } from 'node:fs/promises';
-import { AttendedAdapter } from './adapters/attended.js';
 import { defaultCliPin } from './cli-pin.js';
 import { createAdapter } from './adapters/factory.js';
 import { createAlerter } from './alert.js';
@@ -31,6 +30,7 @@ import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type Pipeli
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
 import { runOutbound } from './outbound.js';
+import { watchSupply, type SupplyWatchState } from './supply-watch.js';
 import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
 import { upkeepDeps } from './job-handlers/upkeep.js';
 import { gitWorkspace, type WorkflowDeps } from './job-handlers/workflow.js';
@@ -39,7 +39,7 @@ import { AGENTS_DIR, TypedOutput } from './typed-output.js';
 import { gitAuthEnv } from './worktree.js';
 import { resolveRoleModel } from './role-model.js';
 import { checkRepositoryGit, failStaleJobRuns, startupChecks } from './startup.js';
-import { drainState, leaseTtlSeconds, newStudioProbeState, tick } from './tick.js';
+import { currentMoneyState, drainState, leaseTtlSeconds, newStudioProbeState, tick } from './tick.js';
 import { sleep } from './time.js';
 
 // How long a stopping dispatcher waits for running cards: a session's SIGINT grace (15 s) and SIGTERM
@@ -78,14 +78,10 @@ async function main(): Promise<void> {
   const running = new Map<string, Date>();
   const now = () => new Date();
   const budgets = new SessionBudgets();
-  // The role jobs still run attended through claude -p on the founder's plan in either studio mode
-  // (docs/specs/agent-workflows.md), so an unattended process keeps an attended adapter for them. Its
-  // Read, Glob and Grep deny rules name the code clone too, whose .env holds the dispatcher's keys, and
-  // there its sessions hold no Bash (role-session.ts), since the host runs no agent-written code.
-  const roleAdapter =
-    adapter.mode === 'attended'
-      ? adapter
-      : new AttendedAdapter({ claudeBin: config.claudeBin, repoRoot: config.repoRoot, codeRoot: config.codeRoot, cliPin: defaultCliPin(config.codeRoot, config.claudeBin) });
+  // A running draft_card session's budget, held from the card path by the card it drafts
+  // (docs/specs/unattended-roles.md, throttle.ts).
+  const jobBudgets = new SessionBudgets();
+  const supplyWatchState: SupplyWatchState = { lastAt: null };
   const typed = new TypedOutput();
   const resolveModel = (role: Role) => resolveRoleModel(role, config).model;
   // The Directors' visual review (docs/specs/design-review.md) runs on the card sessions' adapter:
@@ -159,8 +155,14 @@ async function main(): Promise<void> {
   const jobState: JobState = { running: null };
   // The Janitor's two code jobs (docs/specs/agent-upkeep.md).
   const upkeep = upkeepDeps(config, mainGate);
+  // draft_card (docs/specs/unattended-roles.md, PR4): its sessions run on the card sessions' adapter,
+  // unattended managed readers billed to the card they draft, each within DRAFT_SESSION_MAX_USD and the
+  // money the tick reads; an attended process refuses the run.
   const workflow: WorkflowDeps = {
-    roleAdapter,
+    adapter,
+    draftSessionMaxUsd: config.draftSessionMaxUsd,
+    money: () => currentMoneyState({ db, now, budgets, jobBudgets }),
+    jobBudgets,
     typed,
     priceTable: config.priceTable,
     resolveModel,
@@ -188,6 +190,7 @@ async function main(): Promise<void> {
     maxConcurrency: config.maxConcurrency,
     running,
     budgets,
+    jobBudgets,
     leaseHolder,
     leaseTtlSeconds: ttlSeconds,
     stuckAfterMs: stuckAfterMs(config.sessionMaxMinutes),
@@ -207,7 +210,6 @@ async function main(): Promise<void> {
         alert,
         now,
         leaseHolder,
-        boardSessionTtlMin: config.boardSessionTtlMin,
         watchIntervalMs: config.tickMs,
         state: jobState,
         stopSignal: stop.signal,
@@ -216,6 +218,8 @@ async function main(): Promise<void> {
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
     outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
+    // The card supply's alert when it is short and no draft can be queued (docs/specs/unattended-roles.md).
+    supplyWatch: () => watchSupply({ db, alert, now, log, state: supplyWatchState }),
     drainAt: config.drainAt ?? null,
     // Unattended mode: the one-token call on the studio key that lifts the dispatcher's own credit and
     // spend-limit pauses (credit-probe.ts); attended mode has no studio key and sets no such pause.

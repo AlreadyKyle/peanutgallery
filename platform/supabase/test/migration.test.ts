@@ -2499,3 +2499,32 @@ describe("launch-stamp migration", () => {
     expect(script.slice(start, script.indexOf("];", start))).toContain('"credit_purchases"');
   });
 });
+
+// supply-refill (docs/specs/unattended-roles.md, PR4): the production proof after it is applied is
+// anon-negative-test.ts, so every function it revokes from anon is probed there as an RPC anon is
+// refused, but the trigger function, which PostgREST does not serve.
+describe("anon-negative-test covers the supply-refill functions", () => {
+  it("probes every function the migration revokes from anon", () => {
+    const sql = withoutComments(readFileSync(resolve(MIGRATIONS_DIR, "20261010200000_supply_refill.sql"), "utf8"));
+    const functions = [...new Set([...sql.matchAll(/revoke all on function public\.(\w+)\([^)]*\) from public, anon/g)].map((m) => m[1]!))].sort();
+    expect(functions).toEqual([
+      "approve_card_draft",
+      "card_from_draft_onto",
+      "draft_card_answer",
+      "draft_session_min_usd",
+      "draft_target_exhausted",
+      "draft_target_kind",
+      "enqueue_supply_draft",
+      "job_runs_job_enabled",
+      "next_backlog_card",
+      "open_draft_card",
+      "record_card_draft_for",
+      "reject_draft_card",
+      "supply_draft_check",
+    ]);
+    const script = readFileSync(resolve(MIGRATIONS_DIR, "..", "scripts", "anon-negative-test.ts"), "utf8");
+    const start = script.indexOf("const RPC_PROBES");
+    const probes = script.slice(start, script.indexOf("];", start));
+    for (const name of functions.filter((f) => f !== "job_runs_job_enabled")) expect(probes, name).toContain(`["${name}", {`);
+  });
+});
