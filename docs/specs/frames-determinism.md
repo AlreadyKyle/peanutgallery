@@ -1,6 +1,6 @@
 # Frames determinism
 
-Status: agreed. Card: none. Owner: board.
+Status: built. Card: none. Owner: board.
 
 Draft: written, not yet agreed by the board. Agreed: the contract for the work. Built: merged, and every criterion a test can prove is ticked; live verification is still to run. Done: every Verification line has been run and its output quoted. A criterion replaced by a later spec is struck through and names that spec.
 
@@ -38,6 +38,9 @@ After the page has loaded and asked for its first animation frame, the draw read
 - Before the change, the spec as on main (`--repeat-each=6`, 42 tests): `12 failed`, `30 passed (10.3m)`. Of the 30 draw comparisons, 9 failed on pixels (7 "two draws of the same state differ", at 0, 3,600 and 21,600 s, and 2 "two draws of the page differ"), 3 timed out at 120 s under the load before comparing, and 18 passed. An earlier single run of the spec failed 3,600 and 21,600 s.
 - Diagnostic draw pairs with the harness as on main. At 0 s, the clocks paused at ticks 2 and 14: 189 and 188 frames, the sim's `elapsedSeconds` 3.0177 and 3.0057, and 7 pixels differed (one column, the progress bar's end). At 21,600 s, ticks 3 and 13: 189 and 188 frames, and 163 pixels differed (the dust count's last digits, 9,690 against 9,620).
 - The same diagnostic with the fixed tick, clocks paused at ticks 39 and 12, then 30 and 37: both pairs ran 189 frames from tick 1,000 to 4,000, ended in the same sim state and drew byte-identical canvases.
+- After the change (`--repeat-each=30 --workers=3 --timeout=300000`, the same machine and load): `210 passed (32.1m)`, 0 failed: all 150 draw comparisons (120 canvas, 30 page) byte-identical, each pair with the same frame count. The slowest test took 1.1 minutes, under the default 120 s timeout, so the raised timeout changed nothing.
+- `pnpm --filter @backseat/seed-1 typecheck`: clean; `pnpm --filter @backseat/seed-1 test`: `Tests  83 passed (83)`; `pnpm test:docs`: `pass 22`, `fail 0`; `pnpm verify`: exit 0 (`GATE PASS folder=seed-1 lane=code`, `GATE PASS folder=platform lane=code`, `PASS: secret-scan files=762`).
+- The gate on pull request #145 (run 38077415576, head `bad727b`): the change's draw passed `7 passed` on all three attempts. The base's draw, which runs main's spec, failed attempts 1 and 2 ("two draws of the same state differ" at 21,600 s, and the page on attempt 2). Attempt 3 passed, and the gate passed. `frames-diff.sh` kept one frame, game-21600, whose dust count read …909,697 on the base and …909,711 on the change: the two harnesses step the sim a different amount, so a real difference between them is expected.
 
 ## Decisions
 
