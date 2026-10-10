@@ -279,6 +279,7 @@ Deno.test("migrations on PGlite", {
         "20261010000000_auto_resume.sql",
         "20261010100000_studio_auto_resume.sql",
         "20261010200000_supply_refill.sql",
+        "20261010300000_retire_attended.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -1544,38 +1545,37 @@ Deno.test("migrations on PGlite", {
         );
         assertEquals(stored.t.getTime(), second.t.getTime());
 
-        await db.exec(`select public.set_agent_mode('unattended')`);
-        assertEquals(
+        // Attended mode is retired (docs/specs/unattended-roles.md, PR5): a new
+        // row 1 is unattended by default, set_agent_mode refuses every call after
+        // its board checks, and the check constraint refuses any other value,
+        // null included, even from the service role.
+        const mode = async () =>
           (await row<{ m: string }>(
             `select agent_mode as m from public.studio_state where id = 1`,
-          )).m,
-          "unattended",
-        );
-        await db.exec(`select public.set_agent_mode('attended')`);
-        assertEquals(
-          (await row<{ m: string }>(
-            `select agent_mode as m from public.studio_state where id = 1`,
-          )).m,
-          "attended",
+          )).m;
+        assertEquals(await mode(), "unattended");
+        for (const value of ["attended", "unattended", "auto", null]) {
+          await refuses(
+            `select public.set_agent_mode($1)`,
+            "attended mode is retired",
+            [value],
+          );
+        }
+        await refuses(
+          `update public.studio_state set agent_mode = 'attended' where id = 1`,
+          "studio_state_agent_mode_unattended",
         );
         await refuses(
-          `select public.set_agent_mode('auto')`,
-          "agent_mode must be attended or unattended",
+          `update public.studio_state set agent_mode = null where id = 1`,
+          "agent_mode",
         );
-        await refuses(
-          `select public.set_agent_mode('Attended')`,
-          "agent_mode must be attended or unattended",
-        );
-        await refuses(
-          `select public.set_agent_mode(null)`,
-          "agent_mode must be attended or unattended",
-        );
+        assertEquals(await mode(), "unattended");
 
         const { s } = await row<{ s: Row }>(
           `select public.board_studio_state() as s`,
         );
         assertEquals(Object.keys(s).sort(), BOARD_STATE_KEYS);
-        assertEquals(s.agent_mode, "attended");
+        assertEquals(s.agent_mode, "unattended");
         assertEquals(s.paused, false);
         assertEquals(s.card_max_usd, 25);
         assertEquals(s.daily_cap_usd, 0);
@@ -1631,7 +1631,7 @@ Deno.test("migrations on PGlite", {
           const { s } = await row<{ s: Row }>(
             `select public.board_studio_state() as s`,
           );
-          assertEquals(s.agent_mode, "attended");
+          assertEquals(s.agent_mode, "unattended");
         }
         assertEquals(await counts(), before);
 
@@ -1658,7 +1658,12 @@ Deno.test("migrations on PGlite", {
           (await row<{ t: Date }>(`select public.set_launched() as t`))
             .t instanceof Date,
         );
-        await db.exec(`select public.set_agent_mode('unattended')`);
+        // At the second factor set_agent_mode passes its board checks and then
+        // refuses: attended mode is retired, and the mode stays unattended.
+        await refuses(
+          `select public.set_agent_mode('attended')`,
+          "attended mode is retired",
+        );
         await db.exec(`select public.set_paused(true)`);
         assertEquals(
           await row(
@@ -1667,13 +1672,12 @@ Deno.test("migrations on PGlite", {
           { agent_mode: "unattended", paused: true, paused_by: BOARD_EMAIL },
         );
         await db.exec(`select public.set_paused(false)`);
-        await db.exec(`select public.set_agent_mode('attended')`);
         assertEquals(
           await counts(),
           {
             cards: (before.cards as number) + 2,
             notes: (before.notes as number) + 1,
-            mode: "attended",
+            mode: "unattended",
             paused: false,
           },
         );

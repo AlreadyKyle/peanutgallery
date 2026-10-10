@@ -31,7 +31,6 @@ export const OPTIONAL_KEYS = [
   'AGENT_HOURLY_RATE_USD',
   'DISPATCHER_TICK_MS',
   'DISPATCHER_MAX_CONCURRENCY',
-  'BOARD_SESSION_TTL_MIN',
   'MODEL_DIRECTOR',
   'MODEL_HOST',
   'PUBLIC_SITE_URL',
@@ -49,7 +48,7 @@ export const PRICED_OPTIONAL_MODELS = ['MODEL_DIRECTOR', 'MODEL_HOST'];
 // Read by loadConfig but never copied from the Mac's .env, with the reason.
 export const NOT_COPIED = {
   ANTHROPIC_API_KEY: "the founder's key; the VPS bills the studio key only",
-  CLAUDE_BIN: 'attended mode only; unattended mode runs Managed Agents sessions and no claude CLI',
+  CLAUDE_BIN: 'the hand-run attended tools only (the replay eval, sandbox:check); the dispatcher runs Managed Agents sessions and no claude CLI',
   DISPATCHER_WORKTREE_ROOT: 'dispatcher.service sets /srv/peanutgallery-worktrees; a path on the Mac does not exist on the VPS',
   DISPATCHER_CODE_ROOT: 'dispatcher.service sets /opt/peanutgallery, the read-only code clone',
   DISPATCHER_REPO_ROOT: 'dispatcher.service sets /srv/peanutgallery, the work clone',
