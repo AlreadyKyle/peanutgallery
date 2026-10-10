@@ -31,7 +31,7 @@ The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mo
 
 ## Commands
 
-- `pnpm verify`: typecheck, tests, agents, ops, functions, gate dry-run, secret scan, docs and rename checks. Run it from the repository root, once before pushing. The gate dry-run runs the gated packages' tests, so verify does not run them a second time.
+- `pnpm verify`: typecheck, tests, agents, ops, functions, gate dry-run, secret scan, docs and rename checks. Run it from the repository root, once before pushing. The checks run at once (`scripts/verify.sh`), about 3 minutes on the Mac.
 - `pnpm verify:changed`: typecheck and tests for only the packages the branch touches, plus the docs, secret and rename checks. Use it while iterating.
 - `pnpm test:docs` and `pnpm secret-scan`: the fast checks for a docs-only change. `test:docs` guards the kernel line, schedules, company names and `PLAN.md §` references.
 - Site e2e: `E2E_PORT=<port> npx playwright test <specs>` in `platform/site`.
