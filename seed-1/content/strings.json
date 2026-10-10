@@ -16,7 +16,7 @@
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {
-    "gatherer": "Picks up dust by hand.",
+    "gatherer": "Sweeps dust into a pile.",
     "cart": "Hauls dust in from the yard.",
     "mill": "Grinds stone into dust all day.",
     "forge": "Runs hot and never stops.",
