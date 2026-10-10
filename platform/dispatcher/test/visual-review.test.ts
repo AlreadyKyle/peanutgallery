@@ -163,7 +163,9 @@ describe('runVisualReview', () => {
         await emit({ type: 'start', sessionId, model: 'director-class', tools: READ_SET, apiKeySource: 'none' });
         await emit(usageEvent(1, 400, 'director-class'));
       },
-      { result: answer, ...options },
+      // role-session.ts's attended path, which only a caller that allows it reaches; the dispatcher
+      // reviews on the managed adapter (below).
+      { mode: 'attended', result: answer, ...options },
     );
     const stop = new AbortController();
     const deps: VisualReviewDeps = {
@@ -245,7 +247,6 @@ describe('runVisualReview', () => {
 
   it('starts at once with no board member signed in', async () => {
     const { db, adapter, deps } = setup(JSON.stringify(verdict()));
-    db.boardActive = false;
     expect((await runVisualReview(input(card({ folder: 'platform' })), deps)).kind).toBe('verdict');
     expect(adapter.specs).toHaveLength(1);
   });

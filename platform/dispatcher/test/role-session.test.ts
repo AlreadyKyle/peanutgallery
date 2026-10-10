@@ -35,7 +35,9 @@ function request(overrides: Partial<RoleSessionRequest> = {}): RoleSessionReques
 function setup(script: FakeScript, options: FakeOptions = {}) {
   const db = new FakeDb();
   db.roles = [director, designer];
-  const adapter = new FakeAdapter(script, { result: VERDICT, ...options });
+  // The attended adapter, which only a hand-run tool builds (the replay eval), unless a test asks for the
+  // managed one.
+  const adapter = new FakeAdapter(script, { mode: 'attended', result: VERDICT, ...options });
   const stop = new AbortController();
   const deps: RoleSessionDeps = {
     db,
@@ -185,10 +187,9 @@ describe('runRoleSession', () => {
 
   it('needs no signed-in board member, and stops when its role is paused', async () => {
     const absent = setup(oneTurn);
-    absent.db.boardActive = false;
     expect(await runRoleSession(request(), absent.deps)).toMatchObject({ ok: true });
     const t = setup(async (_spec, emit, signal) => {
-      await emit(startEvent(READ_SET));
+      await emit(startEvent(READ_SET, 'none'));
       t.db.roles = [{ ...director, paused: true }, designer];
       await untilAborted(signal, 1000);
     });
@@ -197,7 +198,7 @@ describe('runRoleSession', () => {
 
   it("stops when the studio is paused, where the caller asks (a Director's review)", async () => {
     const t = setup(async (_spec, emit, signal) => {
-      await emit(startEvent(READ_SET));
+      await emit(startEvent(READ_SET, 'none'));
       t.db.studio = { ...t.db.studio, paused: true };
       await untilAborted(signal, 1000);
     });

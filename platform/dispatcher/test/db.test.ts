@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSupabaseDb, fetchWithTimeout, toCard, type UsageInput } from '../src/db.js';
 import { NOW } from './helpers/fake-db.js';
@@ -86,17 +88,16 @@ describe('createSupabaseDb', () => {
 });
 
 describe('createSupabaseDb queries', () => {
-  it('counts only a board member with the board role as a board session', async () => {
-    const empty = rest([]);
-    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn: empty.fetchFn });
-    expect(await db.boardSessionActive(3, NOW)).toBe(false);
-    const request = empty.seen[0]!;
-    expect(request.url.pathname).toBe('/rest/v1/board_members');
-    expect(request.url.searchParams.getAll('role')).toEqual(['eq.board']);
-    expect(request.url.searchParams.get('last_seen_at')).toBe(`gte.${new Date(NOW.getTime() - 3 * 60_000).toISOString()}`);
-
-    const member = rest([{ email: 'board@example.com' }]);
-    expect(await createSupabaseDb('https://db.local', 'service-role', { fetchFn: member.fetchFn }).boardSessionActive(3, NOW)).toBe(true);
+  // docs/specs/unattended-roles.md, PR5: no dispatcher path reads a board session; board_heartbeat and
+  // board_members.last_seen_at stay in the database, uncalled.
+  it('reads no board session: the store has no board read, and no source file names one', () => {
+    const db = createSupabaseDb('https://db.local', 'service-role', { fetchFn: rest([]).fetchFn });
+    expect(Object.keys(db).filter((name) => /board/i.test(name))).toEqual([]);
+    const src = path.resolve(import.meta.dirname, '..', 'src');
+    const files = readdirSync(src, { recursive: true, encoding: 'utf8' }).filter((file) => file.endsWith('.ts'));
+    expect(files.length).toBeGreaterThan(40);
+    const naming = files.filter((file) => /boardSessionActive|board_members|board_heartbeat|last_seen_at|BOARD_SESSION_TTL_MIN|no_board_session/.test(readFileSync(path.join(src, file), 'utf8')));
+    expect(naming).toEqual([]);
   });
 
   it("finds a card's newest event by its payload step", async () => {

@@ -1221,7 +1221,6 @@ describe('runCardPipeline', () => {
     ]);
     const outcome = await tick({
       db,
-      mode: 'unattended',
       maxConcurrency: 1,
       running: new Map(),
       budgets: new SessionBudgets(),
@@ -1701,7 +1700,9 @@ describe('the visual review', () => {
         await emit({ type: 'start', sessionId: sessionId ? sessionId(n) : `review-${n}`, model: 'builder-class', tools: READ_SET, apiKeySource: 'none' });
         await emit(usageEvent(1, 50));
       },
-      { result: () => answers[Math.min(n, answers.length) - 1] ?? '' },
+      // role-session.ts's attended path, the simplest Director to script; the dispatcher reviews on the
+      // managed adapter (managedVisualDeps below), billed to the card.
+      { mode: 'attended', result: () => answers[Math.min(n, answers.length) - 1] ?? '' },
     );
     return { adapter, reviews: () => n };
   }
@@ -1860,7 +1861,7 @@ describe('the visual review', () => {
     const adapter = new FakeAdapter(
       async (spec, emit) => {
         session += 1;
-        await emit(startEvent(undefined, options.mode === 'unattended' ? 'ANTHROPIC_API_KEY' : 'none'));
+        await emit(startEvent(undefined, options.mode === 'attended' ? 'none' : 'ANTHROPIC_API_KEY'));
         const revising = spec.prompt.includes('Visual review: revision');
         if (revising) await writeFile(path.join(spec.worktree, 'platform', 'site', 'revision.html'), `<p>revision ${session}</p>\n`, 'utf8');
         else await writeFile(path.join(spec.worktree, 'platform', 'site', 'page.html'), `<title>Mob Machine ${session}</title>\n`, 'utf8');
@@ -1873,7 +1874,7 @@ describe('the visual review', () => {
         await patches.save(storedPatch(cardId, base, Buffer.from(diff), null, `sesn_${session}`));
         if (session === 1) options.afterFirst?.();
       },
-      { mode: options.mode ?? 'attended' },
+      { mode: options.mode ?? 'unattended' },
     );
     return { adapter, sessions: () => session };
   }
@@ -2110,7 +2111,7 @@ describe('the visual review', () => {
           await emit(usageEvent(1, 50));
           pause(db);
         },
-        { result: () => JSON.stringify(verdict(LEGIBILITY)) },
+        { mode: 'attended', result: () => JSON.stringify(verdict(LEGIBILITY)) },
       );
       await runCardPipeline(c, visualDeps(db, build.adapter, review, visualRemote().fetchFn));
       expect(build.sessions()).toBe(1);

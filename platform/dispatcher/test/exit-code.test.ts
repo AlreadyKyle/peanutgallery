@@ -22,7 +22,7 @@ describe('exitCodeFor', () => {
     expect(EXIT_RETRY).toBe(1);
     expect(exitCodeFor(new ConfigError('GITHUB_REPO is not set'))).toBe(78);
     expect(exitCodeFor(new StartupError('startup probe failed: init line lists no tools', true))).toBe(78);
-    expect(exitCodeFor(new StartupError('studio_state.agent_mode is attended but AGENT_MODE is unattended', false))).toBe(1);
+    expect(exitCodeFor(new StartupError('the probe session could not be created: overloaded', false))).toBe(1);
     expect(exitCodeFor(new Error('claude could not start: spawn claude ENOENT'))).toBe(1);
     expect(exitCodeFor(new UnknownModelError('mystery-model'))).toBe(1);
     expect(exitCodeFor('a thrown string')).toBe(1);
@@ -35,7 +35,7 @@ describe('exitCodeFor', () => {
     const bad = [
       {},
       { GITHUB_REPO: 'not-a-repo' },
-      { GITHUB_REPO: 'owner/repo', AGENT_MODE: 'manual' },
+      { GITHUB_REPO: 'owner/repo' },
     ];
     for (const env of bad) {
       const error = thrown(() => loadConfig(env, '/repo'));

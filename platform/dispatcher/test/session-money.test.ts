@@ -106,7 +106,7 @@ describe('the session budget', () => {
     expect(adapter.specs).toEqual([]);
   });
 
-  it('gives an attended session its whole remaining ceiling', async () => {
+  it('gives a session with no throttle budget its whole remaining ceiling', async () => {
     const { adapter, result } = await run(async (_spec, emit) => {
       await emit(startEvent());
       await emit(usageEvent(1, 10));

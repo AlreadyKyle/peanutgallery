@@ -1,17 +1,15 @@
 // The Claude Code pin (docs/specs/agent-upkeep.md): the pin file parses and its sandbox-check line is
 // a PASS on its own version; the installed version is read once a minute; the attended adapter
 // refuses to start a session on another version, pausing the card with cli_version (a SessionPaused
-// becomes a paused card with that failing check, pipeline.test.ts), and the dispatcher's own
-// adapters carry the pin.
+// becomes a paused card with that failing check, pipeline.test.ts), and the hand-run tools' attended
+// adapter carries the pin. The dispatcher builds no attended adapter (PLAN.md §10 decision 66).
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AttendedAdapter } from '../src/adapters/attended.js';
-import { createAdapter } from '../src/adapters/factory.js';
 import { SessionPaused, type SessionSpec } from '../src/adapters/types.js';
-import { CliPin, PIN_PATH, VERSION_CACHE_MS, parseClaudeVersion, parsePin } from '../src/cli-pin.js';
-import type { DispatcherConfig } from '../src/config.js';
+import { CliPin, PIN_PATH, VERSION_CACHE_MS, defaultCliPin, parseClaudeVersion, parsePin } from '../src/cli-pin.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 const PIN = { version: '2.1.280', sandbox_check: 'PASS: attended sandbox (sandbox:check --positive on Claude Code 2.1.280)' };
@@ -139,14 +137,9 @@ describe('the attended adapter and the pin', () => {
     expect(spawned).toBe(1);
   });
 
-  it("is carried by the dispatcher's attended adapter, read from the code root", () => {
-    const config = {
-      codeRoot: '/code',
-      repoRoot: '/repo',
-      claudeBin: 'claude',
-    } as unknown as DispatcherConfig;
-    const adapter = createAdapter(config) as unknown as { cliPin: { options: { pinFile: string } } | null };
-    expect(adapter.cliPin?.options.pinFile).toBe(path.join('/code', PIN_PATH));
+  it("is read from the code root by the hand-run tools' attended adapter", () => {
+    const pin = defaultCliPin('/code', 'claude') as unknown as { options: { pinFile: string } };
+    expect(pin.options.pinFile).toBe(path.join('/code', PIN_PATH));
   });
 });
 
