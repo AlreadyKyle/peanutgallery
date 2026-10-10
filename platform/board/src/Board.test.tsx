@@ -40,6 +40,9 @@ const fake = vi.hoisted(() => ({
   role: 'board' as string | null,
   noClient: false,
   signedOut: false,
+  session: null as { user: { id: string; email: string }; access_token: string } | null,
+  // supabase-js's auth listeners: a test delivers SIGNED_IN as another tab's sign-in would.
+  listeners: [] as ((event: string, session: unknown) => void)[],
   otpCalls: [] as Record<string, unknown>[],
   studio: {} as Record<string, unknown>,
   pauseReason: null as string | null,
@@ -63,19 +66,21 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('./lib/supabase', async (importOriginal) => {
   const original = await importOriginal<typeof import('./lib/supabase')>();
-  const session = { user: { email: 'board@mobmachine.games' } };
   const mfa = (name: string, args: Record<string, unknown> | undefined, data: unknown, error: { message: string } | null = null) => {
     fake.mfaCalls.push({ name, args });
     return Promise.resolve({ data, error });
   };
   const client = {
     auth: {
-      getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : session } }),
+      getSession: () => Promise.resolve({ data: { session: fake.signedOut ? null : fake.session } }),
       signInWithOtp: (args: Record<string, unknown>) => {
         fake.otpCalls.push(args);
         return Promise.resolve({ data: {}, error: null });
       },
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      onAuthStateChange: (listener: (event: string, session: unknown) => void) => {
+        fake.listeners.push(listener);
+        return { data: { subscription: { unsubscribe: () => (fake.listeners = fake.listeners.filter((l) => l !== listener)) } } };
+      },
       signOut: () => Promise.resolve({ error: null }),
       mfa: {
         getAuthenticatorAssuranceLevel: () => mfa('getAuthenticatorAssuranceLevel', undefined, { currentLevel: fake.aal }),
@@ -201,6 +206,8 @@ beforeEach(() => {
   fake.role = 'board';
   fake.noClient = false;
   fake.signedOut = false;
+  fake.session = { user: { id: 'u-board', email: 'board@mobmachine.games' }, access_token: 'token-1' };
+  fake.listeners = [];
   fake.otpCalls.length = 0;
   fake.studio = {
     paused: false,
@@ -340,6 +347,60 @@ describe('the first factor (aal1)', () => {
     expect(mfaNamed('verify').map((call) => call.args)).toEqual([{ factorId: 'f-1', challengeId: 'challenge-f-1', code: '123456' }]);
     expect(mfaNamed('enroll')).toHaveLength(0);
     expect(screen.getByRole('region', { name: 'Status' })).toBeTruthy();
+  });
+});
+
+/** Another tab signs in: supabase-js broadcasts the new session to this one. */
+async function signInElsewhere(id: string, email: string, token: string) {
+  fake.session = { user: { id, email }, access_token: token };
+  await act(async () => {
+    for (const listener of fake.listeners) listener('SIGNED_IN', fake.session);
+  });
+  for (let i = 0; i < 4; i += 1) await flush();
+}
+
+const STUDIO_READS = ['board_studio_state', 'card_supply', 'board_jobs'];
+const studioReads = () => [fake.calls.filter((call) => STUDIO_READS.includes(call.name)).length, fake.selects.length];
+
+describe('a new session in another tab', () => {
+  it('keeps the panel through a refresh at aal2', async () => {
+    await renderBoard();
+    await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
+    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+  });
+
+  it('at aal1 for the same board member goes back to the code step, and the panel reads nothing more', async () => {
+    await renderBoard();
+    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+    fake.aal = 'aal1';
+    await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
+    expect(regions()).toEqual(['Two-factor sign-in']);
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
+    expect(named('board_role')).toHaveLength(2);
+  });
+
+  it('at aal1 for another board member goes back to the code step, signed in as them', async () => {
+    await renderBoard();
+    fake.aal = 'aal1';
+    await signInElsewhere('u-other', 'other@mobmachine.games', 'token-3');
+    expect(regions()).toEqual(['Two-factor sign-in']);
+    expect(screen.getByText(/Signed in as other@mobmachine\.games\./)).toBeTruthy();
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
+  });
+
+  it("for the moderator replacing the board's session shows only Pause and resume, and reads no studio state", async () => {
+    await renderBoard();
+    fake.role = 'moderator';
+    fake.aal = 'aal1';
+    await signInElsewhere('u-moderator', 'moderator@mobmachine.games', 'token-4');
+    expect(regions()).toEqual(['Pause and resume']);
+    const after = studioReads();
+    await flush(STUDIO_STATE_POLL_MS * 3);
+    expect(studioReads()).toEqual(after);
   });
 });
 

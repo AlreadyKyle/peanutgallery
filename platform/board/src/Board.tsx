@@ -1,6 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useState, type FormEvent } from 'react';
-import { fetchBoardRole, sendMagicLink, type BoardRole } from './lib/board';
+import { fetchBoardRole, sendMagicLink, twoFactorState, type BoardRole } from './lib/board';
 import { errorMessage, getClient } from './lib/supabase';
 import { Panel } from './Panel';
 import { PauseControls } from './Status';
@@ -32,7 +32,12 @@ export function Board() {
         <h1>Mob Machine board</h1>
         <p className="lede">{BOARD_LEDE}</p>
       </div>
-      {client === null || session === null ? <SignIn client={client} /> : <SignedIn client={client} email={session.user.email ?? ''} />}
+      {client === null || session === null ? (
+        <SignIn client={client} />
+      ) : (
+        // A session for another user (another tab's magic link, broadcast by supabase-js) starts over.
+        <SignedIn key={session.user.id} client={client} email={session.user.email ?? ''} token={session.access_token} />
+      )}
     </main>
   );
 }
@@ -84,27 +89,48 @@ function SignIn({ client }: { client: SupabaseClient | null }) {
 /**
  * Routes a signed-in session: no membership shows a line and calls nothing more; the moderator gets
  * Pause at the first factor; a board member sees only the code step until aal2, then the panel.
+ *
+ * Every new session token (a sign-in in another tab, a refresh, a verified code) asks again for the
+ * role and, for a board member, the assurance level, so an aal1 session never keeps the panel: it goes
+ * back to the code step and the panel's reads stop.
  */
-function SignedIn({ client, email }: { client: SupabaseClient; email: string }) {
+function SignedIn({ client, email, token }: { client: SupabaseClient; email: string; token: string }) {
   const [role, setRole] = useState<BoardRole | null | 'pending'>('pending');
   const [roleError, setRoleError] = useState('');
   const [secondFactor, setSecondFactor] = useState(false);
 
   useEffect(() => {
     let live = true;
-    fetchBoardRole(client)
-      .then((value) => {
-        if (live) setRole(value);
-      })
-      .catch((error: unknown) => {
+    void (async () => {
+      let next: BoardRole | null;
+      try {
+        next = await fetchBoardRole(client);
+      } catch (error) {
         if (!live) return;
         setRole(null);
         setRoleError(errorMessage(error));
-      });
+        setSecondFactor(false);
+        return;
+      }
+      if (!live) return;
+      setRole(next);
+      setRoleError('');
+      if (next !== 'board') {
+        setSecondFactor(false);
+        return;
+      }
+      try {
+        const state = await twoFactorState(client);
+        if (live) setSecondFactor(state.level === 'aal2');
+      } catch {
+        // The code step reads the level again itself and shows the error.
+        if (live) setSecondFactor(false);
+      }
+    })();
     return () => {
       live = false;
     };
-  }, [client]);
+  }, [client, token]);
 
   return (
     <>
