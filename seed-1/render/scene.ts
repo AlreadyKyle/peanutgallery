@@ -92,8 +92,10 @@ export class DustScene extends Phaser.Scene {
   private drawnUnlockCount = -1;
   // The wall-clock millisecond of the last step. The sim advances by wall-clock time rather than
   // Phaser's frame delta, which a browser stops or clamps while the tab is in the background, so time
-  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once).
-  private lastStepAt = Date.now();
+  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once). It starts at the first frame,
+  // not at construction: the time Phaser takes to boot is not play, and counting it made two draws of
+  // the same save credit different dust (the gate's frames job, e2e/frames.spec.ts).
+  private lastStepAt: number | null = null;
 
   // Whether create() has built the objects refresh() draws; a DOM control can act before it has.
   private created = false;
@@ -203,7 +205,7 @@ export class DustScene extends Phaser.Scene {
 
   override update(): void {
     const now = Date.now();
-    this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
+    if (this.lastStepAt !== null) this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
     this.lastStepAt = now;
     this.refresh();
   }
