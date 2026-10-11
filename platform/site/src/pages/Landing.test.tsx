@@ -298,17 +298,18 @@ describe('Landing', () => {
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([copy.pitchTitle]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.playFree }).getAttribute('href')).toBe('https://play.example');
-    expect(screen.getByRole('link', { name: copy.howItWorks }).getAttribute('href')).toBe('/how-it-works');
+    // The hero's button goes to the cards to fund; How it works is in the top bar (decision 72).
+    expect(screen.getByRole('link', { name: copy.fundACard }).getAttribute('href')).toBe('#fund');
 
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.game.title, copy.flow.fundTitle, copy.flow.title, copy.team.title, legal.moneyHeading]);
-    // Four bands: the pitch (signal), the cards (paper: the first game, the cards to fund, then how
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.flow.fundTitle, copy.game.title, copy.flow.title, copy.team.title, legal.moneyHeading]);
+    // Four bands: the pitch (signal), the cards (paper: the cards to fund, the first game, then how
     // they move), the team (ink) and the money (paper).
     const bands = [...container.querySelectorAll<HTMLElement>('main > *')];
     expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band']);
     expect(bands[0]!.querySelector('h1')).not.toBeNull();
-    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['game', 'fund', 'flow']);
+    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['fund', 'game', 'flow']);
     // The first game's tile: its name, a still with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
     expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust.png');

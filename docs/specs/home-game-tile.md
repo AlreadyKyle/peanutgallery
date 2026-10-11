@@ -10,12 +10,12 @@ Public feedback after the announcement said three things. Home never shows a gam
 
 ## Scope
 
-In: a first-game tile on home, first in the card band; one sentence in home's Where the money goes; Dust stepping by wall-clock time and its save recording when it was written.
+In: a first-game tile on home, in the card band after the cards to fund (amended by `docs/PLAN.md` §10 decision 70); one sentence in home's Where the money goes; Dust stepping by wall-clock time and its save recording when it was written.
 Out: embedding the game in the site (the game refuses framing and the site's CSP has no `frame-src`); the pitch, the footer, the suit chip and the video, which still name no game; the split itself and every other money rule.
 
 ## Behaviour
 
-Home's card band opens with **Play the first game**: a still of Dust in play with alt text, the name Dust, one line saying it is an idle game for a browser that the agents built and keep changing one funded card at a time, and **Play Dust free** to the game. The tile is drawn only when the site has a play address, like the hero button. It is not a card and carries no bar. On a phone it stacks; from 48rem the still sits beside the text.
+Home's card band opens with the cards to fund, then **Play the first game** (`docs/PLAN.md` §10 decision 70; it opened the band before): a still of Dust in play with alt text, the name Dust, one line saying it is an idle game for a browser that the agents built and keep changing one funded card at a time, and **Play Dust free** to the game. The tile is drawn only when the site has a play address, like the hero button. It is not a card and carries no bar. On a phone it stacks; from 48rem the still sits beside the text.
 
 Where the money goes adds, after the split: "The agents' share pays only for the AI model time that builds funded cards, and the ledger lists every cost." It restates fixed rule 2 and the ledger's Agent spend line; no rule changes.
 
@@ -23,7 +23,7 @@ Dust advances by the wall clock between frames, so a background tab is credited 
 
 ## Acceptance criteria
 
-- [ ] Home's h2 order is Play the first game, Pick a card to fund, How the cards move, The team (when drawn), Where the money goes.
+- [ ] Home's h2 order is Pick a card to fund, Play the first game, How the cards move, The team (when drawn), Where the money goes.
 - [ ] The tile shows the still, the name Dust and Play Dust free linking the play address; with no play address it is not drawn.
 - [ ] Home names Dust only in the tile; the pitch, footer, lanes, Play free and the suit chip name no game.
 - [ ] Where the money goes shows the agents' share line.

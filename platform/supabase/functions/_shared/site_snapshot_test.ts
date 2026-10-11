@@ -354,11 +354,12 @@ Deno.test("home-flow-supply: the live document's studio entry carries the drafti
       ]);
       assert(doc.reason === null || /^[a-z_]+$/.test(doc.reason as string), `reason is a fixed code: ${doc.reason}`);
       assertEquals([doc.runs_today, doc.run_limit], [0, 12]); // 20261011100000_always_open.sql raises the limit from 4
-      // The next 20-minute slot after now: on a slot boundary, later than now and at most 20 minutes on.
+      // The next minute after now (20261011200000_supply_every_minute.sql; every 20 minutes before it):
+      // on a minute boundary, later than now and at most a minute on.
       const next = new Date(doc.next_check_at as string);
       const now = (await s.row<{ now: Date }>(`select now() as now`)).now;
-      assertEquals([next.getUTCMinutes() % 20, next.getUTCSeconds(), next.getUTCMilliseconds()], [0, 0, 0]);
-      assert(next.getTime() > now.getTime() && next.getTime() - now.getTime() <= 20 * 60 * 1000, `${next.toISOString()} is the slot after ${now.toISOString()}`);
+      assertEquals([next.getUTCSeconds(), next.getUTCMilliseconds()], [0, 0]);
+      assert(next.getTime() > now.getTime() && next.getTime() - now.getTime() <= 60 * 1000, `${next.toISOString()} is the minute after ${now.toISOString()}`);
       // short, reason and runs_today are supply_draft_check()'s, passed through.
       const check = (await s.row<{ c: Doc }>(`select public.supply_draft_check() as c`)).c;
       assertEquals([doc.short, doc.reason, doc.runs_today], [check.short, check.reason, check.runs_today]);
