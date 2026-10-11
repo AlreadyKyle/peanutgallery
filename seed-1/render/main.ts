@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
-import { step } from '../sim/sim';
+import { createSim, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
+import { AccessibleControls } from './controls';
 import { loadGameData } from './load';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
@@ -40,6 +41,11 @@ function start(): void {
           : save.savedAt === null
             ? save.state
             : step(save.state, data.config, awaySeconds(save.savedAt, Date.now()));
+      const initial = savedState ?? createSim(data.config, seed);
+      const controlsRoot = document.getElementById('controls');
+      const controls = controlsRoot === null ? null : new AccessibleControls(controlsRoot, data.config, data.strings, initial);
+      const scene = new DustScene(data, seed, initial, (state) => controls?.update(state));
+      controls?.attach(scene);
       new Phaser.Game({
         type: Phaser.AUTO,
         parent: 'game',
@@ -47,7 +53,7 @@ function start(): void {
         height: SCREEN_HEIGHT * RENDER_SCALE,
         backgroundColor: '#12161c',
         scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-        scene: [new DustScene(data, seed, savedState)],
+        scene: [scene],
       });
     })
     .catch((error: unknown) => {
