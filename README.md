@@ -96,9 +96,9 @@ Per package:
 ## How work is done here
 
 - **Spec first.** A new feature, or any change to the kernel, money, migrations or the gate, has a spec under `docs/specs/`, copied from [`TEMPLATE.md`](docs/specs/TEMPLATE.md). A bug fix, a small tooling change or a copy fix needs none: its pull request description is the contract. A change is done only when every line of its Verification section has been run and the output quoted.
-- **Production needs the board.** Migrations, function deploys, Stripe endpoint changes and anything else that touches production run only with the board's explicit allow. A spec lists them under "Production steps (need the board's allow)".
+- **Production steps.** Migrations, function deploys, Stripe endpoint changes and anything else that touches production are run by the session that ships the change, with no board approval, inside the kernel's money caps and recorded on the ledger (`docs/PLAN.md` §10 decision 74). Anything that reads a secret runs in a local session on the Mac that holds `.env`. A spec lists them under "Production steps".
 - **Pull requests.** Every change reaches `main` through a pull request with the `gate` check green. The one exception is the revert commit the dispatcher writes after a merged card fails its deploy or smoke.
-- **The kernel.** The files listed in `platform/gate/kernel-paths.txt` enforce the rules no card can change. No agent may edit them; the board does.
+- **The kernel.** The files listed in `platform/gate/kernel-paths.txt` enforce the rules no card can change. No card agent may edit them; they change only through a kernel pull request that a Claude session merges on a green gate (`docs/PLAN.md` §10 decision 74).
 
 ## Reading order
 
@@ -110,9 +110,9 @@ Per package:
 
 ## Glossary
 
-- **Board.** Kyle and whoever joins him. The studio never waits on it (`docs/PLAN.md` §10 decision 66). Its site (`platform/board`, not linked from the public site) is an optional panel: Status, Activity, and Pause and Resume, File a card, Reject a card, Resume a paused card, Record a credit purchase and Run a job now (`docs/specs/optional-board.md`). Its standing duties reach it by ntfy, email and GitHub, and caps change by SQL.
+- **Board.** Kyle and whoever joins him. The studio never waits on it (`docs/PLAN.md` §10 decision 66). Its site (`platform/board`, not linked from the public site) is an optional panel: Status, Activity, and Pause and Resume, File a card, Reject a card, Resume a paused card, Record a credit purchase and Run a job now (`docs/specs/optional-board.md`). Its standing duties are only those that need a human or legal identity: buying credit, refunds and disputes, and legal matters; Claude sessions merge gated pull requests, apply migrations, call Stripe and spend inside the kernel's money caps on their own, recorded on the ledger (`docs/PLAN.md` §10 decision 74). Its duties reach it by ntfy, email and GitHub, and caps change by SQL.
 - **Card.** One unit of work: a title, a public summary, the agents' brief, an acceptance test, an estimate, a funding target, a lane, a folder, an executor role, a stage (proposed, designing, voted, funded, building, gated, live, rejected, paused) and a horizon (now, next, later).
-- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` outside its kernel paths only, and that lane opens when the board sets `studio_state.platform_lane_open` once its own site is live (PLAN.md §4 Work).
+- **Lane.** Config lane: data under `seed-1/config/` and `seed-1/content/` only; the gate runs the scans, the bot and the build. Code lane: everything else outside the kernel paths; the full gate runs. Platform cards are code lane, in `platform/site` outside its kernel paths only, and that lane opens when `studio_state.platform_lane_open` is set once its own site is live (PLAN.md §4 Work).
 - **Horizon and backlog.** Only a card on `now` can take money or run. `next` and `later` are the backlog: planned, not built, listed on /roadmap and seeded from `docs/BACKLOG.md`.
 - **Gate.** The checks a change passes before it merges: `platform/gate/ship-gate.sh` run by the `gate` workflow. It covers the secret scan, the deny-list, the runtime-token scan, typecheck and tests, the headless bot and the build.
 - **Kernel.** The rules no card or role change can edit (PLAN.md §4 Kernel). The **kernel paths** are the files that enforce them, listed in `platform/gate/kernel-paths.txt`. The dispatcher refuses a card that changes one, and the gate fails a card branch that does.

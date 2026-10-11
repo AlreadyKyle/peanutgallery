@@ -1,7 +1,8 @@
 # Dependency updates (docs/specs/agent-upkeep.md). npm weekly, once a release is seven days old, with
 # every patch update in one group and at most one open pull request; the dispatcher's upkeep_merge
 # merges a patch group only when every condition of the merge policy holds, and every other update
-# waits for the board. GitHub Actions updates monthly, always for the board.
+# is a kernel pull request a Claude session merges on a green gate (docs/PLAN.md §10 decision 74).
+# GitHub Actions updates monthly, merged the same way.
 version: 2
 updates:
   - package-ecosystem: npm
