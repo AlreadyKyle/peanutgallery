@@ -4,7 +4,10 @@ import {
   contributorId,
   contributorSource,
   feeToUsd,
+  CLIENT_REFERENCE_MAX,
   goalCardId,
+  parseReference,
+  studioPct,
   mapSplit,
   payerKey,
   sha256Hex,
@@ -137,4 +140,87 @@ Deno.test("payerKey is card: and the hashed fingerprint, or email: and the contr
   assertEquals(await payerKey(null, "c0ffee"), "email:c0ffee");
   assertEquals(await payerKey(undefined, "c0ffee"), "email:c0ffee");
   assertEquals(await payerKey("   ", "c0ffee"), "email:c0ffee");
+});
+
+// The slider's reference (docs/specs/split-slider.md): `<uuid>_split<pct>` or `split<pct>`.
+const CARD = "6f1d2c3b-4a5e-4f60-8b71-9c2d3e4f5a6b";
+
+Deno.test("parseReference reads the card and every one of the eleven splits", () => {
+  for (const pct of Object.values(SPLIT_MAP)) {
+    assertEquals(parseReference(`${CARD}_split${pct}`), { cardId: CARD, studioPct: pct });
+    assertEquals(parseReference(`split${pct}`), { cardId: null, studioPct: pct });
+  }
+  assertEquals(parseReference(`${CARD.toUpperCase()}_SPLIT30`), { cardId: CARD, studioPct: 30 });
+});
+
+Deno.test("parseReference keeps a bare uuid (the old reference) as a card with no split", () => {
+  assertEquals(parseReference(CARD), { cardId: CARD, studioPct: null });
+});
+
+Deno.test("parseReference drops a split outside the eleven values but keeps its card", () => {
+  for (const bad of ["25", "110", "999", "020", "00", "05"]) {
+    assertEquals(parseReference(`${CARD}_split${bad}`), { cardId: CARD, studioPct: null }, bad);
+    assertEquals(parseReference(`split${bad}`), { cardId: null, studioPct: null }, bad);
+  }
+});
+
+Deno.test("parseReference refuses malformed, hostile and oversized references", () => {
+  const refused: unknown[] = [
+    null,
+    undefined,
+    "",
+    42,
+    {},
+    "split",
+    "split-20",
+    "split20_split30",
+    `${CARD}_split20_split30`,
+    `split20_${CARD}`,
+    `${CARD}_split20 `,
+    ` ${CARD}_split20`,
+    `${CARD}_split20\n`,
+    `${CARD}_split1e1`,
+    `${CARD}_split-10`,
+    `${CARD}_split2O`,
+    `${CARD}_split20'; drop table contributions; --`,
+    `${CARD}_split20<script>`,
+    "split20%00",
+    "split２０",
+    `${CARD}${"_split20".repeat(20)}`,
+    "x".repeat(CLIENT_REFERENCE_MAX),
+    `split20${"0".repeat(CLIENT_REFERENCE_MAX)}`,
+    "week-1",
+    "00000000-0000-0000-0000-000000000000_split20",
+  ];
+  for (const value of refused) {
+    assertEquals(parseReference(value), { cardId: null, studioPct: null }, JSON.stringify(value));
+  }
+  // Stripe's 200-character limit, and one over it.
+  assertEquals(CLIENT_REFERENCE_MAX, 200);
+  assertEquals(parseReference("a".repeat(201)), { cardId: null, studioPct: null });
+});
+
+Deno.test("studioPct prefers a valid split on the reference, else the old dropdown, else 80/20", () => {
+  assertEquals(studioPct(`${CARD}_split50`, null), 50);
+  assertEquals(studioPct("split0", null), 0);
+  assertEquals(studioPct("split100", null), 100);
+  // The reference wins over the dropdown when both are set.
+  assertEquals(studioPct("split50", "8020"), 50);
+  // Sessions from the old dropdown keep crediting as they did.
+  assertEquals(studioPct(CARD, "6040"), 40);
+  assertEquals(studioPct(null, "1090"), 90);
+  assertEquals(studioPct(null, null), 20);
+  // An invalid split on the reference falls back to the dropdown, then to the default.
+  assertEquals(studioPct(`${CARD}_split25`, "7030"), 30);
+  assertEquals(studioPct(`${CARD}_split25`, null), 20);
+  assertEquals(studioPct("x".repeat(250), null), 20);
+  // An unknown dropdown value still throws, as it did.
+  assertThrows(() => studioPct(`${CARD}_split25`, "9999"), Error, "Unknown split value");
+});
+
+Deno.test("goalCardId reads the card from the slider's reference", () => {
+  assertEquals(goalCardId(`${CARD}_split30`, null), CARD);
+  assertEquals(goalCardId("split30", null), null);
+  assertEquals(goalCardId(`${CARD}_split25`, null), CARD);
+  assertEquals(goalCardId(`${CARD}_junk`, null), null);
 });

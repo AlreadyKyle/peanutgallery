@@ -18,11 +18,11 @@ const CEILING_TOP_UP =
 export const legal = {
   contributeUnavailable: 'Contributions are not open yet.',
   split:
-    'At checkout you choose how your contribution splits between the agents and the studio. These are contributions, not donations.',
+    'These are contributions, not donations.',
   // Home's Where the money goes: the fixed rule's split, filled in from the constants in payment.ts
   // (Funding.tsx splitSentence), then the contributions line on its own.
   splitLine:
-    "Before the split, {reserve}% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, {agents}% goes to the agents and {studio}% to the studio.",
+    "Before the split, {reserve}% of every contribution after Stripe's fee is held in reserve. Unless you change it on the Fund a card page, {agents}% goes to the agents and {studio}% to the studio.",
   notDonations: 'These are contributions, not donations.',
   // Home's Where the money goes, after the split: what the agents' share buys (docs/specs/home-game-tile.md).
   agentShareLine:
@@ -33,7 +33,7 @@ export const legal = {
   fixedRules: [
     'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.',
     'Agents spend contributions only on funded cards, within set caps.',
-    "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, 80% goes to the agents and 20% to the studio.",
+    "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it on the Fund a card page, 80% goes to the agents and 20% to the studio.",
     "5% of the agents' share is set aside in an emergency fund, up to $500.",
     'Every change passes automated checks before it goes live and can be rolled back.',
     'The content filter, the all-ages rating and the art policy always apply.',
@@ -130,7 +130,7 @@ export const legal = {
       {
         heading: 'Contribute and choose the split',
         body: [
-          "At checkout you choose an amount and how it splits between the agents and the studio. Before the split, 10% of what is left after Stripe's fee goes to a reserve that covers disputes.",
+          "You choose how it splits between the agents and the studio, then an amount at checkout. Before the split, 10% of what is left after Stripe's fee goes to a reserve that covers disputes.",
           "Unless you change it, 80% of the rest goes to the agents and 20% to the studio. 5% of the agents' share goes to an emergency fund until it holds $500.",
         ],
       },
@@ -189,7 +189,7 @@ export const legal = {
         heading: 'Where the money goes',
         paragraphs: [
           "Stripe takes its fee first. 10% of the rest is held in reserve; it covers disputes first, and agents never spend it.",
-          "The split you choose at checkout divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
+          "The split you choose on the Fund a card page divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
           "5% of the agents' share goes to an emergency fund for urgent bug fixes, until the fund holds $500. The rest is agent credit.",
           'Agent credit pays for model usage on funded cards, within daily and per-card caps. Money a card does not use stays with the agents and pays for later cards.',
           `Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
@@ -218,7 +218,7 @@ export const legal = {
       { step: null, line: 'Watch AI agents build a game studio and free games.' },
       { step: null, line: 'The AI agents do the creative work: they design, build and review the cards.' },
       { step: 'Pick a card', line: 'Each card is one change to the game or to this site, with a funding target.' },
-      { step: 'Contribute and choose the split', line: 'At checkout you choose an amount and how it splits between the agents and the studio.' },
+      { step: 'Contribute and choose the split', line: 'You choose how it splits between the agents and the studio, then an amount at checkout.' },
       { step: 'The bar fills', line: 'When the bar is full, the card joins the queue.' },
       { step: 'The agents build it', line: 'An AI agent takes the card and makes the change.' },
       { step: 'Checks, then live', line: 'Before a change goes live it must pass automated checks, including a bot that plays the game.' },
@@ -227,8 +227,18 @@ export const legal = {
       { step: null, line: 'Fund a card. Watch AI agents build it. Play it free.' },
     ],
   },
+  // /contribute's split slider (docs/specs/split-slider.md): the agents' and the studio's shares of one
+  // contribution, snapping to the eleven splits the webhook allows, and the fixed rules beside it.
+  splitHeading: 'Choose your split',
+  splitIntro: 'Slide to choose how your contribution splits between the agents and the studio. Unless you move it, 80% goes to the agents and 20% to the studio.',
+  splitLabel: 'Agents and studio split',
+  splitAgents: 'Agents {agents}%',
+  splitStudio: 'Studio {studio}%',
+  splitValueText: '{agents}% to the agents, {studio}% to the studio',
+  splitFixed:
+    "Fixed, whatever you choose: {reserve}% of every contribution after Stripe's fee is held in reserve before the split, and {incident}% of the agents' share goes to the emergency fund until it holds $500.",
   contributeTitle: 'Fund a card',
-  contributeLede: 'Fund the next card in line, or pick the one you want built. You choose the split at checkout.',
+  contributeLede: 'Fund the next card in line, or pick the one you want built. Set the split below, then choose an amount at checkout.',
   // The first choice on /contribute: money given with no card funds the next cards in line (PLAN.md
   // §4). It names the first card in the waterfall's order (public_money.funding_order), says the
   // money waits when no card takes money, and names no card when the order did not load

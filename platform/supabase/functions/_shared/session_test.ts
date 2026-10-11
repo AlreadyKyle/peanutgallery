@@ -152,6 +152,34 @@ Deno.test("parseSession takes the goal card from client_reference_id, then metad
   assertEquals(none.goal_card_id, null);
 });
 
+Deno.test("parseSession reads the slider's split and card from client_reference_id (docs/specs/split-slider.md)", async () => {
+  const noDropdown = { custom_fields: [] };
+  const card = await parseSession("evt_s1", session({ ...noDropdown, client_reference_id: `${GOAL_A}_split50` }));
+  assertEquals([card.goal_card_id, card.studio_pct], [GOAL_A, 50]);
+
+  const nextInLine = await parseSession("evt_s2", session({ ...noDropdown, client_reference_id: "split0" }));
+  assertEquals([nextInLine.goal_card_id, nextInLine.studio_pct], [null, 0]);
+
+  // The reference wins over a dropdown still on the Payment Link.
+  const both = await parseSession("evt_s3", session({ client_reference_id: "split100" }));
+  assertEquals(both.studio_pct, 100);
+
+  // An invalid split falls back to the default, and the card is still credited.
+  const invalid = await parseSession("evt_s4", session({ ...noDropdown, client_reference_id: `${GOAL_A}_split35` }));
+  assertEquals([invalid.goal_card_id, invalid.studio_pct], [GOAL_A, 20]);
+
+  // An oversized reference credits no card and the default split.
+  const oversized = await parseSession("evt_s5", session({ ...noDropdown, client_reference_id: `${GOAL_A}_split50${"x".repeat(200)}` }));
+  assertEquals([oversized.goal_card_id, oversized.studio_pct], [null, 20]);
+
+  // A session from the old dropdown keeps its split and card.
+  const old = await parseSession("evt_s6", session({
+    client_reference_id: GOAL_B,
+    custom_fields: [{ key: "split", type: "dropdown", dropdown: { value: "6040" } }],
+  }));
+  assertEquals([old.goal_card_id, old.studio_pct], [GOAL_B, 40]);
+});
+
 Deno.test("parseSession rejects a missing amount and a non-usd currency", async () => {
   await assertRejects(
     () => parseSession("evt_11", session({ amount_total: null })),

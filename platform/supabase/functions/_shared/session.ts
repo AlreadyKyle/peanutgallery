@@ -6,7 +6,7 @@ import {
   contributorId,
   feeToUsd,
   goalCardId,
-  mapSplit,
+  studioPct,
 } from "./split.ts";
 
 export interface CustomField {
@@ -121,7 +121,7 @@ export async function parseSession(
     session_id: session.id,
     amount_total: session.amount_total,
     currency,
-    studio_pct: mapSplit(customFieldValue(session, "split")),
+    studio_pct: studioPct(session.client_reference_id, customFieldValue(session, "split")),
     // The studio stores no name (docs/specs/legal-copy.md; the Privacy page says so). A session
     // that still carries a displayname field is credited as any other, with no name.
     display_name: null,

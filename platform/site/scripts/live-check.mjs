@@ -474,10 +474,15 @@ try {
     skip('contribute choices: no payment link in this build');
   } else {
     const [first] = choices;
-    check(first[0].startsWith('Fund the next card in line') && STRIPE_LINK.test(first[1]), `Fund the next card in line first -> ${first[1]}`);
+    // The split slider puts the default split on every choice (docs/specs/split-slider.md).
+    const [firstBase, firstQuery = ''] = first[1].split('?');
     check(
-      choices.slice(1).every(([, href]) => /client_reference_id=[0-9a-f-]{36}$/.test(href)),
-      `${choices.length - 1} card choices carry card uuids`,
+      first[0].startsWith('Fund the next card in line') && STRIPE_LINK.test(firstBase) && firstQuery === 'client_reference_id=split20',
+      `Fund the next card in line first -> ${first[1]}`,
+    );
+    check(
+      choices.slice(1).every(([, href]) => /client_reference_id=[0-9a-f-]{36}_split20$/.test(href)),
+      `${choices.length - 1} card choices carry card uuids and the default split`,
     );
     // Its second line names the next card in line, the first card choice, or says the money waits.
     const body = ((await page.getByRole('main').locator('a.choice-primary .choice-body').textContent()) ?? '').trim();

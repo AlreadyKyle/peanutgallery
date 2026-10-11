@@ -74,7 +74,7 @@ Four projects the board named as references, what each actually did, what worked
 **What went wrong.** In April 2021 Humble announced it would remove the charity slider. After developers and buyers objected, it reversed course in May 2021, then in July 2021 set a range of 15 to 30% that stays with the store ([Wikipedia](https://en.wikipedia.org/wiki/Humble_Bundle)). Taking away a control people value costs more than never offering it.
 
 **What Mob Machine takes.**
-- The slider is the next item in line: [Split slider on the site, in place of the checkout dropdown](BACKLOG.md#split-slider-on-the-site-in-place-of-the-checkout-dropdown). The 80/20 default and the 10% reserve stay fixed (§4 Kernel), so the slider never takes back a promise.
+- The slider is built on /contribute (`docs/specs/split-slider.md`). The 80/20 default and the 10% reserve stay fixed (§4 Kernel), so the slider never takes back a promise.
 - A community milestone that benefits everyone fits [Public mirror of the game with a license](BACKLOG.md#public-mirror-of-the-game-with-a-license).
 - Mob Machine leaves out beat-the-average. It ranks payers by amount, which the money surfaces avoid.
 

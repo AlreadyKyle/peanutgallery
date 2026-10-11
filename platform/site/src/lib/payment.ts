@@ -87,10 +87,38 @@ export function inFundingOrder(snapshot: Snapshot, id: string): boolean {
   return order !== null && order.some((place) => place.card_id === id);
 }
 
-/** The Payment Link with client_reference_id set to the card id, which the webhook credits. */
-export function fundLink(base: string, id: string): string {
+/**
+ * The studio percents /contribute's slider stops at: the eleven the webhook's SPLIT_MAP allows
+ * (platform/supabase/functions/_shared/split.ts), 0 to 100 in tens.
+ */
+export const STUDIO_PCT_STEPS: readonly number[] = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+/** The nearest allowed studio percent; anything not a finite number is the default. */
+export function snapStudioPct(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_STUDIO_PCT;
+  return Math.min(100, Math.max(0, Math.round(value / 10) * 10));
+}
+
+/**
+ * The client_reference_id the webhook reads (docs/specs/split-slider.md): the card id, when there is
+ * one, then `split` and the studio percent, joined by an underscore. With no split it is the card id
+ * alone, the reference the site carried before the slider; with neither it is null.
+ */
+export function splitReference(id: string | null, studioPct?: number): string | null {
+  const split = studioPct === undefined ? null : `split${snapStudioPct(studioPct)}`;
+  if (id === null) return split;
+  return split === null ? id : `${id}_${split}`;
+}
+
+/**
+ * The Payment Link with client_reference_id set to the card id and, from /contribute's slider, the
+ * split, both of which the webhook reads. With neither it is the Payment Link itself.
+ */
+export function fundLink(base: string, id: string | null, studioPct?: number): string {
+  const reference = splitReference(id, studioPct);
+  if (reference === null) return base;
   const joiner = base.includes('?') ? '&' : '?';
-  return `${base}${joiner}client_reference_id=${encodeURIComponent(id)}`;
+  return `${base}${joiner}client_reference_id=${encodeURIComponent(reference)}`;
 }
 
 // The fixed rules behind the split (PLAN.md §4 Kernel): 10% reserve, the default 80/20 split and 5%
@@ -105,10 +133,10 @@ function round4(value: number): number {
 }
 
 /** The worked split of a contribution after Stripe's fee, as apply_contribution computes it. */
-export function exampleSplit(net: number) {
+export function exampleSplit(net: number, studioPct: number = DEFAULT_STUDIO_PCT) {
   const reserve = round4((net * RESERVE_PCT) / 100);
   const remainder = round4(net - reserve);
-  const studio = round4((remainder * DEFAULT_STUDIO_PCT) / 100);
+  const studio = round4((remainder * studioPct) / 100);
   const agents = round4(remainder - studio);
   const incident = round4((agents * INCIDENT_PCT) / 100);
   return { reserve, remainder, studio, agents, incident, credit: round4(agents - incident) };
