@@ -63,7 +63,7 @@ for (const viewport of WIDTHS) {
         /Checks, then live$/,
         /It shows under Shipped$/,
         'Where the money goes',
-        'Holds and refunds',
+        'Refunds and disputes',
         'Rules that never change',
         'Who runs it',
         'What code does and what the agents do',

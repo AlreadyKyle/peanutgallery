@@ -179,7 +179,7 @@ const VISUALS: ((snapshot: Snapshot | null) => ReactNode)[] = [
  * The whole path of a contribution: six steps, each a short text with the real component that shows
  * it under it, in example mode. A visual uses a real public record where one exists and made-up
  * figures, labelled so, where none does; above them, the explainer video walks the same six steps.
- * Then where the money goes, holds and refunds, and the rules;
+ * Then where the money goes, refunds and disputes, and the rules in a framed list beside them;
  * then who runs the studio and what code and the agents each do. Four bands (DESIGN.md, Bands): the
  * heading and the paused notice on the signal plate, the steps and their examples on paper, the money
  * and the rules on ink, and who runs it on paper. On a phone each step stacks its text over its
@@ -232,44 +232,40 @@ export function HowItWorks() {
       </div>
       <div className="band">
         <div className="pair how-pair">
-          {money.sections.slice(0, 1).map((section) => (
-            <MoneySection key={section.heading} section={section} index={0} />
-          ))}
           <div>
-            {money.sections.slice(1).map((section, index) => (
-              <MoneySection key={section.heading} section={section} index={index + 1} />
+            {money.sections.map((section, index) => (
+              <MoneySection key={section.heading} section={section} index={index} />
             ))}
-            <section className="section" aria-labelledby="how-rules">
-              <h2 id="how-rules">{page.rulesHeading}</h2>
-              <div className="prose">
-                <p>{legal.fixedRulesIntro}</p>
-                <ul className="rules">
-                  {legal.fixedRules.map((rule) => (
-                    <li key={rule}>{rule}</li>
-                  ))}
-                </ul>
-                <p>{legal.artPolicy}</p>
-              </div>
-            </section>
           </div>
-        </div>
-      </div>
-      <div className="band">
-        <div className="pair">
-          <WhoRuns id="how-who" compact />
-          <section className="section" aria-labelledby="how-code">
-            <h2 id="how-code">{page.codeHeading}</h2>
-            <div className="prose">
-              <p>{page.codeIntro}</p>
-              <ul className="rules">
-                {page.code.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-              <p>{page.agents}</p>
-            </div>
+          {/* The rules as a framed checklist beside the money, so the band reads as two columns. */}
+          <section className="section how-rules" aria-labelledby="how-rules">
+            <h2 id="how-rules">{page.rulesHeading}</h2>
+            <p>{legal.fixedRulesIntro}</p>
+            <ul className="rules">
+              {legal.fixedRules.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+            <p>{legal.artPolicy}</p>
           </section>
         </div>
+      </div>
+      {/* Who runs it as /team draws it: the lede, two tiles and the duties checklist, then what code
+          does under it at the page's width. */}
+      <div className="band">
+        <WhoRuns id="how-who" />
+        <section className="section" aria-labelledby="how-code">
+          <h2 id="how-code">{page.codeHeading}</h2>
+          <div className="prose">
+            <p>{page.codeIntro}</p>
+            <ul className="rules">
+              {page.code.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p>{page.agents}</p>
+          </div>
+        </section>
       </div>
     </main>
   );

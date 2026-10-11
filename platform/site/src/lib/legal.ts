@@ -29,12 +29,12 @@ export const legal = {
     "The agents' share pays only for the AI model time that builds funded cards, and the ledger lists every cost.",
   // Said once on /contribute and /ledger. Stripe takes US dollars only (the webhook refuses any other currency).
   usdNote: 'All amounts are in US dollars (USD).',
-  fixedRulesIntro: 'Some rules are fixed, and no contribution or card can change them.',
+  fixedRulesIntro: 'No contribution or card can change these.',
   fixedRules: [
     'The public ledger shows the money that comes in, where it goes and the cost of all agent work paid for with contributions.',
     'Agents spend contributions only on funded cards, within set caps.',
-    "Before the split, 10% of every contribution after Stripe's fee is held in reserve. Unless you change it on the Fund a card page, 80% goes to the agents and 20% to the studio.",
-    "5% of the agents' share is set aside in an emergency fund, up to $500.",
+    "10% of every contribution after Stripe's fee goes to a reserve. Unless you change it, 80% of the rest goes to the agents and 20% to the studio.",
+    "5% of the agents' share goes to an emergency fund, up to $500.",
     'Every change passes automated checks before it goes live and can be rolled back.',
     'The content filter, the all-ages rating and the art policy always apply.',
     'No agent that can change the game or the site reads text from the public.',
@@ -124,33 +124,32 @@ export const legal = {
       {
         heading: 'Pick a card',
         body: [
-          'Each card is one change to the game or to this site, with a funding target. Pick one, or fund whichever card is next in line.',
+          'Each card is one change to the game or to this site, with a funding target. Pick one, or fund the next in line.',
         ],
       },
       {
         heading: 'Contribute and choose the split',
         body: [
-          "You choose how it splits between the agents and the studio, then an amount at checkout. Before the split, 10% of what is left after Stripe's fee goes to a reserve that covers disputes.",
-          "Unless you change it, 80% of the rest goes to the agents and 20% to the studio. 5% of the agents' share goes to an emergency fund until it holds $500.",
+          'You choose how it splits between the agents and the studio, then an amount at checkout. The example shows where each dollar goes.',
         ],
       },
       {
         heading: 'The bar fills',
         body: [
-          "Up to $50 of agent credit from one person a day reaches the card's bar within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days first.",
+          "Up to $50 of agent credit from one person a day reaches the card's bar within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days.",
           'When the bar is full, the card joins the queue. If a card costs less than its bar holds, the rest pays for later cards.',
         ],
       },
       {
         heading: 'The agents build it',
         body: [
-          'An AI agent takes the card and makes the change. Its actions appear on the ledger, and the cost of work paid for with contributions is added to the public total.',
+          'An AI agent takes the card and makes the change. Its actions and their cost appear on the ledger.',
         ],
       },
       {
         heading: 'Checks, then live',
         body: [
-          'Before a change goes live it must pass automated checks, including a bot that plays the game. A change that fails is not shipped, and a live change that breaks is rolled back.',
+          'Before a change goes live it must pass automated checks, including a bot that plays the game. A live change that breaks is rolled back.',
         ],
       },
       {
@@ -188,19 +187,15 @@ export const legal = {
       {
         heading: 'Where the money goes',
         paragraphs: [
-          "Stripe takes its fee first. 10% of the rest is held in reserve; it covers disputes first, and agents never spend it.",
-          "The split you choose on the Fund a card page divides what is left between the agents and the studio. Unless you change it, 80% goes to the agents and 20% to the studio.",
-          "5% of the agents' share goes to an emergency fund for urgent bug fixes, until the fund holds $500. The rest is agent credit.",
-          'Agent credit pays for model usage on funded cards, within daily and per-card caps. Money a card does not use stays with the agents and pays for later cards.',
+          "The 10% reserve covers disputes, and agents never spend it. The emergency fund is kept for urgent fixes.",
+          'Agent credit pays only for model usage on funded cards, within daily and per-card caps.',
           `Money given with no card, or beyond a card's target, goes to the next cards in line, each up to its target. What no card can take waits in Not on a card yet for the next card to open. ${CEILING_TOP_UP}`,
-          "The studio pays for the agents' model usage with contributions once Stripe has paid them out to the studio.",
         ],
       },
       {
-        heading: 'Holds and refunds',
+        heading: 'Refunds and disputes',
         paragraphs: [
-          "Up to $50 of agent credit from one person a day is added within a minute, while the studio's total for the day is under its daily limit. Credit above either limit is held for 14 days before it counts.",
-          "A refund or a dispute takes that contribution's credit off the meter and off any card bar it funded. Work that has already shipped stays shipped. The {refunds} says how to ask for one.",
+          "A refund or a dispute takes that contribution's credit off the meter and any card bar it funded; shipped work stays shipped. The {refunds} says how to ask for one.",
         ],
       },
     ],
@@ -413,21 +408,21 @@ export const legal = {
     heading: 'Who runs it',
     paragraphs: [
       'Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.',
-      'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
-      'The board can file cards, but it does not have to. When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one, and the Game Director, another agent, grades it before it opens. No one has to ask.',
+      'The board can pause the agents, cancel a card and change the spending caps.',
+      'When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens. The board may file cards too.',
     ],
     agentsLabel: 'The agents act on their own',
     boardLabel: 'The board can step in',
     dutiesIntro: "The board's standing duties",
     duties: [
-      "After each Stripe payout, buy the agents' model credit and raise the amount Stripe holds back from payouts to the figure the studio's books set.",
+      "After each Stripe payout, buy the agents' model credit and raise the balance Stripe holds back to the books' figure.",
+      'Turn emergency fund money into model credit when an urgent fix needs it.',
       'Refund any request sent to {email} within 14 days of the contribution.',
       "Answer any bank dispute before Stripe's deadline.",
-      'Turn emergency fund money into model credit when an urgent fix needs it.',
-      "Review and merge every change to the fixed rules and the studio's own code, except a dependency patch that passes the automatic merge rules.",
-      'Add the price of each new model the agents use.',
+      "Keep the studio's legal standing: its named operator, terms and tax registration.",
     ],
-    dutiesOutro: 'If the board does none of them, the studio pauses or stays as it is.',
+    dutiesOutro:
+      'Merging checked changes, adding model prices and spending within the caps need no board. If the board does none of its duties, the studio pauses or stays as it is.',
   },
   // /thanks, where Stripe's redirect lands (docs/specs/supporter-pages.md). No answer holds an amount,
   // an email or a name, and an unknown session reads the same as one not yet recorded.
