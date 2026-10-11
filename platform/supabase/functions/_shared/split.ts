@@ -138,15 +138,70 @@ export async function payerKey(
   return `email:${contributor}`;
 }
 
+/** Stripe's limit on a Checkout Session's client_reference_id. */
+export const CLIENT_REFERENCE_MAX = 200;
+
+/** The studio percents a supporter may choose: the eleven values SPLIT_MAP allows. */
+export const STUDIO_PCTS: ReadonlySet<number> = new Set(Object.values(SPLIT_MAP));
+
+/**
+ * The site's client_reference_id (docs/specs/split-slider.md): an optional card uuid, then `split`
+ * and the studio percent, joined by an underscore: `<uuid>_split30`, or `split30` alone for Fund the
+ * next card in line. A bare uuid is the reference the site carried before the slider.
+ */
+const REFERENCE_PATTERN =
+  /^(?:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:_split(\d{1,3}))?|split(\d{1,3}))$/i;
+
+export interface Reference {
+  /** The card uuid, lowercased, or null. */
+  cardId: string | null;
+  /** The studio percent the reference carries when it is one SPLIT_MAP allows, else null. */
+  studioPct: number | null;
+}
+
+/**
+ * Reads a client_reference_id. Anything that is not a string, is empty, is longer than Stripe's 200
+ * characters or does not match the site's form names no card and carries no split. A split outside
+ * the eleven allowed values is dropped (null), never clamped; its card still counts.
+ */
+export function parseReference(value: unknown): Reference {
+  if (typeof value !== "string" || value === "" || value.length > CLIENT_REFERENCE_MAX) {
+    return { cardId: null, studioPct: null };
+  }
+  const match = REFERENCE_PATTERN.exec(value);
+  if (match === null) return { cardId: null, studioPct: null };
+  const cardId = match[1] ? match[1].toLowerCase() : null;
+  const digits = match[2] ?? match[3];
+  if (digits === undefined) return { cardId, studioPct: null };
+  // No leading zeros: "split020" is not a value the site writes.
+  const pct = /^(0|[1-9]\d*)$/.test(digits) ? Number(digits) : NaN;
+  return { cardId, studioPct: STUDIO_PCTS.has(pct) ? pct : null };
+}
+
+/**
+ * The studio percent for a session: the split the site put on client_reference_id when it is valid,
+ * else the Payment Link's old `split` dropdown (mapSplit: missing is the default, unknown throws), so
+ * sessions from before the slider keep crediting as they did. An invalid split on the reference falls
+ * back the same way, to the dropdown or the default 80/20.
+ */
+export function studioPct(
+  clientReferenceId: string | null | undefined,
+  dropdownValue: string | null | undefined,
+): number {
+  const fromReference = parseReference(clientReferenceId).studioPct;
+  if (fromReference !== null) return fromReference;
+  return mapSplit(dropdownValue);
+}
+
 /** A goal card id is accepted only when it is a well-formed uuid; the RPC checks the card itself. */
 export function goalCardId(
   clientReferenceId: string | null | undefined,
   metadataGoalCardId: string | null | undefined,
 ): string | null {
-  for (const candidate of [clientReferenceId, metadataGoalCardId]) {
-    if (candidate && UUID_PATTERN.test(candidate)) {
-      return candidate.toLowerCase();
-    }
+  const fromReference = parseReference(clientReferenceId).cardId;
+  if (fromReference !== null) return fromReference;
+  if (metadataGoalCardId && UUID_PATTERN.test(metadataGoalCardId)) {
+    return metadataGoalCardId.toLowerCase();
   }
   return null;
 }

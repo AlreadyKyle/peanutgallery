@@ -993,6 +993,34 @@ button.link:hover:not(:disabled) {
   max-width: var(--measure);
 }
 
+/* The split slider (docs/specs/split-slider.md): a native range input at full touch height, the
+   agents' share named at its left end and the studio's at its right, the fixed rules under it. It
+   has no transition or animation, so reduced motion needs no override. */
+.split-slider {
+  max-width: var(--measure);
+  margin-bottom: var(--space-4);
+}
+
+.split-label {
+  display: block;
+  font-weight: var(--weight-bold);
+}
+
+.split-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.split-range {
+  display: block;
+  width: 100%;
+  min-height: var(--target);
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 .choice {
   position: relative;
   display: flex;

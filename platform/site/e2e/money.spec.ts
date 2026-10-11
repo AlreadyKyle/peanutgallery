@@ -33,13 +33,13 @@ test.describe('/contribute follows the funding order', () => {
     const first = main.locator('a.choice').first();
     await expect(first).toHaveClass(/choice-primary/);
     await expect(first).toHaveText(`Fund the next card in lineNext in line: ${REFUNDED.title}`);
-    await expect(first).toHaveAttribute('href', PAYMENT_LINK);
+    await expect(first).toHaveAttribute('href', `${PAYMENT_LINK}?client_reference_id=split20`);
     const choices = main.locator('ul.choices a.choice');
     await expect(choices).toHaveCount(3);
     expect(await choices.evaluateAll((as) => as.map((a) => a.getAttribute('href')))).toEqual([
-      `${PAYMENT_LINK}?client_reference_id=${REFUNDED.id}`,
-      `${PAYMENT_LINK}?client_reference_id=${QUIET!.id}`,
-      `${PAYMENT_LINK}?client_reference_id=${RENAME!.id}`,
+      `${PAYMENT_LINK}?client_reference_id=${REFUNDED.id}_split20`,
+      `${PAYMENT_LINK}?client_reference_id=${QUIET!.id}_split20`,
+      `${PAYMENT_LINK}?client_reference_id=${RENAME!.id}_split20`,
     ]);
     await expect(main.getByText(String(VETOED.title))).toHaveCount(0);
     await expect(main.locator('ul.choices + p')).toHaveText("Anything beyond a card's target funds the next cards in line.");
@@ -56,6 +56,51 @@ test.describe('/contribute follows the funding order', () => {
     await expect(page.locator('p.status-line')).toHaveText(/^2 cards are open for funding\./);
     const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => a.getAttribute('href')));
     expect(links.sort()).toEqual([`${PAYMENT_LINK}?client_reference_id=${QUIET!.id}`, `${PAYMENT_LINK}?client_reference_id=${RENAME!.id}`].sort());
+  });
+});
+
+// The split slider (docs/specs/split-slider.md): keyboard and pointer move it through the eleven
+// splits, its value is read out as words, and every checkout link carries the choice.
+test.describe('/contribute split slider', () => {
+  test.use({
+    studio: {
+      ...DEFAULT_STUDIO,
+      money: moneyRow({ ...DEFAULT_STUDIO.money, funding_order: fundingOrder([QUIET!.id]) }),
+    },
+  });
+
+  test('starts at 80/20, steps by ten from the keyboard, and carries the split on every checkout link', async ({ page }) => {
+    await page.goto('/contribute');
+    const main = page.getByRole('main');
+    const slider = main.getByRole('slider', { name: 'Agents and studio split' });
+    await expect(slider).toHaveValue('80');
+    await expect(slider).toHaveAttribute('aria-valuetext', '80% to the agents, 20% to the studio');
+    await expect(main.getByText('Agents 80%', { exact: true })).toBeVisible();
+    await expect(main.getByText('Studio 20%', { exact: true })).toBeVisible();
+    await expect(main.getByText(/^Fixed, whatever you choose: 10% of every contribution after Stripe's fee is held in reserve before the split, and 5% of the agents' share/)).toBeVisible();
+
+    await slider.focus();
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await expect(slider).toHaveValue('60');
+    await expect(slider).toHaveAttribute('aria-valuetext', '60% to the agents, 40% to the studio');
+    await expect(main.getByText('Studio 40%', { exact: true })).toBeVisible();
+    const hrefs = () => main.locator('a.choice').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    expect(await hrefs()).toEqual([`${PAYMENT_LINK}?client_reference_id=split40`, `${PAYMENT_LINK}?client_reference_id=${QUIET!.id}_split40`]);
+
+    await page.keyboard.press('Home');
+    await expect(slider).toHaveValue('0');
+    expect((await hrefs())[0]).toBe(`${PAYMENT_LINK}?client_reference_id=split100`);
+    await page.keyboard.press('End');
+    await expect(slider).toHaveValue('100');
+    expect((await hrefs())[1]).toBe(`${PAYMENT_LINK}?client_reference_id=${QUIET!.id}_split0`);
+
+    // A drag lands on one of the eleven stops.
+    const box = (await slider.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    await page.mouse.click(box.x + box.width * 0.33, box.y + box.height / 2);
+    expect(Number(await slider.inputValue()) % 10).toBe(0);
+    expect(await overflowsHorizontally(page)).toBe(false);
   });
 });
 

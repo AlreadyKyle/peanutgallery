@@ -58,7 +58,7 @@ for (const viewport of WIDTHS) {
       const money = page.getByRole('region', { name: 'Where the money goes' });
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
-      await expect(money.getByText('Unless you change it at checkout, 80% goes to the agents and 20% to the studio.', { exact: false })).toBeVisible();
+      await expect(money.getByText('Unless you change it on the Fund a card page, 80% goes to the agents and 20% to the studio.', { exact: false })).toBeVisible();
       await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toBeVisible();
       await expect(money.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
       await expect(money.locator('ul.rows li')).toHaveCount(3);
@@ -113,7 +113,7 @@ for (const viewport of WIDTHS) {
       const first = page.getByRole('main').getByRole('link').first();
       await expect(first).toContainText('Fund the next card in line');
       await expect(first).toContainText('Next in line: Quiet rooms: one more unlock');
-      await expect(first).toHaveAttribute('href', PAYMENT_LINK);
+      await expect(first).toHaveAttribute('href', `${PAYMENT_LINK}?client_reference_id=split20`);
       await expect(page.getByRole('main').getByText('Rename the Gatherer to Sweeper')).toBeVisible();
       await expect(page.getByRole('main').getByText('Board on its own site')).toHaveCount(0);
       await expect(page.getByRole('main').getByText('All amounts are in US dollars (USD).')).toBeVisible();
