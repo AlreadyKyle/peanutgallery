@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { BuildingNow, FundBoard, PlannedNext, QueuedList, ShippedList } from '../components/Cards';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
+import { FundNow, MachineFlow } from '../components/Flow';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { Announcer } from '../components/Announcer';
@@ -9,7 +9,6 @@ import { PoolLine } from '../components/PoolStat';
 import { StaleNotice } from '../components/StaleNotice';
 import { MoreLink } from '../components/MoreLink';
 import { TeamStrip } from '../components/TeamStrip';
-import { plannedCards } from '../lib/cards';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
@@ -18,15 +17,12 @@ import { teamStrip } from '../lib/roster';
 import type { Snapshot } from '../lib/source';
 import { unavailableLine, useStudio, type StudioState } from '../lib/studio';
 
-// Home, in the board's order (DESIGN.md, Home), on bands: what the studio is and its state (the
-// signal plate); what is building, what to fund and what is queued, the only band with cards
-// (paper); the team (ink); what shipped and what is planned next (paper); where the money goes
-// (ink). A band with nothing to show is not drawn, and the bands after it take their colour from
-// their new place.
+// Home, in the board's order (DESIGN.md, Home; docs/specs/home-flow.md), on bands: what the studio
+// is and its state (the signal plate); how the cards move, the four lanes from Next up to Shipped,
+// the only band with cards (paper); the team (ink); where the money goes. A band with nothing to show
+// is not drawn, and the bands after it take their colour from their new place.
 
-/** Home shows the latest three shipped cards, the next three planned and the five latest agent actions. */
-export const HOME_SHIPPED = 3;
-export const HOME_PLANNED = 3;
+/** Home shows the five latest agent actions. */
 export const HOME_ACTIONS = 5;
 
 /** "6 cards are open for funding.", with the figure at 600. */
@@ -56,7 +52,13 @@ function StatusLine({ studio, view }: { studio: StudioState; view: HomeView | nu
   return (
     <p className="status-line">
       <span>
-        {fund.length === 0 ? copy.status.openNone : <Count n={fund.length} words={copy.status.open} />}
+        {fund.length > 0 ? (
+          <Count n={fund.length} words={copy.status.open} />
+        ) : view.snapshot.supply?.drafting === true ? (
+          copy.status.drafting
+        ) : (
+          copy.status.openNone
+        )}
         {now.length === 0 ? null : (
           <>
             {' '}
@@ -98,14 +100,37 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
   );
 }
 
+/** The first game: a still of it, its name, one line and Play, so home shows the agents ship (decision 68). */
+function GameSection() {
+  const env = siteEnv();
+  if (env.playUrl === '') return null;
+  return (
+    <section className="section game-tile" aria-labelledby="game">
+      <img className="game-shot" src="/games/dust.png" width={375} height={470} alt={copy.game.alt} />
+      <div className="game-text">
+        <h2 id="game">{copy.game.title}</h2>
+        <p className="game-name">{copy.game.name}</p>
+        <p>{copy.game.line}</p>
+        <p>
+          <a className="button" href={env.playUrl}>
+            <Glyph name="cartridge" />
+            {copy.game.play}
+          </a>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** The cards open for funding, first and biggest: or the loading or unavailable line while there is no snapshot. */
 function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const view = live.view;
   return (
     <section className="section" aria-labelledby="fund">
-      <h2 id="fund">{copy.fund}</h2>
-      <p>{copy.fundIntro}</p>
+      <h2 id="fund">{copy.flow.fundTitle}</h2>
+      <p>{copy.flow.fundIntro}</p>
       {view !== null ? (
-        <FundBoard snapshot={view.snapshot} cards={view.groups.fund} changed={live.changed} />
+        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} />
       ) : studio.state === 'loading' ? (
         <p className="muted" aria-busy="true">
           {copy.loadingCards}
@@ -113,6 +138,17 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
       ) : (
         <p className="muted">{unavailableLine(studio)}</p>
       )}
+    </section>
+  );
+}
+
+/** How the cards move: the three lanes around funding, from the snapshot. */
+function FlowSection({ view }: { view: HomeView }) {
+  return (
+    <section className="section flow" aria-labelledby="flow">
+      <h2 id="flow">{copy.flow.title}</h2>
+      <p>{copy.flow.intro}</p>
+      <MachineFlow snapshot={view.snapshot} groups={view.groups} />
     </section>
   );
 }
@@ -135,21 +171,6 @@ function TeamSection({ view }: { view: HomeView }) {
   );
 }
 
-function RoadmapSection({ view }: { view: HomeView }) {
-  const shipped = view.groups.shipped.slice(0, HOME_SHIPPED);
-  const planned = plannedCards(view.snapshot.cards);
-  const next = [...planned.next, ...planned.later].slice(0, HOME_PLANNED);
-  if (shipped.length === 0 && next.length === 0) return null;
-  return (
-    <div className="band">
-      <div className="pair">
-        <ShippedList cards={shipped} snapshot={view.snapshot} />
-        <PlannedNext cards={next} />
-      </div>
-    </div>
-  );
-}
-
 /** Where the money goes: the pool with the coin, the split, the latest agent actions and the ledger. */
 function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | null }) {
   const snapshot = view?.snapshot ?? null;
@@ -166,7 +187,7 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
         <PoolLine balance={snapshot.pool.balance_usd} />
       )}
       <p className="money-split">
-        {splitSentence()} {legal.notDonations}
+        {splitSentence()} {legal.agentShareLine} {legal.notDonations}
       </p>
       {snapshot === null ? null : (
         <>
@@ -195,12 +216,11 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
-        {view === null ? null : <BuildingNow cards={view.groups.now} snapshot={view.snapshot} />}
+        <GameSection />
         <FundSection studio={studio} live={live} />
-        {view === null ? null : <QueuedList cards={view.groups.queued} />}
+        {view === null ? null : <FlowSection view={view} />}
       </div>
       {view === null ? null : <TeamSection view={view} />}
-      {view === null ? null : <RoadmapSection view={view} />}
       <div className="band">
         <MoneySection studio={studio} view={view} />
       </div>

@@ -172,7 +172,7 @@ test('the title renders once, where it stays, while the card loads', async ({ pa
 });
 
 test.describe('a planned card', () => {
-  test('draws the roadmap state and no face, never Open for funding', async ({ page }) => {
+  test('draws the planned state and no face, never Open for funding', async ({ page }) => {
     for (const [id, label, reason] of [
       [PLANNED_CARD_ID, 'Planned and not built yet', null],
       [OPENS_SOON_ID, 'Approved, opens soon', null],
@@ -182,7 +182,7 @@ test.describe('a planned card', () => {
       const state = page.locator(`[data-planned="${id}"]`);
       await expect(state.locator('p').first()).toHaveText(label);
       if (reason !== null) await expect(state).toContainText(reason);
-      await expect(state.getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '/roadmap');
+      await expect(state.getByRole('link', { name: 'See the cards to fund' })).toHaveAttribute('href', '/');
       await expect(page.locator('main li.card')).toHaveCount(0);
       await expect(page.getByRole('main')).not.toContainText('Open for funding');
       await expect(page.getByRole('link', { name: 'Fund this card' })).toHaveCount(0);
@@ -271,16 +271,16 @@ test('a card being built shows a new line at the end after the live poll', async
 });
 
 test.describe('the Watch links', () => {
-  test('building and checks faces on home link their card, and so does each shipped row', async ({ page }) => {
+  test('building and checks faces on home link their card, and so does each shipped card', async ({ page }) => {
     await page.goto('/');
     for (const id of [BUILDING_CARD_ID, CHECKS_CARD_ID]) {
       const watch = page.locator(`li.card[data-card="${id}"]`).getByRole('link', { name: "Watch how it's built" });
       await expect(watch).toHaveAttribute('href', `/card/${id}`);
     }
-    const shipped = page.getByRole('region', { name: 'Shipped' });
+    const shipped = page.locator('li.flow-lane[data-lane="shipped"]');
     const links = shipped.getByRole('link', { name: 'Watch how it was built' });
     await expect(links).not.toHaveCount(0);
-    await expect(shipped.locator('li')).toHaveCount(await links.count());
+    await expect(shipped.locator('li.card')).toHaveCount(await links.count());
     for (const href of await links.evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/card\/[0-9a-f-]{36}$/);
     await links.first().click();
     await expect(page).toHaveURL(/\/card\/[0-9a-f-]{36}$/);

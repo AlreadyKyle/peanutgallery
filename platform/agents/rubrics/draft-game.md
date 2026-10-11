@@ -24,7 +24,7 @@ Games meet an ESRB E / PEGI 3 bar: no sexual content, nudity or suggestive theme
 ## The verdict
 
 - approved, with the one reason code fits_pillars, when the draft meets all eight lines.
-- revise, with the reason codes of the lines it misses and a short note saying what to change, when another round could fix it.
+- revise, with the reason codes of the lines it misses and a short note (at most 600 characters) saying what to change, when another round could fix it.
 - flagged, with its reason codes, when it misses the rating, copies an open card or touches the kernel or the art policy. A flagged draft is withdrawn.
 
 Answer with one draft-verdict object, valid against `platform/agents/schemas/draft-verdict.schema.json`, and nothing else: no prose before or after it.

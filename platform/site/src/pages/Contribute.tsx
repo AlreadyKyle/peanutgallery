@@ -43,7 +43,7 @@ export function Contribute() {
   const env = siteEnv();
   const studio = useStudio();
   return (
-    <main>
+    <main className="wide">
       <div className="band">
         <PageHeader title={legal.contributeTitle} lede={legal.contributeLede}>
           <StaleNotice studio={studio} />

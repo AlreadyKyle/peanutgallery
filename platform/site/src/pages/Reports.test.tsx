@@ -40,12 +40,12 @@ describe('/reports', () => {
     expect(container.querySelectorAll('main > .band')).toHaveLength(2);
   });
 
-  it('says there is no report yet, and links the roadmap, with none', async () => {
+  it('says there is no report yet, and links the cards to fund, with none', async () => {
     serve(200, { reports: [] });
     draw();
     await waitFor(() => expect(screen.getByText(copy.reports.empty)).toBeTruthy());
     expect(copy.reports.empty).toBe('No weekly report yet. A report is published after a week in which a card shipped.');
-    expect(screen.getByRole('link', { name: copy.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+    expect(screen.getByRole('link', { name: copy.roadmapLink }).getAttribute('href')).toBe('/');
   });
 
   it('says the reports could not be loaded when the document fails', async () => {

@@ -47,7 +47,7 @@ A number appears only with what it means to the reader. "About $3.10 of every $5
 The site is a quiet, precise table with real cards on it. The words match: plain first, playful only where nothing is at stake.
 
 - **Wink, don't shout.** At most one wink per page, and none in money, legal, status, notice or error copy.
-- **Plain headings win.** "Building now", "Fund what's next", "Queued", "Shipped", "Planned next", "Where the money goes". A deck, hand, table, pile or discard word appears only where it makes a page clearer at a glance.
+- **Plain headings win.** "Pick a card to fund", "How the cards move", "Next up", "Building", "Shipped", "Where the money goes". A deck, hand, table, pile or discard word appears only where it makes a page clearer at a glance.
 - **Games are called games.** Dust is "Dust", never "Cartridge 1". The cartridge is a glyph, not a name. **(tested: no numbered cartridge)**
 - **Coins are never a currency.** Amounts are always dollars. No "coins" as a count or a unit, no coin balance, no "buy coins". The coin is a mark beside a dollar figure, nothing more. **(tested)**
 - **No chance words beside money.** luck, lucky, mystery, surprise, random, spin, jackpot, bet, odds, prize, loot, win, winner, gamble, chance: none of them in a money string or on `/contribute`. Every money action names where the money goes. **(tested on every `legal.ts` string and every string that mentions money)**

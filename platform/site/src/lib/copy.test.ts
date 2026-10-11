@@ -82,21 +82,28 @@ describe('copy rules', () => {
       ...Object.values(copy.status.open),
       copy.status.openNone,
       ...Object.values(copy.status.building),
-      copy.now,
-      copy.fund,
-      copy.fundIntro,
-      copy.showAllCards,
-      copy.queued,
-      copy.queuedIntro,
-      copy.queuedEmpty,
+      copy.status.drafting,
+      copy.flow.fundTitle,
+      copy.flow.fundIntro,
+      copy.flow.fundMore,
+      copy.flow.title,
+      copy.flow.intro,
+      ...Object.values(copy.flow.lanes).flatMap((lane) => Object.values(lane)),
+      copy.flow.drafting,
+      copy.flow.draftingIdle,
+      copy.flow.draftingDone,
+      copy.flow.boardWork,
+      copy.flow.planned,
+      legal.pickForMe,
+      legal.nextInLineNone,
+      legal.fundEmptyBody,
       copy.team.title,
-      copy.shipped,
-      copy.plannedNext,
-      copy.roadmapLink,
       legal.fundAgreement,
       legal.moneyHeading,
       legal.splitLine,
+      legal.agentShareLine,
       legal.notDonations,
+      ...Object.values(copy.game),
       legal.latestActions,
       copy.fullLedger,
       copy.footer,
@@ -153,14 +160,17 @@ describe('launch copy', () => {
     expect(copy.footer).toBe('AI agents build free games you can play in a browser.');
   });
 
-  it('pitches free games and names no game on home (PLAN.md §10 decision 58)', () => {
+  // Decision 58 kept every game's name off home; decision 68 adds the first game's tile, the one place
+  // home names it. The pitch, the footer, the lanes and the suit still name no game.
+  it('pitches free games and names a game on home only in its tile (PLAN.md §10 decisions 58 and 68)', () => {
     expect(copy.pitchTitle).toBe('Watch AI agents build a game studio and free games.');
     expect(legal.explainer.beats[0]!.line).toBe(copy.pitchTitle);
     const index = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
     expect(index).not.toMatch(/\bDust\b/);
-    for (const text of [copy.pitchTitle, copy.pitchBody, copy.footer, copy.fundIntro, copy.playFree, copy.categories.game, copy.categoryNotes.game]) {
+    for (const text of [copy.pitchTitle, copy.pitchBody, copy.footer, copy.flow.intro, ...Object.values(copy.flow.lanes).flatMap((lane) => Object.values(lane)), copy.playFree, copy.categories.game, copy.categoryNotes.game]) {
       expect(text).not.toMatch(/\bDust\b/);
     }
+    expect(copy.game.name).toBe('Dust');
   });
 
   it('labels the pool figure In the pool and never promises money can be spent now', () => {

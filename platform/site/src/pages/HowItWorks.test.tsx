@@ -207,17 +207,19 @@ describe('How it works', () => {
     const text = who.textContent ?? '';
     expect(text).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
     expect(text).toMatch(/pause the agents, cancel, veto or move a card, and change the spending caps/);
-    expect(text).toMatch(/The board files cards on the roadmap\./);
-    expect(text).toMatch(/When too few cards are open for funding, the Game Designer, an AI agent, drafts one.*No one has to ask\./);
+    expect(text).toMatch(/The board can file cards, but it does not have to\./);
+    expect(text).toMatch(/When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one.*No one has to ask\./);
     // PLAN.md §4 The Board's standing duties, one item each.
     expect(within(who).getAllByRole('listitem')).toHaveLength(6);
     for (const duty of [/model credit/, /within 14 days/, /bank dispute/, /emergency fund/, /merge/, /price of each new model/]) expect(text).toMatch(duty);
     expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
     const code = screen.getByRole('region', { name: page.codeHeading });
     expect(within(code).getAllByRole('listitem').map((li) => li.textContent)).toEqual([...page.code]);
-    expect(code.textContent).toMatch(/dispatcher schedules the cards/);
-    expect(code.textContent).toMatch(/gate runs the tests/);
-    expect(code.textContent).toMatch(/goes live only when the gate passes it/);
+    expect(code.textContent).toMatch(/scheduler hands out the cards/);
+    expect(code.textContent).toMatch(/runs through the tests and the other automated checks/);
+    expect(code.textContent).toMatch(/goes live only when it passes those checks/);
+    // Inside terms stay off the page (docs/COPY.md): the dispatcher and the gate are named plainly.
+    expect(code.textContent).not.toMatch(/dispatcher|the gate/i);
     expect(code.textContent).toMatch(/rolled back/);
     expect(code.textContent).toMatch(/design, build and review the cards/);
     // No public list of the board's actions exists, so nothing says they are published.

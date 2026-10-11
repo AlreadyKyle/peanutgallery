@@ -17,6 +17,10 @@ import {
   shippedOrder,
   sourceLabel,
   faceOf,
+  flowLanes,
+  FLOW_LANE_CARDS,
+  FLOW_LANES,
+  nextUp,
   CATEGORY_FILTERS,
   visibleFilters,
 } from './cards';
@@ -297,3 +301,69 @@ describe('visibleFilters', () => {
   });
 });
 
+
+describe("nextUp (home's Next up lane)", () => {
+  it('holds only approved agent cards waiting to open, the soonest first: the backlog and board work stay off the site', () => {
+    const cards = [
+      card({ id: 'board-next', horizon: 'next', rank: 1, board_work: true }),
+      card({ id: 'plan-later', horizon: 'later', rank: 1 }),
+      card({ id: 'plan-next-2', horizon: 'next', rank: 2 }),
+      card({ id: 'opens-later', horizon: 'later', opens_at: '2026-10-11T00:00:00Z' }),
+      card({ id: 'plan-next-1', horizon: 'next', rank: 1 }),
+      card({ id: 'opens-next', horizon: 'next', rank: 3, opens_at: '2026-10-12T00:00:00Z' }),
+      card({ id: 'board-later', horizon: 'later', board_work: true }),
+    ];
+    expect(nextUp(cards).map((c) => c.id)).toEqual(['opens-later', 'opens-next']);
+  });
+
+  it('leaves out vetoed cards, shipped cards and every card on horizon now', () => {
+    const cards = [
+      card({ id: 'held', horizon: 'next', board_vetoed: true, opens_at: '2026-10-11T00:00:00Z' }),
+      card({ id: 'held-later', horizon: 'later', board_vetoed: true }),
+      card({ id: 'shipped', horizon: 'next', stage: 'live' }),
+      card({ id: 'open-now', horizon: 'now', stage: 'proposed', funding_target_usd: 5 }),
+      card({ id: 'building-now', horizon: 'now', stage: 'building' }),
+      card({ id: 'kept', horizon: 'later', opens_at: '2026-10-11T00:00:00Z' }),
+    ];
+    expect(nextUp(cards).map((c) => c.id)).toEqual(['kept']);
+    expect(nextUp([])).toEqual([]);
+  });
+
+  it('is the next group groupCards hands home', () => {
+    const cards = [card({ id: 'a', horizon: 'later' }), card({ id: 'b', horizon: 'next', board_work: true }), card({ id: 'c', horizon: 'now' })];
+    expect(groupCards(cards).next.map((c) => c.id)).toEqual(nextUp(cards).map((c) => c.id));
+  });
+});
+
+describe('flowLanes', () => {
+  it('has three lanes in the order a card moves, and shows at most three cards a lane', () => {
+    // The cards open for funding sit above the lanes on home (Flow.tsx FundNow), never in one.
+    expect(FLOW_LANES).toEqual(['next', 'building', 'shipped']);
+    expect(FLOW_LANE_CARDS).toBe(3);
+  });
+
+  it('puts the funded cards after the cards being built or checked in Building, and passes the other groups through', () => {
+    const cards = [
+      card({ id: 'q-old', stage: 'funded', created_at: '2026-09-14T00:00:00Z' }),
+      card({ id: 'b', stage: 'building' }),
+      card({ id: 'g', stage: 'gated' }),
+      card({ id: 'open', stage: 'proposed', funding_target_usd: 5 }),
+      card({ id: 'live', stage: 'live' }),
+      card({ id: 'plan', horizon: 'next', opens_at: '2026-10-11T00:00:00Z' }),
+    ];
+    const groups = groupCards(cards);
+    const lanes = flowLanes(groups);
+    expect(Object.keys(lanes)).toEqual([...FLOW_LANES]);
+    expect(lanes.building.map((c) => c.id)).toEqual(['b', 'g', 'q-old']);
+    expect(lanes.next).toBe(groups.next);
+    expect(lanes.shipped).toBe(groups.shipped);
+    expect(groups.fund.map((c) => c.id)).toEqual(['open']);
+    expect(Object.values(lanes).flat().map((c) => c.id)).not.toContain('open');
+    expect(lanes.next.map((c) => c.id)).toEqual(['plan']);
+    expect(lanes.shipped.map((c) => c.id)).toEqual(['live']);
+  });
+
+  it('gives three empty lanes for no cards', () => {
+    expect(flowLanes(groupCards([]))).toEqual({ next: [], building: [], shipped: [] });
+  });
+});

@@ -12,11 +12,14 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: Building now, the team, Shipped and
-// Planned next appear only when there is something to show. The status line, the pool figure, the
-// shipped rows, the fund links, the category filters and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
+// Policy report. The landing's h2 order, read from the page: Play the first game, Pick a card to fund, How the cards move,
+// the team (only when there is one) and Where the money goes. Home's cards to fund
+// (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
+// line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
+// tile, never blank. The status
+// line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
-// each running or paused row and no model on the rest; /roadmap shows no bar and no fund link. The
+// each running or paused row and no model on the rest; /roadmap answers with home (there is no roadmap page). The
 // newest live card's own page has its title as the one h1, its commit and a Supporters section;
 // /thanks with no session is a plain thank-you and a made-up session reads as recording with the
 // query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store
@@ -87,7 +90,6 @@ const ROUTES = [
   '/ledger',
   '/how-it-works',
   '/team',
-  '/roadmap',
   '/reports',
   '/terms',
   '/terms/1',
@@ -105,15 +107,20 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['Building now', "Fund what's next", 'Queued', 'The team', 'Shipped', 'Planned next', 'Where the money goes'];
-const OPTIONAL_H2 = new Set(['Building now', 'The team', 'Shipped', 'Planned next']);
+const H2_ORDER = ['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes'];
+const OPTIONAL_H2 = new Set(['The team']);
+// Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
+// its tile saying what happens next, never blank. The cards to fund sit above them, at most three.
+const FLOW_LANES = ['Next up', 'Building', 'Shipped'];
+const FLOW_LANE_CARDS = 3;
+const HOME_FUND_CARDS = 3;
 // The grounds, as computed colours: band 1 and the top bar signal, band 2 paper, then ink and paper.
 const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
 const INK = 'rgb(17, 17, 17)';
 // The status line: the open and building counts, and never a paused sentence (decision 62).
 const STATUS_LINE =
-  /^(No card is open for funding right now\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?$/;
+  /^(No card is open for funding right now\.|The agents are drafting the next card\.|1 card is open for funding\.|\d[\d,]* cards are open for funding\.)( (1 card is|\d[\d,]* cards are) being built\.)?$/;
 // Fund the next card in line's second line with the funding order loaded: the next card, or the waits line.
 const NEXT_IN_LINE = /^Next in line: (.+)$/;
 const WAITS_LINE = 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.';
@@ -220,7 +227,7 @@ function linksWithoutAgreement(page) {
     const underFirst = location.pathname === '/contribute' && line?.tagName === 'P' && has(line);
     return [...document.querySelectorAll('main a[href^="https://buy.stripe.com/"]')]
       .filter((a) => {
-        const grid = a.closest('ul.card-grid');
+        const grid = a.closest('ul.card-grid, ul.fund-grid');
         const next = grid === null ? [] : [grid.nextElementSibling, grid.nextElementSibling?.nextElementSibling];
         return !underFirst && !next.some((el) => el?.classList.contains('fund-agreement') && has(el));
       })
@@ -369,9 +376,11 @@ try {
   const pool = main.locator('.pool-line .figure');
   const hasData = (await pool.count()) > 0;
 
-  // Home's Fund what's next, in order: /contribute's card choices must be the same cards in the same
-  // order, the waterfall's (docs/specs/money-surfaces.md).
+  // Home's cards to fund, in order: /contribute's first card choices must be the same cards in the
+  // same order, the waterfall's (docs/specs/money-surfaces.md); home shows at most three, as full
+  // faces with h3 titles.
   const homeFund = (await main.locator('ul.fund-grid h3').allTextContents()).map((title) => title.trim());
+  const homeFundPanel = await main.locator('.fund-empty').count();
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
   if (!hasData) noData(`landing h2 order ${JSON.stringify(h2)}`);
@@ -392,29 +401,41 @@ try {
 
   if (!hasData) {
     noData('the status line and the pool figure');
-    noData('Shipped rows');
-    noData('fund links and category filters');
+    noData('home flow lanes and shipped cards');
+    noData('fund links');
   } else {
     const status = ((await main.locator('p.status-line').textContent()) ?? '').trim();
     check(STATUS_LINE.test(status), `status line: ${status}`);
     const available = (await pool.textContent()) ?? '';
     check(/^\$[\d,]+\.\d\d$/.test(available) && (await money.locator('.pool-line svg.coin').count()) === 1, `pool figure with the coin shows ${available}`);
 
-    const shipped = page.getByRole('region', { name: 'Shipped' });
-    if ((await shipped.count()) === 0) {
-      skip('Shipped rows: nothing has shipped yet');
+    // The cards to fund are never blank either: full faces, at most three, or the panel.
+    check(
+      (homeFund.length > 0 && homeFund.length <= HOME_FUND_CARDS && homeFundPanel === 0) || (homeFund.length === 0 && homeFundPanel === 1),
+      `home's cards to fund: ${homeFund.length > 0 ? `${homeFund.length} full faces` : homeFundPanel > 0 ? 'the fund-the-next-card panel' : 'BLANK'}`,
+    );
+
+    // The flow is never blank: three lanes in order, each with its cards or its tile.
+    const lanes = main.locator('ol.flow-lanes > li.flow-lane');
+    const laneNames = (await lanes.locator('h3.flow-title').allTextContents()).map((title) => title.replace(/\s+\d[\d,]* cards?$/, '').trim());
+    check(JSON.stringify(laneNames) === JSON.stringify(FLOW_LANES), `home flow lanes ${JSON.stringify(laneNames)}`);
+    const filled = [];
+    for (let i = 0; i < (await lanes.count()); i += 1) {
+      const cards = await lanes.nth(i).locator('li.card').count();
+      const tiles = await lanes.nth(i).locator('.flow-empty').count();
+      filled.push(`${laneNames[i]}=${cards > 0 ? `${cards} cards` : tiles > 0 ? 'tile' : 'BLANK'}`);
+      check(cards + tiles > 0 && cards <= FLOW_LANE_CARDS, `home flow lane ${laneNames[i]} is not blank (${filled.at(-1)})`);
+    }
+    const shippedLane = lanes.filter({ has: page.locator('h3', { hasText: /^Shipped/ }) });
+    const shippedCards = await shippedLane.locator('li.card').count();
+    if (shippedCards === 0) {
+      skip('Shipped cards: nothing has shipped yet');
     } else {
-      const titles = await shipped.getByRole('heading', { level: 3 }).allTextContents();
-      const dates = await shipped.locator('li .row-time').allTextContents();
-      const metas = await shipped.locator('li .row-meta .card-meta').allTextContents();
+      const metas = await shippedLane.locator('li.card .card-bottom .card-meta').allTextContents();
+      const watch = await shippedLane.getByRole('link', { name: 'Watch how it was built' }).count();
       check(
-        titles.length >= 1 &&
-          titles.length <= 3 &&
-          dates.length === titles.length &&
-          dates.every((date) => /^\d{1,2} [A-Z][a-z]{2} \d{4}$/.test(date)) &&
-          metas.length === titles.length &&
-          metas.every((line) => line.trim() !== ''),
-        `${titles.length} shipped rows carry the date, the Live tag and cost or who asked`,
+        metas.length >= shippedCards && metas.every((line) => /shipped \d{1,2} [A-Z][a-z]{2} \d{4}/.test(line)) && watch === shippedCards,
+        `${shippedCards} shipped cards carry the date and Watch how it was built`,
       );
     }
 
@@ -428,16 +449,6 @@ try {
       );
       const box = await main.getByRole('link', { name: 'Fund this card' }).first().boundingBox();
       check((box?.height ?? 0) >= 44, `Fund button height ${box?.height}`);
-    }
-    // The studio and next game chips show only while they have cards (none at launch).
-    const filters = page.getByRole('group', { name: 'Show cards for' });
-    const chips = (await filters.getByRole('button').allTextContents()).map((text) => text.replace(/\s*\d+$/, ''));
-    check(chips[0] === 'All' && chips[1] === 'The games', `category chips ${JSON.stringify(chips)}`);
-    for (const label of [...chips.slice(1), 'All']) {
-      await filters.getByRole('button', { name: new RegExp(`^${label}`) }).click();
-      const bars = await main.getByRole('progressbar').count();
-      const pressed = (await filters.locator('[aria-pressed="true"]').textContent()) ?? '';
-      check(pressed.startsWith(label), `filter ${label} pressed, ${bars} bars`);
     }
   }
 
@@ -485,8 +496,8 @@ try {
         check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
       }
       check(
-        JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())),
-        `home's Fund what's next shows /contribute's ${titles.length} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
+        JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, HOME_FUND_CARDS).map((title) => title.trim())),
+        `home's cards to fund show /contribute's first ${Math.min(titles.length, HOME_FUND_CARDS)} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, HOME_FUND_CARDS).map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
       );
     }
     try {
@@ -594,10 +605,9 @@ try {
     );
   }
 
+  // There is no roadmap page (docs/specs/always-open.md): old links land on home's cards to fund.
   await open(page, '/roadmap');
-  const roadmap = page.getByRole('main');
-  check((await roadmap.getByRole('progressbar').count()) === 0, '/roadmap shows no funding bar');
-  check((await roadmap.getByRole('link').count()) === 0, '/roadmap has no fund link');
+  check(new URL(page.url()).pathname === '/', `/roadmap redirects to home, landed on ${new URL(page.url()).pathname}`);
 
   // The Terms versions (docs/specs/legal-copy.md): /terms shows the newest posted version with when it
   // took effect, never the cannot-confirm notice, and lists each earlier one; the next number is not

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { parseSavedState } from '../sim/save';
+import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
+import { step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { loadGameData } from './load';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
@@ -12,10 +13,12 @@ function statusElement(): HTMLElement | null {
 
 // Storage errors (a disabled or unavailable store) leave the save unread, so
 // the game starts fresh rather than throwing before it can render.
-function readSavedState(): SimState | null {
+function readSave(): { state: SimState; savedAt: number | null } | null {
   try {
     const raw = window.localStorage.getItem(SAVE_KEY);
-    return raw === null ? null : parseSavedState(raw);
+    if (raw === null) return null;
+    const state = parseSavedState(raw);
+    return state === null ? null : { state, savedAt: parseSavedAt(raw) };
   } catch {
     return null;
   }
@@ -29,7 +32,14 @@ function start(): void {
       // The play seed is the wall-clock second the page opened, so strikes
       // roll differently per visit while the bot keeps its fixed seed.
       const seed = Math.floor(Date.now() / 1000) >>> 0;
-      const savedState = readSavedState();
+      // A save credits the time since it was written, so dust keeps accruing while the page is closed.
+      const save = readSave();
+      const savedState =
+        save === null
+          ? null
+          : save.savedAt === null
+            ? save.state
+            : step(save.state, data.config, awaySeconds(save.savedAt, Date.now()));
       new Phaser.Game({
         type: Phaser.AUTO,
         parent: 'game',

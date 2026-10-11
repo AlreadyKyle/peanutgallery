@@ -57,6 +57,8 @@ export type CardGroups = {
   queued: Card[];
   /** Live, newest first. Never fundable, so never in fund. */
   shipped: Card[];
+  /** Next up (home's first lane, docs/specs/always-open.md): approved agent cards waiting to open. */
+  next: Card[];
 };
 
 /**
@@ -76,7 +78,35 @@ export function groupCards(cards: readonly Card[], place: (card: Card) => number
       .sort((a, b) => (place(a) ?? 0) - (place(b) ?? 0) || plannedOrder(a, b)),
     queued: runnable.filter((card) => card.stage === QUEUED_STAGE),
     shipped: cards.filter((card) => card.stage === SHIPPED_STAGE).sort(shippedOrder),
+    next: nextUp(cards),
   };
+}
+
+/**
+ * Home's Next up lane: the agents' approved cards waiting to open for funding (an approval sets
+ * opens_at), held cards left out, the soonest first. The board's backlog (docs/BACKLOG.md, horizon next
+ * or later with no approval) is the repository's plan, not a public card, so it never shows here
+ * (docs/specs/always-open.md).
+ */
+export function nextUp(cards: readonly Card[]): Card[] {
+  return cards
+    .filter((card) => card.horizon !== 'now' && card.stage !== SHIPPED_STAGE && Boolean(card.opens_at) && card.board_vetoed !== true)
+    .sort((a, b) => time(a.opens_at ?? '') - time(b.opens_at ?? '') || plannedOrder(a, b));
+}
+
+/**
+ * Home's flow (docs/specs/home-flow.md): three lanes in the order a card moves through them, around
+ * the cards open for funding that home shows above them. Building holds the cards being built or
+ * checked, then the funded cards waiting for the agents.
+ */
+export const FLOW_LANES = ['next', 'building', 'shipped'] as const;
+export type FlowLane = (typeof FLOW_LANES)[number];
+
+/** Each lane shows at most this many cards; the rest are a link away. */
+export const FLOW_LANE_CARDS = 3;
+
+export function flowLanes(groups: CardGroups): Record<FlowLane, Card[]> {
+  return { next: groups.next, building: [...groups.now, ...groups.queued], shipped: groups.shipped };
 }
 
 /** Roadmap order: ranked cards first, lowest rank first, then the oldest. */
@@ -103,12 +133,13 @@ export function plannedCards(cards: readonly Card[]): Record<PlannedHorizon, Car
 }
 
 /**
- * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage.
+ * A card's face (Card.tsx): its look, state word and state glyph. Six come from the card's stage;
+ * planned is drawn only in home's Next up lane, which passes it (a roadmap card takes no money).
  * Paused and rejected faces are drawn only on the design guide; /ledger lists stopped cards as rows
  * (Stopped.tsx), never as faces (docs/specs/money-surfaces.md).
  */
-export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected';
-export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected'];
+export type Face = 'open' | 'picked' | 'funded' | 'building' | 'checks' | 'live' | 'paused' | 'rejected' | 'planned';
+export const FACES: readonly Face[] = ['open', 'picked', 'funded', 'building', 'checks', 'live', 'paused', 'rejected', 'planned'];
 
 export function faceOf(card: Card): Face {
   if (card.stage === 'building') return 'building';

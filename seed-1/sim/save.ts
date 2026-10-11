@@ -4,10 +4,27 @@ import type { SimState, UnlockEvent } from './types';
 // The save wrapper carries a version outside SimState so a format change
 // never touches the shape tests/timeline.test.ts pins the hash of.
 
+// The wrapper also carries savedAt, the wall-clock millisecond the save was written, so the game can
+// credit the time the player was away. It is optional: a save written before it existed still loads.
+
 const SAVE_VERSION = 1;
 
-export function serializeState(state: SimState): string {
-  return JSON.stringify({ version: SAVE_VERSION, state });
+/** The most time away the game credits in one go: 8 hours. */
+export const MAX_AWAY_SECONDS = 8 * 60 * 60;
+
+export function serializeState(state: SimState, savedAt?: number): string {
+  return JSON.stringify(savedAt === undefined ? { version: SAVE_VERSION, state } : { version: SAVE_VERSION, savedAt, state });
+}
+
+/**
+ * The seconds between two wall-clock readings in milliseconds, as the sim should credit them: never
+ * below zero (a clock set back) and never above MAX_AWAY_SECONDS. The caller reads the clock; the sim
+ * never does.
+ */
+export function awaySeconds(fromMs: number, toMs: number): number {
+  const seconds = (toMs - fromMs) / 1000;
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  return Math.min(seconds, MAX_AWAY_SECONDS);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -71,4 +88,17 @@ export function parseSavedState(raw: string): SimState | null {
   }
   if (!isRecord(parsed) || parsed['version'] !== SAVE_VERSION) return null;
   return parseState(parsed['state']);
+}
+
+/** When a save was written, or null for a save without a usable savedAt (older saves have none). */
+export function parseSavedAt(raw: string): number | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const savedAt = parsed['savedAt'];
+  return typeof savedAt === 'number' && Number.isFinite(savedAt) && savedAt > 0 ? savedAt : null;
 }

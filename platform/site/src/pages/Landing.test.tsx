@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { copy } from '../lib/copy';
@@ -6,7 +6,7 @@ import { legal } from '../lib/legal';
 import { formatDate } from '../lib/format';
 import { DEFAULT_STUDIO_PCT, RESERVE_PCT } from '../lib/payment';
 import { books } from '../lib/books.test-fixture';
-import type { Role, Snapshot, StudioSource } from '../lib/source';
+import type { Role, Snapshot, StudioSource, Supply } from '../lib/source';
 import { SourceProvider } from '../lib/studio';
 import { HOME_ACTIONS, Landing } from './Landing';
 
@@ -224,6 +224,10 @@ function role(id: string, title: string, description: string): Role {
   };
 }
 
+function supply(over: Partial<Supply> = {}): Supply {
+  return { drafting: false, short: true, reason: null, runs_today: 0, run_limit: 3, next_check_at: null, ...over };
+}
+
 function fakeSource(over: Partial<Snapshot> = {}): StudioSource {
   return {
     load: () => Promise.resolve({ ...snapshot, ...over }),
@@ -240,10 +244,38 @@ function renderLanding(source: StudioSource | null) {
   );
 }
 
+type Lane = 'next' | 'building' | 'shipped';
+
+/** Waits for the snapshot to draw the three lanes. */
+async function lanesDrawn(): Promise<void> {
+  await waitFor(() => expect(document.querySelectorAll('ol.flow-lanes > li.flow-lane')).toHaveLength(3));
+}
+
 /** The status line's text, once the snapshot has loaded. */
 async function statusLine(): Promise<HTMLElement> {
-  await screen.findByRole('heading', { level: 2, name: copy.now });
+  await lanesDrawn();
   return document.querySelector('p.status-line') as HTMLElement;
+}
+
+function lane(name: Lane): HTMLElement {
+  return document.querySelector(`li.flow-lane[data-lane="${name}"]`) as HTMLElement;
+}
+
+/** The card titles a lane shows, in order (h4 on home's compact faces). */
+function laneTitles(name: Lane): string[] {
+  return within(lane(name))
+    .queryAllByRole('heading', { level: 4 })
+    .map((h) => h.textContent ?? '');
+}
+
+/** The fund section above the lanes. */
+function fundSection(): HTMLElement {
+  return screen.getByRole('region', { name: copy.flow.fundTitle });
+}
+
+/** The cards to fund, in order (h3 on their full faces). */
+function fundTitles(): string[] {
+  return [...document.querySelectorAll('ul.fund-grid > li.card h3')].map((h) => h.textContent ?? '');
 }
 
 beforeEach(() => {
@@ -258,7 +290,7 @@ afterEach(() => {
 });
 
 describe('Landing', () => {
-  it("is drawn in the board's order, on bands, with every section from the snapshot", async () => {
+  it("is drawn in the board's order, on four bands, with every card in the card band: the cards to fund, then the lanes", async () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     vi.stubEnv('VITE_PLAY_URL', 'https://play.example');
     const { container } = renderLanding(fakeSource());
@@ -268,24 +300,43 @@ describe('Landing', () => {
     expect(screen.getByRole('link', { name: copy.playFree }).getAttribute('href')).toBe('https://play.example');
     expect(screen.getByRole('link', { name: copy.howItWorks }).getAttribute('href')).toBe('/how-it-works');
 
-    await screen.findByRole('heading', { level: 2, name: copy.now });
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
-      copy.now,
-      copy.fund,
-      copy.queued,
-      copy.team.title,
-      copy.shipped,
-      copy.plannedNext,
-      legal.moneyHeading,
-    ]);
-    // Five bands: the pitch, the cards, the team, the roadmap and the money. Every card is in band 2.
-    const bands = [...container.querySelectorAll('main > *')];
-    expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band', 'band']);
+    await screen.findByRole('region', { name: copy.team.title });
+    await lanesDrawn();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.game.title, copy.flow.fundTitle, copy.flow.title, copy.team.title, legal.moneyHeading]);
+    // Four bands: the pitch (signal), the cards (paper: the first game, the cards to fund, then how
+    // they move), the team (ink) and the money (paper).
+    const bands = [...container.querySelectorAll<HTMLElement>('main > *')];
+    expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band']);
+    expect(bands[0]!.querySelector('h1')).not.toBeNull();
+    expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['game', 'fund', 'flow']);
+    // The first game's tile: its name, a still with alt text, and Play to the game (decision 68).
+    expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
+    expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust.png');
+    expect(screen.getByText(legal.agentShareLine, { exact: false })).toBeTruthy();
+    expect(bands[2]!.querySelector('h2')?.id).toBe('team');
+    expect(bands[3]!.querySelector('h2')?.id).toBe('money');
+    expect(screen.getByText(copy.flow.fundIntro)).toBeTruthy();
+    expect(screen.getByText(copy.flow.intro)).toBeTruthy();
+    // The cards to fund come first, as full faces, before the lanes.
+    const grid = bands[1]!.querySelector('ul.fund-grid')!;
+    expect(grid.compareDocumentPosition(bands[1]!.querySelector('ol.flow-lanes')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const face of grid.querySelectorAll('li.card')) expect(face.hasAttribute('data-compact')).toBe(false);
+    // Every card is in band 2.
+    expect(container.querySelectorAll('li.card').length).toBeGreaterThan(0);
     for (const card of container.querySelectorAll('li.card, .funding-bar')) expect(card.closest('main > .band')).toBe(bands[1]);
-    // No Right now panel, no How it works steps, no fixed rules on home any more.
+    // The lanes, in the order a card moves.
+    expect([...container.querySelectorAll('ol.flow-lanes > li')].map((li) => li.getAttribute('data-lane'))).toEqual(['next', 'building', 'shipped']);
+    expect([...bands[1]!.querySelectorAll('h3.flow-title')].map((h) => h.firstChild?.textContent?.trim())).toEqual([
+      copy.flow.lanes.next.title,
+      copy.flow.lanes.building.title,
+      copy.flow.lanes.shipped.title,
+    ]);
+    // No filter chips, no old sections, no Right now panel, no How it works steps, no fixed rules.
+    expect(screen.queryByRole('group', { name: copy.filterLabel })).toBeNull();
+    for (const old of ['Building now', "Fund what's next", 'Queued', 'Shipped', 'Planned next']) expect(screen.queryByRole('heading', { level: 2, name: old })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(screen.queryByText(legal.fixedRulesIntro)).toBeNull();
-    // Each card page link is a Watch link: on the building face and on each shipped row (supporter-pages).
+    // Each card page link is a Watch link: on the building face and on each shipped face (supporter-pages).
     const watch = [...container.querySelectorAll('a[href^="/card/"]')].map((a) => a.textContent);
     expect(watch.length).toBeGreaterThan(0);
     expect(new Set(watch)).toEqual(new Set([copy.cardPage.watchBuilt, copy.cardPage.watchWasBuilt]));
@@ -299,10 +350,31 @@ describe('Landing', () => {
     expect(line.querySelector('svg[data-glyph="pause"]')).toBeNull();
   });
 
+  it('draws no game tile without a play address, like the hero button', async () => {
+    renderLanding(fakeSource());
+    await screen.findByRole('region', { name: copy.team.title });
+    expect(screen.queryByRole('region', { name: copy.game.title })).toBeNull();
+    expect(screen.queryByRole('link', { name: copy.game.play })).toBeNull();
+  });
+
+  it('says the agents are drafting when no card is open and the supply says so, and that none is open otherwise', async () => {
+    const closed = snapshot.cards.filter((card) => !['next1', 'next2', 'studio1'].includes(card.id));
+    renderLanding(fakeSource({ cards: closed, supply: supply({ drafting: true }) }));
+    expect((await statusLine()).textContent).toBe(`${copy.status.drafting} 1 card is being built.`);
+    expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.flow.drafting);
+    cleanup();
+    renderLanding(fakeSource({ cards: closed, supply: supply({ drafting: false }) }));
+    expect((await statusLine()).textContent).toBe(`${copy.status.openNone} 1 card is being built.`);
+    cleanup();
+    // An open card is said first, whatever the supply.
+    renderLanding(fakeSource({ supply: supply({ drafting: true }) }));
+    expect((await statusLine()).textContent).toBe('3 cards are open for funding. 1 card is being built.');
+  });
+
   it('says nothing about a pause while the studio is paused, whatever the reason (decision 62)', async () => {
     for (const pauseReason of [null, 'awaiting_credit', 'spend_limit', 'incident', 'board']) {
       renderLanding(fakeSource({ paused: true, pauseReason, cards: snapshot.cards.filter((card) => card.stage !== 'building') }));
-      await screen.findByRole('heading', { level: 2, name: copy.fund });
+      await lanesDrawn();
       const line = document.querySelector('p.status-line')!;
       await waitFor(() => expect(line.textContent).toBe('3 cards are open for funding.'));
       expect(line.querySelector('svg[data-glyph="pause"]')).toBeNull();
@@ -317,102 +389,145 @@ describe('Landing', () => {
     const loading = document.querySelector('p.status-line')!;
     expect(loading.textContent).toBe(legal.loadingFigures);
     expect(loading.getAttribute('aria-busy')).toBe('true');
+    // The fund section holds the loading line; the lanes wait for the snapshot.
+    expect(within(fundSection()).getByText(copy.loadingCards).getAttribute('aria-busy')).toBe('true');
+    expect(screen.queryByRole('region', { name: copy.flow.title })).toBeNull();
+    expect(document.querySelector('ol.flow-lanes')).toBeNull();
     cleanup();
     renderLanding(null);
     expect(document.querySelector('p.status-line')?.textContent).toBe(legal.meterUnavailable);
     expect(screen.queryByText('$0.00')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
+    expect(document.querySelector('ol.flow-lanes')).toBeNull();
+    expect(within(fundSection()).getByText(legal.meterUnavailable)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: copy.flow.title })).toBeNull();
     expect(screen.queryByRole('heading', { level: 2, name: copy.team.title })).toBeNull();
   });
 
-  it('lists open cards in funding order with fund links, the queue as rows, and building cards above them', async () => {
+  it('lists open cards in funding order with fund links in the fund section, and the building then the funded cards in Building', async () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
     renderLanding(fakeSource());
-    await screen.findByRole('heading', { level: 2, name: copy.now });
-    const fund = screen.getByRole('region', { name: copy.fund });
-    expect(within(fund).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
-      'A second level',
-      'A music track',
-      'A clearer ledger page',
-    ]);
+    await lanesDrawn();
+    const fund = fundSection();
+    expect(fund.querySelector('ul.fund-grid')).not.toBeNull();
+    expect(fundTitles()).toEqual(['A second level', 'A music track', 'A clearer ledger page']);
     expect(within(fund).getAllByRole('link', { name: legal.fundThis }).map((a) => a.getAttribute('href'))).toEqual([
       'https://buy.stripe.com/test-link?client_reference_id=next1',
       'https://buy.stripe.com/test-link?client_reference_id=next2',
       'https://buy.stripe.com/test-link?client_reference_id=studio1',
     ]);
-    const now = screen.getByRole('region', { name: copy.now });
-    expect(within(now).getByText(`${copy.sources.board} · $3.20 ${legal.spentSoFar}`)).toBeTruthy();
-    const queued = screen.getByRole('region', { name: copy.queued });
-    expect(within(queued).getByText('Gatherer costs 11')).toBeTruthy();
-    expect(within(queued).queryByRole('progressbar')).toBeNull();
-    // No brief on a card; the agreement is said once, under the fund grid.
+    // Three cards: no See all link.
+    expect(fund.querySelector('p.more')).toBeNull();
+    const building = lane('building');
+    expect(laneTitles('building')).toEqual(['The core loop', 'Gatherer costs 11']);
+    expect(within(building).getByText(`${copy.sources.board} · $3.20 ${legal.spentSoFar}`)).toBeTruthy();
+    expect(within(building).getByText('Gatherer costs 11').closest('li')?.getAttribute('data-face')).toBe('funded');
+    expect(within(building).queryByRole('progressbar')).toBeNull();
+    // No brief on a card; the agreement is said once, under the fund grid, and nowhere else.
     expect(document.querySelector('details.brief')).toBeNull();
     expect(within(fund).getAllByText(/By funding you accept/)).toHaveLength(1);
+    expect(screen.getAllByText(/By funding you accept/)).toHaveLength(1);
   });
 
-  it('filters the fund board by category and shows the studio chip only while it has cards', async () => {
-    renderLanding(fakeSource());
-    await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(3));
-    const filters = screen.getByRole('group', { name: copy.filterLabel });
-    expect(within(filters).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      `${copy.categories.all} 3`,
-      `${copy.categories.game} 2`,
-      `${copy.categories.studio} 1`,
-    ]);
-    fireEvent.click(within(filters).getByRole('button', { name: `${copy.categories.studio} 1` }));
-    expect(screen.getAllByRole('progressbar').map((bar) => bar.getAttribute('aria-label'))).toEqual(['A clearer ledger page']);
-    expect(screen.getByText(copy.categoryNotes.studio)).toBeTruthy();
-    cleanup();
-    renderLanding(fakeSource({ cards: snapshot.cards.filter((card) => card.folder !== 'platform') }));
-    await waitFor(() => expect(screen.getAllByRole('progressbar')).toHaveLength(2));
-    expect(within(screen.getByRole('group', { name: copy.filterLabel })).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      `${copy.categories.all} 2`,
-      `${copy.categories.game} 2`,
-    ]);
-  });
-
-  it('shows three cards on a phone, and Show all n cards reveals the rest and focuses the fourth title', async () => {
+  it('shows three cards to fund and links See all n open cards to /contribute', async () => {
     const open = Array.from({ length: 5 }, (_, i) => ({ ...snapshot.cards[2]!, id: `o${i}`, title: `Open card ${i + 1}` }));
     renderLanding(fakeSource({ cards: open, money: books(open.map((card) => card.id)) }));
-    const show = await screen.findByRole('button', { name: copy.showAllCards.replace('{n}', '5') });
-    expect(document.querySelector('.fund-grid')?.hasAttribute('data-all')).toBe(false);
-    fireEvent.click(show);
-    await waitFor(() => expect(document.activeElement?.textContent).toBe('Open card 4'));
-    expect(document.querySelector('.fund-grid')?.getAttribute('data-all')).toBe('true');
-    expect(screen.queryByRole('button', { name: copy.showAllCards.replace('{n}', '5') })).toBeNull();
+    await lanesDrawn();
+    expect(fundTitles()).toEqual(['Open card 1', 'Open card 2', 'Open card 3']);
+    const all = within(fundSection()).getByRole('link', { name: copy.flow.fundMore.replace('{n}', '5') });
+    expect(all.getAttribute('href')).toBe('/contribute');
+    expect(screen.queryByRole('button', { name: /Show all/ })).toBeNull();
   });
 
   it("counts and draws as open for funding only the cards in the waterfall's order, and every open card when it did not load", async () => {
     // The fixture's order holds next1, next2 and studio1; leave studio1 out, as a veto would.
     renderLanding(fakeSource({ money: books(['next1', 'next2']) }));
     expect((await statusLine()).textContent).toBe('2 cards are open for funding. 1 card is being built.');
-    const fund = screen.getByRole('region', { name: copy.fund });
-    const titles = within(fund).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    const titles = fundTitles();
     expect(titles).toHaveLength(2);
     expect(titles).not.toContain(snapshot.cards.find((card) => card.id === 'studio1')!.title);
     cleanup();
     renderLanding(fakeSource({ money: null, missing: ['money'] }));
     expect((await statusLine()).textContent).toBe('3 cards are open for funding. 1 card is being built.');
-    expect(within(screen.getByRole('region', { name: copy.fund })).queryByRole('link', { name: legal.fundThis })).toBeNull();
+    expect(fundTitles()).toHaveLength(3);
+    expect(within(fundSection()).queryByRole('link', { name: legal.fundThis })).toBeNull();
   });
 
-  it('never lists a next or later card as open for funding', async () => {
+  it('never lists a next or later card among the cards to fund, nor a now card in Next up', async () => {
     const planned = [
       { ...snapshot.cards[2]!, id: 'later1', title: 'A planned card', horizon: 'later' as const, funding_target_usd: 0 },
       { ...snapshot.cards[1]!, id: 'next1b', title: 'A ranked card', horizon: 'next' as const, rank: 1 },
+      { ...snapshot.cards[1]!, id: 'soon1', title: 'An approved draft', horizon: 'next' as const, opens_at: '2026-10-11T00:00:00Z' },
     ];
-    renderLanding(fakeSource({ cards: [...snapshot.cards, ...planned] }));
-    await screen.findByRole('heading', { level: 2, name: copy.now });
-    const fund = screen.getByRole('region', { name: copy.fund });
-    expect(within(fund).queryByText('A planned card')).toBeNull();
-    expect(within(fund).queryByText('A ranked card')).toBeNull();
-    // They are the roadmap: Planned next lists them, ranked first.
-    const next = screen.getByRole('region', { name: copy.plannedNext });
-    expect(within(next).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['A ranked card', 'A third level', 'A planned card']);
+    const cards = [...snapshot.cards, ...planned];
+    renderLanding(fakeSource({ cards, money: books(['next1', 'next2', 'studio1', 'next1b', 'later1']) }));
+    await lanesDrawn();
+    const fund = fundTitles();
+    expect(fund).not.toContain('A planned card');
+    expect(fund).not.toContain('A ranked card');
+    // Next up holds only the approved agent card waiting to open, on the planned face; the backlog
+    // cards are the repository's plan and never show (docs/specs/always-open.md).
+    expect(laneTitles('next')).toEqual(['An approved draft']);
+    const horizon = (li: Element) => cards.find((card) => card.id === li.getAttribute('data-card'))!.horizon;
+    for (const li of lane('next').querySelectorAll('li.card')) {
+      expect(horizon(li)).not.toBe('now');
+      expect(li.getAttribute('data-face')).toBe('planned');
+    }
+    for (const li of document.querySelectorAll('ul.fund-grid > li.card')) expect(horizon(li)).toBe('now');
+    expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
   });
 
-  it('draws the first three running roles as a team strip linking to /team, and no team band without roles', async () => {
+  it('leaves a held card out of Next up', async () => {
+    const soon = { ...snapshot.cards[7]!, id: 'soon1', title: 'An approved draft', opens_at: '2026-10-12T00:00:00Z' };
+    const held = { ...snapshot.cards[7]!, id: 'held1', title: 'A held card', rank: 1, opens_at: '2026-10-11T00:00:00Z', board_vetoed: true, board_veto_reason: 'Not now.' };
+    renderLanding(fakeSource({ cards: [...snapshot.cards, soon, held] }));
+    await lanesDrawn();
+    expect(laneTitles('next')).toEqual(['An approved draft']);
+    expect(screen.queryByText('A held card')).toBeNull();
+  });
+
+  it('draws the fund panel and three lanes for a database with no cards, each lane holding its tile and none blank', async () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', 'https://buy.stripe.com/test-link');
+    const { container } = renderLanding(fakeSource({ cards: [], funding: {}, money: books([]) }));
+    expect((await statusLine()).textContent).toBe(copy.status.openNone);
+    for (const name of ['next', 'building', 'shipped'] as const) {
+      const tile = lane(name).querySelector('.flow-empty');
+      expect(tile, name).not.toBeNull();
+      expect(tile!.textContent!.trim(), name).not.toBe('');
+      expect(lane(name).querySelector('li.card'), name).toBeNull();
+    }
+    // The fund section stands in a panel: fund the next card in line, with no repeat of the status line.
+    const panel = fundSection().querySelector('.fund-empty') as HTMLElement;
+    expect(panel.querySelector('.fund-empty-title')?.textContent).toBe(legal.pickForMe);
+    expect(within(panel).getByText(legal.fundEmptyBody)).toBeTruthy();
+    expect(panel.textContent).not.toContain(copy.status.openNone);
+    expect(panel.querySelector('.fund-empty-agent')?.textContent).toBe(copy.flow.draftingIdle);
+    expect(within(panel).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
+    expect(document.querySelector('ul.fund-grid')).toBeNull();
+    expect(lane('building').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.building.empty);
+    expect(lane('next').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.next.empty);
+    expect(lane('shipped').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.shipped.empty);
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(container.querySelectorAll('main > .band')).toHaveLength(4);
+  });
+
+  it("says the Game Designer's state in Next up, and the idle line when the supply is missing", async () => {
+    // The fixture has no supply, as before the database carried it.
+    renderLanding(fakeSource());
+    await lanesDrawn();
+    expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.flow.draftingIdle);
+    cleanup();
+    renderLanding(fakeSource({ supply: null }));
+    await lanesDrawn();
+    expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.flow.draftingIdle);
+    expect(lane('next').querySelector('.flow-who')?.hasAttribute('data-drafting')).toBe(false);
+    cleanup();
+    renderLanding(fakeSource({ supply: supply({ reason: 'daily_limit', run_limit: 3, runs_today: 3 }) }));
+    await lanesDrawn();
+    expect(lane('next').querySelector('.flow-who')?.textContent).toBe(copy.flow.draftingDone.replace('{n}', '3'));
+  });
+
+  it('draws the first three running roles as a team strip linking to /team, and three bands without roles', async () => {
     renderLanding(fakeSource());
     const team = await screen.findByRole('region', { name: copy.team.title });
     expect(
@@ -428,21 +543,35 @@ describe('Landing', () => {
     expect(within(team).getByRole('link', { name: copy.team.meetAll }).getAttribute('href')).toBe('/team');
     cleanup();
     const { container } = renderLanding(fakeSource({ roles: [] }));
-    await screen.findByRole('heading', { level: 2, name: copy.shipped });
+    await lanesDrawn();
     expect(screen.queryByRole('region', { name: copy.team.title })).toBeNull();
-    expect(container.querySelectorAll('main > .band')).toHaveLength(4);
+    // Signal, paper (the cards), then the money takes the third band.
+    const bands = [...container.querySelectorAll('main > .band')];
+    expect(bands).toHaveLength(3);
+    expect(bands[2]!.querySelector('h2')?.id).toBe('money');
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([copy.flow.fundTitle, copy.flow.title, legal.moneyHeading]);
   });
 
-  it('lists the latest three shipped cards as rows, newest first, with cost and who funded them', async () => {
+  it('lists the latest three shipped cards, newest first, saying what each cost and who funded it', async () => {
     const more = [3, 4].map((n) => ({ ...snapshot.cards[6]!, id: `live${n}`, title: `Older ship ${n}`, updated_at: `2026-09-1${n - 2}T00:00:00Z` }));
     renderLanding(fakeSource({ cards: [...snapshot.cards, ...more] }));
-    const shipped = await screen.findByRole('region', { name: copy.shipped });
-    expect(within(shipped).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['The unlock list', 'Save and resume', 'Older ship 4']);
-    const rows = within(shipped).getAllByRole('listitem');
-    expect(rows[1]!.querySelector('.row-time')?.textContent).toBe(formatDate('2026-09-15T09:00:00Z'));
-    expect(within(rows[1]!).getByText(`$1.50 ${legal.spent} · ${legal.contributorsMany.replace('{n}', '2')}`)).toBeTruthy();
+    await lanesDrawn();
+    const shipped = lane('shipped');
+    expect(laneTitles('shipped')).toEqual(['The unlock list', 'Save and resume', 'Older ship 4']);
+    expect(shipped.querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '4'));
+    const faces = [...shipped.querySelectorAll('li.card')] as HTMLElement[];
+    expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['live', 'live', 'live']);
+    expect(within(faces[1]!).getByText(new RegExp(`\\$1\\.50 ${legal.spent}`))).toBeTruthy();
+    expect(within(faces[1]!).getByRole('link', { name: copy.cardPage.watchWasBuilt }).getAttribute('href')).toBe('/card/live1');
     expect(within(shipped).queryByRole('progressbar')).toBeNull();
-    expect(within(shipped).getByRole('link', { name: copy.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+    expect(within(shipped).getByRole('link', { name: copy.flow.lanes.shipped.more }).getAttribute('href')).toBe('/reports');
+    // With nothing building, Building names the newest ship.
+    cleanup();
+    renderLanding(fakeSource({ cards: snapshot.cards.filter((card) => !['now1', 'queued1'].includes(card.id)) }));
+    await lanesDrawn();
+    expect(lane('building').querySelector('.flow-empty .card-meta')?.textContent).toBe(
+      copy.flow.lanes.building.lastBuilt.replace('{title}', 'The unlock list').replace('{date}', formatDate('2026-09-15T11:00:00Z')),
+    );
   });
 
   it('says where the money goes: the pool with the coin, the split from the fixed constants, and the five latest actions', async () => {
@@ -466,16 +595,6 @@ describe('Landing', () => {
     await waitFor(() => expect(within(money).getByText('$0.00')).toBeTruthy());
     expect(within(money).getByText(`${legal.describeAvailable} ${legal.shortfall.replace('{amount}', '$1.23')}`)).toBeTruthy();
     expect(screen.queryByText(/-\$/)).toBeNull();
-  });
-
-  it('says nothing needs funding and draws no roadmap band when the database holds no cards', async () => {
-    const { container } = renderLanding(fakeSource({ cards: [], funding: {} }));
-    await waitFor(() => expect(screen.getByText(copy.fundEmpty)).toBeTruthy());
-    expect(screen.queryByRole('heading', { level: 2, name: copy.now })).toBeNull();
-    expect(screen.getByText(copy.queuedEmpty)).toBeTruthy();
-    expect(screen.queryByRole('heading', { level: 2, name: copy.shipped })).toBeNull();
-    expect(screen.queryByRole('progressbar')).toBeNull();
-    expect(container.querySelectorAll('main > .band')).toHaveLength(4);
   });
 
   it('keeps the figures and says they may be out of date when a refresh fails, until one succeeds', async () => {
