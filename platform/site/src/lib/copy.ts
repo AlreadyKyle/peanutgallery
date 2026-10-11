@@ -221,6 +221,8 @@ export const copy = {
     share: 'Share this card',
     shareCopied: 'Link copied.',
     shareFailed: 'Copy this link: {url}',
+    // A heading screen readers hear before the card's face (its title is an h3), so the outline runs h1, h2, h3.
+    cardHeading: 'The card',
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
     factsHeading: 'The facts',

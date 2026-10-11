@@ -287,3 +287,13 @@ test.describe('the Watch links', () => {
     await expect(page.getByRole('heading', { level: 1 })).not.toHaveText('Not found');
   });
 });
+
+test("an open card's page keeps its headings in order: h1, then a hidden h2 before the face's h3", async ({ page }) => {
+  await page.goto(`/card/${OPEN_CARD_ID}`);
+  await expect(page.locator('.replay .card-solo li.card')).toHaveCount(1);
+  const levels = await page.locator('main :is(h1, h2, h3)').evaluateAll((hs) => hs.map((h) => Number(h.tagName[1])));
+  levels.forEach((level, i) => {
+    if (i > 0) expect(level - levels[i - 1]!).toBeLessThanOrEqual(1);
+  });
+  await expect(page.getByRole('heading', { level: 2, name: 'The card' })).toHaveCount(1);
+});
