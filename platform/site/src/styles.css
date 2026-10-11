@@ -1159,6 +1159,9 @@ button.link:hover:not(:disabled) {
   border-radius: var(--radius-card);
   background: var(--primary-bg);
   color: var(--primary-fg);
+  /* The tile is the primary fill, ink on paper and paper on the dark bands, so its focus ring takes
+     the fill's text colour: the band's ring would match the tile (WCAG 2.4.7, 1.4.11). */
+  --focus-colour: var(--primary-fg);
 }
 
 .fund-next {
@@ -1494,6 +1497,40 @@ button.link:hover:not(:disabled) {
   cursor: pointer;
 }
 
+/* The preview loop's pause and play (WCAG 2.2.2): a 44px ink square with a paper edge like the
+   pill, in the bottom-right corner, drawn only while the loop is (not under reduced motion). */
+.explainer-loop-toggle {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  border: 2px solid var(--paper);
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.explainer-loop-toggle:hover {
+  background: var(--ink-hover);
+}
+
+/* The explainer's controls sit over a picture that is white in places and black in others, so a
+   one-colour ring outside them fails on one of the two. A focused control turns over instead: a paper
+   fill inside a 3px ink ring on its own edge, so the paper reads on black and the ring on white, at
+   well over 3:1 either way (WCAG 2.4.7, 1.4.11). On the edge, as the frame clips anything outside. */
+.explainer-frame button:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
 .explainer-poster:hover .explainer-play,
 .explainer-play:active {
   background: var(--ink-hover);
@@ -1506,6 +1543,11 @@ button.link:hover:not(:disabled) {
 
   .explainer-play {
     left: var(--space-2);
+    bottom: var(--space-2);
+  }
+
+  .explainer-loop-toggle {
+    right: var(--space-2);
     bottom: var(--space-2);
   }
 }

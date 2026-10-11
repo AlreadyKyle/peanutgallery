@@ -2,7 +2,7 @@
 // platform/ops/mac/run-job.sh on the Mac host (docs/specs/money-safety.md, docs/specs/mac-host.md).
 // It prints one line per problem, naming keys and line numbers only, never a value, and exits 1 when
 // there is any; else it prints "valid" and exits 0.
-//   node platform/ops/jobs/check-env.mjs controller|quota|backup|backup-mac <env file>
+//   node platform/ops/jobs/check-env.mjs controller|quota|notices|backup|backup-mac <env file>
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JOB_KEYS, jobEnvProblems, jobKeys, parseEnvFile } from './lib.mjs';
