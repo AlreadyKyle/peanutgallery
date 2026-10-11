@@ -150,6 +150,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/home-game-tile.md` | agreed | home's first-game tile, the agents' share line and Dust's time away (pull request 157); then the live check |
 | `specs/split-slider.md` | agreed | the Agents/Studio split slider on /contribute, carried on `client_reference_id`; then the webhook deploy, the live check and the dropdown off the Payment Link |
 | `specs/always-open.md` | agreed | home's Next up holds only approved agent cards, no `/roadmap`, and the draft limit of 12 a day; then the migration in production and the live check |
+| `specs/play-counts.md` | agreed | daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with no cookie, identifier or address, on the board's panel; left: `20261011500000_play_counts.sql` in production, both site deploys and the live check |
 | `specs/ship-notices.md` | agreed | one email per payment and shipped card, read from Stripe and never stored, with a one-click unsubscribe; left: the migration in production, the `NOTICES_ENV` secret and `STUDIO_REF` in the ops repository, the live check, and the first notice received |
 
 ## Standing facts for any session

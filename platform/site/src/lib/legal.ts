@@ -526,8 +526,16 @@ export const legal = {
         ],
       },
       {
+        // docs/specs/play-counts.md
+        heading: 'Play and share counts',
+        paragraphs: [
+          'The studio counts four things a day: how many times Dust is opened, how many times Share your run is pressed, how many times a card is shared from the site, and how many clicks go from Dust to a card. Each is one running total for the day and nothing else.',
+          'A count sets no cookie and stores no identifier and no IP address, so it cannot tell who you are or whether you came back.',
+        ],
+      },
+      {
         heading: 'What the site does not do',
-        paragraphs: ['The site has no ads, no analytics and no tracking cookies.'],
+        paragraphs: ['The site has no ads, no tracking and no cookies that follow you. The daily counts above are the only analytics.'],
       },
       {
         heading: 'Board sign-in',

@@ -285,6 +285,7 @@ Deno.test("migrations on PGlite", {
         "20261011200000_supply_every_minute.sql",
         "20261011300000_role_stats_public_only.sql",
         "20261011400000_ship_notices.sql",
+        "20261011500000_play_counts.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -337,6 +338,7 @@ Deno.test("migrations on PGlite", {
         "ledger",
         "notice_unsubscribes",
         "outbound_posts",
+        "play_counts",
         "pool",
         "roles",
         "scores",
@@ -4026,6 +4028,7 @@ Deno.test("migrations on PGlite", {
           "board_heartbeat",
           "board_jobs",
           "board_needs_you",
+          "board_play_counts",
           "board_role",
           "board_roles",
           "board_studio_state",
@@ -4119,8 +4122,9 @@ Deno.test("migrations on PGlite", {
         // home-flow-supply adds the drafting status site_live() carries in its studio entry.
         // ship-notices adds the unsubscribe the site's /api/unsubscribe calls with the publishable key,
         // which writes only with a matching token (docs/specs/ship-notices.md); its token function is
-        // no role's, so it is listed with the trigger functions below.
-        const everyone = ["card_is_public", "event_line_key", "public_supply", "ship_notice_unsubscribe", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
+        // no role's, so it is listed with the trigger functions below. play-counts adds the counter the
+        // site's /api/count calls, which adds one to a known event's daily total (docs/specs/play-counts.md).
+        const everyone = ["card_is_public", "count_play_event", "event_line_key", "public_supply", "ship_notice_unsubscribe", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [

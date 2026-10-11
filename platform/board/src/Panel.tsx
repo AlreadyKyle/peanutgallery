@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Actions } from './Actions';
 import { Activity, useActivity } from './Activity';
+import { PlayCounts } from './PlayCounts';
 import { StudioStatus, useStudioState } from './Status';
 
 /**
- * The board's panel at the second factor: Status first, then Activity, then Actions. It sends no
+ * The board's panel at the second factor: Status first, then Activity, the play and share counts
+ * (docs/specs/play-counts.md), then Actions. It sends no
  * heartbeat; the studio runs whether or not this page is open (docs/specs/optional-board.md).
  */
 export function Panel({ client }: { client: SupabaseClient }) {
@@ -14,6 +16,7 @@ export function Panel({ client }: { client: SupabaseClient }) {
     <>
       <StudioStatus client={client} studio={studio} />
       <Activity client={client} activity={activity} />
+      <PlayCounts client={client} />
       <Actions
         client={client}
         jobs={activity.jobs?.names ?? []}

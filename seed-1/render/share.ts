@@ -3,6 +3,7 @@
 // nothing else; the player chooses where it goes.
 import type { SimConfig, SimState } from '../sim/types';
 import { fill, formatDust } from './format';
+import { countEvent } from './count';
 import { runCardFile, runFacts } from './share-image';
 import type { Strings } from './strings';
 
@@ -43,6 +44,8 @@ export function attachShare(
   // Its space is reserved from first paint (visibility, not hidden), so showing it never resizes the canvas.
   button.style.visibility = 'visible';
   button.addEventListener('click', () => {
+    // One press counted, with nothing that names the player (docs/specs/play-counts.md).
+    countEvent('dust_share');
     const state = current();
     const text = shareText(state, config, strings);
     const done = (message: string): void => {

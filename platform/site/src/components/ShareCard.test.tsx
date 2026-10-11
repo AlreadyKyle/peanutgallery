@@ -54,4 +54,32 @@ describe('ShareCard', () => {
     expect(writeText).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toBe('');
   });
+
+  it('counts each press as card_share on /api/count, with the event name alone (docs/specs/play-counts.md)', async () => {
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, 'sendBeacon', { value: sendBeacon, configurable: true });
+    Object.defineProperty(navigator, 'share', { value: vi.fn().mockResolvedValue(undefined), configurable: true });
+    try {
+      render(<ShareCard title="A cheaper Mill" url={URL} />);
+      fireEvent.click(screen.getByRole('button', { name: copy.cardPage.share }));
+      fireEvent.click(screen.getByRole('button', { name: copy.cardPage.share }));
+      expect(sendBeacon.mock.calls).toEqual([
+        ['/api/count', '{"event":"card_share"}'],
+        ['/api/count', '{"event":"card_share"}'],
+      ]);
+    } finally {
+      Reflect.deleteProperty(navigator, 'sendBeacon');
+    }
+  });
+
+  it('falls back to a keepalive fetch with no credentials, and a failed count changes nothing on the page', async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetch);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<ShareCard title="A cheaper Mill" url={URL} />);
+    fireEvent.click(screen.getByRole('button', { name: copy.cardPage.share }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.cardPage.shareCopied));
+    expect(fetch).toHaveBeenCalledWith('/api/count', expect.objectContaining({ method: 'POST', body: '{"event":"card_share"}', keepalive: true, credentials: 'omit' }));
+  });
 });

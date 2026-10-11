@@ -48,6 +48,20 @@ export async function mockStudio(page: Page, studio: StudioFixture): Promise<voi
     if (new URL(route.request().url()).search !== '') return route.fulfill({ status: 400, contentType: json, body: '{"error":"No query string is allowed"}' });
     return route.fulfill({ status: 200, contentType: json, body: JSON.stringify({ reports: studio.reports ?? [] }) });
   });
+  // /api/count (docs/specs/play-counts.md): a known event answers 204, anything else 400.
+  await page.route(/\/api\/count(\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.fulfill({ status: 405, contentType: json, body: '{"error":"Only POST is allowed"}' });
+    let event = '';
+    try {
+      event = String((JSON.parse(route.request().postData() ?? '{}') as { event?: unknown }).event ?? '');
+    } catch {
+      event = '';
+    }
+    if (!['dust_load', 'dust_share', 'card_share', 'dust_next_card'].includes(event)) {
+      return route.fulfill({ status: 400, contentType: json, body: '{"error":"Send an event"}' });
+    }
+    return route.fulfill({ status: 204, headers: { 'Cache-Control': 'no-store' } });
+  });
   await page.route(/\/api\/thanks(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'POST') return route.fulfill({ status: 405, contentType: json, body: '{"error":"Only POST is allowed"}' });
     let session = '';

@@ -126,6 +126,11 @@ async function answerSupabase(
         return json(SUPPLY);
       case '/rest/v1/rpc/board_jobs':
         return json(JOBS);
+      case '/rest/v1/rpc/board_play_counts':
+        return json([
+          { day: '2026-10-11', dust_load: 40, dust_share: 6, card_share: 2, dust_next_card: 3 },
+          { day: '2026-10-10', dust_load: 0, dust_share: 0, card_share: 0, dust_next_card: 0 },
+        ]);
       case '/rest/v1/findings':
         return json(FINDINGS);
       case '/rest/v1/public_agent_events':
@@ -267,7 +272,13 @@ test('at the second factor the panel shows Status, Activity and Actions, and eve
   await expect(status.getByText('The caps are read-only here: they change by SQL.')).toBeVisible();
   await expect(status.getByText('Open cards: 6 of a floor of 6 · $5 or more: 0 of 1 · under $2: 6 of 1.')).toBeVisible();
   const sections = await page.locator('main > section').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')));
-  expect(sections).toEqual(['Status', 'Activity', 'Actions']);
+  expect(sections).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
+
+  // Play and share counts (docs/specs/play-counts.md): one row a day and the total, read once for 14 days.
+  const counts = page.getByRole('region', { name: 'Play and share counts' });
+  await expect(counts.locator('tr[data-day="2026-10-11"] > *')).toHaveText(['2026-10-11', '40', '6', '2', '3']);
+  await expect(counts.locator('tr[data-day="total"] > *')).toHaveText(['Total', '40', '6', '2', '3']);
+  expect(bodies).toContainEqual({ path: '/rest/v1/rpc/board_play_counts', body: { p_days: 14 } });
 
   // Activity: a recent card with its failing check, a run line, the findings link and one card's events.
   const activity = page.getByRole('region', { name: 'Activity' });

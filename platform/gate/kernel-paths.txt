@@ -56,6 +56,7 @@ platform/site/src/components/TextPage.tsx
 platform/site/src/lib/card-source.ts
 platform/site/src/lib/colour.ts
 platform/site/src/lib/contrast.ts
+platform/site/src/lib/count.ts
 platform/site/src/lib/copy.test.ts
 platform/site/src/lib/lines.ts
 platform/site/src/lib/env.ts
@@ -86,6 +87,7 @@ seed-1/index.html
 seed-1/netlify.toml
 seed-1/package.json
 seed-1/playwright.config.ts
+seed-1/render/count.ts
 seed-1/scripts
 seed-1/sim/hash.ts
 seed-1/sim/invariants.ts

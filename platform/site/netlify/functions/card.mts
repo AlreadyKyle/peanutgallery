@@ -7,6 +7,9 @@
 //        (netlify/lib/card-preview.ts; docs/specs/card-preview.md): the CDN keeps it 10 minutes
 //   GET|POST /api/unsubscribe  the ship notices' one-click unsubscribe (netlify/lib/unsubscribe.ts;
 //        docs/specs/ship-notices.md): never cached; it shares this function's rate limit
+//   POST /api/count  count_play_event(p_event): adds one to today's total for one of PLAY_EVENTS
+//        (docs/specs/play-counts.md). The body is {"event": "<name>"}, at most 1 KB; it answers 204,
+//        never cached, and reads no cookie, keeps no address and passes nothing but the event's name on
 //
 // Each is one call to Supabase's RPC endpoint with the publishable key, so the function reads only
 // what anon may read (the unsubscribe writes only when the database finds its token matches). A card id that is not a uuid, and any query string on /api/card (which Netlify
@@ -22,6 +25,8 @@ export const RPC_TIMEOUT_MS = 8_000;
 export const MAX_BODY_BYTES = 1024;
 /** A Stripe Checkout Session id, as /thanks takes it from the address. */
 export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
+/** The events /api/count takes; the database's count_play_event holds the same list. */
+export const PLAY_EVENTS = ['dust_load', 'dust_share', 'card_share', 'dust_next_card'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;
 const PREVIEW_PATH = /^\/api\/card\/([^/]+)\/preview\.png$/;
@@ -125,10 +130,38 @@ async function thanks(req: Request): Promise<Response> {
   return answer(200, body, NO_STORE);
 }
 
+/** The event name from a JSON body of at most MAX_BODY_BYTES, or null for anything not in PLAY_EVENTS. */
+async function eventFrom(req: Request): Promise<string | null> {
+  const declared = Number(req.headers.get('content-length') ?? '0');
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
+  const bytes = new Uint8Array(await req.arrayBuffer());
+  if (bytes.byteLength > MAX_BODY_BYTES) return null;
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    const event = (parsed as Record<string, unknown>).event;
+    return typeof event === 'string' && (PLAY_EVENTS as readonly string[]).includes(event) ? event : null;
+  } catch {
+    return null;
+  }
+}
+
+async function count(req: Request): Promise<Response> {
+  const event = await eventFrom(req);
+  if (event === null) return refuse(400, `Send {"event": "<name>"} as JSON, at most 1 KB, naming one of ${PLAY_EVENTS.join(', ')}`);
+  const body = await rpc('count_play_event', { p_event: event });
+  if (body !== 'true') return refuse(502, 'The studio database did not answer');
+  return new Response(null, { status: 204, headers: NO_STORE });
+}
+
 // Netlify calls the default export with (request, context); the tests stub globalThis.fetch.
 export default async function cardFunction(req: Request): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname === UNSUBSCRIBE_PATH) return unsubscribe(req);
+  if (url.pathname === '/api/count') {
+    if (req.method !== 'POST') return refuse(405, 'Only POST is allowed', { Allow: 'POST' });
+    return count(req);
+  }
   if (url.pathname === '/api/thanks') {
     if (req.method !== 'POST') return refuse(405, 'Only POST is allowed', { Allow: 'POST' });
     return thanks(req);
@@ -154,6 +187,6 @@ type FunctionConfig = {
 // and /api/cards too, and readers behind one address (a school, an office) share the limit. The
 // preview shares this rule, so drawing images takes no rule of its own.
 export const config: FunctionConfig = {
-  path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe'],
+  path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe', '/api/count'],
   rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

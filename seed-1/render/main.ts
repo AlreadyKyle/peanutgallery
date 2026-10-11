@@ -6,6 +6,7 @@ import { AccessibleControls } from './controls';
 import { loadGameData } from './load';
 import { loadNextCard, showNextCard } from './next-card';
 import { attachShare } from './share';
+import { countEvent } from './count';
 import { runWhatsNew } from './whats-new';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
@@ -106,3 +107,5 @@ function startWhatsNew(): void {
 start();
 startNextCard();
 startWhatsNew();
+// One Dust load counted, with nothing that names the player (docs/specs/play-counts.md).
+countEvent('dust_load');

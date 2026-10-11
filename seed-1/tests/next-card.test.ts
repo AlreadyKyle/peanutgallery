@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   barFraction,
   CARDS_PATH,
@@ -93,10 +93,28 @@ describe('the line', () => {
   });
 
   it('shows the element for a card and hides it for none', () => {
-    const el = () => ({ textContent: '', style: { width: '' }, hidden: true, href: '', setAttribute() {} });
+    const clicks: (() => void)[] = [];
+    const el = () => ({
+      textContent: '',
+      style: { width: '' },
+      hidden: true,
+      href: '',
+      setAttribute() {},
+      addEventListener: (_: string, fn: () => void) => clicks.push(fn),
+    });
     const elements = { root: el(), link: el(), title: el(), amount: el(), fill: el() } as unknown as NextCardElements;
     showNextCard(elements, card);
     expect(elements.root.hidden).toBe(false);
+    // A click through to the card is counted as dust_next_card (docs/specs/play-counts.md).
+    expect(clicks).toHaveLength(1);
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('navigator', { sendBeacon });
+    try {
+      clicks[0]!();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(sendBeacon).toHaveBeenCalledWith('/api/count', '{"event":"dust_next_card"}');
     expect(elements.link.href).toBe('https://mobmachine.games/card/abc-123');
     expect(elements.fill.style.width).toBe('31%');
     showNextCard(elements, null);

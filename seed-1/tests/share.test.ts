@@ -32,6 +32,24 @@ describe('formatDuration', () => {
 describe('share your run', () => {
   const state = step(createSim(config, 1), config, 600);
 
+  it('counts each press as dust_share on /api/count, with the event name alone (docs/specs/play-counts.md)', () => {
+    const { el, click } = fakeButton();
+    const status = { textContent: '' } as HTMLElement;
+    attachShare(el, status, () => state, config, strings, {});
+    const sendBeacon = vi.fn().mockReturnValue(true);
+    vi.stubGlobal('navigator', { sendBeacon });
+    try {
+      click();
+      click();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(sendBeacon.mock.calls).toEqual([
+      ['/api/count', '{"event":"dust_share"}'],
+      ['/api/count', '{"event":"dust_share"}'],
+    ]);
+  });
+
   it('states the run in numbers from the save only', () => {
     const text = shareText(state, config, strings);
     expect(text).toContain(`${state.unlocked.length} of ${config.unlocks.unlocks.length} unlocks`);

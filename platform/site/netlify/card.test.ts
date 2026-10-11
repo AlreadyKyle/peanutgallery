@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Beside the functions folder, not in it: Netlify deploys every file in netlify/functions as a function.
-import cardFunction, { config, MAX_BODY_BYTES, SESSION_PATTERN } from './functions/card.mts';
+import cardFunction, { config, MAX_BODY_BYTES, PLAY_EVENTS, SESSION_PATTERN } from './functions/card.mts';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/public-env';
 
 const ORIGIN = 'https://site.example';
@@ -184,7 +184,7 @@ describe('methods, paths and the config', () => {
 
   it('names its three paths, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
-      path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe'],
+      path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe', '/api/count'],
       rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');
@@ -233,5 +233,63 @@ describe('GET /api/card/:id/preview.png', () => {
   it('answers 405 for a POST', async () => {
     stubFetch(ok(LIVE_CARD));
     expect((await request(`/api/card/${CARD_ID}/preview.png`, { method: 'POST' })).status).toBe(405);
+  });
+});
+
+describe('POST /api/count (docs/specs/play-counts.md)', () => {
+  const count = (body: string, headers: Record<string, string> = { 'content-type': 'application/json' }) =>
+    request('/api/count', { method: 'POST', body, headers });
+
+  it('takes exactly the four events, the list count_play_event holds', () => {
+    expect(PLAY_EVENTS).toEqual(['dust_load', 'dust_share', 'card_share', 'dust_next_card']);
+    const migration = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261011500000_play_counts.sql'), 'utf8');
+    expect(migration).toContain(`in (${PLAY_EVENTS.map((e) => `'${e}'`).join(', ')})`);
+  });
+
+  it('passes a known event, and nothing else, to count_play_event with the publishable key, and answers 204 no-store', async () => {
+    for (const event of PLAY_EVENTS) {
+      const calls = stubFetch(ok('true'));
+      // A beacon sends text/plain; the body is read as JSON whatever its type says.
+      const response = await count(JSON.stringify({ event }), { 'content-type': 'text/plain;charset=UTF-8', cookie: 'x=1', 'x-forwarded-for': '203.0.113.9' });
+      expect(response.status, event).toBe(204);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Netlify-CDN-Cache-Control')).toBe('no-store');
+      expect(response.headers.get('Set-Cookie')).toBeNull();
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.url).toBe(`${SUPABASE_URL}/rest/v1/rpc/count_play_event`);
+      expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ p_event: event });
+      const headers = calls[0]!.init.headers as Record<string, string>;
+      expect(headers.apikey).toBe(SUPABASE_PUBLISHABLE_KEY);
+      expect(Object.keys(headers).sort()).toEqual(['Accept', 'Content-Type', 'apikey']);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('answers an unknown event, a malformed or oversized body 400 with no Supabase call', async () => {
+    const calls = stubFetch(ok('true'));
+    for (const body of ['', 'dust_load', '[]', 'null', '{}', '{"event":"page_view"}', '{"event":"Dust_load"}', '{"event":1}', JSON.stringify({ event: 'dust_load', pad: 'x'.repeat(MAX_BODY_BYTES) })]) {
+      const response = await count(body);
+      expect(response.status, body.slice(0, 40)).toBe(400);
+      expect(response.headers.get('Cache-Control')).toBe('no-store');
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it('answers 502 when the database does not say true', async () => {
+    for (const respond of [ok('false'), () => Promise.resolve(new Response('{}', { status: 500 })), () => Promise.reject(new Error('down'))]) {
+      stubFetch(respond);
+      expect((await count('{"event":"dust_load"}')).status).toBe(502);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('answers any other method 405', async () => {
+    const calls = stubFetch(ok('true'));
+    for (const method of ['GET', 'PUT', 'DELETE']) {
+      const response = await request('/api/count', { method });
+      expect(response.status, method).toBe(405);
+      expect(response.headers.get('Allow')).toBe('POST');
+    }
+    expect(calls).toHaveLength(0);
   });
 });
