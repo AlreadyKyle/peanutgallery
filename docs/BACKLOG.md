@@ -550,20 +550,11 @@ everything else, in the order the studio would take it.
 - intent: The site has a design system (platform/site/DESIGN.md, tokens.css, the unlisted guide), but the game has only the pillars line in seed-1/CLAUDE.md and the art policy. A kernel-only file beside it, listed in platform/gate/design-paths.txt, would set Dust's palette, shapes, motion, tone of its strings, how units and unlocks are named and what sound it may make, and the Game Director's visual rubric would grade against it. It is not built yet.
 - kernel: yes
 
-### Next card to fund, shown in Dust
-- bucket: game
-- folder: seed-1
-- horizon: later
-- rank: 53
-- summary: Dust shows the next open card that changes Dust, with its bar, and links to fund it.
-- intent: A player in Dust sees nothing about the change their money could buy next, which is the biggest gap between playing and funding (docs/VISION.md). The game page would read the public open cards for seed-1, show the one first in line with its title and bar beside the studio line, and link to its card page; read only, no prompt over the canvas, no chance words, and nothing shown when no card is open. The studio line in seed-1/index.html is protected, so a kernel pull request changes it. It is not built yet.
-- kernel: yes
-
 ### A link preview image for Dust
 - bucket: game
 - folder: seed-1
 - horizon: later
-- rank: 54
+- rank: 53
 - summary: A shared link to Dust shows a picture of Dust instead of the studio's picture.
 - intent: seed-1/index.html points og:image at the site's og.png, so every shared Dust link previews as the studio. A 1200 by 630 image drawn in code from the game's own shapes (docs/PLAN.md §4 Art policy), built with the game and served beside it, with its own alt text, would make shared runs and links read as the game. The page is protected, so a kernel pull request changes it. It is not built yet.
 - kernel: yes
@@ -572,7 +563,7 @@ everything else, in the order the studio would take it.
 - bucket: platform
 - folder: platform
 - horizon: later
-- rank: 55
+- rank: 54
 - summary: The studio counts how many games of Dust start and how many runs and cards are shared, with nothing that identifies a player.
 - intent: Nothing today counts plays, shares or the step from a play to a contribution, so the studio cannot see what turns players into supporters (docs/VISION.md section 1). Aggregate daily counters (Dust loads, Share your run presses, card shares, clicks from Dust to a card) written with no cookie, no identifier and no address, shown on the board's panel and named on the Privacy page. It is not built yet.
 - kernel: yes
