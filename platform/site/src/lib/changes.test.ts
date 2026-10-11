@@ -82,6 +82,12 @@ describe('diffSnapshots', () => {
     expect(announcementText(diff.announce[0]!)).toBe(copy.announceShipped.replace('{title}', 'Card a'));
   });
 
+  it('says a title with $ characters as written', () => {
+    const text = announcementText({ kind: 'shipped', id: 'a', title: "Double $$ for $& the $' dust" });
+    expect(text).toContain("Double $$ for $& the $' dust");
+    expect(text).not.toContain('{title}');
+  });
+
   it('holds cards that arrive or leave, and never plays them', () => {
     const diff = diffSnapshots(snap([card('a')]), snap([card('b')]), visible);
     expect(diff.motions).toEqual([]);

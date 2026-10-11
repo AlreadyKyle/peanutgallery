@@ -72,5 +72,5 @@ export function diffSnapshots(prev: Snapshot | null, next: Snapshot, { hidden }:
 
 /** The announcer's words for a funded or shipped card. */
 export function announcementText(item: Announcement): string {
-  return (item.kind === 'funded' ? copy.announceFunded : copy.announceShipped).replace('{title}', item.title);
+  return (item.kind === 'funded' ? copy.announceFunded : copy.announceShipped).replace('{title}', () => item.title);
 }

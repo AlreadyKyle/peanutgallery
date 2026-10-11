@@ -21,6 +21,13 @@ const FIELDS: Record<'building' | 'unlock', Record<string, string>> = {
   unlock: { atTotalDust: words.atTotalDust, name: words.name, 'effect.value': words.effectValue },
 };
 
+/** Fills {key} slots with the text as written: a function replacer, so `$&` or `$$` in a value stays literal. */
+function fill(template: string, values: Record<string, string>): string {
+  let out = template;
+  for (const [key, value] of Object.entries(values)) out = out.replace(`{${key}}`, () => value);
+  return out;
+}
+
 /** "sharper-tools" reads as "Sharper tools". */
 export function idName(id: string): string {
   const spaced = id.replace(/-/g, ' ');
@@ -32,20 +39,18 @@ export function plainCheck(check: ConfigCheck): string | null {
   const match = ROW_PATH.exec(check.path);
   if (match === null || check.value === null) return null;
   const [, collection, id, field] = match as unknown as [string, string, string, string];
-  const kind = COLLECTIONS[collection];
-  if (kind === undefined) return null;
-  const template = FIELDS[kind][field];
-  if (template === undefined) return null;
-  return template.replace('{name}', idName(id)).replace('{value}', check.value);
+  // Own keys only: a path such as `constructor[id=x].toString` must fall back, not reach the prototype.
+  if (!Object.hasOwn(COLLECTIONS, collection)) return null;
+  const kind = COLLECTIONS[collection]!;
+  if (!Object.hasOwn(FIELDS[kind], field)) return null;
+  const template = FIELDS[kind][field]!;
+  return fill(template, { name: idName(id), value: check.value });
 }
 
 /** The line "What changed" shows for one check: plain words where known, else the raw path. */
 export function changedLine(check: ConfigCheck): { text: string; plain: boolean } {
   const plain = plainCheck(check);
   if (plain !== null) return { text: plain, plain: true };
-  const raw = copy.cardPage.changedValue
-    .replace('{file}', check.file)
-    .replace('{path}', check.path)
-    .replace('{value}', check.value ?? copy.cardPage.changed);
+  const raw = fill(copy.cardPage.changedValue, { file: check.file, path: check.path, value: check.value ?? copy.cardPage.changed });
   return { text: raw, plain: false };
 }

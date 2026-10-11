@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # scripts/verify.sh: `pnpm verify`, the floor before a push (docs/specs/session-speed.md). The checks
 # are independent, so they run at once, each into its own log; the run fails if any check fails and
-# prints that check's log tail. The gate dry-run runs the gated packages' typecheck and tests, so
-# only the packages it does not gate (explainer, gate) run their tests here.
+# prints that check's log tail. The gate dry-runs run the gated packages' typecheck and tests
+# (seed-1, dispatcher, supabase, site, board), so only the explainer is typechecked here and only the
+# packages the gate does not cover (explainer, gate) run their tests here; a repo-wide `pnpm typecheck`
+# would run each gated package's tsc a second time, at the same moment.
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 LOGS=$(mktemp -d "${TMPDIR:-/tmp}/verify.XXXXXX")
 started=$SECONDS
 CHECKS=(
-  "typecheck|pnpm typecheck"
+  "typecheck|pnpm --filter @backseat/explainer typecheck"
   "tests|pnpm --filter @backseat/explainer --filter @backseat/gate test"
   "agents|pnpm test:agents"
   "ops|pnpm test:ops"

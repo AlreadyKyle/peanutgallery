@@ -324,6 +324,13 @@ describe('pure helpers', () => {
     expect(singleLineTitle('x'.repeat(80)).endsWith('…')).toBe(true);
   });
 
+  it('never cuts a title inside a character outside the basic plane', () => {
+    const title = singleLineTitle(`${'a'.repeat(70)}${'😀'.repeat(10)}`);
+    expect(title.length).toBeLessThanOrEqual(72);
+    expect(title).toBe(`${'a'.repeat(70)}…`);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(title)).toBe(false);
+  });
+
   it('writes the commit title, trailers and message in the documented shape', () => {
     expect(commitTitle(input)).toBe('card 4c2f5a1e: spawn table row gatherer: baseCost changes from 10 to 11');
     expect(commitTrailers(input)).toBe(
