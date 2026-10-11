@@ -20,7 +20,7 @@ function fakeButton(): { el: HTMLButtonElement; click: () => void } {
 
 describe('formatDuration', () => {
   it('reads coarse: seconds, minutes, then hours and minutes', () => {
-    expect(formatDuration(45)).toBe('45s');
+    expect(formatDuration(30)).toBe('30s');
     expect(formatDuration(720)).toBe('12m');
     expect(formatDuration(7200)).toBe('2h');
     expect(formatDuration(8040)).toBe('2h 14m');

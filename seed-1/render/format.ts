@@ -39,7 +39,7 @@ export function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 }
 
-/** A span of time away, coarse on purpose: "45s", "12m", "2h 14m". */
+/** A span of time away, coarse on purpose: "12m", "2h 14m". */
 export function formatDuration(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
   if (whole < 60) return `${whole}s`;
