@@ -80,20 +80,11 @@ everything else, in the order the board would take it.
 - intent: Today the number of cards shipped a day is set by fixed counts, not by money. studio_state.draft_runs_per_day caps the Game Designer's drafts at 12 a New York day (docs/PLAN.md §10 decision 69; production read 4 on 10 October 2026, when the 4 runs were used by 21:20 UTC and the supply sat short), one draft runs at a time (checked every minute since decision 71, on a 20-minute pg_cron before it), the dispatcher runs at most 2 cards at once (throttle.ts concurrency, DISPATCHER_MAX_CONCURRENCY 1), and the monthly cap is a flat $500. The scale model (platform/dispatcher/test/scale.test.ts, production's measured costs of about $0.51 a card from draft to live) ships about 9 cards a day at 12 drafts whether players fund $50 or $5,000 a day, and the rest of the money waits; with no draft count and a 5-minute check it ships about 56 cards a day at $50 and stops at the $100 daily cap at about 168. The count guards against drafts failing in a loop, so the work is: replace the daily count with a breaker that stops drafting after a few failed or withdrawn drafts in a row and alerts the board, keeping every money cap; raise the open-card floor with the cards funded in the last day; let the slots and the monthly cap grow with the money players put in over the trailing month, inside the usage tier and the Console credit; and show the studio's capacity on the site as a meter players can push over the line. A board spec, since it changes the money rules and migrations. It is not built yet.
 - board: yes
 
-### Ship notices to supporters
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 7
-- summary: When a card you funded ships, you get a short email saying it is live, what it cost and where to play it.
-- intent: A supporter who leaves /thanks hears nothing more from the studio. One email per payment and shipped card, to the address Stripe already holds for the checkout, sent through the studio's existing Resend sender: the card's title, that it is live, what the agents spent, its /card/:id page and the game's play address, with a one-click unsubscribe. The Privacy page gains the line that says so, and no address is ever shown or stored on a public row. It is the step that closes the fund, watch, ship, share loop (docs/research/comparables.md). It is not built yet.
-- board: yes
-
 ### Run the replay eval and set its first baseline
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 8
+- rank: 7
 - summary: Run the agents' frozen test cases once and record the score, so a later change to a prompt or rubric can be compared with it.
 - intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a board pull request. It is not built yet.
 - board: yes

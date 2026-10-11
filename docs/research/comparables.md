@@ -82,7 +82,7 @@ Four projects the board named as references, what each actually did, what worked
 
 The loop is fund, watch, ship, share. Each ship is the moment a supporter has something true to show, so each step below makes that moment visible and easy to pass on. They are listed in build order, and each step is a backlog entry.
 
-1. **Tell the supporter their card shipped.** Today a supporter who leaves `/thanks` hears nothing more from the studio. A short email to the Stripe checkout address, saying the card is live, what it cost and where to play it, closes the loop. See [Ship notices to supporters](BACKLOG.md#ship-notices-to-supporters).
+1. **Tell the supporter their card shipped.** Built: a supporter who left `/thanks` heard nothing more from the studio, and now a short email to the Stripe checkout address, saying the card is live, what it cost and where to play it, closes the loop. See [Ship notices](../specs/ship-notices.md).
 2. **A Share button and a link preview for each card.** Both are built: the Share button, and a code-drawn preview image of the card face with the title, its Supporter numbers, what it cost and how long the agents took, from public records only. See [Card link preview](../specs/card-preview.md).
 3. **Play the version you funded.** A permalink to the game as the card shipped it, already listed in [More on a card's own page](BACKLOG.md#more-on-a-cards-own-page).
 4. **Studio milestones a supporter can push over the line.** Capacity that money unlocks, shown as a meter (the Star Citizen lesson, without the promises). See [A card supply that keeps pace with funding](BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
