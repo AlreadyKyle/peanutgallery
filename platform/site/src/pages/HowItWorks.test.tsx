@@ -99,7 +99,7 @@ describe('How it works', () => {
     for (const figure of figures()) expect(figure.querySelector('figcaption')?.textContent).toMatch(/^Example/);
     for (const rule of legal.fixedRules) expect(screen.getByText(rule)).toBeTruthy();
     expect(screen.getByText(legal.artPolicy)).toBeTruthy();
-    // Holds and refunds links to the Refunds page.
+    // Refunds and disputes links to the Refunds page.
     expect(screen.getByRole('link', { name: legal.refundsPageLink }).getAttribute('href')).toBe('/refunds');
   });
 
@@ -206,18 +206,21 @@ describe('How it works', () => {
     const who = screen.getByRole('region', { name: legal.whoRuns.heading });
     const text = who.textContent ?? '';
     expect(text).toContain('Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.');
-    expect(text).toMatch(/pause the agents, cancel, veto or move a card, and change the spending caps/);
-    expect(text).toMatch(/The board can file cards, but it does not have to\./);
-    expect(text).toMatch(/When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one.*No one has to ask\./);
-    // PLAN.md §4 The Board's standing duties, one item each.
-    expect(within(who).getAllByRole('listitem')).toHaveLength(6);
-    for (const duty of [/model credit/, /within 14 days/, /bank dispute/, /emergency fund/, /merge/, /price of each new model/]) expect(text).toMatch(duty);
+    expect(text).toMatch(/pause the agents, cancel a card and change the spending caps/);
+    expect(text).toMatch(/The board may file cards too\./);
+    expect(text).toMatch(/When too few cards are open, the Game Designer, an AI agent, drafts one and the Game Director grades it before it opens\./);
+    // PLAN.md §4 The Board's standing duties since decision 74, one item each: no merging or prices.
+    const duties = within(who).getAllByRole('listitem').map((li) => li.textContent ?? '');
+    expect(duties).toHaveLength(5);
+    for (const duty of [/model credit/, /emergency fund/, /within 14 days/, /bank dispute/, /legal standing/]) expect(duties.some((d) => duty.test(d))).toBe(true);
+    expect(duties.join(' ')).not.toMatch(/\bmerg|\bprices?\b/i);
+    expect(text).toMatch(/need no board/);
     expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
     const code = screen.getByRole('region', { name: page.codeHeading });
     expect(within(code).getAllByRole('listitem').map((li) => li.textContent)).toEqual([...page.code]);
     expect(code.textContent).toMatch(/scheduler hands out the cards/);
     expect(code.textContent).toMatch(/runs through the tests and the other automated checks/);
-    expect(code.textContent).toMatch(/goes live only when it passes those checks/);
+    expect(code.textContent).toMatch(/goes live only when it passes/);
     // Inside terms stay off the page (docs/COPY.md): the dispatcher and the gate are named plainly.
     expect(code.textContent).not.toMatch(/dispatcher|the gate/i);
     expect(code.textContent).toMatch(/rolled back/);

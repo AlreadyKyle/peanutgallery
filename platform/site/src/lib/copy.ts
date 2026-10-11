@@ -148,11 +148,10 @@ export const copy = {
     codeIntro: 'Code with no AI in it runs the studio:',
     code: [
       'A scheduler hands out the cards and keeps the agents within their budgets.',
-      'Every change runs through the tests and the other automated checks.',
-      "A card's change goes live only when it passes those checks.",
+      'Every change runs through the tests and the other automated checks, and goes live only when it passes.',
       'If the bot that plays the game finds a problem after a change goes live, the change is rolled back.',
     ],
-    agents: 'The AI agents do the creative work: they design, build and review the cards. When too few cards are open they draft new ones, and another agent grades each draft before it opens.',
+    agents: 'The AI agents do the creative work: they design, build and review the cards.',
   },
   team: {
     title: 'The team',
