@@ -852,6 +852,11 @@ button.link:hover:not(:disabled) {
     grid-row: 4;
     margin-top: 0;
   }
+
+  /* The next card in line (decision 73) spans the same four rows as the faces beside it. */
+  .card-grid > .fund-next {
+    grid-row: span 4;
+  }
 }
 
 .card-bottom > .button {
@@ -1129,6 +1134,7 @@ button.link:hover:not(:disabled) {
 }
 
 .fund-next {
+  align-self: stretch;
   align-content: start;
 }
 
