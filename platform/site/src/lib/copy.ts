@@ -40,6 +40,9 @@ export const copy = {
     building: { one: '1 card', many: '{n} cards', restOne: 'is being built.', restMany: 'are being built.' },
   },
   roadmapLink: 'See the roadmap',
+  // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
+  queued: 'Queued',
+  shipped: 'Shipped',
   playTheGame: 'Play the game',
   filterLabel: 'Show cards for',
   // The two suits, from a card's folder (payment.ts categoryOf); All is the filter for both.
