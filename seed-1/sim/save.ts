@@ -51,9 +51,13 @@ function parseUnlockEvent(raw: unknown): UnlockEvent | null {
 function parseUnlocked(raw: unknown): UnlockEvent[] | null {
   if (!Array.isArray(raw)) return null;
   const events: UnlockEvent[] = [];
+  const seen = new Set<string>();
   for (const entry of raw) {
     const event = parseUnlockEvent(entry);
     if (event === null) return null;
+    // The sim records each unlock once; a save that lists one twice would apply its multiplier twice.
+    if (seen.has(event.id)) continue;
+    seen.add(event.id);
     events.push(event);
   }
   return events;
