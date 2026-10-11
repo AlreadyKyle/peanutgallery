@@ -16,6 +16,8 @@ export const copy = {
   play: 'Play',
   // Home's hero button to the game, in the words of the video's closer (PLAN.md §10 decision 58).
   playFree: 'Play free',
+  // Home's hero button, to the cards to fund on the same page (PLAN.md §10 decision 72).
+  fundACard: 'Fund a card',
   // The top bar's button that opens the page links on a narrow screen.
   menu: 'Menu',
   howItWorksNav: 'How it works',

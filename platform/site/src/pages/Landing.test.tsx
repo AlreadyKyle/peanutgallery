@@ -298,7 +298,8 @@ describe('Landing', () => {
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual([copy.pitchTitle]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();
     expect(screen.getByRole('link', { name: copy.playFree }).getAttribute('href')).toBe('https://play.example');
-    expect(screen.getByRole('link', { name: copy.howItWorks }).getAttribute('href')).toBe('/how-it-works');
+    // The hero's button goes to the cards to fund; How it works is in the top bar (decision 72).
+    expect(screen.getByRole('link', { name: copy.fundACard }).getAttribute('href')).toBe('#fund');
 
     await screen.findByRole('region', { name: copy.team.title });
     await lanesDrawn();

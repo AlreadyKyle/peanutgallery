@@ -78,6 +78,7 @@ describe('copy rules', () => {
       copy.pitchTitle,
       copy.pitchBody,
       copy.playFree,
+      copy.fundACard,
       copy.howItWorks,
       ...Object.values(copy.status.open),
       copy.status.openNone,
