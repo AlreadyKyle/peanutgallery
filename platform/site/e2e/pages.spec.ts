@@ -125,7 +125,7 @@ for (const viewport of WIDTHS) {
       await expect(running.getByText('claude-opus-5-5', { exact: false })).toHaveCount(MODEL_ROLES.length);
       await expect(running.locator('#agent-r-janitor')).toHaveAttribute('data-kind', 'code');
       await expect(running.locator('#agent-r-janitor .agent-kind')).toHaveText('Code only');
-      await expect(running.locator('#agent-r-janitor .card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
+      await expect(running.locator('#agent-r-janitor .card-meta')).toHaveText('Calls no model. Runs every day on its own.');
       await expect(running.locator('#agent-r-builder-a .card-meta')).toHaveText(
         'claude-opus-5-5 · Spent from contributions $0.00, $0.00 in the last 7 days · Worked on 0 shipped cards',
       );

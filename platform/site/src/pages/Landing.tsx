@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
-import { MachineFlow } from '../components/Flow';
+import { FundNow, MachineFlow } from '../components/Flow';
 import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { Announcer } from '../components/Announcer';
@@ -100,15 +100,15 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
   );
 }
 
-/** How the cards move: the four lanes, or the loading or unavailable line while there is no snapshot. */
-function FlowSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
+/** The cards open for funding, first and biggest: or the loading or unavailable line while there is no snapshot. */
+function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const view = live.view;
   return (
-    <section className="section flow" aria-labelledby="flow">
-      <h2 id="flow">{copy.flow.title}</h2>
-      <p>{copy.flow.intro}</p>
+    <section className="section" aria-labelledby="fund">
+      <h2 id="fund">{copy.flow.fundTitle}</h2>
+      <p>{copy.flow.fundIntro}</p>
       {view !== null ? (
-        <MachineFlow snapshot={view.snapshot} groups={view.groups} changed={live.changed} />
+        <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} />
       ) : studio.state === 'loading' ? (
         <p className="muted" aria-busy="true">
           {copy.loadingCards}
@@ -116,6 +116,17 @@ function FlowSection({ studio, live }: { studio: StudioState; live: ReturnType<t
       ) : (
         <p className="muted">{unavailableLine(studio)}</p>
       )}
+    </section>
+  );
+}
+
+/** How the cards move: the three lanes around funding, from the snapshot. */
+function FlowSection({ view }: { view: HomeView }) {
+  return (
+    <section className="section flow" aria-labelledby="flow">
+      <h2 id="flow">{copy.flow.title}</h2>
+      <p>{copy.flow.intro}</p>
+      <MachineFlow snapshot={view.snapshot} groups={view.groups} />
     </section>
   );
 }
@@ -183,7 +194,8 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
-        <FlowSection studio={studio} live={live} />
+        <FundSection studio={studio} live={live} />
+        {view === null ? null : <FlowSection view={view} />}
       </div>
       {view === null ? null : <TeamSection view={view} />}
       <div className="band">

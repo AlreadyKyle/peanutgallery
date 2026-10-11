@@ -12,9 +12,11 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: How the cards move, the team (only when
-// there is one) and Where the money goes. Home's flow (docs/specs/home-flow.md): Next up, Fund now,
-// Building and Shipped in order, each with at most three cards or its tile, never blank. The status
+// Policy report. The landing's h2 order, read from the page: Pick a card to fund, How the cards move,
+// the team (only when there is one) and Where the money goes. Home's cards to fund
+// (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
+// line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
+// tile, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
 // each running or paused row and no model on the rest; /roadmap shows no bar and no fund link. The
@@ -106,12 +108,13 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['How the cards move', 'The team', 'Where the money goes'];
+const H2_ORDER = ['Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['The team']);
-// Home's flow (docs/specs/home-flow.md): four lanes in this order, each with at most three cards or
-// its tile saying what happens next, never blank.
-const FLOW_LANES = ['Next up', 'Fund now', 'Building', 'Shipped'];
+// Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
+// its tile saying what happens next, never blank. The cards to fund sit above them, at most three.
+const FLOW_LANES = ['Next up', 'Building', 'Shipped'];
 const FLOW_LANE_CARDS = 3;
+const HOME_FUND_CARDS = 3;
 // The grounds, as computed colours: band 1 and the top bar signal, band 2 paper, then ink and paper.
 const SIGNAL = 'rgb(17, 17, 17)'; // --signal: ink since the board's call of 23 Sep 2026
 const PAPER = 'rgb(255, 255, 255)';
@@ -374,9 +377,11 @@ try {
   const pool = main.locator('.pool-line .figure');
   const hasData = (await pool.count()) > 0;
 
-  // Home's Fund now lane, in order: /contribute's first card choices must be the same cards in the
-  // same order, the waterfall's (docs/specs/money-surfaces.md); the lane shows at most three.
-  const homeFund = (await main.locator('ul.fund-grid h4').allTextContents()).map((title) => title.trim());
+  // Home's cards to fund, in order: /contribute's first card choices must be the same cards in the
+  // same order, the waterfall's (docs/specs/money-surfaces.md); home shows at most three, as full
+  // faces with h3 titles.
+  const homeFund = (await main.locator('ul.fund-grid h3').allTextContents()).map((title) => title.trim());
+  const homeFundPanel = await main.locator('.fund-empty').count();
   const h2 = await main.getByRole('heading', { level: 2 }).allTextContents();
   const expected = H2_ORDER.filter((name) => !OPTIONAL_H2.has(name) || h2.includes(name));
   if (!hasData) noData(`landing h2 order ${JSON.stringify(h2)}`);
@@ -405,7 +410,13 @@ try {
     const available = (await pool.textContent()) ?? '';
     check(/^\$[\d,]+\.\d\d$/.test(available) && (await money.locator('.pool-line svg.coin').count()) === 1, `pool figure with the coin shows ${available}`);
 
-    // The flow is never blank: four lanes in order, each with its cards or its tile.
+    // The cards to fund are never blank either: full faces, at most three, or the panel.
+    check(
+      (homeFund.length > 0 && homeFund.length <= HOME_FUND_CARDS && homeFundPanel === 0) || (homeFund.length === 0 && homeFundPanel === 1),
+      `home's cards to fund: ${homeFund.length > 0 ? `${homeFund.length} full faces` : homeFundPanel > 0 ? 'the fund-the-next-card panel' : 'BLANK'}`,
+    );
+
+    // The flow is never blank: three lanes in order, each with its cards or its tile.
     const lanes = main.locator('ol.flow-lanes > li.flow-lane');
     const laneNames = (await lanes.locator('h3.flow-title').allTextContents()).map((title) => title.replace(/\s+\d[\d,]* cards?$/, '').trim());
     check(JSON.stringify(laneNames) === JSON.stringify(FLOW_LANES), `home flow lanes ${JSON.stringify(laneNames)}`);
@@ -486,8 +497,8 @@ try {
         check(body === WAITS_LINE && titles.length === 0, `Fund the next card in line says the money waits: "${body}" with ${titles.length} card choices`);
       }
       check(
-        JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, FLOW_LANE_CARDS).map((title) => title.trim())),
-        `home's Fund now lane shows /contribute's first ${Math.min(titles.length, FLOW_LANE_CARDS)} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, FLOW_LANE_CARDS).map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
+        JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, HOME_FUND_CARDS).map((title) => title.trim())),
+        `home's cards to fund show /contribute's first ${Math.min(titles.length, HOME_FUND_CARDS)} card choices in the same order${JSON.stringify(homeFund) === JSON.stringify(titles.slice(0, HOME_FUND_CARDS).map((title) => title.trim())) ? '' : `: home ${JSON.stringify(homeFund)}`}`,
       );
     }
     try {

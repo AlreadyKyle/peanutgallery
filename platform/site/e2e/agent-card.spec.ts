@@ -1,7 +1,7 @@
-// A card the Game Designer drafted (docs/specs/agent-workflows.md): its face in home's Fund now lane
-// and its row on /roadmap carry "Written by the Game Designer, an AI agent", and no card the board
-// filed does; the byline ends above the funding bar. The full faces' rhythm on a card grid is
-// measured on the design guide, the grid home no longer draws (docs/specs/home-flow.md). Set
+// A card the Game Designer drafted (docs/specs/agent-workflows.md): its full face among home's cards
+// to fund, its compact face in Next up and its row on /roadmap carry "Written by the Game Designer, an
+// AI agent", and no card the board filed does; the byline ends above the funding bar. The full faces'
+// rhythm on a card grid is measured on the design guide (docs/specs/home-flow.md). Set
 // E2E_SCREENSHOTS to a folder to save each page at each width.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,7 +29,7 @@ const drafted = (fields: Record<string, unknown>): Record<string, unknown> => ({
   rank: null,
   ...fields,
 });
-// Dealt to now and open for funding, first in line.
+// Opened for funding, first in line.
 const DEALT = drafted({ id: '00000000-0000-4000-8000-0000000000a1', title: 'Gatherers cost 11', summary: 'The gatherer costs one more to build.', horizon: 'now' });
 // Approved and waiting out the cooling window on next.
 const WAITING = drafted({ id: '00000000-0000-4000-8000-0000000000a2', title: 'Sweepers cost 12', summary: 'The sweeper costs one more to build.', horizon: 'next', rank: 4, opens_at: '2026-09-23T00:00:00Z' });
@@ -50,8 +50,12 @@ for (const viewport of WIDTHS) {
 
     test('the drafted cards say the Game Designer wrote them, and no other card says so', async ({ page }) => {
       await page.goto('/');
-      // The dealt card in Fund now, and the approved one waiting to open first in Next up.
+      // The dealt card among the cards to fund, a full face with its h3 title and summary, and the
+      // approved one waiting to open first in Next up.
       const face = page.locator(`.fund-grid li.card[data-card="${DEALT.id}"]`);
+      await expect(face.locator('h3')).toHaveText(String(DEALT.title));
+      await expect(face.locator('.card-summary')).toHaveText(String(DEALT.summary));
+      await expect(face).not.toHaveAttribute('data-compact', 'true');
       await expect(face.locator('.card-byline')).toHaveText(BYLINE);
       const waiting = page.locator(`li.flow-lane[data-lane="next"] li.card[data-card="${WAITING.id}"]`);
       await expect(waiting.locator('.card-byline')).toHaveText(BYLINE);
@@ -73,16 +77,17 @@ for (const viewport of WIDTHS) {
   });
 }
 
-// On the compact face in home's flow the byline sits under the title and ends above the bottom block,
-// so it never lands on the funding bar.
+// On the full face among home's cards to fund the byline sits under the title and summary and ends
+// above the bottom block, so it never lands on the funding bar.
 for (const viewport of [{ width: 375, height: 812 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }]) {
   test(`at ${viewport.width}px the byline ends above the bottom block`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/');
-    const face = page.locator(`li.card[data-card="${DEALT.id}"]`);
+    const face = page.locator(`.fund-grid li.card[data-card="${DEALT.id}"]`);
     await expect(face.locator('.card-byline')).toHaveText(BYLINE);
-    const [title, byline, bottom] = await Promise.all(['h4', '.card-byline', '.card-bottom'].map((part) => face.locator(part).boundingBox()));
+    const [title, summary, byline, bottom] = await Promise.all(['h3', '.card-summary', '.card-byline', '.card-bottom'].map((part) => face.locator(part).boundingBox()));
     expect(byline!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
+    expect(byline!.y).toBeGreaterThanOrEqual(summary!.y + summary!.height - 1);
     expect(byline!.y + byline!.height).toBeLessThanOrEqual(bottom!.y);
     await screenshot(page, 'home-agent-card-row', viewport.width);
   });

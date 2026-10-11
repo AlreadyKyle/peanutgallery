@@ -344,8 +344,9 @@ describe("nextUp (home's Next up lane)", () => {
 });
 
 describe('flowLanes', () => {
-  it('has four lanes in the order a card moves, and shows at most three cards a lane', () => {
-    expect(FLOW_LANES).toEqual(['next', 'fund', 'building', 'shipped']);
+  it('has three lanes in the order a card moves, and shows at most three cards a lane', () => {
+    // The cards open for funding sit above the lanes on home (Flow.tsx FundNow), never in one.
+    expect(FLOW_LANES).toEqual(['next', 'building', 'shipped']);
     expect(FLOW_LANE_CARDS).toBe(3);
   });
 
@@ -362,15 +363,15 @@ describe('flowLanes', () => {
     const lanes = flowLanes(groups);
     expect(Object.keys(lanes)).toEqual([...FLOW_LANES]);
     expect(lanes.building.map((c) => c.id)).toEqual(['b', 'g', 'q-old']);
-    expect(lanes.fund).toBe(groups.fund);
     expect(lanes.next).toBe(groups.next);
     expect(lanes.shipped).toBe(groups.shipped);
-    expect(lanes.fund.map((c) => c.id)).toEqual(['open']);
+    expect(groups.fund.map((c) => c.id)).toEqual(['open']);
+    expect(Object.values(lanes).flat().map((c) => c.id)).not.toContain('open');
     expect(lanes.next.map((c) => c.id)).toEqual(['plan']);
     expect(lanes.shipped.map((c) => c.id)).toEqual(['live']);
   });
 
-  it('gives four empty lanes for no cards', () => {
-    expect(flowLanes(groupCards([]))).toEqual({ next: [], fund: [], building: [], shipped: [] });
+  it('gives three empty lanes for no cards', () => {
+    expect(flowLanes(groupCards([]))).toEqual({ next: [], building: [], shipped: [] });
   });
 });

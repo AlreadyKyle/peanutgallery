@@ -215,9 +215,11 @@ describe('How it works', () => {
     expect(within(who).getByRole('link', { name: legal.contactEmail }).getAttribute('href')).toBe(`mailto:${legal.contactEmail}`);
     const code = screen.getByRole('region', { name: page.codeHeading });
     expect(within(code).getAllByRole('listitem').map((li) => li.textContent)).toEqual([...page.code]);
-    expect(code.textContent).toMatch(/dispatcher schedules the cards/);
-    expect(code.textContent).toMatch(/gate runs the tests/);
-    expect(code.textContent).toMatch(/goes live only when the gate passes it/);
+    expect(code.textContent).toMatch(/scheduler hands out the cards/);
+    expect(code.textContent).toMatch(/runs through the tests and the other automated checks/);
+    expect(code.textContent).toMatch(/goes live only when it passes those checks/);
+    // Inside terms stay off the page (docs/COPY.md): the dispatcher and the gate are named plainly.
+    expect(code.textContent).not.toMatch(/dispatcher|the gate/i);
     expect(code.textContent).toMatch(/rolled back/);
     expect(code.textContent).toMatch(/design, build and review the cards/);
     // No public list of the board's actions exists, so nothing says they are published.

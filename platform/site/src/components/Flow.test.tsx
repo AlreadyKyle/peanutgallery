@@ -9,11 +9,11 @@ import { legal } from '../lib/legal';
 import { canFund } from '../lib/payment';
 import type { Card, Snapshot, Supply } from '../lib/source';
 import { plannedLine } from './Card';
-import { draftingLine, MachineFlow } from './Flow';
+import { draftingLine, FundNow, HOME_FUND_CARDS, MachineFlow } from './Flow';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
-type Lane = 'next' | 'fund' | 'building' | 'shipped';
+type Lane = 'next' | 'building' | 'shipped';
 
 function card(overrides: Partial<Card> = {}): Card {
   return {
@@ -100,98 +100,49 @@ afterEach(() => {
 });
 
 describe('MachineFlow', () => {
-  it('draws four lanes in the order a card moves, each headed by its name and count and saying who acts in it', () => {
+  it('draws three lanes in the order a card moves, each headed by its name and count and saying who acts in it', () => {
     renderFlow(snapshot([...planned(1), ...open(2), card({ id: 'b', title: 'Building', stage: 'building' })]));
     // The lanes set their own heights, so the layout audit leaves the list's balance alone.
     expect(document.querySelector('ol.flow-lanes')?.getAttribute('data-balance')).toBe('ignore');
     const lanes = [...document.querySelectorAll('ol.flow-lanes > li.flow-lane')];
-    expect(lanes.map((li) => li.getAttribute('data-lane'))).toEqual(['next', 'fund', 'building', 'shipped']);
+    expect(lanes.map((li) => li.getAttribute('data-lane'))).toEqual(['next', 'building', 'shipped']);
     expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
       `${copy.flow.lanes.next.title} ${copy.flow.countOne}`,
-      `${copy.flow.lanes.fund.title} ${copy.flow.count.replace('{n}', '2')}`,
       `${copy.flow.lanes.building.title} ${copy.flow.countOne}`,
       `${copy.flow.lanes.shipped.title} ${copy.flow.count.replace('{n}', '0')}`,
     ]);
     // Each lane is named by its heading.
     for (const li of lanes) expect(li.getAttribute('aria-labelledby')).toBe(li.querySelector('h3.flow-title')?.id);
-    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['1', '2', '3', '4']);
-    expect(lane('fund').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.fund.who);
+    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['1', '2', '3']);
     expect(lane('building').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.building.who);
     expect(lane('shipped').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.shipped.who);
-    // Every card is a compact face with an h4 title and no summary.
+    // Every card in a lane is a compact face with an h4 title and no summary; the open cards are
+    // FundNow's, above the lanes, and never in them.
     const faces = [...document.querySelectorAll('li.card')];
-    expect(faces).toHaveLength(4);
+    expect(faces).toHaveLength(2);
     for (const face of faces) expect(face.getAttribute('data-compact')).toBe('true');
     expect(document.querySelector('p.card-summary')).toBeNull();
+    expect(screen.queryByText('Open 1')).toBeNull();
+    expect(document.querySelector('ul.fund-grid')).toBeNull();
   });
 
   it('shows at most three cards a lane, with the count in the heading still the whole lane', () => {
     renderFlow(snapshot([...planned(5), ...open(5), ...live(5), ...Array.from({ length: 4 }, (_, i) => card({ id: `b${i}`, title: `Building ${i + 1}`, stage: 'building' }))]));
     expect(titles('next')).toEqual(['Planned 1', 'Planned 2', 'Planned 3']);
-    expect(titles('fund')).toEqual(['Open 1', 'Open 2', 'Open 3']);
     expect(titles('building')).toEqual(['Building 1', 'Building 2', 'Building 3']);
     expect(titles('shipped')).toEqual(['Live 5', 'Live 4', 'Live 3']);
-    for (const name of ['next', 'fund', 'shipped'] as const) {
+    for (const name of ['next', 'shipped'] as const) {
       expect(lane(name).querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '5'));
     }
     expect(lane('building').querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '4'));
   });
 
-  it('links Next up and Shipped to the roadmap, Fund now to /contribute only past three cards, and Building nowhere', () => {
+  it('links Next up to the roadmap, Shipped to the reports, and Building nowhere', () => {
     renderFlow(snapshot([...planned(1), ...open(4), ...live(1)]));
     expect([more('next')?.textContent, more('next')?.getAttribute('href')]).toEqual([copy.flow.lanes.next.more, '/roadmap']);
     expect([more('shipped')?.textContent, more('shipped')?.getAttribute('href')]).toEqual([copy.flow.lanes.shipped.more, '/reports']);
-    expect([more('fund')?.textContent, more('fund')?.getAttribute('href')]).toEqual([copy.flow.lanes.fund.more.replace('{n}', '4'), '/contribute']);
     expect(more('building')).toBeNull();
-    cleanup();
-    renderFlow(snapshot(open(3)));
-    expect(more('fund')).toBeNull();
-    expect(titles('fund')).toHaveLength(3);
-  });
-
-  describe('Fund now', () => {
-    it("draws the waterfall's order as a fund grid with each card's Fund this card and one agreement under it", () => {
-      vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
-      const cards = open(3);
-      // The order puts the third card first.
-      renderFlow(snapshot(cards, { money: books(['o2', 'o0', 'o1']) }));
-      const grid = lane('fund').querySelector('ul.fund-grid')!;
-      expect(grid).not.toBeNull();
-      expect(grid.classList.contains('flow-cards')).toBe(true);
-      expect(titles('fund')).toEqual(['Open 3', 'Open 1', 'Open 2']);
-      expect(within(lane('fund')).getAllByRole('link', { name: legal.fundThis }).map((a) => a.getAttribute('href'))).toEqual([
-        `${STRIPE}?client_reference_id=o2`,
-        `${STRIPE}?client_reference_id=o0`,
-        `${STRIPE}?client_reference_id=o1`,
-      ]);
-      expect(lane('fund').querySelectorAll('p.fund-agreement')).toHaveLength(1);
-      expect(grid.contains(lane('fund').querySelector('p.fund-agreement'))).toBe(false);
-      // Only the Fund now lane is a fund grid.
-      expect(document.querySelectorAll('ul.fund-grid')).toHaveLength(1);
-    });
-
-    it('says no agreement when no card carries a live link', () => {
-      renderFlow(snapshot(open(2)));
-      expect(lane('fund').querySelector('p.fund-agreement')).toBeNull();
-      expect(within(lane('fund')).queryByRole('link', { name: legal.fundThis })).toBeNull();
-    });
-
-    it('stands in a tile for an empty lane: fund the next card in line, with Contribute only while the Payment Link is set', () => {
-      vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
-      renderFlow(snapshot([card({ id: 'b', stage: 'building' })]));
-      const tile = lane('fund').querySelector('.flow-empty')!;
-      expect(tile.querySelector('.flow-empty-title')?.textContent).toBe(legal.pickForMe);
-      expect(within(tile as HTMLElement).getByText(legal.nextInLineNone)).toBeTruthy();
-      expect(within(tile as HTMLElement).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
-      expect(lane('fund').querySelector('ul')).toBeNull();
-      expect(lane('fund').querySelector('p.fund-agreement')).toBeNull();
-      expect(more('fund')).toBeNull();
-      cleanup();
-      vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
-      renderFlow(snapshot([]));
-      expect(lane('fund').querySelector('.flow-empty-title')?.textContent).toBe(legal.pickForMe);
-      expect(within(lane('fund')).queryByRole('link')).toBeNull();
-    });
+    expect(document.querySelector('a[href="/contribute"]')).toBeNull();
   });
 
   describe('Building', () => {
@@ -207,8 +158,6 @@ describe('MachineFlow', () => {
       expect([...lane('building').querySelectorAll('li.card')].map((li) => li.getAttribute('data-face'))).toEqual(['checks', 'building', 'funded']);
       expect(lane('building').querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '3'));
       expect(lane('building').querySelector('.flow-empty')).toBeNull();
-      // A funded card is not open for funding.
-      expect(titles('fund')).toEqual([]);
     });
 
     it('stands in a tile for an empty lane, naming the newest shipped card and the day it went live', () => {
@@ -247,8 +196,8 @@ describe('MachineFlow', () => {
       expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
       expect(lane('next').querySelector('.spec-rows')).toBeNull();
       expect(screen.queryByText('Held')).toBeNull();
-      // The now card is in Fund now, never Next up.
-      expect(titles('fund')).toEqual(['Open now']);
+      // The now card is open for funding, so it is FundNow's, never Next up's.
+      expect(screen.queryByText('Open now')).toBeNull();
     });
 
     it('stands in a tile for an empty lane and keeps the roadmap link', () => {
@@ -308,12 +257,91 @@ describe('MachineFlow', () => {
 
   it('never leaves a lane blank: with no cards every lane holds its tile', () => {
     renderFlow(snapshot([]));
-    for (const name of ['next', 'fund', 'building', 'shipped'] as const) {
+    for (const name of ['next', 'building', 'shipped'] as const) {
       const tile = lane(name).querySelector('.flow-empty');
       expect(tile, name).not.toBeNull();
       expect(tile!.textContent!.trim(), name).not.toBe('');
       expect(lane(name).querySelector('li.card'), name).toBeNull();
     }
+  });
+});
+
+describe('FundNow', () => {
+  function renderFund(snap: Snapshot) {
+    return render(
+      <MemoryRouter>
+        <FundNow cards={groupCards(snap.cards, fundingPlace(snap)).fund} snapshot={snap} />
+      </MemoryRouter>,
+    );
+  }
+
+  function fundTitles(): string[] {
+    return [...document.querySelectorAll('ul.fund-grid > li.card h3')].map((h) => h.textContent ?? '');
+  }
+
+  it("draws the waterfall's order as full faces in the fund grid, each with its Fund this card, and one agreement under it", () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    // The order puts the third card first.
+    renderFund(snapshot(open(3), { money: books(['o2', 'o0', 'o1']) }));
+    const grid = document.querySelector('ul.fund-grid')!;
+    expect(grid.classList.contains('card-grid')).toBe(true);
+    expect(grid.classList.contains('flow-cards')).toBe(false);
+    expect(fundTitles()).toEqual(['Open 3', 'Open 1', 'Open 2']);
+    // Full faces: an h3 title and the summary, never the compact face.
+    const faces = [...grid.querySelectorAll('li.card')];
+    for (const face of faces) {
+      expect(face.getAttribute('data-compact')).toBeNull();
+      expect(face.querySelector('p.card-summary')?.textContent).toBe('A summary the compact face leaves out.');
+    }
+    expect(screen.queryAllByRole('heading', { level: 4 })).toEqual([]);
+    expect(screen.getAllByRole('link', { name: legal.fundThis }).map((a) => a.getAttribute('href'))).toEqual([
+      `${STRIPE}?client_reference_id=o2`,
+      `${STRIPE}?client_reference_id=o0`,
+      `${STRIPE}?client_reference_id=o1`,
+    ]);
+    expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
+    expect(grid.contains(document.querySelector('p.fund-agreement'))).toBe(false);
+    expect(document.querySelector('a[href="/contribute"]')).toBeNull();
+  });
+
+  it('says no agreement when no card carries a live link', () => {
+    renderFund(snapshot(open(2)));
+    expect(fundTitles()).toEqual(['Open 1', 'Open 2']);
+    expect(document.querySelector('p.fund-agreement')).toBeNull();
+    expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
+  });
+
+  it(`shows ${HOME_FUND_CARDS} cards and links the rest to /contribute only past ${HOME_FUND_CARDS}`, () => {
+    renderFund(snapshot(open(5)));
+    expect(fundTitles()).toEqual(['Open 1', 'Open 2', 'Open 3']);
+    const link = document.querySelector('p.more a')!;
+    expect([link.textContent, link.getAttribute('href')]).toEqual([copy.flow.fundMore.replace('{n}', '5'), '/contribute']);
+    cleanup();
+    renderFund(snapshot(open(3)));
+    expect(fundTitles()).toHaveLength(3);
+    expect(document.querySelector('p.more a')).toBeNull();
+  });
+
+  it('stands in a panel with no card open: fund the next card in line, the drafting line, and Contribute only while the Payment Link is set', () => {
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
+    renderFund(snapshot([card({ id: 'b', stage: 'building' })], { supply: supply({ drafting: true }) }));
+    const panel = document.querySelector('.fund-empty') as HTMLElement;
+    expect(panel.querySelector('.fund-empty-title')?.textContent).toBe(legal.pickForMe);
+    expect(within(panel).getByText(legal.fundEmptyBody)).toBeTruthy();
+    // The status line above already says no card is open, so the panel does not repeat it.
+    expect(panel.textContent).not.toContain(copy.status.openNone);
+    const agent = panel.querySelector('p.fund-empty-agent')!;
+    expect(agent.textContent).toBe(copy.flow.drafting);
+    expect(agent.querySelector('svg[data-glyph="pencil"]')).not.toBeNull();
+    expect(within(panel).getByRole('link', { name: copy.contribute }).getAttribute('href')).toBe('/contribute');
+    expect(document.querySelector('ul')).toBeNull();
+    expect(document.querySelector('p.fund-agreement')).toBeNull();
+    cleanup();
+    vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', '');
+    renderFund(snapshot([]));
+    expect(document.querySelector('.fund-empty-title')?.textContent).toBe(legal.pickForMe);
+    expect(document.querySelector('p.fund-empty-agent')?.textContent).toBe(copy.flow.draftingIdle);
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });
 

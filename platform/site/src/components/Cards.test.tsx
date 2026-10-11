@@ -9,7 +9,7 @@ import { canFund } from '../lib/payment';
 import { fundingPlace, groupCards } from '../lib/cards';
 import type { Card, Snapshot } from '../lib/source';
 import { CardFace, PlannedRow, plannedState, ShippedRow } from './Cards';
-import { MachineFlow } from './Flow';
+import { FundNow, MachineFlow } from './Flow';
 
 const STRIPE = 'https://buy.stripe.com/test-link';
 
@@ -78,17 +78,20 @@ function faces(cards: Card[], snap: Snapshot) {
   );
 }
 
-/** Home's flow, from a snapshot grouped the way lib/live.ts groups it. */
+/** Home's card band, from a snapshot grouped the way lib/live.ts groups it: the cards to fund, then the lanes. */
 function flow(snap: Snapshot) {
+  const groups = groupCards(snap.cards, fundingPlace(snap));
   return render(
     <MemoryRouter>
-      <MachineFlow snapshot={snap} groups={groupCards(snap.cards, fundingPlace(snap))} />
+      <FundNow cards={groups.fund} snapshot={snap} />
+      <MachineFlow snapshot={snap} groups={groups} />
     </MemoryRouter>,
   );
 }
 
-function lane(name: 'next' | 'fund' | 'building' | 'shipped'): HTMLElement {
-  return document.querySelector(`li.flow-lane[data-lane="${name}"]`) as HTMLElement;
+/** Home's cards to fund: the fund grid above the lanes. */
+function fundGrid(): HTMLElement {
+  return document.querySelector('ul.fund-grid') as HTMLElement;
 }
 
 /** A spec row's label and value, or null when the row is not drawn. */
@@ -153,25 +156,27 @@ describe('a card box', () => {
     expect(box.querySelector('p.fund-agreement')).toBeNull();
   });
 
-  it("keeps the money on home's compact face: an h4 title and no summary, the same bar, spec rows and fund button, and one agreement under the lane", () => {
+  it("draws home's cards to fund as full faces: an h3 title and the summary, the bar, spec rows and fund button, and one agreement under the grid", () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const picked = card({ id: 'n1', title: 'A fourteenth unlock', summary: 'Add one more unlock.', stage: 'voted', funding_target_usd: 100, funded_usd: 25 });
     const other = card({ id: 'n2', title: 'Another unlock', funding_target_usd: 10 });
     flow(snapshot([picked, other], { n1: { contributors: 3, credited_usd: 18.5 } }));
-    const box = boxFor('A fourteenth unlock', 4);
-    expect(box.getAttribute('data-compact')).toBe('true');
+    const box = boxFor('A fourteenth unlock');
+    expect(fundGrid().contains(box)).toBe(true);
+    expect(box.hasAttribute('data-compact')).toBe(false);
     expect(box.getAttribute('data-face')).toBe('picked');
-    expect(box.querySelector('p.card-summary')).toBeNull();
+    expect(box.querySelector('p.card-summary')?.textContent).toBe('Add one more unlock.');
     expect(within(box).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
     expect(specRow(box, 'funded')).toEqual([legal.fundedLabel, '$25.00 of $100.00']);
     expect(specRow(box, 'contributors')).toEqual([legal.contributorsLabel, '3']);
     const link = within(box).getByRole('link', { name: legal.fundThis });
     expect(link.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=n1`);
-    expect(link.getAttribute('aria-describedby')).toBe(within(box).getByRole('heading', { level: 4 }).id);
+    expect(link.getAttribute('aria-describedby')).toBe(within(box).getByRole('heading', { level: 3 }).id);
     const agreement = document.querySelectorAll('p.fund-agreement');
     expect(agreement).toHaveLength(1);
-    expect(lane('fund').contains(agreement[0]!)).toBe(true);
-    for (const face of lane('fund').querySelectorAll('li.card')) expect(face.contains(agreement[0]!)).toBe(false);
+    expect(fundGrid().contains(agreement[0]!)).toBe(false);
+    // The agreement sits under the cards to fund, before the lanes.
+    expect(agreement[0]!.compareDocumentPosition(document.querySelector('ol.flow-lanes')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('shows an open card with its state word and a single contributor', () => {
@@ -199,14 +204,14 @@ describe('a card box', () => {
     expect(specRow(box, 'contributors')).toBeNull();
   });
 
-  it("draws in the Fund now lane only the cards in the waterfall's order, each with its live Fund this card, and every open card with none when public_money did not load", () => {
+  it("draws among home's cards to fund only the cards in the waterfall's order, each with its live Fund this card, and every open card with none when public_money did not load", () => {
     vi.stubEnv('VITE_STRIPE_PAYMENT_LINK_URL', STRIPE);
     const cards = [
       card({ id: 'in', title: 'In the order', funding_target_usd: 10, funded_usd: 1 }),
       card({ id: 'out', title: 'Vetoed, so not in the order', funding_target_usd: 10, funded_usd: 1 }),
     ];
     flow(snapshot(cards, {}, ['in']));
-    expect(within(boxFor('In the order', 4)).getByRole('link', { name: legal.fundThis }).getAttribute('href')).toBe(`${STRIPE}?client_reference_id=in`);
+    expect(within(boxFor('In the order')).getByRole('link', { name: legal.fundThis }).getAttribute('href')).toBe(`${STRIPE}?client_reference_id=in`);
     // A card the order leaves out is not open for funding: it is not drawn among cards that carry
     // Fund this card, where its missing button would misalign the row's bars.
     expect(screen.queryByRole('heading', { name: 'Vetoed, so not in the order' })).toBeNull();
@@ -216,7 +221,7 @@ describe('a card box', () => {
     expect(within(boxFor('Vetoed, so not in the order')).queryByRole('link', { name: legal.fundThis })).toBeNull();
     cleanup();
     flow({ ...snapshot(cards, {}, ['in', 'out']), money: null, missing: ['money'] });
-    expect(within(lane('fund')).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['In the order', 'Vetoed, so not in the order']);
+    expect(within(fundGrid()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['In the order', 'Vetoed, so not in the order']);
     expect(screen.queryByRole('link', { name: legal.fundThis })).toBeNull();
     // No card carries a live link, so no agreement is said.
     expect(document.querySelector('p.fund-agreement')).toBeNull();

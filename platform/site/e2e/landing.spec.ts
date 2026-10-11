@@ -20,18 +20,19 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['How the cards move', 'The team', 'Where the money goes']);
-      // The flow (docs/specs/home-flow.md): four lanes in order. Fund now lists horizon now cards
-      // only, picked first, with fund links; Building holds the funded card; no filter chips.
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
+      // as full faces with fund links. Then three lanes in order; Building holds the funded card; no
+      // filter chips.
+      const fund = page.getByRole('region', { name: 'Pick a card to fund' });
+      await expect(fund.locator('ul.fund-grid > li.card h3')).toHaveText(['Quiet rooms: one more unlock', 'Rename the Gatherer to Sweeper']);
       const lanes = main.locator('ol.flow-lanes > li.flow-lane');
-      await expect(lanes.locator('h3')).toHaveText([/^Next up/, /^Fund now/, /^Building/, /^Shipped/]);
-      const fund = lanes.nth(1);
-      await expect(fund.getByRole('heading', { level: 4 })).toHaveText(['Quiet rooms: one more unlock', 'Rename the Gatherer to Sweeper']);
+      await expect(lanes.locator('h3')).toHaveText([/^Next up/, /^Building/, /^Shipped/]);
       const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
       expect(links).toHaveLength(2);
       for (const href of links) expect(href).toMatch(new RegExp(`^${PAYMENT_LINK}\\?client_reference_id=[0-9a-f-]{36}$`));
       await expect(page.getByRole('group', { name: 'Show cards for' })).toHaveCount(0);
-      await expect(lanes.nth(2).getByText('A cheaper Cart')).toBeVisible();
+      await expect(lanes.nth(1).getByText('A cheaper Cart')).toBeVisible();
 
       // The team strip: the first three roles on the team (lib/roster.ts teamStatus), each linking to its row on /team.
       const team = page.getByRole('region', { name: 'The team' });
@@ -39,7 +40,7 @@ for (const viewport of WIDTHS) {
       for (const href of await team.locator('a.member').evaluateAll((as) => as.map((a) => a.getAttribute('href')))) expect(href).toMatch(/^\/team#agent-/);
       await expect(team.getByRole('link', { name: 'Meet the whole team' })).toHaveAttribute('href', '/team');
 
-      await expect(lanes.nth(3).getByRole('heading', { level: 4 })).toHaveText([
+      await expect(lanes.nth(2).getByRole('heading', { level: 4 })).toHaveText([
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
@@ -63,7 +64,7 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('tooltip')).toHaveCount(0);
       await expect(page.getByRole('complementary')).toHaveCount(0);
       // A card's own page is linked only by the Watch links: here, one per shipped card (docs/specs/supporter-pages.md).
-      const shippedCount = await lanes.nth(3).locator('li.card').count();
+      const shippedCount = await lanes.nth(2).locator('li.card').count();
       await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
       await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
       await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
@@ -104,7 +105,7 @@ for (const viewport of WIDTHS) {
 
     test('contribute offers the next card in line first, then each open card', async ({ page }) => {
       await page.goto('/contribute');
-      await expect(page.getByRole('heading', { level: 1, name: 'Where should your contribution go?' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Fund a card' })).toBeVisible();
       const first = page.getByRole('main').getByRole('link').first();
       await expect(first).toContainText('Fund the next card in line');
       await expect(first).toContainText('Next in line: Quiet rooms: one more unlock');
@@ -197,7 +198,7 @@ test.describe('an open card on a wide screen', () => {
     await expect.poll(() => card.evaluate((li) => new DOMMatrix(getComputedStyle(li).transform).m42)).toBe(-4);
     expect(await fund.evaluate((a) => getComputedStyle(a).backgroundColor)).not.toBe(before);
     // The title is under the link's cover, so a press on it follows the Fund link.
-    const target = await card.locator('h4').evaluate((h) => {
+    const target = await card.locator('h3').evaluate((h) => {
       const r = h.getBoundingClientRect();
       const el = document.elementFromPoint(r.x + 10, r.y + r.height / 2);
       return el?.closest('a')?.getAttribute('href') ?? null;

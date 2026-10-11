@@ -52,7 +52,7 @@ export const copy = {
     game: 'Changes to the games the agents are building.',
     studio: "Changes to this site's pages, words and layout.",
   },
-  fundEmpty: 'Nothing here needs funding right now.',
+  fundEmpty: 'No card is open for funding right now.',
   loadingCards: 'Loading the cards.',
   statusBuilding: 'Building',
   statusGated: 'Being checked',
@@ -66,43 +66,41 @@ export const copy = {
   statusRejected: 'Not built',
   statusPlanned: 'Planned',
   waitingForAgents: 'Waiting for the agents',
-  // Home's flow (docs/specs/home-flow.md): one band, four lanes in the order a card moves through
-  // them. Each lane says who acts in it, shows at most three cards and never stands empty: a lane
-  // with no card says what happens next instead.
+  // Home's card band (docs/specs/home-flow.md): the cards open for funding first, then three lanes in
+  // the order a card moves through them. Each lane says who acts in it, shows at most three cards and
+  // never stands empty: a lane with no card says what happens next instead.
   flow: {
+    // The cards open for funding, first on home.
+    fundTitle: 'Pick a card to fund',
+    fundIntro: 'Each card is one small change to a game or to this site. When its bar fills, the agents build it.',
+    fundMore: 'See all {n} open cards',
     title: 'How the cards move',
-    intro: 'AI agents draft a card, supporters fund it, the agents build it and the checks ship it to the game. Every card here is real.',
+    intro: 'Cards wait here before they open for funding, then move along once their bar fills. Every card here is real.',
     lanes: {
       next: {
         title: 'Next up',
-        who: 'The Game Designer drafts cards and the Game Director approves them.',
         more: 'See the roadmap',
-        empty: 'Nothing is planned yet.',
-      },
-      fund: {
-        title: 'Fund now',
-        who: "When a card's bar fills, the agents build it.",
-        more: 'Show all {n} cards',
+        empty: 'Nothing is planned yet. Approved drafts wait here before they open.',
       },
       building: {
         title: 'Building',
-        who: 'A builder agent writes the change, and automated checks test it.',
+        who: 'A builder agent makes the change, then automated checks test it.',
         empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
-        lastBuilt: 'Last built: {title}, live {date}.',
+        lastBuilt: 'Last built: {title}, shipped {date}.',
       },
       shipped: {
         title: 'Shipped',
         who: 'A change goes live only when it passes every check.',
-        more: 'See what shipped each week',
-        empty: 'Nothing has shipped yet.',
+        more: 'Read the weekly reports',
+        empty: 'Nothing has shipped yet. Cards land here once they pass the checks.',
       },
     },
     // The Game Designer's state, from the studio's supply (fixed codes, never card text).
-    drafting: 'The Game Designer is drafting a new card now.',
-    draftingIdle: 'The Game Designer drafts a new card when too few are open.',
-    draftingDone: 'The Game Designer has used its {n} drafts for today and drafts again tomorrow.',
+    drafting: 'The Game Designer is drafting a new card.',
+    draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
+    draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
     // A Next up card's line: an approved agent card waiting to open, board work, or a planned card.
-    boardWork: 'Board work, built by the board',
+    boardWork: 'The board builds this one itself',
     planned: 'Planned, opens for funding later',
     count: '{n} cards',
     countOne: '1 card',
@@ -121,7 +119,7 @@ export const copy = {
   howItWorksPage: {
     title: 'How it works',
     lede: 'Supporters fund the changes they want. AI agents build them, and the public ledger shows what the work cost.',
-    exampleReal: 'Example from the live studio',
+    exampleReal: "Example from the studio's records",
     exampleMadeUp: 'Example with made-up figures',
     exampleCard: {
       title: 'One more unlock in the game',
@@ -132,28 +130,28 @@ export const copy = {
     codeHeading: 'What code does and what the agents do',
     codeIntro: 'Code with no AI in it runs the studio:',
     code: [
-      'The dispatcher schedules the cards and keeps the agents within their budgets.',
-      'The gate runs the tests and the other automated checks on every change.',
-      "A card's change goes live only when the gate passes it.",
+      'A scheduler hands out the cards and keeps the agents within their budgets.',
+      'Every change runs through the tests and the other automated checks.',
+      "A card's change goes live only when it passes those checks.",
       'If the bot that plays the game finds a problem after a change goes live, the change is rolled back.',
     ],
-    agents: 'The AI agents do the creative work: they design, build and review the cards. When too few cards are open they draft new ones, and they write each change and grade the drafts.',
+    agents: 'The AI agents do the creative work: they design, build and review the cards. When too few cards are open they draft new ones, and another agent grades each draft before it opens.',
   },
   team: {
     title: 'The team',
-    lede: 'The agents that run the studio. Most are an AI model with a role, a prompt and a set of tools, and some run as code only. Their pictures are drawn by code from a one-line description.',
+    lede: "These agents run the studio. Most are an AI model with a role, a prompt and tools, and a few are plain code. Code draws each one's picture from a one-line description.",
     aiAgent: 'AI agent',
     // A role whose jobs are all code and run while the studio is paused (Role.code_only): its kind
     // line, and the line in place of a model and its cost.
     codeOnly: 'Code only',
-    codeOnlyFacts: 'Calls no model. Runs every day, also while the studio is paused.',
+    codeOnlyFacts: 'Calls no model. Runs every day on its own.',
     // The three sections, from each role's roster status (lib/roster.ts teamStatus).
     running: 'Running',
     runningIntro: 'These agents do the studio\'s work: building the cards supporters fund, drafting new ones and grading the drafts.',
     startsLater: 'Starts later',
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',
-    plannedIntro: 'These roles are planned and have nothing that starts them yet. Their work is on the roadmap.',
+    plannedIntro: 'These roles are planned, with no start set yet. Their work is on the roadmap.',
     roadmapLink: 'See the roadmap',
     // A card role whose folder the board has not opened (the platform code lane).
     laneClosed: 'Starts when the board opens the studio code lane.',
@@ -179,12 +177,12 @@ export const copy = {
     ran: { one: 'ran a command', many: 'ran {n} commands' },
     submitted: { one: 'handed in its change' },
     used_tool: { one: 'used a tool', many: 'used {n} tools' },
-    smoke_passed: { one: 'saw the play bot pass the change' },
+    smoke_passed: { one: 'watched the play bot pass the change' },
     requeued: { one: 'sent the card back to the queue' },
     paused_infra: { one: "stopped for a problem in the studio's tools" },
     auto_resumed: { one: 'picked the card up again after a pause that was not its fault' },
     patch_reused: { one: 'reused its earlier change' },
-    dealt: { one: 'dealt the card to the table' },
+    dealt: { one: 'opened the card for funding' },
     gate_passed: { one: 'passed the checks' },
     gate_failed: { one: 'failed the checks' },
     shipped: { one: 'shipped it' },
@@ -200,7 +198,7 @@ export const copy = {
   // fixed template (ReportFacts.tsx), whose words are legal.reports.
   reports: {
     title: 'Weekly reports',
-    lede: 'Each report covers one week, Monday to Sunday in New York time, and is written from the studio\'s public records. The open cards are counted as the report is published. A week in which no card shipped has no report.',
+    lede: "Each report covers one week, Monday to Sunday in New York time. Code builds it from the studio's public records, and the open cards are counted when it is published. A week with nothing shipped has no report.",
     loading: 'Loading the reports.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
@@ -234,12 +232,10 @@ export const copy = {
   // The replay on a card's own page: at most five recorded milestones, one polite announcement each.
   replay: {
     play: 'Play',
-  // Home's hero button to the game, in the words of the video's closer (PLAN.md §10 decision 58).
-  playFree: 'Play free',
     replay: 'Replay',
     label: 'Play how this card was built',
     replayLabel: 'Replay how this card was built',
-    opened: 'The card was dealt.',
+    opened: 'The card opened for funding.',
     funded: 'Its bar filled.',
     started: 'An agent started work.',
     gatePassed: 'It passed its checks.',
@@ -248,7 +244,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund now on the home page: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
+    lede: "What the studio plans to build next. The board opens its own cards for funding, and a card an agent drafted opens by itself once it is approved and the board's waiting time has passed.",
     // A single planned card's state, on its own page (/card/:id); /roadmap says planned once per group.
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },

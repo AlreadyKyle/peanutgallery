@@ -101,17 +101,18 @@ export function nextUp(cards: readonly Card[]): Card[] {
 }
 
 /**
- * Home's flow (docs/specs/home-flow.md): four lanes in the order a card moves through them. Building
- * holds the cards being built or checked, then the funded cards waiting for the agents.
+ * Home's flow (docs/specs/home-flow.md): three lanes in the order a card moves through them, around
+ * the cards open for funding that home shows above them. Building holds the cards being built or
+ * checked, then the funded cards waiting for the agents.
  */
-export const FLOW_LANES = ['next', 'fund', 'building', 'shipped'] as const;
+export const FLOW_LANES = ['next', 'building', 'shipped'] as const;
 export type FlowLane = (typeof FLOW_LANES)[number];
 
 /** Each lane shows at most this many cards; the rest are a link away. */
 export const FLOW_LANE_CARDS = 3;
 
 export function flowLanes(groups: CardGroups): Record<FlowLane, Card[]> {
-  return { next: groups.next, fund: groups.fund, building: [...groups.now, ...groups.queued], shipped: groups.shipped };
+  return { next: groups.next, building: [...groups.now, ...groups.queued], shipped: groups.shipped };
 }
 
 /** Roadmap order: ranked cards first, lowest rank first, then the oldest. */
