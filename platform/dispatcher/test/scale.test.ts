@@ -10,7 +10,9 @@
 // three cards the supply drafted that day spent 0.358, 0.369 and 0.805 USD from draft to live, with
 // funding targets of 0.74, 0.75 and 1.19 USD; their draft runs took 1.1 minutes on average (1.6 at
 // most); start to live took 2.3 to 2.6 minutes; and 1 of the day's 4 draft runs failed (a verdict
-// note over the schema's length) and was retried. The studio_state values are production's too.
+// note over the schema's length, fixed in #155) and was retried. The studio_state values are
+// production's too. PLAN.md §10 decision 69 raises draft_runs_per_day to 12; production still read 4
+// that day, before its migration (20261011100000_always_open.sql) was applied.
 import { describe, expect, it } from 'vitest';
 import { concurrency } from '../src/throttle.js';
 
@@ -23,7 +25,7 @@ const MEASURED = {
 };
 
 const PRODUCTION = {
-  draftRunsPerDay: 4,
+  draftRunsPerDay: 12,
   cronMinutes: 20,
   floorOpen: 6,
   dailyCapUsd: 100,
@@ -184,21 +186,24 @@ describe('scale model (production caps, measured costs)', () => {
     const header = '| caps | inflow | shipped/day | spent/day | unplaced after 30 days | binding |\n|---|---|---|---|---|---|';
     const out = [
       header,
-      table('production (4 drafts/day, $500/month)', PRODUCTION),
-      table('48 drafts/day', { ...PRODUCTION, draftRunsPerDay: 48 }),
-      table('48 drafts/day, no monthly cap', { ...PRODUCTION, draftRunsPerDay: 48, monthlyCapUsd: Infinity }),
+      table('4 drafts/day (production before decision 69)', { ...PRODUCTION, draftRunsPerDay: 4 }),
+      table('12 drafts/day, $500/month (decision 69)', PRODUCTION),
+      table('12 drafts/day, no monthly cap', { ...PRODUCTION, monthlyCapUsd: Infinity }),
       table('no draft count, no monthly cap, 5-min cron', { ...PRODUCTION, draftRunsPerDay: Infinity, monthlyCapUsd: Infinity, cronMinutes: 5 }),
     ].join('\n');
     console.log(`\n${out}\n`);
-    expect(out).toContain('| production');
+    expect(out).toContain('(decision 69)');
   });
 
-  it('today the draft count is the binding cap as soon as players fund more than about $3 a day', () => {
-    const o = simulate(50, PRODUCTION);
-    expect(o.binding).toMatch(/^draft_cap/);
-    // 4 runs a day, 3 of 4 succeed: at most 3 new cards a day, whatever the money.
-    expect(o.shippedPerDay).toBeLessThanOrEqual(4);
-    expect(simulate(5000, PRODUCTION).shippedPerDay).toBeCloseTo(o.shippedPerDay, 0);
+  it('the draft count binds as soon as players fund more than a few dollars a day, whatever the money', () => {
+    for (const runs of [4, 12]) {
+      const caps = { ...PRODUCTION, draftRunsPerDay: runs };
+      const o = simulate(50, caps);
+      expect(o.binding).toContain('draft_cap');
+      // runs a day, 3 of 4 succeed: at most that many new cards a day.
+      expect(o.shippedPerDay).toBeLessThanOrEqual(runs * MEASURED.draftSuccess);
+      expect(simulate(5000, caps).shippedPerDay).toBeCloseTo(o.shippedPerDay, 0);
+    }
   });
 
   it('with the count lifted, the $500 monthly cap binds next', () => {
