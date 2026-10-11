@@ -50,12 +50,10 @@ for (const viewport of WIDTHS) {
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
-      // Next up: cards that fund first, then board work, at most three.
-      await expect(lanes.nth(0).getByRole('heading', { level: 4 })).toHaveText([
-        'Choose the next card without paying',
-        'Board on its own site',
-        'A second area in Dust',
-      ]);
+      // Next up: only approved agent cards waiting to open; the fixture's planned cards are backlog
+      // entries and board work, which never show (docs/specs/always-open.md).
+      await expect(lanes.nth(0).getByRole('heading', { level: 4 })).toHaveCount(0);
+      await expect(lanes.nth(0).locator('.flow-empty')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
