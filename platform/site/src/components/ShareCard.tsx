@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { copy } from '../lib/copy';
+import { countEvent } from '../lib/count';
 import { Glyph } from './Glyph';
 
 type ShareState = 'idle' | 'copied' | 'failed';
@@ -15,6 +16,8 @@ type ShareState = 'idle' | 'copied' | 'failed';
 export function ShareCard({ title, url }: { title: string; url: string }) {
   const [state, setState] = useState<ShareState>('idle');
   async function share() {
+    // One press, counted with nothing that names who pressed (docs/specs/play-counts.md).
+    countEvent('card_share');
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title, url });

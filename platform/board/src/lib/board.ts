@@ -484,3 +484,35 @@ export async function runJobNow(client: SupabaseClient, job: string, reason: str
   if (id === null) throw new Error('enqueue_manual_job returned no run id');
   return id;
 }
+
+// Play and share counts (docs/specs/play-counts.md) ----------------------------------
+
+/** How many UTC days the panel shows, today first. */
+export const PLAY_COUNT_DAYS = 14;
+
+export const PLAY_EVENTS = ['dust_load', 'dust_share', 'card_share', 'dust_next_card'] as const;
+
+/** One UTC day's totals: Dust loads, Share your run presses, card share presses, clicks from Dust to a card. */
+export type PlayCountDay = { day: string } & Record<(typeof PLAY_EVENTS)[number], number>;
+
+function whole(row: Record<string, unknown>, key: string): number {
+  const n = optionalAmount(row, key);
+  return n === null || !Number.isFinite(n) || n < 0 ? 0 : Math.trunc(n);
+}
+
+/** board_play_counts' days, newest first; a row with no day is dropped and a missing count reads 0. */
+export function playCountsFrom(data: unknown): PlayCountDay[] {
+  return rows(data)
+    .filter((row) => typeof row.day === 'string' && row.day !== '')
+    .map((row) => ({
+      day: String(row.day),
+      dust_load: whole(row, 'dust_load'),
+      dust_share: whole(row, 'dust_share'),
+      card_share: whole(row, 'card_share'),
+      dust_next_card: whole(row, 'dust_next_card'),
+    }));
+}
+
+export async function fetchPlayCounts(client: SupabaseClient, days = PLAY_COUNT_DAYS): Promise<PlayCountDay[]> {
+  return playCountsFrom(unwrap<unknown>(await client.rpc('board_play_counts', { p_days: days })));
+}

@@ -16,8 +16,9 @@ Every goal is a metric the studio can compute from what exists today: the ledger
 ### Growth
 
 - **New supporters per week**, from the weekly report.
-- **Shares.** Discord ship posts sent (`outbound_posts`), and nothing else yet. Card shares from `ShareCard` and Dust's Share your run are not counted: nothing is sent to the studio by design.
-- **Not measured yet:** visitors, plays of Dust, play length, share clicks, and the path from a play to a contribution. Dust's save is local only (`dust.save` in localStorage) and the site runs no analytics. A privacy-preserving count is proposed below ([Play and share counts without tracking](BACKLOG.md#play-and-share-counts-without-tracking)); until it exists every growth number is supporters and money only.
+- **Shares.** Discord ship posts sent (`outbound_posts`), and the daily counts of card shares from `ShareCard` and of Dust's Share your run presses (`docs/specs/play-counts.md`).
+- **Plays.** Daily totals of Dust loads and of clicks from Dust's next card line to a card, with no cookie, identifier or address (`docs/specs/play-counts.md`), on the board's panel.
+- **Not measured:** unique visitors, play length, and one person's path from a play to a contribution. The counts cannot join one person's steps, by design; Dust's save is local only (`dust.save` in localStorage).
 
 ### Retention
 
@@ -85,7 +86,7 @@ Ranked by impact on the loop for the effort. Built means on main or on this bran
 4. **The next change to Dust, from inside Dust** (built): `seed-1/render/next-card.ts` shows the next open Dust card and its bar under the game. Closes the play to fund gap, the biggest hole in the loop.
 5. **Shareable run picture** (built): a 1200 by 630 card drawn in code with the dust, the unlocks by name and the address, attached to the share sheet where it takes files (`seed-1/render/share-image.ts`).
 6. **Dust's own link preview** (new): [A link preview image for Dust](BACKLOG.md#a-link-preview-image-for-dust). Today a shared Dust link shows the studio's image (`seed-1/index.html` points `og:image` at the site's `og.png`).
-7. **Play and share counts** (new): [Play and share counts without tracking](BACKLOG.md#play-and-share-counts-without-tracking). Without it the studio cannot see conversion, so it cannot tune it.
+7. **Play and share counts** (built on this branch): daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with nothing that names a player (`docs/specs/play-counts.md`).
 8. **Card share and since your last visit** (built): `ShareCard` on card pages and /thanks, `SinceLastVisit` on home.
 9. **Free voting** (backlog): [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards), behind [Player accounts](BACKLOG.md#player-accounts). Lets non-payers steer, which grows the crowd that later funds.
 10. **Weekly episodes and the stream** (backlog): [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips), [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes). The discovery engine at scale.

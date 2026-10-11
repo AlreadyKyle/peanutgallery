@@ -29,6 +29,18 @@ test.describe('a live card', () => {
     await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0);
   });
 
+  test('counts a Share press as card_share on /api/count, sending no cookie and nothing else (docs/specs/play-counts.md)', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
+    const counted = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/count');
+    await page.getByRole('button', { name: 'Share this card' }).click();
+    const request = await counted;
+    expect(request.method()).toBe('POST');
+    expect(request.postData()).toBe('{"event":"card_share"}');
+    expect(new URL(request.url()).origin).toBe(new URL(page.url()).origin);
+    expect(new URL(request.url()).search).toBe('');
+    expect(await request.headerValue('cookie')).toBeNull();
+  });
+
   test('has its title as the one h1, and the facts with the commit and no link', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText([LIVE_TITLE]);
     const facts = page.getByRole('region', { name: 'The facts' });

@@ -13,6 +13,7 @@ import {
   STUDIO_STATE_POLL_MS,
 } from './lib/board';
 import { formatDateTime } from './lib/format';
+import { PLAY_COUNT_HEADS, PLAY_COUNTS_LINE } from './PlayCounts';
 import { CAPS_BY_SQL } from './Status';
 
 // The panel's database calls the old page made and this one never does. Each name is spelt in parts so
@@ -47,6 +48,7 @@ const fake = vi.hoisted(() => ({
   studio: {} as Record<string, unknown>,
   pauseReason: null as string | null,
   supply: null as Record<string, unknown> | null,
+  playCounts: [] as Record<string, unknown>[] | null,
   cards: [] as Record<string, unknown>[],
   jobs: [] as Record<string, unknown>[],
   findings: [] as Record<string, unknown>[],
@@ -117,11 +119,13 @@ vi.mock('./lib/supabase', async (importOriginal) => {
         board_studio_state: fake.studio,
         card_supply: fake.supply,
         board_jobs: fake.jobs,
+        board_play_counts: fake.playCounts,
         cancel_card: fake.cancelResult,
         file_card: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         enqueue_manual_job: '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
       };
       if (name === 'card_supply' && fake.supply === null) return { data: null, error: { message: 'card_supply is unavailable' } };
+      if (name === 'board_play_counts' && fake.playCounts === null) return { data: null, error: { message: 'A second factor is required' } };
       return { data: data[name] ?? null, error: null };
     },
     from: (table: string) => {
@@ -219,6 +223,7 @@ beforeEach(() => {
   fake.supply = { ...AT_FLOOR };
   fake.cards = [];
   fake.jobs = [];
+  fake.playCounts = [];
   fake.findings = [];
   fake.events = [];
   fake.roleRows = [
@@ -328,7 +333,7 @@ describe('the first factor (aal1)', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Verify a code' }));
     for (let i = 0; i < 4; i += 1) await flush();
     expect(mfaNamed('verify').at(-1)?.args).toEqual({ factorId: 'f-new', challengeId: 'challenge-f-new', code: '123456' });
-    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+    expect(regions().slice(0, 4)).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
   });
 
   it('challenges a verified factor, refuses a code that is not six digits before calling, and never enrols', async () => {
@@ -366,12 +371,12 @@ describe('a new session in another tab', () => {
   it('keeps the panel through a refresh at aal2', async () => {
     await renderBoard();
     await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
-    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+    expect(regions().slice(0, 4)).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
   });
 
   it('at aal1 for the same board member goes back to the code step, and the panel reads nothing more', async () => {
     await renderBoard();
-    expect(regions().slice(0, 3)).toEqual(['Status', 'Activity', 'Actions']);
+    expect(regions().slice(0, 4)).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions']);
     fake.aal = 'aal1';
     await signInElsewhere('u-board', 'board@mobmachine.games', 'token-2');
     expect(regions()).toEqual(['Two-factor sign-in']);
@@ -444,7 +449,7 @@ describe('the panel at aal2', () => {
       expect(screen.queryByRole('region', { name: region })).toBeNull();
       expect(screen.queryByRole('form', { name: region })).toBeNull();
     }
-    expect(regions()).toEqual(['Status', 'Activity', 'Actions', 'Pause and resume']);
+    expect(regions()).toEqual(['Status', 'Activity', 'Play and share counts', 'Actions', 'Pause and resume']);
   });
 
   it('lists exactly the six actions', async () => {
@@ -504,6 +509,35 @@ describe('Status', () => {
     fake.supply = null;
     await renderBoard();
     expect(screen.getByText('Card supply: card_supply is unavailable')).toBeTruthy();
+  });
+});
+
+describe('Play and share counts (docs/specs/play-counts.md)', () => {
+  it('reads board_play_counts once for 14 days and shows each day, newest first, with the total', async () => {
+    fake.playCounts = [
+      { day: '2026-10-10', dust_load: 12, dust_share: 3, card_share: 1, dust_next_card: 2 },
+      { day: '2026-10-09', dust_load: '5', dust_share: 0, card_share: 0, dust_next_card: null },
+    ];
+    await renderBoard();
+    const region = screen.getByRole('region', { name: 'Play and share counts' });
+    const counts = within(region);
+    expect(counts.getByText(PLAY_COUNTS_LINE)).toBeTruthy();
+    expect(counts.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Day', ...Object.values(PLAY_COUNT_HEADS)]);
+    const rowText = (day: string) => [...region.querySelectorAll(`tr[data-day="${day}"] > *`)].map((cell) => cell.textContent);
+    expect(rowText('2026-10-10')).toEqual(['2026-10-10', '12', '3', '1', '2']);
+    expect(rowText('2026-10-09')).toEqual(['2026-10-09', '5', '0', '0', '0']);
+    expect(rowText('total')).toEqual(['Total', '17', '3', '1', '2']);
+    expect(named('board_play_counts')).toEqual([{ name: 'board_play_counts', args: { p_days: 14 } }]);
+    await flush(STUDIO_STATE_POLL_MS * 4);
+    expect(named('board_play_counts')).toHaveLength(1);
+  });
+
+  it('says the error and draws no table when the read fails', async () => {
+    fake.playCounts = null;
+    await renderBoard();
+    const counts = within(screen.getByRole('region', { name: 'Play and share counts' }));
+    expect(counts.getByText('A second factor is required')).toBeTruthy();
+    expect(counts.queryByRole('table')).toBeNull();
   });
 });
 

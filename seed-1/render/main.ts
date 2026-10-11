@@ -6,6 +6,7 @@ import { AccessibleControls } from './controls';
 import { loadGameData } from './load';
 import { loadNextCard, showNextCard } from './next-card';
 import { attachShare } from './share';
+import { countEvent } from './count';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
@@ -90,3 +91,5 @@ function startNextCard(): void {
 
 start();
 startNextCard();
+// One Dust load counted, with nothing that names the player (docs/specs/play-counts.md).
+countEvent('dust_load');

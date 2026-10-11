@@ -28,6 +28,15 @@
   status = 200
   force = true
 
+# Play and share counts (render/count.ts; docs/specs/play-counts.md): a POST of one event name, which
+# the site's /api/count adds to that event's daily total. Proxied for the same reason, so the beacon
+# stays on this origin; it carries no cookie (this origin sets none) and the site keeps no address.
+[[redirects]]
+  from = "/api/count"
+  to = "https://mobmachine.games/api/count"
+  status = 200
+  force = true
+
 # Security headers on every path (the game makes no request but to its own origin: e2e/frames.spec.ts
 # fails one to any other). Enforced: no framing, connections to this origin alone, no plugins, no
 # <base> or form posts elsewhere. Script, style and image sources stay open: Phaser draws its own

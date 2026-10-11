@@ -1,3 +1,5 @@
+import { countEvent } from './count';
+
 // The next card to fund that changes Dust, shown under the canvas beside the studio line. Phaser-free and read only: it reads
 // the site's two public documents, /api/live and /api/cards, the same documents every figure on
 // mobmachine.games comes from (platform/site/netlify/functions/snapshot.mts). netlify.toml proxies
@@ -117,5 +119,7 @@ export function showNextCard(elements: NextCardElements, card: NextCard | null):
   elements.title.textContent = text.label;
   elements.amount.textContent = text.amount;
   elements.fill.style.width = `${Math.round(barFraction(card) * 100)}%`;
+  // A click through to the card counted, with nothing that names the player (docs/specs/play-counts.md).
+  elements.link.addEventListener('click', () => countEvent('dust_next_card'));
   elements.root.hidden = false;
 }

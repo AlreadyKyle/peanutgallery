@@ -304,3 +304,39 @@ textarea {
 .error {
   font-weight: var(--weight-bold);
 }
+
+/* Play and share counts: a small table that scrolls inside itself on a phone, never the page. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: var(--size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+caption {
+  text-align: left;
+  color: var(--muted);
+  padding-bottom: var(--space-1);
+}
+
+th,
+td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+th:first-child {
+  text-align: left;
+}
+
+tfoot th,
+tfoot td {
+  font-weight: var(--weight-strong);
+  border-bottom: none;
+}
