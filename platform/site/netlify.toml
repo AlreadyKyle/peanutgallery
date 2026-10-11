@@ -16,11 +16,18 @@
   VITE_DISCORD_INVITE = "https://discord.gg/rwkbWhMk8r"
   VITE_PLAY_URL = "https://play.mobmachine.games"
 
-# The site's one Netlify Function (docs/specs/site-snapshot.md): /api/live and /api/cards, the two
+# The site's Netlify Functions (docs/specs/site-snapshot.md): /api/live and /api/cards, the two
 # documents every figure on the site comes from, read from Supabase with the publishable key in
 # netlify/lib/public-env.ts and cached by the CDN. The page itself holds no Supabase client.
 [functions]
   directory = "netlify/functions"
+  # The card preview (netlify/lib/card-preview.ts, docs/specs/card-preview.md) reads these at run time,
+  # so they ship beside the bundle: resvg's wasm and the site face's two static weights.
+  included_files = [
+    "node_modules/@resvg/resvg-wasm/index_bg.wasm",
+    "node_modules/@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-400-normal.woff",
+    "node_modules/@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff",
+  ]
 
 # The netlify.app address and the old domain always forward to the studio's own domain, same path
 # (docs/specs/rename.md). peanutgallery.games stays registered and a domain alias of this site.

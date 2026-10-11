@@ -182,9 +182,9 @@ describe('methods, paths and the config', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('names its two paths, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
+  it('names its three paths, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
-      path: ['/api/card/:id', '/api/thanks'],
+      path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks'],
       rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');
@@ -194,5 +194,44 @@ describe('methods, paths and the config', () => {
     const text = readFileSync(join(import.meta.dirname, 'functions', 'card.mts'), 'utf8');
     expect(text).not.toMatch(/process\.env|Netlify\.env|Deno\.env|import\.meta\.env/);
     expect(text).not.toMatch(/service_role|SERVICE_ROLE|sb_secret_/);
+  });
+});
+
+describe('GET /api/card/:id/preview.png', () => {
+  const LIVE_CARD = JSON.stringify({ card: { id: CARD_ID, title: 'A card', summary: 'Its summary.', stage: 'voted', created_at: '2026-10-01T00:00:00Z', live_at: null }, spent_usd: 0, supporters: [], supporter_count: 0 });
+
+  it('draws the card as a cached 1200x630 PNG from one site_card call', async () => {
+    // satori loads its layout engine from a data: URL through fetch, so that one goes to the real fetch.
+    const realFetch = globalThis.fetch;
+    const calls = stubFetch(ok(LIVE_CARD));
+    const stubbed = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string | URL, init: RequestInit) => (String(url).startsWith('data:') ? realFetch(url, init) : stubbed(url, init)));
+    const response = await request(`/api/card/${CARD_ID}/preview.png`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('image/png');
+    expect(response.headers.get('Netlify-CDN-Cache-Control')).toBe('public, durable, s-maxage=600, stale-while-revalidate=600');
+    const png = Buffer.from(await response.arrayBuffer());
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ p_id: CARD_ID });
+  }, 30_000);
+
+  it('answers 400 for a bad id or a query string, 404 for no card and 502 for a failed read', async () => {
+    let calls = stubFetch(ok(LIVE_CARD));
+    expect((await request('/api/card/nope/preview.png')).status).toBe(400);
+    expect((await request(`/api/card/${CARD_ID}/preview.png?v=1`)).status).toBe(400);
+    expect(calls).toHaveLength(0);
+    stubFetch(ok('null'));
+    expect((await request(`/api/card/${CARD_ID}/preview.png`)).status).toBe(404);
+    calls = stubFetch(() => Promise.resolve(new Response('boom', { status: 500 })));
+    const failed = await request(`/api/card/${CARD_ID}/preview.png`);
+    expect(failed.status).toBe(502);
+    expect(failed.headers.get('Cache-Control')).toBe('no-store');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('answers 405 for a POST', async () => {
+    stubFetch(ok(LIVE_CARD));
+    expect((await request(`/api/card/${CARD_ID}/preview.png`, { method: 'POST' })).status).toBe(405);
   });
 });
