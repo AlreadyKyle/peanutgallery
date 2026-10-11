@@ -304,6 +304,15 @@ describe('headerNameProblem', () => {
     expect(headerNameProblem(text)).toBeNull();
   });
 
+  it('accepts a name with a space, whose --- and +++ lines git ends with a tab', () => {
+    const text = 'diff --git a/seed-1/config/x y.json b/seed-1/config/x y.json\n--- a/seed-1/config/x y.json\t\n+++ b/seed-1/config/x y.json\t\n@@ -1 +1 @@\n-x\n+y\n';
+    expect(headerNameProblem(text)).toBeNull();
+  });
+
+  it('refuses a quoted name with a plain message', () => {
+    expect(headerNameProblem('diff --git "a/seed-1/caf\\303\\251.json" "b/seed-1/caf\\303\\251.json"\n')).toMatch(/quoted name/);
+  });
+
   it('refuses through patchTextProblem too', () => {
     expect(patchTextProblem(Buffer.from(section('platform/gate/g.sh', 'seed-1/config/c.json')))).toMatch(/names two paths/);
   });

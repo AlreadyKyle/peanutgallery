@@ -68,7 +68,11 @@ export function headerNameProblem(text: string): string | null {
   let oldName: string | null = null;
   let oldLeft = 0;
   let newLeft = 0;
-  const strip = (name: string, prefix: string): string => (name === '/dev/null' ? name : name.startsWith(prefix) ? name.slice(prefix.length) : `\0${name}`);
+  // git ends a ---/+++ name that holds a space with a tab, which is not part of the name.
+  const strip = (raw: string, prefix: string): string => {
+    const name = raw.replace(/\t$/, '');
+    return name === '/dev/null' ? name : name.startsWith(prefix) ? name.slice(prefix.length) : `\0${name}`;
+  };
   for (const line of lines) {
     if (oldLeft > 0 || newLeft > 0) {
       if (line.startsWith('\\')) continue;
@@ -82,7 +86,8 @@ export function headerNameProblem(text: string): string | null {
     }
     const git = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
     if (line.startsWith('diff --git ')) {
-      if (git === null || git[1] !== git[2]) return `the patch header names two paths: ${line}; a file keeps its name`;
+      if (git === null) return `the patch header is not one this check reads (a quoted name, from a character git escapes): ${line}; name files in plain ASCII`;
+      if (git[1] !== git[2]) return `the patch header names two paths: ${line}; a file keeps its name`;
       gitName = git[1] ?? null;
       oldName = null;
       continue;
