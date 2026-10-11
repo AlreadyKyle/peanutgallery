@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow, MachineFlow } from '../components/Flow';
@@ -77,16 +76,18 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
       <div className="hero-text">
         <h1>{copy.pitchTitle}</h1>
         <p className="lede">{copy.pitchBody}</p>
+        {/* The pitch asks for funding, so its button goes to the cards to fund; Play free follows it, and
+            How it works stays in the top bar (decision 72). */}
         <p className="hero-actions">
+          <a className="button" href="#fund">
+            <Glyph name="coin-outline" />
+            {copy.fundACard}
+          </a>
           {env.playUrl === '' ? null : (
-            <a className="button" href={env.playUrl}>
-              <Glyph name="cartridge" />
+            <a className="target" href={env.playUrl}>
               {copy.playFree}
             </a>
           )}
-          <Link className="target" to="/how-it-works">
-            {copy.howItWorks}
-          </Link>
         </p>
       </div>
       {/* The studio's state: under the pitch on a phone, under the pitch and the video from 64rem. */}
@@ -216,8 +217,8 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
-        <GameSection />
         <FundSection studio={studio} live={live} />
+        <GameSection />
         {view === null ? null : <FlowSection view={view} />}
       </div>
       {view === null ? null : <TeamSection view={view} />}

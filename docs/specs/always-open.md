@@ -10,7 +10,7 @@ Production's home showed one "Fund the next card in line" panel and no card to c
 
 ## Scope
 
-In: home's Next up lane; `/roadmap` and every link to it; the Game Designer's daily draft limit.
+In: home's Next up lane; `/roadmap` and every link to it; the Game Designer's daily draft limit; the supply check's schedule (decision 71).
 Out: the money rules, the waterfall and the horizon rule (only horizon now cards take money); `docs/BACKLOG.md` itself, which stays the repository's plan and a source the dispatcher may still draft from; the board's site; the card floor of 6 open cards.
 
 ## Behaviour
@@ -45,3 +45,4 @@ The Game Designer may start up to 12 `draft_card` runs a New York day instead of
 
 - 11 October 2026: the board drops `/roadmap` and keeps the ledger and the weekly reports as the studio's history (`docs/PLAN.md` §10 decision 69).
 - 11 October 2026: the draft limit rises to 12 a day so the floor refills on a day of withdrawn drafts; the card floor stays at 6.
+- 11 October 2026: the supply check runs every minute (`20261011200000_supply_every_minute.sql`, `docs/PLAN.md` §10 decision 71): after the limit rose, the floor refilled at one card each 20 minutes, since a draft takes about a minute and only one runs at a time.

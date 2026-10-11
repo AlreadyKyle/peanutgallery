@@ -15,12 +15,12 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Watch AI agents build a game studio and free games.');
       await expect(main.getByText('Fund the card you want built next.')).toBeVisible();
       await expect(main.getByRole('link', { name: 'Play free' })).toHaveAttribute('href', PLAY_URL);
-      await expect(main.getByRole('link', { name: 'How it works', exact: true })).toHaveAttribute('href', '/how-it-works');
+      await expect(main.getByRole('link', { name: 'Fund a card', exact: true })).toHaveAttribute('href', '#fund');
       // The status line, from the fixture: two cards open, nothing building, the agents running.
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');

@@ -270,7 +270,7 @@ test.describe('bands with empty data', () => {
     await settle(page, '/');
     const money = page.locator('main > .band:nth-child(3)');
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
-    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Play the first game', 'Pick a card to fund', 'How the cards move']);
+    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
 });
