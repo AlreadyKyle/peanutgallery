@@ -35,14 +35,23 @@ export interface Pill {
   width: number;
 }
 
+/** The label, cut short with an ellipsis where it is wider than `maxWidth`, so its text stays inside its pill. */
+function fitLabel(label: string, maxWidth: number, measure: (text: string) => number): string {
+  if (measure(label) <= maxWidth) return label;
+  let chars = Array.from(label);
+  while (chars.length > 0 && measure(`${chars.join('').trimEnd()}…`) > maxWidth) chars = chars.slice(0, -1);
+  return `${chars.join('').trimEnd()}…`;
+}
+
 export function layoutPills(names: readonly string[], measure: (text: string) => number): Pill[] {
   const right = IMAGE_WIDTH - MARGIN;
   const place = (labels: readonly string[]): Pill[] | null => {
     const pills: Pill[] = [];
     let x = MARGIN;
     let row = 0;
-    for (const label of labels) {
-      const width = Math.min(measure(label) + PILL_PAD * 2, right - MARGIN);
+    for (const full of labels) {
+      const label = fitLabel(full, right - MARGIN - PILL_PAD * 2, measure);
+      const width = measure(label) + PILL_PAD * 2;
       if (x + width > right) {
         row += 1;
         x = MARGIN;

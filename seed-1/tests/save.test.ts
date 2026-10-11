@@ -117,3 +117,12 @@ describe('savedAt and awaySeconds', () => {
     expect(awaySeconds(0, 30 * 24 * 60 * 60 * 1000)).toBe(MAX_AWAY_SECONDS);
   });
 });
+
+describe('a save that lists an unlock twice', () => {
+  it('keeps the first of each unlock, so a multiplier is never applied twice', () => {
+    const state = { ...createSim(config, 1), totalDust: 1e9, dust: 1e9 };
+    const first = config.unlocks.unlocks[0]!;
+    const raw = JSON.stringify({ version: 1, state: { ...state, unlocked: [{ id: first.id, atSeconds: 1 }, { id: first.id, atSeconds: 2 }] } });
+    expect(parseSavedState(raw)?.unlocked).toEqual([{ id: first.id, atSeconds: 1 }]);
+  });
+});

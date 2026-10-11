@@ -162,4 +162,22 @@ describe('unlock pills', () => {
     const shown = many.length - 1;
     expect(many.at(-1)?.label).toBe(`+${30 - shown}`);
   });
+
+  it('shortens a name too long for one pill so its text stays inside the pill and the card', () => {
+    const measure = (t: string): number => t.length * 18;
+    const pills = layoutPills(['Cart', 'An unlock name far too long to ever fit inside a single pill on the card'.repeat(2)], measure);
+    expect(pills.length).toBeGreaterThan(0);
+    for (const pill of pills) {
+      expect(measure(pill.label) + 40).toBeLessThanOrEqual(pill.width);
+      expect(pill.x + pill.width).toBeLessThanOrEqual(IMAGE_WIDTH - 72);
+    }
+    expect(pills.some((p) => p.label.endsWith('…'))).toBe(true);
+  });
+});
+
+describe('formatDuration at the edges', () => {
+  it('reads a time away that is not a number as no time', () => {
+    expect(formatDuration(Number.NaN)).toBe('0s');
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('0s');
+  });
 });
