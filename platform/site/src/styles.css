@@ -975,28 +975,44 @@ button.link:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Contribute chooser: each choice is one large link. */
+/* Contribute chooser (docs/specs/home-flow.md): the page takes the full width. Fund the next card in
+   line is one wide panel on the primary fill; each card is a large link drawn like a card (a 2px ink
+   edge, the card radius, the title at the lead size, the bar pinned to its foot), one column on a
+   phone, two from 48rem and three from 72rem, like home's fund grid. */
+.contribute {
+  max-width: none;
+}
+
+.contribute > p,
+.contribute > h2 {
+  max-width: var(--measure);
+}
+
 .choice {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-height: var(--target);
+  height: 100%;
   padding: var(--space-3);
-  border: 1px solid var(--ink);
-  border-radius: var(--radius);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
   color: var(--ink);
   text-decoration: none;
 }
 
 .choice:hover {
-  background: var(--paper-hover);
+  outline: 1px solid var(--ink);
 }
 
 .choice .funding-bar {
-  margin: var(--space-1) 0 0;
+  margin: auto 0 0;
 }
 
 .choice-title {
+  font-size: var(--size-lead);
   font-weight: var(--weight-bold);
   line-height: var(--leading-title);
 }
@@ -1006,17 +1022,23 @@ button.link:hover:not(:disabled) {
   color: var(--text-muted);
 }
 
+.choice-body {
+  margin-bottom: var(--space-2);
+}
+
 .choice-meta {
   font-size: var(--size-small);
   font-variant-numeric: tabular-nums;
 }
 
-/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names the
-   next card in the waterfall's order (docs/specs/money-surfaces.md). Its agreement line
-   (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and carries the
-   section gap before "Or pick a card". */
+/* Fund the next card in line: the first choice, a wide panel on the primary fill with room to
+   breathe. It names the next card in the waterfall's order (docs/specs/money-surfaces.md). Its
+   agreement line (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and
+   carries the section gap before "Or pick a card". */
 .choice-primary {
+  max-width: none;
   margin-bottom: var(--space-1);
+  padding: var(--space-4);
   border-color: var(--primary-bg);
   background: var(--primary-bg);
   color: var(--primary-fg);
@@ -1027,22 +1049,66 @@ button.link:hover:not(:disabled) {
 }
 
 .choice-primary .choice-title {
-  font-size: var(--size-lead);
+  font-size: var(--size-h2);
 }
 
 .choice-primary .choice-body {
+  margin-bottom: 0;
   color: inherit;
+  max-width: var(--measure-text);
 }
 
 .choice-primary:hover {
   border-color: var(--primary-hover);
   background: var(--primary-hover);
+  outline: none;
 }
 
 .choices {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.choice:not(.choice-primary):hover {
+  transform: translateY(-4px);
+}
+
+/* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
+   line and says what the Game Designer is doing, so the first band never reads empty. */
+.fund-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+.fund-empty > p {
+  max-width: var(--measure-text);
+  margin: 0;
+}
+
+.fund-empty-title {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
+}
+
+.fund-empty-agent {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  font-size: var(--size-small);
+}
+
+.fund-empty-agent > .glyph {
+  flex: none;
+  margin-top: 0.125rem;
 }
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
@@ -1877,7 +1943,8 @@ input[type='radio'] {
     transition: transform var(--dur-quick) var(--ease-out);
   }
 
-  .card:has(.card-fund) {
+  .card:has(.card-fund),
+  .choice:not(.choice-primary) {
     transition: transform var(--dur-quick) var(--ease-out);
   }
 
@@ -2134,7 +2201,7 @@ input[type='radio'] {
   /* The lanes share five rows (CSS subgrid): the step, the heading, who acts, the cards and the more
      link, so every lane's first card starts on one line and the links line up under the longest. */
   .flow-lanes {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: repeat(3, auto) 1fr auto;
     gap: 0 var(--space-3);
   }
@@ -2257,6 +2324,7 @@ input[type='radio'] {
    three equal columns however many members it shows. */
 @media (min-width: 48rem) {
   .card-grid,
+  .choices,
   .team-grid,
   .fill-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2273,6 +2341,7 @@ input[type='radio'] {
 
 @media (min-width: 72rem) {
   .card-grid,
+  .choices,
   .team-grid,
   .fill-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

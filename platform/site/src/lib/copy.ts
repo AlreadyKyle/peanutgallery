@@ -70,6 +70,10 @@ export const copy = {
   // them. Each lane says who acts in it, shows at most three cards and never stands empty: a lane
   // with no card says what happens next instead.
   flow: {
+    // The cards open for funding, first on home.
+    fundTitle: "Fund what's next",
+    fundIntro: "Pick a card and chip in. When its bar fills, the agents build it.",
+    fundMore: 'See all {n} cards',
     title: 'How the cards move',
     intro: 'AI agents draft a card, supporters fund it, the agents build it and the checks ship it to the game. Every card here is real.',
     lanes: {
@@ -78,11 +82,6 @@ export const copy = {
         who: 'The Game Designer drafts cards and the Game Director approves them.',
         more: 'See the roadmap',
         empty: 'Nothing is planned yet.',
-      },
-      fund: {
-        title: 'Fund now',
-        who: "When a card's bar fills, the agents build it.",
-        more: 'Show all {n} cards',
       },
       building: {
         title: 'Building',

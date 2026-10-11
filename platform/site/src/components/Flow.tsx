@@ -11,11 +11,12 @@ import { CoinMark, FundAgreement, liveFundLink, type SpecRow } from './Funding';
 import { Glyph } from './Glyph';
 import { MoreLink } from './MoreLink';
 
-// Home's flow (docs/specs/home-flow.md, DESIGN.md Home): one band, four lanes in the order a card
-// moves through them, Next up, Fund now, Building and Shipped. Every lane says who acts in it, shows
-// at most three cards as compact faces and never stands empty: a lane with no card says what happens
-// next. The Fund now lane keeps the fund grid's class, so the live view's tick, flip and deal find
-// its cards (lib/live.ts); its money comes from Funding.tsx (kernel), unchanged.
+// Home's card band (docs/specs/home-flow.md, DESIGN.md Home). First the cards you can fund, as full
+// faces in the fund grid (the live view's tick, flip and deal find them there, lib/live.ts; their
+// money comes from Funding.tsx, kernel, unchanged), or with none open a panel that funds the next card
+// in line. Then the flow: three lanes side by side, Next up, Building and Shipped. Every lane says who
+// acts in it, shows at most three compact faces and never stands empty: a lane with no card says what
+// happens next.
 
 function countLine(n: number): string {
   return n === 1 ? copy.flow.countOne : copy.flow.count.replace('{n}', String(n));
@@ -58,11 +59,11 @@ function LaneWho({ lane, snapshot }: { lane: FlowLane; snapshot: Snapshot }) {
 }
 
 /** A lane's cards as compact faces. Only Next up draws the Planned face; the others take their stage's. */
-function LaneCards({ cards, snapshot, fund = false, planned = false, changed = {} }: { cards: Card[]; snapshot: Snapshot; fund?: boolean; planned?: boolean; changed?: Readonly<Record<string, readonly SpecRow[]>> }) {
+function LaneCards({ cards, snapshot, planned = false }: { cards: Card[]; snapshot: Snapshot; planned?: boolean }) {
   return (
-    <ul className={fund ? 'flow-cards fund-grid' : 'flow-cards'}>
+    <ul className="flow-cards">
       {cards.slice(0, FLOW_LANE_CARDS).map((card) => (
-        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={planned ? 'planned' : undefined} changed={changed[card.id]} />
+        <CardFace key={card.id} card={card} snapshot={snapshot} compact face={planned ? 'planned' : undefined} />
       ))}
     </ul>
   );
@@ -74,33 +75,7 @@ function EmptyTile({ children }: { children: ReactNode }) {
 }
 
 /** A lane's body: its cards, or its tile. */
-function LaneBody({ lane, cards, snapshot, lastShipped, changed }: { lane: FlowLane; cards: Card[]; snapshot: Snapshot; lastShipped: Card | undefined; changed: Readonly<Record<string, readonly SpecRow[]>> }) {
-  const env = siteEnv();
-  if (lane === 'fund') {
-    if (cards.length === 0) {
-      // Nothing takes money right now: the honest call is the next card in line, which is also what
-      // pays for the agents to draft and build the next one.
-      return (
-        <EmptyTile>
-          <p className="flow-empty-title">{legal.pickForMe}</p>
-          <p>{legal.nextInLineNone}</p>
-          {env.stripePaymentLinkUrl === '' ? null : (
-            <Link className="button btn-coin button-block" to="/contribute">
-              <CoinMark />
-              {copy.contribute}
-            </Link>
-          )}
-        </EmptyTile>
-      );
-    }
-    const shown = cards.slice(0, FLOW_LANE_CARDS);
-    return (
-      <div>
-        <LaneCards cards={shown} snapshot={snapshot} fund changed={changed} />
-        {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
-      </div>
-    );
-  }
+function LaneBody({ lane, cards, snapshot, lastShipped }: { lane: FlowLane; cards: Card[]; snapshot: Snapshot; lastShipped: Card | undefined }) {
   if (cards.length > 0) return <LaneCards cards={cards} snapshot={snapshot} planned={lane === 'next'} />;
   if (lane === 'building') {
     return (
@@ -121,11 +96,52 @@ function LaneBody({ lane, cards, snapshot, lastShipped, changed }: { lane: FlowL
   );
 }
 
+/** Home shows this many cards to fund, one row of full faces; /contribute has the rest. */
+export const HOME_FUND_CARDS = 3;
+
+/**
+ * The cards open for funding, first on home and as big as a card gets: full faces in the waterfall's
+ * order, the agreement under them, and a link to the rest on /contribute. With none open, a panel
+ * that funds the next card in line, which is also what pays the agents to draft and build the next one.
+ */
+export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snapshot: Snapshot; changed?: Readonly<Record<string, readonly SpecRow[]>> }) {
+  const env = siteEnv();
+  if (cards.length === 0) {
+    return (
+      <div className="fund-empty">
+        <p className="fund-empty-title">{legal.pickForMe}</p>
+        <p>{legal.nextInLineNone}</p>
+        <p className="fund-empty-agent">
+          <Glyph name="pencil" />
+          <span>{draftingLine(snapshot).text}</span>
+        </p>
+        {env.stripePaymentLinkUrl === '' ? null : (
+          <Link className="button btn-coin" to="/contribute">
+            <CoinMark />
+            {copy.contribute}
+          </Link>
+        )}
+      </div>
+    );
+  }
+  const shown = cards.slice(0, HOME_FUND_CARDS);
+  return (
+    <>
+      <ul className="card-grid fund-grid">
+        {shown.map((card) => (
+          <CardFace key={card.id} card={card} snapshot={snapshot} changed={changed[card.id]} />
+        ))}
+      </ul>
+      {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
+      {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}
+    </>
+  );
+}
+
 /** The link under a lane to the rest of its cards, or nothing. */
-function LaneMore({ lane, count }: { lane: FlowLane; count: number }) {
+function LaneMore({ lane }: { lane: FlowLane }) {
   if (lane === 'next') return <MoreLinkLine to="/roadmap" words={copy.flow.lanes.next.more} />;
   if (lane === 'shipped') return <MoreLinkLine to="/reports" words={copy.flow.lanes.shipped.more} />;
-  if (lane === 'fund' && count > FLOW_LANE_CARDS) return <MoreLinkLine to="/contribute" words={copy.flow.lanes.fund.more.replace('{n}', String(count))} />;
   return null;
 }
 
@@ -137,16 +153,8 @@ function MoreLinkLine({ to, words }: { to: string; words: string }) {
   );
 }
 
-/** The four lanes, in order, each never empty. */
-export function MachineFlow({
-  snapshot,
-  groups,
-  changed = {},
-}: {
-  snapshot: Snapshot;
-  groups: CardGroups;
-  changed?: Readonly<Record<string, readonly SpecRow[]>>;
-}) {
+/** The three lanes, in order, each never empty. */
+export function MachineFlow({ snapshot, groups }: { snapshot: Snapshot; groups: CardGroups }) {
   const lanes = flowLanes(groups);
   // A lane is as long as the cards in it, like a column on a board: Shipped holds three while Building
   // may hold a tile, so the lanes are uneven by nature. Their rows are shared (styles.css), so every
@@ -157,8 +165,8 @@ export function MachineFlow({
         <li key={lane} className="flow-lane" data-lane={lane} aria-labelledby={`lane-${lane}`}>
           <LaneHead lane={lane} step={index + 1} count={lanes[lane].length} />
           <LaneWho lane={lane} snapshot={snapshot} />
-          <LaneBody lane={lane} cards={lanes[lane]} snapshot={snapshot} lastShipped={lanes.shipped[0]} changed={changed} />
-          <LaneMore lane={lane} count={lanes[lane].length} />
+          <LaneBody lane={lane} cards={lanes[lane]} snapshot={snapshot} lastShipped={lanes.shipped[0]} />
+          <LaneMore lane={lane} />
         </li>
       ))}
     </ol>
