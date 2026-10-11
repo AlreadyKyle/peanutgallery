@@ -40,6 +40,33 @@ describe('number formatting', () => {
   });
 });
 
+describe('number formatting at the edges', () => {
+  it('names the scales past a trillion instead of printing a thousand trillions', () => {
+    expect(formatDust(1.234e15)).toBe('1.23Qa');
+    expect(formatDust(4.5e18)).toBe('4.50Qi');
+    expect(formatDust(1.5e21)).toBe('1.50e21');
+    expect(formatDust(2e306)).toBe('2.00e306');
+  });
+
+  it('rolls a rounded 1000.00 up to the next scale', () => {
+    expect(formatDust(999_995_000)).toBe('1.00B');
+    expect(formatDust(999_999_999_999)).toBe('1.00T');
+    expect(formatDust(999_999.6)).toBe('999,999');
+  });
+
+  it('never prints a stray comma, a not-a-number or Infinity', () => {
+    expect(groupThousands(-123)).toBe('-123');
+    expect(groupThousands(-1234567)).toBe('-1,234,567');
+    expect(formatDust(-2_500_000)).toBe('-2.50M');
+    expect(formatDust(0 / 0)).toBe('0');
+    expect(formatDust(Number.POSITIVE_INFINITY)).toBe('0');
+    expect(groupThousands(0 / 0)).toBe('0');
+    expect(formatRate(0 / 0)).toBe('0.0');
+    expect(formatRate(Number.POSITIVE_INFINITY)).toBe('0.0');
+    expect(formatRate(-1.25)).toBe('-1.3');
+  });
+});
+
 describe('content/strings.json', () => {
   const raw = JSON.parse(readFileSync(join(LIVE_CONTENT_DIR, 'strings.json'), 'utf8')) as unknown;
 
