@@ -1,10 +1,10 @@
 import { FundingBar, fundingCaption } from '../components/Funding';
-import { CardsStatus } from '../components/CardsStatus';
 import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
 import { LinkedText } from '../components/TextPage';
 import { siteEnv } from '../lib/env';
+import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
 import { useId, useState } from 'react';
 import { DEFAULT_STUDIO_PCT, fundableCards, fundLink, INCIDENT_PCT, nextInLine, noCardTakesMoney, RESERVE_PCT, snapStudioPct } from '../lib/payment';
@@ -109,10 +109,17 @@ export function Contribute() {
             </p>
 
             <h2>{legal.orPickACard}</h2>
-            <CardsStatus
-              count={studio.state === 'ready' && hasOrder(studio.snapshot) ? fundableCards(studio.snapshot).length : null}
-              unavailable={studio.state !== 'loading' && (studio.state !== 'ready' || !hasOrder(studio.snapshot))}
-            />
+            {/* The cards' polite live region (WCAG 4.1.3), inline as this page is kernel: empty while
+                they load, then the count, or that they did not load. */}
+            <p className="sr-only" role="status" aria-live="polite" data-cards-status="">
+              {studio.state === 'loading'
+                ? ''
+                : studio.state !== 'ready' || !hasOrder(studio.snapshot)
+                  ? copy.cardsUnavailable
+                  : fundableCards(studio.snapshot).length === 1
+                    ? copy.cardsLoadedOne
+                    : `${fundableCards(studio.snapshot).length}${copy.cardsLoadedMany}`}
+            </p>
             <Guarded studio={studio}>
               {(snapshot) => {
                 if (!hasOrder(snapshot)) return <p className="muted">{legal.partUnavailable}</p>;
