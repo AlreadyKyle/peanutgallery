@@ -39,7 +39,7 @@ Four projects the board named as references, what each actually did, what worked
 **What Mob Machine takes.**
 - The meter and the milestone list work. Selling the future is what failed.
 - Mob Machine sells no promise: a card is funded only when it meets the definition of ready (§4 Definition of ready), and it ships or its money moves on.
-- A stretch goal here should unlock studio capacity that the money itself pays for, such as a second builder running in parallel once monthly funding covers it. It should never be game content promised for later. See [A card supply that keeps pace with funding](BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
+- A stretch goal here should unlock studio capacity that the money itself pays for, such as a second builder running in parallel once monthly funding covers it. It should never be game content promised for later. See [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
 - No item in a Mob Machine game is sold for money (§4 Rating, §4 Art policy).
 
 ## Twitch Plays Pokémon
@@ -57,9 +57,9 @@ Four projects the board named as references, what each actually did, what worked
 
 **What Mob Machine takes.**
 - The process is the show, failures included. Gate failures and reverts are already public on the card pages.
-- Free participation is what scales an audience. Money alone does not. See [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards), which waits on [Player accounts](BACKLOG.md#player-accounts).
-- Lore comes from the community naming things. See [The name pipeline](BACKLOG.md#the-name-pipeline) and [Personal decisions for contributors](BACKLOG.md#personal-decisions-for-contributors), which keep public text away from writing agents (§4 Kernel).
-- A recap helps late arrivals. See [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips).
+- Free participation is what scales an audience. Money alone does not. See [Free voting on open cards](../BACKLOG.md#free-voting-on-open-cards), which waits on [Player accounts](../BACKLOG.md#player-accounts).
+- Lore comes from the community naming things. See [The name pipeline](../BACKLOG.md#the-name-pipeline) and [Personal decisions for contributors](../BACKLOG.md#personal-decisions-for-contributors), which keep public text away from writing agents (§4 Kernel).
+- A recap helps late arrivals. See [Weekly episodes and clips](../BACKLOG.md#weekly-episodes-and-clips).
 
 ## Humble Bundle
 
@@ -75,7 +75,7 @@ Four projects the board named as references, what each actually did, what worked
 
 **What Mob Machine takes.**
 - The slider is built on /contribute (`docs/specs/split-slider.md`). The 80/20 default and the 10% reserve stay fixed (§4 Kernel), so the slider never takes back a promise.
-- A community milestone that benefits everyone fits [Public mirror of the game with a license](BACKLOG.md#public-mirror-of-the-game-with-a-license).
+- A community milestone that benefits everyone fits [Public mirror of the game with a license](../BACKLOG.md#public-mirror-of-the-game-with-a-license).
 - Mob Machine leaves out beat-the-average. It ranks payers by amount, which the money surfaces avoid.
 
 ## Growth: the share loop
@@ -84,10 +84,10 @@ The loop is fund, watch, ship, share. Each ship is the moment a supporter has so
 
 1. **Tell the supporter their card shipped.** Built: a supporter who left `/thanks` heard nothing more from the studio, and now a short email to the Stripe checkout address, saying the card is live, what it cost and where to play it, closes the loop. See [Ship notices](../specs/ship-notices.md).
 2. **A Share button and a link preview for each card.** Both are built: the Share button, and a code-drawn preview image of the card face with the title, its Supporter numbers, what it cost and how long the agents took, from public records only. See [Card link preview](../specs/card-preview.md).
-3. **Play the version you funded.** A permalink to the game as the card shipped it, already listed in [More on a card's own page](BACKLOG.md#more-on-a-cards-own-page).
-4. **Studio milestones a supporter can push over the line.** Capacity that money unlocks, shown as a meter (the Star Citizen lesson, without the promises). See [A card supply that keeps pace with funding](BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
-5. **Shareable moments inside Dust.** A code-drawn image of a run that a player can share. See [Shareable runs in Dust](BACKLOG.md#shareable-runs-in-dust).
-6. **Free participation.** Accounts, then free votes (the Twitch Plays Pokémon lesson). See [Player accounts](BACKLOG.md#player-accounts).
+3. **Play the version you funded.** A permalink to the game as the card shipped it, already listed in [More on a card's own page](../BACKLOG.md#more-on-a-cards-own-page).
+4. **Studio milestones a supporter can push over the line.** Capacity that money unlocks, shown as a meter (the Star Citizen lesson, without the promises). See [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
+5. **Shareable moments inside Dust.** A code-drawn image of a run that a player can share. See [Shareable runs in Dust](../BACKLOG.md#shareable-runs-in-dust).
+6. **Free participation.** Accounts, then free votes (the Twitch Plays Pokémon lesson). See [Player accounts](../BACKLOG.md#player-accounts).
 
 Channels and their order are §7 Channels: Reddit, then Hacker News, X and the press.
 
