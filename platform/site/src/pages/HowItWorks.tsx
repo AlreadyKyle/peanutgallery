@@ -256,7 +256,7 @@ export function HowItWorks() {
       </div>
       <div className="band">
         <div className="pair">
-          <WhoRuns id="how-who" />
+          <WhoRuns id="how-who" compact />
           <section className="section" aria-labelledby="how-code">
             <h2 id="how-code">{page.codeHeading}</h2>
             <div className="prose">
