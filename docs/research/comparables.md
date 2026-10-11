@@ -86,7 +86,7 @@ The loop is fund, watch, ship, share. Each ship is the moment a supporter has so
 2. **A Share button and a link preview for each card.** Both are built: the Share button, and a code-drawn preview image of the card face with the title, its Supporter numbers, what it cost and how long the agents took, from public records only. See [Card link preview](../specs/card-preview.md).
 3. **Play the version you funded.** A permalink to the game as the card shipped it, already listed in [More on a card's own page](../BACKLOG.md#more-on-a-cards-own-page).
 4. **Studio milestones a supporter can push over the line.** Capacity that money unlocks, shown as a meter (the Star Citizen lesson, without the promises). See [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
-5. **Shareable moments inside Dust.** A code-drawn image of a run that a player can share. See [Shareable runs in Dust](../BACKLOG.md#shareable-runs-in-dust).
+5. **Shareable moments inside Dust.** A code-drawn image of a run that a player can share. Built: `seed-1/render/share-image.ts`.
 6. **Free participation.** Accounts, then free votes (the Twitch Plays Pokémon lesson). See [Player accounts](../BACKLOG.md#player-accounts).
 
 Channels and their order are §7 Channels: Reddit, then Hacker News, X and the press.

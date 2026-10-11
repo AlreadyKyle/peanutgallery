@@ -81,9 +81,9 @@ Ranked by impact on the loop for the effort. Built means on main or on this bran
 
 1. **Feedback beats in Dust** (built on this branch): "+N" on strike, a pulse on buy, an unlock toast, all skipped under reduced motion (`seed-1/render/scene.ts`).
 2. **Welcome-back note in Dust** (built on this branch): dust earned while away and for how long, after a minute or more away.
-3. **Share your run, text** (built on this branch): the share sheet or the clipboard, with total dust, unlocks and https://play.mobmachine.games/ (`seed-1/render/share.ts`). First step of [Shareable runs in Dust](BACKLOG.md#shareable-runs-in-dust).
+3. **Share your run, text** (built on this branch): the share sheet or the clipboard, with total dust, unlocks and https://play.mobmachine.games/ (`seed-1/render/share.ts`).
 4. **The next change to Dust, from inside Dust** (new): [Next card to fund, shown in Dust](BACKLOG.md#next-card-to-fund-shown-in-dust). Closes the play to fund gap, the biggest hole in the loop.
-5. **Shareable run picture** (backlog): the code-drawn image step of [Shareable runs in Dust](BACKLOG.md#shareable-runs-in-dust).
+5. **Shareable run picture** (built): a 1200 by 630 card drawn in code with the dust, the unlocks by name and the address, attached to the share sheet where it takes files (`seed-1/render/share-image.ts`).
 6. **Dust's own link preview** (new): [A link preview image for Dust](BACKLOG.md#a-link-preview-image-for-dust). Today a shared Dust link shows the studio's image (`seed-1/index.html` points `og:image` at the site's `og.png`).
 7. **Play and share counts** (new): [Play and share counts without tracking](BACKLOG.md#play-and-share-counts-without-tracking). Without it the studio cannot see conversion, so it cannot tune it.
 8. **Card share and since your last visit** (built): `ShareCard` on card pages and /thanks, `SinceLastVisit` on home.
