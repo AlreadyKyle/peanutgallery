@@ -1,5 +1,5 @@
 // A card the Game Designer drafted (docs/specs/agent-workflows.md): its full face among home's cards
-// to fund, its compact face in Next up and its row on /roadmap carry "Written by the Game Designer, an
+// to fund, its compact face in Next up carry "Written by the Game Designer, an
 // AI agent", and no card the board filed does; the byline ends above the funding bar. The full faces'
 // rhythm on a card grid is measured on the design guide (docs/specs/home-flow.md). Set
 // E2E_SCREENSHOTS to a folder to save each page at each width.
@@ -63,16 +63,6 @@ for (const viewport of WIDTHS) {
       await expect(page.locator('.card-byline')).toHaveCount(2);
       expect(await overflowsHorizontally(page)).toBe(false);
       await screenshot(page, 'home-agent-card', viewport.width);
-    });
-
-    test('/roadmap shows the line on the waiting agent card only', async ({ page }) => {
-      await page.goto('/roadmap');
-      const next = page.getByRole('region', { name: 'Next' });
-      const row = next.locator('li', { has: page.getByRole('heading', { name: String(WAITING.title) }) });
-      await expect(row.locator('.card-byline')).toHaveText(BYLINE);
-      await expect(page.locator('.card-byline')).toHaveCount(1);
-      expect(await overflowsHorizontally(page)).toBe(false);
-      await screenshot(page, 'roadmap-agent-card', viewport.width);
     });
   });
 }

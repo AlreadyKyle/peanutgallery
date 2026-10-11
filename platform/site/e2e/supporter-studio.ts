@@ -229,5 +229,4 @@ export const SUPPORTER_ROUTES: [string, string][] = [
   ['thanks-pending', `/thanks?session=${SESSIONS.pending}`],
   ['thanks-not-counted', `/thanks?session=${SESSIONS.notCounted}`],
   ['team-paused', '/team'],
-  ['roadmap-opens-soon', '/roadmap'],
 ];

@@ -5,7 +5,6 @@ import { Guide, GUIDE_PATH } from './pages/Guide';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
 import { Reports } from './pages/Reports';
-import { Roadmap } from './pages/Roadmap';
 import { Team } from './pages/Team';
 
 // The site's pages in the platform code lane and their links in the top bar. This list is a
@@ -22,7 +21,6 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/', element: <Landing /> },
   { path: '/how-it-works', element: <HowItWorks /> },
   { path: '/team', element: <Team /> },
-  { path: '/roadmap', element: <Roadmap /> },
   // A card's own page (docs/specs/supporter-pages.md): the Watch links and /ledger's Stopped rows link it.
   { path: '/card/:id', element: <CardPage /> },
   // The weekly reports (docs/specs/studio-reports.md), linked from the footer.
@@ -35,5 +33,4 @@ export const pageRoutes: readonly PageRoute[] = [
 export const pageNav: readonly NavItem[] = [
   { to: '/how-it-works', label: copy.howItWorksNav },
   { to: '/team', label: copy.teamNav },
-  { to: '/roadmap', label: copy.roadmapNav },
 ];

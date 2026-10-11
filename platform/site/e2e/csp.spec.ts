@@ -8,7 +8,7 @@ import { expect, test } from './fixtures';
 // vite preview sends netlify.toml's headers (vite.config.ts), so this run loads every page under the
 // production Content Security Policy, the whole policy enforced. Any report fails a page load; a connection to a host outside
 // connect-src is refused.
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page', '/design-kit-7q4m'];
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/terms', '/privacy', '/refunds', '/contact', '/board', '/no-such-page', '/design-kit-7q4m'];
 const toml = readFileSync(fileURLToPath(new URL('../netlify.toml', import.meta.url)), 'utf8');
 const enforced = toml.match(/^\s*Content-Security-Policy\s*=\s*"([^"]*)"/m)?.[1] ?? '';
 

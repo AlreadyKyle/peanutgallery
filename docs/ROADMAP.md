@@ -149,6 +149,8 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/unattended-roles.md` | built | PR2 to PR5 are merged (PLAN.md §10 decision 66); left: the production migrations and the live checks of the visual review, auto-resume and the self-refilling supply |
 | `specs/optional-board.md` | built | the board's site as an optional panel: Status, Activity and six Actions, the second factor once per sign-in, no migration |
 | `specs/home-flow.md` | agreed | home's one four-lane card flow, the drafting status in the live document (`20261011000000_home_flow_supply.sql`) and the clipped Game Director note; then the migration in production and the live check |
+| `specs/home-game-tile.md` | agreed | home's first-game tile, the agents' share line and Dust's time away (pull request 157); then the live check |
+| `specs/always-open.md` | agreed | home's Next up holds only approved agent cards, no `/roadmap`, and the draft limit of 12 a day; then the migration in production and the live check |
 
 ## Standing facts for any session
 

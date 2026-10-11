@@ -42,6 +42,13 @@
   status = 301
   force = true
 
+# There is no roadmap page (docs/specs/always-open.md): old links land on home's cards to fund.
+[[redirects]]
+  from = "/roadmap"
+  to = "/"
+  status = 301
+  force = true
+
 # The board has its own site (docs/specs/board-site.md). /board here is a plain not found page, served
 # with a 404 status, and nothing on this site names the board's address.
 [[redirects]]

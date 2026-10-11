@@ -32,7 +32,7 @@ export function Reports() {
           <div className="prose">
             <p>{words.empty}</p>
             <p className="more">
-              <MoreLink to="/roadmap">{copy.roadmapLink}</MoreLink>
+              <MoreLink to="/">{copy.roadmapLink}</MoreLink>
             </p>
           </div>
         ) : (

@@ -19,7 +19,6 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
   ['ledger', '/ledger'],
   ['how-it-works', '/how-it-works'],
   ['team', '/team'],
-  ['roadmap', '/roadmap'],
   ['reports', '/reports'],
   ['terms', '/terms'],
   ['terms-1', '/terms/1'],

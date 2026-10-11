@@ -20,7 +20,6 @@ export const copy = {
   menu: 'Menu',
   howItWorksNav: 'How it works',
   teamNav: 'Team',
-  roadmapNav: 'Roadmap',
   // The footer's link to /reports (docs/specs/studio-reports.md).
   reportsNav: 'Weekly reports',
   fullLedger: 'Full ledger',
@@ -39,7 +38,8 @@ export const copy = {
     drafting: 'The agents are drafting the next card.',
     building: { one: '1 card', many: '{n} cards', restOne: 'is being built.', restMany: 'are being built.' },
   },
-  roadmapLink: 'See the roadmap',
+  // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
+  roadmapLink: 'See the cards to fund',
   // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
   queued: 'Queued',
   shipped: 'Shipped',
@@ -84,12 +84,11 @@ export const copy = {
     fundIntro: 'Each card is one small change to a game or to this site. When its bar fills, the agents build it.',
     fundMore: 'See all {n} open cards',
     title: 'How the cards move',
-    intro: 'Cards wait here before they open for funding, then move along once their bar fills. Every card here is real.',
+    intro: 'The agents draft cards and open them for funding, then build each one once its bar fills. Every card here is real.',
     lanes: {
       next: {
         title: 'Next up',
-        more: 'See the roadmap',
-        empty: 'Nothing is planned yet. Approved drafts wait here before they open.',
+        empty: 'Approved drafts wait here for a few minutes before they open for funding.',
       },
       building: {
         title: 'Building',
@@ -161,7 +160,8 @@ export const copy = {
     startsLaterIntro: 'Each of these roles starts when the step beside it happens.',
     planned: 'Planned',
     plannedIntro: 'These roles are planned, with no start set yet. Their work is on the roadmap.',
-    roadmapLink: 'See the roadmap',
+    // Where a planned card's page and an empty reports page send the reader: home's cards to fund.
+  roadmapLink: 'See the cards to fund',
     // A card role whose folder the board has not opened (the platform code lane).
     laneClosed: 'Starts when the board opens the studio code lane.',
     rolePaused: 'The board has paused this agent.',
@@ -251,30 +251,9 @@ export const copy = {
     gateFailed: 'It failed its checks.',
     shipped: 'It went live.',
   },
+  // A planned card's state, on its own page (/card/:id) and in home's Next up lane.
   roadmap: {
-    title: 'Roadmap',
-    lede: "What the studio plans to build next. The board opens its own cards for funding, and a card an agent drafted opens by itself once it is approved and the board's waiting time has passed.",
-    // A single planned card's state, on its own page (/card/:id); /roadmap says planned once per group.
     planned: 'Planned and not built yet',
-    horizons: { next: 'Next', later: 'Later' },
-    horizonIntros: {
-      next: 'To be built soonest.',
-      later: 'To be built after that.',
-    },
-    // Each horizon's cards in groups by folder and the board-work marker, never by bucket (PLAN.md §4
-    // Work, docs/specs/copy-pass.md). Board work is a disclosure, closed until opened, unless it is all
-    // the horizon holds: then it is drawn open under boardOnly.
-    groups: {
-      players: { heading: 'For players', intro: 'Planned changes to the games.' },
-      studio: { heading: 'The studio', intro: "Planned changes to this site's pages, words and layout." },
-      board: {
-        heading: 'Board work on how the studio runs (not funded by cards)',
-        intro: 'Planned changes to the rules, the card system, the agents and the code that runs them. The board makes these itself through reviewed changes.',
-      },
-    },
-    empty: 'Nothing is planned here yet.',
-    boardOnly: 'No card for players or the studio is here yet. The cards below are board work.',
-    loading: 'Loading the roadmap.',
     // An approved agent card waiting to be dealt to now (opens_at set, not yet on now).
     opensSoon: 'Approved, opens soon',
   },

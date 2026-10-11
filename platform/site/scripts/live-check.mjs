@@ -19,7 +19,7 @@
 // tile, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
-// each running or paused row and no model on the rest; /roadmap shows no bar and no fund link. The
+// each running or paused row and no model on the rest; /roadmap answers with home (there is no roadmap page). The
 // newest live card's own page has its title as the one h1, its commit and a Supporters section;
 // /thanks with no session is a plain thank-you and a made-up session reads as recording with the
 // query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store
@@ -90,7 +90,6 @@ const ROUTES = [
   '/ledger',
   '/how-it-works',
   '/team',
-  '/roadmap',
   '/reports',
   '/terms',
   '/terms/1',
@@ -606,10 +605,9 @@ try {
     );
   }
 
+  // There is no roadmap page (docs/specs/always-open.md): old links land on home's cards to fund.
   await open(page, '/roadmap');
-  const roadmap = page.getByRole('main');
-  check((await roadmap.getByRole('progressbar').count()) === 0, '/roadmap shows no funding bar');
-  check((await roadmap.getByRole('link').count()) === 0, '/roadmap has no fund link');
+  check(new URL(page.url()).pathname === '/', `/roadmap redirects to home, landed on ${new URL(page.url()).pathname}`);
 
   // The Terms versions (docs/specs/legal-copy.md): /terms shows the newest posted version with when it
   // took effect, never the cannot-confirm notice, and lists each earlier one; the next number is not

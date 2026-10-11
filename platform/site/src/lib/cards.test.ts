@@ -303,7 +303,7 @@ describe('visibleFilters', () => {
 
 
 describe("nextUp (home's Next up lane)", () => {
-  it('puts approved agent cards waiting to open first, then cards that fund, then board work, each in roadmap order', () => {
+  it('holds only approved agent cards waiting to open, the soonest first: the backlog and board work stay off the site', () => {
     const cards = [
       card({ id: 'board-next', horizon: 'next', rank: 1, board_work: true }),
       card({ id: 'plan-later', horizon: 'later', rank: 1 }),
@@ -313,15 +313,7 @@ describe("nextUp (home's Next up lane)", () => {
       card({ id: 'opens-next', horizon: 'next', rank: 3, opens_at: '2026-10-12T00:00:00Z' }),
       card({ id: 'board-later', horizon: 'later', board_work: true }),
     ];
-    expect(nextUp(cards).map((c) => c.id)).toEqual([
-      'opens-next',
-      'opens-later',
-      'plan-next-1',
-      'plan-next-2',
-      'plan-later',
-      'board-next',
-      'board-later',
-    ]);
+    expect(nextUp(cards).map((c) => c.id)).toEqual(['opens-later', 'opens-next']);
   });
 
   it('leaves out vetoed cards, shipped cards and every card on horizon now', () => {
@@ -331,7 +323,7 @@ describe("nextUp (home's Next up lane)", () => {
       card({ id: 'shipped', horizon: 'next', stage: 'live' }),
       card({ id: 'open-now', horizon: 'now', stage: 'proposed', funding_target_usd: 5 }),
       card({ id: 'building-now', horizon: 'now', stage: 'building' }),
-      card({ id: 'kept', horizon: 'later' }),
+      card({ id: 'kept', horizon: 'later', opens_at: '2026-10-11T00:00:00Z' }),
     ];
     expect(nextUp(cards).map((c) => c.id)).toEqual(['kept']);
     expect(nextUp([])).toEqual([]);
@@ -357,7 +349,7 @@ describe('flowLanes', () => {
       card({ id: 'g', stage: 'gated' }),
       card({ id: 'open', stage: 'proposed', funding_target_usd: 5 }),
       card({ id: 'live', stage: 'live' }),
-      card({ id: 'plan', horizon: 'next' }),
+      card({ id: 'plan', horizon: 'next', opens_at: '2026-10-11T00:00:00Z' }),
     ];
     const groups = groupCards(cards);
     const lanes = flowLanes(groups);

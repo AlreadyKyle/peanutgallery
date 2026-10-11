@@ -58,6 +58,8 @@ describe('netlify.toml security headers', () => {
       ['https://peanutgallerygames.netlify.app/*', 'https://peanutgallery.games/*', 'https://www.peanutgallery.games/*'].map((from) => [from, 'https://mobmachine.games/:splat', '301', 'force']),
     );
     expect(rules.slice(3, spa)).toEqual([
+      // There is no roadmap page: old links go to home's cards to fund (docs/specs/always-open.md).
+      ['/roadmap', '/', '301', 'force'],
       ['/board', '/index.html', '404', 'force'],
       ['/board/*', '/index.html', '404', 'force'],
       ...['/contribute', '/ledger', '/terms', '/terms/*', '/privacy', '/refunds', '/refunds/*', '/contact', '/thanks'].map((path) => [path, '/index.html', '200', 'force']),
@@ -70,7 +72,7 @@ describe('netlify.toml security headers', () => {
       rules
         .slice(1, spa)
         .map(([from]) => from)
-        .filter((from) => !from!.endsWith('/*'))
+        .filter((from) => !from!.endsWith('/*') && from !== '/roadmap')
         .sort(),
     );
     expect(rules[spa]).toEqual(['/*', '/index.html', '200', 'no force']);

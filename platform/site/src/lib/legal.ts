@@ -397,7 +397,7 @@ export const legal = {
     paragraphs: [
       'Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.',
       'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
-      'The board files cards on the roadmap. When too few cards are open for funding, the Game Designer, an AI agent, drafts one from the roadmap or a new idea, and the Game Director, another agent, grades it before it can open. No one has to ask.',
+      'The board can file cards, but it does not have to. When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one, and the Game Director, another agent, grades it before it opens. No one has to ask.',
     ],
     dutiesIntro: 'The board also has standing duties:',
     duties: [

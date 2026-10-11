@@ -457,6 +457,7 @@ describe('Landing', () => {
     const planned = [
       { ...snapshot.cards[2]!, id: 'later1', title: 'A planned card', horizon: 'later' as const, funding_target_usd: 0 },
       { ...snapshot.cards[1]!, id: 'next1b', title: 'A ranked card', horizon: 'next' as const, rank: 1 },
+      { ...snapshot.cards[1]!, id: 'soon1', title: 'An approved draft', horizon: 'next' as const, opens_at: '2026-10-11T00:00:00Z' },
     ];
     const cards = [...snapshot.cards, ...planned];
     renderLanding(fakeSource({ cards, money: books(['next1', 'next2', 'studio1', 'next1b', 'later1']) }));
@@ -464,8 +465,9 @@ describe('Landing', () => {
     const fund = fundTitles();
     expect(fund).not.toContain('A planned card');
     expect(fund).not.toContain('A ranked card');
-    // They are the roadmap: Next up lists them, ranked first, on the planned face.
-    expect(laneTitles('next')).toEqual(['A ranked card', 'A third level', 'A planned card']);
+    // Next up holds only the approved agent card waiting to open, on the planned face; the backlog
+    // cards are the repository's plan and never show (docs/specs/always-open.md).
+    expect(laneTitles('next')).toEqual(['An approved draft']);
     const horizon = (li: Element) => cards.find((card) => card.id === li.getAttribute('data-card'))!.horizon;
     for (const li of lane('next').querySelectorAll('li.card')) {
       expect(horizon(li)).not.toBe('now');
@@ -476,10 +478,11 @@ describe('Landing', () => {
   });
 
   it('leaves a held card out of Next up', async () => {
-    const held = { ...snapshot.cards[7]!, id: 'held1', title: 'A held card', rank: 1, board_vetoed: true, board_veto_reason: 'Not now.' };
-    renderLanding(fakeSource({ cards: [...snapshot.cards, held] }));
+    const soon = { ...snapshot.cards[7]!, id: 'soon1', title: 'An approved draft', opens_at: '2026-10-12T00:00:00Z' };
+    const held = { ...snapshot.cards[7]!, id: 'held1', title: 'A held card', rank: 1, opens_at: '2026-10-11T00:00:00Z', board_vetoed: true, board_veto_reason: 'Not now.' };
+    renderLanding(fakeSource({ cards: [...snapshot.cards, soon, held] }));
     await lanesDrawn();
-    expect(laneTitles('next')).toEqual(['A third level']);
+    expect(laneTitles('next')).toEqual(['An approved draft']);
     expect(screen.queryByText('A held card')).toBeNull();
   });
 

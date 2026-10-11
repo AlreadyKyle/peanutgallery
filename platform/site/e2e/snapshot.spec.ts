@@ -8,7 +8,7 @@ import { toDocuments } from './snapshot-documents';
 // from its own origin, never the Supabase host, and opens no WebSocket; a hidden tab makes no request;
 // a visible one reads /api/live each minute and /api/cards only on the first load; an in-app route
 // change asks which build is served and reloads a stale tab once, not twice.
-const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/roadmap', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
+const ROUTES = ['/', '/contribute', '/ledger', '/how-it-works', '/team', '/terms', '/terms/1', '/privacy', '/refunds', '/refunds/1', '/contact', '/no-such-page', '/design-kit-7q4m'];
 
 /** Lets a test hide and show the tab: visibilityState reads window.__hidden. */
 async function controlVisibility(page: Page): Promise<void> {

@@ -70,11 +70,10 @@ describe('App routes', () => {
     expect(screen.getByText(legal.ledgerLede)).toBeTruthy();
   });
 
-  it('renders How it works, the team and the roadmap, each with one h1 that names the tab', () => {
+  it('renders How it works and the team, each with one h1 that names the tab', () => {
     for (const [path, title] of [
       ['/how-it-works', copy.howItWorksPage.title],
       ['/team', copy.team.title],
-      ['/roadmap', copy.roadmap.title],
     ] as const) {
       renderAt(path);
       expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent), path).toEqual([title]);
@@ -205,7 +204,6 @@ describe('Site chrome', () => {
       [copy.studioName, '/'],
       [copy.howItWorksNav, '/how-it-works'],
       [copy.teamNav, '/team'],
-      [copy.roadmapNav, '/roadmap'],
       [legal.ledger, '/ledger'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();

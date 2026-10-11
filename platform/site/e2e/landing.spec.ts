@@ -99,7 +99,6 @@ for (const viewport of WIDTHS) {
       for (const [name, href] of [
         ['How it works', '/how-it-works'],
         ['Team', '/team'],
-        ['Roadmap', '/roadmap'],
         ['Ledger', '/ledger'],
         ['Discord', DISCORD_INVITE],
       ] as const) {
@@ -155,8 +154,8 @@ test.describe('the Menu on a phone', () => {
     await expect(nav.getByRole('link', { name: 'Team' })).toHaveCount(0);
     // Moving to another page closes it.
     await menu.click();
-    await nav.getByRole('link', { name: 'Roadmap' }).click();
-    await expect(page).toHaveURL(/\/roadmap$/);
+    await nav.getByRole('link', { name: 'Team' }).click();
+    await expect(page).toHaveURL(/\/team$/);
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 
