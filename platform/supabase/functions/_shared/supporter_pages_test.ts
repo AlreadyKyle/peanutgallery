@@ -502,6 +502,12 @@ Deno.test("site_card returns a public card's document, and public_role_stats cou
       assertEquals(Object.keys(entry).sort(), ["role_id", "shipped_cards", "spent_7d_usd", "spent_usd"]);
     });
 
+    await t.step("public_role_stats leaves out spend on cards the public cannot see (20261011300000_role_stats_public_only.sql)", async () => {
+      await s.db.query(`insert into public.ledger (card_id, role_id, model, usd, billed_to) values ($1, $2, 'model-id', 7, 'studio')`, [hidden, s.builder]);
+      const stats = await s.asAnon(() => s.rows<Doc>(`select * from public.public_role_stats where role_id = $1`, [s.builder]));
+      assertEquals([Number(stats[0]!.spent_usd), Number(stats[0]!.spent_7d_usd)], [1.5, 0.5]);
+    });
+
     await t.step("both documents carry every key in snapshot-keys.json with its type; roles carry status, trigger and the pause", async () => {
       const spec = JSON.parse(await Deno.readTextFile(SNAPSHOT_KEYS)) as { live: KeySpec; cards: KeySpec };
       for (const [name, doc] of [["live", await s.live()], ["cards", await s.cards()]] as const) {
