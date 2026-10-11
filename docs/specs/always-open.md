@@ -39,6 +39,8 @@ The Game Designer may start up to 12 `draft_card` runs a New York day instead of
 
 ## Evidence
 
+- 11 October 2026: the migration was not applied when #157 merged; production read `draft_runs_per_day` 4 with the supply short for `daily_limit` (4 of 4 runs used). Applied on the board's go through the Supabase connector as `20261011021217 always_open`; read back: `draft_runs_per_day` 12, `public_supply()` `{"short": true, "reason": null, "run_limit": 12, "runs_today": 4, "next_check_at": "2026-10-11T02:20:00+00:00"}`. Home showing cards to fund within a day and the live-check line are still to record.
+
 ## Decisions
 
 - 11 October 2026: the board drops `/roadmap` and keeps the ledger and the weekly reports as the studio's history (`docs/PLAN.md` §10 decision 69).
