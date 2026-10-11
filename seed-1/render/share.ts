@@ -30,7 +30,8 @@ export function attachShare(
   nav: ShareNavigator = navigator as ShareNavigator,
 ): void {
   button.textContent = strings.share.button;
-  button.hidden = false;
+  // Its space is reserved from first paint (visibility, not hidden), so showing it never resizes the canvas.
+  button.style.visibility = 'visible';
   button.addEventListener('click', () => {
     const text = shareText(current(), config, strings);
     const done = (message: string): void => {

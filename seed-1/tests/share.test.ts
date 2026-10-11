@@ -14,7 +14,7 @@ const strings = parseStrings(JSON.parse(readFileSync(join(LIVE_CONTENT_DIR, 'str
 // The smallest stand-ins for a button and a status line: the share code touches only these.
 function fakeButton(): { el: HTMLButtonElement; click: () => void } {
   let handler: () => void = () => undefined;
-  const el = { textContent: '', hidden: true, addEventListener: (_: string, fn: () => void) => (handler = fn) } as unknown as HTMLButtonElement;
+  const el = { textContent: '', style: { visibility: 'hidden' }, addEventListener: (_: string, fn: () => void) => (handler = fn) } as unknown as HTMLButtonElement;
   return { el, click: () => handler() };
 }
 
@@ -42,7 +42,7 @@ describe('share your run', () => {
     const { el, click } = fakeButton();
     const status = { textContent: '' } as HTMLElement;
     attachShare(el, status, () => state, config, strings, { share });
-    expect(el.hidden).toBe(false);
+    expect(el.style.visibility).toBe('visible');
     expect(el.textContent).toBe(strings.share.button);
     click();
     expect(share).toHaveBeenCalledWith({ title: strings.title, text: shareText(state, config, strings), url: GAME_URL });
