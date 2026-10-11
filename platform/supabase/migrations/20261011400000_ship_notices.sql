@@ -6,15 +6,20 @@
 -- with the restricted read key and forgets it. These tables hold only ids, a status and Resend's
 -- message id, and no role but service_role reads them; no public view or function exposes them.
 --
--- a. ship_notice_settings: one row, starts_at. Only cards that went live at or after it are noticed,
+-- a. ship_notice_settings: one row. starts_at: only cards that went live at or after it are noticed,
 --    so the first run does not email every supporter of every card shipped before the feature.
+--    unsubscribe_secret: 32 random bytes made here (two gen_random_uuid() values and the clock through
+--    sha256, as PGlite has no pgcrypto), which never leave the database: an unsubscribe link carries
+--    sha256(secret || the payment id's 16 bytes) in hex, and only the database computes or checks it.
 -- b. ship_notices: one row per (payment, card), claimed before the send. The primary key is the
 --    idempotency: a second claim of the same pair finds the row and sends nothing. A claim left at
 --    'sending' (the job died between the send and the settle) is never sent again; the board reads it.
 -- c. notice_unsubscribes: one row per contributor_id (the one-way hash of the receipt email), written
---    by the unsubscribe function; every payment of that contributor is left out from then on.
--- d. ship_notices_due(): what to send, ship_notice_claim(), ship_notice_settle(),
---    ship_notice_unsubscribe(): service_role only.
+--    by ship_notice_unsubscribe; every payment of that contributor is left out from then on.
+-- d. ship_notices_due(), ship_notice_claim() and ship_notice_settle(): service_role only.
+--    ship_notice_unsubscribe(payment, token): anon may call it, as the site's /api/unsubscribe does
+--    with the publishable key. It writes only when the token matches the payment, and only a
+--    contributor hash into notice_unsubscribes; it reads no free text and returns only true or false.
 --
 -- Every statement runs twice without error, as the migration test applies it.
 
@@ -22,7 +27,9 @@
 
 create table if not exists public.ship_notice_settings (
   id smallint primary key default 1 check (id = 1),
-  starts_at timestamptz not null default now()
+  starts_at timestamptz not null default now(),
+  unsubscribe_secret bytea not null default sha256(convert_to(gen_random_uuid()::text || gen_random_uuid()::text || clock_timestamp()::text, 'UTF8'))
+    check (length(unsubscribe_secret) = 32)
 );
 insert into public.ship_notice_settings (id) values (1) on conflict (id) do nothing;
 
@@ -50,9 +57,21 @@ alter table public.ship_notice_settings enable row level security;
 alter table public.ship_notices enable row level security;
 alter table public.notice_unsubscribes enable row level security;
 revoke all on public.ship_notice_settings, public.ship_notices, public.notice_unsubscribes from public, anon, authenticated, service_role;
-grant select on public.ship_notice_settings, public.ship_notices, public.notice_unsubscribes to service_role;
+-- The board reads the notices and the unsubscribes with the service key; the settings row, which holds
+-- the secret, is read only by the functions below.
+grant select on public.ship_notices, public.notice_unsubscribes to service_role;
 
 -- d. Functions ------------------------------------------------------------------
+
+-- The unsubscribe token for a payment: no role may call it; the functions below do.
+create or replace function public.ship_notice_token(p_payment uuid) returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select encode(sha256(s.unsubscribe_secret || uuid_send(p_payment)), 'hex') from public.ship_notice_settings s where s.id = 1
+$$;
 
 -- Each Stripe payment that still counts (money.payment_counts: not the board's test payment, not
 -- refunded or disputed in full) and reached a public card that went live at or after starts_at,
@@ -66,14 +85,15 @@ returns table (
   card_title text,
   card_folder text,
   live_at timestamptz,
-  cost_usd numeric
+  cost_usd numeric,
+  unsubscribe_token text
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, c.id, p.stripe_session_id, c.title, c.folder::text, c.live_at, money.card_studio_spend(c.id)
+  select p.id, c.id, p.stripe_session_id, c.title, c.folder::text, c.live_at, money.card_studio_spend(c.id), public.ship_notice_token(p.id)
   from (
     select x.card_id, x.payment_id
     from public.contribution_allocations x
@@ -138,10 +158,11 @@ begin
 end;
 $$;
 
--- The unsubscribe link names a payment; this records its contributor, so every payment made with the
--- same receipt email is left out from then on. True when the payment is a Stripe payment; a second
--- call is a no-op that still answers true.
-create or replace function public.ship_notice_unsubscribe(p_payment uuid) returns boolean
+-- The unsubscribe link names a payment and carries its token; with a matching token this records the
+-- payment's contributor, so every payment made with the same receipt email is left out from then on.
+-- True when the token matches a Stripe payment (a second call is a no-op that still answers true);
+-- false for anything else, with nothing written.
+create or replace function public.ship_notice_unsubscribe(p_payment uuid, p_token text) returns boolean
 language plpgsql
 security definer
 set search_path = public
@@ -149,6 +170,12 @@ as $$
 declare
   v_contributor text;
 begin
+  if p_payment is null or p_token is null or p_token !~ '^[0-9a-f]{64}$' then
+    return false;
+  end if;
+  if p_token <> public.ship_notice_token(p_payment) then
+    return false;
+  end if;
   select contributor_id into v_contributor
   from public.contributions
   where id = p_payment and rail = 'stripe' and entry = 'payment';
@@ -164,8 +191,9 @@ $$;
 revoke all on function public.ship_notices_due(integer) from public, anon, authenticated;
 revoke all on function public.ship_notice_claim(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.ship_notice_settle(uuid, uuid, text, text) from public, anon, authenticated;
-revoke all on function public.ship_notice_unsubscribe(uuid) from public, anon, authenticated;
+revoke all on function public.ship_notice_unsubscribe(uuid, text) from public;
+revoke all on function public.ship_notice_token(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.ship_notices_due(integer) to service_role;
 grant execute on function public.ship_notice_claim(uuid, uuid) to service_role;
 grant execute on function public.ship_notice_settle(uuid, uuid, text, text) to service_role;
-grant execute on function public.ship_notice_unsubscribe(uuid) to service_role;
+grant execute on function public.ship_notice_unsubscribe(uuid, text) to anon, authenticated, service_role;

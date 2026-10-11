@@ -97,16 +97,19 @@ async function studio() {
   };
   const due = async () =>
     await as("service_role", () =>
-      rows<{ payment_id: string; card_id: string; stripe_session_id: string; card_title: string; card_folder: string; cost_usd: string }>(
+      rows<{ payment_id: string; card_id: string; stripe_session_id: string; card_title: string; card_folder: string; cost_usd: string; unsubscribe_token: string }>(
         `select * from public.ship_notices_due(50)`,
       ));
   const claim = (payment: string, cardId: string) =>
     as("service_role", async () => (await row<{ ok: boolean }>(`select public.ship_notice_claim($1, $2) as ok`, [payment, cardId])).ok);
   const settle = (payment: string, cardId: string, status: string, provider: string | null = null) =>
     as("service_role", async () => (await row<{ ok: boolean }>(`select public.ship_notice_settle($1, $2, $3, $4) as ok`, [payment, cardId, status, provider])).ok);
-  const unsubscribe = (payment: string) =>
-    as("service_role", async () => (await row<{ ok: boolean }>(`select public.ship_notice_unsubscribe($1) as ok`, [payment])).ok);
-  return { db, row, rows, as, card, pay, paymentId, spend, ship, due, claim, settle, unsubscribe, sqlOf, close: () => db.close() };
+  /** The token ship_notices_due hands the job, as the database computes it. */
+  const token = async (payment: string) => (await row<{ t: string }>(`select public.ship_notice_token($1) as t`, [payment])).t;
+  /** The site's call: anon, with the publishable key. */
+  const unsubscribe = (payment: string, t: string) =>
+    as("anon", async () => (await row<{ ok: boolean }>(`select public.ship_notice_unsubscribe($1, $2) as ok`, [payment, t])).ok);
+  return { db, row, rows, as, card, pay, paymentId, spend, ship, due, claim, settle, token, unsubscribe, sqlOf, close: () => db.close() };
 }
 
 Deno.test("ship_notices_due lists each counting payment once per shipped card it reached, and a claim sends once", OPTS, async (t) => {
@@ -131,7 +134,10 @@ Deno.test("ship_notices_due lists each counting payment once per shipped card it
         assertEquals(d.card_folder, "seed-1");
         assertEquals(Number(d.cost_usd), 1.25);
         assert(d.stripe_session_id.startsWith("cs_test_"));
+        assert(/^[0-9a-f]{64}$/.test(d.unsubscribe_token), d.unsubscribe_token);
+        assertEquals(d.unsubscribe_token, await s.token(d.payment_id));
       }
+      assert(due[0]!.unsubscribe_token !== due[1]!.unsubscribe_token, "each payment has its own token");
     });
 
     await t.step("a claim is taken once: the second claim of the same pair answers false", async () => {
@@ -157,7 +163,7 @@ Deno.test("ship_notices_due lists each counting payment once per shipped card it
   }
 });
 
-Deno.test("an unsubscribe leaves out every payment of that contributor, and only Stripe payments can be named", OPTS, async (t) => {
+Deno.test("an unsubscribe with the payment's token leaves out every payment of that contributor; a wrong token writes nothing", OPTS, async (t) => {
   const s = await studio();
   try {
     const one = await s.card("Card one", 10);
@@ -170,17 +176,26 @@ Deno.test("an unsubscribe leaves out every payment of that contributor, and only
     const x1 = await s.paymentId("cs_test_x10000000000");
     const y = await s.paymentId("cs_test_y0000000000");
 
-    await t.step("the unsubscribe from one payment's link leaves out the contributor's other payment too", async () => {
+    await t.step("a wrong, malformed or another payment's token answers false and writes nothing", async () => {
+      assertEquals(await s.unsubscribe(x1, "0".repeat(64)), false);
+      assertEquals(await s.unsubscribe(x1, "not hex"), false);
+      assertEquals(await s.unsubscribe(x1, await s.token(y)), false);
+      assertEquals((await s.rows(`select 1 from public.notice_unsubscribes`)).length, 0);
       assertEquals((await s.due()).length, 3);
-      assertEquals(await s.unsubscribe(x1), true);
-      assertEquals(await s.unsubscribe(x1), true);
+    });
+
+    await t.step("the unsubscribe from one payment's link leaves out the contributor's other payment too", async () => {
+      const t1 = await s.token(x1);
+      assertEquals(await s.unsubscribe(x1, t1), true);
+      assertEquals(await s.unsubscribe(x1, t1), true);
       assertEquals((await s.due()).map((d) => d.payment_id), [y]);
       const stored = await s.rows<{ contributor_id: string }>(`select contributor_id from public.notice_unsubscribes`);
       assertEquals(stored.map((r) => r.contributor_id), ["contrib_same"]);
     });
 
-    await t.step("an unknown payment id answers false and records nothing", async () => {
-      assertEquals(await s.unsubscribe("00000000-0000-0000-0000-000000000000"), false);
+    await t.step("an unknown payment id answers false and records nothing, even with its own token", async () => {
+      const unknown = "00000000-0000-0000-0000-000000000000";
+      assertEquals(await s.unsubscribe(unknown, await s.token(unknown)), false);
       assertEquals((await s.rows(`select 1 from public.notice_unsubscribes`)).length, 1);
     });
   } finally {
@@ -221,18 +236,26 @@ Deno.test("the board's test payment, a full refund, a card shipped before starts
   }
 });
 
-Deno.test("no public role reads the notice tables or calls their functions, and no column holds an address", OPTS, async (t) => {
+Deno.test("no public role reads the notice tables or calls the job's functions, the secret stays in the database, and no column holds an address", OPTS, async (t) => {
   const s = await studio();
   try {
-    await t.step("anon and authenticated cannot read the tables or call the functions", async () => {
+    await t.step("anon and authenticated cannot read the tables or call the job's functions", async () => {
       for (const role of ["anon", "authenticated"]) {
         for (const table of ["ship_notices", "notice_unsubscribes", "ship_notice_settings"]) {
           await assertRejects(() => s.as(role, () => s.rows(`select * from public.${table}`)), Error, "permission denied", `${role} ${table}`);
         }
         await assertRejects(() => s.as(role, () => s.rows(`select * from public.ship_notices_due(1)`)), Error, "permission denied", role);
-        await assertRejects(() => s.as(role, () => s.rows(`select public.ship_notice_unsubscribe(gen_random_uuid())`)), Error, "permission denied", role);
+        await assertRejects(() => s.as(role, () => s.rows(`select public.ship_notice_token(gen_random_uuid())`)), Error, "permission denied", role);
+        await assertRejects(() => s.as(role, () => s.rows(`select public.ship_notice_settle(gen_random_uuid(), gen_random_uuid(), 'sent')`)), Error, "permission denied", role);
         await assertRejects(() => s.as(role, () => s.rows(`select public.ship_notice_claim(gen_random_uuid(), gen_random_uuid())`)), Error, "permission denied", role);
       }
+    });
+
+    await t.step("service_role reads the notices but not the settings row, which holds the secret, nor the token function", async () => {
+      await s.as("service_role", () => s.rows(`select * from public.ship_notices`));
+      await assertRejects(() => s.as("service_role", () => s.rows(`select * from public.ship_notice_settings`)), Error, "permission denied");
+      await assertRejects(() => s.as("service_role", () => s.rows(`select public.ship_notice_token(gen_random_uuid())`)), Error, "permission denied");
+      assertEquals((await s.row<{ n: number }>(`select length(unsubscribe_secret) as n from public.ship_notice_settings`)).n, 32);
     });
 
     await t.step("row level security is on, and no column is named for an email or address", async () => {
@@ -247,8 +270,11 @@ Deno.test("no public role reads the notice tables or calls their functions, and 
     });
 
     await t.step("the migration applies a second time without error", async () => {
+      const secret = `select encode(unsubscribe_secret, 'hex') as h from public.ship_notice_settings`;
+      const before = (await s.row<{ h: string }>(secret)).h;
       await s.db.exec(await s.sqlOf(MIGRATION));
       assertEquals((await s.rows(`select 1 from public.ship_notice_settings`)).length, 1);
+      assertEquals((await s.row<{ h: string }>(secret)).h, before, "a second apply keeps the secret, so links already sent still work");
     });
   } finally {
     await s.close();
