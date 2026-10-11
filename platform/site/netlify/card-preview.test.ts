@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // Beside the functions folders, not in them: Netlify deploys every file there.
 import { cardIdFrom, metaFrom, STUDIO_NAME, withCardMeta } from './lib/card-meta';
-import { draftToLive, HEIGHT, previewCardFrom, renderPreview, STAGE_WORDS, supporterLine, TOKENS, WIDTH } from './lib/card-preview';
+import { clip, draftToLive, HEIGHT, previewCardFrom, renderPreview, STAGE_WORDS, supporterLine, TOKENS, WIDTH } from './lib/card-preview';
 
 const SITE_DIR = join(__dirname, '..');
 const ID = '00000000-0000-4000-8000-000000000004';
@@ -79,5 +79,14 @@ describe('the card page tags', () => {
   it('refuses a body with no title', () => {
     expect(metaFrom('{"card":{"title":""}}')).toBeNull();
     expect(metaFrom('not json')).toBeNull();
+  });
+});
+
+describe('clip', () => {
+  it('cuts on a character, never inside a surrogate pair', () => {
+    const out = clip(`${'a'.repeat(68)}🚀🚀🚀`, 70);
+    expect(out).toBe(`${'a'.repeat(68)}…`);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out)).toBe(false);
+    expect(clip('short  title', 70)).toBe('short title');
   });
 });
