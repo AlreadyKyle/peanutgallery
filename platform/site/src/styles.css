@@ -2403,7 +2403,6 @@ input[type='radio'] {
 
 /* Supporter pages (docs/specs/supporter-pages.md) ------------------------------------------- */
 
-/* A card's own page: one column at the reading measure at every width, the face first. */
 /* A card's Share button (ShareCard.tsx): a plain text button in the page's band, with one polite
    line beside it saying the link was copied. */
 .share-card {
@@ -2433,6 +2432,7 @@ input[type='radio'] {
   font-size: var(--size-small);
 }
 
+/* A card's own page: one column at the reading measure at every width, the face first. */
 .back {
   margin: 0 0 var(--space-2);
 }
