@@ -4,7 +4,7 @@
 // settings. Before every attended session the adapter compares `claude --version` with the pin and
 // pauses the card with cli_version when they differ, so an update that has not passed the sandbox
 // check never runs a card. The Janitor's daily check records the same difference as a finding. A
-// new version is a board pull request that updates the pin file with a fresh PASS line.
+// new version is a kernel pull request that updates the pin file with a fresh PASS line.
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -81,7 +81,7 @@ export class CliPin {
       ok: false,
       installed,
       pinned: pin.version,
-      detail: `Claude Code ${installed ?? 'of no known version'} is installed but the pin is ${pin.version}. Run sudo bash platform/ops/mac/pin-claude-code.sh on the pinned version, or update the pin in a board pull request with a fresh sandbox:check --positive PASS line.`,
+      detail: `Claude Code ${installed ?? 'of no known version'} is installed but the pin is ${pin.version}. Run sudo bash platform/ops/mac/pin-claude-code.sh on the pinned version, or update the pin in a kernel pull request with a fresh sandbox:check --positive PASS line.`,
     };
   }
 }

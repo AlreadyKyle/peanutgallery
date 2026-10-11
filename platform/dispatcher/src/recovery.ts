@@ -154,7 +154,7 @@ async function rejectUnmerged(deps: RecoveryDeps, card: Card): Promise<void> {
   await deps.db.insertEvent(card.id, card.executor_role_id, 'error', { step: 'merge_unknown_resolved', merged: false, branch: card.branch });
   deps.log.warn('recovery', `card ${card.id} had a lost merge and did not merge; rejected`, { branch: card.branch });
   await deps.alert.notify(
-    `Card ${shortId(card.id)} had a lost merge request and its pull request is not merged; it is rejected. Branch ${card.branch ?? '(none)'} and its pull request are left open for the board to close or merge.`,
+    `Card ${shortId(card.id)} had a lost merge request and its pull request is not merged; it is rejected. Branch ${card.branch ?? '(none)'} and its pull request are left open for a Claude session to close or merge.`,
   );
 }
 

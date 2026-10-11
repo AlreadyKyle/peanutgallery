@@ -8,7 +8,7 @@
 # shadows a kernel source file (format.js beside the kernel format.ts: Vite and Vitest try .mjs, .js
 # and .mts before .ts, so it replaces the kernel file and still passes the typecheck), and a
 # kernel name when any segment of its path matches the name as a glob. It matches a design path, one
-# of the board-only files that set the look (docs/specs/design-review.md), the same way as a kernel
+# of the kernel design files that set the look (docs/specs/design-review.md), the same way as a kernel
 # path. Both matches ignore case, because a
 # case-insensitive checkout (macOS) loads claude.md as CLAUDE.md. A line that begins with a double
 # quote (a path git quoted) or holds a tab or other control character fails too: it cannot be
@@ -63,7 +63,7 @@ while IFS= read -r file || [ -n "$file" ]; do
     echo "kernel-guard: $file is a kernel path or cannot be read as a path" >&2
   elif is_design_path "$file"; then
     [ -n "$first" ] || first="$file rule=design-path"
-    echo "kernel-guard: $file is a board-only design file" >&2
+    echo "kernel-guard: $file is a kernel design file" >&2
   fi
 done < "$1"
 

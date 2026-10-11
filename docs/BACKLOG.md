@@ -556,7 +556,7 @@ everything else, in the order the studio would take it.
 - horizon: later
 - rank: 53
 - summary: Dust shows the next open card that changes Dust, with its bar, and links to fund it.
-- intent: A player in Dust sees nothing about the change their money could buy next, which is the biggest gap between playing and funding (docs/VISION.md). The game page would read the public open cards for seed-1, show the one first in line with its title and bar beside the studio line, and link to its card page; read only, no prompt over the canvas, no chance words, and nothing shown when no card is open. The studio line in seed-1/index.html is protected, so the board changes it. It is not built yet.
+- intent: A player in Dust sees nothing about the change their money could buy next, which is the biggest gap between playing and funding (docs/VISION.md). The game page would read the public open cards for seed-1, show the one first in line with its title and bar beside the studio line, and link to its card page; read only, no prompt over the canvas, no chance words, and nothing shown when no card is open. The studio line in seed-1/index.html is protected, so a kernel pull request changes it. It is not built yet.
 - kernel: yes
 
 ### A link preview image for Dust
@@ -565,7 +565,7 @@ everything else, in the order the studio would take it.
 - horizon: later
 - rank: 54
 - summary: A shared link to Dust shows a picture of Dust instead of the studio's picture.
-- intent: seed-1/index.html points og:image at the site's og.png, so every shared Dust link previews as the studio. A 1200 by 630 image drawn in code from the game's own shapes (docs/PLAN.md §4 Art policy), built with the game and served beside it, with its own alt text, would make shared runs and links read as the game. The page is protected, so the board changes it. It is not built yet.
+- intent: seed-1/index.html points og:image at the site's og.png, so every shared Dust link previews as the studio. A 1200 by 630 image drawn in code from the game's own shapes (docs/PLAN.md §4 Art policy), built with the game and served beside it, with its own alt text, would make shared runs and links read as the game. The page is protected, so a kernel pull request changes it. It is not built yet.
 - kernel: yes
 
 ### Play and share counts without tracking
