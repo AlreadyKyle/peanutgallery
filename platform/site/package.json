@@ -11,9 +11,12 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource/atkinson-hyperlegible-next": "5.2.6",
+    "@resvg/resvg-wasm": "2.6.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.3"
+    "react-router-dom": "^7.18.3",
+    "satori": "0.18.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

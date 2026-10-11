@@ -3,6 +3,8 @@
 //
 //   GET  /api/card/:id  site_card(p_id): the CDN keeps it 60 seconds, as /api/live
 //   POST /api/thanks    thanks_for_session(p_session): never cached
+//   GET  /api/card/:id/preview.png  the card's 1200×630 link preview, drawn from site_card's answer
+//        (netlify/lib/card-preview.ts; docs/specs/card-preview.md): the CDN keeps it 10 minutes
 //
 // Each is one call to Supabase's RPC endpoint with the publishable key, so the function reads only
 // what anon may read. A card id that is not a uuid, and any query string on /api/card (which Netlify
@@ -19,6 +21,7 @@ export const MAX_BODY_BYTES = 1024;
 export const SESSION_PATTERN = /^cs_(live|test)_[A-Za-z0-9]{10,250}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CARD_PATH = /^\/api\/card\/([^/]+)$/;
+const PREVIEW_PATH = /^\/api\/card\/([^/]+)\/preview\.png$/;
 
 const JSON_TYPE = 'application/json; charset=utf-8';
 const NO_STORE = { 'Cache-Control': 'no-store', 'Netlify-CDN-Cache-Control': 'no-store' };
@@ -71,6 +74,30 @@ async function card(id: string): Promise<Response> {
   return answer(200, body, CARD_CACHE);
 }
 
+/** A preview changes only when its card does; 10 minutes on the CDN keeps rendering rare. */
+const PREVIEW_CACHE = {
+  'Netlify-CDN-Cache-Control': 'public, durable, s-maxage=600, stale-while-revalidate=600',
+  'Cache-Control': 'public, max-age=600',
+};
+
+async function preview(id: string): Promise<Response> {
+  if (!UUID.test(id)) return refuse(400, 'Not a card id');
+  const body = await rpc('site_card', { p_id: id.toLowerCase() });
+  if (body === null) return refuse(502, 'The studio database did not answer');
+  if (body.trim() === 'null') return refuse(404, 'There is no card at this address');
+  // Imported here so /api/card and /api/thanks never load the renderer.
+  const { previewCardFrom, renderPreview } = await import('../lib/card-preview.ts');
+  const card = previewCardFrom(body);
+  if (card === null) return refuse(502, 'The studio database did not answer');
+  let png: Uint8Array<ArrayBuffer>;
+  try {
+    png = new Uint8Array(await renderPreview(card));
+  } catch {
+    return refuse(502, 'The preview could not be drawn');
+  }
+  return new Response(png, { status: 200, headers: { 'Content-Type': 'image/png', ...PREVIEW_CACHE } });
+}
+
 /** The session id from a JSON body of at most MAX_BODY_BYTES, or null. */
 async function sessionFrom(req: Request): Promise<string | null> {
   const declared = Number(req.headers.get('content-length') ?? '0');
@@ -102,12 +129,13 @@ export default async function cardFunction(req: Request): Promise<Response> {
     if (req.method !== 'POST') return refuse(405, 'Only POST is allowed', { Allow: 'POST' });
     return thanks(req);
   }
-  const match = CARD_PATH.exec(url.pathname);
+  const previewMatch = PREVIEW_PATH.exec(url.pathname);
+  const match = previewMatch ?? CARD_PATH.exec(url.pathname);
   if (match === null) return refuse(404, 'Not found');
   if (req.method !== 'GET') return refuse(405, 'Only GET is allowed', { Allow: 'GET' });
   if (url.search !== '') return refuse(400, 'No query string is allowed');
   // A uuid never needs percent-decoding, and decoding a malformed escape such as %E0 would throw.
-  return card(match[1]!);
+  return previewMatch === null ? card(match[1]!) : preview(match[1]!);
 }
 
 /** Netlify's in-code function config, typed here so the site takes no @netlify/functions dependency. */
@@ -119,8 +147,9 @@ type FunctionConfig = {
 // The paths only, with no method key, so any method reaches the function and a wrong one answers
 // 405. The rate limit is the second of the two code-based rules legacy Free allows (snapshot.mts
 // takes the first), at snapshot.mts's 300 a minute per IP and domain: a card page reads /api/live
-// and /api/cards too, and readers behind one address (a school, an office) share the limit.
+// and /api/cards too, and readers behind one address (a school, an office) share the limit. The
+// preview shares this rule, so drawing images takes no rule of its own.
 export const config: FunctionConfig = {
-  path: ['/api/card/:id', '/api/thanks'],
+  path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks'],
   rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

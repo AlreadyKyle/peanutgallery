@@ -41,7 +41,8 @@
 // /api/cards answers 200, /api/live?x=1 answers 400, /api/reports answers 200 with its reports list
 // and /api/reports?x=1 400 (docs/specs/studio-reports.md), and one /assets/*.js is immutable.
 // Assets (the icons and version.json), og:image as an absolute URL, and
-// /og.png as a 200 image/png of 1200x630. /board is the not found page, a 404 from Netlify, with no
+// /og.png as a 200 image/png of 1200x630; the newest live card's page names its own preview, a
+// 1200x630 PNG (docs/specs/card-preview.md). /board is the not found page, a 404 from Netlify, with no
 // sign-in form and no netlify.app address but the game's (board-address.mjs); with BOARD_SITE_URL
 // set, no route names the board site's address. The www redirect, and the old domain's 301 to the same path, run only against production. The
 // security headers from netlify.toml, the enforced policy's full value included,
@@ -592,6 +593,12 @@ try {
       const commit = ((await page.locator('[data-fact="commit"]').allTextContents())[0] ?? '').trim();
       check(sha === null ? commit === '' : commit === `Merged as the studio's commit ${sha}`, `/card/${newest} commit line ${JSON.stringify(commit)} for commit_sha ${sha ?? 'none'}`);
       check((await page.getByRole('region', { name: 'Supporters', exact: true }).count()) === 1, `/card/${newest} has a Supporters section`);
+      // The card's link preview (docs/specs/card-preview.md): the page as served, before any script,
+      // names the card's own preview image, and that image is a 1200x630 PNG.
+      const served = await (await fetch(`${BASE}/card/${newest}`)).text();
+      const ogImage = served.match(/<meta property="og:image" content="([^"]+)"/)?.[1] ?? '';
+      check(ogImage.endsWith(`/api/card/${newest}/preview.png`), `/card/${newest} og:image ${ogImage}`);
+      await checkPng(`${BASE}/api/card/${newest}/preview.png`, `/api/card/${newest}/preview.png`);
     }
     await open(page, '/thanks');
     const plain = await page.locator('h1').allTextContents();

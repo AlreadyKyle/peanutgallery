@@ -89,20 +89,11 @@ everything else, in the order the board would take it.
 - intent: A supporter who leaves /thanks hears nothing more from the studio. One email per payment and shipped card, to the address Stripe already holds for the checkout, sent through the studio's existing Resend sender: the card's title, that it is live, what the agents spent, its /card/:id page and the game's play address, with a one-click unsubscribe. The Privacy page gains the line that says so, and no address is ever shown or stored on a public row. It is the step that closes the fund, watch, ship, share loop (docs/research/comparables.md). It is not built yet.
 - board: yes
 
-### Share button and link preview for each card
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 8
-- summary: Each card's link shows its own preview when shared: the card face, who funded it, what it cost and how long the agents took.
-- intent: Split out of More on a card's own page. The Share button on each card's page shipped on 11 October 2026 (the browser's share sheet, or the link copied). Left: a preview image per card drawn in code from tokens.css (as og-image.mjs draws the site's), showing the card face, Supporter numbers, what the card cost and its draft-to-live time from public records only, served as the card page's og:image. No countdown, no chance cue near money, no ranking of supporters by amount (docs/research/comparables.md). It is not built yet.
-- board: yes
-
 ### Run the replay eval and set its first baseline
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 9
+- rank: 8
 - summary: Run the agents' frozen test cases once and record the score, so a later change to a prompt or rubric can be compared with it.
 - intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a board pull request. It is not built yet.
 - board: yes
