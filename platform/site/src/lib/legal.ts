@@ -458,9 +458,25 @@ export const legal = {
     // ships webhook (BOARD-SETUP.md), so the button promises none (docs/specs/copy-pass.md).
     discord: 'Follow the studio on Discord',
     discordAge: 'Discord is for ages 13 and over.',
+    // The reward band (docs/specs/supporter-loop.md): the card the money went to first, with the
+    // supporter's number on its face, what happens to it next and its Share button.
+    faceHeading: 'Your card',
+    faceNumber: 'Supporter {n}',
+    nextHeading: 'What happens next',
+    nextSteps: [
+      { key: 'drafting', label: 'Drafting', body: 'Once the card is fully funded, an agent plans the change.' },
+      { key: 'building', label: 'Building', body: 'An agent builds it, and you can watch every step on the card.' },
+      { key: 'gate', label: 'Checks', body: 'The gate runs the tests and checks before anything goes live.' },
+      { key: 'live', label: 'Live', body: 'It ships in the game for everyone.' },
+    ],
+    nextNow: 'Now',
+    shipEmail: 'When it goes live, the studio emails you a ship notice.',
+    shareLede: 'Share the card, so friends can follow it too.',
   },
   pausedFallback: 'It stopped on a check the board is looking into.',
   rejectedFallback: "It did not pass one of the studio's checks.",
+  // On the open card closest to fully funded (docs/specs/supporter-loop.md): a fact, never a timer.
+  leftToFund: '{amount} left to fund it.',
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
     'What the agents have to spend, what their work paid for by contributions has cost, and their latest actions and deploys.',

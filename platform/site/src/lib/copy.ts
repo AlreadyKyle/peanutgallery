@@ -214,6 +214,11 @@ export const copy = {
     loading: 'Loading the reports.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
+  // Home's strip of cards shipped since this browser's last visit (docs/specs/supporter-loop.md).
+  sinceVisit: {
+    heading: 'Since your last visit',
+    shipped: 'Shipped, and its page shows how it was built.',
+  },
   cardPage: {
     back: 'All cards',
     cardTitle: 'A card',
@@ -238,6 +243,14 @@ export const copy = {
     changedLede: 'The values the checks confirmed after the change went live.',
     changedValue: '{file} {path}: {value}',
     changed: 'changed',
+    // A check in plain words, where the game's config says what its field means (lib/config-words.ts).
+    plain: {
+      baseCost: '{name} costs {value} dust to build.',
+      rate: 'Each {name} makes {value} dust a second.',
+      name: '{name} is now called {value}.',
+      atTotalDust: '{name} unlocks at {value} total dust.',
+      effectValue: '{name} multiplies dust by {value}.',
+    },
     stoppedHeading: 'Why it stopped',
     linesHeading: 'What the agents did',
     linesLede: 'Each step an agent took on this card, oldest first.',

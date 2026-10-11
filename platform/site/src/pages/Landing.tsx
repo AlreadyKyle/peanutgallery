@@ -5,11 +5,13 @@ import { splitSentence } from '../components/Funding';
 import { Glyph } from '../components/Glyph';
 import { Announcer } from '../components/Announcer';
 import { PoolLine } from '../components/PoolStat';
+import { SinceLastVisit } from '../components/SinceLastVisit';
 import { StaleNotice } from '../components/StaleNotice';
 import { MoreLink } from '../components/MoreLink';
 import { TeamStrip } from '../components/TeamStrip';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
+import { useLastVisit } from '../lib/last-visit';
 import { legal } from '../lib/legal';
 import { useLiveHome, type HomeView } from '../lib/live';
 import { teamStrip } from '../lib/roster';
@@ -126,6 +128,7 @@ function GameSection() {
 /** The cards open for funding, first and biggest: or the loading or unavailable line while there is no snapshot. */
 function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const view = live.view;
+  const since = useLastVisit();
   return (
     <section className="section" aria-labelledby="fund">
       <h2 id="fund">{copy.flow.fundTitle}</h2>
@@ -211,12 +214,14 @@ export function Landing() {
   const studio = useStudio();
   const live = useLiveHome(studio);
   const view = live.view;
+  const since = useLastVisit();
   return (
     <main className="wide home">
       <div className="band">
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
+        {view === null ? null : <SinceLastVisit cards={view.snapshot.cards} since={since} />}
         <FundSection studio={studio} live={live} />
         <GameSection />
         {view === null ? null : <FlowSection view={view} />}
