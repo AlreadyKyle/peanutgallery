@@ -107,3 +107,28 @@ test.describe('home flow while drafting', () => {
     await expect(page.locator('p.status-line')).toHaveText(copy.status.drafting);
   });
 });
+
+// docs/specs/supporter-loop.md: the cards shipped since this browser's last visit, from localStorage only.
+test.describe('since your last visit', () => {
+  const KEY = 'peanutgallery.home.lastVisit';
+
+  test('a first visit shows no strip and stores the visit', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('section[aria-labelledby="fund"]')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Since your last visit' })).toHaveCount(0);
+    await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).not.toBeNull();
+  });
+
+  test('a return visit lists the cards that shipped since, each linking its page', async ({ page }) => {
+    await page.addInitScript((key) => {
+      if (sessionStorage.getItem('seeded') === null) {
+        localStorage.setItem(key, '2026-09-15T09:00:00Z');
+        sessionStorage.setItem('seeded', '1');
+      }
+    }, KEY);
+    await page.goto('/');
+    const strip = page.getByRole('region', { name: 'Since your last visit' });
+    await expect(strip.getByRole('link', { name: 'The unlock list fits any number of unlocks' })).toHaveAttribute('href', /^[/]card[/]/);
+    await expect(strip.getByRole('link', { name: 'Save progress and resume on reload' })).toHaveCount(0);
+  });
+});

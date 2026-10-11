@@ -2725,6 +2725,49 @@ ol.timeline {
   font-size: var(--size-small);
 }
 
+/* /thanks's reward (docs/specs/supporter-loop.md): the card the money went to first, at the reading
+   measure, with the supporter's number on its face; its Share button drawn as a primary button. */
+.thanks-face {
+  max-width: 24rem;
+  gap: var(--space-1);
+}
+
+.thanks-face h3,
+.thanks-face p {
+  margin: 0;
+}
+
+.thanks-number {
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.thanks-reward .share-card > button {
+  padding: 0 var(--space-3);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+  text-decoration: none;
+}
+
+.thanks-reward .share-card > button:hover {
+  background: var(--primary-hover);
+}
+
+.thanks-next {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: var(--space-3);
+}
+
+.thanks-next > li + li {
+  margin-top: var(--space-1);
+}
+
+.thanks-now {
+  font-weight: var(--weight-bold);
+}
+
 /* /thanks: the cards a payment reached, as rows with their bar when open. */
 .reached .funding-bar {
   margin-top: var(--space-1);
