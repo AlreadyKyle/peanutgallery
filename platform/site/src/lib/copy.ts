@@ -65,6 +65,10 @@ export const copy = {
   },
   fundEmpty: 'No card is open for funding right now.',
   loadingCards: 'Loading the cards.',
+  // Said once by the cards' polite live region when a list arrives (CardsStatus.tsx).
+  cardsLoadedOne: '1 card loaded.',
+  cardsLoadedMany: ' cards loaded.',
+  cardsUnavailable: 'The cards did not load.',
   statusBuilding: 'Building',
   statusGated: 'Being checked',
   statusPicked: 'Picked by the board',

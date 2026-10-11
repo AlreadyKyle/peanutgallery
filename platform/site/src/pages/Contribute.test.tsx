@@ -195,13 +195,15 @@ describe('Contribute', () => {
     renderContribute({
       load: () => (fail ? Promise.reject(new Error('network down')) : loaded.load()),
     });
-    const status = screen.getByRole('status');
+    // The stale notice; the cards' own live region (CardsStatus) says only the count.
+    const notices = () => screen.getAllByRole('status').filter((el) => !el.hasAttribute('data-cards-status'));
+    const status = notices()[0]!;
     await waitFor(() => expect(screen.getByText('Rename the Gatherer')).toBeTruthy());
     expect(status.textContent).toBe('');
     fail = true;
     onChange();
     await waitFor(() => expect(status.textContent).toBe(legal.staleFigures), { timeout: 3000 });
-    expect(screen.getAllByRole('status')).toEqual([status]);
+    expect(notices()).toEqual([status]);
     expect(screen.getByText('Rename the Gatherer')).toBeTruthy();
   });
 
