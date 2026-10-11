@@ -17,6 +17,7 @@ import { VPS_JOBS } from '../jobs/lib.mjs';
 // (docs/specs/mac-host.md) run with these.
 import './jobs.test.mjs';
 import './mac.test.mjs';
+import './notices.test.mjs';
 
 const OPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = path.resolve(OPS_DIR, '..', '..');
@@ -1445,11 +1446,11 @@ describe('the Oracle instance', () => {
 
 // docs/specs/actions-host.md: the daily jobs in the private ops repository.
 describe('the ops repository template', () => {
-  test('lives outside .github, reads contents only, runs the three jobs at their times from STUDIO_REF, and uses only its own secrets', () => {
+  test('lives outside .github, reads contents only, runs the four jobs at their times from STUDIO_REF, and uses only its own secrets', () => {
     const workflow = read('platform/ops/ops-repo/jobs.yml');
     assert.match(workflow, /^permissions:\n {2}contents: read\n(?! )/m);
-    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
-    for (const cron of ["'17 6 * * *'", "'7 7 * * *'", "'37 7 * * *'"]) assert.ok(workflow.includes(`- cron: ${cron}`), cron);
+    assert.deepEqual([...new Set([...workflow.matchAll(/secrets\.([A-Z_]+)/g)].map((match) => match[1]))].sort(), ['BACKUP_ENV', 'CONTROLLER_ENV', 'NOTICES_ENV', 'NTFY_TOPIC_URL', 'QUOTA_ENV']);
+    for (const cron of ["'17 6 * * *'", "'7 7 * * *'", "'37 7 * * *'", "'7 9 * * *'"]) assert.ok(workflow.includes(`- cron: ${cron}`), cron);
     assert.match(workflow, /repository: AlreadyKyle\/peanutgallery\n\s+ref: \$\{\{ vars\.STUDIO_REF \}\}/);
     assert.match(workflow, /persist-credentials: false/);
     assert.match(workflow, /BACKUP_PG_BIN=\/usr\/lib\/postgresql\/17\/bin/);
