@@ -39,7 +39,7 @@ The webhook reads the reference with `parseReference` (`platform/supabase/functi
 - After deploy: `node platform/site/scripts/live-check.mjs`, first line `PASS ... failed=0`, which checks /contribute's links carry `split20`.
 - After the board removes the dropdown: one test-mode or real payment through /contribute at a non-default split credits that split on /ledger.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Deploy the `stripe-webhook` function with this change before the site deploys, so no slider reference reaches a webhook that ignores its split: `npx supabase functions deploy stripe-webhook --project-ref lyxndueoeisyqzewflpu --use-api` from `platform/`.
 2. Merge, so the site deploys and the live check runs.

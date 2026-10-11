@@ -1,9 +1,9 @@
 # Backlog
 
-Everything planned that is not built. Each entry below is filed as a board card by
+Everything planned that is not built. Each entry below is filed as a card by
 `platform/supabase/scripts/file-backlog.ts`: stage proposed, on its horizon, with its rank and no
-funding target, so the public /roadmap page lists it as planned and nobody can fund it yet. The
-board moves an entry to now, with a target, only when it meets the definition of ready in
+funding target, so nobody can fund it yet. The
+studio moves an entry to now, with a target, only when it meets the definition of ready in
 `docs/PLAN.md` §4. `docs/PLAN.md` gives each mechanic one line that links its entry here, and
 `docs/docs.test.mjs` checks that every entry is linked and every link lands.
 
@@ -12,17 +12,17 @@ characters, unique), followed by seven bullet lines in this order, each written 
 and a value: bucket (game, platform, qa, studio, budget or agents), folder (seed-1 or platform),
 horizon (next or later), rank (a whole number, lower is sooner, unique within its horizon),
 summary (one line of public copy, at most 200 characters, sentence case, no em dash), intent
-(one paragraph on one line saying what it is, why, and that it is not built yet) and board (yes
-or no). Board is yes when the change lands in kernel paths: the rules, the money, the card
+(one paragraph on one line saying what it is, why, and that it is not built yet) and kernel (yes
+or no). Kernel is yes when the change lands in kernel paths: the rules, the money, the card
 system, the dispatcher, the gate, the agents and their prompts, or the files that set the look.
-The board makes that work itself through reviewed pull requests and no card funds it, so /roadmap
-shows it apart from the cards for players and the studio (`docs/PLAN.md` §4 Work,
-`docs/specs/copy-pass.md`). The board flips an entry by editing its one line. Prose and level-2
+A Claude session makes that work as a kernel pull request merged on a green gate and no card funds
+it (`docs/PLAN.md` §4 Work and §10 decision 74, `docs/specs/copy-pass.md`); the database keeps the
+marker as `cards.board_work`. An entry flips by editing its one line. Prose and level-2
 headings are ignored. The title is the key the script upserts on, so renaming an entry files a
 new card.
 
 Next is what makes the studio directed by its audience soonest (22 September 2026). Later is
-everything else, in the order the board would take it.
+everything else, in the order the studio would take it.
 
 ## Next
 
@@ -49,7 +49,7 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: next
 - rank: 3
-- summary: The Studio Head turns planned items into draft cards for the board to check and open for funding.
+- summary: The Studio Head turns planned items into draft cards that are checked and opened for funding.
 - intent: The Studio Head picks planned cards from this backlog, the ledger and the shipped cards for the Game Designer to draft, each graded by the Game Director and meeting the definition of ready. Under docs/PLAN.md §10 decision 66 the dispatcher drafts the next seed-1 backlog card by rank and age whenever the card supply is short, and no model ranks (docs/specs/unattended-roles.md); the Studio Head choosing which planned card to draft, from the ledger and the shipped cards, is what is left. It is not built yet.
 - kernel: yes
 
@@ -68,7 +68,7 @@ everything else, in the order the board would take it.
 - horizon: next
 - rank: 5
 - summary: When players fund faster, the agents open and build more cards a day, so money waiting on a card turns into shipped work instead of sitting.
-- intent: Today the number of cards shipped a day is set by fixed counts, not by money. studio_state.draft_runs_per_day caps the Game Designer's drafts at 12 a New York day (docs/PLAN.md §10 decision 69; production read 4 on 10 October 2026, when the 4 runs were used by 21:20 UTC and the supply sat short), one draft runs at a time (checked every minute since decision 71, on a 20-minute pg_cron before it), the dispatcher runs at most 2 cards at once (throttle.ts concurrency, DISPATCHER_MAX_CONCURRENCY 1), and the monthly cap is a flat $500. The scale model (platform/dispatcher/test/scale.test.ts, production's measured costs of about $0.51 a card from draft to live) ships about 9 cards a day at 12 drafts whether players fund $50 or $5,000 a day, and the rest of the money waits; with no draft count and a 5-minute check it ships about 56 cards a day at $50 and stops at the $100 daily cap at about 168. The count guards against drafts failing in a loop, so the work is: replace the daily count with a breaker that stops drafting after a few failed or withdrawn drafts in a row and alerts the board, keeping every money cap; raise the open-card floor with the cards funded in the last day; let the slots and the monthly cap grow with the money players put in over the trailing month, inside the usage tier and the Console credit; and show the studio's capacity on the site as a meter players can push over the line. A board spec, since it changes the money rules and migrations. It is not built yet.
+- intent: Today the number of cards shipped a day is set by fixed counts, not by money. studio_state.draft_runs_per_day caps the Game Designer's drafts at 12 a New York day (docs/PLAN.md §10 decision 69; production read 4 on 10 October 2026, when the 4 runs were used by 21:20 UTC and the supply sat short), one draft runs at a time (checked every minute since decision 71, on a 20-minute pg_cron before it), the dispatcher runs at most 2 cards at once (throttle.ts concurrency, DISPATCHER_MAX_CONCURRENCY 1), and the monthly cap is a flat $500. The scale model (platform/dispatcher/test/scale.test.ts, production's measured costs of about $0.51 a card from draft to live) ships about 9 cards a day at 12 drafts whether players fund $50 or $5,000 a day, and the rest of the money waits; with no draft count and a 5-minute check it ships about 56 cards a day at $50 and stops at the $100 daily cap at about 168. The count guards against drafts failing in a loop, so the work is: replace the daily count with a breaker that stops drafting after a few failed or withdrawn drafts in a row and alerts the board, keeping every money cap; raise the open-card floor with the cards funded in the last day; let the slots and the monthly cap grow with the money players put in over the trailing month, inside the usage tier and the Console credit; and show the studio's capacity on the site as a meter players can push over the line. A kernel spec, since it changes the money rules and migrations. It is not built yet.
 - kernel: yes
 
 ### Ship notices to supporters
@@ -86,7 +86,7 @@ everything else, in the order the board would take it.
 - horizon: next
 - rank: 7
 - summary: Run the agents' frozen test cases once and record the score, so a later change to a prompt or rubric can be compared with it.
-- intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a board pull request. It is not built yet.
+- intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a kernel pull request. It is not built yet.
 - kernel: yes
 
 ## Later
@@ -241,7 +241,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 17
 - summary: Roles can be created, split, retired or replaced by a vote, and retired agents keep their record on an alumni wall.
-- intent: The Studio Head files org cards (create, retire or split a role, change a model tier, replace an agent); replacement comes up for a role in the bottom 20% composite for two reviews in a row or under a 50% first-pass gate rate; the previous role spec is archived so a replacement can be reverted. Includes a /board control for each role's model tier. Role specs are kernel files the board changes today. It is not built yet.
+- intent: The Studio Head files org cards (create, retire or split a role, change a model tier, replace an agent); replacement comes up for a role in the bottom 20% composite for two reviews in a row or under a 50% first-pass gate rate; the previous role spec is archived so a replacement can be reverted. Includes a /board control for each role's model tier. Role specs are kernel files that change only through kernel pull requests today. It is not built yet.
 - kernel: yes
 
 ### Agents improve agents, tested before merge
@@ -250,7 +250,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 18
 - summary: Changes to the agents' own instructions, tools and checks are tested against the old version and undone if they do not help.
-- intent: An Agents-bucket card names the metric it expects to move, is A/B tested on the headless bot suite against the prior version before merge, and reverts unless the metric improves by at least 10%. Prompts, role specs and gate checks are kernel files the board changes today. It is not built yet.
+- intent: An Agents-bucket card names the metric it expects to move, is A/B tested on the headless bot suite against the prior version before merge, and reverts unless the metric improves by at least 10%. Prompts, role specs and gate checks are kernel files that change only through kernel pull requests today. It is not built yet.
 - kernel: yes
 
 ### Studio Head blue-sky proposals
@@ -259,7 +259,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 19
 - summary: From time to time the Studio Head proposes three ideas that no number asked for.
-- intent: A scheduled Studio Head session writes three proposals outside the metrics, filed as proposed cards for the board like any other. Needs a job that runs the directors. It is not built yet.
+- intent: A scheduled Studio Head session writes three proposals outside the metrics, filed as proposed cards like any other. Needs a job that runs the directors. It is not built yet.
 - kernel: yes
 
 ### Biz Dev agent for outside tools and trends
@@ -465,8 +465,8 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: later
 - rank: 42
-- summary: A card can change a page, a screen or the design system once the board has seen a mockup of it.
-- intent: Today the files that set the look (platform/gate/design-paths.txt: the tokens, the Card, the glyphs, motion, the route list, the site's public and brand files and the game's favicon) are board-only, so a new page, a new screen or a design-system change is a board pull request. Mockup and design-system cards would add their own branch lanes, a seed-1 guide page, the draft fields for what a card adds and surfaces, and a card kind with a link from a built card to the mockup it follows. They wait on the first card that needs one. It is not built yet.
+- summary: A card can change a page, a screen or the design system once a mockup of it has been reviewed.
+- intent: Today the files that set the look (platform/gate/design-paths.txt: the tokens, the Card, the glyphs, motion, the route list, the site's public and brand files and the game's favicon) are kernel-only, so a new page, a new screen or a design-system change is a kernel pull request. Mockup and design-system cards would add their own branch lanes, a seed-1 guide page, the draft fields for what a card adds and surfaces, and a card kind with a link from a built card to the mockup it follows. They wait on the first card that needs one. It is not built yet.
 - kernel: yes
 
 ### Post-ship grade and monthly design audit
@@ -556,7 +556,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 52
 - summary: One page that sets how Dust looks, sounds and names things, so every card adds to one game instead of a pile of changes.
-- intent: The site has a design system (platform/site/DESIGN.md, tokens.css, the unlisted guide), but the game has only the pillars line in seed-1/CLAUDE.md and the art policy. A board-only file beside it, listed in platform/gate/design-paths.txt, would set Dust's palette, shapes, motion, tone of its strings, how units and unlocks are named and what sound it may make, and the Game Director's visual rubric would grade against it. It is not built yet.
+- intent: The site has a design system (platform/site/DESIGN.md, tokens.css, the unlisted guide), but the game has only the pillars line in seed-1/CLAUDE.md and the art policy. A kernel-only file beside it, listed in platform/gate/design-paths.txt, would set Dust's palette, shapes, motion, tone of its strings, how units and unlocks are named and what sound it may make, and the Game Director's visual rubric would grade against it. It is not built yet.
 - kernel: yes
 
 ### Shareable runs in Dust

@@ -676,7 +676,7 @@ No agent touches Stripe; these are yours.
 - **Terms checkbox.** Payment Link → Options: turn on "Require customers to accept your terms of
   service"; it links the terms URL already in your public details. The site already states the agreement
   before every checkout; this adds express acceptance. If Stripe will not add it to the existing
-  link, make a new link with the same settings and send me its address; a board pull request swaps
+  link, make a new link with the same settings and send me its address; a kernel pull request swaps
   it into `netlify.toml`.
 - **Adaptive Pricing: leave it alone (decided 1 October 2026).** The earlier note here said a local
   currency checkout would be charged and not credited. Stripe's docs say otherwise: the Checkout
@@ -722,7 +722,7 @@ changing webhook endpoints becomes a Dashboard step of yours.
 
 You read /terms, /refunds and /privacy and approved them on 23 September 2026 (`docs/PLAN.md` §10
 decision 55). The Terms are at version 3 since the rename. A change is a new version, never an edit to
-a posted one: tell me what to change and a board pull request posts it.
+a posted one: tell me what to change and a kernel pull request posts it.
 
 #### 15. Passkeys or hardware keys
 
@@ -993,9 +993,11 @@ so they sound like you, put the clip's link in each, and post them in the order 
 
 ### Your standing duties
 
-These are the only standing actions left with the board, the ones the money rule and the kernel
-force. They reach you by ntfy, email and GitHub (the Controller's and the Janitor's alerts, Stripe's
-own emails, the open pull requests), not through the board site, which is optional (`docs/PLAN.md` §10
+These are the only standing actions left with the board, the ones that need a human or legal
+identity (`docs/PLAN.md` §10 decision 74): buying credit, refunds and disputes, and legal matters.
+Claude sessions merge gated pull requests, apply migrations, make Stripe calls and spend inside the
+kernel's money caps on their own, each recorded on the ledger. Your duties reach you by ntfy, email and
+GitHub (the Controller's and the Janitor's alerts, Stripe's own emails), not through the board site, which is optional (`docs/PLAN.md` §10
 decision 66). If you do none of them, the studio pauses or stays as it is. Nothing else waits on you.
 
 - **After each payout:** buy Console credit and raise Stripe's Minimum balance (step 22). The
@@ -1011,17 +1013,18 @@ decision 66). If you do none of them, the studio pauses or stays as it is. Nothi
   estimate or reject it. The Janitor's daily check alerts by ntfy for a card paused at its ceiling, and
   the panel's Activity lists paused cards.
 - **A card holding money whose approval is not current:** its text was changed outside a board
-  control, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
+  control or a reviewed script, so it is hidden and takes no money. Cancel it at the second factor, which moves its unspent
   money on; it is hidden and takes no money until then. Money it already spent stays on its bar, and a card
   that has shipped is left to the sweep.
 - ~~**A card supply short of its floor.**~~ No longer a duty (`docs/PLAN.md` §10 decision 66): the
   supply refills itself (`docs/specs/unattended-roles.md`). The floor's
-  defaults change by a board pull request.
-- **Kernel pull requests** (HR's text changes, the Claude Code pin, board work): merge them yourself.
-  GitHub notifies you of every open pull request that is not from a `card/` branch: the dispatcher
-  merges only those, so every other one waits for you.
-- **New models:** add a price-table row to `.env` before any role uses a new model. The Janitor's
-  daily check alerts when a model has no row; I tell you when a model change needs it.
+  defaults change by a kernel pull request.
+- ~~**Kernel pull requests.**~~ No longer a duty (`docs/PLAN.md` §10 decision 74): a Claude session
+  merges a kernel pull request (HR's text changes, the Claude Code pin, kernel work) on a green gate
+  at its exact head.
+- ~~**New models.**~~ No longer a duty (`docs/PLAN.md` §10 decision 74): a local session on the Mac
+  adds the price-table row to `.env` before any role uses a new model. The Janitor's daily check
+  alerts when a model has no row.
 
 ### Standing items, outside the order
 

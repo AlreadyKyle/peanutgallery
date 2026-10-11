@@ -24,7 +24,7 @@ In:
 
 Out:
 - Changing the cap itself: the board sets it at /board. No kernel money function changes.
-- Folding the detect and gate jobs into fewer jobs, and skipping the push-to-main gate run for a dispatcher merge. Both save more minutes than this change (below) but change the gate's shape or the smoke's reading of the gate, so each needs the board's own spec.
+- Folding the detect and gate jobs into fewer jobs, and skipping the push-to-main gate run for a dispatcher merge. Both save more minutes than this change (below) but change the gate's shape or the smoke's reading of the gate, so each needs its own spec.
 - Showing or editing the tier cap on /board: the board-site pull request can add it.
 - F1, F4, F8, and the `/assets/*` cache headers and lazy /board bundle that F1 and the board-site pull request carry.
 
@@ -89,7 +89,7 @@ Out:
 - The gate check on this pull request, and the jobs it ran.
 - After production step 1, as the service role: `select public.studio_spend_totals(now() - interval '100 years', date_trunc('month', now()))` against `select coalesce(sum(usd), 0) from public.ledger where billed_to in ('studio', 'overhead')`. (waits on: production step 1)
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Apply `platform/supabase/migrations/20260923000100_spend_totals.sql` through the Management API query endpoint, before any dispatcher runs this code: the attended dispatcher calls `card_ledger_usd` whenever it writes a card's stage, and the unattended one calls `studio_spend_totals` on every tick. Then run the check under Verification. No function deploy is needed.
 2. When Kyle reports the tier's monthly limit from the Console's Limits page at the credit step: `update public.studio_state set anthropic_tier_cap_usd = <that limit> where id = 1;`. Repeat whenever the tier changes. An Evaluation tier below Start has a lower limit, so the first report matters.

@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-Built on the merge of money-logic (and home-and-design, #64). It reads what money-logic publishes and writes no SQL. It is a board pull request: it changes kernel files (`legal.ts`, `payment.ts`, `Funding.tsx`, `Ledger.tsx`, the two new kernel components, `docs/`).
+Built on the merge of money-logic (and home-and-design, #64). It reads what money-logic publishes and writes no SQL. It is a kernel pull request: it changes kernel files (`legal.ts`, `payment.ts`, `Funding.tsx`, `Ledger.tsx`, the two new kernel components, `docs/`).
 
 ## Problem
 

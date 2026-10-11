@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-Series position: after agent-workflows, before supporter-pages (the order is in `docs/ROADMAP.md`, "The launch series"). It is a board pull request: it adds a kernel path (`platform/site/netlify`) and changes legal-copy's kernel `terms.ts`.
+Series position: after agent-workflows, before supporter-pages (the order is in `docs/ROADMAP.md`, "The launch series"). It is a kernel pull request: it adds a kernel path (`platform/site/netlify`) and changes legal-copy's kernel `terms.ts`.
 
 ## Problem
 
@@ -32,7 +32,7 @@ Out, and what each waits on:
 - `/api/card/:id` and `/api/thanks`: supporter-pages. `/api/reports`: studio-reports.
 - Purging the CDN copy on change: a later board card, if a lag of about three minutes proves too slow.
 - A Netlify usage read in the quota job: Netlify's own usage notifications to the board are the alert (board item below).
-- Moving the sites to Cloudflare Pages (F9) and materialised aggregates (F14): board work before Mid and Pop.
+- Moving the sites to Cloudflare Pages (F9) and materialised aggregates (F14): kernel work before Mid and Pop.
 - The board site, which signs in and reads Supabase directly: unchanged.
 - A service worker or offline support.
 

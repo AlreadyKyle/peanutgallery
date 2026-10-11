@@ -42,7 +42,7 @@ Out: any code change, any change of intent or strategy in PLAN.md, the specs of 
 - `pnpm verify` at the repository root, exit 0.
 - `grep -rn -i "backseat" README.md CLAUDE.md` shows Backseat only as the working name and the package prefix.
 
-## Production steps (need the board's allow)
+## Production steps
 
 None. This change touches only docs, one prompt, `.env.example` and a test script.
 

@@ -29,9 +29,9 @@ In:
 - The board site: the cooling window, role pauses, the job list with Run now, and a veto on every card row; Needs you gains two lists.
 
 Out, and what each waits on:
-- The operations spend path. The operations bucket is removed from the series (it would ship at 0%). What depended on it was unattended model role jobs; they do not run: a model-calling role job starts only attended and board-queued, which was already the behaviour at 0%. A later board pull request adds the bucket and the spend path together when a percentage exists.
+- The operations spend path. The operations bucket is removed from the series (it would ship at 0%). What depended on it was unattended model role jobs; they do not run: a model-calling role job starts only attended and board-queued, which was already the behaviour at 0%. A later kernel pull request adds the bucket and the spend path together when a percentage exists.
 - Role workflows, typed outputs, the draft path, public text safety and ranking: `agent-workflows.md`. This pull request seeds no job and schedules nothing.
-- A findings table and a board-work list in Needs you: the first pull request that files a finding.
+- A findings table and a kernel-work list in Needs you: the first pull request that files a finding.
 - Board actions in public: BACKLOG's "Board Decisions page".
 - The public "approved, opens soon" label and /team statuses: supporter-pages.
 - Canary cards and approval-rate trips (R18): with the replay eval set, after launch.

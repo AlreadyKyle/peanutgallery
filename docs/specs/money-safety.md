@@ -18,7 +18,7 @@ In:
 - `oracle-launch.sh`: the Always Free shape and a start that retries capacity; `vps.md` and `oracle-launch.md` corrected.
 - The runbook: backups and the Controller, the restore, recovery from a phone, and the one-time migration history repair (`platform/ops/README.md`).
 
-Out: every production step (below, for the orchestrator with the board's allow); the credit purchase's expiry tracking and the billed-cost field (the Console credit work); `contribution_allocations` and `card_approvals` (their pull requests add them to the append-only triggers); the public "Reconciled with Stripe" line and a board view of `controller_runs`; Supabase egress and Netlify usage, which reach the board as the providers' emails; docs/ROADMAP.md and BOARD-SETUP.md.
+Out: every production step (below, for the orchestrator, from a local session on the Mac); the credit purchase's expiry tracking and the billed-cost field (the Console credit work); `contribution_allocations` and `card_approvals` (their pull requests add them to the append-only triggers); the public "Reconciled with Stripe" line and a board view of `controller_runs`; Supabase egress and Netlify usage, which reach the board as the providers' emails; docs/ROADMAP.md and BOARD-SETUP.md.
 
 ## Behaviour
 
@@ -90,11 +90,11 @@ It writes one `controller_runs` row and, on any mismatch or a dispute that needs
 - `pnpm --filter @backseat/dispatcher test`
 - `pnpm test:ops` (the ops tests import `jobs.test.mjs`)
 - `shellcheck platform/ops/*.sh platform/ops/backup/backup.sh`
-- Production, after the production steps: `select public.ledger_identity()` holds; `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` PASS; `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` PASS (waits on: the board's allow).
+- Production, after the production steps: `select public.ledger_identity()` holds; `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` PASS; `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` PASS (waits on: a local session on the Mac, which holds the secrets).
 - On the VPS: `/usr/local/lib/peanutgallery/backup.sh --restore-check` prints `PASS: restore check`; the Controller's `--dry-run` and the quota check print `PASS:` (waits on: the instance and the keys above).
 - The restore drill quotes `true` for `select public.ledger_identity()->>'holds'` on a decrypted backup (waits on: the board with the offline key).
 
-## Production steps (need the board's allow)
+## Production steps
 
 Pause the studio from /board first and make sure no dispatcher is running on the Mac.
 

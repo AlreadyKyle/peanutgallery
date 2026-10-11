@@ -48,9 +48,9 @@ A plain `install.sh` (and `--start`) first refuses a code clone made by `--jobs-
 - `pnpm verify`
 - `node --test --test-name-pattern="jobs-only" platform/ops/test/ops.test.mjs`
 - `shellcheck platform/ops/mac/*.sh`
-- On the Mac, with the board's allow: `platform/ops/mac/install.sh --jobs-only` twice, then `~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log`, quoted (waits on: the board).
+- On the Mac, from a local session: `platform/ops/mac/install.sh --jobs-only` twice, then `~/peanutgallery-host/code/platform/ops/mac/run-job.sh backup --now; tail -n 10 ~/peanutgallery-host/logs/backup.log`, quoted (waits on: the board).
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. After the board's step 3 and the backup login's password (`money-safety.md`, production step 3): `JOBS_ENV_DIR=~/peanutgallery-host/env platform/ops/make-jobs-env.sh backup-mac` (and `controller`, `quota` once their keys exist), then, with `.env.vps` exported, `platform/ops/mac/install.sh --jobs-only` twice. Quote both.
 2. `run-job.sh backup --now` and the file in the Drive folder. Quote them.

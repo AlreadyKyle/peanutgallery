@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-Built on the merge of site-snapshot (and money-logic, money-surfaces, agent-system-core before it). It is a board pull request: it changes kernel files (a migration, `legal.ts`, `Funding.tsx`, `Stopped.tsx`, `App.tsx`, `netlify.toml`, the new kernel files below, `docs/`). It writes no money rows; every money read is a view or a function over money-logic's tables.
+Built on the merge of site-snapshot (and money-logic, money-surfaces, agent-system-core before it). It is a kernel pull request: it changes kernel files (a migration, `legal.ts`, `Funding.tsx`, `Stopped.tsx`, `App.tsx`, `netlify.toml`, the new kernel files below, `docs/`). It writes no money rows; every money read is a view or a function over money-logic's tables.
 
 This spec covers the launch plan's Phase 2 "Pages and credits" and "`/team`" lines, the card half of Phase 1's "Failures are public" (R14, L02, L04), and PG-02, PG-03, PG-04, PG-05, PG-11 (the thanks half), PG-15 and L17's card half.
 
@@ -130,7 +130,7 @@ Sections: Running (holding paused rows while the studio is paused), Starts later
 - On the deploy preview, after production step 3: `curl -s -D - -o /dev/null '<preview>/api/card/<a live card id>'` twice, quoting `Cache-Status`; `curl -s -X POST -H 'content-type: application/json' -d '{"session":"cs_test_notarealsession000"}' <preview>/api/thanks`, quoting the body and `Cache-Control`.
 - Production: `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts`; `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts`; `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs`; the board-test SELECT through the Management API.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" --format=custom --file ~/peanutgallery-dumps/pre-supporter-pages-<UTC>.dump`, then `chmod 600`.
 2. Apply `20260924600000_supporter_pages.sql` (Management API query endpoint, or `supabase db push` once the history repair has run). Re-apply if review changes the SQL.

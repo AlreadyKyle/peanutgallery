@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-The home-and-design pull request of the approved v1 design direction, with the colour system the board ordered on top of it, and a layout audit so the site catches its own dead space. This is a board pull request: it changes kernel files, listed under Scope. Its mockup is the home page, and the design guide at `/design-kit-7q4m` shows every part and every colour.
+The home-and-design pull request of the approved v1 design direction, with the colour system the board ordered on top of it, and a layout audit so the site catches its own dead space. This is a kernel pull request: it changes kernel files, listed under Scope. Its mockup is the home page, and the design guide at `/design-kit-7q4m` shows every part and every colour.
 
 ## Problem
 
@@ -19,7 +19,7 @@ In:
 - **The guide** (`pages/Guide.tsx`): three bands (signal, paper, ink), every colour token and every pairing measured on the page, the colour rules, the faces in two groups by anatomy, controls and rows on all three grounds.
 - **The layout audit**: `scripts/layout-audit.mjs` (the checks), `e2e/layout-balance.spec.ts` (every public route and the guide, five widths, four data sets, and a page of planted gaps it must catch), `scripts/gap-audit.mjs` (the same checks on any preview or mockup), and the rule in `DESIGN.md` and in the Platform Builder's and Platform Director's prompts.
 - **The 13 audited design fixes** (table below), `og.png` re-rendered, `scripts/live-check.mjs` for the new layout, `DESIGN.md`, this spec and its ROADMAP row.
-- **Kernel files changed** (a board pull request): `platform/site/src/App.tsx` (the top bar, Menu, the not found page), `lib/legal.ts` (the home money lines, the Fund the next card in line label and its no-card line; no money statement changes meaning), `components/EventList.tsx`, `LedgerSummary.tsx`, `DeployList.tsx`, `Funding.tsx`, `PoolStat.tsx`, `Stat.tsx`, `TextPage.tsx` (rail rows, the capped actions, the pool line, the split sentence from the constants), `pages/Contribute.tsx`, `pages/Ledger.tsx`, `scripts/` (`layout-audit.mjs`, `gap-audit.mjs`, `live-check.mjs`, `og-image.mjs`), `platform/agents/prompts/platform-builder.md` and `platform-director.md`, and `docs/` (`PLAN.md`'s "Pick for me" label, `ROADMAP.md`).
+- **Kernel files changed** (a kernel pull request): `platform/site/src/App.tsx` (the top bar, Menu, the not found page), `lib/legal.ts` (the home money lines, the Fund the next card in line label and its no-card line; no money statement changes meaning), `components/EventList.tsx`, `LedgerSummary.tsx`, `DeployList.tsx`, `Funding.tsx`, `PoolStat.tsx`, `Stat.tsx`, `TextPage.tsx` (rail rows, the capped actions, the pool line, the split sentence from the constants), `pages/Contribute.tsx`, `pages/Ledger.tsx`, `scripts/` (`layout-audit.mjs`, `gap-audit.mjs`, `live-check.mjs`, `og-image.mjs`), `platform/agents/prompts/platform-builder.md` and `platform-director.md`, and `docs/` (`PLAN.md`'s "Pick for me" label, `ROADMAP.md`).
 
 Out, and what each waits on:
 - The `/card/:id` replay route, and with it "Watch how it's built" and "Watch how it was built": the supporter-loop work. Nothing links to `/card/` until it exists.

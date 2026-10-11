@@ -144,7 +144,7 @@ First run, on commit 64ccc7d, before this spec was added.
   - Routes and nav: `src/App.test.tsx`.
 - Screenshots of the new pages at 375 and 1440 px are saved under `platform/site/e2e-screenshots/`, which is gitignored and not committed.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Before this merges: confirm B's migrations 000000 to 000400 are applied on production, and that anon can read `cards (horizon, rank, executor_role_id)`, `public_roles` and `public_studio.paused`. The cards query names these columns, so without the grant the whole cards load fails.
 2. Merge; Netlify deploys the site from `main`. Run `node platform/site/scripts/live-check.mjs` against production and quote it here.

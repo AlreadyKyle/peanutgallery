@@ -63,7 +63,7 @@ The script uses the service role because `board_role()` is null for it, so it ca
 - [x] The bot passes every invariant on the live config with each open card's change, alone and together (Evidence).
 - [x] The unlock count bug reproduces against seed-1 at the launch commit (Evidence).
 - [ ] The dry run against production is quoted, with no refusals (waits on: DB's migrations `20260922000000` to `20260922000400` applied after DB merges, and this change merged).
-- [ ] The apply against production is quoted, and a second dry run prints `0 update(s), 0 insert(s), 12 unchanged` (waits on: the dry run above and the board's allow).
+- [ ] The apply against production is quoted, and a second dry run prints `0 update(s), 0 insert(s), 12 unchanged` (waits on: the dry run above and a local session on the Mac).
 - [ ] An anon read after the apply shows the new titles and six cards on `now` with ranks 1 to 6 (waits on: the apply).
 
 ## Verification
@@ -72,9 +72,9 @@ The script uses the service role because `board_role()` is null for it, so it ca
 - `pnpm --filter @backseat/supabase exec vitest run test/refresh-cards.test.ts`
 - The greedy bot on the live config and on copies with each open card's change: `pnpm --filter @backseat/seed-1 bot -- --config-dir <dir> --hours 10 --seed 20260914 --json`.
 - A throwaway script under `seed-1/` that saves after every unlock is earned, restores the save under a config with one unlock removed or renamed, and prints the count the scene draws and the earned line. It was deleted after the run.
-- Production steps 2 to 5 below, quoted (waits on: DB merged and its migrations applied, this change merged, the board's allow).
+- Production steps 2 to 5 below, quoted (waits on: DB merged and its migrations applied, this change merged, a local session on the Mac).
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. After DB's migrations `20260922000000` to `20260922000400` are applied and this change is on main: pause the studio, and make sure no dispatcher is running on the Mac or the VPS (audit F72).
 2. From main, run `pnpm --filter @backseat/supabase exec tsx scripts/refresh-cards.ts --dry-run`. Quote the output. It must end with `dry run: 8 update(s), 3 insert(s), 1 unchanged; nothing written, pass --apply to write` and show no `refused` line.
