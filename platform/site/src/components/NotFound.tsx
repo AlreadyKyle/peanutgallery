@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { copy } from '../lib/copy';
 import { PageHeader } from './PageHeader';
@@ -9,6 +10,15 @@ import { PageHeader } from './PageHeader';
  * id with no public card with it, saying so in `body`.
  */
 export function NotFound({ body = copy.notFoundBody }: { body?: string } = {}) {
+  // Netlify serves the app with a 200 at any path it does not know, so a search engine would index a
+  // not found page as a real one (a soft 404). While it is drawn the page asks not to be indexed.
+  useEffect(() => {
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex';
+    document.head.appendChild(meta);
+    return () => meta.remove();
+  }, []);
   return (
     <main>
       <div className="band">
