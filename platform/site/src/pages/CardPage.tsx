@@ -140,8 +140,13 @@ function Planned({ detail }: { detail: CardDetail }) {
 function Detail({ detail, snapshot }: { detail: CardDetail; snapshot: Snapshot }) {
   return (
     <>
-      {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
-      {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
+      <section aria-labelledby="card-face">
+        <h2 id="card-face" className="sr-only">
+          {words.cardHeading}
+        </h2>
+        {detail.stopped === null && isPlanned(detail.card) ? <Planned detail={detail} /> : <Replay detail={detail} snapshot={snapshot} />}
+        {liveFundLink(detail.card, snapshot) ? <FundAgreement /> : null}
+      </section>
       <Facts detail={detail} />
       <Changed detail={detail} />
       {detail.stopped === null ? null : (
