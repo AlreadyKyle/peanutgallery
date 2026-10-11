@@ -528,7 +528,7 @@ describe('Landing', () => {
     expect(within(faces[1]!).getByText(new RegExp(`\\$1\\.50 ${legal.spent}`))).toBeTruthy();
     expect(within(faces[1]!).getByRole('link', { name: copy.cardPage.watchWasBuilt }).getAttribute('href')).toBe('/card/live1');
     expect(within(shipped).queryByRole('progressbar')).toBeNull();
-    expect(within(shipped).getByRole('link', { name: copy.flow.lanes.shipped.more }).getAttribute('href')).toBe('/roadmap');
+    expect(within(shipped).getByRole('link', { name: copy.flow.lanes.shipped.more }).getAttribute('href')).toBe('/reports');
     // With nothing building, Building names the newest ship.
     cleanup();
     renderLanding(fakeSource({ cards: snapshot.cards.filter((card) => !['now1', 'queued1'].includes(card.id)) }));

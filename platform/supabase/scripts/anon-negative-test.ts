@@ -206,8 +206,10 @@ const SNAPSHOT_RPCS: Array<[string, string[]]> = [
 
 // supporter-pages (docs/specs/supporter-pages.md): a card's own document, null for a card that does
 // not exist, and the /thanks answer, which for a session that is not a real one is exactly
-// {"status":"pending"}. Both only read; thanks_for_session is the one security definer function
-// anon calls, and its answer for a made-up session names nothing.
+// {"status":"pending"}. Both only read; thanks_for_session and public_supply (home-flow) are the
+// security definer functions anon calls: the first's answer for a made-up session names nothing, and
+// the second answers only the drafting status's six figures and fixed codes, no text.
+const SUPPLY_KEYS = ["drafting", "next_check_at", "reason", "run_limit", "runs_today", "short"];
 const CARD_DOCUMENT_KEYS = ["card", "funding", "line_count", "lines", "milestones", "roles", "spent_usd", "stopped", "supporter_count", "supporters"];
 const SUPPORTER_COLUMNS = "card_id,supporter_number,founding";
 const ROLE_STATS_COLUMNS = "role_id,spent_usd,spent_7d_usd,shipped_cards";
@@ -379,6 +381,20 @@ async function main(): Promise<void> {
       expected: "readable",
       actual: error ? "error" : lacking.length === 0 ? "readable" : "error",
       detail: error ? `${error.code ?? "error"} ${error.message}` : lacking.length === 0 ? `keys ${keys.join(",")}` : `missing ${lacking.join(",")}`,
+    });
+  }
+
+  // home-flow (docs/specs/home-flow.md): public_supply answers exactly its six keys, and site_live's
+  // studio entry carries the same.
+  {
+    const { data, error } = await db.rpc("public_supply", {});
+    const present = typeof data === "object" && data !== null && !Array.isArray(data) ? Object.keys(data as object).sort() : [];
+    const exact = JSON.stringify(present) === JSON.stringify(SUPPLY_KEYS);
+    outcomes.push({
+      relation: "rpc public_supply (the drafting status)",
+      expected: "readable",
+      actual: error ? "error" : exact ? "readable" : "error",
+      detail: error ? `${error.code ?? "error"} ${error.message}` : `keys ${present.join(",")}`,
     });
   }
 

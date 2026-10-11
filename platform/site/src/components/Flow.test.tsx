@@ -140,7 +140,7 @@ describe('MachineFlow', () => {
   it('links Next up and Shipped to the roadmap, Fund now to /contribute only past three cards, and Building nowhere', () => {
     renderFlow(snapshot([...planned(1), ...open(4), ...live(1)]));
     expect([more('next')?.textContent, more('next')?.getAttribute('href')]).toEqual([copy.flow.lanes.next.more, '/roadmap']);
-    expect([more('shipped')?.textContent, more('shipped')?.getAttribute('href')]).toEqual([copy.flow.lanes.shipped.more, '/roadmap']);
+    expect([more('shipped')?.textContent, more('shipped')?.getAttribute('href')]).toEqual([copy.flow.lanes.shipped.more, '/reports']);
     expect([more('fund')?.textContent, more('fund')?.getAttribute('href')]).toEqual([copy.flow.lanes.fund.more.replace('{n}', '4'), '/contribute']);
     expect(more('building')).toBeNull();
     cleanup();

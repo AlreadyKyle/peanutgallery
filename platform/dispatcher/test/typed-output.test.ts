@@ -1,9 +1,17 @@
 // A role job's typed answer (src/typed-output.ts, docs/specs/agent-workflows.md): exactly one object
 // valid against the job's schema, or the session fails.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { clipNote, SCHEMA_NAMES, TypedOutput, unwrapAnswer, VERDICT_NOTE_MAX } from '../src/typed-output.js';
 
 const typed = new TypedOutput();
+
+describe('VERDICT_NOTE_MAX', () => {
+  it("is draft-verdict.schema.json's maxLength for note, so the clip follows the schema", () => {
+    const schema = JSON.parse(readFileSync(new URL('../../agents/schemas/draft-verdict.schema.json', import.meta.url), 'utf8')) as { properties: { note: { maxLength: number } } };
+    expect(VERDICT_NOTE_MAX).toBe(schema.properties.note.maxLength);
+  });
+});
 
 const DRAFT = {
   title: 'Gatherers cost 11',

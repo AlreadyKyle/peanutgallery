@@ -93,7 +93,7 @@ export const copy = {
       shipped: {
         title: 'Shipped',
         who: 'A change goes live only when it passes every check.',
-        more: 'See everything shipped',
+        more: 'See what shipped each week',
         empty: 'Nothing has shipped yet.',
       },
     },

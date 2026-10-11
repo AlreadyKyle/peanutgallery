@@ -36,7 +36,7 @@ Every lane has the same parts:
 - its name and how many cards it holds
 - who acts in it
 - at most three compact card faces (index, title, bottom block; no summary)
-- for Next up and Shipped, a link to /roadmap; for Fund now, a link to /contribute past three cards
+- a link: Next up to /roadmap, Shipped to /reports, Fund now to /contribute past three cards
 
 A lane with no card shows a dashed tile saying what happens next, so no lane is ever blank:
 - **Next up:** "Nothing is planned yet."

@@ -124,7 +124,7 @@ function LaneBody({ lane, cards, snapshot, lastShipped, changed }: { lane: FlowL
 /** The link under a lane to the rest of its cards, or nothing. */
 function LaneMore({ lane, count }: { lane: FlowLane; count: number }) {
   if (lane === 'next') return <MoreLinkLine to="/roadmap" words={copy.flow.lanes.next.more} />;
-  if (lane === 'shipped') return <MoreLinkLine to="/roadmap" words={copy.flow.lanes.shipped.more} />;
+  if (lane === 'shipped') return <MoreLinkLine to="/reports" words={copy.flow.lanes.shipped.more} />;
   if (lane === 'fund' && count > FLOW_LANE_CARDS) return <MoreLinkLine to="/contribute" words={copy.flow.lanes.fund.more.replace('{n}', String(count))} />;
   return null;
 }
