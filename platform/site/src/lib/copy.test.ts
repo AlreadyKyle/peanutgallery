@@ -183,9 +183,8 @@ describe('launch copy', () => {
 
   it('names both hold triggers wherever a hold is described', () => {
     const large = NEWEST_TERMS.terms.sections.find((section) => section.heading === 'Large contributions')?.paragraphs.join(' ') ?? '';
-    const holds = legal.howMoneyMoves.sections.find((section) => section.heading === 'Holds and refunds')?.paragraphs[0] ?? '';
     const bar = legal.howMoneyMoves.blocks.find((block) => block.heading === 'The bar fills')?.body[0] ?? '';
-    for (const text of [legal.describeHeld, large, holds, bar]) {
+    for (const text of [legal.describeHeld, large, bar]) {
       expect(text).toMatch(/\$50/);
       expect(text).toMatch(/studio's (total for the day is under its )?daily limit/);
       expect(text).toMatch(/14 days/);

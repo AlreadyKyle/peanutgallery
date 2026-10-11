@@ -29,4 +29,4 @@ A run writes `results/<UTC stamp>.json`: `{commit, cli_version, model_ids, sets:
 
 ## How a baseline moves
 
-Only in a board pull request that changes `baseline.json` and gives the reason in its `reason` field; the test refuses a changed baseline with none. The first baseline is set the same way, from the first attended run; until it exists, the gate log reports that it is missing.
+Only in a kernel pull request that changes `baseline.json` and gives the reason in its `reason` field; the test refuses a changed baseline with none. The first baseline is set the same way, from the first attended run; until it exists, the gate log reports that it is missing.

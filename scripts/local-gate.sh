@@ -15,7 +15,7 @@
 #   - seed-code, platform, end-to-end and build exactly as gate.yml selects them, the build job in its own fresh
 #     worktree with --ignore-scripts, on Node 22 like the runners;
 #   - the gate job's rule: every selected job passed.
-# Board pull requests only. A card/ branch is refused: its checks must come from the base commit on
+# Kernel pull requests only. A card/ branch is refused: its checks must come from the base commit on
 # a clean runner, and the dispatcher still requires the Actions "gate" check, so cards fail closed.
 #
 # Logs and work folders live under ${LOCAL_GATE_DIR:-$HOME/.local-gate} (gate-logs/, gate-work/).

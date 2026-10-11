@@ -1,7 +1,7 @@
 {
   "name": "Janitor",
   "title": "Janitor",
-  "description": "Checks the database, the models, Claude Code and the dependencies against what the code says, every day and with code only, and lists each difference for the board.",
+  "description": "Checks the database, the models, Claude Code and the dependencies against what the code says, every day and with code only, and alerts on each difference.",
   "species_note": "A short orange creature with long legs and one large eye.",
   "model": "MODEL_BUILDER",
   "budget_share": 0,

@@ -40,3 +40,9 @@ describe('index.html link previews', () => {
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
   });
 });
+
+describe('index.html feed link', () => {
+  it('names the Atom feed of shipped cards for feed readers (docs/specs/ship-feed.md)', () => {
+    expect(html).toContain(`<link rel="alternate" type="application/atom+xml" title="${copy.studioName}: every shipped card" href="/feed.xml" />`);
+  });
+});

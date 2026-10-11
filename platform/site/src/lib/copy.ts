@@ -24,6 +24,8 @@ export const copy = {
   teamNav: 'Team',
   // The footer's link to /reports (docs/specs/studio-reports.md).
   reportsNav: 'Weekly reports',
+  // The footer's link to the Atom feed of shipped cards (docs/specs/ship-feed.md).
+  feedLink: 'Follow every ship (RSS)',
   fullLedger: 'Full ledger',
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',
@@ -146,11 +148,10 @@ export const copy = {
     codeIntro: 'Code with no AI in it runs the studio:',
     code: [
       'A scheduler hands out the cards and keeps the agents within their budgets.',
-      'Every change runs through the tests and the other automated checks.',
-      "A card's change goes live only when it passes those checks.",
+      'Every change runs through the tests and the other automated checks, and goes live only when it passes.',
       'If the bot that plays the game finds a problem after a change goes live, the change is rolled back.',
     ],
-    agents: 'The AI agents do the creative work: they design, build and review the cards. When too few cards are open they draft new ones, and another agent grades each draft before it opens.',
+    agents: 'The AI agents do the creative work: they design, build and review the cards.',
   },
   team: {
     title: 'The team',

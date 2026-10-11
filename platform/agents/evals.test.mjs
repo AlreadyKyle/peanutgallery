@@ -45,7 +45,7 @@ export function evalRule(changes, read) {
   }
   const baseline = read(BASELINE);
   if (!baseline || typeof baseline.sets !== 'object' || baseline.sets === null) {
-    return advisory(`${guarded.join(', ')} changed, and ${BASELINE} does not exist yet: the board sets it from a first attended run`);
+    return advisory(`${guarded.join(', ')} changed, and ${BASELINE} does not exist yet: a kernel pull request sets it from a first attended run`);
   }
   const newest = added.at(-1);
   const result = read(newest);
@@ -144,10 +144,10 @@ describe('the eval rule on fixture changes', () => {
     assert.match(gateReport(verdict), /20260926T130000Z\.json is below/);
   });
 
-  test('with no baseline yet a guarded change passes, and the report says the board sets it from a first run', () => {
+  test('with no baseline yet a guarded change passes, and the report says a kernel pull request sets it from a first run', () => {
     const verdict = evalRule([prompt, result('20260926T120000Z')], (p) => (p.endsWith('20260926T120000Z.json') ? { sets: { draft: { pass_k: 1 } } } : null));
     assert.equal(verdict.ok, true);
-    assert.match(gateReport(verdict), /does not exist yet: the board sets it from a first attended run/);
+    assert.match(gateReport(verdict), /does not exist yet: a kernel pull request sets it from a first attended run/);
   });
 
   test('a baseline that moves gives its reason', () => {

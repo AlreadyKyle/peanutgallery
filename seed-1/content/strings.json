@@ -12,7 +12,9 @@
     "unlockedCount": "{unlocked} of {total} unlocked",
     "nextUnlock": "Next: {name} at {amount} dust",
     "allUnlocked": "Every unlock is open.",
-    "unlocksEarned": "{count} unlocks earned"
+    "unlocksEarned": "{count} unlocks earned",
+    "welcomeBack": "While you were away: +{amount} dust in {time}",
+    "unlockBanner": "Unlocked {name}"
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {
@@ -25,5 +27,20 @@
   "effects": {
     "unit": "Opens the {unit}.",
     "multiplier": "Production up {percent}."
+  },
+  "a11y": {
+    "controls": "Game controls",
+    "dustStatus": "{amount} dust, {rate} per second.",
+    "buyUnit": "Buy {name}: costs {cost} dust, {owned} owned",
+    "bought": "Bought a {name}, {owned} owned.",
+    "unlocked": "Unlocked {name}. {effect}"
+  },
+  "share": {
+    "button": "Share your run",
+    "text": "I have {dust} dust and {unlocked} of {total} unlocks in Dust, a free idle game built by AI agents. Play it here:",
+    "copied": "Copied your run to the clipboard.",
+    "failed": "Sharing is not available in this browser.",
+    "imageDust": "dust",
+    "imageUnlocks": "{unlocked} of {total} unlocks"
   }
 }

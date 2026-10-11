@@ -13,6 +13,8 @@ export interface Strings {
     nextUnlock: string;
     allUnlocked: string;
     unlocksEarned: string;
+    welcomeBack: string;
+    unlockBanner: string;
   };
   strikeDescription: string;
   unitDescriptions: Record<string, string>;
@@ -20,7 +22,26 @@ export interface Strings {
     unit: string;
     multiplier: string;
   };
+  // The Share your run button under the canvas (render/share.ts).
+  share: {
+    button: string;
+    text: string;
+    copied: string;
+    failed: string;
+    imageDust: string;
+    imageUnlocks: string;
+  };
+  // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
+  a11y: {
+    controls: string;
+    dustStatus: string;
+    buyUnit: string;
+    bought: string;
+    unlocked: string;
+  };
 }
+
+const A11Y_KEYS = ['controls', 'dustStatus', 'buyUnit', 'bought', 'unlocked'] as const;
 
 const LABEL_KEYS = [
   'dust',
@@ -34,7 +55,11 @@ const LABEL_KEYS = [
   'nextUnlock',
   'allUnlocked',
   'unlocksEarned',
+  'welcomeBack',
+  'unlockBanner',
 ] as const;
+
+const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,6 +90,14 @@ export function parseStrings(raw: unknown): Strings {
   for (const key of LABEL_KEYS) labels[key] = requireText(labelsRaw, key, 'strings.labels');
   const effectsRaw = raw['effects'];
   if (!isRecord(effectsRaw)) throw new Error('strings: "effects" must be an object');
+  const a11yRaw = raw['a11y'];
+  if (!isRecord(a11yRaw)) throw new Error('strings: "a11y" must be an object');
+  const a11y = {} as Strings['a11y'];
+  for (const key of A11Y_KEYS) a11y[key] = requireText(a11yRaw, key, 'strings.a11y');
+  const shareRaw = raw['share'];
+  if (!isRecord(shareRaw)) throw new Error('strings: "share" must be an object');
+  const share = {} as Strings['share'];
+  for (const key of SHARE_KEYS) share[key] = requireText(shareRaw, key, 'strings.share');
   return {
     title: requireText(raw, 'title', 'strings'),
     tabTitle: requireText(raw, 'tabTitle', 'strings'),
@@ -75,5 +108,7 @@ export function parseStrings(raw: unknown): Strings {
       unit: requireText(effectsRaw, 'unit', 'strings.effects'),
       multiplier: requireText(effectsRaw, 'multiplier', 'strings.effects'),
     },
+    share,
+    a11y,
   };
 }

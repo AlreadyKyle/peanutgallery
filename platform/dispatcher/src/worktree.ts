@@ -242,7 +242,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'seed-1/vite.config.ts',
 ];
 
-// The board-only design files (docs/specs/design-review.md): the tokens, the Card, the glyphs, motion,
+// The kernel design files (docs/specs/design-review.md): the tokens, the Card, the glyphs, motion,
 // the route list, the public site's public assets and brand files, and the game's favicon. No card
 // may change one; the dispatcher refuses such a change before any gate run, as it refuses a kernel
 // path, and the gate's kernel-guard.sh fails a card branch that does. They are not kernel: the site
@@ -331,7 +331,7 @@ export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
   return folder === 'seed-1' ? [...CONFIG_LANE_PATHS] : [];
 }
 
-// A board-only design file, or a file under a design folder; case is ignored, as for kernel paths.
+// A kernel design file, or a file under a design folder; case is ignored, as for kernel paths.
 export function isDesignPath(file: string): boolean {
   const lower = file.toLowerCase();
   return DESIGN_PATHS.some((design) => under(lower, design.toLowerCase()));
@@ -465,7 +465,14 @@ export function singleLineTitle(title: string): string {
     return code < SPACE || code === DELETE ? ' ' : ch;
   }).join('');
   const clean = printable.replace(/\s+/g, ' ').trim();
-  return clean.length > TITLE_LIMIT ? `${clean.slice(0, TITLE_LIMIT - 1)}…` : clean;
+  if (clean.length <= TITLE_LIMIT) return clean;
+  // Cut on a code point, never inside a surrogate pair, so the title stays valid UTF-8.
+  let out = '';
+  for (const point of clean) {
+    if (out.length + point.length > TITLE_LIMIT - 1) break;
+    out += point;
+  }
+  return `${out}…`;
 }
 
 export interface CommitInput {

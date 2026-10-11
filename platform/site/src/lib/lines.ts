@@ -27,9 +27,10 @@ export function eventLine(key: string, count = 1, usd: Numeric | undefined = nul
 /**
  * Consecutive lines by the same agent with the same key on the same card, as one line with a count
  * ("Builder A read 12 files"). The lines keep their order; each run keeps its first line's fields.
+ * A line that names an amount (a top-up's usd) never merges: a run would show only the first amount.
  * Home's feed and a card's own page both use it.
  */
-export function collapseLines<T extends { role_id: string | null; line_key?: string; card_id?: string | null }>(lines: readonly T[]): (T & { count: number })[] {
+export function collapseLines<T extends { role_id: string | null; line_key?: string; card_id?: string | null; usd?: Numeric | undefined }>(lines: readonly T[]): (T & { count: number })[] {
   const out: (T & { count: number })[] = [];
   for (const line of lines) {
     const last = out.at(-1);
@@ -38,6 +39,8 @@ export function collapseLines<T extends { role_id: string | null; line_key?: str
       last.role_id === line.role_id &&
       (last.line_key ?? '') === (line.line_key ?? '') &&
       line.line_key !== undefined &&
+      (line.usd ?? null) === null &&
+      (last.usd ?? null) === null &&
       (last.card_id ?? null) === (line.card_id ?? null)
     ) {
       last.count += 1;

@@ -319,7 +319,7 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
 6. **For a real recovery, then:**
    - put the new project's URL and keys in `.env` and in the VPS's env files, and set the stripe-webhook function's secrets there;
    - deploy the webhook to the new project and create its Stripe endpoint with `platform/supabase/scripts/create-webhook-endpoint.ts`, which gives a new signing secret;
-   - change the project ref in `platform/site/netlify.toml`, a kernel file, through a board pull request;
+   - change the project ref in `platform/site/netlify.toml`, a kernel file, through a kernel pull request;
    - the board signs in again and re-enrols its second factor if the new project asks; with no `auth.sql`, each board member signs in afresh by email, which `board_members` allows, and enrols a second factor;
    - resend from the Stripe Dashboard every event since the backup's time (Developers, Events), then run the Controller to find anything still missing;
    - set a password for `peanutgallery_backup` in the new project and update `BACKUP_DB_URL`.
@@ -327,7 +327,7 @@ The encrypted backups are in the `peanutgallery-backups` bucket, and only the bo
 
 ## Migration history
 
-Production's migrations were applied through the Management API query endpoint, which records nothing in `supabase_migrations.schema_migrations`. Once, with the board's allow, `npx supabase@2.117.0 migration repair --status applied <each applied version> --linked` (after `npx supabase link --project-ref lyxndueoeisyqzewflpu`) records every applied file, and `npx supabase migration list --linked` must then show local and remote in step. Later migrations can then go through `supabase db push`. The nightly dump carries the history (`history_schema.sql`, `history_data.sql`), so a restore keeps it.
+Production's migrations were applied through the Management API query endpoint, which records nothing in `supabase_migrations.schema_migrations`. Once, `npx supabase@2.117.0 migration repair --status applied <each applied version> --linked` (after `npx supabase link --project-ref lyxndueoeisyqzewflpu`) records every applied file, and `npx supabase migration list --linked` must then show local and remote in step. Later migrations can then go through `supabase db push`. The nightly dump carries the history (`history_schema.sql`, `history_data.sql`), so a restore keeps it.
 
 ## The GitHub Actions host
 
@@ -426,7 +426,7 @@ The full log needs the board's offline age key, the same one that opens a backup
 - **Gaps between runs.** Each handover leaves a minute or two with no dispatcher, and a card claimed shortly before a drain may still be running at the hard stop, where it is interrupted and paused for the board to resume. Ticks resume with the next run.
 - **GitHub decides when a run starts.** A scheduled run can start late or be dropped under load, GitHub disables the schedule of a public repository after 60 days with no activity in it, and an Actions outage stops the host. healthchecks.io alerts on all of them.
 - **The secret is in GitHub.** Anyone who can change the environment's branch policy, or push to main, can reach `DISPATCHER_ENV`; on a server only root could. Branch protection on main is not set yet.
-- **Every merge to main deploys itself.** On a server or the Mac a deploy needed the gate green and the board's confirmed sha; here the next run runs whatever main holds. What stands between a card and the dispatcher's own code is the kernel paths: no card may change `.github`, `platform/dispatcher`, `platform/ops`, the lockfile or the workspace files (`platform/gate/kernel-paths.txt`), so only a board pull request changes what this host runs.
+- **Every merge to main deploys itself.** On a server or the Mac a deploy needed the gate green and a confirmed sha; here the next run runs whatever main holds. What stands between a card and the dispatcher's own code is the kernel paths: no card may change `.github`, `platform/dispatcher`, `platform/ops`, the lockfile or the workspace files (`platform/gate/kernel-paths.txt`), so only a kernel pull request changes what this host runs.
 - **The code clone is read-only by its mode bits,** as on the Mac: the runner's user could `chmod` it back. No agent-written code runs on the runner, which is what makes this enough.
 
 ## The Mac host

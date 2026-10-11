@@ -10,8 +10,9 @@ import {
   step,
 } from '../sim/sim';
 import { awaySeconds, serializeState } from '../sim/save';
-import type { SimState, UnlockRow } from '../sim/types';
-import { fill, formatDust, formatPercent, formatRate } from './format';
+import type { SimAction, SimState } from '../sim/types';
+import { describeEffect } from './a11y';
+import { fill, formatDust, formatDuration, formatRate } from './format';
 import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
@@ -41,6 +42,20 @@ const COLORS = {
 };
 
 const FONT = 'sans-serif';
+
+// The welcome-back note shows only for an absence long enough to feel like one.
+const MIN_WELCOME_SECONDS = 60;
+const TOAST_MS = 3500;
+
+/** What the save credited on load: the dust earned and the seconds away. */
+export interface WelcomeBack {
+  gain: number;
+  seconds: number;
+}
+
+function reducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 interface UnitRow {
   unit: string;
@@ -77,13 +92,91 @@ export class DustScene extends Phaser.Scene {
   private drawnUnlockCount = -1;
   // The wall-clock millisecond of the last step. The sim advances by wall-clock time rather than
   // Phaser's frame delta, which a browser stops or clamps while the tab is in the background, so time
-  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once).
-  private lastStepAt = Date.now();
+  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once). It starts at the first frame,
+  // not at construction: the time Phaser takes to boot is not play, and counting it made two draws of
+  // the same save credit different dust (the gate's frames job, e2e/frames.spec.ts).
+  private lastStepAt: number | null = null;
 
-  constructor(data: GameData, seed: number, savedState: SimState | null = null) {
+  // Whether create() has built the objects refresh() draws; a DOM control can act before it has.
+  private created = false;
+  // Called after every refresh with the state drawn, so the accessible DOM layer (render/controls.ts) tracks it.
+  private readonly onRefresh: ((state: SimState) => void) | null;
+  private readonly welcome: WelcomeBack | null;
+  // Feedback: the toast over the title row, the strike button's centre for the +N floats, and the
+  // unlock count last seen, so a new unlock gets its own moment.
+  private toast!: Phaser.GameObjects.Container;
+  private toastText!: Phaser.GameObjects.Text;
+  private toastTimer: Phaser.Time.TimerEvent | null = null;
+  private strikeCentreY = 0;
+  private seenUnlocks: number;
+  private readonly calm = reducedMotion();
+
+  constructor(
+    data: GameData,
+    seed: number,
+    savedState: SimState | null = null,
+    onRefresh: ((state: SimState) => void) | null = null,
+    welcome: WelcomeBack | null = null,
+  ) {
     super({ key: 'dust' });
     this.data_ = data;
     this.state = savedState ?? createSim(data.config, seed);
+    this.onRefresh = onRefresh;
+    this.welcome = welcome;
+    this.seenUnlocks = this.state.unlocked.length;
+  }
+
+  // One action from the canvas or the DOM controls: the same sim `apply`, then a redraw.
+  act(action: SimAction): SimState {
+    const before = this.state;
+    this.state = apply(this.state, this.data_.config, action);
+    if (this.created) {
+      if (action.type === 'strike') this.floatGain(this.state.dust - before.dust);
+      else if (this.state !== before && ownedCount(this.state, action.unit) > ownedCount(before, action.unit)) this.pulse(this.dustText);
+      this.refresh();
+    }
+    return this.state;
+  }
+
+  // A "+N" that rises off the Strike button and fades: the strike's yield, made visible.
+  private floatGain(gain: number): void {
+    if (!(gain > 0)) return;
+    const x = SCREEN_WIDTH / 2 + Phaser.Math.Between(-60, 60);
+    const label = this.add.text(x, this.strikeCentreY - 30, `+${formatDust(gain)}`, textStyle(18, COLORS.text, 'bold')).setOrigin(0.5);
+    this.tweens.add({
+      targets: label,
+      y: this.calm ? label.y : label.y - 36,
+      alpha: 0,
+      duration: 800,
+      ease: 'Cubic.easeOut',
+      onComplete: () => label.destroy(),
+    });
+  }
+
+  private pulse(target: Phaser.GameObjects.Text): void {
+    if (this.calm) return;
+    this.tweens.add({ targets: target, scale: 1.06, duration: 90, yoyo: true, ease: 'Quad.easeOut' });
+  }
+
+  private createToast(): void {
+    const height = 34;
+    const panel = this.add.rectangle(SCREEN_WIDTH / 2, height / 2, CONTENT_WIDTH, height, COLORS.accent);
+    this.toastText = this.add.text(SCREEN_WIDTH / 2, height / 2, '', textStyle(13, COLORS.dark, 'bold')).setOrigin(0.5);
+    this.toast = this.add.container(0, MARGIN - 4, [panel, this.toastText]).setAlpha(0).setDepth(10);
+  }
+
+  // `slide` animates the entrance. The unlock toast appears without it: an unlock can land inside the
+  // gate's frame draws, and a tween's timing is not frame-exact, so it would make two draws differ.
+  private showToast(message: string, slide = true): void {
+    this.toastText.setText(message);
+    this.tweens.killTweensOf(this.toast);
+    const animate = slide && !this.calm;
+    this.toast.setAlpha(1).setY(animate ? MARGIN - 14 : MARGIN - 4);
+    if (animate) this.tweens.add({ targets: this.toast, y: MARGIN - 4, duration: 220, ease: 'Back.easeOut' });
+    this.toastTimer?.remove();
+    this.toastTimer = this.time.delayedCall(TOAST_MS, () => {
+      this.tweens.add({ targets: this.toast, alpha: 0, duration: this.calm ? 1 : 400 });
+    });
   }
 
   create(): void {
@@ -102,12 +195,17 @@ export class DustScene extends Phaser.Scene {
     y = this.createStrikeButton(y);
     y = this.createUnitRows(y + 12);
     this.createUnlockList(y + 12);
+    this.createToast();
+    this.created = true;
     this.refresh();
+    if (this.welcome !== null && this.welcome.seconds >= MIN_WELCOME_SECONDS && this.welcome.gain >= 1) {
+      this.showToast(fill(strings.labels.welcomeBack, { amount: formatDust(this.welcome.gain), time: formatDuration(this.welcome.seconds) }));
+    }
   }
 
   override update(): void {
     const now = Date.now();
-    this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
+    if (this.lastStepAt !== null) this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
     this.lastStepAt = now;
     this.refresh();
   }
@@ -115,6 +213,7 @@ export class DustScene extends Phaser.Scene {
   private createStrikeButton(top: number): number {
     const { strings } = this.data_;
     const height = 56;
+    this.strikeCentreY = top + height / 2;
     const button = this.add
       .rectangle(SCREEN_WIDTH / 2, top + height / 2, CONTENT_WIDTH, height, COLORS.accent)
       .setInteractive({ useHandCursor: true });
@@ -122,8 +221,7 @@ export class DustScene extends Phaser.Scene {
     this.add.text(SCREEN_WIDTH / 2, top + 41, strings.strikeDescription, textStyle(12, COLORS.dark)).setOrigin(0.5);
     button.on('pointerdown', () => {
       button.setFillStyle(COLORS.accentDown);
-      this.state = apply(this.state, this.data_.config, { type: 'strike' });
-      this.refresh();
+      this.act({ type: 'strike' });
     });
     button.on('pointerup', () => button.setFillStyle(COLORS.accent));
     button.on('pointerout', () => button.setFillStyle(COLORS.accent));
@@ -150,8 +248,7 @@ export class DustScene extends Phaser.Scene {
       const buttonLabel = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 - 12, strings.labels.buy, textStyle(14, COLORS.dark, 'bold')).setOrigin(0.5);
       const cost = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 + 6, '', textStyle(11, COLORS.dark)).setOrigin(0.5);
       button.on('pointerdown', () => {
-        this.state = apply(this.state, config, { type: 'buy', unit: row.id });
-        this.refresh();
+        this.act({ type: 'buy', unit: row.id });
       });
       container.add([panel, name, description, owned, button, buttonLabel, cost]);
       this.unitRows.push({ unit: row.id, container, owned, cost, button, buttonLabel });
@@ -181,16 +278,6 @@ export class DustScene extends Phaser.Scene {
       this.unlockSection.add([dot, label]);
       this.unlockSlots.push({ dot, label });
     }
-  }
-
-  private describeEffect(row: UnlockRow): string {
-    const { config, strings } = this.data_;
-    const effect = row.effect;
-    if (effect.type === 'unit') {
-      const unitRow = config.spawnTable.rows.find((candidate) => candidate.id === effect.unit) ?? null;
-      return fill(strings.effects.unit, { unit: unitRow === null ? effect.unit : unitRow.name });
-    }
-    return fill(strings.effects.multiplier, { percent: formatPercent(effect.value) });
   }
 
   private refresh(): void {
@@ -232,6 +319,13 @@ export class DustScene extends Phaser.Scene {
       this.progressBar.fillRect(MARGIN, this.progressTop, CONTENT_WIDTH * share, 8);
     }
 
+    if (state.unlocked.length > this.seenUnlocks) {
+      const latest = state.unlocked[state.unlocked.length - 1];
+      const row = config.unlocks.unlocks.find((unlock) => unlock.id === latest?.id);
+      if (row !== undefined) this.showToast(fill(strings.labels.unlockBanner, { name: row.name }), false);
+      this.seenUnlocks = state.unlocked.length;
+    }
+
     if (this.drawnUnlockCount !== state.unlocked.length) {
       this.drawnUnlockCount = state.unlocked.length;
       const earnedIds = new Set(state.unlocked.map((event) => event.id));
@@ -255,11 +349,12 @@ export class DustScene extends Phaser.Scene {
         } else {
           slot.dot.setVisible(true);
           slot.dot.setFillStyle(COLORS.bar, 0);
-          slot.label.setText(`${line.row.name}: ${this.describeEffect(line.row)} (${formatDust(line.row.atTotalDust)})`);
+          slot.label.setText(`${line.row.name}: ${describeEffect(line.row, config, strings)} (${formatDust(line.row.atTotalDust)})`);
           slot.label.setColor(COLORS.muted);
         }
       }
     }
+    this.onRefresh?.(state);
   }
 
   private setText(target: Phaser.GameObjects.Text, value: string): void {
