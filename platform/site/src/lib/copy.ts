@@ -44,7 +44,7 @@ export const copy = {
   queued: 'Queued',
   shipped: 'Shipped',
   playTheGame: 'Play the game',
-  // Home's first game, first in the card band (docs/specs/home-game-tile.md): proof the agents ship.
+  // Home's first game, after the cards to fund (docs/specs/home-game-tile.md, decision 70): proof the agents ship.
   // The one place home names a game (docs/PLAN.md §10 decision 68).
   game: {
     title: 'Play the first game',
@@ -107,6 +107,7 @@ export const copy = {
     drafting: 'The Game Designer is drafting a new card.',
     draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
     draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
+    draftingNoMoney: 'The Game Designer drafts the next card when a contribution comes in.',
     // A Next up card's line: an approved agent card waiting to open, board work, or a planned card.
     boardWork: 'The board builds this one itself',
     planned: 'Planned, opens for funding later',

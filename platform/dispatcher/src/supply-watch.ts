@@ -20,6 +20,7 @@ export const BLOCKED: Readonly<Record<string, string>> = {
   role_paused: 'the Game Designer is paused; resume it to let drafting continue',
   grader_paused: 'the Game Director is paused; resume it to let drafting continue',
   job_disabled: 'the draft_card job is disabled',
+  no_money: 'the last draft failed for want of money; drafting resumes when a contribution is credited, or the next New York day for a cap',
 };
 
 export interface SupplyWatchState {

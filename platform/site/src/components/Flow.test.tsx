@@ -355,6 +355,7 @@ describe('draftingLine', () => {
       text: copy.flow.draftingDone.replace('{n}', '2'),
       drafting: false,
     });
+    expect(draftingLine(snapshot([], { supply: supply({ reason: 'no_money' }) }))).toEqual({ text: copy.flow.draftingNoMoney, drafting: false });
     expect(draftingLine(snapshot([], { supply: supply({ reason: 'not_short' }) }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([], { supply: null }))).toEqual({ text: copy.flow.draftingIdle, drafting: false });
     expect(draftingLine(snapshot([]))).toEqual({ text: copy.flow.draftingIdle, drafting: false });

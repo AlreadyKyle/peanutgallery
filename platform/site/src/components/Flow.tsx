@@ -29,6 +29,7 @@ export function draftingLine(snapshot: Snapshot): { text: string; drafting: bool
   if (supply?.reason === 'daily_limit' && supply.run_limit > 0) {
     return { text: copy.flow.draftingDone.replace('{n}', String(supply.run_limit)), drafting: false };
   }
+  if (supply?.reason === 'no_money') return { text: copy.flow.draftingNoMoney, drafting: false };
   return { text: copy.flow.draftingIdle, drafting: false };
 }
 

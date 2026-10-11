@@ -419,7 +419,8 @@ Deno.test("enqueue_supply_draft queues one scheduled draft_card run while the su
       await s.db.exec(`insert into public.job_runs (job_name, idem_key, origin, status, reason) values ('draft_card', 'skipped-1', 'schedule', 'skipped', 'role_paused')`);
       const second = await s.enqueue();
       assertEquals(second.queued, true);
-      await s.db.query(`update public.job_runs set status = 'failed', reason = 'insufficient_balance', finished_at = now() where id = $1`, [second.run_id]);
+      // A failure that is not for want of money (no_money is supply_every_minute_test.ts's).
+      await s.db.query(`update public.job_runs set status = 'failed', reason = 'stream_lost', finished_at = now() where id = $1`, [second.run_id]);
       const limited = await s.enqueue();
       assertEquals([limited.queued, limited.reason, limited.runs_today, limited.short], [false, "daily_limit", 2, true]);
       // Yesterday's runs, in New York, do not count.

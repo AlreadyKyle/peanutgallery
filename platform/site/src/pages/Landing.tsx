@@ -216,8 +216,8 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
-        <GameSection />
         <FundSection studio={studio} live={live} />
+        <GameSection />
         {view === null ? null : <FlowSection view={view} />}
       </div>
       {view === null ? null : <TeamSection view={view} />}
