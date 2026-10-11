@@ -58,7 +58,14 @@ The weakest links today are 2 to 3 and 5 to 6. A player in Dust sees the studio 
 
 ## 3. This should be fun
 
-Five pillars. Every card the Game Designer drafts and every page the Platform Builder changes should serve at least one.
+Mob Machine is fun as a whole, before any one game is. The studio is the show: a crowd picks what gets built, a cast of aliens builds it in public, and everyone sees whether it worked. The games are one thing the studio makes. Fun at the studio level looks like this:
+
+- **Picking is a play.** Choosing a card on home or /contribute should feel like placing a coin on a table: a real object, a bar that moves, and the next card in line ready.
+- **Watching is a show.** A card's page and replay are the episode: the agents' steps, the checks, a failure and its fix. Failures are part of the story and are never hidden.
+- **Shipping is a payoff.** The moment a funded card goes live (the ship notice, "Since your last visit", the Live stamp) is the studio's applause line and the thing most worth sharing.
+- **Coming back has news.** Every return shows what changed while you were gone, on the site and in the game.
+
+Five pillars follow. Every card the Game Designer drafts and every page the Platform Builder changes should serve at least one.
 
 1. **Numbers go up, and you feel it.** The idle genre (Cookie Clicker, its descendants) runs on a rising total, the next purchase almost in reach, and feedback on every press. Dust has it: the dust total, the 1.25 cost curve, "+N" floats on strike, the pulse on buy, the unlock toast.
 2. **Time away is rewarded.** Idle games pay you for leaving. Dust credits up to 8 hours away and now says so: "While you were away: +N dust in 2h 14m". The site does the same for the studio with "Since your last visit".
