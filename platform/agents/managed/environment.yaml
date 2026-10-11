@@ -8,8 +8,8 @@
 #
 # What this protects and what it does not: it keeps card code in the container from fetching
 # arbitrary payloads or reaching third parties. It is not a confidentiality control for the
-# repository. The same card code runs in CI with the full checkout, the repository stays private as a
-# GitHub setting, and no secret lives in it.
+# repository, which is public (PLAN.md §10 decision 61): the same card code runs in CI with the full
+# checkout, and no secret lives in it.
 #
 # pnpm is preinstalled at the root package.json's packageManager version. `managed:apply` creates or
 # updates this environment by name and prints its id for MANAGED_ENVIRONMENT_ID; unattended startup
