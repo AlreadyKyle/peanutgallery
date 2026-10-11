@@ -1984,11 +1984,98 @@ input[type='radio'] {
   font-weight: var(--weight-bold);
 }
 
+/* Who runs it (WhoRuns.tsx), on ink: a large lede, two tiles side by side, then the board's duties as
+   a numbered checklist in two columns. Rules are hairlines in the text colour, so the block reads on
+   any band. */
+.who-runs .who-lede {
+  max-width: 40rem;
+  font-size: var(--size-lead);
+  line-height: 1.4;
+}
+
+.who-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  opacity: 0.75;
+}
+
+.who-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.who-tile,
+.who-duties {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: var(--radius-card);
+}
+
+.who-tile p:last-child {
+  margin-bottom: 0;
+}
+
+.who-duties {
+  margin-top: var(--space-2);
+}
+
+.who-duties ol {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: duty;
+}
+
+.who-duties li {
+  position: relative;
+  padding-left: var(--space-4);
+  counter-increment: duty;
+}
+
+.who-duties li::before {
+  content: counter(duty);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+}
+
+.who-outro {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  font-size: var(--size-small);
+  opacity: 0.85;
+}
+
 /* Motion ---------------------------------------------------------------------
    Every transition and animation lives here. Under reduced motion none exist, and motion.ts applies
    end states at once. Only transform and opacity move; keyboard focus never animates. */
 
 @media (prefers-reduced-motion: no-preference) {
+  /* The mark tips its head when the wordmark is hovered: a small lift and tilt that eases back. */
+  .mark {
+    transform-origin: 50% 90%;
+    transition: transform var(--dur-quick) var(--ease-out);
+  }
+
+  .wordmark:hover .mark {
+    transform: translateY(-1px) rotate(-6deg);
+  }
+
   .button,
   button {
     transition: transform var(--dur-quick) var(--ease-out);

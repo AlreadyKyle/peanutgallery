@@ -403,7 +403,9 @@ export const legal = {
       'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
       'The board can file cards, but it does not have to. When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one, and the Game Director, another agent, grades it before it opens. No one has to ask.',
     ],
-    dutiesIntro: 'The board also has standing duties:',
+    agentsLabel: 'The agents act on their own',
+    boardLabel: 'The board can step in',
+    dutiesIntro: "The board's standing duties",
     duties: [
       "After each Stripe payout, buy the agents' model credit and raise the amount Stripe holds back from payouts to the figure the studio's books set.",
       'Refund any request sent to {email} within 14 days of the contribution.',
