@@ -13,12 +13,21 @@ export interface Strings {
     nextUnlock: string;
     allUnlocked: string;
     unlocksEarned: string;
+    welcomeBack: string;
+    unlockBanner: string;
   };
   strikeDescription: string;
   unitDescriptions: Record<string, string>;
   effects: {
     unit: string;
     multiplier: string;
+  };
+  // The Share your run button under the canvas (render/share.ts).
+  share: {
+    button: string;
+    text: string;
+    copied: string;
+    failed: string;
   };
   // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
   a11y: {
@@ -44,7 +53,11 @@ const LABEL_KEYS = [
   'nextUnlock',
   'allUnlocked',
   'unlocksEarned',
+  'welcomeBack',
+  'unlockBanner',
 ] as const;
+
+const SHARE_KEYS = ['button', 'text', 'copied', 'failed'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -79,6 +92,10 @@ export function parseStrings(raw: unknown): Strings {
   if (!isRecord(a11yRaw)) throw new Error('strings: "a11y" must be an object');
   const a11y = {} as Strings['a11y'];
   for (const key of A11Y_KEYS) a11y[key] = requireText(a11yRaw, key, 'strings.a11y');
+  const shareRaw = raw['share'];
+  if (!isRecord(shareRaw)) throw new Error('strings: "share" must be an object');
+  const share = {} as Strings['share'];
+  for (const key of SHARE_KEYS) share[key] = requireText(shareRaw, key, 'strings.share');
   return {
     title: requireText(raw, 'title', 'strings'),
     tabTitle: requireText(raw, 'tabTitle', 'strings'),
@@ -89,6 +106,7 @@ export function parseStrings(raw: unknown): Strings {
       unit: requireText(effectsRaw, 'unit', 'strings.effects'),
       multiplier: requireText(effectsRaw, 'multiplier', 'strings.effects'),
     },
+    share,
     a11y,
   };
 }
