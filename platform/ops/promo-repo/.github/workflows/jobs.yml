@@ -1,4 +1,4 @@
-# Mob Machine's daily jobs: the nightly backup, the Controller and the quota check
+# Mob Machine's daily jobs: the nightly backup, the Controller, the quota check and the ship notices
 # (platform/ops/ops-repo/README.md in the studio repository). They run here, in a private repository,
 # never in the public studio repository: no job secret sits where card code or public logs reach it.
 # The job code is the studio repository's platform/ops at the commit in the STUDIO_REF variable, a
@@ -10,13 +10,14 @@ on:
     - cron: '17 6 * * *'   # backup
     - cron: '7 7 * * *'    # controller
     - cron: '37 7 * * *'   # quota
+    - cron: '7 9 * * *'    # notices
   workflow_dispatch:
     inputs:
       job:
-        description: backup, controller or quota
+        description: backup, controller, quota or notices
         required: true
         type: choice
-        options: [backup, controller, quota]
+        options: [backup, controller, quota, notices]
 
 permissions:
   contents: read
@@ -40,6 +41,7 @@ jobs:
             backup:* | ':17 6 * * *') job=backup ;;
             controller:* | ':7 7 * * *') job=controller ;;
             quota:* | ':37 7 * * *') job=quota ;;
+            notices:* | ':7 9 * * *') job=notices ;;
             *) echo "no job for '$ASKED' '$SCHEDULE'"; exit 1 ;;
           esac
           echo "job=$job" >> "$GITHUB_OUTPUT"
@@ -55,6 +57,7 @@ jobs:
           sparse-checkout: |
             platform/ops
             platform/supabase/functions/_shared
+            platform/site
 
       - uses: actions/setup-node@v4
         with:
@@ -100,18 +103,23 @@ jobs:
           retention-days: 90
           compression-level: 0
 
-      - name: Controller or quota check
+      - name: Controller, quota check or ship notices
         if: steps.pick.outputs.job != 'backup'
         env:
           JOB: ${{ steps.pick.outputs.job }}
           CONTROLLER_ENV: ${{ secrets.CONTROLLER_ENV }}
           QUOTA_ENV: ${{ secrets.QUOTA_ENV }}
+          NOTICES_ENV: ${{ secrets.NOTICES_ENV }}
         run: |
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/env"
           file="$RUNNER_TEMP/env/$JOB.env"
-          if [ "$JOB" = controller ]; then printf '%s\n' "$CONTROLLER_ENV" > "$file"; else printf '%s\n' "$QUOTA_ENV" > "$file"; fi
+          case "$JOB" in
+            controller) printf '%s\n' "$CONTROLLER_ENV" > "$file" ;;
+            quota) printf '%s\n' "$QUOTA_ENV" > "$file" ;;
+            notices) printf '%s\n' "$NOTICES_ENV" > "$file" ;;
+          esac
           env -i PATH="$PATH" HOME="$HOME" node studio/platform/ops/jobs/check-env.mjs "$JOB" "$file"
           env -i PATH="$PATH" HOME="$HOME" node --env-file="$file" studio/platform/ops/jobs/main.mjs "$JOB"
 
