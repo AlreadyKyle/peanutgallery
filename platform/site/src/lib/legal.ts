@@ -212,6 +212,9 @@ export const legal = {
   explainer: {
     heading: 'Watch how it works',
     play: 'Play the video',
+    // The preview loop's own control (WCAG 2.2.2): it names the loop, not the video.
+    pauseLoop: 'Pause the preview',
+    playLoop: 'Play the preview',
     agents: 'The agents',
     studio: 'The studio',
     beats: [

@@ -1,4 +1,5 @@
 import { FundingBar, fundingCaption } from '../components/Funding';
+import { CardsStatus } from '../components/CardsStatus';
 import { Guarded } from '../components/Guarded';
 import { PageHeader } from '../components/PageHeader';
 import { StaleNotice } from '../components/StaleNotice';
@@ -108,6 +109,10 @@ export function Contribute() {
             </p>
 
             <h2>{legal.orPickACard}</h2>
+            <CardsStatus
+              count={studio.state === 'ready' && hasOrder(studio.snapshot) ? fundableCards(studio.snapshot).length : null}
+              unavailable={studio.state !== 'loading' && (studio.state !== 'ready' || !hasOrder(studio.snapshot))}
+            />
             <Guarded studio={studio}>
               {(snapshot) => {
                 if (!hasOrder(snapshot)) return <p className="muted">{legal.partUnavailable}</p>;
