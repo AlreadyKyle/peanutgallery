@@ -4,6 +4,7 @@ import { createSim, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
 import { loadGameData } from './load';
+import { loadNextCard, showNextCard } from './next-card';
 import { attachShare } from './share';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
@@ -76,4 +77,16 @@ function start(): void {
     });
 }
 
+// The next Dust card to fund, read apart from the game so a slow or failed read never holds it up.
+function startNextCard(): void {
+  const root = document.getElementById('next-card');
+  const link = document.getElementById('next-card-link');
+  const title = document.getElementById('next-card-title');
+  const amount = document.getElementById('next-card-amount');
+  const fill = document.getElementById('next-card-fill');
+  if (root === null || !(link instanceof HTMLAnchorElement) || title === null || amount === null || fill === null) return;
+  void loadNextCard().then((card) => showNextCard({ root, link, title, amount, fill }, card));
+}
+
 start();
+startNextCard();
