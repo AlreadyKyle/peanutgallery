@@ -24,6 +24,9 @@ export const legal = {
   splitLine:
     "Before the split, {reserve}% of every contribution after Stripe's fee is held in reserve. Unless you change it at checkout, {agents}% goes to the agents and {studio}% to the studio.",
   notDonations: 'These are contributions, not donations.',
+  // Home's Where the money goes, after the split: what the agents' share buys (docs/specs/home-game-tile.md).
+  agentShareLine:
+    "The agents' share pays only for the AI model time that builds funded cards, and the ledger lists every cost.",
   // Said once on /contribute and /ledger. Stripe takes US dollars only (the webhook refuses any other currency).
   usdNote: 'All amounts are in US dollars (USD).',
   fixedRulesIntro: 'Some rules are fixed, and no contribution or card can change them.',
@@ -67,7 +70,7 @@ export const legal = {
   describeAgentSpend: 'Model usage paid for with contributions, priced at list rates.',
   tokensLine: '{in} in · {cached} cached · {out} out tokens',
   meterUnavailable: 'Figures are not available yet.',
-  staleFigures: 'Could not refresh. These figures may be out of date.',
+  staleFigures: 'These figures could not refresh and may be out of date.',
   partUnavailable: 'Not available right now.',
   // What /reports and a card's page show when their document did not load. They sit here, beside the
   // other unavailable lines, because the kernel route-shots spec refuses a frame that shows one and
@@ -108,7 +111,7 @@ export const legal = {
   // (auto_resume, docs/specs/unattended-roles.md). One step has a role: the Studio Head's Rank now
   // (docs/specs/agent-workflows.md), which reads after the role's name.
   eventSteps: {
-    dealt: 'Dealt to now',
+    dealt: 'Opened for funding',
     ceiling_top_up: 'Topped up with {usd} from Not on a card yet',
     resume_rule: 'Resumed by rule after its spending limit',
     auto_resume: 'Resumed on its own after a pause that was not its fault',
@@ -121,7 +124,7 @@ export const legal = {
       {
         heading: 'Pick a card',
         body: [
-          'Each card is one change to the game or to this site, with a funding target. Pick one to fund, or let the studio pick for you.',
+          'Each card is one change to the game or to this site, with a funding target. Pick one, or fund whichever card is next in line.',
         ],
       },
       {
@@ -224,8 +227,8 @@ export const legal = {
       { step: null, line: 'Fund a card. Watch AI agents build it. Play it free.' },
     ],
   },
-  contributeTitle: 'Where should your contribution go?',
-  contributeLede: 'Let the studio decide, or pick the card you want built. You set the split at checkout on the next step.',
+  contributeTitle: 'Fund a card',
+  contributeLede: 'Fund the next card in line, or pick the one you want built. You choose the split at checkout.',
   // The first choice on /contribute: money given with no card funds the next cards in line (PLAN.md
   // §4). It names the first card in the waterfall's order (public_money.funding_order), says the
   // money waits when no card takes money, and names no card when the order did not load
@@ -234,8 +237,11 @@ export const legal = {
   pickForMeBody: 'Your contribution funds whatever the agents build next.',
   nextInLine: 'Next in line: {title}',
   nextInLineNone: 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.',
-  orPickACard: 'Or pick a card',
-  noFundableCards: 'No cards need funding right now. Funding the next card in line still pays for whatever the agents build next.',
+  // Home's fund section with no card open: the same rule as nextInLineNone, without repeating the
+  // status line just above it.
+  fundEmptyBody: 'Your contribution waits in Not on a card yet, then funds the next card that opens.',
+  orPickACard: 'Or pick a card yourself',
+  noFundableCards: 'No card is open for funding right now. Fund the next card in line and your money waits for the next one that opens.',
   // Under /contribute's card choices.
   waterfallLine: "Anything beyond a card's target funds the next cards in line.",
   // /ledger's Funding band: money on no card yet, the shortfall and the board's test payment.
@@ -391,7 +397,7 @@ export const legal = {
     paragraphs: [
       'Mob Machine is run by AI agents and a board: the people who own the studio and can step in, today Kyle Smith.',
       'The board can pause the agents, cancel, veto or move a card, and change the spending caps.',
-      'The board files cards on the roadmap. When too few cards are open for funding, the Game Designer, an AI agent, drafts one from the roadmap or a new idea, and the Game Director, another agent, grades it before it can open. No one has to ask.',
+      'The board can file cards, but it does not have to. When too few cards are open for funding, the Game Designer, an AI agent, drafts a new one, and the Game Director, another agent, grades it before it opens. No one has to ask.',
     ],
     dutiesIntro: 'The board also has standing duties:',
     duties: [
@@ -417,7 +423,7 @@ export const legal = {
     youAre: 'You are Supporter {n}.',
     plainLede: 'Thank you for supporting the studio.',
     reachedHeading: 'Where your money went',
-    reachedLede: 'The cards your contribution reached, the one you picked first.',
+    reachedLede: 'The cards your contribution reached, starting with the one you picked.',
     reachedNone: 'Your contribution has not reached a card yet.',
     stateOpen: 'Open for funding',
     stateFunded: 'Funded and waiting for the agents.',
@@ -441,7 +447,7 @@ export const legal = {
   rejectedFallback: "It did not pass one of the studio's checks.",
   continueToCheckout: 'Continue to checkout',
   ledgerLede:
-    'The money available to the agents, what agent work paid for by contributions has cost, and the latest agent actions and deploys.',
+    'What the agents have to spend, what their work paid for by contributions has cost, and their latest actions and deploys.',
   // The footer links and the text pages they open.
   footerLinks: { terms: 'Terms', privacy: 'Privacy', refunds: 'Refunds', contact: 'Contact' },
   contactEmail: 'hello@clayhouse.studio',

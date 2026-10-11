@@ -48,8 +48,8 @@ test.describe('/contribute follows the funding order', () => {
 
   test('counts and draws on home only the open cards in the order, each with its live Fund this card', async ({ page }) => {
     await page.goto('/');
-    const fund = page.getByRole('region', { name: "Fund what's next" });
-    await expect(fund.getByRole('heading', { level: 3 })).toHaveCount(2);
+    const fund = page.getByRole('region', { name: 'Pick a card to fund' });
+    await expect(fund.locator('ul.fund-grid > li.card h3')).toHaveCount(2);
     // The vetoed card takes no money: it is not counted as open, and not drawn without a button among
     // cards that have one (that misaligns the row's bars).
     await expect(page.getByRole('main').getByText(String(VETOED.title))).toHaveCount(0);
@@ -68,10 +68,16 @@ test.describe('/contribute with an empty order', () => {
     await expect(main.locator('a.choice-primary')).toContainText('Your contribution waits in Not on a card yet and funds the next card that opens.');
     await expect(main.locator('ul.choices')).toHaveCount(0);
     await expect(main.locator(`a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
-    // Home agrees: no card is open for funding, and Fund what's next draws none.
+    // Home agrees: no card is open for funding, and the fund section draws none, only its panel with
+    // Contribute, which says where the money waits without repeating the status line.
     await page.goto('/');
     await expect(page.locator('p.status-line')).toHaveText(/^No card is open for funding right now\./);
-    await expect(page.getByRole('region', { name: "Fund what's next" }).locator('li.card')).toHaveCount(0);
+    const fund = page.getByRole('region', { name: 'Pick a card to fund' });
+    await expect(fund.locator('li.card')).toHaveCount(0);
+    await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
+    await expect(fund.locator('.fund-empty')).toContainText('Your contribution waits in Not on a card yet, then funds the next card that opens.');
+    await expect(fund.locator('.fund-empty')).not.toContainText('No card is open for funding right now.');
+    await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
   });
 });
 
@@ -85,7 +91,7 @@ test.describe('when public_money and public_stopped_cards fail', () => {
     await expect(main.locator('a.choice-primary')).toHaveText('Fund the next card in lineYour contribution funds whatever the agents build next.');
     await expect(main.locator(`a[href^="${PAYMENT_LINK}"]`)).toHaveCount(1);
     await page.goto('/');
-    await expect(page.getByRole('region', { name: "Fund what's next" }).getByRole('heading', { level: 3 }).first()).toBeVisible();
+    await expect(page.locator('ul.fund-grid > li.card h3').first()).toBeVisible();
     await expect(page.getByRole('main').getByRole('link', { name: 'Fund this card' })).toHaveCount(0);
   });
 
@@ -250,7 +256,7 @@ test.describe('/ledger Stopped cards', () => {
     ).toBeVisible();
     // The codes never show, and stopped cards appear on no other page.
     await expect(band.getByText(/ceiling|smoke/)).toHaveCount(0);
-    for (const path of ['/', '/contribute', '/roadmap']) {
+    for (const path of ['/', '/contribute']) {
       await page.goto(path);
       await expect(page.getByRole('main').getByText('A card that paused')).toHaveCount(0);
       await expect(page.getByRole('main').getByText('A card that did not ship')).toHaveCount(0);

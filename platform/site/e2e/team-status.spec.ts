@@ -2,8 +2,8 @@ import { RUNNING_MODEL, runningModelsCheck } from '../scripts/team-models.mjs';
 import { DEFAULT_STUDIO, expect, test } from './fixtures';
 import { BUILDER_A, OPENS_SOON_ID, QA, SUPPORTER_STUDIO, VETOED_ID, VETO_REASON } from './supporter-studio';
 
-// /team from the roster's own columns through lib/roster.ts teamStatus, and /roadmap's opens-soon and
-// held labels (docs/specs/supporter-pages.md).
+// /team from the roster's own columns through lib/roster.ts teamStatus, and home's Next up lane with an
+// opens-soon and a held card (docs/specs/supporter-pages.md, docs/specs/always-open.md).
 
 test.describe('while the studio is paused', () => {
   test.use({ studio: SUPPORTER_STUDIO });
@@ -22,7 +22,7 @@ test.describe('while the studio is paused', () => {
     await expect(code).toHaveCount(1);
     await expect(code).toHaveAttribute('data-status', 'running');
     await expect(code.locator('.tag')).toHaveCount(0);
-    await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
+    await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day on its own.');
     await expect(page.locator('main')).not.toContainText('waits for Stripe');
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
       'claude-opus-5-5 · Spent from contributions $1.24, $0.31 in the last 7 days · Worked on 7 shipped cards',
@@ -133,27 +133,15 @@ test.describe('with one role paused by the board', () => {
   });
 });
 
-test.describe('/roadmap', () => {
+test.describe("home's Next up lane", () => {
   test.use({ studio: SUPPORTER_STUDIO });
 
-  test('labels an approved card waiting to be dealt "Approved, opens soon" and a vetoed one "Held by the board" with its reason', async ({ page }) => {
-    await page.goto('/roadmap');
-    const opening = page.locator(`li[data-card="${OPENS_SOON_ID}"]`);
+  test('shows an approved card waiting to be dealt as "Approved, opens soon" and leaves a vetoed one out', async ({ page }) => {
+    await page.goto('/');
+    const next = page.locator('li.flow-lane[data-lane="next"]');
+    const opening = next.locator(`li[data-card="${OPENS_SOON_ID}"]`);
     await expect(opening).toContainText('Approved, opens soon');
-    await expect(opening).not.toContainText('Held by the board');
-    const held = page.locator(`li[data-card="${VETOED_ID}"]`);
-    await expect(held).toContainText('Held by the board');
-    await expect(held).toContainText(VETO_REASON);
-    await expect(held).not.toContainText('Approved, opens soon');
-    // Every other planned card carries no state label: its group's line says planned once
-    // (docs/specs/copy-pass.md).
-    const others = page.locator(`main li[data-card]:not([data-card="${OPENS_SOON_ID}"]):not([data-card="${VETOED_ID}"])`);
-    await expect(others).not.toHaveCount(0);
-    for (const text of await others.allTextContents()) {
-      expect(text).not.toMatch(/Planned and not built yet|Approved, opens soon|Held by the board/);
-    }
-    for (const group of await page.locator('main .roadmap-group').all()) {
-      expect(((await group.textContent()) ?? '').match(/planned/gi) ?? []).toHaveLength(1);
-    }
+    await expect(next.locator(`li[data-card="${VETOED_ID}"]`)).toHaveCount(0);
+    await expect(page.getByText(VETO_REASON)).toHaveCount(0);
   });
 });

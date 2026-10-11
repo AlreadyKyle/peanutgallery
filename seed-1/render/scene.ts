@@ -9,7 +9,7 @@ import {
   ratePerSecond,
   step,
 } from '../sim/sim';
-import { serializeState } from '../sim/save';
+import { awaySeconds, serializeState } from '../sim/save';
 import type { SimState, UnlockRow } from '../sim/types';
 import { fill, formatDust, formatPercent, formatRate } from './format';
 import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
@@ -75,6 +75,10 @@ export class DustScene extends Phaser.Scene {
   private unlockSection!: Phaser.GameObjects.Container;
   private unlockSlots: UnlockSlot[] = [];
   private drawnUnlockCount = -1;
+  // The wall-clock millisecond of the last step. The sim advances by wall-clock time rather than
+  // Phaser's frame delta, which a browser stops or clamps while the tab is in the background, so time
+  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once).
+  private lastStepAt = Date.now();
 
   constructor(data: GameData, seed: number, savedState: SimState | null = null) {
     super({ key: 'dust' });
@@ -101,8 +105,10 @@ export class DustScene extends Phaser.Scene {
     this.refresh();
   }
 
-  override update(_time: number, delta: number): void {
-    this.state = step(this.state, this.data_.config, delta / 1000);
+  override update(): void {
+    const now = Date.now();
+    this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
+    this.lastStepAt = now;
     this.refresh();
   }
 
@@ -264,7 +270,7 @@ export class DustScene extends Phaser.Scene {
   // keeps playing without a save rather than throwing on every tick.
   private save(): void {
     try {
-      window.localStorage.setItem(SAVE_KEY, serializeState(this.state));
+      window.localStorage.setItem(SAVE_KEY, serializeState(this.state, Date.now()));
     } catch {
       // ignored
     }

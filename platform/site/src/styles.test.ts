@@ -443,10 +443,11 @@ describe('bands', () => {
 
 describe('no dead space (DESIGN.md)', () => {
   // Grid cells (the board, 26 Sep 2026; PLAN §10 decision 49): one item in each cell, no spans.
-  const GRIDS = ['.card-grid', '.team-grid', '.fill-grid'];
+  // /contribute's card choices are a grid of the same columns, like home's fund grid.
+  const GRIDS = ['.card-grid', '.choices', '.team-grid', '.fill-grid'];
   const namesGrid = (rule: Rule) => selectorsOf(rule).some((s) => GRIDS.some((grid) => s.includes(grid)));
 
-  it('puts one item in each cell of a card grid, a team grid and a fill grid: no span and no only-child exception', () => {
+  it('puts one item in each cell of a card grid, the contribute choices, a team grid and a fill grid: no span and no only-child exception', () => {
     const gridRules = ALL_RULES.filter(namesGrid);
     expect(gridRules.length).toBeGreaterThan(0);
     for (const rule of gridRules) {
@@ -455,7 +456,7 @@ describe('no dead space (DESIGN.md)', () => {
     }
   });
 
-  it('draws two equal columns from 48rem and three from 72rem for the card, team and fill grids', () => {
+  it('draws two equal columns from 48rem and three from 72rem for the card, choice, team and fill grids', () => {
     const block = (width: string) => ALL_RULES.find((rule) => rule.media === `@media (min-width: ${width})` && selectorsOf(rule).join('|') === GRIDS.join('|'));
     expect(block('48rem')?.body).toMatch(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
     expect(block('72rem')?.body).toMatch(/grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);

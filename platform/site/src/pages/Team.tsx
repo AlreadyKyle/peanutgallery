@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
@@ -75,27 +74,18 @@ function RoleRow({ role, status, snapshot }: { role: Role; status: TeamStatus; s
   );
 }
 
-function Section({ id, heading, intro, rows, snapshot, link = false }: {
+function Section({ id, heading, intro, rows, snapshot }: {
   id: string;
   heading: string;
   intro: string;
   rows: { role: Role; status: TeamStatus }[];
   snapshot: Snapshot;
-  link?: boolean;
 }) {
   if (rows.length === 0) return null;
   return (
     <section className="section" aria-labelledby={id}>
       <h2 id={id}>{heading}</h2>
-      <p className="muted">
-        {intro}
-        {link ? (
-          <>
-            {' '}
-            <Link to="/roadmap">{team.roadmapLink}</Link>
-          </>
-        ) : null}
-      </p>
+      <p className="muted">{intro}</p>
       <ul className="team-grid">
         {rows.map(({ role, status }) => (
           <RoleRow key={role.id} role={role} status={status} snapshot={snapshot} />
@@ -121,7 +111,7 @@ function Roster({ snapshot }: { snapshot: Snapshot }) {
         snapshot={snapshot}
       />
       <Section id="team-starts" heading={team.startsLater} intro={team.startsLaterIntro} rows={rows.filter((row) => row.status.kind === 'starts')} snapshot={snapshot} />
-      <Section id="team-planned" heading={team.planned} intro={team.plannedIntro} rows={rows.filter((row) => row.status.kind === 'planned')} snapshot={snapshot} link />
+      <Section id="team-planned" heading={team.planned} intro={team.plannedIntro} rows={rows.filter((row) => row.status.kind === 'planned')} snapshot={snapshot} />
     </>
   );
 }

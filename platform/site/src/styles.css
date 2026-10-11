@@ -801,8 +801,14 @@ button.link:hover:not(:disabled) {
   transform: rotate(-3deg);
 }
 
-.card h3 {
+.card h3,
+.card h4 {
   margin-bottom: var(--space-2);
+}
+
+/* Home's flow: a compact card's title keeps the card title's size under its lane's h3. */
+.card h4 {
+  font-size: var(--size-body);
 }
 
 .card-summary {
@@ -969,28 +975,44 @@ button.link:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-/* Contribute chooser: each choice is one large link. */
+/* Contribute chooser (docs/specs/home-flow.md): the page takes the full width. Fund the next card in
+   line is one wide panel on the primary fill; each card is a large link drawn like a card (a 2px ink
+   edge, the card radius, the title at the lead size, the bar pinned to its foot), one column on a
+   phone, two from 48rem and three from 72rem, like home's fund grid. */
+.contribute {
+  max-width: none;
+}
+
+.contribute > p,
+.contribute > h2 {
+  max-width: var(--measure);
+}
+
 .choice {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   min-height: var(--target);
+  height: 100%;
   padding: var(--space-3);
-  border: 1px solid var(--ink);
-  border-radius: var(--radius);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+  background: var(--paper);
   color: var(--ink);
   text-decoration: none;
 }
 
 .choice:hover {
-  background: var(--paper-hover);
+  outline: 1px solid var(--ink);
 }
 
 .choice .funding-bar {
-  margin: var(--space-1) 0 0;
+  margin: auto 0 0;
 }
 
 .choice-title {
+  font-size: var(--size-lead);
   font-weight: var(--weight-bold);
   line-height: var(--leading-title);
 }
@@ -1000,17 +1022,23 @@ button.link:hover:not(:disabled) {
   color: var(--text-muted);
 }
 
+.choice-body {
+  margin-bottom: var(--space-2);
+}
+
 .choice-meta {
   font-size: var(--size-small);
   font-variant-numeric: tabular-nums;
 }
 
-/* Fund the next card in line: the first choice takes the primary fill (signal on paper). It names the
-   next card in the waterfall's order (docs/specs/money-surfaces.md). Its agreement line
-   (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and carries the
-   section gap before "Or pick a card". */
+/* Fund the next card in line: the first choice, a wide panel on the primary fill with room to
+   breathe. It names the next card in the waterfall's order (docs/specs/money-surfaces.md). Its
+   agreement line (Contribute.tsx, docs/specs/legal-copy.md) sits close under it, as its caption, and
+   carries the section gap before "Or pick a card". */
 .choice-primary {
+  max-width: none;
   margin-bottom: var(--space-1);
+  padding: var(--space-4);
   border-color: var(--primary-bg);
   background: var(--primary-bg);
   color: var(--primary-fg);
@@ -1021,22 +1049,105 @@ button.link:hover:not(:disabled) {
 }
 
 .choice-primary .choice-title {
-  font-size: var(--size-lead);
+  font-size: var(--size-h2);
 }
 
 .choice-primary .choice-body {
+  margin-bottom: 0;
   color: inherit;
+  max-width: var(--measure-text);
 }
 
 .choice-primary:hover {
   border-color: var(--primary-hover);
   background: var(--primary-hover);
+  outline: none;
 }
 
 .choices {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.choice:not(.choice-primary):hover {
+  transform: translateY(-4px);
+}
+
+/* Home's first game (docs/specs/home-game-tile.md): a still of the game beside its name, one line and
+   Play. Stacked on a phone, the still capped so the text stays near the top; side by side from 48rem. */
+.game-tile {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.game-shot {
+  display: block;
+  width: 100%;
+  max-width: 18rem;
+  height: auto;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.game-text > h2 {
+  margin-top: 0;
+}
+
+.game-text > p {
+  max-width: var(--measure-text);
+}
+
+.game-name {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-title);
+}
+
+@media (min-width: 48rem) {
+  .game-tile {
+    grid-template-columns: 18rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-5);
+  }
+}
+
+/* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
+   line and says what the Game Designer is doing, so the first band never reads empty. */
+.fund-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--primary-bg);
+  color: var(--primary-fg);
+}
+
+.fund-empty > p {
+  max-width: var(--measure-text);
+  margin: 0;
+}
+
+.fund-empty-title {
+  font-size: var(--size-h2);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
+}
+
+.fund-empty-agent {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+  font-size: var(--size-small);
+}
+
+.fund-empty-agent > .glyph {
+  flex: none;
+  margin-top: 0.125rem;
 }
 
 /* The agent brief: a native disclosure, closed by default. Its summary is a 44px target that takes
@@ -1871,7 +1982,8 @@ input[type='radio'] {
     transition: transform var(--dur-quick) var(--ease-out);
   }
 
-  .card:has(.card-fund) {
+  .card:has(.card-fund),
+  .choice:not(.choice-primary) {
     transition: transform var(--dur-quick) var(--ease-out);
   }
 
@@ -1985,6 +2097,172 @@ input[type='radio'] {
   row-gap: var(--space-4);
 }
 
+/* Home's flow (docs/specs/home-flow.md): one section, four lanes in the order a card moves through
+   them. On a phone and a tablet the lanes stack, joined by a vertical rail through their numbered
+   steps; from 64rem they sit in four equal columns and the rail runs across the steps. Each lane
+   holds at most three compact cards, or a dashed tile saying what happens next, so no lane is ever
+   blank. Ink and paper only, on the paper band. */
+.flow-lanes {
+  display: grid;
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-lane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: calc(2rem + var(--space-2));
+}
+
+/* The step: a numbered ring on the rail. */
+.flow-step {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+}
+
+.flow-step-number {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  font-size: var(--size-small);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rail: from a step's ring to the next lane's. */
+.flow-lane:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 2rem;
+  bottom: calc(-1 * var(--space-4));
+  left: calc(1rem - 1px);
+  width: 2px;
+  background: var(--ink);
+}
+
+.flow-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+  min-height: 2rem;
+  margin-bottom: var(--space-1);
+}
+
+.flow-count {
+  color: var(--text-muted);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.flow-who {
+  margin-bottom: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-small);
+}
+
+/* The Game Designer's state, a glyph beside its words; while it drafts, the line is ink and strong. */
+.flow-agent {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.flow-agent > .glyph {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.flow-agent[data-drafting] {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+}
+
+.flow-cards {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card[data-compact] {
+  padding: var(--space-2);
+}
+
+.card[data-compact] .card-index {
+  margin-bottom: var(--space-1);
+}
+
+.card[data-compact] h4 {
+  margin-bottom: var(--space-1);
+}
+
+.card[data-compact] .card-watch {
+  margin: var(--space-1) 0 0;
+}
+
+/* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
+.flow-empty {
+  padding: var(--space-2);
+  border: 2px dashed var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.flow-lane > .more {
+  margin: var(--space-2) 0 0;
+}
+
+@media (min-width: 64rem) {
+  /* The lanes share five rows (CSS subgrid): the step, the heading, who acts, the cards and the more
+     link, so every lane's first card starts on one line and the links line up under the longest. */
+  .flow-lanes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, auto) 1fr auto;
+    gap: 0 var(--space-3);
+  }
+
+  .flow-lane {
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
+    align-items: start;
+    padding-left: 0;
+  }
+
+  .flow-step {
+    position: static;
+    margin-bottom: var(--space-2);
+  }
+
+  /* The rail runs across from this step's ring to the next lane's. */
+  .flow-lane:not(:last-child)::before {
+    top: calc(1rem - 1px);
+    bottom: auto;
+    left: 2rem;
+    right: calc(-1 * var(--space-3));
+    width: auto;
+    height: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .flow-lane:not(:last-child)::before {
+    background: CanvasText;
+  }
+}
+
 /* Wider screens ------------------------------------------------------------ */
 
 @media (max-width: 47.99rem) {
@@ -2073,6 +2351,7 @@ input[type='radio'] {
    three equal columns however many members it shows. */
 @media (min-width: 48rem) {
   .card-grid,
+  .choices,
   .team-grid,
   .fill-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2089,6 +2368,7 @@ input[type='radio'] {
 
 @media (min-width: 72rem) {
   .card-grid,
+  .choices,
   .team-grid,
   .fill-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

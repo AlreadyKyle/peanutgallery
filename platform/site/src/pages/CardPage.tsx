@@ -119,9 +119,9 @@ function Changed({ detail }: { detail: CardDetail }) {
 }
 
 /**
- * A card on the roadmap (next or later, not started) takes no money, so its page draws no face (which
- * would read Open for funding): it says what /roadmap says, "Planned and not built yet", "Approved,
- * opens soon" or "Held by the board" with the board's reason, and links the roadmap.
+ * A planned card (next or later, not started) takes no money, so its page draws no face (which would
+ * read Open for funding): it says "Planned and not built yet", "Approved, opens soon" or "Held by the
+ * board" with the board's reason, and links home's cards to fund.
  */
 function Planned({ detail }: { detail: CardDetail }) {
   const state = plannedState(detail.card);
@@ -130,7 +130,7 @@ function Planned({ detail }: { detail: CardDetail }) {
       <p className="lede">{state.label}</p>
       {state.reason === null ? null : <p className="muted">{state.reason}</p>}
       <p className="more">
-        <Link to="/roadmap">{copy.roadmapLink}</Link>
+        <Link to="/">{copy.roadmapLink}</Link>
       </p>
     </div>
   );

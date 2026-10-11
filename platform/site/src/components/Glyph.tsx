@@ -24,7 +24,9 @@ export type GlyphName =
   | 'arrow-right'
   | 'arrow-left'
   | 'arrow-up'
-  | 'arrow-down';
+  | 'arrow-down'
+  | 'clock'
+  | 'pencil';
 
 function gearTeeth(): ReactNode[] {
   return Array.from({ length: 8 }, (_, i) => {
@@ -111,6 +113,20 @@ const DRAWINGS: Record<GlyphName, ReactNode> = {
   'arrow-left': <path className="glyph-line" d="M13.5 8h-11M7 3.5 2.5 8 7 12.5" />,
   'arrow-up': <path className="glyph-line" d="M8 13.5v-11M3.5 7 8 2.5 12.5 7" />,
   'arrow-down': <path className="glyph-line" d="M8 2.5v11M3.5 9 8 13.5 12.5 9" />,
+  // Planned: on the roadmap, not open yet (home's Next up lane).
+  clock: (
+    <>
+      <circle className="glyph-line" cx="8" cy="8" r="5.75" />
+      <path className="glyph-line" d="M8 4.75V8l2.5 1.75" />
+    </>
+  ),
+  // An agent drafting a card (home's Next up lane).
+  pencil: (
+    <>
+      <path className="glyph-line" d="M10.5 2.75l2.75 2.75-7.75 7.75H2.75v-2.75z" />
+      <path className="glyph-line" d="M9 4.25l2.75 2.75" />
+    </>
+  ),
 };
 
 export const GLYPH_NAMES = Object.keys(DRAWINGS) as GlyphName[];
@@ -165,4 +181,5 @@ export const STATE_TAGS: Record<Face, { glyph: GlyphName; word: string }> = {
   live: { glyph: 'stamp', word: copy.statusLive },
   paused: { glyph: 'pause', word: copy.statusPaused },
   rejected: { glyph: 'crossed-card', word: copy.statusRejected },
+  planned: { glyph: 'clock', word: copy.statusPlanned },
 };

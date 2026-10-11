@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSavedState, serializeState } from '../sim/save';
+import { awaySeconds, MAX_AWAY_SECONDS, parseSavedAt, parseSavedState, serializeState } from '../sim/save';
 import { createSim } from '../sim/sim';
 import { loadConfigFromDir } from '../bots/config';
 import { greedyTick } from '../bots/greedy';
@@ -73,5 +73,47 @@ describe('serializeState / parseSavedState', () => {
     expect(parseSavedState(serializeState(fresh))).toEqual(fresh);
     const empty = { ...playedState(), dust: 0, owned: {} };
     expect(parseSavedState(serializeState(empty))).toEqual(empty);
+  });
+});
+
+// Time away counts (a background tab, a closed page): the save carries when it was written and the
+// game credits the gap, clamped so a clock set back or a months-old save cannot break the economy.
+describe('savedAt and awaySeconds', () => {
+  it('round-trips savedAt beside the state', () => {
+    const state = playedState();
+    const raw = serializeState(state, 1_760_000_000_000);
+    expect(parseSavedState(raw)).toEqual(state);
+    expect(parseSavedAt(raw)).toBe(1_760_000_000_000);
+  });
+
+  it('still loads a save written before savedAt existed', () => {
+    const state = playedState();
+    const raw = serializeState(state);
+    expect(parseSavedState(raw)).toEqual(state);
+    expect(parseSavedAt(raw)).toBeNull();
+  });
+
+  it('ignores a savedAt that is not a positive finite number', () => {
+    const state = playedState();
+    for (const savedAt of ['soon', -5, 0, null]) {
+      const raw = JSON.stringify({ version: 1, savedAt, state });
+      expect(parseSavedState(raw)).toEqual(state);
+      expect(parseSavedAt(raw)).toBeNull();
+    }
+    expect(parseSavedAt('not json')).toBeNull();
+  });
+
+  it('credits the seconds between two clock readings', () => {
+    expect(awaySeconds(1_000, 241_000)).toBe(240);
+  });
+
+  it('credits nothing when the clock went back', () => {
+    expect(awaySeconds(10_000, 5_000)).toBe(0);
+    expect(awaySeconds(Number.NaN, 5_000)).toBe(0);
+  });
+
+  it('credits at most 8 hours', () => {
+    expect(MAX_AWAY_SECONDS).toBe(28_800);
+    expect(awaySeconds(0, 30 * 24 * 60 * 60 * 1000)).toBe(MAX_AWAY_SECONDS);
   });
 });

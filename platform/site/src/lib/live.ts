@@ -25,7 +25,7 @@ export function viewOf(base: Snapshot, display: Snapshot): HomeView {
   const pick = (cards: Card[]) => cards.map((card) => byId.get(card.id) ?? card);
   return {
     snapshot: display,
-    groups: { now: pick(groups.now), fund: pick(groups.fund), queued: pick(groups.queued), shipped: pick(groups.shipped) },
+    groups: { now: pick(groups.now), fund: pick(groups.fund), queued: pick(groups.queued), shipped: pick(groups.shipped), next: pick(groups.next) },
   };
 }
 

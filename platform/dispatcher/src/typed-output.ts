@@ -2,7 +2,7 @@
 // attended session answers in its final message, which must be exactly one JSON object valid against
 // the job's schema in platform/agents/schemas/. The schemas are read from this process's own checkout,
 // never from a worktree an agent can change, and validated with ajv; anything else fails the run
-// with nothing written.
+// with nothing written. The one mend: a draft verdict's note over its length is clipped (clipNote).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js';
@@ -23,6 +23,20 @@ export function schemaRepoPath(name: SchemaName): string {
 }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
+
+// The longest note a draft verdict may carry (draft-verdict.schema.json).
+export const VERDICT_NOTE_MAX = 600;
+
+// A draft verdict's note over the schema's length is clipped, not refused: one long note once failed
+// a draft run, and a failed run counts toward the day's drafts. The note ends at a word boundary where
+// one falls in its second half, then "…"; the length is in code points, as the schema counts it.
+export function clipNote(note: string, max: number = VERDICT_NOTE_MAX): string {
+  const chars = Array.from(note);
+  if (chars.length <= max) return note;
+  const cut = chars.slice(0, max - 1).join('');
+  const space = cut.lastIndexOf(' ');
+  return `${(space > cut.length / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
 
 // The answer with surrounding white space and, at most, one fenced code block around it removed:
 // the fence is formatting, and what is inside must still be the one object.
@@ -60,6 +74,9 @@ export class TypedOutput {
       return { ok: false, error: 'the final message is not exactly one JSON object' };
     }
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return { ok: false, error: 'the final message is not exactly one JSON object' };
+    // Only a draft verdict's note is mended before the check; every other violation still fails.
+    const verdict = value as { note?: unknown };
+    if (name === 'draft-verdict' && typeof verdict.note === 'string') verdict.note = clipNote(verdict.note);
     const validate = this.validators.get(name)!;
     if (!validate(value)) {
       const errors = (validate.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message ?? 'is invalid'}`);

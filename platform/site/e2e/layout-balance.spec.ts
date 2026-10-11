@@ -51,17 +51,8 @@ function auditRoutes(label: string, studio: StudioFixture, widths: readonly numb
 // agent actions, ten deploys and every role.
 auditRoutes('the launch-shaped studio', LIVE_STUDIO, [320, 375, 768, 1024, 1440]);
 // The supporter pages (docs/specs/supporter-pages.md): /card/:id live, building and rejected, /thanks
-// recorded, pending and not counted, /team with every running role paused and /roadmap with an
-// opens-soon and a held card.
+// recorded, pending and not counted, and /team with every running role paused.
 auditRoutes('the supporter pages', SUPPORTER_STUDIO, [375, 768, 1440], SUPPORTER_ROUTES.map(([, path]) => path));
-// /roadmap as production has it at launch: every planned card is board work (every BACKLOG entry is
-// board: yes), so each band holds only the board-work group, drawn open (docs/specs/copy-pass.md).
-auditRoutes(
-  'the roadmap with only board work planned',
-  { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card.horizon === 'next' || card.horizon === 'later' ? { ...card, board_work: true } : card)) },
-  [320, 375, 768, 1440],
-  ['/roadmap'],
-);
 // The default fixture: a building-free studio with a picked card, a queued card and two shipped.
 auditRoutes('the default fixture', DEFAULT_STUDIO, [375, 768, 1440]);
 // Nothing loaded that could be empty: no roles (home draws no team strip), no actions, no deploys.
@@ -98,7 +89,7 @@ auditRoutes(
   'home with an open card an agent drafted',
   { ...LIVE_STUDIO, cards: LIVE_STUDIO.cards.map((card) => (card === open[0] ? { ...card, source: 'agent', drafter_role_id: designer.id } : card)) },
   [768, 1024, 1440],
-  ['/', '/roadmap'],
+  ['/'],
 );
 auditRoutes(
   'home with a card that has no brief',
