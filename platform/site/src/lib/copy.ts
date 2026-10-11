@@ -217,6 +217,10 @@ export const copy = {
   cardPage: {
     back: 'All cards',
     cardTitle: 'A card',
+    // The card's Share button (docs/BACKLOG.md, Share button and link preview for each card).
+    share: 'Share this card',
+    shareCopied: 'Link copied.',
+    shareFailed: 'Copy this link: {url}',
     loading: 'Loading the card.',
     notFound: 'There is no card at this address.',
     factsHeading: 'The facts',

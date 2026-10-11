@@ -2404,6 +2404,35 @@ input[type='radio'] {
 /* Supporter pages (docs/specs/supporter-pages.md) ------------------------------------------- */
 
 /* A card's own page: one column at the reading measure at every width, the face first. */
+/* A card's Share button (ShareCard.tsx): a plain text button in the page's band, with one polite
+   line beside it saying the link was copied. */
+.share-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.share-card > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.share-status {
+  font-size: var(--size-small);
+}
+
 .back {
   margin: 0 0 var(--space-2);
 }
