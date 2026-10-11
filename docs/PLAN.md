@@ -188,7 +188,14 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Actions minutes in the quota check](BACKLOG.md#actions-minutes-in-the-quota-check): the quota job reading the account's Actions minutes again.
 - [Split slider on the site, in place of the checkout dropdown](BACKLOG.md#split-slider-on-the-site-in-place-of-the-checkout-dropdown): the supporter's Agents/Studio split set with sliders before checkout.
 - [Steam release path](BACKLOG.md#steam-release-path): only past 500 daily players.
-- [More on a card's own page](BACKLOG.md#more-on-a-cards-own-page): link previews, design frames and verdicts, Play this version, Share and more of the agents' steps.
+- [More on a card's own page](BACKLOG.md#more-on-a-cards-own-page): design frames and verdicts, Play this version and more of the agents' steps.
+- [A card supply that keeps pace with funding](BACKLOG.md#a-card-supply-that-keeps-pace-with-funding): drafts, slots and the monthly cap that grow with the money, behind a failure breaker.
+- [Ship notices to supporters](BACKLOG.md#ship-notices-to-supporters): an email when a card you funded ships.
+- [Share button and link preview for each card](BACKLOG.md#share-button-and-link-preview-for-each-card): a code-drawn preview per card (the Share button is built).
+- [Run the replay eval and set its first baseline](BACKLOG.md#run-the-replay-eval-and-set-its-first-baseline): the draft set's first recorded score.
+- [Balance report from the headless bot](BACKLOG.md#balance-report-from-the-headless-bot): unlock times and two-minute gains for the Game Designer.
+- [A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust): the game's look, sound, tone and naming, board-only.
+- [Shareable runs in Dust](BACKLOG.md#shareable-runs-in-dust): a code-drawn picture of your run to share.
 - [Mockup and design-system cards](BACKLOG.md#mockup-and-design-system-cards): cards that change a page, a screen or the design system after a mockup, in place of a board pull request.
 - [Post-ship grade and monthly design audit](BACKLOG.md#post-ship-grade-and-monthly-design-audit): the Directors grade what shipped and audit main's frames each month.
 - [Follow-up drafts from open visual criteria](BACKLOG.md#follow-up-drafts-from-open-visual-criteria): a card that shipped with an open criterion gets a draft to fix it.

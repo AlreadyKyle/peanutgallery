@@ -41,7 +41,7 @@ everything else, in the order the board would take it.
 - horizon: next
 - rank: 2
 - summary: Make an account on the site and sign in, so what you fund and play is yours. Free voting waits on it.
-- intent: A supporter account on the site, separate from the board's sign-in, with one vote per account and a minimum account age before an account can vote, so votes cannot be multiplied; linking a Twitch identity can come later. Free voting cannot move to now until this exists. It is not built yet.
+- intent: A supporter account on the site, separate from the board's sign-in, with one vote per account and a minimum account age before an account can vote, so votes cannot be multiplied; linking a Twitch identity can come later. Free voting cannot move to now until this exists. A profile page beyond the account waits for a reason supporters give: until then a supporter is Supporter n, and the ship notice is how the studio reaches them. It is not built yet.
 - board: yes
 
 ### Free voting on open cards
@@ -69,6 +69,42 @@ everything else, in the order the board would take it.
 - rank: 5
 - summary: The Studio Head reads each note from the board and turns it into a draft card, a scheduled item or a discard, with a reason.
 - intent: Board notes are the one free text a role with write access may read. Triage runs at the top of every hour and at planning, links the note to its outcome, and shows the reason only on /board; a discarded note stays discarded unless the board files it as a directive. Notes are stored today and nothing reads them, and the board's panel has no note form since docs/PLAN.md §10 decision 66, so this also waits on one. It is not built yet.
+- board: yes
+
+### A card supply that keeps pace with funding
+- bucket: agents
+- folder: platform
+- horizon: next
+- rank: 6
+- summary: When players fund faster, the agents open and build more cards a day, so money waiting on a card turns into shipped work instead of sitting.
+- intent: Today the number of cards shipped a day is set by fixed counts, not by money. studio_state.draft_runs_per_day caps the Game Designer's drafts at 12 a New York day (docs/PLAN.md §10 decision 69; production read 4 on 10 October 2026, when the 4 runs were used by 21:20 UTC and the supply sat short), one draft runs at a time (checked every minute since decision 71, on a 20-minute pg_cron before it), the dispatcher runs at most 2 cards at once (throttle.ts concurrency, DISPATCHER_MAX_CONCURRENCY 1), and the monthly cap is a flat $500. The scale model (platform/dispatcher/test/scale.test.ts, production's measured costs of about $0.51 a card from draft to live) ships about 9 cards a day at 12 drafts whether players fund $50 or $5,000 a day, and the rest of the money waits; with no draft count and a 5-minute check it ships about 56 cards a day at $50 and stops at the $100 daily cap at about 168. The count guards against drafts failing in a loop, so the work is: replace the daily count with a breaker that stops drafting after a few failed or withdrawn drafts in a row and alerts the board, keeping every money cap; raise the open-card floor with the cards funded in the last day; let the slots and the monthly cap grow with the money players put in over the trailing month, inside the usage tier and the Console credit; and show the studio's capacity on the site as a meter players can push over the line. A board spec, since it changes the money rules and migrations. It is not built yet.
+- board: yes
+
+### Ship notices to supporters
+- bucket: platform
+- folder: platform
+- horizon: next
+- rank: 7
+- summary: When a card you funded ships, you get a short email saying it is live, what it cost and where to play it.
+- intent: A supporter who leaves /thanks hears nothing more from the studio. One email per payment and shipped card, to the address Stripe already holds for the checkout, sent through the studio's existing Resend sender: the card's title, that it is live, what the agents spent, its /card/:id page and the game's play address, with a one-click unsubscribe. The Privacy page gains the line that says so, and no address is ever shown or stored on a public row. It is the step that closes the fund, watch, ship, share loop (docs/research/comparables.md). It is not built yet.
+- board: yes
+
+### Share button and link preview for each card
+- bucket: platform
+- folder: platform
+- horizon: next
+- rank: 8
+- summary: Each card's link shows its own preview when shared: the card face, who funded it, what it cost and how long the agents took.
+- intent: Split out of More on a card's own page. The Share button on each card's page shipped on 11 October 2026 (the browser's share sheet, or the link copied). Left: a preview image per card drawn in code from tokens.css (as og-image.mjs draws the site's), showing the card face, Supporter numbers, what the card cost and its draft-to-live time from public records only, served as the card page's og:image. No countdown, no chance cue near money, no ranking of supporters by amount (docs/research/comparables.md). It is not built yet.
+- board: yes
+
+### Run the replay eval and set its first baseline
+- bucket: agents
+- folder: platform
+- horizon: next
+- rank: 9
+- summary: Run the agents' frozen test cases once and record the score, so a later change to a prompt or rubric can be compared with it.
+- intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a board pull request. It is not built yet.
 - board: yes
 
 ## Later
@@ -385,7 +421,7 @@ everything else, in the order the board would take it.
 - horizon: later
 - rank: 35
 - summary: Detailed traces of each agent session in an existing tracing tool, alongside the public ledger.
-- intent: OpenTelemetry export or Langfuse's free cloud tier, fed from the dispatcher's metered events and never from inside an agent session. The ledger and agent_events are the record at launch (22 September 2026). It is not built yet.
+- intent: OpenTelemetry export or Langfuse's free cloud tier, fed from the dispatcher's metered events and never from inside an agent session. The ledger and agent_events are the record at launch (22 September 2026), and every card and role session is a Claude Managed Agents session whose full event history the studio organisation's Console already shows, so this waits until the replay evals need dashboards across runs. It is not built yet.
 - board: yes
 
 ### Second model provider
@@ -438,8 +474,8 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: later
 - rank: 41
-- summary: A card's page gains link previews, its design frames and verdicts, a Play this version link, a Share button and more of the agents' steps.
-- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones. Left for later: a link preview per card, the design review's frames and the Director's verdicts (kept private in card_approvals today), a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, supporter names chosen by supporters (free text, so it needs moderation first), the hand-off lines (Drafted by, Approved by) and ranking moves, the value a config change replaced, and a Share button. It is not built yet.
+- summary: A card's page gains its design frames and verdicts, a Play this version link and more of the agents' steps.
+- intent: /card/:id launched with the facts, what changed, supporter numbers, the agents' steps as fixed lines and a replay of at most five milestones. The link preview per card and the Share button moved to their own entry, Share button and link preview for each card. Left for later: the design review's frames and the Director's verdicts (kept private in card_approvals today), a permalink that plays the version the card shipped, a replay of one contribution and replay Pause and Step, supporter names chosen by supporters (free text, so it needs moderation first), the hand-off lines (Drafted by, Approved by) and ranking moves, and the value a config change replaced. It is not built yet.
 - board: yes
 
 ### Mockup and design-system cards
@@ -522,3 +558,30 @@ everything else, in the order the board would take it.
 - summary: Make the daily quota check read the account's GitHub Actions minutes again.
 - intent: The quota job reports the database size, and its Actions minutes line says the billing usage could not be read, on the Mac and on Actions alike (platform/ops/jobs/main.mjs quota). The dispatcher's runs are free in the public studio repository, but the daily jobs in the private ops repository draw on the account's included minutes, so the check should read them through GitHub's current billing usage API with a token that has the permission it needs, and alert before they run out. It is not built yet.
 - board: yes
+
+### Balance report from the headless bot
+- bucket: agents
+- folder: platform
+- horizon: later
+- rank: 51
+- summary: Before drafting a change to Dust, the Game Designer reads how a bot plays the game today: how long each unlock takes and what two minutes of play earns.
+- intent: Shipped game cards so far are single number changes (prices, rates, one unlock), and nothing tells the Game Designer whether the game is too slow or too fast. seed-1/bots already plays the sim headless (greedy.ts, report.ts); its report of the time to each unlock and the dust a two-minute session earns would be run in the draft session's scratch checkout and named in the Game Designer's prompt and the Game Director's rubric, so a draft cites the numbers it moves. It is not built yet.
+- board: yes
+
+### A creative guide for Dust
+- bucket: game
+- folder: seed-1
+- horizon: later
+- rank: 52
+- summary: One page that sets how Dust looks, sounds and names things, so every card adds to one game instead of a pile of changes.
+- intent: The site has a design system (platform/site/DESIGN.md, tokens.css, the unlisted guide), but the game has only the pillars line in seed-1/CLAUDE.md and the art policy. A board-only file beside it, listed in platform/gate/design-paths.txt, would set Dust's palette, shapes, motion, tone of its strings, how units and unlocks are named and what sound it may make, and the Game Director's visual rubric would grade against it. It is not built yet.
+- board: yes
+
+### Shareable runs in Dust
+- bucket: game
+- folder: seed-1
+- horizon: later
+- rank: 53
+- summary: Share a picture of your Dust run, drawn by the game, with how much dust you made and what you unlocked.
+- intent: A Share action on the one screen that draws an image of the player's current run in code (procedural or vector only, docs/PLAN.md §4 Art policy) with the totals and unlocks, and shares it through the browser's share sheet with the game's address. No chance cues, no comparison with other players, nothing sent to the studio. It is not built yet.
+- board: no
