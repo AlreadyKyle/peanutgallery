@@ -100,6 +100,28 @@ function Hero({ studio, live }: { studio: StudioState; live: ReturnType<typeof u
   );
 }
 
+/** The first game: a still of it, its name, one line and Play, so home shows the agents ship (decision 68). */
+function GameSection() {
+  const env = siteEnv();
+  if (env.playUrl === '') return null;
+  return (
+    <section className="section game-tile" aria-labelledby="game">
+      <img className="game-shot" src="/games/dust.png" width={375} height={470} alt={copy.game.alt} />
+      <div className="game-text">
+        <h2 id="game">{copy.game.title}</h2>
+        <p className="game-name">{copy.game.name}</p>
+        <p>{copy.game.line}</p>
+        <p>
+          <a className="button" href={env.playUrl}>
+            <Glyph name="cartridge" />
+            {copy.game.play}
+          </a>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /** The cards open for funding, first and biggest: or the loading or unavailable line while there is no snapshot. */
 function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<typeof useLiveHome> }) {
   const view = live.view;
@@ -165,7 +187,7 @@ function MoneySection({ studio, view }: { studio: StudioState; view: HomeView | 
         <PoolLine balance={snapshot.pool.balance_usd} />
       )}
       <p className="money-split">
-        {splitSentence()} {legal.notDonations}
+        {splitSentence()} {legal.agentShareLine} {legal.notDonations}
       </p>
       {snapshot === null ? null : (
         <>
@@ -194,6 +216,7 @@ export function Landing() {
         <Hero studio={studio} live={live} />
       </div>
       <div className="band">
+        <GameSection />
         <FundSection studio={studio} live={live} />
         {view === null ? null : <FlowSection view={view} />}
       </div>

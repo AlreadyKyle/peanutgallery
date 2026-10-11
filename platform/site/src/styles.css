@@ -1076,6 +1076,45 @@ button.link:hover:not(:disabled) {
   transform: translateY(-4px);
 }
 
+/* Home's first game (docs/specs/home-game-tile.md): a still of the game beside its name, one line and
+   Play. Stacked on a phone, the still capped so the text stays near the top; side by side from 48rem. */
+.game-tile {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.game-shot {
+  display: block;
+  width: 100%;
+  max-width: 18rem;
+  height: auto;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-card);
+}
+
+.game-text > h2 {
+  margin-top: 0;
+}
+
+.game-text > p {
+  max-width: var(--measure-text);
+}
+
+.game-name {
+  font-size: var(--size-lead);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-title);
+}
+
+@media (min-width: 48rem) {
+  .game-tile {
+    grid-template-columns: 18rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--space-5);
+  }
+}
+
 /* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
    line and says what the Game Designer is doing, so the first band never reads empty. */
 .fund-empty {

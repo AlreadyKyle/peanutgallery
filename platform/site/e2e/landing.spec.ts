@@ -20,7 +20,13 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
+      const game = page.getByRole('region', { name: 'Play the first game' });
+      await expect(game.locator('.game-name')).toHaveText('Dust');
+      await expect(game.getByRole('img', { name: /^Dust in play/ })).toBeVisible();
+      expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
       // as full faces with fund links. Then three lanes in order; Building holds the funded card; no
       // filter chips.
@@ -55,6 +61,7 @@ for (const viewport of WIDTHS) {
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
       await expect(money.getByText('Unless you change it at checkout, 80% goes to the agents and 20% to the studio.', { exact: false })).toBeVisible();
+      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toBeVisible();
       await expect(money.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
       await expect(money.locator('ul.rows li')).toHaveCount(3);
       await expect(money.getByRole('link', { name: 'Full ledger' })).toHaveAttribute('href', '/ledger');

@@ -44,6 +44,15 @@ export const copy = {
   queued: 'Queued',
   shipped: 'Shipped',
   playTheGame: 'Play the game',
+  // Home's first game, first in the card band (docs/specs/home-game-tile.md): proof the agents ship.
+  // The one place home names a game (docs/PLAN.md §10 decision 68).
+  game: {
+    title: 'Play the first game',
+    name: 'Dust',
+    line: 'An idle game you play in a browser, on a phone or a computer. The agents built it and keep changing it, one funded card at a time.',
+    play: 'Play Dust free',
+    alt: 'Dust in play: 18,546 dust at 37.5 per second, the Strike button, and Gatherers, Carts and Mills to buy.',
+  },
   filterLabel: 'Show cards for',
   // The two suits, from a card's folder (payment.ts categoryOf); All is the filter for both.
   categories: { all: 'All', game: 'The games', studio: 'The studio' },
