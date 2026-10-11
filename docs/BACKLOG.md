@@ -26,20 +26,11 @@ everything else, in the order the board would take it.
 
 ## Next
 
-### Split slider on the site, in place of the checkout dropdown
-- bucket: platform
-- folder: platform
-- horizon: next
-- rank: 1
-- summary: Choose where your contribution goes with sliders on the site, the way Humble Bundle does, instead of a dropdown at checkout.
-- intent: Humble Bundle style slider on the contribute page sets the supporter's Agents/Studio split (default 80/20, which stays the default and is not votable, PLAN.md §4 Kernel), with the 10% chargeback reserve and the incident share shown as fixed and not movable. It snaps to the eleven splits SPLIT_MAP already allows (platform/supabase/functions/_shared/split.ts) and carries the choice on the Payment Link's client_reference_id beside the card id (platform/site/src/lib/payment.ts), so the site holds no Stripe secret and creates no Checkout Session; the webhook reads it there, still accepts only valid splits and keeps crediting sessions that used the old dropdown, and the dropdown comes off the Payment Link once the slider is live. This is one payment's Agents/Studio split, not the pool's weekly bucket allocation. Requested by the board on 23 September 2026 and made the first entry in Next on 6 October 2026, to build after Go live. It is not built yet.
-- board: yes
-
 ### Player accounts
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 2
+- rank: 1
 - summary: Make an account on the site and sign in, so what you fund and play is yours. Free voting waits on it.
 - intent: A supporter account on the site, separate from the board's sign-in, with one vote per account and a minimum account age before an account can vote, so votes cannot be multiplied; linking a Twitch identity can come later. Free voting cannot move to now until this exists. A profile page beyond the account waits for a reason supporters give: until then a supporter is Supporter n, and the ship notice is how the studio reaches them. It is not built yet.
 - board: yes
@@ -48,7 +39,7 @@ everything else, in the order the board would take it.
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 3
+- rank: 2
 - summary: Players vote for free on which open card is built next, alongside funding it.
 - intent: Free votes from identified accounts counted beside the money on each open card, with the kick-off plan's tiers and quorums: global decisions pass at 60% with a quorum of the larger of 25 voters or 10% of the trailing seven days' unique voters and stay open 48 hours; collective decisions pass by simple majority with a quorum of the larger of 25 voters or 5% of weekly unique voters; micro-votes of 90 seconds pick among agent-proposed config options. At launch funding a card is the only choice a supporter makes. Needs voter identity. It is not built yet.
 - board: yes
@@ -57,7 +48,7 @@ everything else, in the order the board would take it.
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 4
+- rank: 3
 - summary: The Studio Head turns planned items into draft cards for the board to check and open for funding.
 - intent: The Studio Head picks planned cards from this backlog, the ledger and the shipped cards for the Game Designer to draft, each graded by the Game Director and meeting the definition of ready. Under docs/PLAN.md §10 decision 66 the dispatcher drafts the next seed-1 backlog card by rank and age whenever the card supply is short, and no model ranks (docs/specs/unattended-roles.md); the Studio Head choosing which planned card to draft, from the ledger and the shipped cards, is what is left. It is not built yet.
 - board: yes
@@ -66,7 +57,7 @@ everything else, in the order the board would take it.
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 5
+- rank: 4
 - summary: The Studio Head reads each note from the board and turns it into a draft card, a scheduled item or a discard, with a reason.
 - intent: Board notes are the one free text a role with write access may read. Triage runs at the top of every hour and at planning, links the note to its outcome, and shows the reason only on /board; a discarded note stays discarded unless the board files it as a directive. Notes are stored today and nothing reads them, and the board's panel has no note form since docs/PLAN.md §10 decision 66, so this also waits on one. It is not built yet.
 - board: yes
@@ -75,7 +66,7 @@ everything else, in the order the board would take it.
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 6
+- rank: 5
 - summary: When players fund faster, the agents open and build more cards a day, so money waiting on a card turns into shipped work instead of sitting.
 - intent: Today the number of cards shipped a day is set by fixed counts, not by money. studio_state.draft_runs_per_day caps the Game Designer's drafts at 12 a New York day (docs/PLAN.md §10 decision 69; production read 4 on 10 October 2026, when the 4 runs were used by 21:20 UTC and the supply sat short), one draft runs at a time (checked every minute since decision 71, on a 20-minute pg_cron before it), the dispatcher runs at most 2 cards at once (throttle.ts concurrency, DISPATCHER_MAX_CONCURRENCY 1), and the monthly cap is a flat $500. The scale model (platform/dispatcher/test/scale.test.ts, production's measured costs of about $0.51 a card from draft to live) ships about 9 cards a day at 12 drafts whether players fund $50 or $5,000 a day, and the rest of the money waits; with no draft count and a 5-minute check it ships about 56 cards a day at $50 and stops at the $100 daily cap at about 168. The count guards against drafts failing in a loop, so the work is: replace the daily count with a breaker that stops drafting after a few failed or withdrawn drafts in a row and alerts the board, keeping every money cap; raise the open-card floor with the cards funded in the last day; let the slots and the monthly cap grow with the money players put in over the trailing month, inside the usage tier and the Console credit; and show the studio's capacity on the site as a meter players can push over the line. A board spec, since it changes the money rules and migrations. It is not built yet.
 - board: yes
@@ -84,7 +75,7 @@ everything else, in the order the board would take it.
 - bucket: platform
 - folder: platform
 - horizon: next
-- rank: 7
+- rank: 6
 - summary: When a card you funded ships, you get a short email saying it is live, what it cost and where to play it.
 - intent: A supporter who leaves /thanks hears nothing more from the studio. One email per payment and shipped card, to the address Stripe already holds for the checkout, sent through the studio's existing Resend sender: the card's title, that it is live, what the agents spent, its /card/:id page and the game's play address, with a one-click unsubscribe. The Privacy page gains the line that says so, and no address is ever shown or stored on a public row. It is the step that closes the fund, watch, ship, share loop (docs/research/comparables.md). It is not built yet.
 - board: yes
@@ -93,7 +84,7 @@ everything else, in the order the board would take it.
 - bucket: agents
 - folder: platform
 - horizon: next
-- rank: 8
+- rank: 7
 - summary: Run the agents' frozen test cases once and record the score, so a later change to a prompt or rubric can be compared with it.
 - intent: platform/agents/evals holds the draft set's nine cases, but no run has been recorded: there is no results folder and no baseline.json, so every prompt or rubric change passes with the advisory line that the baseline is missing. The board runs pnpm eval:replay -- --set draft --k 3 at the Mac on the founder's login (the runner refuses the studio key and CI) and files the result and the first baseline in a board pull request. It is not built yet.
 - board: yes

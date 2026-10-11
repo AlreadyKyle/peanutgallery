@@ -113,7 +113,7 @@ for (const viewport of WIDTHS) {
       const first = page.getByRole('main').getByRole('link').first();
       await expect(first).toContainText('Fund the next card in line');
       await expect(first).toContainText('Next in line: Quiet rooms: one more unlock');
-      await expect(first).toHaveAttribute('href', PAYMENT_LINK);
+      await expect(first).toHaveAttribute('href', `${PAYMENT_LINK}?client_reference_id=split20`);
       await expect(page.getByRole('main').getByText('Rename the Gatherer to Sweeper')).toBeVisible();
       await expect(page.getByRole('main').getByText('Board on its own site')).toHaveCount(0);
       await expect(page.getByRole('main').getByText('All amounts are in US dollars (USD).')).toBeVisible();
