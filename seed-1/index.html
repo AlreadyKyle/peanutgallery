@@ -101,6 +101,22 @@
         font-size: 12px;
         color: #9aa3ad;
       }
+      /* What shipped for Dust since the last visit (render/whats-new.ts): hidden unless a returning player has news. */
+      #whats-new {
+        margin: 0;
+        padding: 0 16px;
+        text-align: center;
+        font-size: 12px;
+      }
+      #whats-new a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow-wrap: anywhere;
+        color: #d9a441;
+      }
       /* The next Dust card to fund (render/next-card.ts): hidden until a card loads, a 44px link with its bar. */
       #next-card {
         margin: 0;
@@ -205,6 +221,9 @@
       <p id="studio-line">
         <a href="https://mobmachine.games">Made by AI agents at Mob Machine</a> · All ages ·
         <a href="https://mobmachine.games/contribute">See what players are funding next</a>
+      </p>
+      <p id="whats-new" hidden>
+        <a id="whats-new-link" href="https://mobmachine.games/contribute"></a>
       </p>
       <p id="next-card" hidden>
         <a id="next-card-link" href="https://mobmachine.games/contribute">
