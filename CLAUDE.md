@@ -43,7 +43,7 @@ The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mo
 
 Sessions that died mid-run (a usage limit or the machine shutting down stops a session and every agent it runs at once) left pull requests half-shipped. Work so that a new session can pick up from git alone.
 
-- Keep multi-agent runs small. Reviewers: none for a fix under about 50 changed lines outside the kernel, one by default, up to three only for kernel, money, migration or gate changes. One review round a pull request, a second only after a blocker fix, and several short workflows in sequence rather than one long one.
+- Keep multi-agent runs small: several short workflows in sequence rather than one long one.
 - Never wait in the foreground: run the gate watch, `pnpm verify` and e2e in the background and act on the notification, not on `sleep` or `until` loops.
 - Every agent commits and pushes its branch at least every 20 minutes. Nothing lives only in a worktree or in `/tmp`.
 - At most three agents run `pnpm verify` or e2e at once, each on its own port (`E2E_PORT`, 4400 to 4499).

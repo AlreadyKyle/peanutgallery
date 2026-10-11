@@ -394,7 +394,7 @@ export async function runCardPipeline(card: Card, deps: PipelineDeps): Promise<v
 
 // A card the previous process merged but did not see through. A smoke test that already passed is
 // only recorded. Otherwise, while main is still at the merge, its deploy and smoke test run again with
-// the pipeline's rollback; once main has moved, nothing runs and the board decides.
+// the pipeline's rollback; once main has moved, nothing runs and a Claude session settles it.
 export async function resumeMerged(card: Card, deps: PipelineDeps): Promise<void> {
   const roleId = card.executor_role_id;
   const delay = timings(deps).retryDelayMs;
@@ -1146,8 +1146,8 @@ async function merge(card: Card, roleId: string, commit: CommitInfo, deps: Pipel
         `Card ${shortId(card.id)}: the merge request for pull request #${commit.prNumber} failed and GitHub did not show it merged (${result.reason}). It is left gated; the dispatcher checks it again when it starts, and nothing was closed.`,
       );
     }
-    // A refusal while main moved (GitHub's 405 "Base branch was modified" when the board merges in the
-    // gap after confirmMergeable) is not the card's fault: it goes back to funded like main_moved.
+    // A refusal while main moved (GitHub's 405 "Base branch was modified" when another pull request merges
+    // in the gap after confirmMergeable) is not the card's fault: it goes back to funded like main_moved.
     const head = await mainHead(githubOptions(deps)).catch(() => commit.baseSha);
     if (head !== commit.baseSha) {
       throw new Requeue(['gated'], 'main_moved', `main moved from ${commit.baseSha.slice(0, 8)} to ${head.slice(0, 8)} as the card merged, and the merge was refused (${result.status}); it goes back to funded to be built on the new main`, false);

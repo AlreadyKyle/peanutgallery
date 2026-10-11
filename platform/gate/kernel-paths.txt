@@ -6,7 +6,7 @@
 # design checks a card could otherwise switch off (the end-to-end suite and its fixtures in
 # platform/site/e2e, styles.test.ts with the colour and contrast maths it reads, copy.test.ts, and
 # seed-1's frame spec and its Playwright config; docs/specs/design-review.md); the whole board site is
-# kernel. The files that set the look are a separate, board-only list, design-paths.txt. A kernel file in platform/site/src imports only
+# kernel. The files that set the look are a separate list of kernel design files, design-paths.txt. A kernel file in platform/site/src imports only
 # kernel files, packages, copy.ts, PageHeader.tsx, styles.css, freshness.ts and routes.tsx
 # (platform/dispatcher/test/site-kernel.test.ts). One repository-relative path per line; a folder
 # covers everything under it. The dispatcher refuses a card that changes one, the gate fails a card

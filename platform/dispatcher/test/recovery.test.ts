@@ -209,7 +209,7 @@ describe('recoverOrphans', () => {
     await recoverOrphans(recoveryDeps(async () => undefined, async () => null));
     expect(db.cards[0]).toMatchObject({ stage: 'rejected', failing_check: 'merge' });
     expect(alert.messages).toEqual([
-      'Card bbbbbbbb had a lost merge request and its pull request is not merged; it is rejected. Branch card/bbbbbbbb-config and its pull request are left open for the board to close or merge.',
+      'Card bbbbbbbb had a lost merge request and its pull request is not merged; it is rejected. Branch card/bbbbbbbb-config and its pull request are left open for a Claude session to close or merge.',
     ]);
   });
 

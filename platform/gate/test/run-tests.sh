@@ -857,7 +857,7 @@ for file in platform/site/e2e/design.spec.ts platform/site/e2e/routes.ts platfor
   printf 'platform/site/src/pages/Landing.tsx\n%s\n' "$file" > "$T/kernel-design-checks.txt"
   expect "kernel-guard: $file is kernel" 1 "^FAIL: kernel-guard path=$file\$" -- bash "$KERNEL" "$T/kernel-design-checks.txt"
 done
-# The board-only design files (design-paths.txt) fail a card branch with their own rule: a file on
+# The kernel design files (design-paths.txt) fail a card branch with their own rule: a file on
 # the list, a file under a listed folder, and the same in another case.
 for file in platform/site/src/tokens.css platform/site/src/components/Card.tsx platform/site/src/components/Glyph.tsx platform/site/src/lib/motion.ts \
   platform/site/src/routes.tsx platform/site/public/og.png platform/site/public/fonts/x.woff2 platform/site/brand/mark.svg seed-1/render/favicon.svg \

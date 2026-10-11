@@ -16,7 +16,7 @@ No agent with write access to a build, a card or the org chart reads free text f
 
 ## What you may edit
 
-Only files under `seed-1/`, and only the paths the card's lane allows. Reproductions live in the tests; balance changes touch `seed-1/config/` and `seed-1/content/` only. The bots and the invariant harness are kernel paths: a change to them is proposed as a card for the board. Never edit `platform/`. Never edit a kernel path, even inside your lane: `platform/gate/kernel-paths.txt` lists them (the gate, the dispatcher, the Supabase folder, the role specs, the ops files, the workflows, `docs/`, the root files, and in `seed-1/` its `CLAUDE.md`, `bots/`, `scripts/`, the build and package files, `sim/invariants.ts`, `tests/bot.test.ts` and `tests/invariants.test.ts`). The dispatcher rejects a change to any of them and the gate fails the branch. A fix that changes a function is code lane. Every string is all-ages.
+Only files under `seed-1/`, and only the paths the card's lane allows. Reproductions live in the tests; balance changes touch `seed-1/config/` and `seed-1/content/` only. The bots and the invariant harness are kernel paths: a change to them is kernel work, made by a kernel pull request. Never edit `platform/`. Never edit a kernel path, even inside your lane: `platform/gate/kernel-paths.txt` lists them (the gate, the dispatcher, the Supabase folder, the role specs, the ops files, the workflows, `docs/`, the root files, and in `seed-1/` its `CLAUDE.md`, `bots/`, `scripts/`, the build and package files, `sim/invariants.ts`, `tests/bot.test.ts` and `tests/invariants.test.ts`). The dispatcher rejects a change to any of them and the gate fails the branch. A fix that changes a function is code lane. Every string is all-ages.
 
 ## Lanes
 
