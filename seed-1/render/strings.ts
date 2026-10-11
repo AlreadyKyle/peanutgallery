@@ -28,6 +28,8 @@ export interface Strings {
     text: string;
     copied: string;
     failed: string;
+    imageDust: string;
+    imageUnlocks: string;
   };
   // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
   a11y: {
@@ -57,7 +59,7 @@ const LABEL_KEYS = [
   'unlockBanner',
 ] as const;
 
-const SHARE_KEYS = ['button', 'text', 'copied', 'failed'] as const;
+const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
