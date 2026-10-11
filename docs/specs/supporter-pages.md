@@ -71,7 +71,7 @@ Rows with key none never reach the public documents. On the page, consecutive li
 **`/card/:id`.** Black band: top bar, back link, the title as `h1`. White band:
 - the card face (the Live stamp for a live card) and Play;
 - the facts: Funded $x of $y; Contributors n; cost from contributions; minutes from start to live when both are recorded; "Merged as the studio's commit abc1234" (no link: the repository is private); gate passed, at a time;
-- "What changed", for a config card: the commit, and each `check: config <file> <path> == <value>` line from the card's already-public `acceptance_test` as `<file> <path>: <value>` when the value is a number, boolean or string of 200 characters or fewer, else "changed";
+- "What changed", for a config card: the commit, and each `check: config <file> <path> == <value>` line from the card's already-public `acceptance_test` as `<file> <path>: <value>` when the value is a number, boolean or string of 200 characters or fewer, else "changed" (in plain words where the game's config says what the field means, docs/specs/supporter-loop.md);
 - the supporters; the event lines (newest 200, oldest first, with "and n earlier steps").
 
 A rejected or paused card shows its face and the same reason words and money trail as its /ledger Stopped row (money-surfaces' `public_stopped_cards` row and `legal.failingCheckWords`). An unknown or malformed id shows the not found content with "There is no card at this address." While the card is building or being checked, the page reloads its detail on the site's live poll and new lines appear at the end.

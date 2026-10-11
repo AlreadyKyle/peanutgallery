@@ -42,13 +42,16 @@ test.describe('a live card', () => {
     await expect(commit.locator('a')).toHaveCount(0);
   });
 
-  test('says what changed: scalar values as checked, anything else "changed"', async ({ page }) => {
+  test('says what changed: known config paths in plain words, anything else raw or "changed"', async ({ page }) => {
     const changed = page.getByRole('region', { name: 'What changed' });
     await expect(changed.locator('li')).toHaveText([
-      'seed-1/config/game.json buildings[id=gatherer].name: "Sweeper"',
-      'seed-1/config/game.json buildings[id=gatherer].baseCost: 12',
+      'Gatherer is now called "Sweeper".',
+      'Gatherer costs 12 dust to build.',
       'seed-1/config/game.json unlocks[0].labels: changed',
     ]);
+    // The raw fallback keeps its code face; a plain line is prose (docs/specs/supporter-loop.md).
+    await expect(changed.locator('li[data-plain="true"] code')).toHaveCount(0);
+    await expect(changed.locator('li:not([data-plain]) code')).toHaveCount(1);
   });
 
   test('lists the supporters in number order, the first 24 then "and 6 more", with no amount', async ({ page }) => {

@@ -3,7 +3,7 @@ import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
 import { formatDate, formatInteger, formatUsd, percent } from '../lib/format';
 import { legal } from '../lib/legal';
-import { canFund, DEFAULT_STUDIO_PCT, exampleFromPaid, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
+import { canFund, DEFAULT_STUDIO_PCT, exampleFromPaid, fundingPlace, fundLink, inFundingOrder, RESERVE_PCT } from '../lib/payment';
 import type { CardDetail } from '../lib/card-source';
 import type { Card, Snapshot } from '../lib/source';
 import { Stat } from './Stat';
@@ -135,12 +135,14 @@ export function FundAgreement() {
  * in the order on a tie. Null when the order did not load or no card is short.
  */
 export function closestToFunded(snapshot: Snapshot): string | null {
-  let best: { id: string; left: number } | null = null;
+  const place = fundingPlace(snapshot);
+  let best: { id: string; left: number; at: number } | null = null;
   for (const card of snapshot.cards) {
-    if (card.funding_target_usd <= 0 || !inFundingOrder(snapshot, card.id)) continue;
+    const at = place(card);
+    if (card.funding_target_usd <= 0 || at === null || !inFundingOrder(snapshot, card.id)) continue;
     const left = card.funding_target_usd - card.funded_usd;
     if (left <= 0) continue;
-    if (best === null || left < best.left) best = { id: card.id, left };
+    if (best === null || left < best.left || (left === best.left && at < best.at)) best = { id: card.id, left, at };
   }
   return best?.id ?? null;
 }
