@@ -197,7 +197,7 @@ Deno.test("site_cards returns only the cards columns anon may select, and both d
       const [topUp] = (await s.live()).events as Doc[];
       assertEquals([topUp!.card_id, topUp!.type, topUp!.step, topUp!.usd], [card!.id, "message", "ceiling_top_up", 2.5]);
       assertEquals(Object.keys(doc.pool as Doc).sort(), ["balance_usd", "daily_spent_usd", "day", "held_usd", "incident_reserve_usd", "reserve_usd"]);
-      assertEquals(Object.keys(doc.studio as Doc).sort(), ["launched_at", "pause_reason", "paused", "platform_lane_open"]);
+      assertEquals(Object.keys(doc.studio as Doc).sort(), ["launched_at", "pause_reason", "paused", "platform_lane_open", "supply"]);
       assert(Array.isArray((doc.money as Doc).funding_order), "money carries funding_order");
     });
 
@@ -324,6 +324,77 @@ Deno.test("BOARD-SETUP's pause statement does what set_paused(true) does, and th
       console.log(`BOARD-SETUP statement: before ${JSON.stringify(before)} after ${JSON.stringify(after)}`);
       const studioDoc = (await s.live()).studio as Doc;
       assertEquals([studioDoc.paused, studioDoc.pause_reason], [true, "board"]);
+    });
+  } finally {
+    await s.close();
+  }
+});
+
+Deno.test("home-flow-supply: the live document's studio entry carries the drafting status, figures and fixed codes only", OPTS, async (t) => {
+  const s = await studio();
+  try {
+    const SUPPLY = "20261011000000_home_flow_supply.sql";
+    const supply = async () => ((await s.live()).studio as Doc).supply as Doc;
+
+    await t.step("public_supply is stable and security definer with search_path public, anon's and not public's", async () => {
+      const fn = await s.row<{ sec: boolean; v: string; config: string[] }>(`select prosecdef as sec, provolatile as v, proconfig as config from pg_proc where proname = 'public_supply'`);
+      assertEquals([fn.sec, fn.v, fn.config], [true, "s", ["search_path=public"]]);
+      for (const role of ["anon", "authenticated", "service_role"]) {
+        assertEquals((await s.row<{ ok: boolean }>(`select has_function_privilege($1, 'public.public_supply()', 'execute') as ok`, [role])).ok, true, role);
+      }
+      const acl = (await s.row<{ acl: string[] }>(`select proacl::text[] as acl from pg_proc where proname = 'public_supply'`)).acl;
+      assert(!acl.some((entry) => entry.startsWith("=")), `public holds no grant on public_supply: ${acl.join(" ")}`);
+    });
+
+    await t.step("as anon, studio.supply has exactly its six keys, each a figure, a flag, a time or a fixed code", async () => {
+      const doc = await supply();
+      assertEquals(Object.keys(doc).sort(), ["drafting", "next_check_at", "reason", "run_limit", "runs_today", "short"]);
+      assertEquals([jsonType(doc.drafting), jsonType(doc.short), jsonType(doc.runs_today), jsonType(doc.run_limit), jsonType(doc.next_check_at)], [
+        "boolean", "boolean", "number", "number", "string",
+      ]);
+      assert(doc.reason === null || /^[a-z_]+$/.test(doc.reason as string), `reason is a fixed code: ${doc.reason}`);
+      assertEquals([doc.runs_today, doc.run_limit], [0, 4]);
+      // The next 20-minute slot after now: on a slot boundary, later than now and at most 20 minutes on.
+      const next = new Date(doc.next_check_at as string);
+      const now = (await s.row<{ now: Date }>(`select now() as now`)).now;
+      assertEquals([next.getUTCMinutes() % 20, next.getUTCSeconds(), next.getUTCMilliseconds()], [0, 0, 0]);
+      assert(next.getTime() > now.getTime() && next.getTime() - now.getTime() <= 20 * 60 * 1000, `${next.toISOString()} is the slot after ${now.toISOString()}`);
+      // short, reason and runs_today are supply_draft_check()'s, passed through.
+      const check = (await s.row<{ c: Doc }>(`select public.supply_draft_check() as c`)).c;
+      assertEquals([doc.short, doc.reason, doc.runs_today], [check.short, check.reason, check.runs_today]);
+    });
+
+    await t.step("drafting is false with no draft run, and true once a draft_card run is queued, then running", async () => {
+      assertEquals((await supply()).drafting, false);
+      // A draft_card run as enqueue_supply_draft queues it (supply_refill_test.ts).
+      const run = (await s.row<{ id: string }>(`insert into public.job_runs (job_name, idem_key, origin) values ('draft_card', 'queued-one', 'schedule') returning id`)).id;
+      const queued = await supply();
+      assertEquals([queued.drafting, queued.reason, queued.runs_today], [true, "already_queued", 1]);
+      await s.db.query(`update public.job_runs set status = 'running', started_at = now() where id = $1`, [run]);
+      assertEquals((await supply()).drafting, true);
+      await s.db.query(`update public.job_runs set status = 'succeeded', finished_at = now() where id = $1`, [run]);
+      const done = await supply();
+      assertEquals([done.drafting, done.runs_today], [false, 1]);
+    });
+
+    await t.step("run_limit is studio_state.draft_runs_per_day", async () => {
+      await s.db.exec(`update public.studio_state set draft_runs_per_day = 7 where id = 1`);
+      assertEquals((await supply()).run_limit, 7);
+    });
+
+    await t.step("with no studio row the studio entry stays null", async () => {
+      await s.db.exec(`begin`);
+      try {
+        await s.db.exec(`delete from public.studio_state`);
+        assertEquals((await s.live()).studio, null);
+      } finally {
+        await s.db.exec(`rollback`);
+      }
+    });
+
+    await t.step("the migration applies a second time", async () => {
+      await s.db.exec(s.migrations.find((m) => m.name === SUPPLY)!.sql);
+      assertEquals(Object.keys(await supply()).length, 6);
     });
   } finally {
     await s.close();

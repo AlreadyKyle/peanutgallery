@@ -420,6 +420,21 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     for (const row of t.db.ledger) expect([row.billed_to, row.card_id]).toEqual(['studio', NEW_CARD]);
   });
 
+  it("clips a revise note over 600 characters instead of failing the run, and still fails on any other verdict the schema refuses", async () => {
+    const long = 'Say it costs dust and name the row. '.repeat(25).slice(0, 900);
+    const t = setup({ designer: [JSON.stringify(DRAFT), JSON.stringify(DRAFT)], director: [verdict('revise', ['unclear_text'], long), verdict('approved', ['fits_pillars'])] });
+    const output = await draftCard(t.context);
+    expect(output).toMatchObject({ result: 'approved', rounds: [{ round: 1, verdict: { result: 'revise' } }, { round: 2 }] });
+    const note = (output as { rounds: Array<{ verdict: { note?: string } | null }> }).rounds[0]!.verdict!.note!;
+    expect(Array.from(note).length).toBeLessThanOrEqual(600);
+    expect(note.endsWith('…')).toBe(true);
+    expect(t.sessions[2]!.prompt).toContain(`Note: ${note}`);
+
+    const wrong = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('revise', ['fits_pillars'], long)] });
+    await expect(draftCard(wrong.context)).rejects.toThrow(/^the Game Director's session failed: the final message is not valid against draft-verdict\.schema\.json: /);
+    expect(wrong.db.drafts.map((d) => [d.status, d.reason_codes])).toEqual([['withdrawn', ['grade_failed']]]);
+  });
+
   it('withdraws a flagged draft: a new card is rejected with its spend kept, a backlog card is left as it was', async () => {
     const t = setup({ designer: [JSON.stringify(DRAFT)], director: [verdict('flagged', ['duplicate_card'])] });
     expect(await draftCard(t.context)).toMatchObject({ result: 'withdrawn', reason: 'flagged', reason_codes: ['duplicate_card'], card_id: NEW_CARD, kind: 'new', card_rejected: true });

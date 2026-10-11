@@ -27,7 +27,7 @@ These are two different states.
    - /how-it-works, /team and /roadmap are live.
    - Link previews render, and the board's own site requires a second factor.
    - ~~The board and the moderator have each signed in on the board's own site by magic link, through the studio's own sign-in email (`specs/board-site.md`).~~ Optional: the board's site is an optional panel and the studio waits on no sign-in (PLAN.md §10 decision 66, `specs/optional-board.md`).
-   - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items, on /roadmap and in home's Planned next.
+   - Nothing on the site describes a feature that does not exist, and no public string says "vote" except planned items, on /roadmap and in home's Next up lane.
    - ~~The site shows a notice while the studio is paused.~~ Removed: the public site shows no paused notice (PLAN.md §10 decision 62).
 5. **The launch time is stamped.** The first Console credit purchase recorded at /board stamps `launched_at` (PLAN.md §10 decision 62); ~~the board has pressed Go live~~ (superseded, no button). The launch clip and the post drafts exist.
 
@@ -148,6 +148,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/no-pause-no-golive.md` | built | apply `20261006000000_launch_stamp.sql` to production after merge, then the site deploy and the live check |
 | `specs/unattended-roles.md` | built | PR2 to PR5 are merged (PLAN.md §10 decision 66); left: the production migrations and the live checks of the visual review, auto-resume and the self-refilling supply |
 | `specs/optional-board.md` | built | the board's site as an optional panel: Status, Activity and six Actions, the second factor once per sign-in, no migration |
+| `specs/home-flow.md` | agreed | home's one four-lane card flow, the drafting status in the live document (`20261011000000_home_flow_supply.sql`) and the clipped Game Director note; then the migration in production and the live check |
 
 ## Standing facts for any session
 

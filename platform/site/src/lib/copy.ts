@@ -35,20 +35,14 @@ export const copy = {
   status: {
     open: { one: '1 card', many: '{n} cards', restOne: 'is open for funding.', restMany: 'are open for funding.' },
     openNone: 'No card is open for funding right now.',
+    // While nothing is open and the Game Designer is drafting (docs/specs/home-flow.md).
+    drafting: 'The agents are drafting the next card.',
     building: { one: '1 card', many: '{n} cards', restOne: 'is being built.', restMany: 'are being built.' },
   },
-  now: 'Building now',
-  fund: "Fund what's next",
-  fundIntro:
-    "Fund a card to grow the games and the studio. When a card's bar fills, the agents build it.",
-  // A phone shows the first three cards of the grid until the viewer asks for the rest.
-  showAllCards: 'Show all {n} cards',
-  queued: 'Queued',
-  queuedIntro: 'Fully funded and waiting for the agents.',
-  queuedEmpty: 'No cards are queued.',
-  shipped: 'Shipped',
-  plannedNext: 'Planned next',
   roadmapLink: 'See the roadmap',
+  // The explainer video's labels for a queued and a shipped card (platform/explainer/src/data.ts).
+  queued: 'Queued',
+  shipped: 'Shipped',
   playTheGame: 'Play the game',
   filterLabel: 'Show cards for',
   // The two suits, from a card's folder (payment.ts categoryOf); All is the filter for both.
@@ -70,7 +64,49 @@ export const copy = {
   statusLive: 'Live',
   statusPaused: 'Paused',
   statusRejected: 'Not built',
+  statusPlanned: 'Planned',
   waitingForAgents: 'Waiting for the agents',
+  // Home's flow (docs/specs/home-flow.md): one band, four lanes in the order a card moves through
+  // them. Each lane says who acts in it, shows at most three cards and never stands empty: a lane
+  // with no card says what happens next instead.
+  flow: {
+    title: 'How the cards move',
+    intro: 'AI agents draft a card, supporters fund it, the agents build it and the checks ship it to the game. Every card here is real.',
+    lanes: {
+      next: {
+        title: 'Next up',
+        who: 'The Game Designer drafts cards and the Game Director approves them.',
+        more: 'See the roadmap',
+        empty: 'Nothing is planned yet.',
+      },
+      fund: {
+        title: 'Fund now',
+        who: "When a card's bar fills, the agents build it.",
+        more: 'Show all {n} cards',
+      },
+      building: {
+        title: 'Building',
+        who: 'A builder agent writes the change, and automated checks test it.',
+        empty: 'Nothing is being built right now. A funded card starts within about half an hour.',
+        lastBuilt: 'Last built: {title}, live {date}.',
+      },
+      shipped: {
+        title: 'Shipped',
+        who: 'A change goes live only when it passes every check.',
+        more: 'See what shipped each week',
+        empty: 'Nothing has shipped yet.',
+      },
+    },
+    // The Game Designer's state, from the studio's supply (fixed codes, never card text).
+    drafting: 'The Game Designer is drafting a new card now.',
+    draftingIdle: 'The Game Designer drafts a new card when too few are open.',
+    draftingDone: 'The Game Designer has used its {n} drafts for today and drafts again tomorrow.',
+    // A Next up card's line: an approved agent card waiting to open, board work, or a planned card.
+    boardWork: 'Board work, built by the board',
+    planned: 'Planned, opens for funding later',
+    count: '{n} cards',
+    countOne: '1 card',
+  },
   buildingBy: '{name} is building this',
   agentBrief: 'What the agents are told',
   // Beside agent-written card text only (docs/specs/agent-workflows.md): the drafting role's title,
@@ -212,7 +248,7 @@ export const copy = {
   },
   roadmap: {
     title: 'Roadmap',
-    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund what\'s next: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
+    lede: 'Cards the studio plans to build and has not built yet. A card for players or the studio opens for funding when it moves to Fund now on the home page: the board moves its own cards there, and a card an agent drafted moves there by itself once it is approved and a waiting time the board sets has passed.',
     // A single planned card's state, on its own page (/card/:id); /roadmap says planned once per group.
     planned: 'Planned and not built yet',
     horizons: { next: 'Next', later: 'Later' },
@@ -300,7 +336,7 @@ export const copy = {
     cardsIntro:
       'A white face with a 2px ink edge and rounded corners, no shadow. The suit sits at the start of the corner index and the state at its end, each a word and a glyph; colour only adds to them. No face is ever signal or ink, and every card sits in band 2.',
     moneyFaces: 'Cards that take money',
-    workFaces: 'Cards at work, then finished',
+    workFaces: 'Cards planned, at work, then finished',
     faces: {
       open: 'Open for funding: the bar, the spec rows and the Fund button.',
       picked: 'Picked by the board: a signal ribbon inside the top edge, and the same money as open.',
@@ -310,6 +346,7 @@ export const copy = {
       live: 'Live: the green stamp at an angle is for this page and a card of its own. Rows use the plain tag.',
       paused: 'Paused: a hatched strip inside the top edge, on this page only.',
       rejected: 'Not built: a dashed edge and the public reason, on this page only.',
+      planned: "Planned: on the roadmap and not open yet. Drawn only in home's Next up lane, with its line and no money.",
     },
     barHeading: 'Funding bar',
     barIntro:
@@ -356,6 +393,7 @@ export const copy = {
       live: { title: 'The game tab shows its name and icon', summary: 'The tab reads Dust with its own icon, and the page links back to the studio.' },
       paused: { title: 'Count only the unlocks that exist', summary: 'The count above the unlock list includes only unlocks the game still has.' },
       rejected: { title: 'A sound for every tap', summary: 'A short click on each tap, with a switch beside the game to turn every sound off.' },
+      planned: { title: 'A second game to play', summary: 'A new small game beside Dust, drafted and built by the agents.' },
       reason: 'The change failed its checks twice: on a phone the click played after the tap.',
       builder: 'Builder A',
     },

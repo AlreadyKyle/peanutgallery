@@ -48,11 +48,11 @@ describe('the design guide', () => {
     for (const card of cards) expect(card.closest('main > .band')).toBe(bands[1]);
   });
 
-  it('draws the card in all eight faces, in two groups by anatomy, each noted and labelled Sample', () => {
+  it('draws the card in all nine faces, in two groups by anatomy, each noted and labelled Sample', () => {
     const { container } = renderGuide();
     const gallery = screen.getByRole('region', { name: copy.guide.cardsHeading });
     const faces = [...gallery.querySelectorAll('li.card')].map((card) => card.getAttribute('data-face'));
-    expect(faces).toEqual(['open', 'picked', 'funded', 'paused', 'building', 'checks', 'live', 'rejected']);
+    expect(faces).toEqual(['open', 'picked', 'funded', 'paused', 'planned', 'building', 'checks', 'live', 'rejected']);
     expect([...faces].sort()).toEqual([...FACES].sort());
     expect(gallery.querySelectorAll('ul.card-grid')).toHaveLength(2);
     expect(gallery.querySelectorAll('.face-notes .sample-label')).toHaveLength(FACES.length);

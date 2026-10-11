@@ -103,7 +103,9 @@ describe('suits, from data', () => {
 });
 
 describe('the card faces', () => {
-  const STAGE: Record<Exclude<Face, 'paused' | 'rejected'>, string> = {
+  // Paused and rejected are drawn on the guide only, and planned in home's Next up lane only, each passed as a face.
+  const PASSED = (face: Face) => face === 'paused' || face === 'rejected' || face === 'planned';
+  const STAGE: Record<Exclude<Face, 'paused' | 'rejected' | 'planned'>, string> = {
     open: 'proposed',
     picked: 'voted',
     funded: 'funded',
@@ -114,8 +116,8 @@ describe('the card faces', () => {
 
   it('renders each state as its word and its own glyph, on the face its stage gives', () => {
     for (const face of FACES) {
-      const staged = face === 'paused' || face === 'rejected' ? card() : card({ stage: STAGE[face] });
-      const box = one(staged, face === 'paused' || face === 'rejected' ? { face, mode: 'sample' } : {});
+      const staged = PASSED(face) ? card() : card({ stage: STAGE[face as keyof typeof STAGE] });
+      const box = one(staged, PASSED(face) ? { face, mode: 'sample' } : {});
       expect(box.getAttribute('data-face'), face).toBe(face);
       const tag = box.querySelector('.card-index [data-state]')!;
       expect(tag.textContent, face).toBe(STATE_TAGS[face].word);
@@ -131,6 +133,7 @@ describe('the card faces', () => {
       copy.statusLive,
       copy.statusPaused,
       copy.statusRejected,
+      copy.statusPlanned,
     ]);
   });
 
