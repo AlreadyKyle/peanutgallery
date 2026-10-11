@@ -94,8 +94,8 @@ everything else, in the order the board would take it.
 - folder: platform
 - horizon: next
 - rank: 8
-- summary: Each card's page gets a Share button and its own link preview: the card face, who funded it, what it cost and how long the agents took.
-- intent: Split out of More on a card's own page. A preview image per card drawn in code from tokens.css (as og-image.mjs draws the site's), showing the card face, Supporter numbers, what the card cost and its draft-to-live time from public records only, served as the card page's og:image, and a Share button that uses the browser's share sheet with a copy-link fallback. No countdown, no chance cue near money, no ranking of supporters by amount (docs/research/comparables.md). It is not built yet.
+- summary: Each card's link shows its own preview when shared: the card face, who funded it, what it cost and how long the agents took.
+- intent: Split out of More on a card's own page. The Share button on each card's page shipped on 11 October 2026 (the browser's share sheet, or the link copied). Left: a preview image per card drawn in code from tokens.css (as og-image.mjs draws the site's), showing the card face, Supporter numbers, what the card cost and its draft-to-live time from public records only, served as the card page's og:image. No countdown, no chance cue near money, no ranking of supporters by amount (docs/research/comparables.md). It is not built yet.
 - board: yes
 
 ### Run the replay eval and set its first baseline
