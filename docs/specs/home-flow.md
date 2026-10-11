@@ -32,7 +32,7 @@ Home's second band (paper) holds two sections, the cards to fund first.
 - With no card open, a panel on the primary fill instead of the grid: "Fund the next card in line", then "Your contribution waits in Not on a card yet, then funds the next card that opens." (it does not repeat the status line above it), the Game Designer's state with the pencil glyph, and Contribute while the Payment Link is set.
 
 **How the cards move.** Its intro: "Cards wait here before they open for funding, then move along once their bar fills. Every card here is real." Three lanes, in the order a card moves:
-1. **Next up.** The roadmap's cards, held cards left out: an approved agent card waiting to open first, then cards for players or the studio, then kernel work. Each is drawn with the Planned face (a clock glyph) and one line: "Approved, opens soon", "Planned, opens for funding later" or "Kernel work, built through the gate". The lane's who-line is the Game Designer's state, from the studio's supply:
+1. **Next up.** The roadmap's cards, held cards left out: an approved agent card waiting to open first, then cards for players or the studio, then kernel work. Each is drawn with the Planned face (a clock glyph) and one line: "Approved, opens soon", "Planned, opens for funding later" or "The studio builds this one itself, with no card". The lane's who-line is the Game Designer's state, from the studio's supply:
    - "The Game Designer is drafting a new card."
    - "The Game Designer has used today's n drafts and is back tomorrow."
    - "The Game Designer drafts more cards when the open ones run low."
