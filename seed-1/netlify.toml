@@ -13,6 +13,21 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# The next Dust card to fund (render/next-card.ts) reads the site's two public documents. Proxied
+# here, so the game's fetch stays on its own origin and connect-src 'self' holds; GET only, read only,
+# and the site's CDN cache answers. Only these two paths are proxied.
+[[redirects]]
+  from = "/api/live"
+  to = "https://mobmachine.games/api/live"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/cards"
+  to = "https://mobmachine.games/api/cards"
+  status = 200
+  force = true
+
 # Security headers on every path (the game makes no request but to its own origin: e2e/frames.spec.ts
 # fails one to any other). Enforced: no framing, connections to this origin alone, no plugins, no
 # <base> or form posts elsewhere. Script, style and image sources stay open: Phaser draws its own

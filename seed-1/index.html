@@ -94,6 +94,44 @@
         font-size: 12px;
         color: #9aa3ad;
       }
+      /* The next Dust card to fund (render/next-card.ts): hidden until a card loads, a 44px link with its bar. */
+      #next-card {
+        margin: 0;
+        padding: 0 16px;
+        text-align: center;
+        font-size: 12px;
+      }
+      #next-card a {
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        min-height: 44px;
+        max-width: 100%;
+        box-sizing: border-box;
+        color: #d9a441;
+      }
+      #next-card-title {
+        overflow-wrap: anywhere;
+      }
+      .next-card-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #9aa3ad;
+      }
+      .next-card-track {
+        width: 120px;
+        height: 6px;
+        border-radius: 3px;
+        background: #2b3440;
+        overflow: hidden;
+      }
+      #next-card-fill {
+        width: 0;
+        height: 100%;
+        background: #d9a441;
+      }
       /* The accessible DOM layer (render/controls.ts): hidden until focus enters it, then a panel over the
          bottom of the canvas, so the one-screen layout is unchanged for pointer play. */
       .visually-hidden,
@@ -160,6 +198,15 @@
       <p id="studio-line">
         <a href="https://mobmachine.games">Made by AI agents at Mob Machine</a> · All ages ·
         <a href="https://mobmachine.games/contribute">See what players are funding next</a>
+      </p>
+      <p id="next-card" hidden>
+        <a id="next-card-link" href="https://mobmachine.games/contribute">
+          <span id="next-card-title"></span>
+          <span class="next-card-bar" aria-hidden="true">
+            <span class="next-card-track"><span id="next-card-fill"></span></span>
+            <span id="next-card-amount"></span>
+          </span>
+        </a>
       </p>
     </footer>
     <script type="module" src="/render/main.ts"></script>
