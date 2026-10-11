@@ -530,7 +530,11 @@ describe('backup-mac.sh', () => {
     const dumped = new Set(['public', 'money']);
 
     // A schedule's command is single-quoted or, when it quotes a job name itself, dollar-quoted ($c$).
-    const jobs = [...sql.matchAll(/cron\.schedule\(('[^']+', '[^']+', (?:'[^']+'|\$c\$[\s\S]*?\$c\$))\)/g)].map((match) => match[1]);
+    // cron.schedule with a job's name replaces that job, so a later migration's schedule is the one a
+    // restore must make (20261011200000_supply_every_minute.sql reschedules supply-draft).
+    const latest = new Map();
+    for (const match of sql.matchAll(/cron\.schedule\(('([^']+)', '[^']+', (?:'[^']+'|\$c\$[\s\S]*?\$c\$))\)/g)) latest.set(match[2], match[1]);
+    const jobs = [...latest.values()];
     for (const name of ['credit-held-contributions', 'waterfall-sweep', 'janitor', 'upkeep_merge', 'supply-draft']) {
       assert.ok(jobs.some((job) => job.startsWith(`'${name}'`)), `the migrations schedule ${name}`);
     }
