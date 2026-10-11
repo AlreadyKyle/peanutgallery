@@ -191,7 +191,6 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [More on a card's own page](BACKLOG.md#more-on-a-cards-own-page): design frames and verdicts, Play this version and more of the agents' steps.
 - [A card supply that keeps pace with funding](BACKLOG.md#a-card-supply-that-keeps-pace-with-funding): drafts, slots and the monthly cap that grow with the money, behind a failure breaker.
 - [Ship notices to supporters](BACKLOG.md#ship-notices-to-supporters): an email when a card you funded ships.
-- [Share button and link preview for each card](BACKLOG.md#share-button-and-link-preview-for-each-card): a code-drawn preview per card (the Share button is built).
 - [Run the replay eval and set its first baseline](BACKLOG.md#run-the-replay-eval-and-set-its-first-baseline): the draft set's first recorded score.
 - [Balance report from the headless bot](BACKLOG.md#balance-report-from-the-headless-bot): unlock times and two-minute gains for the Game Designer.
 - [A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust): the game's look, sound, tone and naming, board-only.
