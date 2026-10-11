@@ -10,8 +10,9 @@ import {
   step,
 } from '../sim/sim';
 import { awaySeconds, serializeState } from '../sim/save';
-import type { SimState, UnlockRow } from '../sim/types';
-import { fill, formatDust, formatPercent, formatRate } from './format';
+import type { SimAction, SimState } from '../sim/types';
+import { describeEffect } from './a11y';
+import { fill, formatDust, formatRate } from './format';
 import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
 import type { GameData } from './load';
 
@@ -80,10 +81,23 @@ export class DustScene extends Phaser.Scene {
   // spent in another tab still counts (up to MAX_AWAY_SECONDS at once).
   private lastStepAt = Date.now();
 
-  constructor(data: GameData, seed: number, savedState: SimState | null = null) {
+  // Whether create() has built the objects refresh() draws; a DOM control can act before it has.
+  private created = false;
+  // Called after every refresh with the state drawn, so the accessible DOM layer (render/controls.ts) tracks it.
+  private readonly onRefresh: ((state: SimState) => void) | null;
+
+  constructor(data: GameData, seed: number, savedState: SimState | null = null, onRefresh: ((state: SimState) => void) | null = null) {
     super({ key: 'dust' });
     this.data_ = data;
     this.state = savedState ?? createSim(data.config, seed);
+    this.onRefresh = onRefresh;
+  }
+
+  // One action from the canvas or the DOM controls: the same sim `apply`, then a redraw.
+  act(action: SimAction): SimState {
+    this.state = apply(this.state, this.data_.config, action);
+    if (this.created) this.refresh();
+    return this.state;
   }
 
   create(): void {
@@ -102,6 +116,7 @@ export class DustScene extends Phaser.Scene {
     y = this.createStrikeButton(y);
     y = this.createUnitRows(y + 12);
     this.createUnlockList(y + 12);
+    this.created = true;
     this.refresh();
   }
 
@@ -122,8 +137,7 @@ export class DustScene extends Phaser.Scene {
     this.add.text(SCREEN_WIDTH / 2, top + 41, strings.strikeDescription, textStyle(12, COLORS.dark)).setOrigin(0.5);
     button.on('pointerdown', () => {
       button.setFillStyle(COLORS.accentDown);
-      this.state = apply(this.state, this.data_.config, { type: 'strike' });
-      this.refresh();
+      this.act({ type: 'strike' });
     });
     button.on('pointerup', () => button.setFillStyle(COLORS.accent));
     button.on('pointerout', () => button.setFillStyle(COLORS.accent));
@@ -150,8 +164,7 @@ export class DustScene extends Phaser.Scene {
       const buttonLabel = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 - 12, strings.labels.buy, textStyle(14, COLORS.dark, 'bold')).setOrigin(0.5);
       const cost = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 + 6, '', textStyle(11, COLORS.dark)).setOrigin(0.5);
       button.on('pointerdown', () => {
-        this.state = apply(this.state, config, { type: 'buy', unit: row.id });
-        this.refresh();
+        this.act({ type: 'buy', unit: row.id });
       });
       container.add([panel, name, description, owned, button, buttonLabel, cost]);
       this.unitRows.push({ unit: row.id, container, owned, cost, button, buttonLabel });
@@ -181,16 +194,6 @@ export class DustScene extends Phaser.Scene {
       this.unlockSection.add([dot, label]);
       this.unlockSlots.push({ dot, label });
     }
-  }
-
-  private describeEffect(row: UnlockRow): string {
-    const { config, strings } = this.data_;
-    const effect = row.effect;
-    if (effect.type === 'unit') {
-      const unitRow = config.spawnTable.rows.find((candidate) => candidate.id === effect.unit) ?? null;
-      return fill(strings.effects.unit, { unit: unitRow === null ? effect.unit : unitRow.name });
-    }
-    return fill(strings.effects.multiplier, { percent: formatPercent(effect.value) });
   }
 
   private refresh(): void {
@@ -255,11 +258,12 @@ export class DustScene extends Phaser.Scene {
         } else {
           slot.dot.setVisible(true);
           slot.dot.setFillStyle(COLORS.bar, 0);
-          slot.label.setText(`${line.row.name}: ${this.describeEffect(line.row)} (${formatDust(line.row.atTotalDust)})`);
+          slot.label.setText(`${line.row.name}: ${describeEffect(line.row, config, strings)} (${formatDust(line.row.atTotalDust)})`);
           slot.label.setColor(COLORS.muted);
         }
       }
     }
+    this.onRefresh?.(state);
   }
 
   private setText(target: Phaser.GameObjects.Text, value: string): void {

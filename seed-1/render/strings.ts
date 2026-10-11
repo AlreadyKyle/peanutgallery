@@ -20,7 +20,17 @@ export interface Strings {
     unit: string;
     multiplier: string;
   };
+  // The accessible DOM layer's text (render/controls.ts): the canvas is hidden from assistive technology.
+  a11y: {
+    controls: string;
+    dustStatus: string;
+    buyUnit: string;
+    bought: string;
+    unlocked: string;
+  };
 }
+
+const A11Y_KEYS = ['controls', 'dustStatus', 'buyUnit', 'bought', 'unlocked'] as const;
 
 const LABEL_KEYS = [
   'dust',
@@ -65,6 +75,10 @@ export function parseStrings(raw: unknown): Strings {
   for (const key of LABEL_KEYS) labels[key] = requireText(labelsRaw, key, 'strings.labels');
   const effectsRaw = raw['effects'];
   if (!isRecord(effectsRaw)) throw new Error('strings: "effects" must be an object');
+  const a11yRaw = raw['a11y'];
+  if (!isRecord(a11yRaw)) throw new Error('strings: "a11y" must be an object');
+  const a11y = {} as Strings['a11y'];
+  for (const key of A11Y_KEYS) a11y[key] = requireText(a11yRaw, key, 'strings.a11y');
   return {
     title: requireText(raw, 'title', 'strings'),
     tabTitle: requireText(raw, 'tabTitle', 'strings'),
@@ -75,5 +89,6 @@ export function parseStrings(raw: unknown): Strings {
       unit: requireText(effectsRaw, 'unit', 'strings.effects'),
       multiplier: requireText(effectsRaw, 'multiplier', 'strings.effects'),
     },
+    a11y,
   };
 }

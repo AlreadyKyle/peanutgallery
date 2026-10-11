@@ -25,5 +25,12 @@
   "effects": {
     "unit": "Opens the {unit}.",
     "multiplier": "Production up {percent}."
+  },
+  "a11y": {
+    "controls": "Game controls",
+    "dustStatus": "{amount} dust, {rate} per second.",
+    "buyUnit": "Buy {name}: costs {cost} dust, {owned} owned",
+    "bought": "Bought a {name}, {owned} owned.",
+    "unlocked": "Unlocked {name}. {effect}"
   }
 }
