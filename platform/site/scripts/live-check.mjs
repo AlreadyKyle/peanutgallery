@@ -12,7 +12,7 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: Play the first game, Pick a card to fund, How the cards move,
+// Policy report. The landing's h2 order, read from the page: Pick a card to fund, Play the first game (decision 70), How the cards move,
 // the team (only when there is one) and Where the money goes. Home's cards to fund
 // (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
 // line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
@@ -107,7 +107,7 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes'];
+const H2_ORDER = ['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['The team']);
 // Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
 // its tile saying what happens next, never blank. The cards to fund sit above them, at most three.

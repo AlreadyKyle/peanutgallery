@@ -5,6 +5,7 @@ import { Glyph } from '../components/Glyph';
 import { NotFound } from '../components/NotFound';
 import { PageHeader } from '../components/PageHeader';
 import { Replay } from '../components/Replay';
+import { ShareCard } from '../components/ShareCard';
 import { StoppedFacts } from '../components/Stopped';
 import { Supporters } from '../components/Supporters';
 import { Timeline } from '../components/Timeline';
@@ -193,6 +194,7 @@ export function CardPage() {
           </Link>
         </p>
         <PageHeader title={title} lede={summary === null || summary.trim() === '' ? undefined : summary} />
+        {state.state === 'ready' ? <ShareCard title={title} url={`${window.location.origin}/card/${state.detail.card.id}`} /> : null}
       </div>
       <div className="band">
         {state.state === 'loading' ? (
