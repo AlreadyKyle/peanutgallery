@@ -22,7 +22,7 @@ const CLASSES = ['writer', 'planner', 'reviewer', 'read_only', 'web_only'];
 // The roster: the nine launch roles and the seven added on 23 September 2026 with no tools and a
 // budget_share of 0, each with its place in the launch roster (README.md).
 const LAUNCH_VALUES = {
-  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'running' },
+  'studio-head': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'terse', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'planner', status: 'planned' },
   'game-designer': { model: 'MODEL_DIRECTOR', budget_share: 0, voice: 'precise', tools: DESIGNER_SET, metrics: ['estimate_accuracy', 'first_pass_rate'], class: 'planner', status: 'running' },
   'game-director': { model: 'MODEL_DIRECTOR', budget_share: 0.1, voice: 'firm', tools: READ_SET, metrics: ['estimate_accuracy', 'cost_per_ship'], class: 'reviewer', status: 'running' },
   'builder-a': { model: 'MODEL_BUILDER', budget_share: 0.2, voice: 'plain', tools: WRITE_SET, metrics: ['first_pass_rate', 'cost_per_ship', 'estimate_accuracy'], class: 'writer', status: 'running' },
@@ -41,7 +41,7 @@ const LAUNCH_VALUES = {
 };
 
 // The roles that run at launch, from the launch plan's roster.
-const RUNNING = ['Studio Head', 'Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director', 'Janitor'];
+const RUNNING = ['Game Designer', 'Game Director', 'Builder A', 'Builder B', 'QA', 'Platform Builder', 'Platform Director', 'Janitor'];
 
 function readSchemaFromReadme() {
   const readme = readFileSync(join(agentsDir, 'README.md'), 'utf8');

@@ -15,7 +15,7 @@ async function screenshot(page: Page, name: string, width: number): Promise<void
 }
 
 // The roles the roster marks running whose lane is open, in /team's order (by title).
-const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA', 'Studio Head'];
+const RUNNING_ROLES = ['Builder A', 'Builder B', 'Game Designer', 'Game Director', 'Janitor', 'Platform Director', 'QA'];
 // The running roles that run on a model: all but the code-only Janitor.
 const MODEL_ROLES = RUNNING_ROLES.filter((title) => title !== 'Janitor');
 
@@ -111,7 +111,7 @@ for (const viewport of WIDTHS) {
       ]);
       await expect(starts.locator('#agent-r-platform-builder')).toContainText('Starts when the board opens the studio code lane.');
       await expect(starts.locator('#agent-r-community')).toContainText('Starts once a named moderator is in place for the community channels.');
-      await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host']);
+      await expect(planned.getByRole('heading', { level: 3 })).toHaveText(['Host', 'Studio Head']);
       // The board block sits at the foot, after every section (docs/specs/copy-pass.md).
       await expect(page.getByRole('main').locator('section h2')).toHaveText(['Running', 'Starts later', 'Planned', 'Who runs it']);
       await expect(page.locator('main > .band').last().getByRole('region', { name: 'Who runs it', exact: true })).toContainText('Kyle Smith');
