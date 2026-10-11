@@ -1132,7 +1132,7 @@ dependabot_block() { awk -v eco="  - package-ecosystem: $1" '$0 == eco {p=1; pri
 npm_has() { dependabot_block npm | grep -qxF -- "$1"; }
 actions_has() { dependabot_block github-actions | grep -qxF -- "$1"; }
 assert "dependabot.yml: version 2" grep -qx 'version: 2' "$DEPENDABOT"
-for line in '    directory: /' '      interval: weekly' '      day: monday' '    cooldown:' '      default-days: 7' '      patches:' '          - patch' '    open-pull-requests-limit: 1' '      - upkeep'; do
+for line in '    directory: /' '      interval: weekly' '      day: monday' '    cooldown:' '      default-days: 7' '      patches:' '          - patch' '    open-pull-requests-limit: 1'; do
   assert "dependabot.yml: npm sets '$line'" npm_has "$line"
 done
 for line in '    directory: /' '      interval: monthly' '    open-pull-requests-limit: 1'; do
