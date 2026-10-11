@@ -184,7 +184,7 @@ describe('methods, paths and the config', () => {
 
   it('names its three paths, with no method, and sets the 300-a-minute rate limit per IP and domain', () => {
     expect(config).toEqual({
-      path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks'],
+      path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe'],
       rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
     });
     expect(config).not.toHaveProperty('method');

@@ -34,20 +34,28 @@ export function ExplainerVideo() {
   const [started, setStarted] = useState(false);
   const reduced = useReducedMotion();
   const preview = useRef<HTMLVideoElement>(null);
+  // The viewer can stop the looping preview (WCAG 2.2.2); a paused loop stays paused.
+  const [looping, setLooping] = useState(true);
 
   // React sets muted as a property only, and some browsers then refuse to autoplay; mute and start
   // the loop from here instead.
   useEffect(() => {
     const element = preview.current;
-    if (element === null) return;
+    if (element === null || !looping) return;
     element.muted = true;
     element.setAttribute('muted', '');
     const play = () => void element.play().catch(() => undefined);
     play();
     element.addEventListener('canplay', play);
     return () => element.removeEventListener('canplay', play);
-  }, [reduced, started]);
+  }, [reduced, started, looping]);
   const words = legal.explainer;
+
+  function toggleLoop() {
+    const element = preview.current;
+    if (looping) element?.pause();
+    setLooping(!looping);
+  }
 
   function start() {
     setStarted(true);
@@ -77,10 +85,18 @@ export function ExplainerVideo() {
               <img src={file('wide', 'jpg')} alt="" width={1920} height={1080} />
             </picture>
             {reduced ? null : (
-              <video ref={preview} className="explainer-loop" autoPlay muted loop playsInline aria-hidden="true" tabIndex={-1}>
+              <video ref={preview} className="explainer-loop" autoPlay={looping} muted loop playsInline aria-hidden="true" tabIndex={-1}>
                 <source media={PHONE} src={loop('tall')} type="video/mp4" />
                 <source src={loop('wide')} type="video/mp4" />
               </video>
+            )}
+            {reduced ? null : (
+              <button type="button" className="explainer-loop-toggle" aria-label={looping ? words.pauseLoop : words.playLoop} onClick={(event) => {
+                  event.stopPropagation();
+                  toggleLoop();
+                }}>
+                <Glyph name={looping ? 'pause' : 'play'} />
+              </button>
             )}
             <button type="button" className="explainer-play" onClick={(event) => {
                 event.stopPropagation();

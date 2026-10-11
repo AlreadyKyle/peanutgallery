@@ -2,22 +2,24 @@
 // image from the read-only code clone, each with its own env file:
 //   node platform/ops/jobs/main.mjs controller [--dry-run]
 //   node platform/ops/jobs/main.mjs quota [--dry-run]
+//   node platform/ops/jobs/main.mjs notices [--dry-run]   (docs/specs/ship-notices.md)
 // --dry-run reads everything and prints the result, but writes no controller_runs row, reinstates no
 // dispute and alerts nobody. The first output line is PASS: or FAIL:. A run that finds a mismatch
 // exits 0 (the board is alerted); one that cannot run exits 1, and the unit's OnFailure alert fires.
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runController } from './controller.mjs';
+import { runNotices } from './notices.mjs';
 import { runQuota } from './quota.mjs';
 
-export const JOBS = { controller: runController, quota: runQuota };
+export const JOBS = { controller: runController, quota: runQuota, notices: runNotices };
 
 export async function main(argv, env = process.env, deps = {}) {
   const [job, ...flags] = argv;
   const run = JOBS[job];
   const unknown = flags.filter((flag) => flag !== '--dry-run');
   if (!run || unknown.length > 0) {
-    (deps.err ?? process.stderr).write('usage: node platform/ops/jobs/main.mjs controller|quota [--dry-run]\n');
+    (deps.err ?? process.stderr).write('usage: node platform/ops/jobs/main.mjs controller|quota|notices [--dry-run]\n');
     return 2;
   }
   try {

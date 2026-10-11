@@ -11,6 +11,12 @@ export const JOB_KEYS = {
     required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_READ_KEY', 'NTFY_TOPIC_URL'],
     optional: ['CONTROLLER_HEALTHCHECK_URL'],
   },
+  // The ship notices (docs/specs/ship-notices.md): the Stripe read key for each session's receipt
+  // address, and the studio's Resend key to send.
+  notices: {
+    required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_READ_KEY', 'RESEND_API_KEY', 'NTFY_TOPIC_URL'],
+    optional: ['NOTICES_HEALTHCHECK_URL'],
+  },
   quota: {
     required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GITHUB_BILLING_TOKEN', 'GITHUB_BILLING_USER', 'NTFY_TOPIC_URL'],
     optional: ['QUOTA_HEALTHCHECK_URL', 'DATABASE_ALERT_MB', 'ACTIONS_MINUTES_INCLUDED', 'ACTIONS_MINUTES_FLOOR'],
@@ -41,7 +47,7 @@ export const MAC_JOBS = ['backup-mac', 'controller', 'quota'];
 const OWNER_DB_URL = /^postgres(ql)?:\/\/postgres[.:@]/;
 
 // Keys whose value must be an https URL.
-export const URL_KEYS = ['SUPABASE_URL', 'NTFY_TOPIC_URL', 'CONTROLLER_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'BACKUP_PAR_URL', 'BACKUP_HEALTHCHECK_URL'];
+export const URL_KEYS = ['SUPABASE_URL', 'NTFY_TOPIC_URL', 'CONTROLLER_HEALTHCHECK_URL', 'NOTICES_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'BACKUP_PAR_URL', 'BACKUP_HEALTHCHECK_URL'];
 
 // Stripe secret keys can move money. No job holds one under any name; the Controller reads Stripe
 // only with a restricted live key.
@@ -86,6 +92,8 @@ export function jobEnvProblems(job, env) {
   }
   const read = (env.STRIPE_READ_KEY ?? '').trim();
   if (read && !read.startsWith(STRIPE_READ_PREFIX)) problems.push(`STRIPE_READ_KEY must be a restricted live key (${STRIPE_READ_PREFIX}...)`);
+  const resend = (env.RESEND_API_KEY ?? '').trim();
+  if (resend && !/^re_[A-Za-z0-9_]{8,}$/.test(resend)) problems.push('RESEND_API_KEY must be a Resend API key (re_...)');
   const recipient = (env.BACKUP_AGE_RECIPIENT ?? '').trim();
   if (recipient && !/^age1[0-9a-z]{58}$/.test(recipient)) problems.push('BACKUP_AGE_RECIPIENT must be one age public key (age1...)');
   const dbUrl = (env.BACKUP_DB_URL ?? '').trim();

@@ -11,17 +11,18 @@ They run in a private repository, never in this one: this repository is public, 
 | `backup` | 06:17 daily | `platform/ops/mac/backup-mac.sh` with `BACKUP_PG_BIN=/usr/lib/postgresql/17/bin` (`postgresql-client-17` from the PostgreSQL apt repository) and `BACKUP_DIR=$RUNNER_TEMP/backups`, up to 3 attempts a minute apart, then the `.tar.age` uploaded as an artifact kept 90 days |
 | `controller` | 07:07 daily | `jobs/check-env.mjs controller`, then `node --env-file jobs/main.mjs controller` |
 | `quota` | 07:37 daily | `jobs/check-env.mjs quota`, then `node --env-file jobs/main.mjs quota` |
+| `notices` | 09:07 daily | `jobs/check-env.mjs notices`, then `node --env-file jobs/main.mjs notices`: the ship notices (`docs/specs/ship-notices.md`), at most 50 a run |
 
 `workflow_dispatch` with the input `job` runs any one of them at once. A failure posts "Mob Machine job <job> failed on GitHub Actions: <run URL>" to ntfy.
 
-The job code is this repository's `platform/ops` (and `platform/supabase/functions/_shared`, which the Controller imports) at the commit in the variable `STUDIO_REF`, a full sha, checked out sparsely with no credential kept. A commit on main reaches the jobs' secrets only once someone sets `STUDIO_REF` to it, so **moving `STUDIO_REF` to the deployed sha is part of every deploy** that changes `platform/ops`: review the diff of `platform/ops` since the old sha first.
+The job code is this repository's `platform/ops` (and `platform/supabase/functions/_shared`, which the Controller imports, and `platform/site`, whose `netlify.toml` gives the ship notices the game's play address) at the commit in the variable `STUDIO_REF`, a full sha, checked out sparsely with no credential kept. A commit on main reaches the jobs' secrets only once someone sets `STUDIO_REF` to it, so **moving `STUDIO_REF` to the deployed sha is part of every deploy** that changes `platform/ops`: review the diff of `platform/ops` since the old sha first.
 
 ## Set it up (once)
 
 1. Create a private repository in the board's account (`AlreadyKyle/mobmachine-ops`) and commit `jobs.yml` as `.github/workflows/jobs.yml`.
-2. Secrets, in Settings, Secrets and variables, Actions: `BACKUP_ENV`, `CONTROLLER_ENV` and `QUOTA_ENV`, each the text of that job's env file as `make-jobs-env.sh` writes it (`backup-mac controller quota`; the workflow replaces `BACKUP_DIR`), with `gh secret set BACKUP_ENV --repo AlreadyKyle/mobmachine-ops < <file>`; and `NTFY_TOPIC_URL`.
+2. Secrets, in Settings, Secrets and variables, Actions: `BACKUP_ENV`, `CONTROLLER_ENV`, `QUOTA_ENV` and `NOTICES_ENV`, each the text of that job's env file as `make-jobs-env.sh` writes it (`backup-mac controller quota notices`; the workflow replaces `BACKUP_DIR`), with `gh secret set BACKUP_ENV --repo AlreadyKyle/mobmachine-ops < <file>`; and `NTFY_TOPIC_URL`.
 3. Variable `STUDIO_REF`: the full sha of main to run.
-4. Run each job once (`gh workflow run jobs.yml --repo AlreadyKyle/mobmachine-ops -f job=backup`, then `controller`, then `quota`) and read its log: the backup ends `backup: done: peanutgallery-<time>.tar.age`.
+4. Run each job once (`gh workflow run jobs.yml --repo AlreadyKyle/mobmachine-ops -f job=backup`, then `controller`, then `quota`; run `notices` only after the ship-notices migration is applied, first with `node --env-file <file> platform/ops/jobs/main.mjs notices --dry-run` on the Mac) and read its log: the backup ends `backup: done: peanutgallery-<time>.tar.age`.
 
 ## Restore
 
@@ -29,4 +30,4 @@ Download the artifact (`gh run download <run id> --repo AlreadyKyle/mobmachine-o
 
 ## What it costs
 
-A private repository's Actions minutes come from the account's free 2,000 a month; the three jobs use a few minutes a day. The dispatcher's own runs are in the public studio repository, where minutes are free.
+A private repository's Actions minutes come from the account's free 2,000 a month; the four jobs use a few minutes a day. The dispatcher's own runs are in the public studio repository, where minutes are free.

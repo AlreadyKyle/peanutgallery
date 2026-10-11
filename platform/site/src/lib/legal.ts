@@ -212,6 +212,9 @@ export const legal = {
   explainer: {
     heading: 'Watch how it works',
     play: 'Play the video',
+    // The preview loop's own control (WCAG 2.2.2): it names the loop, not the video.
+    pauseLoop: 'Pause the preview',
+    playLoop: 'Play the preview',
     agents: 'The agents',
     studio: 'The studio',
     beats: [
@@ -486,7 +489,7 @@ export const legal = {
     'Contributing means you accept the {terms} in force when your checkout starts, including the {refunds}. To contribute you must be an adult where you live, or have the permission of a parent or guardian.',
   fundAgreement: "By funding you accept the {terms} and the {refunds}, and confirm you are an adult or have a guardian's permission.",
   // Privacy is a notice with its own date, not part of a Terms version.
-  privacyUpdated: 'Last updated 24 September 2026.',
+  privacyUpdated: 'Last updated 11 October 2026.',
   privacy: {
     title: 'Privacy',
     lede: 'What the studio stores when you contribute, and what it does not.',
@@ -501,6 +504,14 @@ export const legal = {
           "For each contribution the studio stores the amount, the split you chose, the card you funded, the time, Stripe's reference for the payment, a one-way hash of the email address Stripe collects and, when Stripe provides one, a one-way hash of the identifier Stripe gives your payment card. The email address and the card number are not stored.",
           'The card hash is used only to apply the $50 daily limit, so one person paying with several email addresses shares one limit.',
           "The studio's database does not store your name. Stripe keeps the name on your card with its record of the payment.",
+        ],
+      },
+      {
+        // docs/specs/ship-notices.md
+        heading: 'Ship notices',
+        paragraphs: [
+          'When a card your contribution reached ships, the studio sends one email to the address Stripe collected at checkout, saying the card is live, what the agents spent on it and where to play. The studio reads the address from Stripe when it sends and does not store it. The email is sent through Resend.',
+          'Every notice has a link to stop them. After you use it the studio sends you no more, for any contribution made with that email address.',
         ],
       },
       {

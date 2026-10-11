@@ -1,3 +1,4 @@
+import { CardsStatus } from '../components/CardsStatus';
 import { EventList } from '../components/EventList';
 import { ExplainerVideo } from '../components/ExplainerVideo';
 import { FundNow, MachineFlow } from '../components/Flow';
@@ -130,6 +131,10 @@ function FundSection({ studio, live }: { studio: StudioState; live: ReturnType<t
     <section className="section" aria-labelledby="fund">
       <h2 id="fund">{copy.flow.fundTitle}</h2>
       <p>{copy.flow.fundIntro}</p>
+      <CardsStatus
+        count={view !== null ? view.groups.fund.length : null}
+        unavailable={view === null && studio.state !== 'loading'}
+      />
       {view !== null ? (
         <FundNow cards={view.groups.fund} snapshot={view.snapshot} changed={live.changed} />
       ) : studio.state === 'loading' ? (
