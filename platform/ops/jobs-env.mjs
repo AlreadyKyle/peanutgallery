@@ -5,13 +5,16 @@
 //                   pre-authenticated request and the backup healthcheck;
 //   controller.env  the Supabase service key and the restricted Stripe read key;
 //   quota.env       the Supabase service key and the dispatcher's GitHub token for its Plan read;
+//   notices.env     the Supabase service key, the restricted Stripe read key and the studio's Resend
+//                   key (RESEND_SMTP_KEY in .env, the key Supabase Auth's email already sends with;
+//                   docs/specs/ship-notices.md). Written only when asked for by name.
 //   backup-mac.env  on the Mac host, the backup login, the board's age public key, the folder the
 //                   backups go to and the backup healthcheck (docs/specs/mac-host.md). Written only
 //                   when asked for by name.
 // No value is ever printed; every message names keys only. A job whose keys are not all there yet is
 // refused and named, and the others are still written.
 //
-// usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota ...]
+// usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota|notices ...]
 import { chmodSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
@@ -19,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { JOB_KEYS, VPS_JOBS, jobEnvProblems, jobKeys } from './jobs/lib.mjs';
 
 // Exported by the operator in the Mac shell (from .env.vps), never read from .env.
-export const JOB_OPERATOR_KEYS = ['NTFY_TOPIC_URL', 'BACKUP_HEALTHCHECK_URL', 'VPS_GITHUB_TOKEN', 'CONTROLLER_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL'];
+export const JOB_OPERATOR_KEYS = ['NTFY_TOPIC_URL', 'BACKUP_HEALTHCHECK_URL', 'VPS_GITHUB_TOKEN', 'CONTROLLER_HEALTHCHECK_URL', 'QUOTA_HEALTHCHECK_URL', 'NOTICES_HEALTHCHECK_URL'];
 
 // Each job's entries, in the order jobKeys gives, from .env and the operator's values.
 export function jobEnvEntries(job, dotenvText, operator) {
@@ -34,6 +37,8 @@ export function jobEnvEntries(job, dotenvText, operator) {
     NTFY_TOPIC_URL: fromOperator('NTFY_TOPIC_URL'),
     CONTROLLER_HEALTHCHECK_URL: fromOperator('CONTROLLER_HEALTHCHECK_URL'),
     QUOTA_HEALTHCHECK_URL: fromOperator('QUOTA_HEALTHCHECK_URL'),
+    NOTICES_HEALTHCHECK_URL: fromOperator('NOTICES_HEALTHCHECK_URL'),
+    RESEND_API_KEY: fromDotenv('RESEND_API_KEY') || fromDotenv('RESEND_SMTP_KEY'),
     GITHUB_BILLING_TOKEN: fromOperator('VPS_GITHUB_TOKEN'),
     GITHUB_BILLING_USER: owner,
     DATABASE_ALERT_MB: fromDotenv('DATABASE_ALERT_MB'),
@@ -68,7 +73,7 @@ export function jobEnvText(job, entries) {
 
 function main(argv) {
   if (argv.length < 2) {
-    process.stderr.write('usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota ...]\n');
+    process.stderr.write('usage: node platform/ops/jobs-env.mjs <dotenv-file> <output-folder> [backup|backup-mac|controller|quota|notices ...]\n');
     return 2;
   }
   const [dotenvFile, outDir, ...asked] = argv;

@@ -5,13 +5,16 @@
 //   POST /api/thanks    thanks_for_session(p_session): never cached
 //   GET  /api/card/:id/preview.png  the card's 1200×630 link preview, drawn from site_card's answer
 //        (netlify/lib/card-preview.ts; docs/specs/card-preview.md): the CDN keeps it 10 minutes
+//   GET|POST /api/unsubscribe  the ship notices' one-click unsubscribe (netlify/lib/unsubscribe.ts;
+//        docs/specs/ship-notices.md): never cached; it shares this function's rate limit
 //
 // Each is one call to Supabase's RPC endpoint with the publishable key, so the function reads only
-// what anon may read. A card id that is not a uuid, and any query string on /api/card (which Netlify
+// what anon may read (the unsubscribe writes only when the database finds its token matches). A card id that is not a uuid, and any query string on /api/card (which Netlify
 // would put in the cache key), answer 400 before Supabase is called. /api/thanks takes a JSON body
 // of at most 1 KB holding one well-formed Checkout Session id, and every answer it gives is no-store.
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../lib/public-env.ts';
+import { unsubscribe, UNSUBSCRIBE_PATH } from '../lib/unsubscribe.ts';
 
 /** How long one RPC call may take before the function answers 502. */
 export const RPC_TIMEOUT_MS = 8_000;
@@ -125,6 +128,7 @@ async function thanks(req: Request): Promise<Response> {
 // Netlify calls the default export with (request, context); the tests stub globalThis.fetch.
 export default async function cardFunction(req: Request): Promise<Response> {
   const url = new URL(req.url);
+  if (url.pathname === UNSUBSCRIBE_PATH) return unsubscribe(req);
   if (url.pathname === '/api/thanks') {
     if (req.method !== 'POST') return refuse(405, 'Only POST is allowed', { Allow: 'POST' });
     return thanks(req);
@@ -150,6 +154,6 @@ type FunctionConfig = {
 // and /api/cards too, and readers behind one address (a school, an office) share the limit. The
 // preview shares this rule, so drawing images takes no rule of its own.
 export const config: FunctionConfig = {
-  path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks'],
+  path: ['/api/card/:id', '/api/card/:id/preview.png', '/api/thanks', '/api/unsubscribe'],
   rateLimit: { windowLimit: 300, windowSize: 60, aggregateBy: ['ip', 'domain'] },
 };

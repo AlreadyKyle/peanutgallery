@@ -284,6 +284,7 @@ Deno.test("migrations on PGlite", {
         "20261011100000_always_open.sql",
         "20261011200000_supply_every_minute.sql",
         "20261011300000_role_stats_public_only.sql",
+        "20261011400000_ship_notices.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -334,10 +335,13 @@ Deno.test("migrations on PGlite", {
         "job_runs",
         "jobs",
         "ledger",
+        "notice_unsubscribes",
         "outbound_posts",
         "pool",
         "roles",
         "scores",
+        "ship_notice_settings",
+        "ship_notices",
         "standing_costs",
         "stream_state",
         "studio_reports",
@@ -4098,6 +4102,9 @@ Deno.test("migrations on PGlite", {
           "resume_due_by_rule",
           "reverse_contribution",
           "schema_fingerprint",
+          "ship_notice_claim",
+          "ship_notice_settle",
+          "ship_notices_due",
           "studio_spend_totals",
           "supply_draft_check",
           "terms_version_at",
@@ -4110,7 +4117,10 @@ Deno.test("migrations on PGlite", {
         // helper public_agent_events calls, a card's own document and the /thanks answer.
         // studio-reports adds the weekly reports' document (docs/specs/studio-reports.md).
         // home-flow-supply adds the drafting status site_live() carries in its studio entry.
-        const everyone = ["card_is_public", "event_line_key", "public_supply", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
+        // ship-notices adds the unsubscribe the site's /api/unsubscribe calls with the publishable key,
+        // which writes only with a matching token (docs/specs/ship-notices.md); its token function is
+        // no role's, so it is listed with the trigger functions below.
+        const everyone = ["card_is_public", "event_line_key", "public_supply", "ship_notice_unsubscribe", "site_card", "site_cards", "site_live", "site_reports", "thanks_for_session"];
         assertEquals(
           privileges.map((p) => p.proname),
           [
@@ -4123,6 +4133,7 @@ Deno.test("migrations on PGlite", {
             "restrict_auth_users_to_board",
             "set_live_at",
             "set_updated_at",
+            "ship_notice_token",
             "stamp_launched_at",
             "studio_pause_reason",
           ].sort(),
