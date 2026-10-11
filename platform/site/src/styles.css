@@ -1117,7 +1117,8 @@ button.link:hover:not(:disabled) {
 
 /* Home with no card open for funding: one wide panel on the primary fill that funds the next card in
    line and says what the Game Designer is doing, so the first band never reads empty. */
-.fund-empty {
+.fund-empty,
+.fund-next {
   display: grid;
   justify-items: start;
   gap: var(--space-2);
@@ -1127,7 +1128,12 @@ button.link:hover:not(:disabled) {
   color: var(--primary-fg);
 }
 
-.fund-empty > p {
+.fund-next {
+  align-content: start;
+}
+
+.fund-empty > p,
+.fund-next > p {
   max-width: var(--measure-text);
   margin: 0;
 }

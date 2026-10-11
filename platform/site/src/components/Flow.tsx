@@ -132,6 +132,22 @@ export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snap
         {shown.map((card) => (
           <CardFace key={card.id} card={card} snapshot={snapshot} changed={changed[card.id]} />
         ))}
+        {/* There is always more than one way to fund (decision 73): beside the open cards, the next
+            card in line, which needs no draft, so it is there however few cards are open. */}
+        <li className="fund-next">
+          <p className="fund-empty-title">{legal.pickForMe}</p>
+          <p>{legal.fundNextBody}</p>
+          <p className="fund-empty-agent">
+            <Glyph name="pencil" />
+            <span>{draftingLine(snapshot).text}</span>
+          </p>
+          {env.stripePaymentLinkUrl === '' ? null : (
+            <Link className="button btn-coin" to="/contribute">
+              <CoinMark />
+              {copy.contribute}
+            </Link>
+          )}
+        </li>
       </ul>
       {shown.some((card) => liveFundLink(card, snapshot)) ? <FundAgreement /> : null}
       {cards.length > HOME_FUND_CARDS ? <MoreLinkLine to="/contribute" words={copy.flow.fundMore.replace('{n}', String(cards.length))} /> : null}

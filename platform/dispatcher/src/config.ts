@@ -122,7 +122,7 @@ export function visualReviewMaxUsdEnv(env: Env): number {
 export const DRAFT_SESSION_MIN_USD = 0.35;
 
 export function draftSessionMaxUsdEnv(env: Env): number {
-  const value = numberEnv(env, 'DRAFT_SESSION_MAX_USD', 0.75);
+  const value = numberEnv(env, 'DRAFT_SESSION_MAX_USD', 0.45);
   if (value < DRAFT_SESSION_MIN_USD) throw new ConfigError(`DRAFT_SESSION_MAX_USD must be at least ${DRAFT_SESSION_MIN_USD}`);
   return value;
 }
