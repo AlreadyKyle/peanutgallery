@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { legal } from '../lib/legal';
@@ -99,14 +99,14 @@ describe('Contribute', () => {
     );
     expect(screen.getByRole('heading', { level: 1, name: legal.contributeTitle })).toBeTruthy();
     const links = () => screen.getAllByRole('link');
-    expect(links()[0]?.getAttribute('href')).toBe(STRIPE);
+    expect(links()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split20`);
     await waitFor(() => expect(links()[0]?.textContent).toBe(`${legal.pickForMe}${legal.nextInLine.replace('{title}', 'Refunded below its target')}`));
 
     const choices = screen.getAllByRole('listitem').map((item) => within(item).getByRole('link'));
     expect(choices.map((a) => a.getAttribute('href'))).toEqual([
-      `${STRIPE}?client_reference_id=refunded`,
-      `${STRIPE}?client_reference_id=s1`,
-      `${STRIPE}?client_reference_id=g1`,
+      `${STRIPE}?client_reference_id=refunded_split20`,
+      `${STRIPE}?client_reference_id=s1_split20`,
+      `${STRIPE}?client_reference_id=g1_split20`,
     ]);
     expect(within(choices[2]!).getByText('A new name.')).toBeTruthy();
     expect(screen.queryByText('Vetoed card')).toBeNull();
@@ -183,7 +183,7 @@ describe('Contribute', () => {
   it('keeps Fund the next card in line when no card needs funding, and says so', async () => {
     renderContribute(source([]));
     await waitFor(() => expect(screen.getByText(legal.noFundableCards)).toBeTruthy());
-    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).getAttribute('href')).toBe(STRIPE);
+    expect(screen.getByRole('link', { name: new RegExp(legal.pickForMe) }).getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split20`);
   });
 
   it('says the figures may be out of date when a refresh fails', async () => {
@@ -210,5 +210,32 @@ describe('Contribute', () => {
     renderContribute(null);
     expect(screen.getByText(legal.contributeUnavailable)).toBeTruthy();
     expect(screen.queryByRole('link', { name: new RegExp(legal.pickForMe) })).toBeNull();
+  });
+});
+
+describe('Contribute split slider (docs/specs/split-slider.md)', () => {
+  it('starts at 80/20 and carries the chosen split on every checkout link beside the card id', async () => {
+    renderContribute(source([card({ id: 'g1', title: 'Goal' })]));
+    const slider = screen.getByRole('slider', { name: legal.splitLabel }) as HTMLInputElement;
+    expect(slider.value).toBe('80');
+    expect(slider.getAttribute('aria-valuetext')).toBe('80% to the agents, 20% to the studio');
+    expect([slider.getAttribute('min'), slider.getAttribute('max'), slider.getAttribute('step')]).toEqual(['0', '100', '10']);
+    expect(screen.getByText('Agents 80%')).toBeTruthy();
+    expect(screen.getByText('Studio 20%')).toBeTruthy();
+    expect(screen.getByText(/Fixed, whatever you choose: 10% of every contribution/)).toBeTruthy();
+    await waitFor(() => expect(checkoutLinks()).toHaveLength(2));
+
+    fireEvent.change(slider, { target: { value: '30' } });
+    expect(slider.getAttribute('aria-valuetext')).toBe('30% to the agents, 70% to the studio');
+    expect(screen.getByText('Agents 30%')).toBeTruthy();
+    expect(checkoutLinks().map((a) => a.getAttribute('href'))).toEqual([
+      `${STRIPE}?client_reference_id=split70`,
+      `${STRIPE}?client_reference_id=g1_split70`,
+    ]);
+
+    fireEvent.change(slider, { target: { value: '0' } });
+    expect(checkoutLinks()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split100`);
+    fireEvent.change(slider, { target: { value: '100' } });
+    expect(checkoutLinks()[0]?.getAttribute('href')).toBe(`${STRIPE}?client_reference_id=split0`);
   });
 });
