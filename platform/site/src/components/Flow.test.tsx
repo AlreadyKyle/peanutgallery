@@ -85,7 +85,9 @@ function more(name: Lane): HTMLAnchorElement | null {
 }
 
 const open = (n: number) => Array.from({ length: n }, (_, i) => card({ id: `o${i}`, title: `Open ${i + 1}`, created_at: `2026-09-14T00:00:0${i}Z` }));
-const planned = (n: number) => Array.from({ length: n }, (_, i) => card({ id: `p${i}`, title: `Planned ${i + 1}`, horizon: 'next', rank: i + 1 }));
+// Approved agent cards waiting to open: the only cards Next up holds (docs/specs/always-open.md).
+const planned = (n: number) =>
+  Array.from({ length: n }, (_, i) => card({ id: `p${i}`, title: `Planned ${i + 1}`, horizon: 'next', rank: i + 1, opens_at: `2026-10-${11 + i}T00:00:00Z` }));
 const live = (n: number) =>
   Array.from({ length: n }, (_, i) => card({ id: `l${i}`, title: `Live ${i + 1}`, stage: 'live', shape: 'oneoff', funding_target_usd: 0, live_at: `2026-09-${10 + i}T00:00:00Z` }));
 
@@ -137,9 +139,10 @@ describe('MachineFlow', () => {
     expect(lane('building').querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '4'));
   });
 
-  it('links Next up to the roadmap, Shipped to the reports, and Building nowhere', () => {
+  it('links Shipped to the reports, and Next up and Building nowhere (there is no roadmap page)', () => {
     renderFlow(snapshot([...planned(1), ...open(4), ...live(1)]));
-    expect([more('next')?.textContent, more('next')?.getAttribute('href')]).toEqual([copy.flow.lanes.next.more, '/roadmap']);
+    expect(more('next')).toBeNull();
+    expect(document.querySelector('a[href="/roadmap"]')).toBeNull();
     expect([more('shipped')?.textContent, more('shipped')?.getAttribute('href')]).toEqual([copy.flow.lanes.shipped.more, '/reports']);
     expect(more('building')).toBeNull();
     expect(document.querySelector('a[href="/contribute"]')).toBeNull();
@@ -177,7 +180,7 @@ describe('MachineFlow', () => {
   });
 
   describe('Next up', () => {
-    it('draws its cards on the planned face, approved agent cards first, then planned cards, then board work, never a held one', () => {
+    it('draws only approved agent cards waiting to open, on the planned face: never the backlog, board work or a held card', () => {
       renderFlow(
         snapshot([
           card({ id: 'board', title: 'Board work', horizon: 'next', rank: 1, board_work: true }),
@@ -187,11 +190,12 @@ describe('MachineFlow', () => {
           card({ id: 'now', title: 'Open now', horizon: 'now' }),
         ]),
       );
-      expect(titles('next')).toEqual(['Opens soon', 'Planned', 'Board work']);
+      expect(titles('next')).toEqual(['Opens soon']);
       const faces = [...lane('next').querySelectorAll('li.card')] as HTMLElement[];
-      expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['planned', 'planned', 'planned']);
-      expect(faces.map((li) => li.querySelector('.card-bottom .card-meta')?.textContent)).toEqual([copy.roadmap.opensSoon, copy.flow.planned, copy.flow.boardWork]);
-      expect(lane('next').querySelector('.flow-count')?.textContent).toBe(copy.flow.count.replace('{n}', '3'));
+      expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['planned']);
+      expect(faces.map((li) => li.querySelector('.card-bottom .card-meta')?.textContent)).toEqual([copy.roadmap.opensSoon]);
+      expect(lane('next').querySelector('.flow-count')?.textContent).toBe(copy.flow.countOne);
+      expect(screen.queryByText('Board work')).toBeNull();
       // A planned card takes no money: no bar, no spec rows, no fund link.
       expect(within(lane('next')).queryByRole('progressbar')).toBeNull();
       expect(lane('next').querySelector('.spec-rows')).toBeNull();
@@ -200,10 +204,9 @@ describe('MachineFlow', () => {
       expect(screen.queryByText('Open now')).toBeNull();
     });
 
-    it('stands in a tile for an empty lane and keeps the roadmap link', () => {
+    it('stands in a tile for an empty lane', () => {
       renderFlow(snapshot(open(1)));
       expect(lane('next').querySelector('.flow-empty')?.textContent).toBe(copy.flow.lanes.next.empty);
-      expect(more('next')?.getAttribute('href')).toBe('/roadmap');
     });
 
     it.each([
@@ -238,7 +241,7 @@ describe('MachineFlow', () => {
         card({ id: 'ln', title: 'Shipped from next', stage: 'live', shape: 'oneoff', funding_target_usd: 0, horizon: 'next', live_at: '2026-09-16T00:00:00Z' }),
         card({ id: 'll', title: 'Shipped from later', stage: 'live', shape: 'oneoff', funding_target_usd: 0, horizon: 'later', live_at: '2026-09-15T00:00:00Z' }),
       ];
-      renderFlow(snapshot([...shipped, card({ id: 'p', title: 'Still planned', horizon: 'next' })]));
+      renderFlow(snapshot([...shipped, card({ id: 'p', title: 'Still planned', horizon: 'next', opens_at: '2026-10-11T00:00:00Z' })]));
       expect(titles('shipped')).toEqual(['Shipped from next', 'Shipped from later']);
       const faces = [...lane('shipped').querySelectorAll('li.card')] as HTMLElement[];
       expect(faces.map((li) => li.getAttribute('data-face'))).toEqual(['live', 'live']);

@@ -256,7 +256,7 @@ test.describe('/ledger Stopped cards', () => {
     ).toBeVisible();
     // The codes never show, and stopped cards appear on no other page.
     await expect(band.getByText(/ceiling|smoke/)).toHaveCount(0);
-    for (const path of ['/', '/contribute', '/roadmap']) {
+    for (const path of ['/', '/contribute']) {
       await page.goto(path);
       await expect(page.getByRole('main').getByText('A card that paused')).toHaveCount(0);
       await expect(page.getByRole('main').getByText('A card that did not ship')).toHaveCount(0);

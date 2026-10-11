@@ -172,7 +172,7 @@ test('the title renders once, where it stays, while the card loads', async ({ pa
 });
 
 test.describe('a planned card', () => {
-  test('draws the roadmap state and no face, never Open for funding', async ({ page }) => {
+  test('draws the planned state and no face, never Open for funding', async ({ page }) => {
     for (const [id, label, reason] of [
       [PLANNED_CARD_ID, 'Planned and not built yet', null],
       [OPENS_SOON_ID, 'Approved, opens soon', null],
@@ -182,7 +182,7 @@ test.describe('a planned card', () => {
       const state = page.locator(`[data-planned="${id}"]`);
       await expect(state.locator('p').first()).toHaveText(label);
       if (reason !== null) await expect(state).toContainText(reason);
-      await expect(state.getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '/roadmap');
+      await expect(state.getByRole('link', { name: 'See the cards to fund' })).toHaveAttribute('href', '/');
       await expect(page.locator('main li.card')).toHaveCount(0);
       await expect(page.getByRole('main')).not.toContainText('Open for funding');
       await expect(page.getByRole('link', { name: 'Fund this card' })).toHaveCount(0);

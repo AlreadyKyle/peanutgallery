@@ -67,7 +67,7 @@ test.describe('the design guide', () => {
   test('asks not to be indexed and is linked from nowhere on the site', async ({ page }) => {
     await settle(page, GUIDE);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
-    for (const path of ['/', '/how-it-works', '/team', '/roadmap', '/contribute', '/ledger']) {
+    for (const path of ['/', '/how-it-works', '/team', '/contribute', '/ledger']) {
       await settle(page, path);
       await expect(page.locator(`a[href="${GUIDE}"]`)).toHaveCount(0);
     }
@@ -270,7 +270,7 @@ test.describe('bands with empty data', () => {
     await settle(page, '/');
     const money = page.locator('main > .band:nth-child(3)');
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
-    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'How the cards move']);
+    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Play the first game', 'Pick a card to fund', 'How the cards move']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
 });
@@ -325,10 +325,10 @@ test.describe('the weekly reports', () => {
 });
 
 test.describe('the weekly reports, none yet', () => {
-  test('say no report yet and link the roadmap', async ({ page }) => {
+  test('say no report yet and link the cards to fund', async ({ page }) => {
     await settle(page, '/reports');
     await expect(page.getByText('No weekly report yet. A report is published after a week in which a card shipped.')).toBeVisible();
-    await expect(page.getByRole('main').getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '/roadmap');
+    await expect(page.getByRole('main').getByRole('link', { name: 'See the cards to fund' })).toHaveAttribute('href', '/');
   });
 });
 

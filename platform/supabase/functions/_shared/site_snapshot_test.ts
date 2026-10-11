@@ -353,7 +353,7 @@ Deno.test("home-flow-supply: the live document's studio entry carries the drafti
         "boolean", "boolean", "number", "number", "string",
       ]);
       assert(doc.reason === null || /^[a-z_]+$/.test(doc.reason as string), `reason is a fixed code: ${doc.reason}`);
-      assertEquals([doc.runs_today, doc.run_limit], [0, 4]);
+      assertEquals([doc.runs_today, doc.run_limit], [0, 12]); // 20261011100000_always_open.sql raises the limit from 4
       // The next 20-minute slot after now: on a slot boundary, later than now and at most 20 minutes on.
       const next = new Date(doc.next_check_at as string);
       const now = (await s.row<{ now: Date }>(`select now() as now`)).now;

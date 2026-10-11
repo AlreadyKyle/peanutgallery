@@ -124,7 +124,7 @@ describe('Team', () => {
     expect(names(starts)).toEqual(['Platform Builder', 'Biz Dev', 'Community']);
     const planned = screen.getByRole('region', { name: team.planned });
     expect(names(planned)).toEqual(['Host']);
-    expect(within(planned).getByRole('link', { name: team.roadmapLink }).getAttribute('href')).toBe('/roadmap');
+    expect(within(planned).queryByRole('link')).toBeNull();
     expect(box('Builder A').getAttribute('data-status')).toBe('running');
     expect(box('Biz Dev').getAttribute('data-status')).toBe('starts');
     expect(box('Host').getAttribute('data-status')).toBe('planned');

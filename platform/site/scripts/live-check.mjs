@@ -12,14 +12,14 @@
 // bands in order (the top bar and band 1 on signal, band 2 on paper, then ink and paper in turn),
 // no dead space (scripts/layout-audit.mjs, the same checks as the layout balance e2e test), the
 // footer's Weekly reports, Terms, Privacy, Refunds and Contact links, no console errors and no Content Security
-// Policy report. The landing's h2 order, read from the page: Pick a card to fund, How the cards move,
+// Policy report. The landing's h2 order, read from the page: Play the first game, Pick a card to fund, How the cards move,
 // the team (only when there is one) and Where the money goes. Home's cards to fund
 // (docs/specs/home-flow.md) as full faces, at most three, or the panel that funds the next card in
 // line; then the flow: Next up, Building and Shipped in order, each with at most three cards or its
 // tile, never blank. The status
 // line, the pool figure, the shipped cards, the fund links and /contribute's choices. /how-it-works carries no Payment Link and no client_reference_id; /team
 // draws every agent in Running, Starts later and Planned, runs at least one, shows claude-opus-5-5 on
-// each running or paused row and no model on the rest; /roadmap shows no bar and no fund link. The
+// each running or paused row and no model on the rest; /roadmap answers with home (there is no roadmap page). The
 // newest live card's own page has its title as the one h1, its commit and a Supporters section;
 // /thanks with no session is a plain thank-you and a made-up session reads as recording with the
 // query dropped; /api/card/<not a uuid> is a 400 and /api/thanks answers it exactly pending, no-store
@@ -90,7 +90,6 @@ const ROUTES = [
   '/ledger',
   '/how-it-works',
   '/team',
-  '/roadmap',
   '/reports',
   '/terms',
   '/terms/1',
@@ -108,7 +107,7 @@ const FOOTER_LINKS = [
   ['Refunds', '/refunds'],
   ['Contact', '/contact'],
 ];
-const H2_ORDER = ['Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes'];
+const H2_ORDER = ['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes'];
 const OPTIONAL_H2 = new Set(['The team']);
 // Home's flow (docs/specs/home-flow.md): three lanes in this order, each with at most three cards or
 // its tile saying what happens next, never blank. The cards to fund sit above them, at most three.
@@ -606,10 +605,9 @@ try {
     );
   }
 
+  // There is no roadmap page (docs/specs/always-open.md): old links land on home's cards to fund.
   await open(page, '/roadmap');
-  const roadmap = page.getByRole('main');
-  check((await roadmap.getByRole('progressbar').count()) === 0, '/roadmap shows no funding bar');
-  check((await roadmap.getByRole('link').count()) === 0, '/roadmap has no fund link');
+  check(new URL(page.url()).pathname === '/', `/roadmap redirects to home, landed on ${new URL(page.url()).pathname}`);
 
   // The Terms versions (docs/specs/legal-copy.md): /terms shows the newest posted version with when it
   // took effect, never the cannot-confirm notice, and lists each earlier one; the next number is not

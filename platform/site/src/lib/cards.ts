@@ -57,11 +57,7 @@ export type CardGroups = {
   queued: Card[];
   /** Live, newest first. Never fundable, so never in fund. */
   shipped: Card[];
-  /**
-   * Next up (home's first lane, docs/specs/home-flow.md): the roadmap's cards not held by the board,
-   * an approved agent card waiting to open first, then cards for players or the studio, then board
-   * work; each in roadmap order, next before later.
-   */
+  /** Next up (home's first lane, docs/specs/always-open.md): approved agent cards waiting to open. */
   next: Card[];
 };
 
@@ -86,18 +82,16 @@ export function groupCards(cards: readonly Card[], place: (card: Card) => number
   };
 }
 
-/** How soon a planned card is next up: an approved agent card waiting to open, a card that funds, then board work. */
-function nextRank(card: Card): number {
-  if (card.opens_at) return 0;
-  return card.board_work === true ? 2 : 1;
-}
-
-/** Home's Next up lane: the roadmap's cards, held cards left out, in the order they come up. */
+/**
+ * Home's Next up lane: the agents' approved cards waiting to open for funding (an approval sets
+ * opens_at), held cards left out, the soonest first. The board's backlog (docs/BACKLOG.md, horizon next
+ * or later with no approval) is the repository's plan, not a public card, so it never shows here
+ * (docs/specs/always-open.md).
+ */
 export function nextUp(cards: readonly Card[]): Card[] {
-  const planned = plannedCards(cards);
-  const order = [...planned.next, ...planned.later].filter((card) => card.board_vetoed !== true);
-  // A stable sort keeps the roadmap's order (next before later, rank, age) within each kind.
-  return order.map((card, index) => ({ card, index })).sort((a, b) => nextRank(a.card) - nextRank(b.card) || a.index - b.index).map(({ card }) => card);
+  return cards
+    .filter((card) => card.horizon !== 'now' && card.stage !== SHIPPED_STAGE && Boolean(card.opens_at) && card.board_vetoed !== true)
+    .sort((a, b) => time(a.opens_at ?? '') - time(b.opens_at ?? '') || plannedOrder(a, b));
 }
 
 /**

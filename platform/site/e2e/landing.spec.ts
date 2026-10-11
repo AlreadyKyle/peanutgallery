@@ -20,7 +20,13 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Play the first game', 'Pick a card to fund', 'How the cards move', 'The team', 'Where the money goes']);
+      // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
+      const game = page.getByRole('region', { name: 'Play the first game' });
+      await expect(game.locator('.game-name')).toHaveText('Dust');
+      await expect(game.getByRole('img', { name: /^Dust in play/ })).toBeVisible();
+      expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
       // as full faces with fund links. Then three lanes in order; Building holds the funded card; no
       // filter chips.
@@ -44,17 +50,16 @@ for (const viewport of WIDTHS) {
         'The unlock list fits any number of unlocks',
         'Save progress and resume on reload',
       ]);
-      // Next up: cards that fund first, then board work, at most three.
-      await expect(lanes.nth(0).getByRole('heading', { level: 4 })).toHaveText([
-        'Choose the next card without paying',
-        'Board on its own site',
-        'A second area in Dust',
-      ]);
+      // Next up: only approved agent cards waiting to open; the fixture's planned cards are backlog
+      // entries and board work, which never show (docs/specs/always-open.md).
+      await expect(lanes.nth(0).getByRole('heading', { level: 4 })).toHaveCount(0);
+      await expect(lanes.nth(0).locator('.flow-empty')).toBeVisible();
 
       const money = page.getByRole('region', { name: 'Where the money goes' });
       await expect(money.locator('.pool-line')).toHaveText('$12.34 in the pool');
       await expect(money.locator('.pool-line svg.coin')).toHaveCount(1);
       await expect(money.getByText('Unless you change it at checkout, 80% goes to the agents and 20% to the studio.', { exact: false })).toBeVisible();
+      await expect(money.getByText("The agents' share pays only for the AI model time that builds funded cards", { exact: false })).toBeVisible();
       await expect(money.getByText('These are contributions, not donations.', { exact: false })).toBeVisible();
       await expect(money.locator('ul.rows li')).toHaveCount(3);
       await expect(money.getByRole('link', { name: 'Full ledger' })).toHaveAttribute('href', '/ledger');
@@ -92,7 +97,6 @@ for (const viewport of WIDTHS) {
       for (const [name, href] of [
         ['How it works', '/how-it-works'],
         ['Team', '/team'],
-        ['Roadmap', '/roadmap'],
         ['Ledger', '/ledger'],
         ['Discord', DISCORD_INVITE],
       ] as const) {
@@ -148,8 +152,8 @@ test.describe('the Menu on a phone', () => {
     await expect(nav.getByRole('link', { name: 'Team' })).toHaveCount(0);
     // Moving to another page closes it.
     await menu.click();
-    await nav.getByRole('link', { name: 'Roadmap' }).click();
-    await expect(page).toHaveURL(/\/roadmap$/);
+    await nav.getByRole('link', { name: 'Team' }).click();
+    await expect(page).toHaveURL(/\/team$/);
     await expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 

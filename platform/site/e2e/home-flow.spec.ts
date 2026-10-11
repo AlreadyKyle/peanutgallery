@@ -47,7 +47,7 @@ for (const { label, studio } of CASES) {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        await expect(h2.first()).toHaveText(copy.flow.fundTitle);
+        await expect(h2.nth(1)).toHaveText(copy.flow.fundTitle); // after the first game's tile (decision 68)
         const items = await lanes(page);
         const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);
@@ -79,10 +79,12 @@ test.describe('home flow lanes', () => {
 
 test.describe('home flow, production lanes', () => {
   test.use({ studio: PROD_STUDIO });
-  test('production on 10 Oct 2026: planned and shipped cards show, and the empty lanes say what happens next', async ({ page }) => {
+  test('production on 10 Oct 2026: shipped cards show, the backlog does not, and the empty lanes say what happens next', async ({ page }) => {
     await page.goto('/');
     const items = await lanes(page);
-    await expect(items.nth(0).locator('li.card[data-face="planned"]')).toHaveCount(3);
+    // Production's planned cards are all backlog entries, which never show (docs/specs/always-open.md).
+    await expect(items.nth(0).locator('li.card')).toHaveCount(0);
+    await expect(items.nth(0).locator('.flow-empty')).toHaveText(copy.flow.lanes.next.empty);
     await expect(items.nth(0).locator('.flow-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
     const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');

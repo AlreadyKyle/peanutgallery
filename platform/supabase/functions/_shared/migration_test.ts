@@ -281,6 +281,7 @@ Deno.test("migrations on PGlite", {
         "20261010200000_supply_refill.sql",
         "20261010300000_retire_attended.sql",
         "20261011000000_home_flow_supply.sql",
+        "20261011100000_always_open.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);

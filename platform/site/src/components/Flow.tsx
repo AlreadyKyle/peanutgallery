@@ -140,7 +140,6 @@ export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snap
 
 /** The link under a lane to the rest of its cards, or nothing. */
 function LaneMore({ lane }: { lane: FlowLane }) {
-  if (lane === 'next') return <MoreLinkLine to="/roadmap" words={copy.flow.lanes.next.more} />;
   if (lane === 'shipped') return <MoreLinkLine to="/reports" words={copy.flow.lanes.shipped.more} />;
   return null;
 }
