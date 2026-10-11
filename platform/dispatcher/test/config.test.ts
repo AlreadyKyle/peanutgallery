@@ -43,7 +43,7 @@ describe('loadConfig', () => {
       poolDailyCapUsd: 100,
       cardMaxUsd: 25,
       visualReviewMaxUsd: 1,
-      draftSessionMaxUsd: 0.45,
+      draftSessionMaxUsd: 0.5,
       sessionMaxTurns: 60,
       agentHourlyRateUsd: 5,
       tickMs: 60_000,
