@@ -265,12 +265,12 @@ test.describe('bands with empty data', () => {
       await settle(page, path);
       expect(await grounds(page), path).toEqual(expected(bands));
     }
-    // With no team strip, where the money goes moves onto ink, right after the flow on paper, and
-    // every card stays in band 2.
+    // With no team strip, where the money goes moves onto ink, right after the cards on paper (the
+    // cards to fund, then how they move), and every card stays in band 2.
     await settle(page, '/');
     const money = page.locator('main > .band:nth-child(3)');
     await expect(money.getByRole('heading', { level: 2, name: 'Where the money goes' })).toBeVisible();
-    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2, name: 'How the cards move' })).toBeVisible();
+    await expect(page.locator('main > .band:nth-child(2)').getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'How the cards move']);
     expect(await page.locator('main > .band:not(:nth-child(2)) li.card').count()).toBe(0);
   });
 });

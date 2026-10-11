@@ -83,11 +83,13 @@ afterEach(() => {
 });
 
 describe('Roadmap', () => {
-  it('says both ways a planned card opens for funding: the board moves it, or an approved agent card moves by itself', () => {
+  it('says both ways a planned card opens for funding: the board opens it, or an approved agent card opens by itself', () => {
     // An approved agent card sits on next until the tick deals it to now after the cooling window.
-    expect(roadmap.lede).toContain('the board moves its own cards there');
-    expect(roadmap.lede).toContain('a card an agent drafted moves there by itself once it is approved');
+    expect(roadmap.lede).toContain('The board opens its own cards for funding');
+    expect(roadmap.lede).toContain('a card an agent drafted opens by itself once it is approved');
     expect(roadmap.lede).not.toContain('until the board moves them');
+    // Home has no Fund now lane to point at any more.
+    expect(roadmap.lede).not.toContain('Fund now');
   });
 
   it('says which role wrote an approved agent card waiting on next, and nothing on the cards the board filed', async () => {

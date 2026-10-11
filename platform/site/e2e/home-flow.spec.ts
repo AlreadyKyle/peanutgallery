@@ -1,4 +1,5 @@
 import { copy } from '../src/lib/copy';
+import { legal } from '../src/lib/legal';
 import { PAYMENT_LINK } from './fixture-env';
 import { DEFAULT_STUDIO, expect, overflowsHorizontally, test, type StudioFixture } from './fixtures';
 import { DRAFTING_STUDIO, EMPTY_STUDIO, PROD_STUDIO } from './prod-studio';
@@ -46,9 +47,9 @@ for (const { label, studio } of CASES) {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        await expect(h2.first()).toHaveText("Fund what's next");
+        await expect(h2.first()).toHaveText(copy.flow.fundTitle);
         const items = await lanes(page);
-        const fund = page.getByRole('region', { name: "Fund what's next" });
+        const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);
         await neverBlank(items);
         expect(await overflowsHorizontally(page)).toBe(false);
@@ -64,7 +65,7 @@ test.describe('home flow lanes', () => {
   test('the default studio: open cards fund through Stripe as full faces, building holds the queued card', async ({ page }) => {
     await page.goto('/');
     const items = await lanes(page);
-    const fund = page.getByRole('region', { name: "Fund what's next" });
+    const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('ul.fund-grid li.card h3')).toHaveText(['Quiet rooms: one more unlock', 'Rename the Gatherer to Sweeper']);
     await expect(fund.locator('li.card[data-compact]')).toHaveCount(0);
     const links = await fund.getByRole('link', { name: 'Fund this card' }).evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href));
@@ -83,8 +84,10 @@ test.describe('home flow, production lanes', () => {
     const items = await lanes(page);
     await expect(items.nth(0).locator('li.card[data-face="planned"]')).toHaveCount(3);
     await expect(items.nth(0).locator('.flow-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
-    const fund = page.getByRole('region', { name: "Fund what's next" });
+    const fund = page.getByRole('region', { name: copy.flow.fundTitle });
     await expect(fund.locator('.fund-empty')).toContainText('Fund the next card in line');
+    await expect(fund.locator('.fund-empty')).toContainText(legal.fundEmptyBody);
+    await expect(fund.locator('.fund-empty-agent')).toHaveText(copy.flow.draftingDone.replace('{n}', '4'));
     await expect(fund.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
     await expect(items.nth(1).locator('.flow-empty')).toContainText('Cheaper first Gatherer');
     await expect(items.nth(2).locator('li.card[data-face="live"]')).toHaveCount(3);

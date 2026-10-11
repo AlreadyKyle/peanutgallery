@@ -22,7 +22,7 @@ test.describe('while the studio is paused', () => {
     await expect(code).toHaveCount(1);
     await expect(code).toHaveAttribute('data-status', 'running');
     await expect(code.locator('.tag')).toHaveCount(0);
-    await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day, also while the studio is paused.');
+    await expect(code.locator('.card-meta')).toHaveText('Calls no model. Runs every day on its own.');
     await expect(page.locator('main')).not.toContainText('waits for Stripe');
     await expect(page.locator(`#agent-${BUILDER_A} .card-meta`)).toHaveText(
       'claude-opus-5-5 · Spent from contributions $1.24, $0.31 in the last 7 days · Worked on 7 shipped cards',

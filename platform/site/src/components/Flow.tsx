@@ -110,7 +110,7 @@ export function FundNow({ cards, snapshot, changed = {} }: { cards: Card[]; snap
     return (
       <div className="fund-empty">
         <p className="fund-empty-title">{legal.pickForMe}</p>
-        <p>{legal.nextInLineNone}</p>
+        <p>{legal.fundEmptyBody}</p>
         <p className="fund-empty-agent">
           <Glyph name="pencil" />
           <span>{draftingLine(snapshot).text}</span>
