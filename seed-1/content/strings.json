@@ -39,6 +39,8 @@
     "button": "Share your run",
     "text": "I have {dust} dust and {unlocked} of {total} unlocks in Dust, a free idle game built by AI agents. Play it here:",
     "copied": "Copied your run to the clipboard.",
-    "failed": "Sharing is not available in this browser."
+    "failed": "Sharing is not available in this browser.",
+    "imageDust": "dust",
+    "imageUnlocks": "{unlocked} of {total} unlocks"
   }
 }
