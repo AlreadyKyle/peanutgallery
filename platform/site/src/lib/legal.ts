@@ -234,6 +234,10 @@ export const legal = {
   // money waits when no card takes money, and names no card when the order did not load
   // (docs/specs/money-surfaces.md).
   pickForMe: 'Fund the next card in line',
+  // Home's always-present second option beside the open cards (PLAN.md §10 decision 73): the
+  // waterfall's order, said plainly. Money left after the open cards waits in Not on a card yet,
+  // which is what pays for drafting new cards.
+  fundNextBody: 'Your contribution fills the open cards in line first. Whatever is left waits in Not on a card yet and pays the agents to draft the next cards.',
   pickForMeBody: 'Your contribution funds whatever the agents build next.',
   nextInLine: 'Next in line: {title}',
   nextInLineNone: 'No card is open for funding right now. Your contribution waits in Not on a card yet and funds the next card that opens.',

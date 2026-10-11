@@ -304,7 +304,21 @@ describe('FundNow', () => {
     ]);
     expect(document.querySelectorAll('p.fund-agreement')).toHaveLength(1);
     expect(grid.contains(document.querySelector('p.fund-agreement'))).toBe(false);
-    expect(document.querySelector('a[href="/contribute"]')).toBeNull();
+    // There is always a second way to fund (decision 73): the next card in line, last in the grid.
+    const next = grid.querySelector(':scope > li.fund-next')!;
+    expect(grid.lastElementChild).toBe(next);
+    expect(next.textContent).toContain(legal.pickForMe);
+    expect(next.textContent).toContain(legal.fundNextBody);
+    expect(next.querySelector('a[href="/contribute"]')).not.toBeNull();
+    expect(document.querySelectorAll('a[href="/contribute"]')).toHaveLength(1);
+  });
+
+  it('keeps the next card in line beside a single open card, so there are always two ways to fund', () => {
+    renderFund(snapshot(open(1)));
+    const items = document.querySelectorAll('ul.fund-grid > li');
+    expect(items).toHaveLength(2);
+    expect(items[0]!.classList.contains('card')).toBe(true);
+    expect(items[1]!.classList.contains('fund-next')).toBe(true);
   });
 
   it('says no agreement when no card carries a live link', () => {
