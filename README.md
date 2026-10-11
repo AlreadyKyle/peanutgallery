@@ -28,7 +28,7 @@ The repository is public (since 6 October 2026). `main` has no branch protection
 - `platform/agents`: the sixteen role specs (JSON) and their prompts.
 - `platform/ops`: the dispatcher's Docker image, systemd units, provisioning and deploy scripts, and the VPS runbook.
 - `seed-1`: Dust, with its simulation, config, content, renderer, bot and tests. It never imports from `platform/`.
-- `BOARD-SETUP.md`: the board's steps, the one list of what only Kyle can do. It sits at the repository root so it is the first thing visible.
+- `BOARD-SETUP.md`: the board's few standing duties, the ones that need a human or legal identity (PLAN.md §10 decision 74), and how to pause the studio without the board's site.
 - `docs`: the constitution (`PLAN.md`), the launch checklist (`ROADMAP.md`), the backlog (`BACKLOG.md`) and the specs.
 
 ## How a card ships

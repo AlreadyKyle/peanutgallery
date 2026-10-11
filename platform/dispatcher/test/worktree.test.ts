@@ -83,7 +83,7 @@ describe('pure helpers', () => {
     expect([...DESIGN_PATHS]).toEqual(gateList('design-paths.txt'));
   });
 
-  it('refuses a change to a board-only design file in the card lanes, before any gate run', () => {
+  it('refuses a change to a kernel design file in the card lanes, before any gate run', () => {
     const site = lanePaths('platform', 'code');
     const seed = lanePaths('seed-1', 'code');
     for (const file of [
@@ -104,7 +104,7 @@ describe('pure helpers', () => {
     for (const file of ['platform/site/src/tokens.css.md', 'platform/site/publicity.ts', 'platform/site/brands/x.svg', 'seed-1/render/favicon.ts', 'platform/site/src/lib/motions.ts']) {
       expect(isDesignPath(file), file).toBe(false);
     }
-    // Design files are board work, not kernel: the site kernel import rule does not reach them.
+    // Design files change only by a kernel pull request, but are not kernel: the site kernel import rule does not reach them.
     for (const file of DESIGN_PATHS) expect(isKernelPath(file), file).toBe(false);
     expect(protectedPaths(site)).toEqual(expect.arrayContaining(['platform/site/src/routes.tsx', 'platform/site/public', 'platform/site/brand']));
     expect(protectedPaths(seed)).toEqual(expect.arrayContaining(['seed-1/render/favicon.svg', 'seed-1/e2e', 'seed-1/playwright.config.ts']));
@@ -247,7 +247,7 @@ describe('pure helpers', () => {
       'seed-1/sim/hashing.ts',
       'seed-1/render/postcss.ts',
       // The site's pages, copy, cards, headers and styles stay in the platform code lane; the route list is
-      // not kernel but a board-only design file (DESIGN_PATHS).
+      // not kernel but a kernel design file (DESIGN_PATHS).
       'platform/site/src/pages/Landing.tsx',
       'platform/site/src/pages/HowItWorks.tsx',
       'platform/site/src/routes.tsx',

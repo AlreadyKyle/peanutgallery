@@ -242,7 +242,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'seed-1/vite.config.ts',
 ];
 
-// The board-only design files (docs/specs/design-review.md): the tokens, the Card, the glyphs, motion,
+// The kernel design files (docs/specs/design-review.md): the tokens, the Card, the glyphs, motion,
 // the route list, the public site's public assets and brand files, and the game's favicon. No card
 // may change one; the dispatcher refuses such a change before any gate run, as it refuses a kernel
 // path, and the gate's kernel-guard.sh fails a card branch that does. They are not kernel: the site
@@ -331,7 +331,7 @@ export function lanePaths(folder: CardFolder, lane: CardLane): string[] {
   return folder === 'seed-1' ? [...CONFIG_LANE_PATHS] : [];
 }
 
-// A board-only design file, or a file under a design folder; case is ignored, as for kernel paths.
+// A kernel design file, or a file under a design folder; case is ignored, as for kernel paths.
 export function isDesignPath(file: string): boolean {
   const lower = file.toLowerCase();
   return DESIGN_PATHS.some((design) => under(lower, design.toLowerCase()));

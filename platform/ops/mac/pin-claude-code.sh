@@ -7,7 +7,7 @@
 # line was recorded on). It then sets env.DISABLE_AUTOUPDATER to "1" in Claude Code's managed
 # settings, keeping every other key, so the CLI stops updating itself. The file is root-owned at mode
 # 0644: Claude Code reads it, and only an administrator can change it. The dispatcher's attended
-# adapter refuses any other version before every session; a new version is a board pull request that
+# adapter refuses any other version before every session; a new version is a kernel pull request that
 # updates the pin with a fresh PASS line on it. CLAUDE_MANAGED_DIR points it elsewhere (the tests).
 set -eu
 
@@ -49,7 +49,7 @@ if [ -z "$claude_bin" ] && [ -x "/Users/$user/.local/bin/claude" ]; then claude_
 [ -n "$claude_bin" ] || fail "claude is not installed where root can find it"
 installed="$(sudo -u "$user" "$claude_bin" --version 2> /dev/null | sed -nE '1s/^[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' || true)"
 if [ "$installed" != "$pinned" ]; then
-  fail "Claude Code ${installed:-of no known version} is installed but the pin is $pinned. Install $pinned (claude install $pinned), or update the pin in a board pull request with a fresh sandbox:check --positive PASS line on the installed version, then run this again."
+  fail "Claude Code ${installed:-of no known version} is installed but the pin is $pinned. Install $pinned (claude install $pinned), or update the pin in a kernel pull request with a fresh sandbox:check --positive PASS line on the installed version, then run this again."
 fi
 
 mkdir -p "$MANAGED_DIR"

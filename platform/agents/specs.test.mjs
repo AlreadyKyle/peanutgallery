@@ -237,7 +237,7 @@ test('game-director.md carries the seven pillars verbatim from docs/PLAN.md', ()
 
 // docs/specs/agent-workflows.md: the three roles that run jobs answer with one object valid against
 // their schema, the Director grades with the rubric, no role job holds Write or Edit, and the two
-// roles that read outside text propose nothing that passes a board review and name no source that
+// roles that read outside text propose nothing that passes a review and name no source that
 // is neither free nor allowed.
 const JOB_SCHEMAS = {
   'studio-head': 'platform/agents/schemas/ranking.schema.json',
@@ -330,7 +330,7 @@ test("the visual verdict's criteria equal the rubric's headings, and each criter
 });
 
 for (const role of ['biz-dev', 'community']) {
-  test(`${role}.md proposes nothing for a board review, names no Reddit or X, puts nothing on the ledger page and says it is not running yet`, () => {
+  test(`${role}.md proposes nothing for review, names no Reddit or X, puts nothing on the ledger page and says it is not running yet`, () => {
     const prompt = readFileSync(join(repoRoot, 'platform', 'agents', 'prompts', `${role}.md`), 'utf8');
     assert.doesNotMatch(prompt, /reddit|subreddit/i);
     assert.ok(!prompt.includes(' X '), 'no X source');

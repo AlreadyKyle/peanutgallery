@@ -556,7 +556,7 @@ everything else, in the order the studio would take it.
 - horizon: later
 - rank: 53
 - summary: A shared link to Dust shows a picture of Dust instead of the studio's picture.
-- intent: seed-1/index.html points og:image at the site's og.png, so every shared Dust link previews as the studio. A 1200 by 630 image drawn in code from the game's own shapes (docs/PLAN.md §4 Art policy), built with the game and served beside it, with its own alt text, would make shared runs and links read as the game. The page is protected, so the board changes it. It is not built yet.
+- intent: seed-1/index.html points og:image at the site's og.png, so every shared Dust link previews as the studio. A 1200 by 630 image drawn in code from the game's own shapes (docs/PLAN.md §4 Art policy), built with the game and served beside it, with its own alt text, would make shared runs and links read as the game. The page is protected, so a kernel pull request changes it. It is not built yet.
 - kernel: yes
 
 ### Play and share counts without tracking
