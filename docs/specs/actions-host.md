@@ -41,7 +41,7 @@ Out: creating the environment `dispatcher`, setting any secret, variable or envi
 - [x] The work clone is made with the token in git's environment only, never on its command line or in `.git/config`.
 - [x] The daily jobs' template is in `platform/ops/ops-repo/` with only its own secrets, reads contents only, runs the three jobs at their times from `STUDIO_REF`, and is not a workflow of this repository; `backups-repo/` is gone.
 - [x] The daily jobs run on Actions in AlreadyKyle/mobmachine-ops, and the Mac's LaunchAgents are removed.
-- [ ] The operator's setup: the environment `dispatcher` allowing main alone, `DISPATCHER_ENV`, `BACKUP_AGE_RECIPIENT` (waits on: the board's allow and the managed agent's ids, which wait on Console credit).
+- [ ] The operator's setup: the environment `dispatcher` allowing main alone, `DISPATCHER_ENV`, `BACKUP_AGE_RECIPIENT` (waits on: a local session on the Mac and the managed agent's ids, which wait on Console credit).
 - [ ] The cutover: `PASS: toolchain`, the first run's `code root is read-only`, `containment verified` and `startup probe passed` lines, the heartbeat, the ntfy test on the board's phone (waits on: the setup and Console credit).
 - [ ] The restart and liveness checks, and a 24-hour soak across at least four drains with each run starting the next (waits on: the cutover).
 - [ ] The Controller's first clean run after a payout clears its minimum balance item (waits on: the first payout).

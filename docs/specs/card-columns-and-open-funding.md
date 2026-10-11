@@ -91,7 +91,7 @@ Out:
 - `pnpm verify` at the repository root.
 - The production steps below, once the board allows them.
 
-## Production steps (need the board's allow)
+## Production steps
 
 Before:
 1. `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` prints `PASS:`. Keep its output as the baseline.

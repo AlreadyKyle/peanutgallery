@@ -9,7 +9,7 @@ The launch plan (workstream B, with the audit amendments) needs the database to 
 ## Scope
 
 In: six migrations (`20260922000000` to `20260922000500`), the webhook's payer key and shortfall alert, the role `description` field (agent JSON, README schema, parser, seed), `scripts/file-backlog.ts` and its parser, `scripts/ledger-identity.ts` and `scripts/anon-negative-test.ts`, and their tests.
-Out: the site (SITE), the dispatcher's use of the lease, the credit bound and the patches (DISPATCHER, MANAGED), `docs/BACKLOG.md` and the docs (DOCS), the production cards (LIVE CARDS), and every production step, which the orchestrator runs with the board's allow.
+Out: the site (SITE), the dispatcher's use of the lease, the credit bound and the patches (DISPATCHER, MANAGED), `docs/BACKLOG.md` and the docs (DOCS), the production cards (LIVE CARDS), and every production step, which the orchestrator runs from a local session on the Mac.
 
 ## Behaviour
 
@@ -71,7 +71,7 @@ Out: the site (SITE), the dispatcher's use of the lease, the credit bound and th
 - /board: `record_credit_purchase` after the first purchase (waits on: Console credit).
 - The unattended probe writes an overhead row and the pool is unchanged (waits on: the cutover).
 
-## Production steps (need the board's allow)
+## Production steps
 
 Before each apply, pause the studio from /board and make sure no dispatcher is running on the Mac.
 

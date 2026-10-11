@@ -1,6 +1,6 @@
 # Card link preview
 
-Status: built. Card: none (board work). Owner: board.
+Status: built. Card: none (kernel work). Owner: board.
 
 ## Problem
 

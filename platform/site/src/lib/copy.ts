@@ -114,8 +114,8 @@ export const copy = {
     draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
     draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
     draftingNoMoney: 'The Game Designer drafts the next card when a contribution comes in.',
-    // A Next up card's line: an approved agent card waiting to open, board work, or a planned card.
-    boardWork: 'The board builds this one itself',
+    // A Next up card's line: an approved agent card waiting to open, kernel work, or a planned card.
+    kernelWork: 'The studio builds this one itself, with no card',
     planned: 'Planned, opens for funding later',
     count: '{n} cards',
     countOne: '1 card',

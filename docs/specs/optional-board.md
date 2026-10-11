@@ -2,7 +2,7 @@
 
 Status: built. Card: none. Owner: board.
 
-The board's site under `docs/PLAN.md` §10 decision 66 (10 October 2026, the board): the studio never waits on a board member, so the board's site becomes a minimal, optional admin and debug panel, like a hosting dashboard. It is a board pull request: `platform/board` is kernel. It supersedes the Needs you inbox of `docs/specs/board-site.md` and the deferred triage model of `docs/specs/simple-board.md`. The runtime it relies on is `docs/specs/unattended-roles.md`.
+The board's site under `docs/PLAN.md` §10 decision 66 (10 October 2026, the board): the studio never waits on a board member, so the board's site becomes a minimal, optional admin and debug panel, like a hosting dashboard. It is a kernel pull request: `platform/board` is kernel. It supersedes the Needs you inbox of `docs/specs/board-site.md` and the deferred triage model of `docs/specs/simple-board.md`. The runtime it relies on is `docs/specs/unattended-roles.md`.
 
 ## Problem
 

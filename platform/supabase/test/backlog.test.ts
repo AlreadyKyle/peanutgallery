@@ -18,7 +18,7 @@ const GOOD = [
   "- rank: 3",
   "- summary: A plain summary.",
   "- intent: What it is and why. It is not built yet.",
-  "- board: no",
+  "- kernel: no",
 ];
 
 /** The problems a file raises, or [] when it parses. */
@@ -35,14 +35,14 @@ function problems(text: string): string[] {
 describe("parseBacklog on the fixture", () => {
   it("reads every card, in order, and ignores prose, level-2 headings and fenced blocks", () => {
     const entries = parseBacklog(FIXTURE);
-    expect(entries.map((e) => [e.title, e.bucket, e.folder, e.horizon, e.rank, e.board_work])).toEqual([
+    expect(entries.map((e) => [e.title, e.bucket, e.folder, e.horizon, e.rank, e.kernel_work])).toEqual([
       ["Free voting on open cards", "platform", "platform", "next", 1, true],
       ["Studio Head drafts cards from the roadmap", "agents", "platform", "next", 2, true],
       ["A second unlock track in Dust", "game", "seed-1", "later", 1, false],
     ]);
     expect(entries[0]!.summary).toBe("Let players pick the next card without paying, alongside funding.");
     expect(entries[0]!.intent.endsWith("It is not built yet.")).toBe(true);
-    expect(backlogCounts(entries)).toEqual({ horizon: { next: 2, later: 1 }, folder: { "seed-1": 1, platform: 2 }, board: { yes: 2, no: 1 } });
+    expect(backlogCounts(entries)).toEqual({ horizon: { next: 2, later: 1 }, folder: { "seed-1": 1, platform: 2 }, kernel: { yes: 2, no: 1 } });
   });
 });
 
@@ -51,20 +51,20 @@ describe("parseBacklog refusals", () => {
     expect(problems(card("A card", GOOD))).toEqual([]);
   });
 
-  it("refuses a missing key, keys out of order and a key after board", () => {
+  it("refuses a missing key, keys out of order and a key after kernel", () => {
     expect(problems(card("A card", GOOD.filter((l) => !l.startsWith("- rank"))))[0]).toContain('needs "- rank: <value>"');
     expect(problems(card("A card", [GOOD[1]!, GOOD[0]!, ...GOOD.slice(2)]))[0]).toContain('needs "- bucket: <value>"');
-    expect(problems(card("A card", [...GOOD, "- lane: code"]))[0]).toContain("has a key after board");
+    expect(problems(card("A card", [...GOOD, "- lane: code"]))[0]).toContain("has a key after kernel");
     expect(problems(card("A card", GOOD.slice(0, 5)))[0]).toContain("the end of the file");
   });
 
-  it("refuses an entry without its board: bullet, and a board value other than yes or no (docs/specs/copy-pass.md)", () => {
-    expect(problems(card("A card", GOOD.slice(0, 6)))[0]).toContain('needs "- board: <value>" here, found the end of the file');
-    expect(problems([card("A card", GOOD.slice(0, 6)), card("Next", GOOD.map((l) => (l.startsWith("- rank") ? "- rank: 4" : l)))].join("\n"))[0]).toContain('"A card" needs "- board: <value>" here, found "### Next"');
-    expect(problems(card("A card", [...GOOD.slice(0, 6), "- board: maybe"]))[0]).toContain('board "maybe" is not yes or no');
-    expect(problems(card("A card", [...GOOD.slice(0, 6), "- board: Yes"]))[0]).toContain('board "Yes" is not yes or no');
-    expect(parseBacklog(card("A card", [...GOOD.slice(0, 6), "- board: yes"]))[0]!.board_work).toBe(true);
-    expect(parseBacklog(card("A card", GOOD))[0]!.board_work).toBe(false);
+  it("refuses an entry without its kernel: bullet, and a kernel value other than yes or no (docs/specs/copy-pass.md)", () => {
+    expect(problems(card("A card", GOOD.slice(0, 6)))[0]).toContain('needs "- kernel: <value>" here, found the end of the file');
+    expect(problems([card("A card", GOOD.slice(0, 6)), card("Next", GOOD.map((l) => (l.startsWith("- rank") ? "- rank: 4" : l)))].join("\n"))[0]).toContain('"A card" needs "- kernel: <value>" here, found "### Next"');
+    expect(problems(card("A card", [...GOOD.slice(0, 6), "- kernel: maybe"]))[0]).toContain('kernel "maybe" is not yes or no');
+    expect(problems(card("A card", [...GOOD.slice(0, 6), "- kernel: Yes"]))[0]).toContain('kernel "Yes" is not yes or no');
+    expect(parseBacklog(card("A card", [...GOOD.slice(0, 6), "- kernel: yes"]))[0]!.kernel_work).toBe(true);
+    expect(parseBacklog(card("A card", GOOD))[0]!.kernel_work).toBe(false);
   });
 
   it("refuses values outside the allowed sets", () => {
@@ -156,7 +156,7 @@ describe("planBacklog", () => {
   it("sets each filed card's board_work from its entry, as an in-place update (docs/specs/copy-pass.md)", () => {
     const plan = planBacklog(entries, [
       existing({ title: "Free voting on open cards", board_work: false }),
-      existing({ title: "Studio Head drafts cards from the roadmap", rank: 2, summary: "The Studio Head turns roadmap items into draft cards for the board to review.", intent: "A scheduled Studio Head session reads the roadmap and files draft cards the board can edit and move to now. It is not built yet.", bucket: "agents" }),
+      existing({ title: "Studio Head drafts cards from the roadmap", rank: 2, summary: "The Studio Head turns roadmap items into draft cards for review.", intent: "A scheduled Studio Head session reads the roadmap and files draft cards an agent can edit and move to now. It is not built yet.", bucket: "agents" }),
       existing({ title: "A second unlock track in Dust", horizon: "later", folder: "seed-1", bucket: "game", summary: "A second set of unlocks that opens after the first track is complete.", intent: "Players who finish every unlock get a new track with its own goals, so the game keeps a next goal on screen. It is not built yet." }),
     ]);
     expect(plan.update).toEqual([
@@ -174,7 +174,7 @@ describe("planBacklog", () => {
       bucket: "agents",
       rank: 5,
       horizon: "later",
-      summary: "The Studio Head turns roadmap items into draft cards for the board to review.",
+      summary: "The Studio Head turns roadmap items into draft cards for review.",
       intent: "An older intent.",
     });
     const plan = planBacklog(entries, [same, moved]);
@@ -186,7 +186,7 @@ describe("planBacklog", () => {
         patch: {
           horizon: "next",
           rank: 2,
-          intent: "A scheduled Studio Head session reads the roadmap and files draft cards the board can edit and move to now. It is not built yet.",
+          intent: "A scheduled Studio Head session reads the roadmap and files draft cards an agent can edit and move to now. It is not built yet.",
         },
       },
     ]);

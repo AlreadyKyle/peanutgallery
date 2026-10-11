@@ -5,7 +5,7 @@ A public game studio run by AI agents, directed by its audience and funded by th
 ## Read first, in this order
 
 1. `docs/ROADMAP.md`: the launch checklist and standing facts.
-2. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board; §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
+2. The sections of `docs/PLAN.md` the work touches: §4 mechanics, work, kernel and The Board (the operator console); §5 money; §6 architecture; §10 decisions; Appendix A technical spec.
 3. The specs under `docs/specs/` the work touches.
 
 `docs/BACKLOG.md` lists what is planned and not built.
@@ -16,7 +16,7 @@ Rules that never change (the kernel, PLAN.md §4 Kernel): the ledger, spend caps
 
 - Nothing in this repo references the founder's other companies or projects, with two exceptions: the public site's footer carries a single "Created by Clayhouse" credit linking to clayhouse.studio, and the public contact address is hello@clayhouse.studio (`docs/PLAN.md` §10 decision 37).
 - Secrets live in the gitignored `.env` and `.env.vps`. Never print, paste or commit a value; check a key by prefix and length instead.
-- Ask the board before any Stripe call, reads included, and before anything that spends money.
+- Stripe calls (reads and writes) and spending are fine inside the kernel's money caps, recorded on the ledger (`docs/PLAN.md` §10 decision 74).
 
 ## Names
 
@@ -36,7 +36,7 @@ The name is the board's call (`docs/PLAN.md` §10 decision 43). The domain is mo
 - `pnpm test:docs` and `pnpm secret-scan`: the fast checks for a docs-only change. `test:docs` guards the kernel line, schedules, company names and `PLAN.md §` references.
 - Site e2e: `E2E_PORT=<port> npx playwright test <specs>` in `platform/site`.
 - Live check of a running site: `node platform/site/scripts/live-check.mjs [baseUrl]`. Quote its first line, which must read `PASS ... failed=0`. From a cloud session, read the `live-check` workflow's latest run instead (Cloud sessions, below).
-- Local gate for a board pull request, the fallback if Actions cannot start jobs (the gate workflow runs on Actions again since the repository went public on 6 October 2026): `bash scripts/local-gate.sh <pr> [port-base]`, from main's checkout and never a pull request's own copy. It prints `LOCAL GATE PASS pr=... head=... base=...`. It runs on the Mac only.
+- Local gate for a kernel pull request, the fallback if Actions cannot start jobs (the gate workflow runs on Actions again since the repository went public on 6 October 2026): `bash scripts/local-gate.sh <pr> [port-base]`, from main's checkout and never a pull request's own copy. It prints `LOCAL GATE PASS pr=... head=... base=...`. It runs on the Mac only.
 
 ## Long runs and merging
 
@@ -52,7 +52,7 @@ Sessions that died mid-run (a usage limit or the machine shutting down stops a s
 
 ## Cloud sessions
 
-Code work runs in Claude Code cloud sessions; `scripts/cloud-setup.sh` (the SessionStart hook) installs the packages, Deno and Playwright's Chromium there. `.env` and `.env.vps` never go to the cloud, so production migrations, database dumps and anything else that reads a secret run in a local session on the board's Mac.
+Code work runs in Claude Code cloud sessions; `scripts/cloud-setup.sh` (the SessionStart hook) installs the packages, Deno and Playwright's Chromium there. `.env` and `.env.vps` never go to the cloud, so production migrations, database dumps and anything else that reads a secret run in a local session on the Mac that holds them.
 
 - The cloud environment's default network level (Limited) reaches the package registries and GitHub but not the site (mobmachine.games and its redirect domain), deno.land or cdn.playwright.dev. So `scripts/cloud-setup.sh` installs Deno from npm and, when Playwright's Chromium cannot download, points the Playwright configs at the Chromium the cloud image ships (`PW_CHROMIUM_PATH`).
 - The `live-check` workflow (`.github/workflows/live-check.yml`) checks production on its own: after every push to main that changes the site, once that commit is deployed, and once a day. A cloud session quotes the first line of the Live check step in the latest run for the merge commit; it runs `live-check.mjs` directly only when it can reach the site (the board added the domains under the environment's Allowed domains).

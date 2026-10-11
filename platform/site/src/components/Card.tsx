@@ -65,10 +65,10 @@ export type CardFaceProps = {
   compact?: boolean;
 };
 
-/** A Next up card's line: approved and opening soon, board work, or planned. */
+/** A Next up card's line: approved and opening soon, kernel work (cards.board_work), or planned. */
 export function plannedLine(card: Card): string {
   if (card.opens_at && card.horizon !== 'now') return copy.roadmap.opensSoon;
-  return card.board_work === true ? copy.flow.boardWork : copy.flow.planned;
+  return card.board_work === true ? copy.flow.kernelWork : copy.flow.planned;
 }
 
 /**

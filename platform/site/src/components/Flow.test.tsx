@@ -377,9 +377,9 @@ describe('draftingLine', () => {
 });
 
 describe('plannedLine', () => {
-  it('says approved and opening soon, board work, or planned', () => {
+  it('says approved and opening soon, kernel work (cards.board_work), or planned', () => {
     expect(plannedLine(card({ horizon: 'next', opens_at: '2026-10-11T00:00:00Z', board_work: true }))).toBe(copy.roadmap.opensSoon);
-    expect(plannedLine(card({ horizon: 'next', board_work: true }))).toBe(copy.flow.boardWork);
+    expect(plannedLine(card({ horizon: 'next', board_work: true }))).toBe(copy.flow.kernelWork);
     expect(plannedLine(card({ horizon: 'later' }))).toBe(copy.flow.planned);
     // A now card with opens_at set is not waiting to open.
     expect(plannedLine(card({ horizon: 'now', opens_at: '2026-10-11T00:00:00Z' }))).toBe(copy.flow.planned);

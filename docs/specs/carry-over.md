@@ -111,7 +111,7 @@ The production steps below ran with the launch series; what they left is read ba
 
 Every Verification line is run and quoted. Status done.
 
-## Production steps (need the board's allow)
+## Production steps
 
 In order, with the studio paused and no Mac dispatcher running:
 

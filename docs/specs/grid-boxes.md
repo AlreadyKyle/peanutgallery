@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-Series position: first in the rest of the launch series, before studio-reports (the order is in `docs/ROADMAP.md`, "The launch series"). The board ordered it on 26 September 2026. It is a board pull request: it changes the layout audit and site styles.
+Series position: first in the rest of the launch series, before studio-reports (the order is in `docs/ROADMAP.md`, "The launch series"). The board ordered it on 26 September 2026. It is a kernel pull request: it changes the layout audit and site styles.
 
 ## Problem
 

@@ -124,7 +124,7 @@ Every step checks before it acts, and folders are fixed one level only, never re
 - `pnpm verify` at the repository root exits 0.
 - The production steps, quoted.
 
-## Production steps (need the board's allow)
+## Production steps
 
 Each runs on the server as root, during the cutover in `platform/ops/README.md`, and its output is quoted here. Oracle is dropped (PLAN.md §10 decision 38); until a server exists the dispatcher runs on the board's Mac, whose steps are in `mac-host.md`.
 
