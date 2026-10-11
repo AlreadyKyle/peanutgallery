@@ -191,7 +191,7 @@ PASS: secret-scan files=340
 
 The failed-revert test asserts the alert ends "The studio is paused until the board unpauses it." and that `studio_state.paused` is true.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Apply the DB workstream's migrations `20260922000000` to `20260922000300` before any dispatcher built from this change runs. Without `claim_dispatcher_lease` it stops at startup with that error. In unattended mode it also needs `credit_purchases` and `studio_state.monthly_cap_usd`, or no card starts.
 2. On the Mac, stop any running dispatcher first.

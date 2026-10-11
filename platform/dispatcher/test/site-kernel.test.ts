@@ -15,6 +15,7 @@ const CARD_LANE_IMPORTS: Record<string, string> = {
   'platform/site/src/components/PageHeader.tsx': 'the h1, the lede and the tab title, from the strings the page passes',
   'platform/site/src/styles.css': "the site's styles, imported once by main.tsx",
   'platform/site/src/lib/freshness.ts': 'reloads a tab restored, returned to or moved to another page when a newer build is live (main.tsx)',
+  'platform/site/src/components/Glyph.tsx': "the site's 16px glyphs, aria-hidden beside a word that says the same; a board-only design file (platform/gate/design-paths.txt), so no card can change it",
   'platform/site/src/routes.tsx': "the pages App.tsx does not route itself and their top bar links, which App.tsx filters (App.tsx); a board-only design file (platform/gate/design-paths.txt)",
 };
 const PACKAGES = new Set(['react', 'react-dom', 'react-dom/client', 'react-router-dom']);
@@ -65,6 +66,7 @@ describe('the public site kernel imports only kernel code', () => {
       'components/Supporters.tsx',
       'lib/reports-source.ts',
       'components/ReportFacts.tsx',
+      'components/ShareCard.tsx',
     ]) {
       expect(kernelSiteFiles, file).toContain(`${SITE_SRC}/${file}`);
     }

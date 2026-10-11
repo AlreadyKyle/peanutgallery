@@ -4,7 +4,7 @@ Status: done. Card: none. Owner: board.
 
 Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): a short supply queues `draft_card` with origin schedule, with no Needs you item and no Draft to the floor; the board's panel shows the supply line on Status (`optional-board.md`).
 
-Series position: after grid-boxes, before design-review (the order is in `docs/ROADMAP.md`, "The launch series"). The layout-balance pull request is dropped: home (#64) ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. It is the launch plan's Phase 2 "Reason to come back" (PG-13, L19) and "Card supply" (PG-10) lines. It is a board pull request: it changes kernel files (the dispatcher, the ops env tools, Supabase, the board site and the site's kernel files). Drafting the launch cards that fill the floor is `docs/specs/launch-card-floor.md`.
+Series position: after grid-boxes, before design-review (the order is in `docs/ROADMAP.md`, "The launch series"). The layout-balance pull request is dropped: home (#64) ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. It is the launch plan's Phase 2 "Reason to come back" (PG-13, L19) and "Card supply" (PG-10) lines. It is a kernel pull request: it changes kernel files (the dispatcher, the ops env tools, Supabase, the board site and the site's kernel files). Drafting the launch cards that fill the floor is `docs/specs/launch-card-floor.md`.
 
 ## Problem
 
@@ -31,7 +31,7 @@ Out, and what each waits on:
 - Setting the webhook addresses: a board item (BOARD-SETUP "Discord webhooks"). Until then no request is made and nothing is posted.
 - Drafting the launch cards that fill the floor: `launch-card-floor.md`.
 - Automatic drafting when the supply is short, AI-written notes on the report (the Studio Head's and the Head of Finance's), the Head of Finance's note on /ledger and its run on a failed reconcile: each needs scheduled, unattended role jobs, which need an operations percentage. The operations bucket is removed until one exists (money-logic); agent-workflows lists scheduled role jobs in BACKLOG with it.
-- Changing the floor from /board: the defaults are changed by a board pull request.
+- Changing the floor from /board: the defaults are changed by a kernel pull request.
 - Retrying a failed Discord post.
 - Inbound Discord (polls, buttons, commands), free voting and the Video Editor: backlog.
 - A post when a card opens or fills: left out of v1 (see Decisions).
@@ -105,7 +105,7 @@ The migration is additive and must be live before the merge, because the site's 
 
 Board items (listed, never blocking):
 - Discord (BOARD-SETUP "Discord webhooks"): create the #ships and #weekly webhooks, put them in `.env` as `DISCORD_WEBHOOK_SHIPS` and `DISCORD_WEBHOOK_WEEKLY`, and turn on AutoMod. The attended dispatcher reads them at its next start; the Mac host gets them when `make-dispatcher-env.sh` and `install.sh` run at the cutover. The first ship post's arrival is quoted then.
-- Optional: change the floor defaults through a board pull request. The defaults apply until then.
+- Optional: change the floor defaults through a kernel pull request. The defaults apply until then.
 - No Stripe, Console or spending step.
 
 ## Evidence

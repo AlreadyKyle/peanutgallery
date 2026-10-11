@@ -94,7 +94,7 @@ describe('copy rules', () => {
       copy.flow.draftingIdle,
       copy.flow.draftingDone,
       copy.flow.draftingNoMoney,
-      copy.flow.boardWork,
+      copy.flow.kernelWork,
       copy.flow.planned,
       legal.pickForMe,
       legal.nextInLineNone,

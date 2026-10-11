@@ -2,7 +2,7 @@
 
 Status: done. Card: none. Owner: board.
 
-The design-system pull request of the approved v1 design direction (the board's review of 23 September 2026). The direction is the contract: a quiet, precise table where real cards are funded with arcade coins and built by a cast of code-drawn aliens, on a white page whose full-bleed bands rotate black and white. This is a board pull request: it changes kernel files, listed under Scope. Its mockup is the unlisted design guide; the home-and-design pull request that follows applies the bands to every page and rebuilds home.
+The design-system pull request of the approved v1 design direction (the board's review of 23 September 2026). The direction is the contract: a quiet, precise table where real cards are funded with arcade coins and built by a cast of code-drawn aliens, on a white page whose full-bleed bands rotate black and white. This is a kernel pull request: it changes kernel files, listed under Scope. Its mockup is the unlisted design guide; the home-and-design pull request that follows applies the bands to every page and rebuilds home.
 
 ## Problem
 
@@ -18,7 +18,7 @@ In:
 - **Wiring, without restructuring layouts:** the new card replaces the card box on home (Building now and Fund what's next) and on `/how-it-works`; the roadmap's groups and home's shipped rows carry the suit glyph; `/team` rows become `li.agent` with the asleep pose; `'next'` leaves `CardCategory`, `CATEGORY_FILTERS` and `copy.categories`.
 - **The design guide** at the unlisted `/design-kit-7q4m` (`src/pages/Guide.tsx`, `routes.tsx`), not indexed.
 - **Docs:** `platform/site/DESIGN.md` rewritten as the source of truth; `docs/COPY.md` gains the voice rules; this spec and its ROADMAP row.
-- **Kernel files changed** (a board pull request): `platform/site/src/components/Funding.tsx` (the bar, spec rows, coin mark, card modes), `lib/legal.ts` (the spec-row labels and the not-built money line), `lib/payment.ts` (the two categories), `index.html` (the preload), `package.json` and `pnpm-lock.yaml` (`@axe-core/playwright`, a free dev dependency), and `scripts/` (`fonts.sh`, `font-metrics.py`, `og-image.mjs` reading `tokens.css`, `live-check.mjs` reading `li.agent`).
+- **Kernel files changed** (a kernel pull request): `platform/site/src/components/Funding.tsx` (the bar, spec rows, coin mark, card modes), `lib/legal.ts` (the spec-row labels and the not-built money line), `lib/payment.ts` (the two categories), `index.html` (the preload), `package.json` and `pnpm-lock.yaml` (`@axe-core/playwright`, a free dev dependency), and `scripts/` (`fonts.sh`, `font-metrics.py`, `og-image.mjs` reading `tokens.css`, `live-check.mjs` reading `li.agent`).
 
 Out, and what each waits on:
 - The top bar and Menu, bands on every public page, home in the board's order, the status line on home, the live-updates row wired to the real snapshot, the `/contribute` block, rail rows, the replay links, the audited fixes and the copy pass, and `og.png` re-rendered with the font: the home-and-design pull request.

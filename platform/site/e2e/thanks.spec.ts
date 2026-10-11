@@ -183,3 +183,27 @@ test('with no session: a plain thank-you with links home and to Contribute', asy
   await expect(main.getByRole('link', { name: 'Contribute' })).toHaveAttribute('href', '/contribute');
   expect(sent).toEqual([]);
 });
+
+test('a recorded payment draws the card it went to with the supporter number on its face, the next steps and Share', async ({ page }) => {
+  await open(page, SESSIONS.recorded);
+  // docs/specs/supporter-loop.md: the reward band comes before Where your money went.
+  const reward = page.getByRole('region', { name: 'Your card' });
+  const face = reward.locator('.thanks-face');
+  await expect(face.locator('[data-supporter]')).toHaveText('Supporter 12');
+  await expect(face.getByRole('link', { name: 'A cheaper Cart' })).toHaveAttribute('href', `/card/${BUILDING_CARD_ID}`);
+  await expect(reward.getByRole('button', { name: 'Share' })).toBeVisible();
+  const steps = reward.locator('.thanks-next > li');
+  await expect(steps.locator('strong')).toHaveText(['Drafting', 'Building', 'Checks', 'Live']);
+  // The fixture's card is being built, so Building is the current step.
+  await expect(reward.locator('[aria-current="step"]')).toHaveAttribute('data-step', 'building');
+  await expect(reward.locator('[data-note="ship-email"]')).toHaveText('When it goes live, the studio emails you a ship notice.');
+  const order = await page.locator('main section').evaluateAll((sections) => sections.map((s) => s.getAttribute('aria-labelledby')));
+  expect(order.indexOf('reward')).toBeLessThan(order.indexOf('reached'));
+  expect(await reward.textContent()).not.toContain('$');
+});
+
+test('a refunded or disputed payment draws no reward band', async ({ page }) => {
+  await open(page, SESSIONS.reversed);
+  await expect(page.getByText('This payment was refunded or disputed, so nothing from it is on a card.')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Your card' })).toHaveCount(0);
+});

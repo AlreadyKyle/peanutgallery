@@ -10,17 +10,18 @@
 //   - rank: a whole number, lower is sooner, unique within its horizon
 //   - summary: one line, at most 200 characters, sentence case, no em dash
 //   - intent: one paragraph on one line: what it is, why, and that it is not built yet
-//   - board: yes | no: yes when the change lands in kernel paths (the rules, the money, the card
-//     system, the dispatcher, the gate, the agents and their prompts), so the board makes it and no
-//     card funds it (PLAN.md §4 Work, docs/specs/copy-pass.md)
+//   - kernel: yes | no: yes when the change lands in kernel paths (the rules, the money, the card
+//     system, the dispatcher, the gate, the agents and their prompts), so it ships as a kernel pull
+//     request through the gate and no card funds it (PLAN.md §4 Work, docs/specs/copy-pass.md).
+//     The database keeps the column name cards.board_work; insertRow maps kernel_work onto it.
 // Titles are at most 80 characters and unique; the title is the upsert key.
 // Any other heading at level 3, key, order or value fails the parse.
 
 export const BUCKETS = ["game", "platform", "qa", "studio", "budget", "agents"] as const;
 export const FOLDERS = ["seed-1", "platform"] as const;
 export const HORIZONS = ["next", "later"] as const;
-export const KEYS = ["bucket", "folder", "horizon", "rank", "summary", "intent", "board"] as const;
-export const BOARD_VALUES = ["yes", "no"] as const;
+export const KEYS = ["bucket", "folder", "horizon", "rank", "summary", "intent", "kernel"] as const;
+export const KERNEL_VALUES = ["yes", "no"] as const;
 
 export const TITLE_MAX = 80;
 export const SUMMARY_MAX = 200;
@@ -37,8 +38,8 @@ export interface BacklogEntry {
   rank: number;
   summary: string;
   intent: string;
-  /** Board work: the board makes it and no card funds it (the entry's board: bullet). */
-  board_work: boolean;
+  /** Kernel work: a kernel pull request makes it and no card funds it (the entry's kernel: bullet). */
+  kernel_work: boolean;
   /** 1-based line of the heading, for messages. */
   line: number;
 }
@@ -97,12 +98,12 @@ export function parseBacklog(text: string): BacklogEntry[] {
       j += 1;
     }
     if (complete && j < lines.length && /^- [a-z_]+:/.test(lines[j]!)) {
-      problems.push(`line ${j + 1}: "${title}" has a key after board: "${lines[j]}"`);
+      problems.push(`line ${j + 1}: "${title}" has a key after kernel: "${lines[j]}"`);
     }
     i = j - 1;
     if (!complete) continue;
 
-    const { bucket, folder, horizon, rank, summary, intent, board } = values as Record<(typeof KEYS)[number], string>;
+    const { bucket, folder, horizon, rank, summary, intent, kernel } = values as Record<(typeof KEYS)[number], string>;
     const where = `line ${at} "${title}"`;
     if (!oneOf(bucket, BUCKETS)) problems.push(`${where}: bucket "${bucket}" is not one of ${BUCKETS.join(", ")}`);
     if (!oneOf(folder, FOLDERS)) problems.push(`${where}: folder "${folder}" is not one of ${FOLDERS.join(", ")}`);
@@ -114,7 +115,7 @@ export function parseBacklog(text: string): BacklogEntry[] {
     if (summary.includes(EM_DASH)) problems.push(`${where}: the summary uses an em dash`);
     if (intent === "") problems.push(`${where}: the intent is empty`);
     if (intent.includes(EM_DASH)) problems.push(`${where}: the intent uses an em dash`);
-    if (!oneOf(board, BOARD_VALUES)) problems.push(`${where}: board "${board}" is not yes or no`);
+    if (!oneOf(kernel, KERNEL_VALUES)) problems.push(`${where}: kernel "${kernel}" is not yes or no`);
 
     entries.push({
       title,
@@ -124,7 +125,7 @@ export function parseBacklog(text: string): BacklogEntry[] {
       rank: Number(rank),
       summary,
       intent,
-      board_work: board === "yes",
+      kernel_work: kernel === "yes",
       line: at,
     });
   }
@@ -249,7 +250,7 @@ function insertRow(entry: BacklogEntry): BacklogInsert {
     estimate_usd: 0,
     priority: 100,
     confidence: "low",
-    board_work: entry.board_work,
+    board_work: entry.kernel_work,
   };
 }
 
@@ -301,19 +302,19 @@ export function planBacklog(entries: readonly BacklogEntry[], existing: readonly
   return plan;
 }
 
-/** Entry counts by horizon, by folder and by board-work marker, for the dry run to quote against the file. */
+/** Entry counts by horizon, by folder and by kernel-work marker, for the dry run to quote against the file. */
 export function backlogCounts(entries: readonly BacklogEntry[]): {
   horizon: Record<BacklogHorizon, number>;
   folder: Record<Folder, number>;
-  board: { yes: number; no: number };
+  kernel: { yes: number; no: number };
 } {
   const horizon: Record<BacklogHorizon, number> = { next: 0, later: 0 };
   const folder: Record<Folder, number> = { "seed-1": 0, platform: 0 };
-  const board = { yes: 0, no: 0 };
+  const kernel = { yes: 0, no: 0 };
   for (const entry of entries) {
     horizon[entry.horizon] += 1;
     folder[entry.folder] += 1;
-    board[entry.board_work ? "yes" : "no"] += 1;
+    kernel[entry.kernel_work ? "yes" : "no"] += 1;
   }
-  return { horizon, folder, board };
+  return { horizon, folder, kernel };
 }

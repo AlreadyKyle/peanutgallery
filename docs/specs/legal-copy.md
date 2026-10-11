@@ -4,7 +4,7 @@ Status: done. Card: none. Owner: board.
 
 Built on main after home-and-design (#64). The layout-balance pull request is dropped: home ships `platform/site/e2e/layout-balance.spec.ts`, which this change only extends. The cross-PR contracts it relies on are in Decisions under "Reconciled with the series".
 
-The launch plan's Phase 1 "Legal pages", from the reviews of 23 September 2026: R04 (a refund policy, age terms, the currency and the Ontario internet-agreement disclosures), R06, L01 and PG-25 (what happens to unspent money), L07 (the no-token line) and L12 (a change to the terms applies only to money given after it is posted). This is a board pull request: it changes kernel files, listed under Scope.
+The launch plan's Phase 1 "Legal pages", from the reviews of 23 September 2026: R04 (a refund policy, age terms, the currency and the Ontario internet-agreement disclosures), R06, L01 and PG-25 (what happens to unspent money), L07 (the no-token line) and L12 (a change to the terms applies only to money given after it is posted). This is a kernel pull request: it changes kernel files, listed under Scope.
 
 ## Problem
 
@@ -32,7 +32,7 @@ Out, and what each waits on:
 - Stamping each contribution with its version: money-logic adds `contributions.terms_version`, set in `apply_contribution` to `terms_version_at` of the Checkout Session's `created` time, never a value the client sends. Until then no rule differs between versions 1 and 2, so the promise in the Terms holds without the stamp.
 - `cancel_card` sending a cancelled card's unspent money to later cards: money-logic (PG-01).
 - The operations bucket: not built. It ships at 0%, so nothing here carries a percentage for it. The operations-share pull request, opened only when a percentage exists, adds the percentage and a new Terms version by the procedure below.
-- The operator's mailing address and phone: the board (BOARD-SETUP step 10). A later board pull request adds them as a new version.
+- The operator's mailing address and phone: the board (BOARD-SETUP step 10). A later kernel pull request adds them as a new version.
 - /thanks naming the version a contribution carries and linking /terms/n: supporter-pages.
 - Stripe Dashboard settings (the terms checkbox at checkout; Adaptive Pricing is left alone, BOARD-SETUP Reference 12) and a lawyer's review: the board (BOARD-SETUP step 12 and D). Nothing waits on them.
 - site-snapshot moves this read behind `/api/cards`, keeping the fallback below.
@@ -84,7 +84,7 @@ Out, and what each waits on:
 - Once, quoted in Evidence: version 1's entry equals `legal.terms` and `legal.refunds` from `git show 7540073:platform/site/src/lib/legal.ts` (a one-off tsx comparison).
 - Production: `pnpm --filter @backseat/supabase exec tsx scripts/anon-negative-test.ts` and `pnpm --filter @backseat/supabase exec tsx scripts/ledger-identity.ts` PASS; `select version, posted_at from public.terms_versions order by version` and `select has_table_privilege('service_role', 'public.terms_versions', 'insert'), has_function_privilege('anon', 'public.terms_version_at(timestamptz)', 'execute')` (both false) read back; `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs` PASS.
 
-## Production steps (need the board's allow)
+## Production steps
 
 The studio stays paused throughout.
 
@@ -99,7 +99,7 @@ The studio stays paused throughout.
 
 ## Board items (listed, never blocking)
 
-- BOARD-SETUP step 10: send a mailing address and phone for the Ontario disclosure; a later board pull request adds them as a new version.
+- BOARD-SETUP step 10: send a mailing address and phone for the Ontario disclosure; a later kernel pull request adds them as a new version.
 - BOARD-SETUP step 12 (Stripe Dashboard): turn on "Require customers to accept your terms of service" on the Payment Link, and leave Adaptive Pricing alone: Stripe keeps the session in the price's currency (USD), so a local-currency checkout is still credited (BOARD-SETUP Reference 12, 1 October 2026).
 - BOARD-SETUP step 14: read the posted Terms, Refunds and Privacy pages.
 - BOARD-SETUP D: a paid lawyer's review of the pages (whether a contribution is a consumer internet agreement, whether the Consumer Protection Act, 2023 is in force, delivering a copy within 15 days, and the age, refund-fallback and wind-down wording).

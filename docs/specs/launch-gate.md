@@ -95,7 +95,7 @@ Card tests, the headless bot and the end-to-end suite all run card code. The bot
 - [x] A clean install with `--ignore-scripts` builds both folders, the builds scan clean, and the bot runs.
 - [x] This pull request's own gate run shows the new `detect` scans and the `build` job green.
 - [ ] A card pull request after merge shows the lane check, the kernel restore and the bot in the `build` job green, and no Netlify deploy preview (waits on: the first card run after merge).
-- [ ] Both Netlify sites' build settings read back, and any existing deploy preview of a `card/*` branch deleted (waits on: the board's allow for the Netlify read and delete).
+- [ ] Both Netlify sites' build settings read back, and any existing deploy preview of a `card/*` branch deleted (waits on: a local session on the Mac for the Netlify read and delete).
 
 ## Verification
 
@@ -108,11 +108,11 @@ Card tests, the headless bot and the end-to-end suite all run card code. The bot
 - `pnpm verify`
 - This pull request's gate run.
 - The first card pull request after merge (waits on: the first card run after merge).
-- The Netlify build settings read (waits on: the board's allow).
+- The Netlify build settings read (waits on: a local session on the Mac, which holds the secrets).
 
-## Production steps (need the board's allow)
+## Production steps
 
-1. After merge, read both Netlify sites (`GET /api/v1/sites/{site_id}` for peanutgallerygames and peanutgallery-seed-1) and quote the deploy-preview and branch-deploy settings. Previews of board pull requests stay on; the `ignore` command already skips `card/*` branches.
+1. After merge, read both Netlify sites (`GET /api/v1/sites/{site_id}` for peanutgallerygames and peanutgallery-seed-1) and quote the deploy-preview and branch-deploy settings. Previews of kernel pull requests stay on; the `ignore` command already skips `card/*` branches.
 2. List each site's deploys with context `deploy-preview` or `branch-deploy` whose branch starts with `card/`, and delete them so their public URLs stop serving. Quote the list before and after.
 
 ## Evidence

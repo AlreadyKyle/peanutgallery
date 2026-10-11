@@ -192,6 +192,7 @@ export const KERNEL_PATHS: readonly string[] = [
   'platform/site/src/components/PausedNotice.tsx',
   'platform/site/src/components/PoolStat.tsx',
   'platform/site/src/components/ReportFacts.tsx',
+  'platform/site/src/components/ShareCard.tsx',
   'platform/site/src/components/StaleNotice.tsx',
   'platform/site/src/components/Stat.tsx',
   'platform/site/src/components/Stopped.tsx',

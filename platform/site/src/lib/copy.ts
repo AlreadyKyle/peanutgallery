@@ -116,8 +116,8 @@ export const copy = {
     draftingIdle: 'The Game Designer drafts more cards when the open ones run low.',
     draftingDone: "The Game Designer has used today's {n} drafts and is back tomorrow.",
     draftingNoMoney: 'The Game Designer drafts the next card when a contribution comes in.',
-    // A Next up card's line: an approved agent card waiting to open, board work, or a planned card.
-    boardWork: 'The board builds this one itself',
+    // A Next up card's line: an approved agent card waiting to open, kernel work, or a planned card.
+    kernelWork: 'The studio builds this one itself, with no card',
     planned: 'Planned, opens for funding later',
     count: '{n} cards',
     countOne: '1 card',
@@ -220,6 +220,11 @@ export const copy = {
     loading: 'Loading the reports.',
     empty: 'No weekly report yet. A report is published after a week in which a card shipped.',
   },
+  // Home's strip of cards shipped since this browser's last visit (docs/specs/supporter-loop.md).
+  sinceVisit: {
+    heading: 'Since your last visit',
+    shipped: 'Shipped, and its page shows how it was built.',
+  },
   cardPage: {
     back: 'All cards',
     cardTitle: 'A card',
@@ -244,6 +249,14 @@ export const copy = {
     changedLede: 'The values the checks confirmed after the change went live.',
     changedValue: '{file} {path}: {value}',
     changed: 'changed',
+    // A check in plain words, where the game's config says what its field means (lib/config-words.ts).
+    plain: {
+      baseCost: '{name} costs {value} dust to build.',
+      rate: 'Each {name} makes {value} dust a second.',
+      name: '{name} is now called {value}.',
+      atTotalDust: '{name} unlocks at {value} total dust.',
+      effectValue: '{name} multiplies dust by {value}.',
+    },
     stoppedHeading: 'Why it stopped',
     linesHeading: 'What the agents did',
     linesLede: 'Each step an agent took on this card, oldest first.',

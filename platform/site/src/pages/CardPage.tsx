@@ -11,6 +11,7 @@ import { Supporters } from '../components/Supporters';
 import { Timeline } from '../components/Timeline';
 import { parseChecks, useCardDetail, type CardDetail } from '../lib/card-source';
 import { faceOf, isPlanned } from '../lib/cards';
+import { changedLine } from '../lib/config-words';
 import { copy } from '../lib/copy';
 import { formatDateTime, formatInteger, shortSha } from '../lib/format';
 import { legal } from '../lib/legal';
@@ -107,13 +108,14 @@ function Changed({ detail }: { detail: CardDetail }) {
       <h2 id="card-changed">{words.changedHeading}</h2>
       <p className="muted">{words.changedLede}</p>
       <ul className="rows what-changed">
-        {checks.map((check) => (
-          <li key={`${check.file} ${check.path}`}>
-            <code>
-              {words.changedValue.replace('{file}', check.file).replace('{path}', check.path).replace('{value}', check.value ?? words.changed)}
-            </code>
-          </li>
-        ))}
+        {checks.map((check) => {
+          const line = changedLine(check);
+          return (
+            <li key={`${check.file} ${check.path}`} data-plain={line.plain ? 'true' : undefined}>
+              {line.plain ? line.text : <code>{line.text}</code>}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );
