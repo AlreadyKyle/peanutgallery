@@ -24,6 +24,8 @@ export const copy = {
   teamNav: 'Team',
   // The footer's link to /reports (docs/specs/studio-reports.md).
   reportsNav: 'Weekly reports',
+  // The footer's link to the Atom feed of shipped cards (docs/specs/ship-feed.md).
+  feedLink: 'Follow every ship (RSS)',
   fullLedger: 'Full ledger',
   // The ledger shows the ten newest agent actions until the reader asks for the rest.
   showAllActions: 'Show all {n} agent actions',

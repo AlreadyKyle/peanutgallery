@@ -181,7 +181,7 @@ describe('the public values', () => {
 });
 
 describe('the functions folder', () => {
-  it('holds the two functions alone, since Netlify deploys every file there as a function', () => {
-    expect(readdirSync(join(import.meta.dirname, 'functions')).sort()).toEqual(['card.mts', 'snapshot.mts']);
+  it('holds the three functions alone, since Netlify deploys every file there as a function', () => {
+    expect(readdirSync(join(import.meta.dirname, 'functions')).sort()).toEqual(['card.mts', 'feed.mts', 'snapshot.mts']);
   });
 });

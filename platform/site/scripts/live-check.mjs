@@ -38,7 +38,7 @@
 // The site's own documents (docs/specs/site-snapshot.md): no page requests the Supabase host or opens
 // a WebSocket, on any route; /api/live answers 200 JSON with every key in snapshot-keys.json and a
 // browser Cache-Control of max-age=0, a second read within 60 seconds is a CDN hit (production),
-// /api/cards answers 200, /api/live?x=1 answers 400, /api/reports answers 200 with its reports list
+// /api/cards answers 200, /feed.xml answers 200 application/atom+xml (docs/specs/ship-feed.md), /api/live?x=1 answers 400, /api/reports answers 200 with its reports list
 // and /api/reports?x=1 400 (docs/specs/studio-reports.md), and one /assets/*.js is immutable.
 // Assets (the icons and version.json), og:image as an absolute URL, and
 // /og.png as a 200 image/png of 1200x630; the newest live card's page names its own preview, a
@@ -702,6 +702,14 @@ try {
       check(reportsQuery.status === 400, `/api/reports?x=1 ${reportsQuery.status}`);
       const query = await fetch(`${BASE}/api/live?x=1`);
       check(query.status === 400 && (query.headers.get('cache-control') ?? '') === 'no-store', `/api/live?x=1 ${query.status} Cache-Control ${query.headers.get('cache-control')}`);
+      // The Atom feed of shipped cards (docs/specs/ship-feed.md): 200 as application/atom+xml.
+      const feedAnswer = await fetch(`${BASE}/feed.xml`);
+      const feedType = feedAnswer.headers.get('content-type') ?? '';
+      const feedBody = await feedAnswer.text();
+      check(
+        feedAnswer.status === 200 && feedType.includes('application/atom+xml') && feedBody.includes('<feed xmlns="http://www.w3.org/2005/Atom">'),
+        `/feed.xml ${feedAnswer.status} ${feedType}, ${(feedBody.match(/<entry>/g) ?? []).length} entr(ies)`,
+      );
       // The card function (docs/specs/supporter-pages.md): a malformed id is a 400 before any read, and
       // /api/thanks answers a made-up session exactly pending, never cached.
       const malformed = await fetch(`${BASE}/api/card/not-a-card`);
