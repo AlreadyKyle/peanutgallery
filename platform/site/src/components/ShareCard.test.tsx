@@ -9,6 +9,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   Reflect.deleteProperty(navigator, 'share');
+  Reflect.deleteProperty(navigator, 'clipboard');
 });
 
 describe('ShareCard', () => {
@@ -32,6 +33,12 @@ describe('ShareCard', () => {
 
   it('shows the address to copy by hand when the clipboard refuses', async () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true });
+    render(<ShareCard title="A cheaper Mill" url={URL} />);
+    fireEvent.click(screen.getByRole('button', { name: copy.cardPage.share }));
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.cardPage.shareFailed.replace('{url}', URL)));
+  });
+
+  it('shows the address to copy by hand where the browser has no clipboard at all', async () => {
     render(<ShareCard title="A cheaper Mill" url={URL} />);
     fireEvent.click(screen.getByRole('button', { name: copy.cardPage.share }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe(copy.cardPage.shareFailed.replace('{url}', URL)));
