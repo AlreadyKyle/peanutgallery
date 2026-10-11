@@ -17,7 +17,7 @@ Out: the money rules, the waterfall and the horizon rule (only horizon now cards
 
 The agents keep cards open for funding with no one acting: when fewer than 6 are open, the dispatcher queues the Game Designer's `draft_card`, the Game Director grades the draft, and an approved card opens (`docs/PLAN.md` §10 decision 66). The board can file cards but never has to.
 
-Home's Next up lane holds only the agents' approved cards waiting to open (an approval sets `opens_at`), soonest first, and never a backlog card, board work or a held card. With none it says approved drafts wait there a few minutes before they open, beside the Game Designer's drafting status. It links nowhere.
+Home's Next up lane holds only the agents' approved cards waiting to open (an approval sets `opens_at`), soonest first, and never a backlog card, kernel work or a held card. With none it says approved drafts wait there a few minutes before they open, beside the Game Designer's drafting status. It links nowhere.
 
 There is no `/roadmap` page. `/roadmap` answers 301 to home, the top bar and the sitemap drop it, and every link that named it goes to home's cards to fund ("See the cards to fund"): a planned card's own page and the empty weekly reports page. `/team`'s Planned section links nothing. The ledger and the weekly reports are the studio's history.
 
@@ -25,7 +25,7 @@ The Game Designer may start up to 12 `draft_card` runs a New York day instead of
 
 ## Acceptance criteria
 
-- [ ] Home's Next up lane draws only approved cards waiting to open, never a backlog card, board work or a held card.
+- [ ] Home's Next up lane draws only approved cards waiting to open, never a backlog card, kernel work or a held card.
 - [ ] No page links `/roadmap`; the top bar has How it works, Team and Ledger; the sitemap has no `/roadmap`.
 - [ ] `/roadmap` answers 301 to `/` (netlify.toml, unit-tested) and the live check lands on home.
 - [ ] A planned card's page and the empty reports page link "See the cards to fund" to `/`.

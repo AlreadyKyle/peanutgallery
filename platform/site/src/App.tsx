@@ -210,6 +210,12 @@ function SiteFooter() {
             <Link to="/reports">{copy.reportsNav}</Link>
           </li>
           <li>
+            {/* A file the feed function serves, not a page of the app, so a plain link (docs/specs/ship-feed.md). */}
+            <a href="/feed.xml" type="application/atom+xml">
+              {copy.feedLink}
+            </a>
+          </li>
+          <li>
             <Link to="/terms">{legal.footerLinks.terms}</Link>
           </li>
           <li>

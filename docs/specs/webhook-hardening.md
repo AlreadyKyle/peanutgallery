@@ -86,7 +86,7 @@ Out:
 - `pnpm verify`
 - The production steps below, each with its output quoted.
 
-## Production steps (need the board's allow)
+## Production steps
 
 Run in this order from the repository root unless a step says otherwise.
 

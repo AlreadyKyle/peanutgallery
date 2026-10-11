@@ -2,7 +2,7 @@
 
 Status: built. Card: none. Owner: board. PR2 to PR5 are merged; only the production migration and the live checks remain.
 
-The runtime of `docs/PLAN.md` §10 decision 66 (10 October 2026, the board). Four board pull requests in order, each from main after the one before has merged on a green gate: PR2 the visual review, PR3 auto-resume and the studio's auto-unpause, PR4 the self-refilling card supply and the end of `studio_ranking`, PR5 attended mode and the board heartbeat out of the dispatcher. PR1 was the docs (`docs/optional-board` branch); the board's panel is `docs/specs/optional-board.md`. Every part is kernel, so each is a board pull request.
+The runtime of `docs/PLAN.md` §10 decision 66 (10 October 2026, the board). Four kernel pull requests in order, each from main after the one before has merged on a green gate: PR2 the visual review, PR3 auto-resume and the studio's auto-unpause, PR4 the self-refilling card supply and the end of `studio_ranking`, PR5 attended mode and the board heartbeat out of the dispatcher. PR1 was the docs (`docs/optional-board` branch); the board's panel is `docs/specs/optional-board.md`. Every part is kernel, so each is a kernel pull request.
 
 ## Problem
 
@@ -62,7 +62,7 @@ PR3
 
 PR4
 - [x] With the supply short, a `draft_card` run with origin `schedule` is queued with no board action, and never two at once.
-- [x] The run drafts the next seed-1 backlog card by horizon, rank and age, skipping board work and drafted cards, and with none opens a new private seed-1 card; a withdrawn draft rejects a new card and leaves a backlog card as it was.
+- [x] The run drafts the next seed-1 backlog card by horizon, rank and age, skipping kernel work and drafted cards, and with none opens a new private seed-1 card; a withdrawn draft rejects a new card and leaves a backlog card as it was.
 - [x] An approved draft fills that card's fields, records a draft approval on it, and `deal_due_cards` deals it.
 - [x] Both sessions' ledger rows are studio-billed with that card's id.
 - [x] No pg_cron job, board control or handler starts `studio_ranking`.

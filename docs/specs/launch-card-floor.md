@@ -4,7 +4,7 @@ Status: agreed. Card: none. Owner: board.
 
 Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): superseded. The card supply refills itself: a scheduled `draft_card` drafts the next seed-1 backlog card when `card_supply()` is short, unattended and billed to that card, so no attended session and no Draft to the floor are needed. The status stays agreed as a record; nothing in it will run.
 
-Series position: last in the launch series, after copy-pass (the order is in `docs/ROADMAP.md`, "The launch series"). It uses studio-reports' `card_supply()` and Draft to the floor, agent-workflows' `draft_card` job, agent-system-core's approvals and dealing, and money-logic's `public_money.funding_order`. It is a board pull request of docs only: this spec's Evidence and its ROADMAP row (the spec and the row land first, with the series). The work itself is one attended production session.
+Series position: last in the launch series, after copy-pass (the order is in `docs/ROADMAP.md`, "The launch series"). It uses studio-reports' `card_supply()` and Draft to the floor, agent-workflows' `draft_card` job, agent-system-core's approvals and dealing, and money-logic's `public_money.funding_order`. It is a kernel pull request of docs only: this spec's Evidence and its ROADMAP row (the spec and the row land first, with the series). The work itself is one attended production session.
 
 It covers the launch plan's Phase 2 "Card supply" (PG-10), Phase 5's "The first public cards are chosen for first-pass success" (L16) and "the launch cards are open to fund", and the launch clip (PG-15).
 
@@ -59,7 +59,7 @@ Each SELECT goes through the Management API query endpoint and is read-only.
 - `set -a; . ./.env; set +a; node platform/site/scripts/live-check.mjs`
 - `rm -rf platform/site/dist-e2e platform/board/dist-e2e && pnpm verify` on the docs pull request.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. Dump: `/opt/homebrew/opt/libpq/bin/pg_dump "$BACKUP_DB_URL" --format=custom --file ~/peanutgallery-dumps/pre-card-floor-<UTC>.dump`, then `chmod 600`, and quote its size.
 2. Quote `card_supply()` and the start time.

@@ -4,7 +4,7 @@ Status: built. Card: none. Owner: board.
 
 Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): the deferred triage model is dropped; the board's site becomes the optional panel of `optional-board.md`.
 
-The board's order of 6 October 2026: the board concept and its sign-in feel weird. Cut the same day to critical fixes and minutes-long wording changes; the bigger, simpler model was one backlog entry, A simpler board site: triage queue and sign-in, removed when PLAN.md §10 decision 66 made the board's site an optional panel (`optional-board.md`). This is a board pull request: `platform/board` and `platform/site/src/lib/legal.ts` are kernel.
+The board's order of 6 October 2026: the board concept and its sign-in feel weird. Cut the same day to critical fixes and minutes-long wording changes; the bigger, simpler model was one backlog entry, A simpler board site: triage queue and sign-in, removed when PLAN.md §10 decision 66 made the board's site an optional panel (`optional-board.md`). This is a kernel pull request: `platform/board` and `platform/site/src/lib/legal.ts` are kernel.
 
 ## Audit
 

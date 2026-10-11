@@ -6,7 +6,7 @@
 // baseline.json, or before any baseline exists, passes, and the gate log reports what is missing. The
 // change is the diff against the gate's base (EVAL_BASE, which gate.yml and scripts/local-gate.sh set
 // to the commit they compare with), or origin/main's merge base locally. A baseline still moves only
-// in a board pull request that gives the reason, and one that moves without it fails.
+// in a kernel pull request that gives the reason, and one that moves without it fails.
 // Run from the repository root: node --test platform/agents/evals.test.mjs
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -33,7 +33,7 @@ export function evalRule(changes, read) {
   if (baselineChanged) {
     const baseline = read(BASELINE);
     if (!baseline || typeof baseline.reason !== 'string' || baseline.reason.trim() === '') {
-      return { ok: false, reason: `${BASELINE} changed without a reason: a baseline moves only in a board pull request that gives it` };
+      return { ok: false, reason: `${BASELINE} changed without a reason: a baseline moves only in a kernel pull request that gives it` };
     }
   }
   const guarded = changes.filter((c) => GUARDED.test(c.path)).map((c) => c.path);

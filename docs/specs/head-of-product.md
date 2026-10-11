@@ -30,7 +30,7 @@ Out:
 - **The session.** It starts one Managed Agents session for the Head of Product. The session holds Read, Glob and Grep, no Bash, Write, Edit, web or MCP tool, and no fallback model. Its folder holds those frames, `platform/site/DESIGN.md`, `docs/COPY.md` and the rubric.
 - **The answer.** The session answers one `product-review` object: up to eight findings. Each finding has a page, a width, a frame file name, a criterion (first_action, dead_space, unbalanced, legibility, copy_mismatch, all_ages) from a closed list, a severity (high, medium or low) and a short title that passes the deny-list. A finding carries no free-text instruction to a writing role.
 - **Billing.** The review is billed as one card of its own, "Monthly site review", opened by the dispatcher and funded like any card (the money rule of "Post-ship grade and monthly design audit"). It runs only when that card's bar has filled, so no overhead budget is needed.
-- **Where findings go.** Findings appear on the card's page as fixed lines and on the board's panel. The board files any it wants as board work. A high-severity all_ages finding alerts the board by ntfy.
+- **Where findings go.** Findings appear on the card's page as fixed lines and on the board's panel. The board files any it wants as kernel work. A high-severity all_ages finding alerts the board by ntfy.
 - **The role on /team.** The role moves from Starts to Running only in the pull request that ships the job, so /team never shows it running before it does.
 
 ## Acceptance criteria

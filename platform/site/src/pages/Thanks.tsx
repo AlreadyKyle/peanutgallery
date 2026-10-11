@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CoinMark, FundingBar } from '../components/Funding';
 import { PageHeader } from '../components/PageHeader';
+import { ShareCard } from '../components/ShareCard';
 import { LinkedText } from '../components/TextPage';
 import { copy } from '../lib/copy';
 import { siteEnv } from '../lib/env';
@@ -51,6 +52,64 @@ function ReachedRow({ id, snapshot }: { id: string; snapshot: Snapshot | null })
   );
 }
 
+type Step = (typeof words.nextSteps)[number]['key'];
+
+/** Which step of What happens next a card is on, from its stage; null while it is still open. */
+export function currentStep(stage: string | undefined): Step | null {
+  if (stage === 'funded') return 'drafting';
+  if (stage === 'building') return 'building';
+  if (stage === 'gated') return 'gate';
+  if (stage === 'live') return 'live';
+  return null;
+}
+
+/**
+ * The reward (docs/specs/supporter-loop.md): the card the money went to first, drawn as a card with
+ * the supporter's number on its face, then what happens to it next and its Share button. A payment
+ * with no supporter number draws the face without one; nothing here holds an amount, email or name.
+ */
+function RewardBand({ id, answer, snapshot }: { id: string; answer: Recorded; snapshot: Snapshot | null }) {
+  const card = snapshot?.cards.find((c) => c.id === id);
+  const stopped = snapshot?.stopped?.find((s) => s.card_id === id);
+  const title = card?.title ?? stopped?.title ?? words.cardFallback;
+  const line = stateLine(card, stopped !== undefined);
+  const now = stopped === undefined ? currentStep(card?.stage) : null;
+  return (
+    <section className="section thanks-reward" aria-labelledby="reward">
+      <h2 id="reward" className="sr-only">
+        {words.faceHeading}
+      </h2>
+      <div className="card thanks-face" data-card={id}>
+        {answer.supporter === null ? null : (
+          <p className="thanks-number" data-supporter={answer.supporter.number}>
+            {words.faceNumber.replace('{n}', formatInteger(answer.supporter.number))}
+          </p>
+        )}
+        <h3>
+          <Link to={`/card/${id}`}>{title}</Link>
+        </h3>
+        {line === null ? null : <p className="card-meta">{line}</p>}
+      </div>
+      <p className="muted">{words.shareLede}</p>
+      <ShareCard title={title} url={`${window.location.origin}/card/${id}`} />
+      {stopped === undefined ? (
+        <>
+          <h3 id="next">{words.nextHeading}</h3>
+          <ol className="thanks-next" aria-labelledby="next">
+            {words.nextSteps.map((step) => (
+              <li key={step.key} data-step={step.key} aria-current={now === step.key ? 'step' : undefined}>
+                <strong>{step.label}</strong> {step.body}
+                {now === step.key ? <span className="thanks-now"> {words.nextNow}</span> : null}
+              </li>
+            ))}
+          </ol>
+          <p data-note="ship-email">{words.shipEmail}</p>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 function HomeLinks() {
   const env = siteEnv();
   return (
@@ -98,6 +157,7 @@ function RecordedBody({ answer, snapshot }: { answer: Recorded; snapshot: Snapsh
   const watch = answer.namedCardId ?? reached[0] ?? null;
   return (
     <>
+      {reversed || watch === null ? null : <RewardBand id={watch} answer={answer} snapshot={snapshot} />}
       <section className="section" aria-labelledby="reached">
         <h2 id="reached">{words.reachedHeading}</h2>
         {reversed ? (

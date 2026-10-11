@@ -4,6 +4,9 @@ import { Glyph } from './Glyph';
 
 type ShareState = 'idle' | 'copied' | 'failed';
 
+// Kernel (docs/specs/supporter-loop.md): /thanks, a kernel page, puts this button beside the card a
+// payment reached, so it lives in the kernel list; the card's own page uses it too.
+
 /**
  * Share this card (docs/BACKLOG.md, Share button and link preview for each card): the browser's
  * share sheet where there is one, else the card's address copied to the clipboard, with one polite

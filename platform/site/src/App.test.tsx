@@ -162,7 +162,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
 });
 
 describe('Site chrome', () => {
-  it('links Weekly reports, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
+  it('links Weekly reports, the feed, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
     for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/contact', '/board', '/no-such-page']) {
       renderAt(path);
       const footer = screen.getByRole('contentinfo');
@@ -171,6 +171,7 @@ describe('Site chrome', () => {
         .map((link) => [link.textContent, link.getAttribute('href')]);
       expect(links, path).toEqual([
         [copy.reportsNav, '/reports'],
+        [copy.feedLink, '/feed.xml'],
         [legal.footerLinks.terms, '/terms'],
         [legal.footerLinks.privacy, '/privacy'],
         [legal.footerLinks.refunds, '/refunds'],

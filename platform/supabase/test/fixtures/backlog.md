@@ -17,7 +17,7 @@ and so are level-2 headings and fenced blocks.
 - rank: 1
 - summary: Let players pick the next card without paying, alongside funding.
 - intent: A free vote for each signed-in player, counted beside the money on each card, so the audience steers without paying. It is not built yet.
-- board: yes
+- kernel: yes
 
 ### Studio Head drafts cards from the roadmap
 
@@ -25,9 +25,9 @@ and so are level-2 headings and fenced blocks.
 - folder: platform
 - horizon: next
 - rank: 2
-- summary: The Studio Head turns roadmap items into draft cards for the board to review.
-- intent: A scheduled Studio Head session reads the roadmap and files draft cards the board can edit and move to now. It is not built yet.
-- board: yes
+- summary: The Studio Head turns roadmap items into draft cards for review.
+- intent: A scheduled Studio Head session reads the roadmap and files draft cards an agent can edit and move to now. It is not built yet.
+- kernel: yes
 
 ## Later
 
@@ -38,4 +38,4 @@ and so are level-2 headings and fenced blocks.
 - rank: 1
 - summary: A second set of unlocks that opens after the first track is complete.
 - intent: Players who finish every unlock get a new track with its own goals, so the game keeps a next goal on screen. It is not built yet.
-- board: no
+- kernel: no

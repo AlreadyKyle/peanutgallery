@@ -154,7 +154,7 @@ The Read, Glob and Grep tools, which the sandbox does not cover, are denied the 
   - reach an external host.
 
   The Read tool is denied `.env`, and the seed-1 test, typecheck and bot pass inside the sandbox.
-- [ ] `managed:apply` creates `peanutgallery-writer` and `peanutgallery-cards` in the studio organization and prints the three ids. (waits on: the board's allow)
+- [ ] `managed:apply` creates `peanutgallery-writer` and `peanutgallery-cards` in the studio organization and prints the three ids. (waits on: a local session on the Mac, which holds the secrets)
 - [ ] `managed:apply --check` creates and archives a one-cent session with the repository mounted at main. (waits on: GITHUB_READ_TOKEN creation; Console credit if the API refuses an organization with none)
 - [ ] `provision.sh` on the VPS proves the real read token is denied a write. (waits on: GITHUB_READ_TOKEN creation, cutover)
 - [ ] `probe.ts --toolchain` prints `PASS: toolchain`. (waits on: Console credit, cutover)
@@ -168,7 +168,7 @@ The Read, Glob and Grep tools, which the sandbox does not cover, are denied the 
 - `pnpm --filter @backseat/dispatcher test`, which runs the managed, managed-meter, managed-config, patch, recovery-managed, smoke, unattended, startup, attended, factory, config, pipeline and tick tests.
 - `pnpm test:ops`, which runs the env file keys, provision's read-token checks, `read_token_verdict`, `check_ref`, the image with no claude, and the workflow audit.
 - `SANDBOX_CHECK_REPO_ROOT=<the Mac's checkout> pnpm --filter @backseat/dispatcher sandbox:check --positive` on the Mac. The first line must read `PASS: attended sandbox`.
-- Live, in the order of Production steps: the `managed:apply` output, the `--check` output, `provision.sh`'s read-token line, `PASS: toolchain`, the journal lines, and the first card's ledger rows, each quoted here. (waits on: the board's allow, GITHUB_READ_TOKEN creation, Console credit, the cutover)
+- Live, in the order of Production steps: the `managed:apply` output, the `--check` output, `provision.sh`'s read-token line, `PASS: toolchain`, the journal lines, and the first card's ledger rows, each quoted here. (waits on: a local session on the Mac, GITHUB_READ_TOKEN creation, Console credit, the cutover)
 
 ## Evidence
 
@@ -259,7 +259,7 @@ The settings were checked against the installed command line, not assumed. `clau
   14 failIfUnavailable
 ```
 
-## Production steps (need the board's allow)
+## Production steps
 
 Nothing below has run. Each writes to the studio's Anthropic organization, GitHub or the VPS, and each follows this change's merge.
 

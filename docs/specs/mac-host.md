@@ -69,7 +69,7 @@ Out: the Google Cloud move (a backlog entry, waiting on the board's billing acco
 - The cutover's lines, the restart checks and the soak (waits on: Console credit and the cutover).
 - The restore drill (waits on: the board with the offline key).
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. After the board's step 3: write `env/dispatcher.env` with `make-dispatcher-env.sh` and the jobs' with `JOBS_ENV_DIR=~/peanutgallery-host/env make-jobs-env.sh backup-mac controller quota`, then `install.sh` twice. Quote both outputs.
 2. The Controller's dry run (after the board is told what it reads), `run-job.sh quota --now` and `run-job.sh backup --now`. Quote each.

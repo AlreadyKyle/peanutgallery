@@ -64,7 +64,7 @@ address of the founder's appears.
 
 **Prompts.** No week or day numbers, no "re-vote" (a stopped card pauses for the board), no vote
 wording outside the kernel line mirrored from PLAN, and every unbuilt mechanic marked not running
-yet. The Platform Builder builds studio cards (pages, copy, presentation) and describes board work
+yet. The Platform Builder builds studio cards (pages, copy, presentation) and describes kernel work
 as a proposal, never makes it. The smoke sentence matches the smoke that runs no card code, and the
 builders may run only the `git` commands a session's closing instructions name for handing back
 work.
@@ -80,13 +80,13 @@ work.
 - [x] BACKLOG.md parses in the contract format with unique titles, ranks 1 upward per horizon and every intent saying it is not built yet (test: "parses in the backlog format"), and the launch/db parser reads the same 46 entries (run against a copy of that parser, quoted under Evidence).
 - [x] Every line under PLAN.md §4 Not built yet links a BACKLOG.md entry by its title, every entry is listed there, and every `BACKLOG.md#` link in the docs lands (tests: "every mechanic … links a backlog entry", "every link into docs/BACKLOG.md").
 - [x] The company guard reads every Markdown file under `docs/` and the prompts, and passes (test: "name none of the founder's other companies").
-- [x] The prompts mark the unbuilt mechanics not running yet, say nothing of re-votes, winning votes or start days, and the Platform Builder names board work instead of changing the card system (test: "mark mechanics that are not built").
+- [x] The prompts mark the unbuilt mechanics not running yet, say nothing of re-votes, winning votes or start days, and the Platform Builder names kernel work instead of changing the card system (test: "mark mechanics that are not built").
 - [x] The Seed 1 pillars line is unchanged and the Game Director prompt still carries it (`specs.test.mjs`, 64 of 64).
 - [x] The gate fixture injects its marker on a line that exists, the middle of PLAN.md (gate tests, 213 passed).
 - [x] ROADMAP rows naming a spec path show the spec's own status (test: "every ROADMAP row").
 - [x] CI's platform job runs a green "Docs tests" step on this pull request (gate run 35796053515, quoted under Evidence).
 - [ ] With launch/db on main, the parser test runs instead of skipping and passes (waits on: the launch/db merge).
-- [ ] `file-backlog` prints next 6 and later 40, seed-1 2 and platform 44 as a dry run, and then files them (waits on: the launch/db merge, its migrations, and the board's allow).
+- [ ] `file-backlog` prints next 6 and later 40, seed-1 2 and platform 44 as a dry run, and then files them (waits on: the launch/db merge, its migrations, and a local session on the Mac).
 
 ## Verification
 
@@ -98,7 +98,7 @@ work.
 - After push: the pull request's gate run shows the platform job's "Docs tests" step green.
 - Each other launch branch merged into this one on a throwaway local branch, then `node --test docs/docs.test.mjs` (and, for `launch/db`, `node --test platform/agents/specs.test.mjs`; for `launch/gate`, `bash platform/gate/test/run-tests.sh`), so the tests hold once the merge queue lands.
 - (waits on: the launch/db merge) the same docs test on the rebased branch runs the parser test rather than skipping it.
-- (waits on: the launch/db merge and the board's allow) `pnpm --filter @backseat/supabase file-backlog` as a dry run, the counts quoted and matched to this spec, then `-- --apply` with the inserted count quoted.
+- (waits on: the launch/db merge and a local session on the Mac) `pnpm --filter @backseat/supabase file-backlog` as a dry run, the counts quoted and matched to this spec, then `-- --apply` with the inserted count quoted.
 
 ## Evidence
 
@@ -118,7 +118,7 @@ work.
   - `launch/dispatcher` (0b81f55), `launch/cards` (097a085) and `launch/managed` (4a8bb42, work in progress): merge cleanly; docs tests 14 pass, 1 skipped.
 - `pnpm verify` is quoted in the pull request.
 
-## Production steps (need the board's allow)
+## Production steps
 
 1. After every other launch pull request has merged and the backlog migration is on production:
    `pnpm --filter @backseat/supabase file-backlog` (dry run), with the counts quoted and matched to
@@ -140,7 +140,7 @@ where it went: built (kept in PLAN), a BACKLOG.md entry, or superseded by a numb
 - **§4 (Three decision tiers)**: global and collective, Free voting on open cards (and Voter identity for free votes first). Personal decisions: Personal decisions for contributors.
 - **§4 (Buckets and allocation)**: Buckets, weekly allocation and the QA slider; buckets stay an internal tag.
 - **§4 (Incident reserve)**: the 5% up to $500 and the S1 draw, built. Deterministic S1 classification: In-game bug button and QA reproductions.
-- **§4 (The platform improves itself)**: the Platform team changing the card system, decision 32 (board work). Agents-bucket A/B: Agents improve agents, tested before merge. The efficiency curve: its entry. Metric definitions: kept (§4 Metrics).
+- **§4 (The platform improves itself)**: the Platform team changing the card system, decision 32 (kernel work). Agents-bucket A/B: Agents improve agents, tested before merge. The efficiency curve: its entry. Metric definitions: kept (§4 Metrics).
 - **§4 (The org chart)**: roles are data, built. Weekly agenda and Monday report: The Monday report. Blue-sky sessions: Studio Head blue-sky proposals. Org cards, replacement, the season review, model tier per role: Org chart changes and replacement votes; Seasons. The Scout and its trials: Scout agent for outside tools and trends. The Community agent and the Lore page: Community agent and the Lore page.
 - **§4 (The team, on screen)**: aliens and "AI agent", kept. Avatars from the image adapter: decision 27 (code-drawn SVG). Meet the Team: built at launch (/team, decision 26). Salary, scorecard, notable ships, bugs caused: Scorecards for every agent. Alumni wall: Org chart changes and replacement votes. Names from a filtered pool: The name pipeline. Dev Cam office: Twitch channel and stream scenes. Monday all-hands: The Monday report. Employee of the season: Seasons.
 - **§4 (Vote regimes)**: Vote weight regimes. Vetoes: Vetoes for the two directors. Names: The name pipeline.
@@ -156,7 +156,7 @@ where it went: built (kept in PLAN), a BACKLOG.md entry, or superseded by a numb
 - **§5 (Break-even and the scenario table)**: decision 24 (scenario figures). Second-order value: kept as §5 Possible later income. Canada admin: kept, with the HST review in BOARD-SETUP and Alert the board at the tax review threshold.
 - **§6 (Build 1)** (its day and week bars and a numbered launch day): decision 24 and the ROADMAP checklist. Built from it: the site, meter, ledger, Stripe, the dispatcher, the gate, rollback, /board with TOTP, the four columns, the incident reserve. Not built: each item maps above (OBS and scenes, the host, micro-votes, the second provider, the vote board, tiers, standing bars, the design stage, personal decisions, S1 classification, bug filing, auto-clips, the image adapter, Board Decisions, Lore, the phone kill switch).
 - **§6 (Roadmap through the system)**: the agent-maintained "How it works" wiki, superseded by /how-it-works (decision 26). Blue-sky, Play Cam, tiers, Steam, Scout trials, the efficiency curve, vote regimes, lore and name votes: their entries. Card-system improvements from platform metrics: decision 32.
-- **§6 (Architecture)**: the dispatcher loop, the budget throttle, the game runtime and the layout, kept and updated. The public read-only mirror: Public mirror of the game with a license. The scheduler's timed jobs: their entries (the scheduler stub runs no handler). The image adapter: its entry. The blue/green heartbeat for agent-changed dispatcher versions: decisions 31 and 32 (the dispatcher is board work, and the platform code lane is closed). The stream architecture: Twitch channel and stream scenes, The host, Weekly episodes and clips, Twitch Bits and subscriptions. Technical risks: kept, updated.
+- **§6 (Architecture)**: the dispatcher loop, the budget throttle, the game runtime and the layout, kept and updated. The public read-only mirror: Public mirror of the game with a license. The scheduler's timed jobs: their entries (the scheduler stub runs no handler). The image adapter: its entry. The blue/green heartbeat for agent-changed dispatcher versions: decisions 31 and 32 (the dispatcher is kernel work, and the platform code lane is closed). The stream architecture: Twitch channel and stream scenes, The host, Weekly episodes and clips, Twitch Bits and subscriptions. Technical risks: kept, updated.
 - **§7 (First 72 hours)**: decisions 15 and 24; each mechanic in it maps above. Channels: kept. Content after launch: Weekly episodes and clips, Discord bot, News section on the site. Backlash: kept, with the response line amended by decision 21.
 - **§8 (Risks and kill conditions)**: kept; the kill table counted from Go live (decision 33), the pivots an open board decision.
 - **§9 (Sources)**: kept verbatim. §10 (Defaults in force): kept as decisions 1 to 20.

@@ -4,7 +4,7 @@ Status: built. Card: none. Owner: board.
 
 Amended by PLAN.md §10 decision 66 (`unattended-roles.md`): the board's site is an optional panel (`optional-board.md`). Needs you is superseded: the panel's first screen is Status, the standing duties reach the board by ntfy, email and GitHub, and `board_needs_you()` stays in the database, uncalled.
 
-The launch plan's Phase 3 "Board on its own site", the first pull request of Wave 2, from the reviews of 23 September 2026: R12 (board sign-in email and sign-ups), R16 (the money, ledger and legal surfaces as kernel, and the payment-host scan) and PG-23 (the "Needs you" inbox). This is a board pull request: it changes kernel files, listed under Scope.
+The launch plan's Phase 3 "Board on its own site", the first pull request of Wave 2, from the reviews of 23 September 2026: R12 (board sign-in email and sign-ups), R16 (the money, ledger and legal surfaces as kernel, and the payment-host scan) and PG-23 (the "Needs you" inbox). This is a kernel pull request: it changes kernel files, listed under Scope.
 
 ## Problem
 
@@ -52,7 +52,7 @@ Out:
 - each S1 card in a spending stage (funded, building, gated, paused), with what the emergency fund holds;
 - the Console credit to buy, when the latest run's figure is above zero and no purchase was recorded after that run: the steps, a **Fill in the record form** button (second factor) that fills the amount, the newest paid payout's id and a reason, and the Minimum balance to set in Stripe, in USD and in Stripe's settlement currency.
 
-With nothing due it says "Nothing needs you." Under the list: the latest run's time, whether the books matched Stripe, the credit figure and the Minimum balance; or, before any run, "No Controller run yet", with a link to Stripe's disputes. Two standing lines follow: refund requests arrive at hello@peanutgallery.games and are refunded in Stripe within 14 days; every pull request not from a card branch waits for the board's merge, linking GitHub's open pull requests filtered `-head:card/`. The dispatcher merges only the `card/*` branches it opens, so every other pull request (board work, HR's text changes, the Claude Code pin, a dependency update) is the board's, and the list needs no label anyone must remember. The inbox reloads once a minute.
+With nothing due it says "Nothing needs you." Under the list: the latest run's time, whether the books matched Stripe, the credit figure and the Minimum balance; or, before any run, "No Controller run yet", with a link to Stripe's disputes. Two standing lines follow: refund requests arrive at hello@peanutgallery.games and are refunded in Stripe within 14 days; every pull request not from a card branch is merged by a Claude session on a green gate (PLAN.md §10 decision 74), linking GitHub's open pull requests filtered `-head:card/`. The dispatcher merges only the `card/*` branches it opens, so every other pull request (kernel work, HR's text changes, the Claude Code pin, a dependency update) is a kernel pull request, and the list needs no label anyone must remember. The inbox reloads once a minute.
 
 **The tier cap.** The status line shows the usage tier cap or "No usage tier cap" and whether the studio code lane is open. The Caps form has "Anthropic usage tier monthly cap (USD)", blank for none; saving sends it with every other cap. `set_caps` changes the tier cap only when `p_set_anthropic_tier_cap` is true (null then removes it), refuses a value at or below zero or above $1,000,000, and records it in the board action's before and after.
 
@@ -97,10 +97,10 @@ With nothing due it says "Nothing needs you." Under the list: the latest run's t
 - `pnpm --filter @backseat/site e2e`
 - `pnpm --filter @backseat/board e2e`
 - `deno test --config platform/supabase/functions/deno.json --allow-read --allow-env platform/supabase/functions/_shared/migration_test.ts`
-- Production, after the production steps: `anon-negative-test.ts` and `ledger-identity.ts` PASS; `curl -sI` on the board site shows the headers; `node platform/site/scripts/live-check.mjs` with `BOARD_SITE_URL` from `.env` in its environment PASS (waits on: the board's allow).
+- Production, after the production steps: `anon-negative-test.ts` and `ledger-identity.ts` PASS; `curl -sI` on the board site shows the headers; `node platform/site/scripts/live-check.mjs` with `BOARD_SITE_URL` from `.env` in its environment PASS (waits on: a local session on the Mac, which holds the secrets).
 - The board's and the moderator's sign-ins on the board site (waits on: the board).
 
-## Production steps (need the board's allow)
+## Production steps
 
 The studio stays paused throughout. Merging removes /board from the public site as soon as Netlify deploys it, so steps 2 to 5 follow the merge without a gap; until the board site is up, a Pause the board asks for is made through the Management API.
 

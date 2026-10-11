@@ -29,7 +29,7 @@ Out: history, which is never rewritten: specs under `docs/specs/` other than thi
 
 ### The migration session, in order
 
-The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 together; the domain half (the steps marked "domain") runs in a later pull request once the board has registered one.
+The name ran on 23 September 2026 in one kernel pull request, tiers 1 and 2 together; the domain half (the steps marked "domain") runs in a later pull request once the board has registered one.
 
 1. [x] Fill the placeholders in this spec: the name is filled; `{{DOMAIN}}` waits on the board. The mark is settled (below); the game's address waits on the domain.
 2. [x] Branch. `node scripts/rename.mjs --apply --tier 1 --name "Mob Machine" --domain peanutgallery.games` (the domain unchanged on purpose). Domain: the same with `--domain {{DOMAIN}}`.
@@ -44,7 +44,7 @@ The name ran on 23 September 2026 in one board pull request, tiers 1 and 2 toget
 5. [x] `pnpm verify`, the site e2e and the board e2e (Evidence). Pull request, merge on a green gate.
 6. [ ] The board's steps below: the name ones after the deploy; the domain ones when the board has registered one. Open: none is ticked yet.
 7. [x] Production data: the read-only name query below; fix any hit through /board or a data migration with a dump first (`specs/money-safety.md`). A card that links to peanutgallery.games or the game's netlify.app address is correct until the domain moves, so the name query does not look for either. Domain: the domain query below (open, waits on the domain).
-8. [ ] The managed agent: `agent.yaml` and `environment.yaml` changed in tier 1 (the description and system text name the studio), so run `pnpm --filter @backseat/dispatcher managed:apply` with the board's allow and put the new `MANAGED_AGENT_VERSION` in the Mac host's `env/dispatcher.env`, then `platform/ops/mac/install.sh`. The startup check refuses an agent that differs from `agent.yaml`, so the unattended dispatcher does not start until this is done. The `name:` keys stay, because `managed:apply` finds the agent by name and a new name makes a new agent and a new id. Open: it ran and failed on "Your credit balance is too low to access the Anthropic API" (Evidence); it waits on Console credit, bought from a payout (`BOARD-SETUP.md` step 22), and the Mac host is not installed yet, so there is no env file to update.
+8. [ ] The managed agent: `agent.yaml` and `environment.yaml` changed in tier 1 (the description and system text name the studio), so run `pnpm --filter @backseat/dispatcher managed:apply` from a local session on the Mac and put the new `MANAGED_AGENT_VERSION` in the Mac host's `env/dispatcher.env`, then `platform/ops/mac/install.sh`. The startup check refuses an agent that differs from `agent.yaml`, so the unattended dispatcher does not start until this is done. The `name:` keys stay, because `managed:apply` finds the agent by name and a new name makes a new agent and a new id. Open: it ran and failed on "Your credit balance is too low to access the Anthropic API" (Evidence); it waits on Console credit, bought from a payout (`BOARD-SETUP.md` step 22), and the Mac host is not installed yet, so there is no env file to update.
 9. [x] Tier 2 ran in the same pull request (`--apply --tier 2`), since nothing in it waits on the domain. The ntfy titles change on the Mac after `install.sh`.
 10. [x] Update the memory files and this spec's Evidence; this spec is built, and moves to done when every line of Verification has run.
 
@@ -122,7 +122,7 @@ Counted by the script, never rewritten, each because renaming it costs more than
 - The production data name query, output quoted; domain: the domain query, output quoted
 - Domain: `curl -sI https://peanutgallery.games/how-it-works` shows a 301 to `https://{{DOMAIN}}/how-it-works`, and a link preview of `https://{{DOMAIN}}` (the Open Graph debugger of one platform) shows the new og.png and title
 
-## Production steps (need the board's allow)
+## Production steps
 
 In order, after the merge, the studio paused:
 
