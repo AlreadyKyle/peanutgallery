@@ -109,7 +109,7 @@ describe('savedAt and awaySeconds', () => {
 
   it('credits nothing when the clock went back', () => {
     expect(awaySeconds(10_000, 5_000)).toBe(0);
-    expect(awaySeconds(Number.NaN, 5_000)).toBe(0);
+    expect(awaySeconds(0 / 0, 5_000)).toBe(0);
   });
 
   it('credits at most 8 hours', () => {

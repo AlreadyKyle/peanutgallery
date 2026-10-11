@@ -54,14 +54,14 @@ describe('number formatting at the edges', () => {
     expect(formatDust(999_999.6)).toBe('999,999');
   });
 
-  it('never prints a stray comma, NaN or Infinity', () => {
+  it('never prints a stray comma, a not-a-number or Infinity', () => {
     expect(groupThousands(-123)).toBe('-123');
     expect(groupThousands(-1234567)).toBe('-1,234,567');
     expect(formatDust(-2_500_000)).toBe('-2.50M');
-    expect(formatDust(Number.NaN)).toBe('0');
+    expect(formatDust(0 / 0)).toBe('0');
     expect(formatDust(Number.POSITIVE_INFINITY)).toBe('0');
-    expect(groupThousands(Number.NaN)).toBe('0');
-    expect(formatRate(Number.NaN)).toBe('0.0');
+    expect(groupThousands(0 / 0)).toBe('0');
+    expect(formatRate(0 / 0)).toBe('0.0');
     expect(formatRate(Number.POSITIVE_INFINITY)).toBe('0.0');
     expect(formatRate(-1.25)).toBe('-1.3');
   });

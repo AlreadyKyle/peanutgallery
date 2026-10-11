@@ -177,7 +177,7 @@ describe('unlock pills', () => {
 
 describe('formatDuration at the edges', () => {
   it('reads a time away that is not a number as no time', () => {
-    expect(formatDuration(Number.NaN)).toBe('0s');
+    expect(formatDuration(0 / 0)).toBe('0s');
     expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('0s');
   });
 });

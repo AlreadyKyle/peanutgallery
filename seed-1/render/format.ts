@@ -12,7 +12,7 @@ const SUFFIXES: ReadonlyArray<{ value: number; suffix: string }> = [
 ];
 
 export function groupThousands(whole: number): string {
-  // A figure that is not a finite number shows as 0 rather than "NaN" or "Infinity".
+  // A figure that is not a finite number shows as 0 rather than "not a number" or "Infinity".
   if (!Number.isFinite(whole)) return '0';
   if (whole < 0) return `-${groupThousands(-whole)}`;
   const digits = Math.floor(whole).toString();
