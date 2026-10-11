@@ -25,7 +25,7 @@ Out: a picture of the game, supporter names, amounts per supporter, and any chan
 - [x] The face's colours equal tokens.css's and its words copy.ts's (`netlify/card-preview.test.ts`).
 - [x] Supporters are listed by number only; draft to live shows only once live (`netlify/card-preview.test.ts`).
 - [x] The card page's tags name the card, its address and its preview, HTML-escaped, and leave the other tags alone (`netlify/card-preview.test.ts`).
-- [ ] A shared card link on the deploy preview shows the card's face (a link preview debugger, run by the board).
+- [ ] Production's newest live card page names its own preview, and that preview is a 1200x630 PNG (the `live-check` workflow, `live-check.mjs`).
 
 ## Verification
 
