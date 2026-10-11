@@ -7,6 +7,7 @@ import { loadGameData } from './load';
 import { loadNextCard, showNextCard } from './next-card';
 import { attachShare } from './share';
 import { countEvent } from './count';
+import { runWhatsNew } from './whats-new';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
@@ -89,7 +90,22 @@ function startNextCard(): void {
   void loadNextCard().then((card) => showNextCard({ root, link, title, amount, fill }, card));
 }
 
+// What shipped for Dust since the last visit, for a returning player; read apart from the game too.
+function startWhatsNew(): void {
+  const root = document.getElementById('whats-new');
+  const link = document.getElementById('whats-new-link');
+  if (root === null || !(link instanceof HTMLAnchorElement)) return;
+  let store: Storage;
+  try {
+    store = window.localStorage;
+  } catch {
+    return;
+  }
+  void runWhatsNew({ root, link }, store, SAVE_KEY, Date.now());
+}
+
 start();
 startNextCard();
+startWhatsNew();
 // One Dust load counted, with nothing that names the player (docs/specs/play-counts.md).
 countEvent('dust_load');

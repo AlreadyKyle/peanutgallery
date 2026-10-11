@@ -2,10 +2,12 @@ import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBuildSha } from './build-sha.mjs';
+import { OG_FILE_NAME, ogImagePng } from './og-image.mjs';
 
 // Runs after `vite build`: the config lane is served as the files on disk, so
 // config/ and content/ are copied into dist/ byte for byte, and version.json
-// lets the smoke test confirm which commit is live.
+// lets the smoke test confirm which commit is live. It also draws the link preview picture
+// (scripts/og-image.mjs) that index.html's og:image names.
 export const COPIED_FOLDERS = ['config', 'content'];
 
 /**
@@ -18,6 +20,7 @@ export function runPostbuild(packageDir, dist) {
   for (const folder of COPIED_FOLDERS) {
     cpSync(join(packageDir, folder), join(dist, folder), { recursive: true });
   }
+  writeFileSync(join(dist, OG_FILE_NAME), ogImagePng());
   const version = { sha: resolveBuildSha(), builtAt: new Date().toISOString() };
   writeFileSync(join(dist, 'version.json'), `${JSON.stringify(version)}\n`);
   return version;
@@ -26,5 +29,5 @@ export function runPostbuild(packageDir, dist) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const packageDir = dirname(dirname(fileURLToPath(import.meta.url)));
   const version = runPostbuild(packageDir, join(packageDir, 'dist'));
-  process.stdout.write(`postbuild: copied config and content, wrote version.json for ${version.sha}\n`);
+  process.stdout.write(`postbuild: copied config and content, drew ${OG_FILE_NAME}, wrote version.json for ${version.sha}\n`);
 }

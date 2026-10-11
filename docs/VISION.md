@@ -85,8 +85,8 @@ Ranked by impact on the loop for the effort. Built means on main or on this bran
 3. **Share your run, text** (built on this branch): the share sheet or the clipboard, with total dust, unlocks and https://play.mobmachine.games/ (`seed-1/render/share.ts`).
 4. **The next change to Dust, from inside Dust** (built): `seed-1/render/next-card.ts` shows the next open Dust card and its bar under the game. Closes the play to fund gap, the biggest hole in the loop.
 5. **Shareable run picture** (built): a 1200 by 630 card drawn in code with the dust, the unlocks by name and the address, attached to the share sheet where it takes files (`seed-1/render/share-image.ts`).
-6. **Dust's own link preview** (new): [A link preview image for Dust](BACKLOG.md#a-link-preview-image-for-dust). Today a shared Dust link shows the studio's image (`seed-1/index.html` points `og:image` at the site's `og.png`).
-7. **Play and share counts** (built on this branch): daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with nothing that names a player (`docs/specs/play-counts.md`).
+6. **Dust's own link preview** (built): `seed-1/scripts/og-image.mjs` draws a 1200 by 630 picture of the game in code at build time, and `seed-1/index.html` points `og:image` and `twitter:image` at it, with its own alt text.
+7. **Play and share counts** (built): daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with nothing that names a player (`docs/specs/play-counts.md`).
 8. **Card share and since your last visit** (built): `ShareCard` on card pages and /thanks, `SinceLastVisit` on home.
 9. **Free voting** (backlog): [Free voting on open cards](BACKLOG.md#free-voting-on-open-cards), behind [Player accounts](BACKLOG.md#player-accounts). Lets non-payers steer, which grows the crowd that later funds.
 10. **Weekly episodes and the stream** (backlog): [Weekly episodes and clips](BACKLOG.md#weekly-episodes-and-clips), [Twitch channel and stream scenes](BACKLOG.md#twitch-channel-and-stream-scenes). The discovery engine at scale.
@@ -119,7 +119,6 @@ Rejected for now: leaderboards and comparisons between players (the shareable ru
 
 The site's bar is `platform/site/DESIGN.md`: a quiet table, motion only for a real change or a press, three motifs. Dust has no written bar yet ([A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust)). Small opportunities found reading the code:
 
-- `seed-1/index.html`: `og:image` and its alt text are the studio's, so a shared Dust link previews as the studio. A Dust image drawn from the game's own shapes fixes it (item 6).
 - `seed-1/render/scene.ts`: the feedback beats are in place; the next polish is a short count-up on the total when the welcome-back credit lands, so the gain is seen arriving, skipped under reduced motion.
 - `seed-1/render/share.ts` and `seed-1/content/strings.json`: the shared text is the whole artifact today. A code-drawn card image is the next step, using the site's card edge so a shared run reads as part of the studio.
 - `seed-1/index.html`: the studio line sits below the canvas as plain text. Showing the next Dust card there with its bar (item 4) turns the footer into the loop's bridge.

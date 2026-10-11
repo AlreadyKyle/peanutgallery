@@ -192,7 +192,6 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Run the replay eval and set its first baseline](BACKLOG.md#run-the-replay-eval-and-set-its-first-baseline): the draft set's first recorded score.
 - [Balance report from the headless bot](BACKLOG.md#balance-report-from-the-headless-bot): unlock times and two-minute gains for the Game Designer.
 - [A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust): the game's look, sound, tone and naming, changed only by a kernel pull request.
-- [A link preview image for Dust](BACKLOG.md#a-link-preview-image-for-dust): a code-drawn preview picture of the game for shared links.
 - [Mockup and design-system cards](BACKLOG.md#mockup-and-design-system-cards): cards that change a page, a screen or the design system after a mockup, in place of a kernel pull request.
 - [Post-ship grade and monthly design audit](BACKLOG.md#post-ship-grade-and-monthly-design-audit): the Directors grade what shipped and audit main's frames each month.
 - [Follow-up drafts from open visual criteria](BACKLOG.md#follow-up-drafts-from-open-visual-criteria): a card that shipped with an open criterion gets a draft to fix it.
