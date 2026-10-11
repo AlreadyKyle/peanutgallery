@@ -1,6 +1,6 @@
 # Mob Machine: the constitution
 
-This file says what the studio is and the rules it runs by. It holds no schedule: work is ordered, never dated, and no date or deadline appears here unless the board set it (18 September 2026). `docs/ROADMAP.md` is the launch checklist. `docs/BACKLOG.md` lists every mechanic that is planned and not built; the board files those entries as cards, and the site lists them on /roadmap. A spec under `docs/specs/` is the contract for one change. A mechanic that is not built gets one line here, in §4 Not built yet, pointing at its backlog entry, and is not described as if it exists.
+This file says what the studio is and the rules it runs by. It holds no schedule: work is ordered, never dated, and no date or deadline appears here unless the board set it (18 September 2026). `docs/ROADMAP.md` is the launch checklist. `docs/BACKLOG.md` lists every mechanic that is planned and not built; the board files those entries as cards, and the site lists them on /roadmap. A spec under `docs/specs/` is the contract for one change. `docs/VISION.md` sets the product direction, the goals and the order of bets under these rules. A mechanic that is not built gets one line here, in §4 Not built yet, pointing at its backlog entry, and is not described as if it exists.
 
 Rewritten 22 September 2026 from the kick-off plan (version 3.4, at commit ed29674), which it replaces. The section numbers, the Kernel and The Board headings and the numbered decisions in §10 are kept, so a citation such as "PLAN.md §4 The Board" or "§10 default 20" in a spec, a migration or a code comment lands on the same subject; specs and migrations dated before 22 September 2026 quote the kick-off plan's wording. The working name Backseat survives in the package names (`@backseat/*`).
 
@@ -193,6 +193,9 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Balance report from the headless bot](BACKLOG.md#balance-report-from-the-headless-bot): unlock times and two-minute gains for the Game Designer.
 - [A creative guide for Dust](BACKLOG.md#a-creative-guide-for-dust): the game's look, sound, tone and naming, board-only.
 - [Shareable runs in Dust](BACKLOG.md#shareable-runs-in-dust): a code-drawn picture of your run to share.
+- [Next card to fund, shown in Dust](BACKLOG.md#next-card-to-fund-shown-in-dust): the next open Dust card and its bar on the game page.
+- [A link preview image for Dust](BACKLOG.md#a-link-preview-image-for-dust): a code-drawn preview picture of the game for shared links.
+- [Play and share counts without tracking](BACKLOG.md#play-and-share-counts-without-tracking): aggregate counts of plays and shares, with no identifiers.
 - [Mockup and design-system cards](BACKLOG.md#mockup-and-design-system-cards): cards that change a page, a screen or the design system after a mockup, in place of a board pull request.
 - [Post-ship grade and monthly design audit](BACKLOG.md#post-ship-grade-and-monthly-design-audit): the Directors grade what shipped and audit main's frames each month.
 - [Follow-up drafts from open visual criteria](BACKLOG.md#follow-up-drafts-from-open-visual-criteria): a card that shipped with an open criterion gets a draft to fix it.

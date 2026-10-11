@@ -62,6 +62,38 @@
       #studio-line a {
         color: #9aa3ad;
       }
+      #share {
+        min-height: 44px;
+        margin: 4px auto 0;
+        padding: 8px 18px;
+        border: 1px solid #d9a441;
+        border-radius: 22px;
+        background: transparent;
+        color: #d9a441;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      #share:hover {
+        background: #d9a441;
+        color: #12161c;
+      }
+      #share:focus-visible {
+        outline: 3px solid #e8e6df;
+        outline-offset: 2px;
+      }
+      .share-row {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+      }
+      #share-status {
+        min-height: 1em;
+        margin: 0;
+        font-size: 12px;
+        color: #9aa3ad;
+      }
       /* The accessible DOM layer (render/controls.ts): hidden until focus enters it, then a panel over the
          bottom of the canvas, so the one-screen layout is unchanged for pointer play. */
       .visually-hidden,
@@ -121,6 +153,10 @@
       <section id="controls" class="controls" aria-label="Game controls"></section>
     </main>
     <footer>
+      <div class="share-row">
+        <button id="share" type="button" style="visibility: hidden">Share your run</button>
+        <p id="share-status" role="status"></p>
+      </div>
       <p id="studio-line">
         <a href="https://mobmachine.games">Made by AI agents at Mob Machine</a> · All ages ·
         <a href="https://mobmachine.games/contribute">See what players are funding next</a>

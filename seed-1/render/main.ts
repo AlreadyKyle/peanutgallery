@@ -4,6 +4,7 @@ import { createSim, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
 import { loadGameData } from './load';
+import { attachShare } from './share';
 import { DustScene, RENDER_SCALE, SAVE_KEY, SCREEN_HEIGHT, SCREEN_WIDTH } from './scene';
 
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
@@ -35,17 +36,29 @@ function start(): void {
       const seed = Math.floor(Date.now() / 1000) >>> 0;
       // A save credits the time since it was written, so dust keeps accruing while the page is closed.
       const save = readSave();
-      const savedState =
-        save === null
-          ? null
-          : save.savedAt === null
-            ? save.state
-            : step(save.state, data.config, awaySeconds(save.savedAt, Date.now()));
+      const away = save === null || save.savedAt === null ? 0 : awaySeconds(save.savedAt, Date.now());
+      const savedState = save === null ? null : away === 0 ? save.state : step(save.state, data.config, away);
+      const welcome = save === null || savedState === null ? null : { gain: savedState.totalDust - save.state.totalDust, seconds: away };
       const initial = savedState ?? createSim(data.config, seed);
       const controlsRoot = document.getElementById('controls');
       const controls = controlsRoot === null ? null : new AccessibleControls(controlsRoot, data.config, data.strings, initial);
-      const scene = new DustScene(data, seed, initial, (state) => controls?.update(state));
+      let latest = initial;
+      const scene = new DustScene(
+        data,
+        seed,
+        initial,
+        (state) => {
+          latest = state;
+          controls?.update(state);
+        },
+        welcome,
+      );
       controls?.attach(scene);
+      const shareButton = document.getElementById('share');
+      const shareStatus = document.getElementById('share-status');
+      if (shareButton instanceof HTMLButtonElement && shareStatus !== null) {
+        attachShare(shareButton, shareStatus, () => latest, data.config, data.strings);
+      }
       new Phaser.Game({
         type: Phaser.AUTO,
         parent: 'game',
