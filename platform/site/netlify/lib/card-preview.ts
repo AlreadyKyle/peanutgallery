@@ -85,9 +85,16 @@ export function previewCardFrom(body: string): PreviewCard | null {
   };
 }
 
-function clip(text: string, max: number): string {
+export function clip(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1).trimEnd()}…`;
+  if (flat.length <= max) return flat;
+  // Cut on a code point, so an emoji at the edge is dropped whole rather than split in half.
+  let out = '';
+  for (const point of flat) {
+    if (out.length + point.length > max - 1) break;
+    out += point;
+  }
+  return `${out.trimEnd()}…`;
 }
 
 export function formatUsd(value: number): string {

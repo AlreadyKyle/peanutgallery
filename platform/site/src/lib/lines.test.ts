@@ -43,4 +43,13 @@ describe('event lines', () => {
     // Events from before the line keys never merge.
     expect(collapseLines([{ role_id: 'a' }, { role_id: 'a' }]).map((l) => l.count)).toEqual([1, 1]);
   });
+
+  it('never merges lines that name an amount, so each top-up shows its own', () => {
+    const top = (usd: number) => ({ role_id: null, line_key: 'topped_up', card_id: 'c1', usd });
+    const rows = collapseLines([top(5), top(3)]);
+    expect(rows.map((l) => eventLine(l.line_key, l.count, l.usd))).toEqual([
+      'topped the card up with $5.00 from Not on a card yet',
+      'topped the card up with $3.00 from Not on a card yet',
+    ]);
+  });
 });

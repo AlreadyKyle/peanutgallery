@@ -59,7 +59,7 @@ Install with `pnpm install --frozen-lockfile`. The dispatcher, the seed and the 
 
 `pnpm verify` at the repository root is the floor for every change. It runs these checks at once (`scripts/verify.sh`) and prints `VERIFY PASS` when all of them pass:
 
-1. `pnpm typecheck`: every package's typecheck.
+1. The explainer's typecheck. The other packages' typecheck runs inside the two ship-gate dry runs.
 2. The explainer's and the gate's tests. The other packages' tests run inside the two ship-gate dry runs.
 3. `pnpm test:agents`: the role specs and prompts.
 4. `pnpm test:ops`: the ops scripts and env file.

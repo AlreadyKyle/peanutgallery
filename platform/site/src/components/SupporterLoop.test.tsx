@@ -198,6 +198,17 @@ describe('What changed in plain words', () => {
     expect(changedLine({ file: 'x.json', path: 'rows[id=mill].colour', value: '"red"' }).plain).toBe(false);
     expect(changedLine({ file: 'x.json', path: 'rows[id=mill].baseCost', value: null }).plain).toBe(false);
   });
+
+  it('falls back, never throws, on a collection or field named like an Object.prototype key', () => {
+    expect(changedLine({ file: 'x.json', path: 'constructor[id=mill].name', value: '1' })).toEqual({ text: 'x.json constructor[id=mill].name: 1', plain: false });
+    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].toString', value: '1' }).plain).toBe(false);
+    expect(changedLine({ file: 'x.json', path: 'rows[id=mill].constructor', value: '1' }).plain).toBe(false);
+  });
+
+  it('shows a value with $ characters as written, not as a replacement pattern', () => {
+    expect(plainCheck({ file: 'seed-1/config/game.json', path: 'buildings[id=gatherer].name', value: '"$& Mill"' })).toBe('Gatherer is now called "$& Mill".');
+    expect(changedLine({ file: 'x.json', path: 'unlocks[0].label', value: "\"$$ and $'\"" }).text).toBe("x.json unlocks[0].label: \"$$ and $'\"");
+  });
 });
 
 describe("/thanks's next step", () => {

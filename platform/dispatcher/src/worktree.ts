@@ -465,7 +465,14 @@ export function singleLineTitle(title: string): string {
     return code < SPACE || code === DELETE ? ' ' : ch;
   }).join('');
   const clean = printable.replace(/\s+/g, ' ').trim();
-  return clean.length > TITLE_LIMIT ? `${clean.slice(0, TITLE_LIMIT - 1)}…` : clean;
+  if (clean.length <= TITLE_LIMIT) return clean;
+  // Cut on a code point, never inside a surrogate pair, so the title stays valid UTF-8.
+  let out = '';
+  for (const point of clean) {
+    if (out.length + point.length > TITLE_LIMIT - 1) break;
+    out += point;
+  }
+  return `${out}…`;
 }
 
 export interface CommitInput {
