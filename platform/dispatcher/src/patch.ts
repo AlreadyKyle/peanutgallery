@@ -6,7 +6,7 @@
 // --numstat --summary -z` reads it without writing, and the patch is refused when it:
 // - is larger than PATCH_MAX_BYTES or changes more than PATCH_MAX_FILES files;
 // - carries a binary change (a "Binary files" or "GIT binary patch" hunk, or a "-" numstat count);
-// - renames or copies a file;
+// - renames or copies a file, by rename or copy lines or by a header whose old and new names differ;
 // - creates, deletes or changes any mode other than 100644 and 100755 (so no symlink, 120000, and no
 //   submodule, 160000);
 // - touches a path outside the card's lane, a kernel path, or a path with a . or .. or .git segment.
@@ -45,11 +45,65 @@ export function patchTextProblem(bytes: Uint8Array): string | null {
   if (text.includes('\0')) return 'the patch contains a NUL byte';
   if (/^GIT binary patch$/m.test(text) || /^Binary files .* differ$/m.test(text)) return 'the patch changes a binary file';
   if (/^(rename|copy) (from|to) /m.test(text)) return 'the patch renames or copies a file; make it with --no-renames';
+  const header = headerNameProblem(text);
+  if (header !== null) return header;
   for (const match of text.matchAll(/^(?:new file mode|deleted file mode|old mode|new mode) (\d+)$/gm)) {
     if (!ALLOWED_MODES.includes(match[1] ?? '')) return `the patch uses file mode ${match[1]}; only regular files (100644, 100755) are allowed`;
   }
   for (const match of text.matchAll(/^index [0-9a-f]+\.\.[0-9a-f]+ (\d+)$/gm)) {
     if (!ALLOWED_MODES.includes(match[1] ?? '')) return `the patch uses file mode ${match[1]}; only regular files (100644, 100755) are allowed`;
+  }
+  return null;
+}
+
+// Each file's header names one path: `diff --git a/X b/X`, `--- a/X` and `+++ b/X`, or /dev/null on
+// one side for a new or deleted file. git applies a header whose old and new names differ as a rename
+// with no rename line, and its numstat lists only the new name, so the lane and kernel checks would
+// never see the old one. Hunks are skipped by their line counts, so a removed line that reads
+// "-- note" (shown as "--- note") is never taken for a header. A section with no diff --git line is
+// refused: the export command always writes one.
+export function headerNameProblem(text: string): string | null {
+  const lines = text.split('\n');
+  let gitName: string | null = null;
+  let oldName: string | null = null;
+  let oldLeft = 0;
+  let newLeft = 0;
+  const strip = (name: string, prefix: string): string => (name === '/dev/null' ? name : name.startsWith(prefix) ? name.slice(prefix.length) : `\0${name}`);
+  for (const line of lines) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (line.startsWith('\\')) continue;
+      if (line.startsWith('-')) oldLeft -= 1;
+      else if (line.startsWith('+')) newLeft -= 1;
+      else {
+        oldLeft -= 1;
+        newLeft -= 1;
+      }
+      continue;
+    }
+    const git = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    if (line.startsWith('diff --git ')) {
+      if (git === null || git[1] !== git[2]) return `the patch header names two paths: ${line}; a file keeps its name`;
+      gitName = git[1] ?? null;
+      oldName = null;
+      continue;
+    }
+    if (line.startsWith('--- ')) {
+      if (gitName === null) return 'the patch has a file section with no diff --git line; make it with git diff';
+      oldName = strip(line.slice(4), 'a/');
+      continue;
+    }
+    if (line.startsWith('+++ ')) {
+      if (gitName === null || oldName === null) return 'the patch has a +++ line with no --- line before it';
+      const newName = strip(line.slice(4), 'b/');
+      const named = [oldName, newName].filter((name) => name !== '/dev/null');
+      if (named.length === 0 || named.some((name) => name !== gitName)) return `the patch's --- and +++ lines name another path than its diff --git line: ${gitName}`;
+      continue;
+    }
+    const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(line);
+    if (hunk) {
+      oldLeft = hunk[1] === undefined ? 1 : Number(hunk[1]);
+      newLeft = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    }
   }
   return null;
 }

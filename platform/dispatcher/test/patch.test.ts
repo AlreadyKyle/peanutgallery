@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  headerNameProblem,
   applyStoredPatch,
   createSupabasePatchStore,
   parseApplyReport,
@@ -272,5 +273,38 @@ describe('createSupabasePatchStore', () => {
     expect(url.searchParams.get('select')).toBe('card_id,base_sha,patch,sha256,bytes,summary,session_id');
     expect(url.searchParams.get('card_id')).toBe('eq.card-1');
     expect(url.searchParams.get('order')).toBe('created_at.desc');
+  });
+});
+
+describe('headerNameProblem', () => {
+  const section = (a: string, b: string, minus = `a/${a}`, plus = `b/${b}`) =>
+    `diff --git a/${a} b/${b}\nindex 1111111..2222222 100644\n--- ${minus}\n+++ ${plus}\n@@ -1 +1 @@\n-x\n+y\n`;
+
+  it('accepts a change, a new file and a deleted file that keep one name', () => {
+    expect(headerNameProblem(section('seed-1/config/a.json', 'seed-1/config/a.json'))).toBeNull();
+    expect(headerNameProblem(section('seed-1/config/n.json', 'seed-1/config/n.json', '/dev/null'))).toBeNull();
+    expect(headerNameProblem(section('seed-1/config/d.json', 'seed-1/config/d.json', 'a/seed-1/config/d.json', '/dev/null'))).toBeNull();
+  });
+
+  it('refuses a diff --git line that names two paths, a hidden rename with no rename line', () => {
+    expect(headerNameProblem(section('platform/gate/g.sh', 'seed-1/config/c.json'))).toMatch(/names two paths/);
+  });
+
+  it('refuses --- and +++ lines that name another path than the diff --git line', () => {
+    expect(headerNameProblem(section('seed-1/config/c.json', 'seed-1/config/c.json', 'a/platform/gate/g.sh'))).toMatch(/another path/);
+    expect(headerNameProblem(section('seed-1/config/c.json', 'seed-1/config/c.json', 'a/seed-1/config/c.json', 'b/platform/gate/g.sh'))).toMatch(/another path/);
+  });
+
+  it('refuses a file section with no diff --git line', () => {
+    expect(headerNameProblem('--- a/platform/gate/g.sh\n+++ b/seed-1/config/c.json\n@@ -1 +1 @@\n-x\n+y\n')).toMatch(/no diff --git line/);
+  });
+
+  it('reads a removed line that starts with -- as hunk content, not a header', () => {
+    const text = 'diff --git a/seed-1/a.sql b/seed-1/a.sql\n--- a/seed-1/a.sql\n+++ b/seed-1/a.sql\n@@ -1,2 +1,1 @@\n--- a note\n keep\n';
+    expect(headerNameProblem(text)).toBeNull();
+  });
+
+  it('refuses through patchTextProblem too', () => {
+    expect(patchTextProblem(Buffer.from(section('platform/gate/g.sh', 'seed-1/config/c.json')))).toMatch(/names two paths/);
   });
 });
