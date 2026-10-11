@@ -54,12 +54,16 @@
       #studio-line {
         flex: 0 0 auto;
         margin: 0;
-        padding: 6px 16px;
+        padding: 0 16px;
         text-align: center;
         font-size: 12px;
         color: #9aa3ad;
       }
+      /* Each link is a 44px touch target on a phone (seed-1/CLAUDE.md Pillars), centred on its text. */
       #studio-line a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         color: #9aa3ad;
       }
       #share {
