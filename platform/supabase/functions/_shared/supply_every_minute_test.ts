@@ -92,6 +92,11 @@ Deno.test("no_money holds after a draft fails for want of money, until a contrib
       assertEquals((await check(db)).reason, null);
     });
 
+    await t.step("a money failure over an hour old no longer holds, since a finished build frees money", async () => {
+      await failRun(db, "insufficient_balance: budget", "now() - interval '61 minutes'");
+      assertEquals((await check(db)).reason, null);
+    });
+
     await t.step("a daily cap holds only on the New York day it failed", async () => {
       await failRun(db, "daily_cap: the daily cap of 100 USD");
       assertEquals((await check(db)).reason, "no_money");

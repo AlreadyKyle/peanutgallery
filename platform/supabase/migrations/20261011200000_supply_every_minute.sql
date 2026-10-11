@@ -9,7 +9,7 @@
 -- stands. public_supply()'s next_check_at becomes the next minute.
 --
 -- supply_draft_check() gains one reason, no_money: the latest draft run failed
--- for want of money (insufficient_balance or console_credit) and no contribution
+-- for want of money (insufficient_balance) within the hour and no contribution
 -- has been credited since, or it hit a daily, monthly or tier cap earlier this
 -- New York day. On 11 October 2026 the pool held 0.7447 USD against a draft
 -- budget of 0.75, so every check would have queued a run that failed at once and
@@ -81,10 +81,12 @@ begin
   );
 
   -- The latest draft run failed for want of money (the dispatcher's money stop), and no contribution
-  -- has been credited since: another run would fail the same way, so none is queued until one is.
+  -- has been credited since: another run would fail the same way, so none is queued until one is, or
+  -- for an hour, since a build that finishes also frees money held for it.
   -- A daily, monthly or tier cap clears on its own, so it holds only on the New York day it failed.
   select coalesce((
-    select (r.reason like 'insufficient_balance%' or r.reason like 'console_credit%')
+    select r.reason like 'insufficient_balance%'
+           and r.finished_at > now() - interval '1 hour'
            and not exists (select 1 from public.contributions k where k.credited_at > r.finished_at)
         or ((r.reason like 'daily_cap%' or r.reason like 'monthly_cap%' or r.reason like 'tier_cap%') and r.finished_at >= v_since)
     from public.job_runs r
