@@ -25,9 +25,9 @@ describe("readRoleSpecs against platform/agents", () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     const byStatus = (status: string) => specs.filter((s) => s.status === status).map((s) => s.name).sort();
     // The Janitor runs, as code only (docs/specs/agent-upkeep.md).
-    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA", "Studio Head"]);
+    expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA"]);
     expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
-    expect(byStatus("planned")).toEqual(["Host"]);
+    expect(byStatus("planned")).toEqual(["Host", "Studio Head"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/first Stripe payout/);
   });
