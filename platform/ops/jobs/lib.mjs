@@ -197,27 +197,39 @@ export function stripeReader({ key, fetchFn = fetch, version, maxPages = 50 }) {
 
 // The Supabase calls the jobs make with the service key. A new-format secret key (sb_secret_) goes in
 // apikey only; a legacy service role JWT also goes as the bearer, as supabase-js sends it.
-export function supabaseClient({ url, key, fetchFn = fetch }) {
+// Supabase answers 401 "JWT issued at future" when its own clocks disagree for a moment (the Controller
+// failed so once, on 15 October 2026, and the quota check passed with the same key minutes later), so
+// that one answer is retried once after retryMs; every other answer is returned as it came.
+export const FUTURE_IAT = /issued at future/i;
+export function supabaseClient({ url, key, fetchFn = fetch, retryMs = 5_000 }) {
   const headers = { apikey: key, 'Content-Type': 'application/json' };
   if (!key.startsWith('sb_secret_')) headers.Authorization = `Bearer ${key}`;
   const base = url.replace(/\/+$/, '');
+  const send = async (target, init) => {
+    const response = await fetchFn(target, { ...init, signal: AbortSignal.timeout(30_000) });
+    if (response.status !== 401 || typeof response.clone !== 'function') return response;
+    const text = await response.clone().text().catch(() => '');
+    if (!FUTURE_IAT.test(text)) return response;
+    await response.body?.cancel();
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
+    return fetchFn(target, { ...init, signal: AbortSignal.timeout(30_000) });
+  };
   return {
     async rpc(name, args = {}) {
-      const response = await fetchFn(`${base}/rest/v1/rpc/${name}`, { method: 'POST', headers, body: JSON.stringify(args), signal: AbortSignal.timeout(30_000) });
+      const response = await send(`${base}/rest/v1/rpc/${name}`, { method: 'POST', headers, body: JSON.stringify(args) });
       return readJson(response, `supabase rpc ${name}`);
     },
     async insert(table, row) {
-      const response = await fetchFn(`${base}/rest/v1/${table}`, {
+      const response = await send(`${base}/rest/v1/${table}`, {
         method: 'POST',
         headers: { ...headers, Prefer: 'return=minimal' },
         body: JSON.stringify(row),
-        signal: AbortSignal.timeout(30_000),
       });
       await readJson(response, `supabase insert ${table}`);
     },
     // A PostgREST read: query is the search string, such as 'job=eq.quota&order=created_at.desc&limit=20'.
     async select(table, query) {
-      const response = await fetchFn(`${base}/rest/v1/${table}?${query}`, { method: 'GET', headers, signal: AbortSignal.timeout(30_000) });
+      const response = await send(`${base}/rest/v1/${table}?${query}`, { method: 'GET', headers });
       return readJson(response, `supabase select ${table}`);
     },
   };
