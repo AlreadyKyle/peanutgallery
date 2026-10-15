@@ -24,7 +24,8 @@
 #   own lines and a fixed line per lifecycle message (lifecycle_lines), never a field of the log.
 # - It writes to $GITHUB_OUTPUT: status (the dispatcher's exit), fatal, drained, hard_stopped, ran
 #   (seconds), redispatch (whether the workflow starts the next run now) and alerted. Exit 78, or a
-#   failed check here, is fatal: ntfy hears "fatal startup error" and nothing starts the next run until
+#   failed check here, is fatal: ntfy hears "fatal startup error", with the dispatcher's own reason (env
+#   values masked) after an exit 78, and nothing starts the next run until
 #   the board does. A drained run, a hard stop, or any run of HEALTHY_SECONDS or more starts the next
 #   one now; a shorter failed run is left to the workflow's 30-minute schedule, which is the restart
 #   delay, and ntfy hears of it.
@@ -186,11 +187,36 @@ redispatch_now() {
   if [ "$2" = true ] || [ "$3" = true ] || [ "$4" -ge "$HEALTHY_SECONDS" ]; then echo true; else echo false; fi
 }
 
+# fatal_reason: the error of the dispatcher's last "dispatcher exited with an error" line, for the ntfy
+# alert only, never the public log. Every env file value of eight characters or more is replaced by ***,
+# quotes and backslashes are dropped (the alert's curl config quotes it) and it is cut to 300 characters.
+# shellcheck disable=SC2016 # the node program is in single quotes on purpose
+fatal_reason() {
+  [ -f "$LOG" ] || return 0
+  env -i PATH="$PATH" node --input-type=module -e '
+    import { readFileSync, existsSync } from "node:fs";
+    const [log, envFile] = process.argv.slice(1);
+    let reason = "";
+    for (const line of readFileSync(log, "utf8").split("\n")) {
+      try {
+        const record = JSON.parse(line);
+        if (record.msg === "dispatcher exited with an error" && typeof record.error === "string") reason = record.error;
+      } catch {}
+    }
+    if (existsSync(envFile)) {
+      const values = readFileSync(envFile, "utf8").split("\n").map((line) => line.slice(line.indexOf("=") + 1)).filter((value) => value.length >= 8);
+      for (const value of values.sort((a, b) => b.length - a.length)) reason = reason.split(value).join("***");
+    }
+    process.stdout.write(reason.replace(/["\\]/g, "").replace(/\s+/g, " ").trim().slice(0, 300));
+  ' "$LOG" "$ENV_FILE" 2> /dev/null || true
+}
+
+# stop_fatal <public reason> [private detail]: the detail goes to ntfy alone.
 stop_fatal() {
   note "stopped: fatal startup error: $1"
   output fatal true
   output redispatch false
-  alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error"
+  alert "Mob Machine dispatcher stopped on GitHub Actions: fatal startup error${2:+: $2}"
   exit "$EXIT_FATAL"
 }
 
@@ -254,7 +280,7 @@ run() {
   output drained "$drained"
   output hard_stopped "$hard"
   output ran "$ran"
-  [ "$status" = "$EXIT_FATAL" ] && stop_fatal "the dispatcher exited $EXIT_FATAL; the encrypted log says why"
+  [ "$status" = "$EXIT_FATAL" ] && stop_fatal "the dispatcher exited $EXIT_FATAL; the encrypted log says why" "$(fatal_reason)"
   output fatal false
   redispatch=$(redispatch_now false "$drained" "$hard" "$ran")
   output redispatch "$redispatch"
