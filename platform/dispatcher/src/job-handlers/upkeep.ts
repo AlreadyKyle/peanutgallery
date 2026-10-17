@@ -27,7 +27,7 @@ export interface UpkeepTimings {
 export interface UpkeepDeps {
   config: Pick<
     DispatcherConfig,
-    'githubToken' | 'githubRepo' | 'netlifyAuthToken' | 'netlifySiteIdSeed' | 'netlifySiteIdPlatform' | 'modelBuilder' | 'modelDirector' | 'modelHost' | 'priceTable' | 'studioAnthropicApiKey' | 'codeRoot'
+    'githubToken' | 'githubRepo' | 'netlifyAuthToken' | 'netlifySiteIdSeed' | 'netlifySiteIdPlatform' | 'modelBuilder' | 'modelDirector' | 'modelDesigner' | 'modelHost' | 'priceTable' | 'studioAnthropicApiKey' | 'codeRoot'
   >;
   // GitHub, Netlify, the npm registry and the Anthropic model list; tests pass a mock.
   fetchFn?: typeof fetch;

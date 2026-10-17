@@ -53,6 +53,7 @@ export function configuredModels(config: UpkeepDeps['config']): Array<[string, s
   const models: Array<[string, string | null]> = [
     ['MODEL_BUILDER', config.modelBuilder],
     ['MODEL_DIRECTOR', config.modelDirector],
+    ['MODEL_DESIGNER', config.modelDesigner],
     ['MODEL_HOST', config.modelHost],
   ];
   return models.filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== '');

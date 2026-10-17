@@ -1,16 +1,17 @@
 // The model a role's session runs on, resolved when the session starts. Each role's spec in
-// platform/agents/*.json names an env token (MODEL_BUILDER, MODEL_DIRECTOR or MODEL_HOST), and the
-// token's value in the dispatcher's environment is the model, so changing the env and restarting the
+// platform/agents/*.json names an env token (MODEL_BUILDER, MODEL_DIRECTOR, MODEL_DESIGNER or
+// MODEL_HOST), and the token's value in the dispatcher's environment is the model, so changing the env and restarting the
 // dispatcher changes the model without re-seeding the roles. roles.model, which the seed writes from
 // the same env and /team displays, is used only for a role with no spec or a token the env leaves
 // unset, and then MODEL_BUILDER. The specs are read from the dispatcher's own code root, which no card
-// can write to.
+// can write to. MODEL_DESIGNER, the Game Designer's token, falls back to MODEL_DIRECTOR when unset,
+// so the Designer runs on the Director's model until the board sets its own.
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { DispatcherConfig } from './config.js';
 import type { Role } from './db.js';
 
-export const MODEL_TOKENS = ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_HOST'] as const;
+export const MODEL_TOKENS = ['MODEL_BUILDER', 'MODEL_DIRECTOR', 'MODEL_DESIGNER', 'MODEL_HOST'] as const;
 
 // The roles the board's role jobs run (studio_ranking, draft_card; docs/specs/agent-workflows.md) and
 // the Directors' visual review (docs/specs/design-review.md). The two Directors grade with no write
@@ -22,11 +23,12 @@ export function isModelToken(value: string): value is ModelToken {
   return (MODEL_TOKENS as readonly string[]).includes(value);
 }
 
-type ModelConfig = Pick<DispatcherConfig, 'codeRoot' | 'modelBuilder' | 'modelDirector' | 'modelHost'>;
+type ModelConfig = Pick<DispatcherConfig, 'codeRoot' | 'modelBuilder' | 'modelDirector' | 'modelDesigner' | 'modelHost'>;
 
 export function tokenModel(config: ModelConfig, token: ModelToken): string | null {
   if (token === 'MODEL_BUILDER') return config.modelBuilder;
   if (token === 'MODEL_DIRECTOR') return config.modelDirector;
+  if (token === 'MODEL_DESIGNER') return config.modelDesigner ?? config.modelDirector;
   return config.modelHost;
 }
 

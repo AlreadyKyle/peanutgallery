@@ -44,6 +44,7 @@ function config(overrides: Partial<DispatcherConfig> = {}): DispatcherConfig {
     netlifySiteIdPlatform: 'site-platform',
     modelBuilder: 'builder-class',
     modelDirector: 'director-class',
+    modelDesigner: null,
     modelHost: null,
     priceTable: PRICE_TABLE,
     poolDailyCapUsd: 100,
@@ -79,7 +80,7 @@ describe('roleModelTokens', () => {
     expect(tokens.size).toBe(16);
     expect(tokens.get('Builder A')).toBe('MODEL_BUILDER');
     expect(tokens.get('Biz Dev')).toBe('MODEL_BUILDER');
-    expect(tokens.get('Game Designer')).toBe('MODEL_DIRECTOR');
+    expect(tokens.get('Game Designer')).toBe('MODEL_DESIGNER');
     expect(tokens.get('Studio Head')).toBe('MODEL_DIRECTOR');
     expect(tokens.get('Game Director')).toBe('MODEL_DIRECTOR');
     expect(tokens.get('Host')).toBe('MODEL_HOST');
@@ -100,6 +101,12 @@ describe('resolveRoleModel', () => {
   it('falls back to roles.model when the env leaves the token unset, then to MODEL_BUILDER', () => {
     expect(resolveRoleModel({ name: 'Studio Head', model: 'seeded-model' }, config({ modelDirector: null }))).toEqual({ model: 'seeded-model', source: 'role', token: 'MODEL_DIRECTOR' });
     expect(resolveRoleModel({ name: 'Unknown', model: '' }, config())).toEqual({ model: 'builder-class', source: 'builder', token: null });
+  });
+
+  it("runs the Game Designer on MODEL_DESIGNER when it is set, and on MODEL_DIRECTOR until then", () => {
+    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config({ codeRoot: CODE_ROOT }))).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DESIGNER' });
+    expect(resolveRoleModel({ name: 'Game Designer', model: '' }, config({ codeRoot: CODE_ROOT, modelDesigner: 'designer-class' }))).toEqual({ model: 'designer-class', source: 'env', token: 'MODEL_DESIGNER' });
+    expect(resolveRoleModel({ name: 'Game Director', model: '' }, config({ codeRoot: CODE_ROOT, modelDesigner: 'designer-class' }))).toEqual({ model: 'director-class', source: 'env', token: 'MODEL_DIRECTOR' });
   });
 
   it('resolves a roles.model that is itself a token', () => {
