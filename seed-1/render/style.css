@@ -860,6 +860,31 @@ footer {
   text-transform: uppercase;
 }
 
+/* On a phone the perks fold behind a toggle so the island keeps its room. */
+.perks-toggle {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+
+.perks-toggle::after {
+  content: ' ▾';
+}
+
+.gems.open .perks-toggle::after {
+  content: ' ▴';
+}
+
+.gems:not(.open) .perks-heading,
+.gems:not(.open) .perks {
+  display: none;
+}
+
 /* On a phone the perks scroll sideways inside the sheet; the page never does. */
 .perks {
   display: flex;
@@ -1089,6 +1114,7 @@ footer {
   .perk {
     grid-template-columns: 1fr auto;
     column-gap: 8px;
+    max-width: none;
   }
 
   .perk-effect {
@@ -1103,5 +1129,17 @@ footer {
   .perk-cost {
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .perks-toggle {
+    display: none;
+  }
+
+  .gems:not(.open) .perks-heading {
+    display: block;
+  }
+
+  .gems:not(.open) .perks {
+    display: grid;
   }
 }

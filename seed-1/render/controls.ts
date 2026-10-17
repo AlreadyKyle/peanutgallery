@@ -67,6 +67,7 @@ export class AccessibleControls {
   private readonly confirmText: HTMLElement;
   private readonly confirmYes: HTMLButtonElement;
   private readonly perkButtons = new Map<string, PerkButton>();
+  private readonly perksToggle: HTMLButtonElement;
   private lastNow = 0;
   /** Called when a purchase is refused, with the reason in words, so the HUD can show it. */
   refused: ((unit: string, reason: string) => void) | null = null;
@@ -184,6 +185,18 @@ export class AccessibleControls {
     this.confirm.id = 'press-confirm';
     const perksHeading = el('h3', 'perks-heading', strings.depth.perksHeading);
     const perks = el('div', 'perks');
+    perks.id = 'perks';
+    // On a phone the perks fold behind this toggle so the island keeps its room; a wide screen shows
+    // them always and hides the toggle (render/style.css).
+    this.perksToggle = el('button', 'perks-toggle');
+    this.perksToggle.type = 'button';
+    this.perksToggle.setAttribute('aria-expanded', 'false');
+    this.perksToggle.setAttribute('aria-controls', perks.id);
+    this.perksToggle.addEventListener('click', () => {
+      const open = !this.gems.classList.contains('open');
+      this.gems.classList.toggle('open', open);
+      this.perksToggle.setAttribute('aria-expanded', String(open));
+    });
     for (const perk of config.unlocks.gems?.perks ?? []) {
       const button = el('button', 'perk');
       button.type = 'button';
@@ -200,7 +213,7 @@ export class AccessibleControls {
       perks.append(button);
       this.perkButtons.set(perk.id, { button, cost });
     }
-    this.gems.append(gemsHeading, this.gemsHeld, this.press, this.confirm, perksHeading, perks);
+    this.gems.append(gemsHeading, this.gemsHeld, this.press, this.confirm, this.perksToggle, perksHeading, perks);
     root.append(this.gems);
 
     // The unlock list: earned unlocks as one count, the next few by name.
@@ -293,7 +306,9 @@ export class AccessibleControls {
     setAttr(this.press, 'aria-disabled', String(!ready));
     if (!ready && !this.confirm.hidden) this.closeConfirm();
     setText(this.confirmText, fill(this.strings.depth.pressConfirm, { season: String(season + 2), gems: String(press.gems) }));
-    for (const perk of this.config.unlocks.gems?.perks ?? []) {
+    const perkRows = this.config.unlocks.gems?.perks ?? [];
+    setText(this.perksToggle, fill(this.strings.depth.perksShow, { owned: String(state.perks?.length ?? 0), total: String(perkRows.length) }));
+    for (const perk of perkRows) {
       const entry = this.perkButtons.get(perk.id);
       if (entry === undefined) continue;
       const owned = hasPerk(state, perk.id);

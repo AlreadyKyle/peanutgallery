@@ -143,6 +143,7 @@ const DEPTH_KEYS = [
   'perkThrift',
   'nextGem',
   'gemsIntro',
+  'perksShow',
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

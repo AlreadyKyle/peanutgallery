@@ -99,9 +99,9 @@
     "pressedBody": "+{gems} gems. Each gem adds {percent} to production.",
     "pressedSaid": "Season {season} begins. You hold {gems} gems.",
     "perksHeading": "Perks",
-    "perkCost": "{cost} gems",
+    "perkCost": "Gem cost {cost}",
     "perkOwned": "Owned",
-    "perkLabel": "{name}: {effect}. Costs {cost} gems.",
+    "perkLabel": "{name}: {effect}. Gem cost {cost}.",
     "perkOwnedLabel": "{name}: {effect}. Owned.",
     "perkBought": "Bought {name}: {effect}.",
     "perkProduction": "Production {times}",
@@ -110,6 +110,7 @@
     "perkWeather": "Weather lasts {times} as long",
     "perkThrift": "Units cost {percent} less",
     "nextGem": "Next gem",
-    "gemsIntro": "Each gem adds {percent} to production, for good."
+    "gemsIntro": "Each gem adds {percent} to production, for good.",
+    "perksShow": "Perks: {owned} of {total}"
   }
 }

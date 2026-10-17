@@ -68,6 +68,7 @@ export class Hud {
   private readonly rate: HTMLElement;
   private readonly goal: HTMLElement;
   private readonly goalName: HTMLElement;
+  private readonly goalLabel: HTMLElement;
   private readonly goalLeft: HTMLElement;
   private readonly goalFill: HTMLElement;
   private readonly floaterNodes: Floater[] = [];
@@ -115,6 +116,7 @@ export class Hud {
     this.goal = div('hud-goal', hud);
     const goalRow = div('hud-goal-row', this.goal);
     const goalLabel = div('hud-goal-label', goalRow);
+    this.goalLabel = goalLabel;
     goalLabel.textContent = strings.labels.nextGoal;
     this.goalName = div('hud-goal-name', goalRow);
     const track = div('hud-goal-track', this.goal);
@@ -252,14 +254,17 @@ export class Hud {
     const gem = goal === null ? gemGoal(state, this.config) : null;
     if (gem !== null) {
       // Every unlock is open: the bar runs to the next gem instead, so there is always a goal.
+      setText(this.goalLabel, this.strings.depth.gemsHeading);
       setText(this.goalName, this.strings.depth.nextGem);
       setText(this.goalLeft, fill(this.strings.labels.toGo, { amount: formatDust(Math.ceil(gem.remaining)) }));
       this.setGoal(gem.progress);
     } else if (goal === null) {
+      setText(this.goalLabel, this.strings.labels.nextGoal);
       setText(this.goalName, this.strings.labels.allUnlocked);
       setText(this.goalLeft, '');
       this.setGoal(1);
     } else {
+      setText(this.goalLabel, this.strings.labels.nextGoal);
       setText(this.goalName, goal.row.name);
       setText(this.goalLeft, fill(this.strings.labels.toGo, { amount: formatDust(Math.ceil(goal.remaining)) }));
       this.setGoal(goal.progress);

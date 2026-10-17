@@ -60,7 +60,8 @@ test('a refused purchase says why', async ({ page }) => {
   await ready(page);
   const cart = page.getByRole('button', { name: /^Buy Cart: costs 120 dust, 0 owned$/ });
   await expect(cart).toHaveAttribute('aria-disabled', 'true');
-  await cart.click();
+  // force: Playwright otherwise waits for an aria-disabled button to become enabled.
+  await cart.click({ force: true });
   await expect(page.locator('[aria-live="polite"]')).toContainText(/more dust for a Cart/);
   await expect(page.locator('.hud-hint')).toContainText(/more dust for a Cart/);
   await expect(page.getByRole('button', { name: /^Buy Cart: costs 120 dust, 0 owned$/ })).toBeAttached();
@@ -82,7 +83,7 @@ test('presses the pile by keyboard after confirming, then buys a perk', async ({
   await expect(page.getByRole('button', { name: /^Buy Gatherer: costs 10 dust, 0 owned$/ })).toBeAttached();
   await expect(page.locator('.gems-held')).toHaveText('3 gems, production +30%');
 
-  const perk = page.getByRole('button', { name: 'Strong arms: Strikes ×3. Costs 1 gems.' });
+  const perk = page.getByRole('button', { name: 'Strong arms: Strikes ×3. Gem cost 1.' });
   await expect(perk).toHaveAttribute('aria-disabled', 'false');
   await perk.focus();
   await page.keyboard.press('Enter');
@@ -101,6 +102,16 @@ for (const [label, width, height] of [
     await plant(page, ripe());
     await ready(page);
     await expect(page.getByRole('button', { name: /^Press the pile for 3 gems\./ })).toBeVisible();
+    const toggle = page.getByRole('button', { name: 'Perks: 0 of 5' });
+    if (label === 'phone') {
+      // On a phone the perks fold behind a toggle so the island keeps its room.
+      await expect(page.getByRole('button', { name: /^Strong arms/ })).toBeHidden();
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    } else {
+      await expect(toggle).toBeHidden();
+    }
+    await expect(page.getByRole('button', { name: /^Strong arms/ })).toBeVisible();
     expect(await axeSeriousOrCritical(page)).toEqual([]);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, 'the page scrolls sideways').toBeLessThanOrEqual(0);
