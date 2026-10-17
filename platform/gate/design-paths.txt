@@ -16,3 +16,4 @@ platform/site/src/routes.tsx
 platform/site/public
 platform/site/brand
 seed-1/render/favicon.svg
+seed-1/box-art.svg

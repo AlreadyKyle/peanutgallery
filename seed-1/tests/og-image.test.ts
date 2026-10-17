@@ -70,8 +70,9 @@ describe('link preview image', () => {
         colors.add(`${raw[i]},${raw[i + 1]},${raw[i + 2]}`);
       }
     }
-    expect(colors).toContain('18,22,28');
-    expect(colors).toContain('217,164,65');
-    expect(colors).toContain('111,168,220');
+    // Paper, ink and the Dust suit magenta (render/style.css).
+    expect(colors).toContain('253,252,248');
+    expect(colors).toContain('21,21,21');
+    expect(colors).toContain('176,34,106');
   });
 });

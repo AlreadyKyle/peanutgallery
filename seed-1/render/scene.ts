@@ -1,381 +1,1116 @@
-import Phaser from 'phaser';
+// The Three.js diorama: a small square quarry island seen from above at an angle, in the studio's line
+// style (render/toon.ts). The dust pile in the middle grows with lifetime dust; gatherers walk lanes
+// to it with sacks, carts roll on a track around it, mills turn at the right, forges glow at the left
+// and foundries smoke at the back. Each unit appears, with a pop, as it is bought, up to the caps in
+// render/world.ts. A strike squashes the pile and throws dust; an unlock throws confetti.
+//
+// Everything moves as a function of the frame clock passed to frame() and of a fixed hash, never
+// Math.random, so the same state at the same clock draws the same pixels (e2e/frames.spec.ts).
+// Under prefers-reduced-motion nothing walks, turns, drifts or flies; the scene is drawn still.
 import {
-  apply,
-  costOf,
-  createSim,
-  isUnitAvailable,
-  nextLockedUnlock,
-  ownedCount,
-  ratePerSecond,
-  step,
-} from '../sim/sim';
-import { awaySeconds, serializeState } from '../sim/save';
-import type { SimAction, SimState } from '../sim/types';
-import { describeEffect } from './a11y';
-import { fill, formatDust, formatDuration, formatRate } from './format';
-import { layoutUnlockList, MAX_UNEARNED_UNLOCK_LINES, RENDER_SCALE, SCREEN_HEIGHT, SCREEN_WIDTH } from './layout';
-import type { GameData } from './load';
+  AmbientLight,
+  BoxGeometry,
+  CircleGeometry,
+  Color,
+  ConeGeometry,
+  CylinderGeometry,
+  DataTexture,
+  DirectionalLight,
+  DodecahedronGeometry,
+  DoubleSide,
+  Euler,
+  ExtrudeGeometry,
+  Float32BufferAttribute,
+  Group,
+  IcosahedronGeometry,
+  LatheGeometry,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  OctahedronGeometry,
+  OrthographicCamera,
+  PlaneGeometry,
+  Points,
+  PointsMaterial,
+  Quaternion,
+  RGBAFormat,
+  Scene,
+  Shape,
+  SphereGeometry,
+  TorusGeometry,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+  type BufferGeometry,
+} from 'three';
+import { ownedCount } from '../sim/sim';
+import type { SimConfig, SimState } from '../sim/types';
+import { DepthLayer } from './scene-depth';
+import { addSmoothNormals, INK, merge, outlineMaterial, outlineUniform, part, Prop, toonMaterial } from './toon';
+import {
+  CART_ORDER,
+  easeOutBack,
+  gathererPath,
+  gathererPhase,
+  hash01,
+  ISLAND_HALF,
+  pileScale,
+  shownCount,
+  STRUCTURE_SLOTS,
+  TRACK_RADIUS,
+  UNIT_CAPS,
+  type Slot,
+} from './world';
 
-export { RENDER_SCALE, SCREEN_WIDTH, SCREEN_HEIGHT } from './layout';
-
-export const SAVE_KEY = 'dust.save';
-const SAVE_INTERVAL_MS = 5000;
-
-const MARGIN = 16;
-const CONTENT_WIDTH = SCREEN_WIDTH - MARGIN * 2;
-// Tall enough that the Buy button is a 44px touch target on a 375px phone (the canvas scales 375/420).
-const UNIT_ROW_HEIGHT = 64;
-const BUY_BUTTON_HEIGHT = 50;
-const MAX_UNLOCK_LINES = 1 + MAX_UNEARNED_UNLOCK_LINES;
-
-const COLORS = {
-  background: 0x12161c,
-  panel: 0x1c222b,
-  panelEdge: 0x2b3440,
-  accent: 0xd9a441,
-  accentDown: 0xb8862f,
-  buttonOff: 0x3a4352,
-  bar: 0x6fa8dc,
-  text: '#e8e6df',
-  muted: '#9aa3ad',
-  dark: '#12161c',
+// The site's creature fills (platform/site/src/tokens.css) and the Dust suit's magenta.
+export const PALETTE = {
+  paper: 0xfdfcf8,
+  ground: 0xf6f2e8,
+  path: 0xece5d4,
+  side: 0xe6dccb,
+  sand: 0xf1d99c,
+  sandDeep: 0xe3c37e,
+  blue: 0x8db9e8,
+  lavender: 0xcbbdee,
+  green: 0x9bd3a6,
+  pink: 0xf3b0c6,
+  orange: 0xf5b97a,
+  yellow: 0xf5dc7a,
+  grey: 0xc3c7cc,
+  teal: 0x7fcbc5,
+  brown: 0xcfa77c,
+  magenta: 0xb0226a,
+  ink: INK,
 };
 
-const FONT = 'sans-serif';
+const CREATURES = [PALETTE.blue, PALETTE.lavender, PALETTE.green, PALETTE.pink, PALETTE.orange, PALETTE.yellow];
 
-// The welcome-back note shows only for an absence long enough to feel like one.
-const MIN_WELCOME_SECONDS = 60;
-const TOAST_MS = 3500;
-
-/** What the save credited on load: the dust earned and the seconds away. */
-export interface WelcomeBack {
-  gain: number;
-  seconds: number;
+export interface SafeArea {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
-function reducedMotion(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const UP = new Vector3(0, 1, 0);
+// Looking down about 31 degrees on a wide screen, and steeper on a tall one, where the island has the
+// height to spare and a flatter view would leave it a thin strip.
+const WIDE_LIFT = 0.86;
+const TALL_LIFT = 1.45;
+const CAMERA_DISTANCE = 40;
+// The box the framing keeps in view: the island and the tallest chimney.
+const FRAME_BOX = { half: ISLAND_HALF + 0.2, low: -1.6, high: 2.0 };
+
+const CHUNKS = 90;
+const CONFETTI = 90;
+const POP_SECONDS = 0.5;
+
+const scratch = new Matrix4();
+const scratchQ = new Quaternion();
+const scratchS = new Vector3();
+const scratchP = new Vector3();
+const scratchC = new Color();
+const scratchE = new Euler();
+
+function compose(x: number, y: number, z: number, rotY: number, sx: number, sy = sx, sz = sx, rotX = 0, rotZ = 0): Matrix4 {
+  scratchP.set(x, y, z);
+  scratchQ.setFromEuler(scratchE.set(rotX, rotY, rotZ, 'YXZ'));
+  scratchS.set(sx, sy, sz);
+  return scratch.compose(scratchP, scratchQ, scratchS);
 }
 
-interface UnitRow {
-  unit: string;
-  container: Phaser.GameObjects.Container;
-  owned: Phaser.GameObjects.Text;
-  cost: Phaser.GameObjects.Text;
-  button: Phaser.GameObjects.Rectangle;
-  buttonLabel: Phaser.GameObjects.Text;
+function translate(x: number, y: number, z: number): Matrix4 {
+  return new Matrix4().makeTranslation(x, y, z);
 }
 
-interface UnlockSlot {
-  dot: Phaser.GameObjects.Arc;
-  label: Phaser.GameObjects.Text;
+function roundedSquare(half: number, radius: number): Shape {
+  const s = new Shape();
+  s.moveTo(-half + radius, -half);
+  s.lineTo(half - radius, -half);
+  s.quadraticCurveTo(half, -half, half, -half + radius);
+  s.lineTo(half, half - radius);
+  s.quadraticCurveTo(half, half, half - radius, half);
+  s.lineTo(-half + radius, half);
+  s.quadraticCurveTo(-half, half, -half, half - radius);
+  s.lineTo(-half, -half + radius);
+  s.quadraticCurveTo(-half, -half, -half + radius, -half);
+  return s;
 }
 
-function textStyle(size: number, color = COLORS.text, weight = 'normal'): Phaser.Types.GameObjects.Text.TextStyle {
-  return { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: weight, resolution: RENDER_SCALE };
+// A slab of the island's outline shape, its top at y = 0, coloured top and side apart.
+function slab(half: number, radius: number, depth: number, top: number, side: number): BufferGeometry {
+  const geometry = new ExtrudeGeometry(roundedSquare(half, radius), { depth, bevelEnabled: false, curveSegments: 5 }).toNonIndexed();
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -depth, 0);
+  geometry.deleteAttribute('uv');
+  geometry.computeVertexNormals();
+  const normal = geometry.attributes['normal']!;
+  const colours = new Float32Array(normal.count * 3);
+  const topC = new Color(top);
+  const sideC = new Color(side);
+  for (let i = 0; i < normal.count; i += 1) {
+    const c = normal.getY(i) > 0.5 ? topC : sideC;
+    colours.set([c.r, c.g, c.b], i * 3);
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colours, 3));
+  return geometry;
 }
 
-export class DustScene extends Phaser.Scene {
-  private readonly data_: GameData;
-  private state: SimState;
-  private dustText!: Phaser.GameObjects.Text;
-  private rateText!: Phaser.GameObjects.Text;
-  private unlockCountText!: Phaser.GameObjects.Text;
-  private nextUnlockText!: Phaser.GameObjects.Text;
-  private progressBar!: Phaser.GameObjects.Graphics;
-  private progressTop = 0;
-  private unitsTop = 0;
-  private unitRows: UnitRow[] = [];
-  private unlockListTop = 0;
-  private unlockSection!: Phaser.GameObjects.Container;
-  private unlockSlots: UnlockSlot[] = [];
-  private drawnUnlockCount = -1;
-  // The wall-clock millisecond of the last step. The sim advances by wall-clock time rather than
-  // Phaser's frame delta, which a browser stops or clamps while the tab is in the background, so time
-  // spent in another tab still counts (up to MAX_AWAY_SECONDS at once). It starts at the first frame,
-  // not at construction: the time Phaser takes to boot is not play, and counting it made two draws of
-  // the same save credit different dust (the gate's frames job, e2e/frames.spec.ts).
-  private lastStepAt: number | null = null;
+function islandGeometry(): BufferGeometry {
+  return merge([slab(ISLAND_HALF, 1.3, 1.5, PALETTE.ground, PALETTE.side)]);
+}
 
-  // Whether create() has built the objects refresh() draws; a DOM control can act before it has.
-  private created = false;
-  // Called after every refresh with the state drawn, so the accessible DOM layer (render/controls.ts) tracks it.
-  private readonly onRefresh: ((state: SimState) => void) | null;
-  private readonly welcome: WelcomeBack | null;
-  // Feedback: the toast over the title row, the strike button's centre for the +N floats, and the
-  // unlock count last seen, so a new unlock gets its own moment.
-  private toast!: Phaser.GameObjects.Container;
-  private toastText!: Phaser.GameObjects.Text;
-  private toastTimer: Phaser.Time.TimerEvent | null = null;
-  private strikeCentreY = 0;
-  private seenUnlocks: number;
-  private readonly calm = reducedMotion();
+function strataGeometry(): BufferGeometry {
+  const ring = (y: number): BufferGeometry => {
+    const g = slab(ISLAND_HALF + 0.02, 1.32, 0.06, PALETTE.ink, PALETTE.ink);
+    g.translate(0, y, 0);
+    return g;
+  };
+  return merge([ring(-0.55), ring(-1.0)]);
+}
+
+function lumpy(geometry: BufferGeometry, amount: number, seed: number): BufferGeometry {
+  const position = geometry.attributes['position']!;
+  for (let i = 0; i < position.count; i += 1) {
+    const x = position.getX(i);
+    const z = position.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = 1 + amount * (Math.sin(a * 5 + seed) * 0.6 + Math.sin(a * 9 + seed * 2.3) * 0.4);
+    position.setX(i, x * k);
+    position.setZ(i, z * k);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+export function pileGeometry(): BufferGeometry {
+  const profile = [
+    [0.0, 1.0],
+    [0.2, 0.98],
+    [0.38, 0.9],
+    [0.55, 0.74],
+    [0.7, 0.54],
+    [0.84, 0.3],
+    [0.95, 0.1],
+    [1.0, 0.0],
+  ]
+    .reverse()
+    .map(([x, y]) => new Vector2(Math.max(0.001, x!), y!));
+  const lathe = lumpy(new LatheGeometry(profile, 18), 0.06, 1.3);
+  const parts: BufferGeometry[] = [part(lathe, PALETTE.sand)];
+  // An ink line where the pile meets the ground, which the outline hull cannot draw there.
+  const ring = new TorusGeometry(1.0, 0.025, 4, 48);
+  ring.rotateX(Math.PI / 2);
+  parts.push(part(ring, PALETTE.ink, translate(0, 0.02, 0)));
+  // Loose lumps around the foot of the pile.
+  for (let i = 0; i < 12; i += 1) {
+    const a = (i / 12) * Math.PI * 2 + hash01(i + 40) * 0.4;
+    const r = 1.02 + hash01(i + 60) * 0.22;
+    const s = 0.07 + hash01(i + 80) * 0.07;
+    parts.push(part(new IcosahedronGeometry(1, 0), i % 3 === 0 ? PALETTE.sandDeep : PALETTE.sand, compose(Math.cos(a) * r, s * 0.6, Math.sin(a) * r, a, s).clone()));
+  }
+  return merge(parts);
+}
+
+function flagGeometry(): BufferGeometry {
+  const pole = part(new CylinderGeometry(0.025, 0.025, 0.95, 6), PALETTE.ink, translate(0, 0.47, 0));
+  const shape = new Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(0.5, -0.14);
+  shape.lineTo(0, -0.3);
+  shape.lineTo(0, 0);
+  const cloth = new ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: false });
+  cloth.deleteAttribute('uv');
+  const flag = part(cloth, PALETTE.magenta, translate(0.02, 0.93, -0.015));
+  return merge([pole, flag]);
+}
+
+function treeGeometry(): BufferGeometry {
+  return merge([
+    part(new CylinderGeometry(0.07, 0.1, 0.55, 6), PALETTE.brown, translate(0, 0.27, 0)),
+    part(new SphereGeometry(0.42, 12, 8), PALETTE.green, translate(0, 0.8, 0)),
+    part(new SphereGeometry(0.26, 10, 6), PALETTE.green, translate(0.22, 1.08, 0.08)),
+  ]);
+}
+
+function rockGeometry(): BufferGeometry {
+  const g = new DodecahedronGeometry(0.32, 0);
+  g.scale(1, 0.6, 0.85);
+  g.translate(0, 0.12, 0);
+  return merge([part(g, PALETTE.grey)]);
+}
+
+function gathererGeometry(): BufferGeometry {
+  const body = new SphereGeometry(0.27, 14, 10);
+  body.scale(1, 1.25, 1);
+  return merge([
+    part(body, 0xffffff, translate(0, 0.38, 0)),
+    part(new SphereGeometry(0.045, 6, 4), PALETTE.ink, translate(0.09, 0.47, 0.24)),
+    part(new SphereGeometry(0.045, 6, 4), PALETTE.ink, translate(-0.09, 0.47, 0.24)),
+    part(new CylinderGeometry(0.014, 0.014, 0.2, 4), PALETTE.ink, translate(0, 0.78, 0)),
+    part(new SphereGeometry(0.055, 8, 6), 0xffffff, translate(0, 0.89, 0)),
+    part(new SphereGeometry(0.07, 6, 4), PALETTE.ink, translate(0.12, 0.05, 0)),
+    part(new SphereGeometry(0.07, 6, 4), PALETTE.ink, translate(-0.12, 0.05, 0)),
+  ]).scale(0.85, 0.85, 0.85);
+}
+
+function sackGeometry(): BufferGeometry {
+  const g = new SphereGeometry(0.19, 10, 8);
+  g.scale(1, 0.9, 0.85);
+  return merge([part(g, PALETTE.sandDeep), part(new CylinderGeometry(0.05, 0.07, 0.07, 6), PALETTE.brown, translate(0, 0.17, 0))]);
+}
+
+function cartGeometry(): BufferGeometry {
+  const load = new SphereGeometry(0.3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  load.scale(1.15, 0.45, 0.75);
+  const parts = [part(new BoxGeometry(0.78, 0.3, 0.5), PALETTE.orange, translate(0, 0.33, 0)), part(load, PALETTE.sand, translate(0, 0.47, 0))];
+  for (const [x, z] of [
+    [0.26, 0.27],
+    [-0.26, 0.27],
+    [0.26, -0.27],
+    [-0.26, -0.27],
+  ] as const) {
+    parts.push(part(new CylinderGeometry(0.12, 0.12, 0.06, 10), PALETTE.ink, new Matrix4().makeTranslation(x, 0.13, z).multiply(new Matrix4().makeRotationX(Math.PI / 2))));
+  }
+  return merge(parts);
+}
+
+function trackGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const sleepers = 40;
+  for (let i = 0; i < sleepers; i += 1) {
+    const a = (i / sleepers) * Math.PI * 2;
+    parts.push(part(new BoxGeometry(0.62, 0.04, 0.13), PALETTE.brown, new Matrix4().makeTranslation(Math.cos(a) * TRACK_RADIUS, 0.02, Math.sin(a) * TRACK_RADIUS).multiply(new Matrix4().makeRotationY(-a))));
+  }
+  return merge(parts);
+}
+
+function railsGeometry(): BufferGeometry {
+  const rail = (r: number): BufferGeometry => {
+    const g = new TorusGeometry(r, 0.035, 4, 96);
+    g.rotateX(Math.PI / 2);
+    g.translate(0, 0.07, 0);
+    return part(g, PALETTE.ink);
+  };
+  return merge([rail(TRACK_RADIUS - 0.2), rail(TRACK_RADIUS + 0.2)]);
+}
+
+function millGeometry(): BufferGeometry {
+  return merge([
+    part(new CylinderGeometry(0.42, 0.62, 1.35, 8), PALETTE.paper, translate(0, 0.67, 0)),
+    part(new ConeGeometry(0.62, 0.62, 8), PALETTE.blue, translate(0, 1.66, 0)),
+    part(new BoxGeometry(0.26, 0.42, 0.08), PALETTE.ink, translate(0, 0.21, 0.56)),
+    part(new BoxGeometry(0.16, 0.18, 0.06), PALETTE.blue, translate(0, 0.86, 0.47)),
+    part(new CylinderGeometry(0.06, 0.06, 0.3, 6), PALETTE.ink, new Matrix4().makeTranslation(0, 1.3, 0.52).multiply(new Matrix4().makeRotationX(Math.PI / 2))),
+  ]);
+}
+
+function sailsGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const turn = new Matrix4().makeRotationZ((i * Math.PI) / 2);
+    parts.push(part(new BoxGeometry(0.06, 1.2, 0.05), PALETTE.brown, turn.clone().multiply(translate(0, 0.6, 0))));
+    parts.push(part(new BoxGeometry(0.3, 0.82, 0.03), PALETTE.paper, turn.clone().multiply(translate(0.18, 0.7, 0))));
+  }
+  parts.push(part(new SphereGeometry(0.1, 8, 6), PALETTE.magenta));
+  return merge(parts);
+}
+
+function forgeGeometry(): BufferGeometry {
+  const roof = new CylinderGeometry(0.01, 0.82, 0.5, 4, 1);
+  roof.rotateY(Math.PI / 4);
+  roof.scale(1.08, 1, 0.9);
+  return merge([
+    part(new BoxGeometry(1.1, 0.72, 0.9), PALETTE.grey, translate(0, 0.36, 0)),
+    part(roof, PALETTE.orange, translate(0, 0.97, 0)),
+    part(new CylinderGeometry(0.13, 0.15, 0.9, 8), PALETTE.paper, translate(-0.3, 1.2, -0.22)),
+    part(new CylinderGeometry(0.155, 0.155, 0.1, 8), PALETTE.ink, translate(-0.3, 1.6, -0.22)),
+    part(new BoxGeometry(0.46, 0.36, 0.04), PALETTE.ink, translate(0.08, 0.26, 0.46)),
+    part(new BoxGeometry(0.3, 0.12, 0.16), PALETTE.ink, translate(0.08, 0.2, 0.92)),
+    part(new BoxGeometry(0.12, 0.12, 0.1), PALETTE.ink, translate(0.08, 0.08, 0.92)),
+  ]);
+}
+
+function glowGeometry(): BufferGeometry {
+  return new BoxGeometry(0.36, 0.26, 0.03).translate(0.08, 0.25, 0.485);
+}
+
+function foundryGeometry(): BufferGeometry {
+  const parts = [
+    part(new BoxGeometry(1.8, 1.0, 1.3), PALETTE.lavender, translate(0, 0.5, 0)),
+    part(new BoxGeometry(0.42, 0.56, 0.06), PALETTE.ink, translate(0.3, 0.28, 0.66)),
+    part(new BoxGeometry(0.3, 0.2, 0.05), PALETTE.yellow, translate(-0.45, 0.6, 0.66)),
+  ];
+  // A saw-tooth roof of three ridges.
+  for (let i = 0; i < 3; i += 1) {
+    const ridge = new CylinderGeometry(0.34, 0.34, 1.3, 3, 1);
+    ridge.rotateX(Math.PI / 2);
+    ridge.rotateZ(Math.PI / 2);
+    ridge.scale(1, 0.9, 1);
+    parts.push(part(ridge, PALETTE.pink, translate(-0.6 + i * 0.6, 1.14, 0)));
+  }
+  for (const x of [-0.5, 0.45]) {
+    parts.push(part(new CylinderGeometry(0.16, 0.2, 1.7, 10), PALETTE.paper, translate(x, 1.65, -0.38)));
+    parts.push(part(new CylinderGeometry(0.205, 0.205, 0.14, 10), PALETTE.magenta, translate(x, 2.3, -0.38)));
+  }
+  return merge(parts);
+}
+
+function plotGeometry(): BufferGeometry {
+  const parts = [part(new BoxGeometry(1.0, 0.04, 1.0), PALETTE.path, translate(0, 0.02, 0))];
+  for (const [x, z] of [
+    [0.48, 0.48],
+    [-0.48, 0.48],
+    [0.48, -0.48],
+    [-0.48, -0.48],
+  ] as const) {
+    parts.push(part(new CylinderGeometry(0.025, 0.025, 0.28, 4), PALETTE.ink, translate(x, 0.14, z)));
+  }
+  return merge(parts);
+}
+
+function groundGeometry(): BufferGeometry {
+  // A worn clearing around the pile and a scatter of grass tufts.
+  const clearing = new CircleGeometry(3.05, 48);
+  clearing.rotateX(-Math.PI / 2);
+  const parts: BufferGeometry[] = [part(clearing, PALETTE.path, translate(0, 0.004, 0))];
+  for (let i = 0; i < 46; i += 1) {
+    const x = (hash01(i * 5 + 500) - 0.5) * ISLAND_HALF * 1.86;
+    const z = (hash01(i * 5 + 501) - 0.5) * ISLAND_HALF * 1.86;
+    if (Math.hypot(x, z) < 4.0) continue;
+    const blade = new ConeGeometry(0.05, 0.22, 3);
+    for (const dx of [-0.06, 0, 0.06]) parts.push(part(blade.clone(), 0x7fb98a, new Matrix4().makeTranslation(x + dx, 0.1, z).multiply(new Matrix4().makeRotationZ(-dx * 4))));
+  }
+  return merge(parts);
+}
+
+function pondGeometry(): BufferGeometry {
+  const water = new CylinderGeometry(0.95, 0.95, 0.04, 28);
+  water.scale(1, 1, 0.75);
+  const parts = [part(water, PALETTE.blue, translate(0, 0.02, 0))];
+  for (const [x, z] of [
+    [0.75, 0.3],
+    [0.85, 0.05],
+    [0.65, 0.45],
+  ] as const) {
+    parts.push(part(new CylinderGeometry(0.02, 0.02, 0.4, 4), 0x5c9e6a, translate(x, 0.2, z)));
+  }
+  return merge(parts).translate(4.1, 0, 2.85);
+}
+
+const TREES: ReadonlyArray<readonly [number, number, number]> = [
+  [4.75, 4.55, 1.05],
+  [3.35, 5.25, 0.8],
+  [5.3, 3.15, 0.9],
+  [5.35, 1.1, 0.7],
+  [0.95, 5.35, 0.75],
+  [-2.95, -5.3, 0.85],
+  [-5.35, -2.85, 0.7],
+  [-5.3, 3.2, 0.65],
+  [3.3, -5.35, 0.7],
+];
+const ROCKS: ReadonlyArray<readonly [number, number, number]> = [
+  [2.4, 4.4, 1.0],
+  [1.4, 4.6, 0.8],
+  [-2.8, 2.6, 0.7],
+  [2.6, -2.5, 0.75],
+  [-2.4, -2.6, 0.9],
+  [5.25, -3.0, 0.6],
+];
+
+function sceneryGeometry(): BufferGeometry {
+  const parts: BufferGeometry[] = [];
+  const tree = treeGeometry();
+  const rock = rockGeometry();
+  TREES.forEach(([x, z, s], i) => {
+    const g = tree.clone();
+    g.deleteAttribute('smoothNormal');
+    g.applyMatrix4(compose(x, 0, z, hash01(i + 300) * 6, s).clone());
+    parts.push(g);
+  });
+  ROCKS.forEach(([x, z, s], i) => {
+    const g = rock.clone();
+    g.deleteAttribute('smoothNormal');
+    g.applyMatrix4(compose(x, 0, z, hash01(i + 400) * 6, s).clone());
+    parts.push(g);
+  });
+  return merge(parts);
+}
+
+function dotTexture(): DataTexture {
+  const size = 16;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) / (size / 2);
+      const a = Math.max(0, Math.min(1, (1 - d) * 3));
+      data.set([255, 255, 255, Math.round(a * 255)], (y * size + x) * 4);
+    }
+  }
+  const texture = new DataTexture(data, size, size, RGBAFormat);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+interface Chunk {
+  born: number;
+  life: number;
+  p: Vector3;
+  v: Vector3;
+  spin: number;
+  size: number;
+  colour: number;
+}
+
+function outlined(geometry: BufferGeometry, material = toonMaterial()): Group {
+  const group = new Group();
+  if (geometry.getAttribute('smoothNormal') === undefined) addSmoothNormals(geometry);
+  group.add(new Mesh(geometry, material), new Mesh(geometry, outlineMaterial()));
+  return group;
+}
+
+export class DustScene {
+  readonly canvas: HTMLCanvasElement;
+  private readonly renderer: WebGLRenderer;
+  private readonly scene = new Scene();
+  private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 1, 120);
+  private width = 1;
+  private height = 1;
+  private safe: SafeArea = { top: 0, right: 0, bottom: 0, left: 0 };
+  // Frustum before breathing and punches: centre (camera right/up units) and units per CSS pixel.
+  private frame0 = { cx: 0, cy: 0, unitsPerPx: 0.05, sx: 0.5, sy: 0.5 };
+  private direction = new Vector3(1, WIDE_LIFT, 1).normalize();
+
+  private state: SimState | null = null;
+  private time = 0;
+  private lastTime: number | null = null;
+
+  private readonly pile = new Group();
+  private readonly flag: Group;
+  private pileShown = 0;
+  private squashAt = -10;
+  private squashPower = 0;
+  private punchAt = -10;
+  private punchPower = 1;
+  private readonly depth: DepthLayer;
+
+  private readonly track = new Group();
+  private readonly gatherers: Prop;
+  private readonly sacks: Prop;
+  private readonly carts: Prop;
+  private readonly mills: Prop;
+  private readonly sails: Prop;
+  private readonly forges: Prop;
+  private readonly glows: Prop;
+  private readonly glowMaterial: MeshBasicMaterial;
+  private readonly sparks: Prop;
+  private readonly foundries: Prop;
+  private readonly smoke: Prop;
+  private readonly plots: Prop;
+  private readonly shadows: Prop;
+  private readonly chunkProp: Prop;
+  private readonly confettiProp: Prop;
+  private readonly motes: Points;
+  private readonly motePositions: Float32Array;
+
+  private readonly chunks: Chunk[] = [];
+  private readonly confetti: Chunk[] = [];
+  private fxSeed = 1;
+  // When each drawn unit popped in, by unit and index; absent means it was there from the start.
+  private readonly popAt = new Map<string, number[]>();
+  private readonly bumpAt = new Map<string, number>();
 
   constructor(
-    data: GameData,
-    seed: number,
-    savedState: SimState | null = null,
-    onRefresh: ((state: SimState) => void) | null = null,
-    welcome: WelcomeBack | null = null,
+    host: HTMLElement,
+    private readonly config: SimConfig,
+    private readonly calm: boolean,
   ) {
-    super({ key: 'dust' });
-    this.data_ = data;
-    this.state = savedState ?? createSim(data.config, seed);
-    this.onRefresh = onRefresh;
-    this.welcome = welcome;
-    this.seenUnlocks = this.state.unlocked.length;
-  }
+    this.renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.setClearColor(0x000000, 0);
+    this.canvas = this.renderer.domElement;
+    host.append(this.canvas);
 
-  // One action from the canvas or the DOM controls: the same sim `apply`, then a redraw.
-  act(action: SimAction): SimState {
-    const before = this.state;
-    this.state = apply(this.state, this.data_.config, action);
-    if (this.created) {
-      if (action.type === 'strike') this.floatGain(this.state.dust - before.dust);
-      else if (this.state !== before && ownedCount(this.state, action.unit) > ownedCount(before, action.unit)) this.pulse(this.dustText);
-      this.refresh();
+    this.scene.add(new AmbientLight(0xffffff, 2.35));
+    const sun = new DirectionalLight(0xffffff, 1.35);
+    sun.position.set(-5, 10, 7);
+    this.scene.add(sun);
+
+    // The island, its strata lines and a flat shadow on the paper beneath it.
+    const shadow = new Mesh(new ExtrudeGeometry(roundedSquare(ISLAND_HALF, 1.3), { depth: 0.01, bevelEnabled: false }).rotateX(-Math.PI / 2), new MeshBasicMaterial({ color: PALETTE.ink, transparent: true, opacity: 0.07, depthWrite: false }));
+    shadow.position.set(0.9, -2.2, 0.9);
+    this.scene.add(shadow);
+    this.scene.add(outlined(islandGeometry()));
+    this.scene.add(new Mesh(strataGeometry(), new MeshBasicMaterial({ color: PALETTE.ink })));
+    this.scene.add(new Mesh(groundGeometry(), toonMaterial()));
+    this.scene.add(outlined(pondGeometry()));
+    this.scene.add(outlined(sceneryGeometry()));
+
+    // The track appears with the first cart.
+    this.track.add(outlined(trackGeometry()), new Mesh(railsGeometry(), new MeshBasicMaterial({ color: PALETTE.ink })));
+    this.track.visible = false;
+    this.scene.add(this.track);
+
+    // The pile and its flag.
+    this.pile.add(outlined(pileGeometry()));
+    this.flag = outlined(flagGeometry());
+    this.flag.position.y = 0.97;
+    this.pile.add(this.flag);
+    this.scene.add(this.pile);
+
+    const shadowMaterial = new MeshBasicMaterial({ color: PALETTE.ink, transparent: true, opacity: 0.11, depthWrite: false });
+    this.shadows = new Prop(new CircleGeometry(0.5, 20).rotateX(-Math.PI / 2).translate(0, 0.012, 0), 64, shadowMaterial, false);
+    this.plots = new Prop(plotGeometry(), 3);
+    this.gatherers = new Prop(gathererGeometry(), UNIT_CAPS['gatherer']!);
+    this.sacks = new Prop(sackGeometry(), UNIT_CAPS['gatherer']!);
+    this.carts = new Prop(cartGeometry(), UNIT_CAPS['cart']!);
+    this.mills = new Prop(millGeometry(), UNIT_CAPS['mill']!);
+    this.sails = new Prop(sailsGeometry(), UNIT_CAPS['mill']!);
+    this.forges = new Prop(forgeGeometry(), UNIT_CAPS['forge']!);
+    this.glowMaterial = new MeshBasicMaterial({ color: PALETTE.orange });
+    this.glows = new Prop(glowGeometry(), UNIT_CAPS['forge']!, this.glowMaterial, false);
+    this.sparks = new Prop(new BoxGeometry(0.06, 0.06, 0.06), UNIT_CAPS['forge']! * 6, new MeshBasicMaterial({ color: PALETTE.yellow }), false);
+    this.foundries = new Prop(foundryGeometry(), UNIT_CAPS['foundry']!);
+    this.smoke = new Prop(merge([part(new IcosahedronGeometry(0.24, 1), PALETTE.paper)]), UNIT_CAPS['foundry']! * 2 * 3);
+    this.chunkProp = new Prop(merge([part(new OctahedronGeometry(1, 0), 0xffffff)]), CHUNKS);
+    this.confettiProp = new Prop(new PlaneGeometry(0.2, 0.12), CONFETTI, new MeshBasicMaterial({ color: 0xffffff, side: DoubleSide }), false);
+    for (const prop of [this.shadows, this.plots, this.gatherers, this.sacks, this.carts, this.mills, this.sails, this.forges, this.glows, this.sparks, this.foundries, this.smoke, this.chunkProp, this.confettiProp]) {
+      this.scene.add(prop.mesh);
+      if (prop.outline !== null) this.scene.add(prop.outline);
     }
-    return this.state;
+    for (let i = 0; i < UNIT_CAPS['gatherer']!; i += 1) this.gatherers.colour(i, scratchC.set(CREATURES[gathererPath(i).colour]!));
+    this.depth = new DepthLayer(this.scene, config, calm);
+
+    // Motes of dust drifting over the island.
+    const motes = 70;
+    this.motePositions = new Float32Array(motes * 3);
+    const moteGeometry = new SphereGeometry(1, 1, 1);
+    moteGeometry.setAttribute('position', new Float32BufferAttribute(this.motePositions, 3));
+    this.motes = new Points(moteGeometry, new PointsMaterial({ color: 0xc9b98f, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, map: dotTexture(), depthWrite: false }));
+    this.motes.frustumCulled = false;
+    this.scene.add(this.motes);
   }
 
-  // A "+N" that rises off the Strike button and fades: the strike's yield, made visible.
-  private floatGain(gain: number): void {
-    if (!(gain > 0)) return;
-    const x = SCREEN_WIDTH / 2 + Phaser.Math.Between(-60, 60);
-    const label = this.add.text(x, this.strikeCentreY - 30, `+${formatDust(gain)}`, textStyle(18, COLORS.text, 'bold')).setOrigin(0.5);
-    this.tweens.add({
-      targets: label,
-      y: this.calm ? label.y : label.y - 36,
-      alpha: 0,
-      duration: 800,
-      ease: 'Cubic.easeOut',
-      onComplete: () => label.destroy(),
-    });
+  setState(state: SimState): void {
+    this.state = state;
   }
 
-  private pulse(target: Phaser.GameObjects.Text): void {
-    if (this.calm) return;
-    this.tweens.add({ targets: target, scale: 1.06, duration: 90, yoyo: true, ease: 'Quad.easeOut' });
+  /** Sizes the canvas to its host and keeps the island inside `safe`, the part of it no panel covers. */
+  resize(width: number, height: number, safe: SafeArea): void {
+    this.width = Math.max(1, Math.round(width));
+    this.height = Math.max(1, Math.round(height));
+    this.safe = safe;
+    this.renderer.setSize(this.width, this.height, true);
+    this.fit();
   }
 
-  private createToast(): void {
-    const height = 34;
-    const panel = this.add.rectangle(SCREEN_WIDTH / 2, height / 2, CONTENT_WIDTH, height, COLORS.accent);
-    this.toastText = this.add.text(SCREEN_WIDTH / 2, height / 2, '', textStyle(13, COLORS.dark, 'bold')).setOrigin(0.5);
-    this.toast = this.add.container(0, MARGIN - 4, [panel, this.toastText]).setAlpha(0).setDepth(10);
-  }
-
-  // `slide` animates the entrance. The unlock toast appears without it: an unlock can land inside the
-  // gate's frame draws, and a tween's timing is not frame-exact, so it would make two draws differ.
-  private showToast(message: string, slide = true): void {
-    this.toastText.setText(message);
-    this.tweens.killTweensOf(this.toast);
-    const animate = slide && !this.calm;
-    this.toast.setAlpha(1).setY(animate ? MARGIN - 14 : MARGIN - 4);
-    if (animate) this.tweens.add({ targets: this.toast, y: MARGIN - 4, duration: 220, ease: 'Back.easeOut' });
-    this.toastTimer?.remove();
-    this.toastTimer = this.time.delayedCall(TOAST_MS, () => {
-      this.tweens.add({ targets: this.toast, alpha: 0, duration: this.calm ? 1 : 400 });
-    });
-  }
-
-  create(): void {
-    const { strings } = this.data_;
-    this.cameras.main.setBackgroundColor(COLORS.background).setZoom(RENDER_SCALE).centerOn(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
-    this.setUpSaving();
-
-    let y = MARGIN;
-    this.add.text(MARGIN, y, strings.title, textStyle(26, COLORS.text, 'bold'));
-    y += 40;
-    this.dustText = this.add.text(MARGIN, y, '', textStyle(34, COLORS.text, 'bold'));
-    y += 44;
-    this.rateText = this.add.text(MARGIN, y, '', textStyle(15, COLORS.muted));
-    y += 30;
-
-    y = this.createStrikeButton(y);
-    y = this.createUnitRows(y + 12);
-    this.createUnlockList(y + 12);
-    this.createToast();
-    this.created = true;
-    this.refresh();
-    if (this.welcome !== null && this.welcome.seconds >= MIN_WELCOME_SECONDS && this.welcome.gain >= 1) {
-      this.showToast(fill(strings.labels.welcomeBack, { amount: formatDust(this.welcome.gain), time: formatDuration(this.welcome.seconds) }));
-    }
-  }
-
-  override update(): void {
-    const now = Date.now();
-    if (this.lastStepAt !== null) this.state = step(this.state, this.data_.config, awaySeconds(this.lastStepAt, now));
-    this.lastStepAt = now;
-    this.refresh();
-  }
-
-  private createStrikeButton(top: number): number {
-    const { strings } = this.data_;
-    const height = 56;
-    this.strikeCentreY = top + height / 2;
-    const button = this.add
-      .rectangle(SCREEN_WIDTH / 2, top + height / 2, CONTENT_WIDTH, height, COLORS.accent)
-      .setInteractive({ useHandCursor: true });
-    this.add.text(SCREEN_WIDTH / 2, top + 20, strings.labels.strike, textStyle(20, COLORS.dark, 'bold')).setOrigin(0.5);
-    this.add.text(SCREEN_WIDTH / 2, top + 41, strings.strikeDescription, textStyle(12, COLORS.dark)).setOrigin(0.5);
-    button.on('pointerdown', () => {
-      button.setFillStyle(COLORS.accentDown);
-      this.act({ type: 'strike' });
-    });
-    button.on('pointerup', () => button.setFillStyle(COLORS.accent));
-    button.on('pointerout', () => button.setFillStyle(COLORS.accent));
-    return top + height;
-  }
-
-  private createUnitRows(top: number): number {
-    const { config, strings } = this.data_;
-    this.add.text(MARGIN, top, strings.labels.units, textStyle(14, COLORS.muted));
-    this.unitsTop = top + 22;
-    let y = this.unitsTop;
-    for (const row of config.spawnTable.rows) {
-      const container = this.add.container(0, y);
-      const panel = this.add.rectangle(SCREEN_WIDTH / 2, UNIT_ROW_HEIGHT / 2 - 3, CONTENT_WIDTH, UNIT_ROW_HEIGHT - 6, COLORS.panel);
-      panel.setStrokeStyle(1, COLORS.panelEdge);
-      const name = this.add.text(MARGIN + 10, 9, row.name, textStyle(16, COLORS.text, 'bold'));
-      const description = this.add.text(MARGIN + 10, 32, strings.unitDescriptions[row.id] ?? '', textStyle(11, COLORS.muted));
-      const owned = this.add.text(MARGIN + 10 + name.width + 8, 12, '', textStyle(12, COLORS.muted));
-      const buttonWidth = 96;
-      const buttonX = SCREEN_WIDTH - MARGIN - buttonWidth / 2 - 8;
-      const button = this.add
-        .rectangle(buttonX, UNIT_ROW_HEIGHT / 2 - 3, buttonWidth, BUY_BUTTON_HEIGHT, COLORS.accent)
-        .setInteractive({ useHandCursor: true });
-      const buttonLabel = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 - 12, strings.labels.buy, textStyle(14, COLORS.dark, 'bold')).setOrigin(0.5);
-      const cost = this.add.text(buttonX, UNIT_ROW_HEIGHT / 2 + 6, '', textStyle(11, COLORS.dark)).setOrigin(0.5);
-      button.on('pointerdown', () => {
-        this.act({ type: 'buy', unit: row.id });
-      });
-      container.add([panel, name, description, owned, button, buttonLabel, cost]);
-      this.unitRows.push({ unit: row.id, container, owned, cost, button, buttonLabel });
-      y += UNIT_ROW_HEIGHT;
-    }
-    return y;
-  }
-
-  private createUnlockList(top: number): void {
-    const { strings } = this.data_;
-    // One container, moved up in refresh() so the section sits right under the units shown, with no
-    // gap left for units still locked.
-    this.unlockSection = this.add.container(0, 0);
-    const heading = this.add.text(MARGIN, top, strings.labels.unlocks, textStyle(14, COLORS.muted));
-    this.unlockCountText = this.add.text(SCREEN_WIDTH - MARGIN, top, '', textStyle(12, COLORS.muted)).setOrigin(1, 0);
-    let y = top + 22;
-    this.nextUnlockText = this.add.text(MARGIN, y, '', textStyle(13, COLORS.text));
-    y += 20;
-    this.progressTop = y;
-    this.progressBar = this.add.graphics();
-    y += 14;
-    this.unlockListTop = y;
-    this.unlockSection.add([heading, this.unlockCountText, this.nextUnlockText, this.progressBar]);
-    for (let i = 0; i < MAX_UNLOCK_LINES; i += 1) {
-      const dot = this.add.circle(MARGIN + 6, y + 9, 5, COLORS.bar).setStrokeStyle(1, COLORS.bar);
-      const label = this.add.text(MARGIN + 18, y, '', textStyle(12, COLORS.muted));
-      this.unlockSection.add([dot, label]);
-      this.unlockSlots.push({ dot, label });
-    }
-  }
-
-  private refresh(): void {
-    const { config, strings } = this.data_;
-    const state = this.state;
-    this.setText(this.dustText, `${formatDust(state.dust)} ${strings.labels.dust.toLowerCase()}`);
-    this.setText(this.rateText, `${formatRate(ratePerSecond(state, config))} ${strings.labels.perSecond}`);
-
-    // Available units pack upward so a locked unit leaves no gap on screen.
-    let shown = 0;
-    for (const row of this.unitRows) {
-      const available = isUnitAvailable(state, config, row.unit);
-      row.container.setVisible(available);
-      if (!available) continue;
-      row.container.setY(this.unitsTop + shown * UNIT_ROW_HEIGHT);
-      shown += 1;
-      const cost = costOf(state, config, row.unit);
-      const affordable = state.dust >= cost;
-      this.setText(row.owned, `${ownedCount(state, row.unit)} ${strings.labels.owned}`);
-      this.setText(row.cost, formatDust(cost));
-      row.button.setFillStyle(affordable ? COLORS.accent : COLORS.buttonOff);
-      row.buttonLabel.setColor(affordable ? COLORS.dark : COLORS.muted);
-      row.cost.setColor(affordable ? COLORS.dark : COLORS.muted);
-    }
-    this.unlockSection.setY((shown - this.unitRows.length) * UNIT_ROW_HEIGHT);
-
-    const total = config.unlocks.unlocks.length;
-    this.setText(this.unlockCountText, fill(strings.labels.unlockedCount, { unlocked: String(state.unlocked.length), total: String(total) }));
-    const next = nextLockedUnlock(state, config);
-    this.progressBar.clear();
-    if (next === null) {
-      this.setText(this.nextUnlockText, strings.labels.allUnlocked);
-    } else {
-      this.setText(this.nextUnlockText, fill(strings.labels.nextUnlock, { name: next.name, amount: formatDust(next.atTotalDust) }));
-      const share = Math.min(1, state.totalDust / next.atTotalDust);
-      this.progressBar.fillStyle(COLORS.panel, 1);
-      this.progressBar.fillRect(MARGIN, this.progressTop, CONTENT_WIDTH, 8);
-      this.progressBar.fillStyle(COLORS.bar, 1);
-      this.progressBar.fillRect(MARGIN, this.progressTop, CONTENT_WIDTH * share, 8);
-    }
-
-    if (state.unlocked.length > this.seenUnlocks) {
-      const latest = state.unlocked[state.unlocked.length - 1];
-      const row = config.unlocks.unlocks.find((unlock) => unlock.id === latest?.id);
-      if (row !== undefined) this.showToast(fill(strings.labels.unlockBanner, { name: row.name }), false);
-      this.seenUnlocks = state.unlocked.length;
-    }
-
-    if (this.drawnUnlockCount !== state.unlocked.length) {
-      this.drawnUnlockCount = state.unlocked.length;
-      const earnedIds = new Set(state.unlocked.map((event) => event.id));
-      const lines = layoutUnlockList(this.unlockListTop, config.unlocks.unlocks, earnedIds);
-      for (let i = 0; i < this.unlockSlots.length; i += 1) {
-        const slot = this.unlockSlots[i];
-        const line = lines[i];
-        if (slot === undefined) continue;
-        if (line === undefined) {
-          slot.dot.setVisible(false);
-          slot.label.setVisible(false);
-          continue;
-        }
-        slot.dot.setY(line.y + 9);
-        slot.label.setY(line.y);
-        slot.label.setVisible(true);
-        if (line.kind === 'earned') {
-          slot.dot.setVisible(false);
-          slot.label.setText(fill(strings.labels.unlocksEarned, { count: String(line.count) }));
-          slot.label.setColor(COLORS.text);
-        } else {
-          slot.dot.setVisible(true);
-          slot.dot.setFillStyle(COLORS.bar, 0);
-          slot.label.setText(`${line.row.name}: ${describeEffect(line.row, config, strings)} (${formatDust(line.row.atTotalDust)})`);
-          slot.label.setColor(COLORS.muted);
+  private fit(): void {
+    const safeW = Math.max(80, this.width - this.safe.left - this.safe.right);
+    const safeH = Math.max(80, this.height - this.safe.top - this.safe.bottom);
+    const tall = Math.min(1, Math.max(0, (safeH / safeW - 0.7) / 0.4));
+    this.direction = new Vector3(1, WIDE_LIFT + (TALL_LIFT - WIDE_LIFT) * tall, 1).normalize();
+    const forward = this.direction.clone().negate();
+    const right = new Vector3().crossVectors(forward, UP).normalize();
+    const up = new Vector3().crossVectors(right, forward).normalize();
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const x of [-FRAME_BOX.half, FRAME_BOX.half]) {
+      for (const y of [FRAME_BOX.low, FRAME_BOX.high]) {
+        for (const z of [-FRAME_BOX.half, FRAME_BOX.half]) {
+          const p = new Vector3(x, y, z);
+          minX = Math.min(minX, p.dot(right));
+          maxX = Math.max(maxX, p.dot(right));
+          minY = Math.min(minY, p.dot(up));
+          maxY = Math.max(maxY, p.dot(up));
         }
       }
     }
-    this.onRefresh?.(state);
+    // Never so close that the island fills a huge screen edge to edge.
+    const unitsPerPx = Math.max(((maxX - minX) * 0.97) / safeW, (maxY - minY) / safeH, (maxX - minX) / 1100) * 1.02;
+    this.frame0 = {
+      cx: (minX + maxX) / 2,
+      cy: (minY + maxY) / 2,
+      unitsPerPx,
+      sx: this.safe.left + safeW / 2,
+      sy: this.safe.top + safeH / 2,
+    };
+    // Lines a little thicker when the island is drawn big.
+    const islandPx = (maxX - minX) / unitsPerPx;
+    outlineUniform.value = Math.min(3.2, Math.max(2.0, islandPx / 200)) * unitsPerPx;
   }
 
-  private setText(target: Phaser.GameObjects.Text, value: string): void {
-    if (target.text !== value) target.setText(value);
+  private placeCamera(): void {
+    const t = this.time;
+    const sway = this.calm ? 0 : Math.sin(t * 0.55) * 0.02;
+    const punchK = Math.max(0, 1 - (t - this.punchAt) / 0.6);
+    const punch = this.calm ? 0 : Math.sin(punchK * Math.PI) * 0.035 * punchK * this.punchPower;
+    const breathe = this.calm ? 0 : Math.sin(t * 0.8) * 0.006;
+    const zoom = 1 - punch - breathe;
+    const direction = this.direction.clone().applyAxisAngle(UP, sway);
+    this.camera.position.copy(direction).multiplyScalar(CAMERA_DISTANCE);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(0, 0, 0);
+    const f = this.frame0;
+    const u = f.unitsPerPx * zoom;
+    // The island's centre lands on the safe area's centre.
+    const left = f.cx - f.sx * u;
+    const top = f.cy + f.sy * u;
+    this.camera.left = left;
+    this.camera.right = left + this.width * u;
+    this.camera.top = top;
+    this.camera.bottom = top - this.height * u;
+    this.camera.updateProjectionMatrix();
   }
 
-  // Storage errors (a full or disabled store) are swallowed here so the game
-  // keeps playing without a save rather than throwing on every tick.
-  private save(): void {
-    try {
-      window.localStorage.setItem(SAVE_KEY, serializeState(this.state, Date.now()));
-    } catch {
-      // ignored
+  /** Where the top of the pile is on the canvas, in CSS pixels: the strike floaters rise from here. */
+  pileScreen(): { x: number; y: number } {
+    const p = new Vector3(0, this.pileShown * 1.0, 0).project(this.camera);
+    return { x: ((p.x + 1) / 2) * this.width, y: ((1 - p.y) / 2) * this.height };
+  }
+
+  private random(): number {
+    this.fxSeed += 1;
+    return hash01(this.fxSeed * 2654435761);
+  }
+
+  strike(gain: number, streak: number): void {
+    const starry = this.state?.weather?.kind === 'shooting-star';
+    this.squashAt = this.time;
+    this.squashPower = Math.min(1, 0.55 + streak * 0.05);
+    if (this.calm || !(gain > 0)) return;
+    const count = 7 + Math.min(10, streak);
+    const top = this.pileShown;
+    for (let i = 0; i < count; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = 1.8 + this.random() * 2.4;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 0.9 + this.random() * 0.5,
+        p: new Vector3(Math.cos(a) * 0.3 * top, top * 0.85, Math.sin(a) * 0.3 * top),
+        v: new Vector3(Math.cos(a) * speed, 3.2 + this.random() * 2.6, Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 14,
+        size: 0.06 + this.random() * 0.06,
+        colour: starry ? (this.random() < 0.5 ? PALETTE.yellow : PALETTE.paper) : this.random() < 0.3 ? PALETTE.sandDeep : PALETTE.sand,
+      });
+    }
+    // A strike that lands big (a long streak, or under a shooting star) nudges the camera too.
+    if (streak >= 8 || starry) this.punch(0.35);
+  }
+
+  private punch(power: number): void {
+    // A smaller nudge never cuts short a bigger one still playing.
+    const left = Math.max(0, 1 - (this.time - this.punchAt) / 0.6) * this.punchPower;
+    if (power < left) return;
+    this.punchAt = this.time;
+    this.punchPower = power;
+  }
+
+  /** A unit passed a milestone: a nudge and a burst of confetti where it stands. */
+  milestone(unit: string, owned: number): void {
+    this.punch(0.6);
+    if (this.calm) return;
+    const index = Math.min(owned, UNIT_CAPS[unit] ?? 1) - 1;
+    const where = this.unitPosition(unit, Math.max(0, index)) ?? new Vector3(0, 0, 0);
+    this.burst(where.clone().setY(1.2), 26, 0.7);
+  }
+
+  /** The pile was pressed: the island's biggest moment. */
+  pressed(): void {
+    this.punch(1.6);
+    this.squashAt = this.time;
+    this.squashPower = 1;
+    // Whatever the new season starts with pops in again.
+    this.popAt.clear();
+    for (const unit of Object.keys(UNIT_CAPS)) this.popAt.set(unit, Array.from({ length: UNIT_CAPS[unit]! }, (_, i) => this.time + 0.3 + i * 0.05));
+    if (this.calm) return;
+    this.burst(new Vector3(0, this.pileShown * 1.4, 0), CONFETTI, 1.5);
+    for (let i = 0; i < 40; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = 2 + this.random() * 4;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 1.2 + this.random() * 0.6,
+        p: new Vector3(Math.cos(a) * 0.4, this.pileShown, Math.sin(a) * 0.4),
+        v: new Vector3(Math.cos(a) * speed, 5 + this.random() * 4, Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 14,
+        size: 0.08 + this.random() * 0.08,
+        colour: [PALETTE.lavender, PALETTE.teal, PALETTE.pink, PALETTE.sand][i % 4]!,
+      });
     }
   }
 
-  private setUpSaving(): void {
-    this.time.addEvent({ delay: SAVE_INTERVAL_MS, loop: true, callback: () => this.save() });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.save();
-    });
-    window.addEventListener('pagehide', () => this.save());
+  /** A perk was bought: the gem ring glints. */
+  perk(): void {
+    this.punch(0.4);
+    if (this.calm) return;
+    const r = this.pileShown * 1.08 + 0.55;
+    for (let i = 0; i < 24; i += 1) {
+      const a = (i / 24) * Math.PI * 2;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time + (i % 6) * 0.03,
+        life: 0.8,
+        p: new Vector3(Math.cos(a) * r, 0.4, Math.sin(a) * r),
+        v: new Vector3(Math.cos(a) * 0.6, 3 + this.random() * 1.5, Math.sin(a) * 0.6),
+        spin: 8,
+        size: 0.07,
+        colour: [PALETTE.yellow, PALETTE.paper, PALETTE.lavender][i % 3]!,
+      });
+    }
+  }
+
+  /** The weather turned: a small beat so the eye goes to it. */
+  weatherTurned(): void {
+    this.punch(0.3);
+  }
+
+  private burst(at: Vector3, count: number, scale: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = (1.2 + this.random() * 3.2) * Math.sqrt(scale);
+      this.spawn(this.confetti, CONFETTI, {
+        born: this.time,
+        life: 2 + this.random() * 1.0,
+        p: at.clone(),
+        v: new Vector3(Math.cos(a) * speed, (4 + this.random() * 4) * Math.sqrt(scale), Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 16,
+        size: 0.7 + this.random() * 0.6,
+        colour: [PALETTE.magenta, PALETTE.blue, PALETTE.yellow, PALETTE.green, PALETTE.pink, PALETTE.lavender][i % 6]!,
+      });
+    }
+  }
+
+  bought(unit: string, owned: number): void {
+    const index = owned - 1;
+    if (index < (UNIT_CAPS[unit] ?? 0)) {
+      const pops = this.popAt.get(unit) ?? [];
+      pops[index] = this.time;
+      this.popAt.set(unit, pops);
+      const where = this.unitPosition(unit, index);
+      if (where !== null && !this.calm) this.puff(where);
+    } else {
+      this.bumpAt.set(unit, this.time);
+    }
+    this.punch(0.25);
+  }
+
+  unlocked(): void {
+    this.punch(1);
+    if (this.calm) return;
+    const top = this.pileShown * 1.9;
+    for (let i = 0; i < 60; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const speed = 1.2 + this.random() * 3.2;
+      this.spawn(this.confetti, CONFETTI, {
+        born: this.time,
+        life: 2.2 + this.random() * 1.0,
+        p: new Vector3(0, top, 0),
+        v: new Vector3(Math.cos(a) * speed, 4 + this.random() * 4, Math.sin(a) * speed),
+        spin: (this.random() - 0.5) * 16,
+        size: 0.8 + this.random() * 0.6,
+        colour: [PALETTE.magenta, PALETTE.blue, PALETTE.yellow, PALETTE.green, PALETTE.pink, PALETTE.lavender][i % 6]!,
+      });
+    }
+  }
+
+  /** The welcome-back moment: dust rains into the pile. */
+  welcome(): void {
+    this.punch(1);
+    if (this.calm) return;
+    for (let i = 0; i < 50; i += 1) {
+      const a = this.random() * Math.PI * 2;
+      const r = this.random() * 1.6;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time + this.random() * 1.2,
+        life: 1.6,
+        p: new Vector3(Math.cos(a) * r, 7 + this.random() * 4, Math.sin(a) * r),
+        v: new Vector3(0, -2, 0),
+        spin: (this.random() - 0.5) * 10,
+        size: 0.07 + this.random() * 0.07,
+        colour: this.random() < 0.3 ? PALETTE.sandDeep : PALETTE.sand,
+      });
+    }
+  }
+
+  private puff(at: Vector3): void {
+    for (let i = 0; i < 10; i += 1) {
+      const a = (i / 10) * Math.PI * 2;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 0.6,
+        p: at.clone().add(new Vector3(Math.cos(a) * 0.3, 0.1, Math.sin(a) * 0.3)),
+        v: new Vector3(Math.cos(a) * 2.2, 1.6, Math.sin(a) * 2.2),
+        spin: 6,
+        size: 0.07,
+        colour: PALETTE.paper,
+      });
+    }
+  }
+
+  private spawn(pool: Chunk[], cap: number, chunk: Chunk): void {
+    if (pool.length >= cap) pool.shift();
+    pool.push(chunk);
+  }
+
+  private unitPosition(unit: string, index: number): Vector3 | null {
+    const slots = STRUCTURE_SLOTS[unit];
+    if (slots !== undefined) {
+      const slot = slots[index];
+      return slot === undefined ? null : new Vector3(slot.x, 0, slot.z);
+    }
+    if (unit === 'cart') {
+      const a = (CART_ORDER[index % CART_ORDER.length]! / CART_ORDER.length) * Math.PI * 2 - this.time * 0.35;
+      return new Vector3(Math.cos(a) * TRACK_RADIUS, 0, Math.sin(a) * TRACK_RADIUS);
+    }
+    if (unit === 'gatherer') {
+      const path = gathererPath(index);
+      const r = this.pileShown + 0.3 + (path.reach - this.pileShown) * 0.5;
+      return new Vector3(Math.cos(path.angle) * r, 0, Math.sin(path.angle) * r);
+    }
+    return null;
+  }
+
+  // 0 to 1 while a unit pops in, 1 after; a bump wobbles a unit when one is bought past the cap.
+  private popScale(unit: string, index: number): number {
+    const at = this.popAt.get(unit)?.[index];
+    let s = 1;
+    if (at !== undefined && !this.calm) s = easeOutBack(Math.min(1, Math.max(0, (this.time - at) / POP_SECONDS)));
+    const bump = this.bumpAt.get(unit);
+    if (bump !== undefined && !this.calm) {
+      const k = (this.time - bump) / 0.35;
+      if (k >= 0 && k < 1) s *= 1 + Math.sin(k * Math.PI) * 0.15 * (index % 2 === 0 ? 1 : 0.6);
+    }
+    return s;
+  }
+
+  /** Advances every animation to `ms` (the frame clock, in milliseconds) and draws. */
+  frame(ms: number): void {
+    this.time = ms / 1000;
+    const dt = this.lastTime === null ? 0 : Math.min(0.05, Math.max(0, this.time - this.lastTime));
+    this.lastTime = this.time;
+    this.update(dt);
+    this.placeCamera();
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private update(dt: number): void {
+    const state = this.state;
+    if (state === null) return;
+    const t = this.calm ? 0 : this.time;
+    this.depth.begin();
+    let shadows = 0;
+    const shadow = (x: number, z: number, r: number): void => {
+      if (shadows >= this.shadows.capacity || r <= 0.01) return;
+      this.shadows.set(shadows, compose(x, 0, z, 0, r * 2, 1, r * 2 * 0.9));
+      shadows += 1;
+    };
+
+    // The pile eases toward its size for the lifetime total, and squashes on a strike.
+    const target = pileScale(state.totalDust);
+    this.pileShown = this.pileShown === 0 || this.calm ? target : this.pileShown + (target - this.pileShown) * Math.min(1, dt * 3);
+    const k = (this.time - this.squashAt) / 0.42;
+    let squash = 0;
+    if (k >= 0 && k < 1 && !this.calm) squash = Math.sin(k * Math.PI * 2.2) * (1 - k) * 0.22 * this.squashPower;
+    const s = this.pileShown;
+    this.pile.scale.set(s * (1 + squash * 0.55), s * (1 - squash), s * (1 + squash * 0.55));
+    this.flag.rotation.y = this.calm ? 0.4 : 0.4 + Math.sin(t * 2.1) * 0.25;
+    shadow(0, 0, s * 1.15);
+
+    // Plots: a staked square for each building not yet built, so the island shows what is to come.
+    let plots = 0;
+    for (const unit of ['mill', 'forge', 'foundry']) {
+      if (ownedCount(state, unit) > 0) continue;
+      const slot = STRUCTURE_SLOTS[unit]![0]!;
+      this.plots.set(plots, compose(slot.x, 0, slot.z, slot.rot, 1));
+      plots += 1;
+    }
+    this.plots.commit(plots);
+
+    // Gatherers walk out along their lanes and back with a sack.
+    const gatherers = shownCount('gatherer', ownedCount(state, 'gatherer'));
+    let sacks = 0;
+    for (let i = 0; i < gatherers; i += 1) {
+      const path = gathererPath(i);
+      const { along, inbound } = this.calm ? { along: 0.45, inbound: true } : gathererPhase(path, t);
+      const near = s * 1.02 + 0.25;
+      const r = near + (path.reach - near) * along;
+      const x = Math.cos(path.angle) * r;
+      const z = Math.sin(path.angle) * r;
+      const walking = !this.calm && along > 0.001 && along < 0.999;
+      const bob = walking ? Math.abs(Math.sin(t * 9 + i)) * 0.07 : 0;
+      // Facing: +z of the model is its face. Outbound faces away from the pile.
+      const heading = Math.atan2(Math.cos(path.angle), Math.sin(path.angle)) + (inbound ? Math.PI : 0);
+      const pop = this.popScale('gatherer', i);
+      const tilt = walking ? Math.sin(t * 9 + i) * 0.08 : 0;
+      this.gatherers.set(i, compose(x, bob, z, heading, pop, pop, pop, 0, tilt));
+      this.depth.hat(state, x, bob, z, heading, pop, tilt);
+      shadow(x, z, 0.3 * pop);
+      if (inbound && pop > 0.01) {
+        const back = -0.2;
+        this.sacks.set(sacks, compose(x + Math.sin(heading) * back, 0.42 + bob, z + Math.cos(heading) * back, heading, pop));
+        sacks += 1;
+      }
+    }
+    this.gatherers.commit(gatherers);
+    this.sacks.commit(sacks);
+
+    // Carts roll around the track.
+    const carts = shownCount('cart', ownedCount(state, 'cart'));
+    this.track.visible = carts > 0 || state.unlocked.some((event) => event.id === 'cart');
+    for (let i = 0; i < carts; i += 1) {
+      const a = (CART_ORDER[i % CART_ORDER.length]! / CART_ORDER.length) * Math.PI * 2 - t * 0.35;
+      const x = Math.cos(a) * TRACK_RADIUS;
+      const z = Math.sin(a) * TRACK_RADIUS;
+      const pop = this.popScale('cart', i);
+      const rattle = this.calm ? 0 : Math.abs(Math.sin(t * 14 + i * 2)) * 0.025;
+      this.carts.set(i, compose(x, rattle, z, a, pop));
+      this.depth.pennant(state, 'cart', new Vector3(x - Math.sin(a) * 0.25, 0.45 + rattle, z - Math.cos(a) * 0.25), -a, pop, t);
+      shadow(x, z, 0.45 * pop);
+    }
+    this.carts.commit(carts);
+
+    // Mills turn their sails.
+    const mills = shownCount('mill', ownedCount(state, 'mill'));
+    for (let i = 0; i < mills; i += 1) {
+      const slot = STRUCTURE_SLOTS['mill']![i]!;
+      const pop = this.popScale('mill', i);
+      this.mills.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      const hub = this.local(slot, 0, 1.3, 0.7, pop);
+      this.sails.set(i, compose(hub.x, hub.y, hub.z, slot.rot, pop, pop, pop, 0, t * 1.4 + i));
+      this.depth.pennant(state, 'mill', this.local(slot, 0, 1.92, 0, pop), slot.rot, pop, t);
+      shadow(slot.x, slot.z, 0.75 * pop);
+    }
+    this.mills.commit(mills);
+    this.sails.commit(mills);
+
+    // Forges glow and spit sparks.
+    const forges = shownCount('forge', ownedCount(state, 'forge'));
+    const glow = this.calm ? 0.5 : 0.5 + 0.5 * Math.sin(t * 3.1) * Math.sin(t * 1.7 + 0.4);
+    this.glowMaterial.color.set(PALETTE.orange).lerp(scratchC.set(PALETTE.yellow), glow);
+    let sparks = 0;
+    for (let i = 0; i < forges; i += 1) {
+      const slot = STRUCTURE_SLOTS['forge']![i]!;
+      const pop = this.popScale('forge', i);
+      this.forges.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      this.glows.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      this.depth.pennant(state, 'forge', this.local(slot, 0.05, 1.16, 0.05, pop), slot.rot, pop, t);
+      shadow(slot.x, slot.z, 0.8 * pop);
+      if (this.calm) continue;
+      for (let j = 0; j < 6; j += 1) {
+        const phase = (t * 1.3 + j / 6 + i * 0.37) % 1;
+        const a = hash01(Math.floor(t * 1.3 + j / 6 + i * 0.37) * 31 + j * 7 + i) * Math.PI - Math.PI / 2;
+        const base = this.local(slot, 0.08 + Math.sin(a) * 0.15 * phase * 3, 0.32 + phase * 1.2 - phase * phase * 1.4, 0.95 + phase * 0.5, pop);
+        const sz = (1 - phase) * pop;
+        this.sparks.set(sparks, compose(base.x, base.y, base.z, phase * 9, sz));
+        sparks += 1;
+      }
+    }
+    this.forges.commit(forges);
+    this.glows.commit(forges);
+    this.sparks.commit(sparks);
+
+    // Foundries puff smoke from both chimneys.
+    const foundries = shownCount('foundry', ownedCount(state, 'foundry'));
+    let puffs = 0;
+    for (let i = 0; i < foundries; i += 1) {
+      const slot = STRUCTURE_SLOTS['foundry']![i]!;
+      const pop = this.popScale('foundry', i);
+      this.foundries.set(i, compose(slot.x, 0, slot.z, slot.rot, pop));
+      this.depth.pennant(state, 'foundry', this.local(slot, 0.0, 1.42, 0.3, pop), slot.rot, pop, t);
+      shadow(slot.x, slot.z, 1.05 * pop);
+      for (let c = 0; c < 2; c += 1) {
+        for (let j = 0; j < 3; j += 1) {
+          const phase = this.calm ? 0.25 + j * 0.25 : (t * 0.45 + j / 3 + c * 0.17 + i * 0.29) % 1;
+          const p = this.local(slot, c === 0 ? -0.5 : 0.45, 2.4 + phase * 1.7, -0.38, pop);
+          const size = Math.sin(Math.min(1, phase * 1.1) * Math.PI) * (0.35 + phase * 0.75) * pop;
+          // Smoke leans away from the camera and wobbles as it rises.
+          const lean = phase * 1.1 + Math.sin(t * 1.3 + j * 2 + c) * 0.12 * phase;
+          this.smoke.set(puffs, compose(p.x - lean, p.y, p.z - lean * 0.6, phase * 2 + j, size, size * 0.85, size));
+          puffs += 1;
+        }
+      }
+    }
+    this.foundries.commit(foundries);
+    this.smoke.commit(puffs);
+
+    // The later layers: milestone badges, gems, season flowers and the weather; a shooting star
+    // trails sparkles into the particle pool.
+    for (const sparkle of this.depth.update(state, this.time, dt, s)) {
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time,
+        life: 0.7,
+        p: sparkle.at.clone(),
+        v: new Vector3((this.random() - 0.5) * 0.8, -0.5 - this.random(), (this.random() - 0.5) * 0.8),
+        spin: 10,
+        size: 0.05 + this.random() * 0.04,
+        colour: sparkle.colour,
+      });
+    }
+
+    // Strike dust, purchase puffs and the welcome-back rain.
+    this.chunks.splice(0, this.chunks.length, ...this.chunks.filter((c) => this.time - c.born < c.life));
+    let drawn = 0;
+    for (const c of this.chunks) {
+      const age = this.time - c.born;
+      if (age < 0) continue;
+      c.v.y -= 11 * dt;
+      c.p.addScaledVector(c.v, dt);
+      if (c.p.y < 0.05) {
+        c.p.y = 0.05;
+        c.v.multiplyScalar(0.4);
+        c.v.y = Math.abs(c.v.y) * 0.3;
+      }
+      const fade = Math.min(1, (c.life - age) / 0.25);
+      this.chunkProp.set(drawn, compose(c.p.x, c.p.y, c.p.z, age * c.spin, c.size * fade));
+      this.chunkProp.colour(drawn, scratchC.set(c.colour));
+      drawn += 1;
+    }
+    this.chunkProp.commit(drawn);
+
+    this.confetti.splice(0, this.confetti.length, ...this.confetti.filter((c) => this.time - c.born < c.life));
+    drawn = 0;
+    for (const c of this.confetti) {
+      const age = this.time - c.born;
+      c.v.y -= 5 * dt;
+      c.v.multiplyScalar(1 - Math.min(1, dt * 1.6));
+      c.p.addScaledVector(c.v, dt);
+      if (c.p.y < 0.03) {
+        c.p.y = 0.03;
+        c.v.set(0, 0, 0);
+      }
+      const fade = Math.min(1, (c.life - age) / 0.4);
+      this.confettiProp.set(drawn, compose(c.p.x, c.p.y, c.p.z, age * c.spin, c.size * fade, c.size * fade, c.size * fade, age * c.spin * 0.7, age * 3));
+      this.confettiProp.colour(drawn, scratchC.set(c.colour));
+      drawn += 1;
+    }
+    this.confettiProp.commit(drawn);
+
+    this.shadows.commit(shadows);
+
+    // Motes drift on slow loops above the island, faster in a breeze.
+    const tw = this.calm ? 0 : this.depth.windTime;
+    const motes = this.motePositions.length / 3;
+    for (let i = 0; i < motes; i += 1) {
+      const bx = (hash01(i * 3 + 1) - 0.5) * ISLAND_HALF * 2.1;
+      const bz = (hash01(i * 3 + 2) - 0.5) * ISLAND_HALF * 2.1;
+      const by = 0.3 + hash01(i * 3 + 3) * 3.2;
+      const w = 0.2 + hash01(i + 900) * 0.3;
+      this.motePositions[i * 3] = bx + Math.sin(tw * w + i) * 0.6;
+      this.motePositions[i * 3 + 1] = by + Math.sin(tw * w * 1.3 + i * 2) * 0.35;
+      this.motePositions[i * 3 + 2] = bz + Math.cos(tw * w * 0.9 + i) * 0.6;
+    }
+    this.motes.geometry.attributes['position']!.needsUpdate = true;
+  }
+
+  // A point in a building's own frame (x right, y up, z its front), in world space.
+  private local(slot: Slot, x: number, y: number, z: number, scale: number): Vector3 {
+    const c = Math.cos(slot.rot);
+    const s = Math.sin(slot.rot);
+    return new Vector3(slot.x + (x * c + z * s) * scale, y * scale, slot.z + (-x * s + z * c) * scale);
+  }
+
+  dispose(): void {
+    this.renderer.dispose();
   }
 }

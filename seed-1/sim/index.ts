@@ -1,4 +1,11 @@
 export type {
+  GemTable,
+  MilestoneTable,
+  PerkEffect,
+  PerkRow,
+  WeatherKind,
+  WeatherState,
+  WeatherTable,
   SimAction,
   SimConfig,
   SimState,
@@ -15,20 +22,35 @@ export {
   COST_GROWTH,
   apply,
   availableUnits,
+  canBuyPerk,
+  canPress,
   costOf,
   createSim,
+  currentWeather,
+  dustForNextGem,
+  findPerk,
   findRow,
   findUnlock,
+  gemBonus,
+  gemsForPress,
+  gemsOpen,
+  hasPerk,
   isUnitAvailable,
   isUnlocked,
+  milestoneFactor,
+  milestoneTier,
   nextLockedUnlock,
+  nextMilestone,
   ownedCount,
+  productionMultiplier,
   ratePerSecond,
   step,
+  strikeMultiplier,
   strikeYield,
+  unitRate,
 } from './sim';
 export { hashState } from './hash';
-export { awaySeconds, MAX_AWAY_SECONDS, parseSavedAt, parseSavedState, serializeState } from './save';
+export { awaySeconds, MAX_AWAY_SECONDS, parseSavedAt, parseSavedState, SAVE_VERSION, serializeState } from './save';
 export { nextRandom, seedRng } from './rng';
 export {
   SECONDS_PER_HOUR,
