@@ -259,6 +259,7 @@ export const DESIGN_PATHS: readonly string[] = [
   'platform/site/public',
   'platform/site/brand',
   'seed-1/render/favicon.svg',
+  'seed-1/box-art.svg',
 ];
 
 // File and folder names no agent may create or change at any depth: Claude Code loads a nested
