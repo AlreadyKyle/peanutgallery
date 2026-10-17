@@ -29,9 +29,9 @@ on:
         required: false
         default: 'https://mobmachine.games'
       rate:
-        description: 'Peak requests per second (production: 100 at most)'
+        description: 'Peak requests per second (production: 100 at most; one runner trips the per-address protection near 50)'
         required: false
-        default: '50'
+        default: '30'
       duration:
         description: 'Seconds in all, split into four steps (production: 300 at most)'
         required: false
@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 15
     env:
       BASE_URL: ${{ inputs.base_url || 'https://mobmachine.games' }}
-      RATE: ${{ inputs.rate || '50' }}
+      RATE: ${{ inputs.rate || '30' }}
       DURATION: ${{ inputs.duration || '120' }}
       MAX_REQUESTS: ${{ inputs.max_requests || '3000' }}
     steps:
