@@ -56,15 +56,15 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 
 | Metric | How measured | Target | Floor | Assumption | Comparable or source |
 |---|---|---|---|---|---|
-| Player D1 | Share of daily game loads that come from a save at least 20 hours old and under 48 hours old, as an aggregate count | 20% | 10% | Approximates D1 without an identifier. Needs: a returning flag in the play counts | GameAnalytics 2025: top quartile D1 about 26 to 28%, bottom quartile 10 to 11.5% ([GameDev Reports](https://gamedevreports.substack.com/p/gameanalytics-mobile-gaming-benchmarks)) |
-| Player D7 | As above, saves 6 to 8 days old | 6% | 3% | As above | Same source: median D7 about 3.4 to 3.9%, top quartile 7 to 8% |
-| Session length | Median seconds between load and last save (aggregate buckets) | 4 minutes or more | 2 minutes | Needs: a session-length bucket in the play counts | Same source: median 5 to 6 minutes, top quartile 8 to 9 |
+| Player D1 | Share of daily game loads that come from a save at least 20 hours old and under 48 hours old, as an aggregate count | 20% | 10% | Approximates D1 without an identifier. Counted as `dust_return_1d`, decided in the browser from the save's own time (`docs/specs/counter-senders.md`) | GameAnalytics 2025: top quartile D1 about 26 to 28%, bottom quartile 10 to 11.5% ([GameDev Reports](https://gamedevreports.substack.com/p/gameanalytics-mobile-gaming-benchmarks)) |
+| Player D7 | As above, saves 6 to 8 days old | 6% | 3% | As above, counted as `dust_return_7d` | Same source: median D7 about 3.4 to 3.9%, top quartile 7 to 8% |
+| Session length | Median visible play time per load, from the share of loads reaching 2 and 4 minutes (aggregate buckets) | 4 minutes or more | 2 minutes | Counted as `dust_session_2m` and `dust_session_4m`, once each per page load (`docs/specs/counter-senders.md`) | Same source: median 5 to 6 minutes, top quartile 8 to 9 |
 | Returning profiles | Profiles active in two different weeks of the last four / profiles active in the last four weeks | 35% | 15% | | Our own |
 | Suggestions | Suggestions submitted (30d) / active profiles | 0.3 | 0.05 | | Our own |
 | Suggestion to live | Share of suggestions (90d) that reach live | 5% | 1% | | Our own; hive coding's "accepted improvements" |
 | Seeds | Seeds saved (30d) and published (30d) | 1 save per 20 loads; 10% of saves published | 1 per 100 | | Our own |
 | Collections | Supporters holding cards of 3 or more suits | 30% | 10% | | TCG category breadth |
-| Studio dwell | Median seconds on home before navigation (aggregate buckets) | 45 seconds | 15 seconds | Needs: an aggregate dwell bucket in the site's counts | Our own |
+| Studio dwell | Median seconds on home before navigation (aggregate buckets) | 45 seconds | 15 seconds | Counted as `home_dwell_mid` (15 seconds visible) and `home_dwell_long` (45) per view of home over `home_load`; the median meets a bucket when half the views reach it (`docs/specs/counter-senders.md`) | Our own |
 
 ## 5. Virality, sharing, community and acquisition
 
@@ -73,8 +73,8 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 | Shares per 100 game loads | Share your run plus Save as seed / game loads (30d) | 3 | 1 | | `docs/specs/play-counts.md` |
 | Card shares per contribution | Card shares / contributions (30d) | 0.5 | 0.1 | | Our own |
 | Seed opens from links | Loads with `?seed=` / seeds shared (30d) | 2 opens per shared seed | 0.5 | Each shared seed reaches someone | Our own |
-| Broadcast reach | Distinct referrers loading /broadcast (30d), and contributions with the broadcast's QR source | 3 streams; 5% of contributions | 1 stream | Needs: a source tag on the QR link | Our own |
-| Discord to site | Clicks on Discord post links (aggregate redirect counter) per post | 5% of members | 1% | Needs: an aggregate counter on outbound links | Our own |
+| Broadcast reach | Distinct referrers loading /broadcast (30d), and contributions with the broadcast's QR source | 3 streams; 5% of contributions | 1 stream | The QR link carries `?from=broadcast`; `broadcast_load` counts loads of /broadcast and `broadcast_qr` landings from the QR. Distinct referrers and contributions from the QR need a record of a visit, which no counter keeps, so this row is read as loads and landings | Our own |
+| Discord to site | Clicks on Discord post links (aggregate redirect counter) per post | 5% of members | 1% | `discord_click` counts presses on the site's Discord links (site to Discord). Needs: a source tag on the links in Discord posts and a counter for the landings, for clicks the other way | Our own |
 | New supporters per launch beat | Distinct new payer keys in the 7 days after a beat | 25 | 5 | | Kick-off plan's 7-day kill line |
 | Organic only | Paid acquisition spend | $0 | | The studio has no ad budget | `docs/PLAN.md` §10 decision 35 |
 
@@ -82,9 +82,9 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 
 | Step | How measured | Target | Floor | Assumption | Comparable or source |
 |---|---|---|---|---|---|
-| Visitor to player | Clicks to a game / site home loads (aggregate, 30d) | 25% | 10% | Needs: an aggregate home-load counter | Our own |
+| Visitor to player | Clicks to a game / site home loads (aggregate, 30d) | 25% | 10% | Home loads are `home_load`, one per view of home | Our own |
 | Player to card | Clicks from a game's next-card line to a card / game loads | 3% | 1% | Built in play counts | `docs/specs/play-counts.md` |
-| Visitor to participant | New profiles / site home loads (30d) | 2% | 0.5% | Needs: the home-load counter | Our own |
+| Visitor to participant | New profiles / site home loads (30d) | 2% | 0.5% | Home loads are `home_load` | Our own |
 | Participant to supporter | Profiles with a claimed or linked contribution / profiles (cumulative) | 20% | 5% | | Our own |
 | Visitor to supporter | Distinct new payer keys / site home loads (30d) | 1% | 0.3% | Our visitors are colder than a Kickstarter page's | Kickstarter pages average about 10% visitor to backer with targeted traffic ([LaunchBoom](https://www.launchboom.com/blog/resources/what-is-a-good-conversion-rate-kickstarter/)); free-to-play payer rates are commonly 1 to 3% (assumption) |
 | Checkout completion | Completed sessions / checkout links opened (Stripe, 30d) | 60% | 40% | | Our own |
@@ -120,10 +120,10 @@ Abbreviations: D1, D7 and D30 are the share of a group active again 1, 7 and 30 
 
 ## What has to be built to measure everything above
 
-Some rows say "Needs". They share one change: privacy-preserving aggregate counters, the same kind as the play counts (daily totals, no cookie, identifier or address). Listed together so they can be one card or one small spec:
+The rows that said "Needs" shared one change: privacy-preserving aggregate counters, the same kind as the play counts (daily totals, no cookie, identifier or address). It is built: the counters and their daily totals (`docs/specs/operations.md`) and their senders in the game and the site (`docs/specs/counter-senders.md`):
 
-1. A returning flag and a session-length bucket in the game's daily counts.
-2. A home-load counter and a dwell bucket on the site.
-3. A source tag on the broadcast's QR link and an aggregate counter on outbound Discord links.
+1. A returning count (a load from a save a day or a week old) and the session buckets (2 and 4 minutes) in the game's daily counts, and its seed saves and seed-link opens.
+2. A home-load count and the dwell buckets (15 and 45 seconds) on the site.
+3. A source tag on the broadcast's QR link with a count of its landings, a count of the broadcast's loads, and a count of presses on the site's Discord links.
 
-Until they exist, those rows are read as "not measured" in every review, and nobody estimates them.
+One need is left: clicks from links in Discord posts back to the site (Discord to site). Until a row's counter exists, or before it has counted anything, it is read as "not measured" in every review, and nobody estimates it.

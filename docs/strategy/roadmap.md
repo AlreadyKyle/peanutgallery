@@ -33,7 +33,7 @@ Run launch beats 1 to 5 from `growth.md`, one at a time, each when its capabilit
 | 3 | Beat 3, collect the cards | 30% of supporters with three or more suits |
 | 4 | Beat 4, you suggest, agents build | The first suggestion shipped; suggestions per profile at 0.3 |
 | 5 | Beat 5, seeds | 2 opens per shared seed |
-| 6 | [Aggregate counters for the benchmarks](../BACKLOG.md#aggregate-counters-for-the-benchmarks) | Every "Needs" row in `benchmarks.md` measured |
+| 6 | Aggregate counters for the benchmarks (built: `docs/specs/operations.md`, `docs/specs/counter-senders.md`) | Every "Needs" row in `benchmarks.md` measured, or its remaining need named there |
 | 7 | [The review team on events](../BACKLOG.md#the-review-team-on-events) | First full review report with every row filled or marked not measured |
 
 Phase exit: stage 1 of the path to profitability (`business-strategy.md` §4) and repeat supporter rate at 10% or more. If instead a kill or pivot line in `business-strategy.md` §8 is crossed, the board decides.

@@ -189,7 +189,6 @@ Each line is one mechanic from the kick-off plan or a later decision, with its e
 - [Monthly security audit](BACKLOG.md#monthly-security-audit): a Janitor mode that reviews the kernel's security once a month.
 - [Visual replay set](BACKLOG.md#visual-replay-set): frozen frame pairs from real visual reviews, replayed like the draft set.
 - [Builder replay set](BACKLOG.md#builder-replay-set): frozen cards replayed through the builders, with the gate as the grader.
-- [Aggregate counters for the benchmarks](BACKLOG.md#aggregate-counters-for-the-benchmarks): returning players, session length, visits and share sources as daily totals.
 - [The review team on events](BACKLOG.md#the-review-team-on-events): specialised agents check the benchmarks on events and propose adjustments (`docs/strategy/operating-system.md`).
 - [Download and delete your profile data](BACKLOG.md#download-and-delete-your-profile-data): a profile's data as a file, and deletion.
 - [Loyalty bonus for repeat supporters](BACKLOG.md#loyalty-bonus-for-repeat-supporters): a money bonus for repeat supporters, its own kernel spec.

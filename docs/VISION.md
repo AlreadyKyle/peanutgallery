@@ -19,8 +19,8 @@ Every goal is a metric the studio can compute from what exists today (the full s
 
 - **New supporters per week**, from the weekly report.
 - **Shares.** Discord ship posts sent (`outbound_posts`), and the daily counts of card shares from `ShareCard` and of Dust's Share your run presses (`docs/specs/play-counts.md`).
-- **Plays.** Daily totals of Dust loads and of clicks from Dust's next card line to a card, with no cookie, identifier or address (`docs/specs/play-counts.md`), on the board's panel.
-- **Not measured:** unique visitors, play length, and one person's path from a play to a contribution. The counts cannot join one person's steps, by design; Dust's save is local only (`dust.save` in localStorage).
+- **Plays.** Daily totals of Dust loads and of clicks from Dust's next card line to a card, with no cookie, identifier or address (`docs/specs/play-counts.md`), on the board's panel; and daily totals of loads from a save a day or a week old, plays reaching 2 and 4 minutes, seed saves and seed-link opens, home views and their dwell, the broadcast's loads and QR landings, and presses on Discord links (`docs/specs/counter-senders.md`), in `daily_metrics`.
+- **Not measured:** unique visitors, a play's exact length, and one person's path from a play to a contribution. The counts cannot join one person's steps, by design; Dust's save is local only (`dust.save` in localStorage).
 
 ### Retention
 

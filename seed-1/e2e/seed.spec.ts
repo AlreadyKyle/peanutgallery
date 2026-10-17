@@ -111,7 +111,7 @@ test('a load from a save a day old counts dust_return_1d, read from the save it 
     window.localStorage.setItem(key, JSON.stringify(save));
   }, [SAVE_KEY, JSON.stringify(OWN)] as const);
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Strike' })).toBeAttached();
+  await expect(page.getByRole('button', { name: 'Strike', exact: true })).toBeAttached();
   await expect.poll(() => events).toContain('dust_return_1d');
   expect(events.filter((event) => event.startsWith('dust_return'))).toEqual(['dust_return_1d']);
   // Counting stores nothing: the keys are the game's own save and its last visit (render/whats-new.ts).
