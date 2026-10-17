@@ -6,7 +6,7 @@
 import { ratePerSecond } from '../sim/sim';
 import type { SimConfig, SimState, UnlockRow } from '../sim/types';
 import { describeEffect } from './a11y';
-import { firstStep, gemGoal, weatherView } from './depth';
+import { firstStep, gemGoal, weatherView, whirlView } from './depth';
 import { fill, formatDust, formatDuration, formatRate } from './format';
 import { nextGoal } from './goals';
 import type { Strings } from './strings';
@@ -35,7 +35,7 @@ interface Banner {
   title: string;
   body: string;
   /** The banner's look: an unlock (magenta), a welcome back, a milestone or a new season. */
-  tone: 'unlock' | 'welcome' | 'milestone' | 'season';
+  tone: 'unlock' | 'welcome' | 'milestone' | 'season' | 'fork' | 'devil';
 }
 
 // How long a refusal's reason stays under the totals.
@@ -85,6 +85,9 @@ export class Hud {
   private readonly weatherName: HTMLElement;
   private readonly weatherEffect: HTMLElement;
   private readonly weatherLeft: HTMLElement;
+  private readonly whirlChip: HTMLElement;
+  private whirlAt = -10;
+  private shownWhirl = false;
   private shownWeather: string | null = null;
   private weatherAt = -10;
   private flashText = '';
@@ -144,6 +147,10 @@ export class Hud {
     }
     this.streakNode = div('streak', fx);
     this.streakNode.style.opacity = '0';
+    // The whirl a caught dust devil leaves (strikes multiplied for a few seconds), left of the pile
+    // as the streak is right of it.
+    this.whirlChip = div('hud-whirl', fx);
+    this.whirlChip.style.opacity = '0';
     this.bannerNode = div('banner', fx);
     this.bannerKicker = div('banner-kicker', this.bannerNode);
     this.bannerTitle = div('banner-title', this.bannerNode);
@@ -188,12 +195,26 @@ export class Hud {
       this.queue.push({
         born: 0,
         until: 0,
-        kicker: this.strings.labels.unlockedTitle,
+        // A fork asks for a choice rather than announcing a gain.
+        kicker: row.effect.type === 'fork' ? this.strings.depth.forkKicker : this.strings.labels.unlockedTitle,
         title: row.name,
         body: describeEffect(row, this.config, this.strings),
-        tone: 'unlock',
+        tone: row.effect.type === 'fork' ? 'fork' : 'unlock',
       });
     }
+  }
+
+  /** A dust devil was caught: the rare event's beat, first in the queue. */
+  caught(title: string, body: string): void {
+    this.pulseAt = this.time;
+    this.queue.unshift({ born: 0, until: 0, kicker: this.strings.depth.devilKicker, title, body, tone: 'devil' });
+    if (this.banner !== null && this.banner.tone !== 'devil') this.banner.until = Math.min(this.banner.until, this.time);
+  }
+
+  /** An order was filled: the total pulses and a short line says what it paid. */
+  filled(text: string): void {
+    this.pulseAt = this.time;
+    this.flash(text);
   }
 
   welcome(gain: number, seconds: number): void {
@@ -298,6 +319,7 @@ export class Hud {
 
     this.drawHint(t, state);
     this.drawWeather(t, state);
+    this.drawWhirl(t, state);
     this.drawBanner(t);
   }
 
@@ -341,6 +363,25 @@ export class Hud {
     this.weatherChip.style.transform = `scale(${s.toFixed(3)})`;
   }
 
+  private drawWhirl(t: number, state: SimState): void {
+    const view = whirlView(state, this.config, this.strings);
+    const on = view !== null;
+    if (on !== this.shownWhirl) {
+      this.shownWhirl = on;
+      this.whirlAt = t;
+    }
+    if (view === null) {
+      if (this.whirlChip.style.opacity !== '0') this.whirlChip.style.opacity = '0';
+      return;
+    }
+    setText(this.whirlChip, `${this.strings.depth.whirl}: ${view.effect} · ${fill(this.strings.depth.weatherLeft, { seconds: String(view.secondsLeft) })}`);
+    const k = Math.min(1, (t - this.whirlAt) / 0.4);
+    const wobble = this.calm ? 0 : Math.sin(t * 9) * 3 * (1 - k * 0.6);
+    this.whirlChip.style.opacity = this.calm ? '1' : Math.min(1, k * 3).toFixed(3);
+    const s = this.calm ? 1 : 0.6 + 0.4 * easeOutBack(k);
+    this.whirlChip.style.transform = `translate(${(this.anchor.x - 30).toFixed(1)}px, ${(this.anchor.y - 24).toFixed(1)}px) translate(-100%, 0) rotate(${(6 + wobble).toFixed(2)}deg) scale(${s.toFixed(3)})`;
+  }
+
   private setGoal(progress: number): void {
     const p = Math.round(progress * 1000) / 1000;
     if (p === this.goalProgress) return;
@@ -358,7 +399,7 @@ export class Hud {
       this.bannerKicker.textContent = next.kicker;
       this.bannerTitle.textContent = next.title;
       this.bannerBody.textContent = next.body;
-      for (const tone of ['welcome', 'milestone', 'season'] as const) this.bannerNode.classList.toggle(tone, next.tone === tone);
+      for (const tone of ['welcome', 'milestone', 'season', 'fork', 'devil'] as const) this.bannerNode.classList.toggle(tone, next.tone === tone);
     }
     const banner = this.banner;
     if (banner === null) return;

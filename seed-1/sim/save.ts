@@ -1,5 +1,5 @@
 import { stateIsFinite } from './invariants';
-import type { SimState, UnlockEvent, WeatherState } from './types';
+import type { DevilState, OrderState, SimState, UnlockEvent, WeatherState } from './types';
 
 // The save wrapper carries a version outside SimState so a format change
 // never touches the shape tests/timeline.test.ts pins the hash of.
@@ -87,7 +87,50 @@ function parsePerks(raw: unknown): string[] | null {
   return perks;
 }
 
-// The optional layers (weather, gems, perks, seasons) are carried only when present, so a save from
+function isTime(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function parseChosen(raw: unknown): Record<string, string> | null {
+  if (!isRecord(raw)) return null;
+  const chosen: Record<string, string> = {};
+  for (const [unlock, option] of Object.entries(raw)) {
+    if (typeof option !== 'string' || option.length === 0) return null;
+    chosen[unlock] = option;
+  }
+  return chosen;
+}
+
+function parseOrder(raw: unknown): OrderState | null {
+  if (!isRecord(raw)) return null;
+  const { type, unit, target, progress, from } = raw;
+  if (type !== 'own' && type !== 'gather' && type !== 'strikes') return null;
+  if (!isTime(target)) return null;
+  const order: OrderState = { type, target };
+  if (unit !== undefined) {
+    if (typeof unit !== 'string' || unit.length === 0) return null;
+    order.unit = unit;
+  }
+  if (type === 'own' && order.unit === undefined) return null;
+  if (progress !== undefined) {
+    if (!isTime(progress)) return null;
+    order.progress = progress;
+  }
+  if (from !== undefined) {
+    if (!isTime(from)) return null;
+    order.from = from;
+  }
+  return order;
+}
+
+function parseDevil(raw: unknown): DevilState | null {
+  if (!isRecord(raw)) return null;
+  const { until, next, whirlUntil } = raw;
+  if (!isTime(until) || !isTime(next) || !isTime(whirlUntil)) return null;
+  return { until, next, whirlUntil };
+}
+
+// The optional layers (weather, gems, perks, seasons, forks, orders, dust devils) are carried only when present, so a save from
 // before they existed loads unchanged and a state without them hashes as it always did.
 function parseLayers(raw: Record<string, unknown>, state: SimState): SimState | null {
   const out: SimState = { ...state };
@@ -96,7 +139,7 @@ function parseLayers(raw: Record<string, unknown>, state: SimState): SimState | 
     if (weather === null) return null;
     out.weather = weather;
   }
-  for (const key of ['gems', 'season'] as const) {
+  for (const key of ['gems', 'season', 'ordersFilled'] as const) {
     if (raw[key] === undefined) continue;
     if (!isCount(raw[key])) return null;
     out[key] = raw[key];
@@ -110,6 +153,21 @@ function parseLayers(raw: Record<string, unknown>, state: SimState): SimState | 
     const perks = parsePerks(raw['perks']);
     if (perks === null) return null;
     out.perks = perks;
+  }
+  if (raw['chosen'] !== undefined) {
+    const chosen = parseChosen(raw['chosen']);
+    if (chosen === null) return null;
+    out.chosen = chosen;
+  }
+  if (raw['order'] !== undefined) {
+    const order = parseOrder(raw['order']);
+    if (order === null) return null;
+    out.order = order;
+  }
+  if (raw['devil'] !== undefined) {
+    const devil = parseDevil(raw['devil']);
+    if (devil === null) return null;
+    out.devil = devil;
   }
   return out;
 }

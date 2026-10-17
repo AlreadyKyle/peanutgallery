@@ -56,6 +56,7 @@ import {
   ISLAND_HALF,
   pileScale,
   shownCount,
+  SIGNPOST,
   STRUCTURE_SLOTS,
   TRACK_RADIUS,
   UNIT_CAPS,
@@ -763,6 +764,51 @@ export class DustScene {
   /** The weather turned: a small beat so the eye goes to it. */
   weatherTurned(): void {
     this.punch(0.3);
+  }
+
+  /** Where the dust devil is on the canvas, in CSS pixels, or null when there is none: a tap near it catches it. */
+  devilScreen(): { x: number; y: number } | null {
+    const at = this.depth.devilAt;
+    if (at === null) return null;
+    const p = at.clone().project(this.camera);
+    return { x: ((p.x + 1) / 2) * this.width, y: ((1 - p.y) / 2) * this.height };
+  }
+
+  /** The dust devil was caught: the rare event's beat, a big nudge and its sand flung out in a ring. */
+  caught(): void {
+    this.punch(1.2);
+    const at = this.depth.devilAt ?? new Vector3(0, 0.9, 0);
+    if (this.calm) return;
+    this.burst(at.clone().setY(1.4), 40, 0.9);
+    for (let i = 0; i < 36; i += 1) {
+      const a = (i / 36) * Math.PI * 2;
+      const speed = 2.5 + this.random() * 2;
+      this.spawn(this.chunks, CHUNKS, {
+        born: this.time + (i % 4) * 0.02,
+        life: 1.1,
+        p: new Vector3(at.x + Math.cos(a) * 0.4, 0.3 + (i % 6) * 0.25, at.z + Math.sin(a) * 0.4),
+        v: new Vector3(Math.cos(a) * speed, 2.5 + this.random() * 2, Math.sin(a) * speed),
+        spin: 12,
+        size: 0.07 + this.random() * 0.05,
+        colour: i % 3 === 0 ? PALETTE.yellow : PALETTE.sand,
+      });
+    }
+  }
+
+  /** An order was filled: a nudge and a puff of dust from the pile's foot, where the crate stood. */
+  filled(): void {
+    this.punch(0.45);
+    if (this.calm) return;
+    const r = this.pileShown * 1.05 + 0.45;
+    this.puff(new Vector3(r * 0.7071, 0.3, r * 0.7071));
+    this.burst(new Vector3(r * 0.7071, 0.8, r * 0.7071), 18, 0.5);
+  }
+
+  /** A fork was chosen: a nudge and confetti at the signpost, where the new plank goes up. */
+  chose(): void {
+    this.punch(0.6);
+    if (this.calm) return;
+    this.burst(new Vector3(SIGNPOST.x, 1.6, SIGNPOST.z), 30, 0.7);
   }
 
   private burst(at: Vector3, count: number, scale: number): void {
