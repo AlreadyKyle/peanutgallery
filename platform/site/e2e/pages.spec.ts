@@ -101,8 +101,10 @@ for (const viewport of WIDTHS) {
       await expect(running.getByRole('heading', { level: 3 })).toHaveText(RUNNING_ROLES);
       // Every starts role with its trigger; the Platform Builder waits on the platform code lane.
       await expect(starts.getByRole('heading', { level: 3 })).toHaveText([
+        'Art Director',
         'Biz Dev',
         'Community',
+        'Curator',
         'Head of Finance',
         'Head of Product',
         'HR',
