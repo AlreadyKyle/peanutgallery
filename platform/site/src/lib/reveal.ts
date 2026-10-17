@@ -2,12 +2,11 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motionAllowed } from './motion';
 
-// The scroll reveal (docs/specs/final-state.md, the motion pass): a section below the fold rises
-// 24px and fades in as it comes into view, once, over --dur-reveal with the scene's easing. Nothing is
-// hidden by a stylesheet: a section is drawn as it is until the observer sees it nearing the window,
-// so the first paint is complete, and under reduced motion nothing moves at all. Only transform and
-// opacity change, and no control moves while it is under the pointer: the reveal plays before the
-// section reaches the viewport.
+// The scroll reveal (docs/specs/final-state.md, the motion pass): a section below the fold fades in
+// as it comes into view, once, over --dur-reveal with the scene's easing. Only its opacity changes,
+// so no box shifts while it plays (e2e/card.spec.ts measures that). Nothing is hidden by a
+// stylesheet: a section is drawn as it is until the observer sees it nearing the window, so the first
+// paint is complete, and under reduced motion nothing changes at all.
 
 const SELECTOR = 'main > .band > .section, main > .band > section, .card-grid > li, .seed-grid > li, .goal';
 
@@ -32,10 +31,7 @@ export function useScrollReveal(): void {
           // Already on screen when first seen: drawn as it is.
           if (el.getBoundingClientRect().top < window.innerHeight) continue;
           el.animate?.(
-            [
-              { transform: 'translateY(24px)', opacity: 0 },
-              { transform: 'none', opacity: 1 },
-            ],
+            [{ opacity: 0 }, { opacity: 1 }],
             { duration, easing, fill: 'backwards' },
           );
         }

@@ -3,6 +3,7 @@ import { feedFromSnapshot, useCommunity, useFeed } from '../lib/community';
 import type { FeedEvent, StudioDoc } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import type { Snapshot } from '../lib/source';
+import { roomRoles } from '../lib/studio-scene';
 import { Pipe } from './Pipe';
 import { StudioRoom, type Pulse } from './StudioRoom';
 
@@ -75,7 +76,8 @@ export function LiveStudio({ snapshot }: { snapshot: Snapshot }) {
           hasOlder={feed.hasOlder}
           loadingOlder={feed.loadingOlder}
           onOlder={feed.loadOlder}
-          pageSize={7}
+          // With no team in the room there are no written facts under it, so fewer rows sit beside it.
+          pageSize={roomRoles(snapshot).length === 0 ? 4 : 7}
         />
       </div>
     </section>

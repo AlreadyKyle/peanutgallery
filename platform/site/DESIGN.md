@@ -259,7 +259,7 @@ The rule (docs/specs/final-state.md, the motion pass): motion may set the scene 
 - **Slam** (shipped, replay only in v1): scale 1.04 and 8px up, to rest, over `--dur-move`.
 - **Press**: `:active` changes the fill in every mode and scales to 0.97. Keyboard focus never animates. Hover motion is limited to the card lift and the studio's agents, which stop walking while pointed at or focused.
 - **The live studio** (`StudioRoom.tsx`, `lib/studio-scene.ts`): one `requestAnimationFrame` loop walks agents between stations, bobs the idle, types at desks and trades speech glyphs (no words) between chatting pairs. It stops in a hidden tab and off screen. A coin drops through the pipe when money arrives, a paper plane lands for a suggestion and a box leaves the dock for a ship, each once per change.
-- **Scroll reveal** (`lib/reveal.ts`): a section that starts below the window rises 24px and fades in over `--dur-reveal` with `--ease-scene`, once. Nothing is hidden by the stylesheet, so first paint is complete.
+- **Scroll reveal** (`lib/reveal.ts`): a section that starts below the window fades in over `--dur-reveal` with `--ease-scene`, once. Nothing is hidden by the stylesheet, so first paint is complete.
 - **Page transitions**: an internal link cross-fades through `document.startViewTransition` where the browser has it; elsewhere the page simply changes.
 - **The pipe** (`Pipe.tsx`): a new row slides in at the top of the feed, at most once per poll.
 
