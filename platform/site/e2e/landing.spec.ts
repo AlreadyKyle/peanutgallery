@@ -71,7 +71,9 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('complementary')).toHaveCount(0);
       // A card's own page is linked only by the Watch links: here, one per shipped card (docs/specs/supporter-pages.md).
       const shippedCount = await lanes.nth(2).locator('li.card').count();
-      await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
+      // The live studio (docs/specs/final-state.md) also links the cards its agents are working on,
+      // in its written facts and its pipe; outside it the rule holds.
+      await expect(page.locator('a[href^="/card/"]:not(.live-studio a)')).toHaveCount(shippedCount);
       await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
       await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
       await expect(footer.getByText('Everything here is made for all ages.', { exact: false })).toBeVisible();

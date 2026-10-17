@@ -3261,7 +3261,7 @@ ol.timeline {
 
 .machine-amounts {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
   gap: var(--space-1);
   max-width: 28rem;
 }
@@ -3498,6 +3498,11 @@ ol.timeline {
   border: 0;
   padding: 0;
   accent-color: var(--ink);
+}
+
+.era-rows {
+  padding: 0;
+  list-style: none;
 }
 
 .era-rows li {
@@ -3885,7 +3890,7 @@ ol.timeline {
 /* The FAQ: the topics as links, then each question and its answer. */
 .faq-index ul {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr));
   gap: 0 var(--space-3);
 }
 
@@ -3997,14 +4002,18 @@ main.broadcast > .band > * {
 .broadcast-body {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) 34rem;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.broadcast-main {
+  display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-3);
   min-height: 0;
 }
 
 .broadcast-room {
-  grid-column: 1;
-  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -4026,14 +4035,7 @@ main.broadcast > .band > * {
   height: 100%;
 }
 
-.broadcast-cards {
-  grid-column: 1;
-  grid-row: 2;
-}
-
 .broadcast-side {
-  grid-column: 2;
-  grid-row: 1 / span 2;
   min-height: 0;
   overflow: hidden;
   border-inline-start: 1px solid var(--hairline);

@@ -471,7 +471,7 @@ export const copy = {
     always: 'Always open',
     body: 'General support for the whole studio. It has no bar to fill and never closes.',
     amountsLabel: 'Pick an amount to bring to checkout',
-    fund: 'Fund the Machine with {amount}',
+    fund: 'Fund {amount}',
     amountNote: 'Checkout asks for the amount, so enter {amount} there.',
   },
   goals: {

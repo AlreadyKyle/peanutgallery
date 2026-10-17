@@ -77,21 +77,27 @@ export function Broadcast() {
         </div>
       </div>
       <div className="band broadcast-body">
-        <div className="broadcast-room">
-          {snapshot === null ? <p className="muted">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p> : <StudioRoom snapshot={snapshot} studio={doc} facts={false} />}
+        <div className="broadcast-main">
+          <div className="broadcast-room">
+            {snapshot === null ? (
+              <p className="muted">{studio.state === 'loading' ? copy.broadcast.loading : copy.broadcast.unavailable}</p>
+            ) : (
+              <StudioRoom snapshot={snapshot} studio={doc} facts={false} />
+            )}
+          </div>
+          <section className="broadcast-cards" aria-labelledby="broadcast-cards">
+            <h2 id="broadcast-cards">{copy.broadcast.cardsTitle}</h2>
+            {snapshot === null || top.length === 0 ? (
+              <p className="muted">{copy.broadcast.noCards}</p>
+            ) : (
+              <ul className="card-grid broadcast-grid">
+                {top.map((card) => (
+                  <CardFace key={card.id} card={card} snapshot={snapshot} mode="example" compact />
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
-        <section className="broadcast-cards" aria-labelledby="broadcast-cards">
-          <h2 id="broadcast-cards">{copy.broadcast.cardsTitle}</h2>
-          {snapshot === null || top.length === 0 ? (
-            <p className="muted">{copy.broadcast.noCards}</p>
-          ) : (
-            <ul className="card-grid broadcast-grid">
-              {top.map((card) => (
-                <CardFace key={card.id} card={card} snapshot={snapshot} mode="example" compact />
-              ))}
-            </ul>
-          )}
-        </section>
         <div className="broadcast-side">
           <Pipe
             events={live ? feed.events : snapshot === null ? [] : feedFromSnapshot(snapshot)}
@@ -103,6 +109,7 @@ export function Broadcast() {
             pageSize={6}
             headingLevel={2}
             paging={false}
+            linked={false}
           />
         </div>
       </div>

@@ -31,7 +31,9 @@ function apiRequests(page: Page): string[] {
   const seen: string[] = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.pathname.startsWith('/api/')) seen.push(url.pathname);
+    // The community documents (docs/specs/final-state.md: the pipe, the studio's era) keep their own
+    // schedule; this file checks the snapshot documents' reads.
+    if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/community/')) seen.push(url.pathname);
   });
   return seen;
 }

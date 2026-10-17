@@ -35,18 +35,18 @@ function linkOf(event: FeedEvent): string | null {
   return null;
 }
 
-function Who({ event }: { event: FeedEvent }) {
+function Who({ event, linked }: { event: FeedEvent; linked: boolean }) {
   if (event.kind !== 'contribution' && event.kind !== 'badge' && !event.actor) return null;
   return (
     <span className="pipe-who">
-      <PersonLink person={event.actor ?? null} />
+      <PersonLink person={event.actor ?? null} linked={linked} />
     </span>
   );
 }
 
-export function PipeRow({ event, now }: { event: FeedEvent; now: number }) {
+export function PipeRow({ event, now, linked = true }: { event: FeedEvent; now: number; linked?: boolean }) {
   const kind = FEED_KINDS[event.kind] ?? FEED_KINDS.stage;
-  const link = linkOf(event);
+  const link = linked ? linkOf(event) : null;
   return (
     <li className="pipe-row" data-kind={event.kind} data-event={event.id}>
       <span className="pipe-kind">
@@ -55,7 +55,7 @@ export function PipeRow({ event, now }: { event: FeedEvent; now: number }) {
       </span>
       <p className="pipe-text">{link === null ? event.text : <Link to={link}>{event.text}</Link>}</p>
       <p className="pipe-meta">
-        <Who event={event} />
+        <Who event={event} linked={linked} />
         {event.rarity === undefined || event.rarity === 'common' ? null : <RarityTag rarity={event.rarity} />}
         <time dateTime={event.at}>{relativeTime(event.at, now)}</time>
       </p>
@@ -76,9 +76,11 @@ export type PipeProps = {
   headingLevel?: 2 | 3;
   /** The broadcast overlay draws no Older button. */
   paging?: boolean;
+  /** False on an overlay that is watched, not clicked (/broadcast): rows carry no links. */
+  linked?: boolean;
 };
 
-export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true }: PipeProps) {
+export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, pageSize = 8, headingLevel = 3, paging = true, linked = true }: PipeProps) {
   const list = useRef<HTMLOListElement>(null);
   const known = useRef<Set<string> | null>(null);
   const [count, setCount] = useState(pageSize);
@@ -123,7 +125,7 @@ export function Pipe({ events, live, loading, hasOlder, loadingOlder, onOlder, p
       ) : (
         <ol className="pipe-rows" ref={list} aria-live="polite" aria-relevant="additions">
           {shown.map((event) => (
-            <PipeRow key={event.id} event={event} now={now} />
+            <PipeRow key={event.id} event={event} now={now} linked={linked} />
           ))}
         </ol>
       )}

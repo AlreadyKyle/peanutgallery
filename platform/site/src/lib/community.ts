@@ -46,7 +46,9 @@ export function useCommunity<T>(path: string | null, pollMs = 0): Loaded<T> & { 
     if (path === null) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let started = false;
     const load = () => {
+      started = true;
       getCommunity<T>(path)
         .then((data) => live && setState({ state: 'ready', data }))
         .catch((error: unknown) => {
@@ -59,13 +61,14 @@ export function useCommunity<T>(path: string | null, pollMs = 0): Loaded<T> & { 
         });
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible' && timer === null && pollMs > 0) load();
+      if (document.visibilityState === 'visible' && timer === null && (pollMs > 0 || !started)) load();
       else if (document.visibilityState !== 'visible' && timer !== null) {
         clearTimeout(timer);
         timer = null;
       }
     };
-    load();
+    // Like the snapshot (lib/studio.tsx), a tab opened hidden reads nothing until it is shown.
+    if (document.visibilityState === 'visible') load();
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       live = false;

@@ -24,8 +24,15 @@ export function PersonAvatar({ person, size = 48 }: { person: Pick<PublicPerson,
   );
 }
 
-export function PersonLink({ person }: { person: PublicPerson | null }) {
+export function PersonLink({ person, linked = true }: { person: PublicPerson | null; linked?: boolean }) {
   if (person === null) return <span className="person-name">{copy.pipe.anonymous}</span>;
+  if (!linked)
+    return (
+      <span className="person-link">
+        <PersonAvatar person={person} size={24} />
+        <span>{person.displayName}</span>
+      </span>
+    );
   return (
     <Link className="person-link" to={`/u/${encodeURIComponent(person.handle)}`}>
       <PersonAvatar person={person} size={24} />
