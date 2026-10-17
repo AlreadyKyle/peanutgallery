@@ -517,16 +517,32 @@ main:has(> .band) {
   counter-reset: section;
 }
 
-main > .band:not(:first-child) .section:has(> h2:first-child) {
+/* Blocks whose heading is not a section's first child join the same count: how it works' video and
+   steps, home's first game with the explainer (one rule and number over the pair, drawn by the
+   showcase itself, below) and /contribute's two headings, so a page's numbers never skip a block. */
+main > .band:not(:first-child) .section:has(> h2:first-child:not(.sr-only)),
+main > .band:not(:first-child) .how-watch,
+main > .band:not(:first-child) .how-step,
+main > .band:not(:first-child) .showcase,
+main > .band:not(:first-child) .split-slider,
+main > .band:not(:first-child) .contribute > h2 {
   padding-top: var(--space-2);
   border-top: 2px solid currentColor;
 }
 
-main > .band:not(:first-child) .section > h2:first-child {
+main > .band:not(:first-child) .section > h2:first-child:not(.sr-only),
+main > .band:not(:first-child) .how-watch > h2:first-child,
+main > .band:not(:first-child) .how-text > h2:first-child,
+main > .band:not(:first-child) .split-slider > h2:first-child,
+main > .band:not(:first-child) .contribute > h2 {
   counter-increment: section;
 }
 
-main > .band:not(:first-child) .section > h2:first-child::before {
+main > .band:not(:first-child) .section > h2:first-child:not(.sr-only)::before,
+main > .band:not(:first-child) .how-watch > h2:first-child::before,
+main > .band:not(:first-child) .how-text > h2:first-child::before,
+main > .band:not(:first-child) .split-slider > h2:first-child::before,
+main > .band:not(:first-child) .contribute > h2::before {
   content: counter(section, decimal-leading-zero) / '';
   display: block;
   margin-bottom: var(--space-2);
@@ -559,6 +575,17 @@ main > .band:not(:first-child) .section > h2:first-child::before {
     position: sticky;
     top: var(--space-3);
     margin: 0;
+  }
+
+  /* The section's 2px rule is its first line: a list that opens the text column drops its own top
+     hairline, so the two never stack. */
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .rows > li:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .spec-rows > div:first-child,
+  main.sheet > .band:not(:first-child) > .section > h2:first-child + .facts > div:first-child,
+main.sheet > .band:not(:first-child) > .section > h2:first-child + .stats > :first-child,
+main.sheet > .band:not(:first-child) > .section > h2:first-child + .faq-item {
+    border-top: 0;
+    padding-top: 0;
   }
 
   /* The text column is the measure itself (about 80 characters at 1440px), so its paragraphs fill it. */
@@ -658,6 +685,20 @@ a.target {
   main.card-page .hero > h1 {
     margin-bottom: var(--space-3);
   }
+}
+
+/* A card's plate is short: its title at the section size (a card title runs long) and the plate's
+   foot closer, so the face and its Fund this card are in view when the page opens. */
+main.card-page .hero > h1 {
+  font-size: var(--size-h2);
+}
+
+main.card-page > .band:first-child {
+  padding-block: var(--space-5) var(--space-4);
+}
+
+main.card-page > .band:nth-child(2) {
+  padding-top: var(--space-5);
 }
 
 .lede {
@@ -897,17 +938,19 @@ button.link:hover:not(:disabled) {
   border-style: dashed;
 }
 
-/* Picked: a 6px signal ribbon inside the top edge. Paused: a 6px ink hatch in the same slot (the two
-   never meet). Both are backgrounds, so forced colours drop them; the word and glyph carry the state. */
+/* Picked: a 6px signal tab under the top edge at its left, two fifths of the card wide, so it starts
+   where the corner's curve ends and stops well clear of the rarity tab on the right. Paused: a 6px
+   ink hatch in the same slot (the two never meet). Both are backgrounds, so forced colours drop
+   them; the word and glyph carry the state. */
 .card[data-face='picked']::before,
 .card[data-face='paused']::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: var(--radius-card);
+  width: 40%;
   height: 6px;
-  border-radius: calc(var(--radius-card) - 2px) calc(var(--radius-card) - 2px) 0 0;
+  border-radius: 0 0 3px 3px;
 }
 
 .card[data-face='picked']::before {
@@ -993,9 +1036,21 @@ button.link:hover:not(:disabled) {
     grid-row: 3;
   }
 
+  /* The bottom block fills its track and pins its button to the foot, so a card with an extra
+     line above its button (what is left to fund) still lines its button up with the row's. */
   .card-grid > .card > .card-bottom {
     grid-row: 4;
     margin-top: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-grid > .card > .card-bottom > .button {
+    margin-top: auto;
+  }
+
+  .card-grid > .card > .card-bottom > :has(+ .button) {
+    margin-bottom: var(--space-2);
   }
 
 }
@@ -1045,7 +1100,7 @@ button.link:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -1129,8 +1184,7 @@ button.link:hover:not(:disabled) {
   max-width: none;
 }
 
-.contribute > p,
-.contribute > h2 {
+.contribute > p {
   max-width: var(--measure);
 }
 
@@ -1257,20 +1311,26 @@ button.link:hover:not(:disabled) {
   text-wrap: balance;
 }
 
-/* The panel is one link, so it shows the press it offers: a paper disc with an arrow under its
-   words. The arrow's alternative text is empty, so the link's name stays its title and line. */
+/* The panel is one link, so it shows the press it offers: a paper button under its words, a label
+   and an arrow, never a bare disc a reader might take for a carousel control. It is drawn, not
+   written: its alternative text is empty, so the link's name and text stay its title and line. */
 .choice-primary::after {
-  content: '\2192' / '';
-  display: grid;
-  place-items: center;
-  width: var(--target);
-  height: var(--target);
-  margin-top: var(--space-2);
-  border-radius: 50%;
+  content: 'Choose an amount \2192' / '';
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  min-height: var(--target);
+  margin-top: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
   background: var(--paper);
   color: var(--ink);
-  font-size: var(--size-lead);
-  font-weight: var(--weight-bold);
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+}
+
+.choice-primary:hover::after {
+  background: var(--paper-hover);
 }
 
 .choice-primary .choice-body {
@@ -1354,12 +1414,24 @@ button.link:hover:not(:disabled) {
   --focus-colour: var(--primary-fg);
 }
 
-/* Beside the Machine card the tile takes the row's height, its lines kept at the top, so the extra
-   height never stretches its rows (or its Contribute button). */
+/* Beside the Machine card the tile takes the row's height: its lines stay at the top and its
+   Contribute button sits at the foot of the row, so no hollow pools under it. */
 .fund-empty,
 .fund-next {
   align-self: stretch;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fund-empty > .button,
+.fund-next > .button {
+  margin-top: auto;
+}
+
+/* Paired with the Machine card, the tile's title is a card title, the same size as its neighbour's. */
+.fund-ways:has(> .machine-card) .fund-empty-title {
+  font-size: var(--size-lead);
 }
 
 .fund-empty > p,
@@ -1407,7 +1479,7 @@ button.link:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
-  padding: var(--space-2) var(--space-1);
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--hairline);
   font-size: var(--size-body);
 }
@@ -1586,17 +1658,11 @@ button.link:hover:not(:disabled) {
   max-width: var(--measure);
   margin: 0;
   padding: 0;
-  counter-reset: how-step;
 }
 
 .how-step {
   display: grid;
   gap: var(--space-2);
-  counter-increment: how-step;
-}
-
-.how-text h2::before {
-  content: counter(how-step) '. ';
 }
 
 .how-text p {
@@ -1949,8 +2015,8 @@ main > .band:first-child .pipe .avatar {
 
 /* Footer -----------------------------------------------------------------
    A spec sheet (docs/specs/brand.md, Footer): the mark and the studio's line, then two labelled
-   columns of links, one link to a line, then the credit under a hairline. Four columns from 64rem
-   (the brand block takes two), two below, one under 30rem. */
+   columns of links, one link to a line, then the credit under a hairline. Five columns from 64rem
+   (the brand block takes two), the three link columns side by side from 30rem, one under it. */
 
 .site-footer {
   border-top: 1px solid var(--hairline);
@@ -1979,29 +2045,32 @@ main > .band:first-child .pipe .avatar {
   max-width: 22rem;
 }
 
+/* The footer's name is the wordmark again: uppercase and bold, like the top bar's. */
 .footer-name {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   font-size: var(--size-body);
   font-weight: var(--weight-bold);
+  text-transform: uppercase;
   line-height: 1.1;
 }
 
-/* The name and its mark take the footer's text colour, not its muted tone. */
-.site-footer .footer-name {
+/* The name, its mark and the column labels take the footer's text colour, not its muted tone. */
+.site-footer .footer-name,
+.site-footer .footer-label {
   color: var(--paper);
 }
 
-.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name {
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-name,
+.page:has(> main > .band:last-child:nth-child(odd)) > .site-footer .footer-label {
   color: var(--ink);
 }
 
+/* A column's label: the sans at 600, in the footer's text colour (above), over its muted links. */
 .footer-label {
   margin-bottom: var(--space-1);
-  font-family: var(--font-mono);
   font-weight: var(--weight-strong);
-  letter-spacing: var(--tracking-label);
 }
 
 .footer-links {
@@ -2024,7 +2093,7 @@ main > .band:first-child .pipe .avatar {
 
 @media (min-width: 30rem) {
   .footer-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .footer-row > .footer-brand,
@@ -2035,7 +2104,7 @@ main > .band:first-child .pipe .avatar {
 
 @media (min-width: 64rem) {
   .footer-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .footer-row > .footer-brand {
@@ -2354,18 +2423,14 @@ input[type='radio'] {
 }
 
 .who-duties li::before {
-  content: counter(duty);
+  content: counter(duty, decimal-leading-zero);
   position: absolute;
   top: 0;
   left: 0;
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
+  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
+  line-height: inherit;
 }
 
 .who-outro {
@@ -2468,7 +2533,7 @@ input[type='radio'] {
 /* The live studio on the plate: a paper screen in the dark band, its ground and roles paper's, so the
    room, its era label and the role cards draw exactly as they do on paper. */
 .home > .band:first-child > .live-studio {
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
 }
 
 /* Selected through the hero, not the band's position, so the plate's own rules keep their one amber. */
@@ -2492,8 +2557,8 @@ input[type='radio'] {
   --live-mark: var(--live);
 }
 
-/* The live studio's heading on the plate is a label over the screen, not a second headline: the lead
-   size, with its intro beside it from 64rem. */
+/* The live studio's heading on the plate is a label, not a second headline: the lead size, with a
+   small muted intro. */
 .home .live-studio > h2 {
   margin-bottom: 0.25rem;
   font-size: var(--size-lead);
@@ -2505,15 +2570,58 @@ input[type='radio'] {
   font-size: var(--size-small);
 }
 
-/* The plate opens closer under the top bar on home, so the room is in view on a phone. */
-.home > .band:first-child {
-  padding-top: var(--space-4);
+/* From 64rem the label and its intro head the ruled column beside the room, above the pipe, so the
+   room starts right under the pitch and is in view when the page opens. The room spans every row;
+   the column's parts share one rule down its left edge. */
+@media (min-width: 64rem) {
+  .home .live-studio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 24rem;
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: var(--space-4);
+  }
+
+  .home .live-studio > .live-studio-grid {
+    display: contents;
+  }
+
+  .home .live-studio > .live-studio-grid > .studio {
+    grid-column: 1;
+    grid-row: 1 / -1;
+  }
+
+  .home .live-studio > h2,
+  .home .live-studio > p,
+  .home .live-studio > .live-studio-grid > .pipe {
+    grid-column: 2;
+    margin-block: 0;
+    border-inline-start: 1px solid var(--hairline);
+    padding-inline-start: var(--space-3);
+  }
+
+  .home .live-studio > h2 {
+    grid-row: 1;
+    padding-bottom: 0.25rem;
+  }
+
+  .home .live-studio > p:not(.twitch) {
+    grid-row: 2;
+    padding-bottom: var(--space-3);
+  }
+
+  .home .live-studio > p.twitch {
+    grid-row: 3;
+    padding-bottom: var(--space-2);
+  }
+
+  .home .live-studio > .live-studio-grid > .pipe {
+    grid-row: 4;
+  }
 }
 
-@media (min-width: 64rem) {
-  .home > .band:first-child {
-    padding-top: var(--space-5);
-  }
+/* The plate opens closer under the top bar on home, so the room is in view when the page opens. */
+.home > .band:first-child {
+  padding-top: var(--space-3);
 }
 
 /* The first game and the explainer, side by side from 64rem (the video alone takes the row). */
@@ -2521,6 +2629,19 @@ input[type='radio'] {
   display: grid;
   gap: var(--band-pad) var(--space-5);
   align-items: center;
+}
+
+/* The pair's number over the full-width rule, at its left edge like every section's. */
+main > .band:not(:first-child) .showcase::before {
+  content: counter(section, decimal-leading-zero) / '';
+  counter-increment: section;
+  grid-column: 1 / -1;
+  margin-bottom: calc(var(--space-2) - var(--band-pad));
+  font-family: var(--font-mono);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+  line-height: var(--leading-title);
 }
 
 @media (min-width: 64rem) {
@@ -2653,6 +2774,8 @@ input[type='radio'] {
   border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--paper);
+  /* The index's numerals: the mono face, two digits (01, 02, ...), on every numbered thing. */
+  font-family: var(--font-mono);
   font-size: var(--size-small);
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
@@ -2732,6 +2855,26 @@ input[type='radio'] {
   margin: var(--space-1) 0 0;
 }
 
+/* What an empty or unloaded list says instead (EmptyState.tsx): the empty lane's dashed tile, the
+   reason at the body size, then what to do next. */
+.empty-state {
+  padding: var(--space-3);
+  border: 2px dashed currentColor;
+  border-radius: var(--radius-card);
+}
+
+.empty-state > p {
+  margin: 0;
+}
+
+.empty-state > p + p {
+  margin-top: var(--space-1);
+}
+
+.empty-state-line {
+  font-weight: var(--weight-strong);
+}
+
 /* What an empty lane says instead: a dashed tile, never a card (it carries no card's data). */
 .flow-empty {
   padding: var(--space-2);
@@ -2786,6 +2929,14 @@ input[type='radio'] {
 
 @media (max-width: 47.99rem) {
   .fund-grid:not([data-all]) > li:nth-child(n + 4) {
+    display: none;
+  }
+}
+
+/* In the two-column grid (48 to 72rem) a third card would sit alone beside an empty cell, so home
+   shows two whenever the link to the rest follows the grid; the rest are one press away. */
+@media (min-width: 48rem) and (max-width: 71.99rem) {
+  .fund-grid:not([data-all]):has(~ .more) > li:nth-child(n + 3) {
     display: none;
   }
 }
@@ -2996,7 +3147,7 @@ input[type='radio'] {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0 var(--space-2);
-  padding: 0.375rem var(--space-1);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -3076,7 +3227,48 @@ ol.timeline {
 }
 
 /* /thanks's reward (docs/specs/supporter-loop.md): the card the money went to first, at the reading
-   measure, with the supporter's number on its face; its Share button drawn as a primary button. */
+   measure, with the supporter's number on its face; its Share button drawn as a primary button. Its
+   heading is for screen readers only, so the block opens the band without a rule or a number. From
+   64rem the face, its share line and Share take the sheet's left column and what happens next the
+   right, so the left never stands empty beside it. */
+@media (min-width: 64rem) {
+  /* The face's top sits level with What happens next, and its share line with the ship note, so
+     the two columns read across. */
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: start;
+    margin-top: 0;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-face + p {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .share-card {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > #next {
+    grid-row: 1;
+    margin-top: 0;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > .thanks-next {
+    grid-row: 2;
+  }
+
+  main.sheet > .band:not(:first-child) > .thanks-reward > [data-note='ship-email'] {
+    grid-row: 3;
+  }
+}
+
+.thanks-face + p {
+  margin-top: var(--space-2);
+}
+
 .thanks-face {
   max-width: 24rem;
   gap: var(--space-1);
@@ -3114,7 +3306,14 @@ ol.timeline {
   margin-top: var(--space-1);
 }
 
+/* The step the card is on: a small stamp after its line, not a loose word. */
 .thanks-now {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 0.375rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: var(--size-small);
   font-weight: var(--weight-bold);
 }
 
@@ -3617,9 +3816,8 @@ ol.timeline {
 
 .machine-amounts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
-  max-width: 28rem;
 }
 
 /* The presets are choices, not actions: outlined like the filter chips, so the coin Fund button is
@@ -3627,6 +3825,7 @@ ol.timeline {
 .machine-amounts .amount,
 .machine-amounts .amount:hover:not(:disabled) {
   min-width: 0;
+  white-space: nowrap;
   min-height: var(--target);
   padding: 0 0.25em;
   justify-content: center;
@@ -3672,14 +3871,18 @@ ol.timeline {
   min-width: 0;
 }
 
+/* On a narrow card a chip is about 50px wide: the pressed chip drops its check glyph (its 3px edge
+   still says pressed), so "$100" never breaks across two lines. */
+@container (max-width: 26rem) {
+  .machine-amounts .amount > .glyph {
+    display: none;
+  }
+}
+
 @container (min-width: 44rem) {
   .machine-card > .machine-about,
   .machine-card > .machine-fund {
     flex-basis: 0;
-  }
-
-  .machine-card .machine-amounts {
-    max-width: none;
   }
 }
 

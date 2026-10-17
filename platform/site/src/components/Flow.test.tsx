@@ -115,7 +115,7 @@ describe('MachineFlow', () => {
     ]);
     // Each lane is named by its heading.
     for (const li of lanes) expect(li.getAttribute('aria-labelledby')).toBe(li.querySelector('h3.flow-title')?.id);
-    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['1', '2', '3']);
+    expect(lanes.map((li) => li.querySelector('.flow-step-number')?.textContent)).toEqual(['01', '02', '03']);
     expect(lane('building').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.building.who);
     expect(lane('shipped').querySelector('.flow-who')?.textContent).toBe(copy.flow.lanes.shipped.who);
     // Every card in a lane is a compact face with an h4 title and no summary; the open cards are
