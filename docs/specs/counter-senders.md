@@ -35,7 +35,7 @@ Every count is the event's name alone, `{"event": "<name>"}`, posted to `/api/co
 ### Privacy and the scoreboard
 
 - The Privacy page's Play and share counts section names every count above, says the browser decides whether a count applies from what it already holds, that the save's own time is never sent, and keeps the rule: no cookie, no identifier, no IP address, nothing new stored in the browser.
-- The benchmark review's scoreboard gains `site.dwell_15s` (home views staying 15 seconds or more / home views, target and floor a half) and `site.dwell_45s` (45 seconds or more, target a half). Both read "not measured" until `home_dwell_mid` has been counted. The rows for Player D1 and D7 and session length were already on it and now have counts to read.
+- The benchmark review's scoreboard gains `site.dwell_mid` (home views staying 15 seconds or more / home views, target and floor a half) and `site.dwell_long` (45 seconds or more, target a half). Both read "not measured" until `home_dwell_mid` has been counted. The rows for Player D1 and D7 and session length were already on it and now have counts to read.
 
 ## Acceptance criteria
 

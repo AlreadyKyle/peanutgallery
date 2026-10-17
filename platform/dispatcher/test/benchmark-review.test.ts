@@ -112,10 +112,10 @@ describe('the benchmark scoreboard', () => {
     expect([sent.get('play.d1')!.value, sent.get('play.d1')!.status]).toEqual([0.25, 'meets_target']);
     expect([sent.get('play.d7')!.value, sent.get('play.d7')!.status]).toEqual([0.05, 'between']);
     expect([sent.get('play.session_4m')!.value, sent.get('play.session_4m')!.status]).toEqual([0.4, 'between']);
-    expect([sent.get('site.dwell_15s')!.value, sent.get('site.dwell_15s')!.status]).toEqual([0.6, 'meets_target']);
-    expect([sent.get('site.dwell_45s')!.value, sent.get('site.dwell_45s')!.status]).toEqual([0.4, 'between']);
-    expect(by.get('site.dwell_15s')!.status).toBe('not_measured');
-    const short = scoreboard(days({ ...HEALTHY, 'play.home_dwell_mid': 90, 'play.home_dwell_long': 10 })).find((row) => row.metric === 'site.dwell_15s')!;
+    expect([sent.get('site.dwell_mid')!.value, sent.get('site.dwell_mid')!.status]).toEqual([0.6, 'meets_target']);
+    expect([sent.get('site.dwell_long')!.value, sent.get('site.dwell_long')!.status]).toEqual([0.4, 'between']);
+    expect(by.get('site.dwell_mid')!.status).toBe('not_measured');
+    const short = scoreboard(days({ ...HEALTHY, 'play.home_dwell_mid': 90, 'play.home_dwell_long': 10 })).find((row) => row.metric === 'site.dwell_mid')!;
     expect(short.status).toBe('below_floor');
 
     const poor = new Map(scoreboard(days({ ...HEALTHY, 'money.median_30d': 4, 'money.refunded_usd': 2 })).map((row) => [row.metric, row]));
