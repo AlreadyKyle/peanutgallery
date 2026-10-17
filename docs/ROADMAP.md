@@ -31,7 +31,7 @@ These are two different states.
    - ~~The site shows a notice while the studio is paused.~~ Removed: the public site shows no paused notice (PLAN.md §10 decision 62).
 5. **The launch time is stamped.** The first Console credit purchase recorded at /board stamps `launched_at` (PLAN.md §10 decision 62); ~~the board has pressed Go live~~ (superseded, no button). The launch clip and the post drafts exist.
 
-Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for example [the stream](BACKLOG.md#twitch-channel-and-stream-scenes), [the host](BACKLOG.md#the-host), [free voting](BACKLOG.md#free-voting-on-open-cards), [personal decisions](BACKLOG.md#personal-decisions-for-contributors), [display names through the name pipeline](BACKLOG.md#the-name-pipeline), [the image adapter](BACKLOG.md#image-adapter-for-studio-pictures), [the public seed-1 mirror](BACKLOG.md#public-mirror-of-the-game-with-a-license) and [a board rollback button](BACKLOG.md#board-rollback-button).
+Everything else is in `docs/BACKLOG.md`, and none of it is part of live: for example [the stream](BACKLOG.md#twitch-channel-and-stream-scenes), [the host](BACKLOG.md#the-host), [names inside the games through the name pipeline](BACKLOG.md#the-name-pipeline), [the image adapter](BACKLOG.md#image-adapter-for-studio-pictures), [the public seed-1 mirror](BACKLOG.md#public-mirror-of-the-game-with-a-license) and [a board rollback button](BACKLOG.md#board-rollback-button). The final state (`docs/specs/final-state.md`, PLAN.md §10 decision 75) is its own series after live, ordered in `docs/strategy/roadmap.md`.
 
 ## The order from here
 
@@ -140,6 +140,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 
 | Spec | Status | What is left |
 |---|---|---|
+| `specs/final-state.md` | agreed | the final-state series of four branches (strategy, dust-three, site-studio, community-core), each with its Verification quoted; then the migrations in production, the flags on and the live check (`docs/strategy/roadmap.md`, Phase 1) |
 | `specs/announcement.md` | agreed | the drafts in `docs/launch/` post now, with no clip (PLAN.md §10 decision 64, `specs/announce-now.md`) |
 | `specs/build-on-funding.md` | built | a player-funded card building unattended |
 | `specs/announce-now.md` | built | the three site lines and the game's og:image served in production |

@@ -57,8 +57,8 @@ Four projects the board named as references, what each actually did, what worked
 
 **What Mob Machine takes.**
 - The process is the show, failures included. Gate failures and reverts are already public on the card pages.
-- Free participation is what scales an audience. Money alone does not. See [Free voting on open cards](../BACKLOG.md#free-voting-on-open-cards), which waits on [Player accounts](../BACKLOG.md#player-accounts).
-- Lore comes from the community naming things. See [The name pipeline](../BACKLOG.md#the-name-pipeline) and [Personal decisions for contributors](../BACKLOG.md#personal-decisions-for-contributors), which keep public text away from writing agents (§4 Kernel).
+- Free participation is what scales an audience. Money alone does not. The final state answers with suggestions and upvotes for any signed-in player, tracked from received to live (`docs/specs/final-state.md`, Suggestions; `docs/strategy/research.md`).
+- Lore comes from the community naming things. See [The name pipeline](../BACKLOG.md#the-name-pipeline), which keeps public text away from writing agents (§4 Kernel), and the "Suggested by" credits and featured seeds of the final state.
 - A recap helps late arrivals. See [Weekly episodes and clips](../BACKLOG.md#weekly-episodes-and-clips).
 
 ## Humble Bundle
@@ -87,7 +87,7 @@ The loop is fund, watch, ship, share. Each ship is the moment a supporter has so
 3. **Play the version you funded.** A permalink to the game as the card shipped it, already listed in [More on a card's own page](../BACKLOG.md#more-on-a-cards-own-page).
 4. **Studio milestones a supporter can push over the line.** Capacity that money unlocks, shown as a meter (the Star Citizen lesson, without the promises). See [A card supply that keeps pace with funding](../BACKLOG.md#a-card-supply-that-keeps-pace-with-funding).
 5. **Shareable moments inside Dust.** A code-drawn image of a run that a player can share. Built: `seed-1/render/share-image.ts`.
-6. **Free participation.** Accounts, then free votes (the Twitch Plays Pokémon lesson). See [Player accounts](../BACKLOG.md#player-accounts).
+6. **Free participation.** Profiles, suggestions, upvotes and seeds (the Twitch Plays Pokémon lesson), built by the final-state series (`docs/specs/final-state.md`).
 
 Channels and their order are §7 Channels: Reddit, then Hacker News, X and the press.
 
