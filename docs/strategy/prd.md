@@ -82,6 +82,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | I5 | Display names pass the content filter and the name pipeline before anyone sees them | FS: Identity and anonymity | In this series (filter and admin rename); the full name pipeline for in-game names is Later: [The name pipeline](../BACKLOG.md#the-name-pipeline) |
 | I6 | Download and delete your profile data | | Later: [Download and delete your profile data](../BACKLOG.md#download-and-delete-your-profile-data) |
 | I7 | Link a Twitch or Discord identity to a profile | | Later: [Link a Twitch or Discord account](../BACKLOG.md#link-a-twitch-or-discord-account) |
+| I8 | Anyone with a profile can press Tell me when this ships on any card and gets one email when it goes live, to the sign-in address the studio does not copy; a payer of the same card with the same email gets the ship notice alone | `docs/specs/card-follows.md` | Built (cards); following a suggestion is later |
 
 ## 6. Progression: XP, levels, badges, avatars, frames, collection
 
