@@ -1,6 +1,6 @@
 // The community migrations on PGlite (docs/specs/community-core.md): the quarantine, row level
 // security, the rarity and XP twins on the shared vectors, the XP cap, the rate limits, the feed's
-// triggers, the claim, the public documents with their keyset cursors, trending order, the Scout's
+// triggers, the claim, the public documents with their keyset cursors, trending order, the Curator's
 // path and the admin functions. Every migration runs in order behind the Supabase shim, as
 // play_counts_test.ts runs them.
 
@@ -133,13 +133,13 @@ Deno.test("the quarantine: no role the agents or the dispatcher use can read a s
       for (const fn of ["public.community_suggestions('top', null, null)", "public.my_profile()", "public.community_profile('supporter-1')"]) {
         await assertRejects(() => s.as("service_role", () => s.rows(`select ${fn}`)), Error, "permission denied", fn);
       }
-      // Its one read is the Scout's batch, empty while the flag is off.
-      assertEquals(await s.as("service_role", async () => (await s.row<{ r: Json }>(`select public.scout_take_batch(10) as r`)).r), { enabled: false, items: [] });
+      // Its one read is the Curator's batch, empty while the flag is off.
+      assertEquals(await s.as("service_role", async () => (await s.row<{ r: Json }>(`select public.curator_take_batch(10) as r`)).r), { enabled: false, items: [] });
     });
 
-    await t.step("anon and a player cannot take the Scout's batch or write its triage", async () => {
-      await assertRejects(() => s.as("anon", () => s.rows(`select public.scout_take_batch(10)`)), Error, "permission denied");
-      await assertRejects(() => s.as("authenticated", () => s.rows(`select public.scout_record_triage(null, '[]')`)), Error, "permission denied");
+    await t.step("anon and a player cannot take the Curator's batch or write its triage", async () => {
+      await assertRejects(() => s.as("anon", () => s.rows(`select public.curator_take_batch(10)`)), Error, "permission denied");
+      await assertRejects(() => s.as("authenticated", () => s.rows(`select public.curator_record_triage(null, '[]')`)), Error, "permission denied");
     });
   } finally {
     await s.close();
@@ -293,7 +293,7 @@ Deno.test("profiles, claims, funding XP and the feed", OPTS, async (t) => {
   }
 });
 
-Deno.test("XP cap, rate limits, suggestions, votes and the Scout", OPTS, async (t) => {
+Deno.test("XP cap, rate limits, suggestions, votes and the Curator", OPTS, async (t) => {
   const s = await studio();
   try {
     const p = await s.user("p@example.com");
@@ -339,22 +339,22 @@ Deno.test("XP cap, rate limits, suggestions, votes and the Scout", OPTS, async (
       await assertRejects(() => s.call(voters[0], `public.vote_suggestion($1, 2::smallint)`, [oldest.id]), Error, "1, or 0");
     });
 
-    await t.step("the Scout's batch is empty with the flag off, then hands out received items once an hour", async () => {
-      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.scout_take_batch(10) as r`))).r.items, []);
-      await s.board(`public.board_set_flag('scout_triage', 'true', 'start triage')`);
-      const batch = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.scout_take_batch(10) as r`))).r;
+    await t.step("the Curator's batch is empty with the flag off, then hands out received items once an hour", async () => {
+      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.curator_take_batch(10) as r`))).r.items, []);
+      await s.board(`public.board_set_flag('curator_triage', 'true', 'start triage')`);
+      const batch = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.curator_take_batch(10) as r`))).r;
       assertEquals(batch.items.length, 3);
       assertEquals(Object.keys(batch.items[0]).sort(), ["area", "body", "id", "title"]);
-      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.scout_take_batch(10) as r`))).r.items, []);
-      const enq = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.enqueue_scout_triage() as r`))).r;
+      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.curator_take_batch(10) as r`))).r.items, []);
+      const enq = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.enqueue_curator_triage() as r`))).r;
       assertEquals(enq.queued, true);
-      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.enqueue_scout_triage() as r`))).r.reason, "already_queued");
+      assertEquals((await s.as("service_role", () => s.row<{ r: Json }>(`select public.enqueue_curator_triage() as r`))).r.reason, "already_queued");
     });
 
     await t.step("the triage: an instruction is declined with no summary, a flag holds, the rest cluster", async () => {
       const ids = (await s.rows<{ id: string; title: string }>(`select id, title from community.suggestions order by created_at`));
       const [carts, dark, sound] = ids;
-      const result = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.scout_record_triage(null, $1) as r`, [JSON.stringify([
+      const result = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.curator_record_triage(null, $1) as r`, [JSON.stringify([
         { id: carts!.id, area: "dust", kind: "feature", cluster_key: "faster-carts", fit: 0.8, safety_flags: [], summary: "Carts move faster." },
         { id: dark!.id, area: "site", kind: "feature", cluster_key: "dark-mode", fit: 0.5, safety_flags: ["money_or_secrets"], summary: "Change the split." },
         { id: sound!.id, area: "studio", kind: "content", cluster_key: "sound-role", fit: 0.6, safety_flags: ["personal_data"], summary: "A sound role." },
@@ -369,13 +369,13 @@ Deno.test("XP cap, rate limits, suggestions, votes and the Scout", OPTS, async (
       const listed = (await s.anon(`public.community_suggestions('new', null, null)`)).items;
       assertEquals(listed.map((i: Json) => [i.id, i.summary, i.state]), [[carts!.id, "Carts move faster.", "clustered"]]);
       // A second answer for the same suggestion writes nothing.
-      const again = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.scout_record_triage(null, $1) as r`, [JSON.stringify([
+      const again = (await s.as("service_role", () => s.row<{ r: Json }>(`select public.curator_record_triage(null, $1) as r`, [JSON.stringify([
         { id: carts!.id, area: "dust", kind: "bug", cluster_key: "other", fit: 0.1, safety_flags: [], summary: "Other." },
       ])]))).r;
       assertEquals(again.written, 0);
     });
 
-    await t.step("a draft from a cluster takes the Scout's fields, never the player's words, and the ship rewards the suggester", async () => {
+    await t.step("a draft from a cluster takes the Curator's fields, never the player's words, and the ship rewards the suggester", async () => {
       const cluster = (await s.row<{ id: string }>(`select id from community.suggestion_clusters where key = 'faster-carts'`)).id;
       const out = await s.board(`public.board_draft_from_cluster($1, 'top cluster')`, [cluster]);
       assertEquals(out.cluster, { id: cluster, key: "faster-carts", area: "dust", kind: "feature", fit: 0.8, summary: "Carts move faster.", votes: 3, suggestions: 1 });

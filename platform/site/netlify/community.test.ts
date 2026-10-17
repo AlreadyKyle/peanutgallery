@@ -170,7 +170,7 @@ describe('the player RPCs', () => {
   it('refuses another RPC, an unknown argument and a missing token before Supabase is called', async () => {
     const calls = stubFetch([{ body: {} }]);
     expect((await post('/api/community/rpc/board_flags', {}, { authorization: `Bearer ${TOKEN}` })).status).toBe(404);
-    expect((await post('/api/community/rpc/scout_take_batch', {}, { authorization: `Bearer ${TOKEN}` })).status).toBe(404);
+    expect((await post('/api/community/rpc/curator_take_batch', {}, { authorization: `Bearer ${TOKEN}` })).status).toBe(404);
     expect((await post('/api/community/rpc/vote_seed', { id: 'x', value: 1, user_id: 'y' }, { authorization: `Bearer ${TOKEN}` })).status).toBe(400);
     expect((await post('/api/community/rpc/my_profile', [], { authorization: `Bearer ${TOKEN}` })).status).toBe(400);
     expect((await post('/api/community/rpc/my_profile', {})).status).toBe(401);

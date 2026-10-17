@@ -1,4 +1,4 @@
--- Community admin and the Scout's path (docs/specs/community-core.md).
+-- Community admin and the Curator's path (docs/specs/community-core.md).
 --
 -- a. The board's community admin: every function needs a board member at the second factor, as
 --    the board's other panel functions do, and writes one append-only community.admin_log row
@@ -7,15 +7,15 @@
 --    card drafted from it, queue a draft from a cluster), Seeds (list, unpublish, feature), Cards
 --    (suit and rarity override), Goals (list, save, delete), Studio eras (list, set), Flags (list,
 --    set) and the moderation log.
--- b. The Scout's path, service_role only: scout_take_batch hands the dispatcher's scout_triage job
+-- b. The Curator's path, service_role only: curator_take_batch hands the dispatcher's curator_triage job
 --    a batch of received suggestions (the one read of player text outside the board), and
---    scout_record_triage writes the Scout's validated structured output and nothing else. A
+--    curator_record_triage writes the Curator's validated structured output and nothing else. A
 --    suggestion flagged as an instruction to agents, or as asking to change money or secrets, is
 --    declined as instruction_to_agents with no summary; one flagged not all-ages is declined as
 --    not_all_ages; any other flag holds it for the board; the rest join a cluster.
--- c. The roles and the job: Scout (no tools) and Art Director rows if the seed has not written them
---    yet, and the scout_triage job (calls a model, billed as studio overhead, PLAN.md §10
---    decision 66). enqueue_scout_triage queues a run when the scout_triage flag is on and a
+-- c. The job: curator_triage, run by the Curator (no tools; its row, like the Art Director's, comes
+--    from the seed), the curator_triage job (calls a model, billed as studio overhead, PLAN.md §10
+--    decision 66). enqueue_curator_triage queues a run when the curator_triage flag is on and a
 --    suggestion waits; pg_cron calls it every 15 minutes where pg_cron exists.
 --
 -- Every statement runs twice without error.
@@ -194,7 +194,7 @@ begin
 end;
 $$;
 
--- A held suggestion goes back to the queue: clustered if the Scout gave it a cluster, else received.
+-- A held suggestion goes back to the queue: clustered if the Curator gave it a cluster, else received.
 create or replace function public.board_release_suggestion(p_id uuid, p_reason text) returns jsonb
 language plpgsql
 security definer
@@ -236,7 +236,7 @@ begin
 end;
 $$;
 
--- The structured brief a draft from a cluster takes: the Scout's fields and summary and the
+-- The structured brief a draft from a cluster takes: the Curator's fields and summary and the
 -- cluster's votes, never a player's words.
 create or replace function community.cluster_brief(p_cluster uuid) returns jsonb
 language sql
@@ -573,7 +573,7 @@ begin
 end;
 $$;
 
--- b. The Scout's path ------------------------------------------------------------------------
+-- b. The Curator's path ------------------------------------------------------------------------
 
 -- A suggestion with a triage joins the cluster its key names (made from this triage when new),
 -- unless it is held or declined.
@@ -600,9 +600,9 @@ begin
 end;
 $$;
 
--- The batch the Scout reads: up to p_limit received suggestions not handed out in the last hour,
--- oldest first, with only the fields the Scout needs. Empty while the scout_triage flag is off.
-create or replace function public.scout_take_batch(p_limit integer default 20) returns jsonb
+-- The batch the Curator reads: up to p_limit received suggestions not handed out in the last hour,
+-- oldest first, with only the fields the Curator needs. Empty while the curator_triage flag is off.
+create or replace function public.curator_take_batch(p_limit integer default 20) returns jsonb
 language plpgsql
 security definer
 set search_path = community, public
@@ -610,15 +610,15 @@ as $$
 declare
   v_items jsonb;
 begin
-  if not community.flag_on('scout_triage') then return jsonb_build_object('enabled', false, 'items', '[]'::jsonb); end if;
+  if not community.flag_on('curator_triage') then return jsonb_build_object('enabled', false, 'items', '[]'::jsonb); end if;
   with picked as (
     select s.id from community.suggestions s
-    where s.state = 'received' and not s.held and (s.scout_claimed_at is null or s.scout_claimed_at < now() - interval '1 hour')
+    where s.state = 'received' and not s.held and (s.curator_claimed_at is null or s.curator_claimed_at < now() - interval '1 hour')
     order by s.created_at, s.id
     limit least(greatest(coalesce(p_limit, 20), 1), 50)
     for update skip locked
   ), marked as (
-    update community.suggestions s set scout_claimed_at = now() from picked where s.id = picked.id
+    update community.suggestions s set curator_claimed_at = now() from picked where s.id = picked.id
     returning s.id, s.area, s.title, s.body, s.created_at
   )
   select coalesce(jsonb_agg(jsonb_build_object('id', id, 'area', area, 'title', title, 'body', body) order by created_at, id), '[]'::jsonb)
@@ -627,10 +627,10 @@ begin
 end;
 $$;
 
--- The Scout's answer, already validated against suggestion-triage.schema.json by the dispatcher,
+-- The Curator's answer, already validated against suggestion-triage.schema.json by the dispatcher,
 -- checked again here: each item names a suggestion still received, with fields in range. Items
 -- that do not are skipped. Returns what was written.
-create or replace function public.scout_record_triage(p_run uuid, p_items jsonb) returns jsonb
+create or replace function public.curator_record_triage(p_run uuid, p_items jsonb) returns jsonb
 language plpgsql
 security definer
 set search_path = community, public
@@ -686,41 +686,32 @@ begin
 end;
 $$;
 
--- c. Roles and the job -------------------------------------------------------------------------
+-- c. The job ---------------------------------------------------------------------------------
 
-insert into public.roles (name, title, description, species_note, model, budget_share, voice, prompt_path,
-  tools_json, metrics_json, write_access, status, trigger, agent_class)
-values
-  ('Scout', 'Scout', 'Reads queued player suggestions as quoted data and sorts them into structured fields; it has no tools and writes nothing.',
-    'A small sand-coloured creature with one tall antenna and wide, watchful eyes.',
-    coalesce((select model from public.roles where name = 'Janitor'), 'MODEL_BUILDER'), 0, 'level', 'platform/agents/prompts/scout.md',
-    '[]'::jsonb, '["first_pass_rate","cost_per_ship"]'::jsonb, false, 'starts', 'Starts when the board turns on suggestion triage.', 'web_only'),
-  ('Art Director', 'Art Director', 'Reviews the look of every game: its box art and visual quality, against the studio''s quality bar.',
-    'A tall violet creature with a paintbrush-tipped tail and round spectacles.',
-    coalesce((select model from public.roles where name = 'Game Director'), 'MODEL_DIRECTOR'), 0, 'keen', 'platform/agents/prompts/art-director.md',
-    '["Read","Glob","Grep"]'::jsonb, '["first_pass_rate","reopen_rate"]'::jsonb, false, 'starts', 'Starts at the first box-art card.', 'reviewer')
-on conflict (name) do nothing;
+-- The Curator and Art Director rows come from platform/agents/*.json through the seed
+-- (pnpm --filter @backseat/supabase seed), as every role does; the job picks the Curator's row up
+-- when this migration runs again after the seed.
 
 insert into public.jobs (name, role_id, calls_model, runs_when_paused, description)
-values ('scout_triage', (select id from public.roles where name = 'Scout'), true, false,
-  'Triage suggestions: the Scout, with no tools, sorts a batch of queued player suggestions into structured fields; nothing else is written.')
-on conflict (name) do update set role_id = excluded.role_id, calls_model = excluded.calls_model,
+values ('curator_triage', (select id from public.roles where name = 'Curator'), true, false,
+  'Triage suggestions: the Curator, with no tools, sorts a batch of queued player suggestions into structured fields; nothing else is written.')
+on conflict (name) do update set role_id = coalesce(excluded.role_id, public.jobs.role_id), calls_model = excluded.calls_model,
   runs_when_paused = excluded.runs_when_paused, description = excluded.description;
 
-create or replace function public.enqueue_scout_triage() returns jsonb
+create or replace function public.enqueue_curator_triage() returns jsonb
 language plpgsql
 security definer
 set search_path = community, public
 as $$
 begin
-  if not community.flag_on('scout_triage') then return jsonb_build_object('queued', false, 'reason', 'flag_off'); end if;
+  if not community.flag_on('curator_triage') then return jsonb_build_object('queued', false, 'reason', 'flag_off'); end if;
   if not exists (select 1 from community.suggestions where state = 'received' and not held) then
     return jsonb_build_object('queued', false, 'reason', 'nothing_waiting');
   end if;
-  if exists (select 1 from public.job_runs where job_name = 'scout_triage' and status in ('queued', 'running')) then
+  if exists (select 1 from public.job_runs where job_name = 'curator_triage' and status in ('queued', 'running')) then
     return jsonb_build_object('queued', false, 'reason', 'already_queued');
   end if;
-  return jsonb_build_object('queued', true, 'run', public.enqueue_job_run('scout_triage', 'schedule', null, null, '{}'::jsonb, null));
+  return jsonb_build_object('queued', true, 'run', public.enqueue_job_run('curator_triage', 'schedule', null, null, '{}'::jsonb, null));
 end;
 $$;
 
@@ -744,22 +735,22 @@ begin
 end
 $$;
 
-revoke all on function public.scout_take_batch(integer) from public, anon, authenticated;
-revoke all on function public.scout_record_triage(uuid, jsonb) from public, anon, authenticated;
-revoke all on function public.enqueue_scout_triage() from public, anon, authenticated;
-grant execute on function public.scout_take_batch(integer) to service_role;
-grant execute on function public.scout_record_triage(uuid, jsonb) to service_role;
-grant execute on function public.enqueue_scout_triage() to service_role;
+revoke all on function public.curator_take_batch(integer) from public, anon, authenticated;
+revoke all on function public.curator_record_triage(uuid, jsonb) from public, anon, authenticated;
+revoke all on function public.enqueue_curator_triage() from public, anon, authenticated;
+grant execute on function public.curator_take_batch(integer) to service_role;
+grant execute on function public.curator_record_triage(uuid, jsonb) to service_role;
+grant execute on function public.enqueue_curator_triage() to service_role;
 
 -- A database that does not ship pg_cron (PGlite in the tests) skips the schedule.
 do $$
 begin
   if not exists (select 1 from pg_available_extensions where name = 'pg_cron') then
-    raise notice 'pg_cron is not available; enqueue_scout_triage is not scheduled';
+    raise notice 'pg_cron is not available; enqueue_curator_triage is not scheduled';
     return;
   end if;
   create extension if not exists pg_cron with schema pg_catalog;
-  perform cron.schedule('scout-triage', '*/15 * * * *', $c$select public.enqueue_scout_triage()$c$);
+  perform cron.schedule('curator-triage', '*/15 * * * *', $c$select public.enqueue_curator_triage()$c$);
 end $$;
 
 notify pgrst, 'reload schema';

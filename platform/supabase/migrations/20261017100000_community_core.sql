@@ -4,7 +4,7 @@
 -- /api/community/* function serves.
 --
 -- a. Schema community. Nothing in it is granted to anon, authenticated or service_role: every
---    read and write goes through a security-definer function below (or the admin and Scout
+--    read and write goes through a security-definer function below (or the admin and Curator
 --    functions in 20261017100200_community_admin.sql). Row level security is on for every table
 --    as a second wall. The backup role reads it as it reads public.
 -- b. The content filter: community.clean_text strips links, code fences and markup;
@@ -338,7 +338,7 @@ create table if not exists community.suggestions (
   held boolean not null default false,
   cluster_id uuid,
   votes integer not null default 0 check (votes >= 0),
-  scout_claimed_at timestamptz,
+  curator_claimed_at timestamptz,
   created_at timestamptz not null default now(),
   constraint suggestions_declined_check check ((state = 'declined') = (decline_reason is not null))
 );
@@ -361,7 +361,7 @@ create table if not exists community.suggestion_clusters (
 );
 create index if not exists suggestion_clusters_card_idx on community.suggestion_clusters (card_id);
 
--- The Scout's structured output, one row per suggestion. Its summary is the Scout's own words,
+-- The Curator's structured output, one row per suggestion. Its summary is the Curator's own words,
 -- never the player's, and it is null when the suggestion was flagged as an instruction to agents.
 create table if not exists community.suggestion_triage (
   suggestion_id uuid primary key references community.suggestions (id) on delete cascade,
@@ -549,7 +549,7 @@ insert into community.flags (key, value) values
   ('suggestions_open', 'true'::jsonb),
   ('seeds_open', 'true'::jsonb),
   ('profiles_open', 'true'::jsonb),
-  ('scout_triage', 'false'::jsonb)
+  ('curator_triage', 'false'::jsonb)
 on conflict (key) do nothing;
 
 -- Player sign-in: the week-1 restriction let only board emails into auth.users. Players now sign in
