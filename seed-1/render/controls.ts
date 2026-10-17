@@ -179,6 +179,11 @@ export class AccessibleControls {
     this.unlockList.replaceChildren(...items);
   }
 
+  /** Says a message in the live region now, such as the welcome back. */
+  say(message: string): void {
+    this.announce(message);
+  }
+
   private announce(message: string): void {
     this.live.textContent = message;
   }

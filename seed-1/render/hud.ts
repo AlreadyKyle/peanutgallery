@@ -152,8 +152,8 @@ export class Hud {
       born: 0,
       until: 0,
       kicker: this.strings.labels.welcomeTitle,
-      title: `+${formatDust(gain)}`,
-      body: fill(this.strings.labels.welcomeBack, { amount: formatDust(gain), time: formatDuration(seconds) }),
+      title: fill(this.strings.labels.dustGain, { amount: formatDust(gain) }),
+      body: fill(this.strings.labels.awayFor, { time: formatDuration(seconds) }),
     });
   }
 

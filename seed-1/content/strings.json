@@ -21,7 +21,9 @@
     "welcomeTitle": "Welcome back",
     "streak": "Streak",
     "newUnit": "New",
-    "tapHint": "or tap the pile"
+    "tapHint": "or tap the pile",
+    "awayFor": "Gathered while you were away for {time}.",
+    "dustGain": "+{amount} dust"
   },
   "strikeDescription": "Each strike adds one to two seconds of dust.",
   "unitDescriptions": {

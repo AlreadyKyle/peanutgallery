@@ -627,7 +627,7 @@ footer {
   background: rgba(21, 21, 21, 0.35);
 }
 
-.seed-offer-kicker {
+#seed-offer .seed-offer-kicker {
   margin: 0;
   padding: 6px 16px;
   font-size: 12px;

@@ -22,6 +22,8 @@ export interface Strings {
     streak: string;
     newUnit: string;
     tapHint: string;
+    awayFor: string;
+    dustGain: string;
   };
   strikeDescription: string;
   unitDescriptions: Record<string, string>;
@@ -84,6 +86,8 @@ const LABEL_KEYS = [
   'streak',
   'newUnit',
   'tapHint',
+  'awayFor',
+  'dustGain',
 ] as const;
 
 const SHARE_KEYS = ['button', 'text', 'copied', 'failed', 'imageDust', 'imageUnlocks'] as const;

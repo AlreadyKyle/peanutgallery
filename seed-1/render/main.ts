@@ -4,6 +4,7 @@ import { createSim, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
 import { countEvent } from './count';
+import { fill, formatDuration, formatDust } from './format';
 import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
 import { Hud } from './hud';
 import { loadGameData, type GameData } from './load';
@@ -153,6 +154,7 @@ function run(data: GameData): void {
   if (welcome !== null && welcome.seconds >= MIN_WELCOME_SECONDS && welcome.gain >= 1) {
     hud.welcome(welcome.gain, welcome.seconds);
     scene.welcome();
+    controls?.say(fill(strings.labels.welcomeBack, { amount: formatDust(welcome.gain), time: formatDuration(welcome.seconds) }));
   }
 
   // Saving: every few seconds, when the tab is hidden and when the page goes away.
