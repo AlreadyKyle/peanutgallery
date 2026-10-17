@@ -90,13 +90,52 @@ export interface DraftInput {
   floor: Floor | null;
   // The open cards the run names, by id; null for every open card.
   openCardIds: string[] | null;
+  // A suggestion cluster the board chose to draft from (docs/specs/community-core.md): the Curator's
+  // structured fields and its own summary, never a player's text.
+  cluster: ClusterBrief | null;
 }
 
-// The run's typed input: {} or {floor, open_cards}. Anything else fails the run.
+// community.cluster_brief, as board_draft_from_cluster queues it.
+export interface ClusterBrief {
+  id: string;
+  key: string;
+  area: 'dust' | 'new_game' | 'studio' | 'site';
+  kind: 'bug' | 'feature' | 'content' | 'balance' | null;
+  fit: number | null;
+  summary: string | null;
+  votes: number;
+  suggestions: number;
+}
+
+const CLUSTER_KEYS = ['id', 'key', 'area', 'kind', 'fit', 'summary', 'votes', 'suggestions'] as const;
+
+// The cluster brief, strictly: exactly its eight keys, each of its type; a summary no longer than the
+// Curator's 140 characters. Anything else fails the run, so no other text reaches the Designer.
+export function parseClusterBrief(value: unknown): ClusterBrief {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('draft_card cluster must be an object');
+  const brief = value as Record<string, unknown>;
+  const extra = Object.keys(brief).filter((key) => !(CLUSTER_KEYS as readonly string[]).includes(key));
+  if (extra.length > 0) throw new Error(`draft_card cluster takes only ${CLUSTER_KEYS.join(', ')}, not ${extra.join(', ')}`);
+  const ok =
+    typeof brief.id === 'string' && /^[0-9a-f-]{36}$/.test(brief.id) &&
+    typeof brief.key === 'string' && /^[a-z0-9-]{1,48}$/.test(brief.key) &&
+    typeof brief.area === 'string' && ['dust', 'new_game', 'studio', 'site'].includes(brief.area) &&
+    (brief.kind === null || (typeof brief.kind === 'string' && ['bug', 'feature', 'content', 'balance'].includes(brief.kind))) &&
+    (brief.fit === null || (typeof brief.fit === 'number' && brief.fit >= 0 && brief.fit <= 1)) &&
+    (brief.summary === null || (typeof brief.summary === 'string' && Array.from(brief.summary).length <= 140 && !/[<>\n]/.test(brief.summary))) &&
+    typeof brief.votes === 'number' && Number.isInteger(brief.votes) &&
+    typeof brief.suggestions === 'number' && Number.isInteger(brief.suggestions);
+  if (!ok) throw new Error('draft_card cluster is not a valid cluster brief');
+  return brief as unknown as ClusterBrief;
+}
+
+// The run's typed input: {} or {floor, open_cards}, or {cluster} from the board's Draft from cluster.
+// Anything else fails the run.
 export function parseDraftInput(input: Record<string, unknown>): DraftInput {
   const keys = Object.keys(input);
-  const unknown = keys.filter((key) => key !== 'floor' && key !== 'open_cards');
-  if (unknown.length > 0) throw new Error(`draft_card takes {} or {floor, open_cards}, not ${unknown.join(', ')}`);
+  const unknown = keys.filter((key) => key !== 'floor' && key !== 'open_cards' && key !== 'cluster');
+  if (unknown.length > 0) throw new Error(`draft_card takes {} or {floor, open_cards} or {cluster}, not ${unknown.join(', ')}`);
+  const cluster = input.cluster === undefined ? null : parseClusterBrief(input.cluster);
   let floor: Floor | null = null;
   if (input.floor !== undefined) {
     const value = input.floor;
@@ -113,7 +152,7 @@ export function parseDraftInput(input: Record<string, unknown>): DraftInput {
       return id;
     });
   }
-  return { floor, openCardIds };
+  return { floor, openCardIds, cluster };
 }
 
 // Why the last round came back, for the next Designer session.
@@ -154,6 +193,18 @@ export interface DesignerContext {
   executors: readonly string[];
   cardMaxUsd: number;
   feedback: Feedback | null;
+  // The suggestion cluster the board chose to draft from, or none.
+  cluster?: ClusterBrief | null;
+}
+
+// The cluster as the Designer reads it: the Curator's fields and summary only.
+export function clusterLines(cluster: ClusterBrief | null | undefined): string[] {
+  if (!cluster) return [];
+  return [
+    '',
+    `The board chose a cluster of ${cluster.suggestions} player suggestion${cluster.suggestions === 1 ? '' : 's'} (${cluster.votes} upvote${cluster.votes === 1 ? '' : 's'}) to draft from. These are the Curator's structured fields and its own summary, not the players' words; draft the change they describe, within Dust's pillars:`,
+    JSON.stringify({ key: cluster.key, area: cluster.area, kind: cluster.kind, fit: cluster.fit, summary: cluster.summary }, null, 2),
+  ];
 }
 
 function repoLine(repo: RepoContext | null): string[] {
@@ -182,6 +233,7 @@ export function designerPrompt(context: DesignerContext, typed: TypedOutput): st
     `Every turn of this session is billed to that card at list price, within a budget of ${usd(context.budgetUsd)}: a short, direct session is the way to stay inside it.`,
     `The card's drafting has spent ${usd(context.spentUsd)} so far. On approval its funding target is your estimate plus everything its drafting spends, this session and the grading included, rounded up to the cent, and that total must stay within the per-card maximum of ${usd(context.cardMaxUsd)}.`,
     ...repoLine(context.repo),
+    ...clusterLines(context.cluster),
     '',
     'The cards already open, as typed fields; do not draft a copy of one. A card whose source is community carries no text.',
     JSON.stringify(context.openCards, null, 2),
@@ -388,7 +440,7 @@ export const draftCard: JobHandler = async (context) => {
           label: `designer-${round}`,
           worktree: workspace.path,
           prompt: designerPrompt(
-            { runId: context.run.id, round, target, repo, budgetUsd: forDesigner.budgetUsd, spentUsd: forDesigner.spentUsd, floor: input.floor, openCards, executors, cardMaxUsd: studio.card_max_usd, feedback },
+            { runId: context.run.id, round, target, repo, budgetUsd: forDesigner.budgetUsd, spentUsd: forDesigner.spentUsd, floor: input.floor, openCards, executors, cardMaxUsd: studio.card_max_usd, feedback, cluster: input.cluster },
             workflow.typed,
           ),
           schema: 'card-draft',
