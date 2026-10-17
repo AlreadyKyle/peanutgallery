@@ -1,10 +1,10 @@
 import './style.css';
 import { awaySeconds, parseSavedAt, parseSavedState } from '../sim/save';
-import { createSim, findPerk, step } from '../sim/sim';
+import { chosenOption, createSim, devilReward, findPerk, orderBonus, step } from '../sim/sim';
 import type { SimState } from '../sim/types';
 import { AccessibleControls } from './controls';
 import { countEvent } from './count';
-import { describePerk, milestoneWords, weatherView } from './depth';
+import { describeForkEffect, describePerk, devilCaughtWords, milestoneWords, orderWords, weatherView } from './depth';
 import { fill, formatDust, formatDuration, formatPercent } from './format';
 import { Game, SAVE_INTERVAL_MS, SAVE_KEY } from './game';
 import { Hud } from './hud';
@@ -19,6 +19,8 @@ import { runWhatsNew } from './whats-new';
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
 // The welcome-back moment shows only for an absence long enough to feel like one.
 const MIN_WELCOME_SECONDS = 60;
+// How near the dust devil a tap on the island catches it, in CSS pixels: generous, so it needs no precision.
+const DEVIL_REACH_PX = 60;
 
 function statusElement(): HTMLElement | null {
   return document.getElementById('status');
@@ -150,12 +152,49 @@ function run(data: GameData): void {
       hud.bought();
       if (perk !== null) controls?.say(fill(strings.depth.perkBought, { name: perk.name, effect: describePerk(perk, config, strings) }));
     },
+    chose: (unlock, _option, state) => {
+      const option = chosenOption(state, config, unlock);
+      scene.chose();
+      hud.bought();
+      if (option !== null) controls?.say(fill(strings.depth.forkChosenSaid, { name: option.name, effect: describeForkEffect(option.effect, config, strings) }));
+    },
+    ordered: (order) => {
+      controls?.say(fill(strings.depth.orderSaid, { what: orderWords(order, config, strings) }));
+    },
+    filled: (gain, state) => {
+      const amount = formatDust(gain);
+      scene.filled();
+      hud.filled(fill(strings.depth.orderFilledToast, { amount }));
+      controls?.say(
+        fill(strings.depth.orderFilledSaid, { amount, count: String(state.ordersFilled ?? 0), percent: formatPercent(orderBonus(state, config)) }),
+      );
+    },
+    devil: (here, state) => {
+      if (here) {
+        scene.weatherTurned();
+        controls?.say(fill(strings.depth.devilSaid, { amount: formatDust(devilReward(state, config)) }));
+      } else {
+        controls?.say(strings.depth.devilGone);
+      }
+    },
+    caught: (gain) => {
+      const words = devilCaughtWords(config, strings, gain);
+      scene.caught();
+      hud.caught(words.title, words.body);
+      controls?.say(words.said);
+    },
   });
   if (controls !== null) controls.refused = (_unit, reason) => hud.flash(reason);
 
-  // A tap anywhere on the island strikes; the Strike button does the same from the keyboard.
+  // A tap anywhere on the island strikes, or catches the dust devil when it lands on or near it; the
+  // Strike and Catch buttons do the same from the keyboard.
   scene.canvas.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
+    const devil = scene.devilScreen();
+    if (devil !== null && Math.hypot(event.offsetX - devil.x, event.offsetY - devil.y) < DEVIL_REACH_PX) {
+      game.act({ type: 'catch' });
+      return;
+    }
     game.act({ type: 'strike' });
   });
 
