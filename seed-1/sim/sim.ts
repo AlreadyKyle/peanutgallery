@@ -1,5 +1,10 @@
 import { nextRandom, seedRng } from './rng';
 import type {
+  DevilState,
+  ForkEffect,
+  ForkOption,
+  OrderKind,
+  OrderState,
   PerkRow,
   SimAction,
   SimConfig,
@@ -14,7 +19,8 @@ import type {
 // Every function here is pure: it reads the state it is given and returns a
 // new one (or the same object when the action changes nothing).
 //
-// The layers after the units (milestones, weather, gems and perks) are optional in the config. A
+// The layers after the units (milestones, weather, gems and perks, forks, orders and dust devils) are
+// optional in the config. A
 // config without them leaves every number and every field of the state exactly as it was before
 // they existed, so the pinned timeline (tests/timeline.test.ts, against tests/fixtures/config)
 // holds; tests/depth.test.ts covers the layers themselves.
@@ -170,6 +176,193 @@ export function gemBonus(state: SimState, config: SimConfig): number {
   return 1 + table.bonusPerGem * gems;
 }
 
+// ---- Forks ------------------------------------------------------------------------------------
+
+/** A fork unlock's options, or null for an unlock that is not a fork. */
+export function forkOptions(row: UnlockRow): readonly ForkOption[] | null {
+  return row.effect.type === 'fork' ? row.effect.options : null;
+}
+
+/** The option chosen at a fork this season, or null while it is still open (or for no such fork). */
+export function chosenOption(state: SimState, config: SimConfig, unlock: string): ForkOption | null {
+  const id = state.chosen?.[unlock];
+  if (id === undefined) return null;
+  const row = findUnlock(config, unlock);
+  return row === null ? null : (forkOptions(row)?.find((option) => option.id === id) ?? null);
+}
+
+/** The forks reached this season and not yet chosen, in the order they opened. */
+export function pendingForks(state: SimState, config: SimConfig): UnlockRow[] {
+  const pending: UnlockRow[] = [];
+  for (const event of state.unlocked) {
+    const row = findUnlock(config, event.id);
+    if (row !== null && row.effect.type === 'fork' && state.chosen?.[row.id] === undefined) pending.push(row);
+  }
+  return pending;
+}
+
+function chosenEffects(state: SimState, config: SimConfig): ForkEffect[] {
+  const effects: ForkEffect[] = [];
+  if (state.chosen === undefined) return effects;
+  for (const unlock of Object.keys(state.chosen)) {
+    const option = chosenOption(state, config, unlock);
+    if (option !== null) effects.push(option.effect);
+  }
+  return effects;
+}
+
+/** What the forks chosen this season multiply one kind of thing by (1 with none chosen). */
+export function forkProduct(state: SimState, config: SimConfig, type: 'multiplier' | 'strike' | 'weather' | 'devil' | 'order'): number {
+  let product = 1;
+  for (const effect of chosenEffects(state, config)) if (effect.type === type) product *= effect.value;
+  return product;
+}
+
+function forkUnit(state: SimState, config: SimConfig, unit: string): number {
+  let product = 1;
+  for (const effect of chosenEffects(state, config)) if (effect.type === 'unit' && effect.unit === unit) product *= effect.value;
+  return product;
+}
+
+// ---- Orders -----------------------------------------------------------------------------------
+
+/** Whether orders are open: their unlock has opened this season. */
+export function ordersOpen(state: SimState, config: SimConfig): boolean {
+  const table = config.unlocks.orders;
+  return table !== undefined && isUnlocked(state, table.opensAt);
+}
+
+/** What filled orders add to production, for good: 1 + bonusPerOrder for each one filled. */
+export function orderBonus(state: SimState, config: SimConfig): number {
+  const table = config.unlocks.orders;
+  const filled = state.ordersFilled ?? 0;
+  if (table === undefined || filled === 0) return 1;
+  return 1 + table.bonusPerOrder * filled;
+}
+
+/** How far along the order on the board is: what the player has now and what it asks for. */
+export function orderProgress(state: SimState): { have: number; need: number } | null {
+  const order = state.order;
+  if (order === undefined) return null;
+  if (order.type === 'own') return { have: ownedCount(state, order.unit ?? ''), need: order.target };
+  if (order.type === 'strikes') return { have: order.progress ?? 0, need: order.target };
+  return { have: state.totalDust, need: order.target };
+}
+
+export function orderFilled(state: SimState): boolean {
+  const progress = orderProgress(state);
+  return progress !== null && progress.have >= progress.need;
+}
+
+/** The dust filling the order on the board pays now: rewardSeconds of production, times order forks. */
+export function orderReward(state: SimState, config: SimConfig): number {
+  const table = config.unlocks.orders;
+  if (table === undefined) return 0;
+  return table.rewardSeconds * ratePerSecond(state, config) * forkProduct(state, config, 'order');
+}
+
+// What `count` more of a unit cost from what is owned now, with every perk on the price.
+function costOfMore(state: SimState, config: SimConfig, row: SpawnRow, count: number): number {
+  let total = 0;
+  const owned = ownedCount(state, row.id);
+  for (let i = 0; i < count; i += 1) {
+    const base = row.baseCost * Math.pow(COST_GROWTH, owned + i);
+    total += Math.round(state.perks === undefined ? base : base * thriftFactor(state, config));
+  }
+  return total;
+}
+
+function pickWeighted<T extends { weight: number }>(rows: readonly T[], value: number): T {
+  const total = rows.reduce((sum, row) => sum + Math.max(0, row.weight), 0);
+  let pick = value * total;
+  let chosen = rows.find((row) => row.weight > 0)!;
+  for (const row of rows) {
+    if (row.weight <= 0) continue;
+    chosen = row;
+    if (pick < row.weight) break;
+    pick -= row.weight;
+  }
+  return chosen;
+}
+
+// A new order, sized to the island as it stands: three draws on the seeded generator, always three,
+// so a replay lands on the same order. An own order asks only for a unit the player could afford
+// within `budget` seconds of production; with none such it becomes a gather order.
+function drawOrder(state: SimState, config: SimConfig): SimState {
+  const table = config.unlocks.orders!;
+  const kindDraw = nextRandom(state.rngState);
+  const sizeDraw = nextRandom(kindDraw.state);
+  const unitDraw = nextRandom(sizeDraw.state);
+  let kind: OrderKind = pickWeighted(table.kinds, kindDraw.value);
+  const size = (k: OrderKind): number => k.min + Math.floor(sizeDraw.value * (k.max - k.min + 1));
+  const rate = ratePerSecond(state, config);
+  const budget = rate * table.budget;
+  let order: OrderState | null = null;
+  if (kind.type === 'own') {
+    const candidates = availableUnits(state, config).filter((row) => costOfMore(state, config, row, 1) <= budget);
+    if (candidates.length > 0) {
+      const row = candidates[Math.min(candidates.length - 1, Math.floor(unitDraw.value * candidates.length))]!;
+      let count = size(kind);
+      while (count > 1 && costOfMore(state, config, row, count) > budget) count -= 1;
+      order = { type: 'own', unit: row.id, target: ownedCount(state, row.id) + count };
+    } else {
+      kind = table.kinds.find((k) => k.type === 'gather') ?? { type: 'gather', weight: 1, min: 30, max: 60 };
+    }
+  }
+  if (order === null && kind.type === 'strikes') order = { type: 'strikes', target: size(kind), progress: 0 };
+  if (order === null) order = { type: 'gather', target: Math.ceil(state.totalDust + Math.max(1, rate * size(kind))) };
+  return { ...state, rngState: unitDraw.state, order };
+}
+
+// ---- Dust devils ------------------------------------------------------------------------------
+
+/** Whether a dust devil is on the island now. */
+export function devilHere(state: SimState): boolean {
+  const devil = state.devil;
+  return devil !== undefined && devil.until > state.elapsedSeconds;
+}
+
+/** Whether the whirl from a caught dust devil is still blowing. */
+export function whirling(state: SimState): boolean {
+  const devil = state.devil;
+  return devil !== undefined && devil.whirlUntil > state.elapsedSeconds;
+}
+
+/** The dust catching the devil on the island pays now: rewardSeconds of production, times devil forks. */
+export function devilReward(state: SimState, config: SimConfig): number {
+  const table = config.unlocks.devils;
+  if (table === undefined) return 0;
+  return table.rewardSeconds * ratePerSecond(state, config) * forkProduct(state, config, 'devil');
+}
+
+function devilsUnlocked(state: SimState, config: SimConfig): boolean {
+  const table = config.unlocks.devils;
+  return table !== undefined && isUnlocked(state, table.opensAt);
+}
+
+function firstDevil(state: SimState, config: SimConfig): DevilState {
+  return { until: 0, next: Math.ceil(state.elapsedSeconds) + config.unlocks.devils!.firstAfter, whirlUntil: 0 };
+}
+
+function devilGap(config: SimConfig, value: number): number {
+  const table = config.unlocks.devils!;
+  return table.gapMin + Math.floor(value * (table.gapMax - table.gapMin + 1));
+}
+
+// A devil arrives at `next` and stays `lasts` seconds; one that leaves uncaught draws the gap to the
+// next on the seeded generator.
+function turnDevil(state: SimState, config: SimConfig, devil: DevilState): SimState {
+  if (devil.until > 0) {
+    const draw = nextRandom(state.rngState);
+    return { ...state, rngState: draw.state, devil: { ...devil, until: 0, next: devil.until + devilGap(config, draw.value) } };
+  }
+  return { ...state, devil: { ...devil, until: devil.next + config.unlocks.devils!.lasts, next: 0 } };
+}
+
+function devilBoundary(devil: DevilState): number {
+  return devil.until > 0 ? devil.until : devil.next;
+}
+
 // ---- Rates and costs --------------------------------------------------------------------------
 
 /** One unit's own rate right now: its row's rate times its milestones and the weather on it. */
@@ -180,10 +373,11 @@ export function unitRate(state: SimState, config: SimConfig, unit: string): numb
   const weather = currentWeather(state, config);
   const boost = weather?.units[unit];
   if (boost !== undefined) rate *= boost;
+  if (state.chosen !== undefined) rate *= forkUnit(state, config, unit);
   return rate;
 }
 
-/** Every multiplier on the whole of production: unlocks, weather, perks and unspent gems. */
+/** Every multiplier on the whole of production: unlocks, weather, perks, unspent gems, forks and orders filled. */
 export function productionMultiplier(state: SimState, config: SimConfig): number {
   let multiplier = 1;
   for (const event of state.unlocked) {
@@ -196,19 +390,21 @@ export function productionMultiplier(state: SimState, config: SimConfig): number
   }
   if (state.perks !== undefined) multiplier *= perkProduct(state, config, 'production');
   if (state.gems !== undefined) multiplier *= gemBonus(state, config);
+  if (state.chosen !== undefined) multiplier *= forkProduct(state, config, 'multiplier');
+  if (state.ordersFilled !== undefined) multiplier *= orderBonus(state, config);
   return multiplier;
 }
 
 export function ratePerSecond(state: SimState, config: SimConfig): number {
   let base = BASE_RATE;
-  const layered = config.spawnTable.milestones !== undefined || state.weather !== undefined;
+  const layered = config.spawnTable.milestones !== undefined || state.weather !== undefined || state.chosen !== undefined;
   for (const row of config.spawnTable.rows) {
     base += (layered ? unitRate(state, config, row.id) : row.rate) * ownedCount(state, row.id);
   }
   return base * productionMultiplier(state, config);
 }
 
-/** What every strike's yield is multiplied by: strike unlocks, the weather and perks. */
+/** What every strike's yield is multiplied by: strike unlocks, the weather, perks, forks and a devil's whirl. */
 export function strikeMultiplier(state: SimState, config: SimConfig): number {
   let multiplier = 1;
   for (const event of state.unlocked) {
@@ -218,6 +414,8 @@ export function strikeMultiplier(state: SimState, config: SimConfig): number {
   const weather = currentWeather(state, config);
   if (weather !== null) multiplier *= weather.strike;
   if (state.perks !== undefined) multiplier *= perkProduct(state, config, 'strike');
+  if (state.chosen !== undefined) multiplier *= forkProduct(state, config, 'strike');
+  if (state.devil !== undefined && whirling(state)) multiplier *= config.unlocks.devils?.whirlStrike ?? 1;
   return multiplier;
 }
 
@@ -248,7 +446,17 @@ function settleUnlocks(state: SimState, config: SimConfig): SimState {
   if (weatherOpens && state.weather === undefined && config.unlocks.weather !== undefined) {
     settled.weather = { kind: null, until: 0, next: Math.ceil(state.elapsedSeconds) + config.unlocks.weather.firstAfter };
   }
-  return settled;
+  return startLayers(settled, config);
+}
+
+// Orders and dust devils start at their opening unlock. A state that has the unlock but not the layer
+// (a seed or a save from before the layer existed) starts it the next time the sim steps, as the
+// unlock would have.
+function startLayers(state: SimState, config: SimConfig): SimState {
+  let out = state;
+  if (out.devil === undefined && devilsUnlocked(out, config)) out = { ...out, devil: firstDevil(out, config) };
+  if (out.order === undefined && ordersOpen(out, config)) out = drawOrder(out, config);
+  return out;
 }
 
 function gain(state: SimState, amount: number): SimState {
@@ -270,16 +478,9 @@ function turnWeather(state: SimState, config: SimConfig, weather: WeatherState):
     const gap = table.gapMin + Math.floor(draw.value * (table.gapMax - table.gapMin + 1));
     return { ...state, rngState: draw.state, weather: { kind: null, until: 0, next: weather.until + gap } };
   }
-  const total = table.kinds.reduce((sum, kind) => sum + kind.weight, 0);
-  let pick = draw.value * total;
-  let chosen = table.kinds.find((kind) => kind.weight > 0)!;
-  for (const kind of table.kinds) {
-    if (kind.weight <= 0) continue;
-    chosen = kind;
-    if (pick < kind.weight) break;
-    pick -= kind.weight;
-  }
-  const seconds = Math.max(1, Math.round(chosen.seconds * perkProduct(state, config, 'weather')));
+  const chosen = pickWeighted(table.kinds, draw.value);
+  const lasting = perkProduct(state, config, 'weather') * (state.chosen === undefined ? 1 : forkProduct(state, config, 'weather'));
+  const seconds = Math.max(1, Math.round(chosen.seconds * lasting));
   return { ...state, rngState: draw.state, weather: { kind: chosen.id, until: weather.next + seconds, next: 0 } };
 }
 
@@ -291,28 +492,45 @@ function weatherUnlocked(state: SimState, config: SimConfig): boolean {
   return config.unlocks.unlocks.some((row) => row.effect.type === 'weather' && isUnlocked(state, row.id));
 }
 
+// The next whole second at which the weather or a dust devil changes, or Infinity for none.
+function nextBoundary(state: SimState): number {
+  let boundary = Infinity;
+  if (state.weather !== undefined) boundary = weatherBoundary(state.weather);
+  if (state.devil !== undefined) boundary = Math.min(boundary, devilBoundary(state.devil));
+  return boundary;
+}
+
+// Every change due at `boundary`, the weather's first, so the seeded draws come in one order however
+// the time is stepped.
+function turnAt(state: SimState, config: SimConfig, boundary: number): SimState {
+  let out = state;
+  if (out.weather !== undefined && weatherBoundary(out.weather) <= boundary) out = turnWeather(out, config, out.weather);
+  if (out.devil !== undefined && devilBoundary(out.devil) <= boundary) out = turnDevil(out, config, out.devil);
+  return out;
+}
+
 export function step(state: SimState, config: SimConfig, dtSeconds = 1): SimState {
-  if (config.unlocks.weather === undefined) return plainStep(state, config, dtSeconds);
+  const table = config.unlocks;
+  if (table.weather === undefined && table.devils === undefined && table.orders === undefined) return plainStep(state, config, dtSeconds);
   // A state whose weather unlock is open but which has no weather yet (a seed or a save written by
   // hand, or a state from another config) starts its weather now, as the unlock would have.
-  if (state.weather === undefined && weatherUnlocked(state, config)) {
-    state = { ...state, weather: { kind: null, until: 0, next: Math.ceil(state.elapsedSeconds) + config.unlocks.weather.firstAfter } };
+  if (table.weather !== undefined && state.weather === undefined && weatherUnlocked(state, config)) {
+    state = { ...state, weather: { kind: null, until: 0, next: Math.ceil(state.elapsedSeconds) + table.weather.firstAfter } };
   }
-  if (state.weather === undefined) return plainStep(state, config, dtSeconds);
-  // With weather, the step splits at each change so production uses the weather in force for each
-  // part. Boundaries are whole seconds, so a one-second step from a whole second splits exactly.
+  state = startLayers(state, config);
+  // The step splits at each change of weather and each coming and going of a dust devil, so
+  // production uses the weather in force for each part and the draws land in time order. Boundaries
+  // are whole seconds, so a one-second step from a whole second splits exactly.
   let current = state;
   let left = dtSeconds;
   for (;;) {
-    const weather = current.weather;
-    if (weather === undefined) return plainStep(current, config, left);
-    const boundary = weatherBoundary(weather);
+    const boundary = nextBoundary(current);
     const span = boundary - current.elapsedSeconds;
-    if (span > left) return plainStep(current, config, left);
+    if (!(span <= left)) return plainStep(current, config, left);
     const part = Math.max(0, span);
     current = { ...plainStep(current, config, part), elapsedSeconds: Math.max(current.elapsedSeconds, boundary) };
     left -= part;
-    current = turnWeather(current, config, current.weather!);
+    current = turnAt(current, config, boundary);
     if (left <= 0) return current;
   }
 }
@@ -346,14 +564,30 @@ function press(state: SimState, config: SimConfig): SimState {
     perks: [...(state.perks ?? [])],
     season: (state.season ?? 0) + 1,
     pastDust: (state.pastDust ?? 0) + state.totalDust,
+    // Forks, the order on the board and the dust devils start over with the season; orders filled stay.
+    ...(state.ordersFilled === undefined ? {} : { ordersFilled: state.ordersFilled }),
   };
+}
+
+function choose(state: SimState, config: SimConfig, unlock: string, option: string): SimState {
+  if (!isUnlocked(state, unlock) || state.chosen?.[unlock] !== undefined) return state;
+  const row = findUnlock(config, unlock);
+  const options = row === null ? null : forkOptions(row);
+  if (options === null || !options.some((candidate) => candidate.id === option)) return state;
+  return { ...state, chosen: { ...state.chosen, [unlock]: option } };
+}
+
+function strikeOrder(state: SimState): SimState {
+  const order = state.order;
+  if (order === undefined || order.type !== 'strikes') return state;
+  return { ...state, order: { ...order, progress: (order.progress ?? 0) + 1 } };
 }
 
 export function apply(state: SimState, config: SimConfig, action: SimAction): SimState {
   switch (action.type) {
     case 'strike': {
       const roll = strikeYield(state, config);
-      return settleUnlocks({ ...gain(state, roll.amount), rngState: roll.rngState }, config);
+      return settleUnlocks(strikeOrder({ ...gain(state, roll.amount), rngState: roll.rngState }), config);
     }
     case 'buy': {
       if (findRow(config, action.unit) === null) return state;
@@ -372,6 +606,28 @@ export function apply(state: SimState, config: SimConfig, action: SimAction): Si
       if (!canBuyPerk(state, config, action.perk)) return state;
       const perk = findPerk(config, action.perk)!;
       return { ...state, gems: (state.gems ?? 0) - perk.cost, perks: [...(state.perks ?? []), perk.id] };
+    }
+    case 'choose':
+      return choose(state, config, action.unlock, action.option);
+    case 'fill': {
+      if (!ordersOpen(state, config) || !orderFilled(state)) return state;
+      const paid = { ...gain(state, orderReward(state, config)), ordersFilled: (state.ordersFilled ?? 0) + 1 };
+      return settleUnlocks(drawOrder(paid, config), config);
+    }
+    case 'swap':
+      if (!ordersOpen(state, config) || state.order === undefined || orderFilled(state)) return state;
+      return drawOrder(state, config);
+    case 'catch': {
+      const table = config.unlocks.devils;
+      if (table === undefined || !devilHere(state)) return state;
+      const draw = nextRandom(state.rngState);
+      const paid = gain(state, devilReward(state, config));
+      const devil: DevilState = {
+        until: 0,
+        next: Math.ceil(state.elapsedSeconds) + devilGap(config, draw.value),
+        whirlUntil: state.elapsedSeconds + table.whirlSeconds,
+      };
+      return settleUnlocks({ ...paid, rngState: draw.state, devil }, config);
     }
   }
 }

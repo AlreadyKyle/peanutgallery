@@ -1,6 +1,11 @@
 import type {
+  DevilTable,
+  ForkEffect,
+  ForkOption,
   GemTable,
   MilestoneTable,
+  OrderKind,
+  OrderTable,
   PerkEffect,
   PerkRow,
   SimConfig,
@@ -72,7 +77,34 @@ function parseEffect(raw: unknown, where: string, unitIds: Set<string>): UnlockE
   }
   if (type === 'weather') return { type: 'weather' };
   if (type === 'gems') return { type: 'gems' };
-  throw new Error(`${where}: effect type must be "unit", "multiplier", "strike", "weather" or "gems"`);
+  if (type === 'fork') return { type: 'fork', options: parseForkOptions(raw, where, unitIds) };
+  throw new Error(`${where}: effect type must be "unit", "multiplier", "strike", "weather", "gems" or "fork"`);
+}
+
+function parseForkEffect(raw: unknown, where: string, unitIds: Set<string>): ForkEffect {
+  if (!isRecord(raw)) throw new Error(`${where}: "effect" must be an object`);
+  const type = raw['type'];
+  if (type === 'multiplier' || type === 'strike' || type === 'weather' || type === 'devil' || type === 'order') {
+    return { type, value: requireNumber(raw, 'value', where, 1) };
+  }
+  if (type === 'unit') {
+    const unit = requireString(raw, 'unit', where);
+    if (!unitIds.has(unit)) throw new Error(`${where}: effect names an unknown unit "${unit}"`);
+    return { type, unit, value: requireNumber(raw, 'value', where, 1) };
+  }
+  throw new Error(`${where}: a fork option's effect type must be "multiplier", "strike", "unit", "weather", "devil" or "order"`);
+}
+
+// A fork offers two or three options; the player picks one, and it lasts the season.
+function parseForkOptions(raw: Record<string, unknown>, where: string, unitIds: Set<string>): ForkOption[] {
+  const options = requireArray(raw, 'options', where).map((option, index) => {
+    const at = `${where} options[${index}]`;
+    if (!isRecord(option)) throw new Error(`${at}: must be an object`);
+    return { id: requireString(option, 'id', at), name: requireString(option, 'name', at), effect: parseForkEffect(option['effect'], at, unitIds) };
+  });
+  if (options.length < 2 || options.length > 3) throw new Error(`${where}: a fork offers two or three options`);
+  assertUniqueIds(options.map((option) => option.id), `${where} options`);
+  return options;
 }
 
 function parseUnlockRow(raw: unknown, index: number, unitIds: Set<string>): UnlockRow {
@@ -193,6 +225,49 @@ function parseGems(raw: unknown, unitIds: Set<string>): GemTable {
   return { dustPerGem: requireNumber(raw, 'dustPerGem', where, 1), bonusPerGem: requireNumber(raw, 'bonusPerGem', where, 0), perks };
 }
 
+function parseOrderKind(raw: unknown, index: number): OrderKind {
+  const where = `orders kinds[${index}]`;
+  if (!isRecord(raw)) throw new Error(`${where}: must be an object`);
+  const type = raw['type'];
+  if (type !== 'own' && type !== 'gather' && type !== 'strikes') throw new Error(`${where}: "type" must be "own", "gather" or "strikes"`);
+  const min = requireInteger(raw, 'min', where, 1);
+  return { type, weight: requireNumber(raw, 'weight', where, 0), min, max: requireInteger(raw, 'max', where, min) };
+}
+
+function parseOrders(raw: unknown, unlockIds: Set<string>): OrderTable {
+  const where = 'unlocks orders';
+  if (!isRecord(raw)) throw new Error(`${where}: must be an object`);
+  const opensAt = requireString(raw, 'opensAt', where);
+  if (!unlockIds.has(opensAt)) throw new Error(`${where}: "opensAt" names an unknown unlock "${opensAt}"`);
+  const kinds = requireArray(raw, 'kinds', where).map(parseOrderKind);
+  if (!kinds.some((kind) => kind.weight > 0)) throw new Error(`${where}: at least one kind needs a weight above 0`);
+  return {
+    opensAt,
+    rewardSeconds: requireNumber(raw, 'rewardSeconds', where, 0),
+    bonusPerOrder: requireNumber(raw, 'bonusPerOrder', where, 0),
+    budget: requireNumber(raw, 'budget', where, 1),
+    kinds,
+  };
+}
+
+function parseDevils(raw: unknown, unlockIds: Set<string>): DevilTable {
+  const where = 'unlocks devils';
+  if (!isRecord(raw)) throw new Error(`${where}: must be an object`);
+  const opensAt = requireString(raw, 'opensAt', where);
+  if (!unlockIds.has(opensAt)) throw new Error(`${where}: "opensAt" names an unknown unlock "${opensAt}"`);
+  const gapMin = requireInteger(raw, 'gapMin', where, 1);
+  return {
+    opensAt,
+    firstAfter: requireInteger(raw, 'firstAfter', where, 1),
+    gapMin,
+    gapMax: requireInteger(raw, 'gapMax', where, gapMin),
+    lasts: requireInteger(raw, 'lasts', where, 1),
+    rewardSeconds: requireNumber(raw, 'rewardSeconds', where, 0),
+    whirlSeconds: requireInteger(raw, 'whirlSeconds', where, 0),
+    whirlStrike: requireNumber(raw, 'whirlStrike', where, 1),
+  };
+}
+
 export function parseUnlockTable(raw: unknown, spawnTable: SpawnTable): UnlockTable {
   if (!isRecord(raw)) throw new Error('unlocks: must be an object');
   const unitIds = new Set(spawnTable.rows.map((row) => row.id));
@@ -215,6 +290,9 @@ export function parseUnlockTable(raw: unknown, spawnTable: SpawnTable): UnlockTa
     if (!unlocks.some((row) => row.effect.type === 'gems')) throw new Error('unlocks: "gems" needs an unlock with a gems effect');
     table.gems = parseGems(raw['gems'], unitIds);
   }
+  const unlockIds = new Set(unlocks.map((row) => row.id));
+  if (raw['orders'] !== undefined) table.orders = parseOrders(raw['orders'], unlockIds);
+  if (raw['devils'] !== undefined) table.devils = parseDevils(raw['devils'], unlockIds);
   for (const row of unlocks) {
     if (row.effect.type === 'weather' && table.weather === undefined) throw new Error(`unlocks: "${row.id}" opens weather, but there is no "weather" table`);
     if (row.effect.type === 'gems' && table.gems === undefined) throw new Error(`unlocks: "${row.id}" opens gems, but there is no "gems" table`);
