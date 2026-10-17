@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -193,35 +194,38 @@ export function Suggest() {
         </section>
         <section className="section" aria-labelledby="suggest-list">
           <h2 id="suggest-list">{copy.suggest.listTitle}</h2>
-          <div className="list-controls">
-            <div role="group" aria-label={copy.suggest.sortLabel} className="filters">
-              {(['top', 'new'] as const).map((key) => (
-                <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
-                  {sort === key ? <Glyph name="check" /> : null}
-                  {copy.suggest.sorts[key]}
-                </button>
-              ))}
-            </div>
-            <label className="inline-select" htmlFor={filterId}>
-              <span>{copy.suggest.areaFilter}</span>
-              <select id={filterId} value={area} onChange={(event) => setArea(event.currentTarget.value)}>
-                <option value="all">{copy.suggest.allAreas}</option>
-                {SUGGESTION_AREAS.map((key) => (
-                  <option key={key} value={key}>
-                    {copy.suggest.areas[key]}
-                  </option>
+          {/* The sort and the area filter show only while there is a list to sort. */}
+          {list.state === 'unavailable' ? null : (
+            <div className="list-controls">
+              <div role="group" aria-label={copy.suggest.sortLabel} className="filters">
+                {(['top', 'new'] as const).map((key) => (
+                  <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
+                    {sort === key ? <Glyph name="check" /> : null}
+                    {copy.suggest.sorts[key]}
+                  </button>
                 ))}
-              </select>
-            </label>
-          </div>
+              </div>
+              <label className="inline-select" htmlFor={filterId}>
+                <span>{copy.suggest.areaFilter}</span>
+                <select id={filterId} value={area} onChange={(event) => setArea(event.currentTarget.value)}>
+                  <option value="all">{copy.suggest.allAreas}</option>
+                  {SUGGESTION_AREAS.map((key) => (
+                    <option key={key} value={key}>
+                      {copy.suggest.areas[key]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           {list.state === 'loading' ? (
             <p className="muted" aria-busy="true">
               {copy.suggest.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <p className="muted">{legal.partUnavailable}</p>
+            <EmptyState line={legal.partUnavailable} next={{ to: '/', label: copy.roadmapLink }} unavailable />
           ) : list.data.items.length === 0 ? (
-            <p className="muted">{copy.suggest.empty}</p>
+            <EmptyState line={copy.suggest.empty} next={{ to: '#suggest-send', label: copy.emptyState.sendFirst }} />
           ) : (
             <ol className="suggestions">
               {list.data.items.map((item) => (

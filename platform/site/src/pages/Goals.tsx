@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
+import { EmptyState } from '../components/EmptyState';
 import { Glyph, type GlyphName } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { useCommunity } from '../lib/community';
@@ -89,7 +90,7 @@ export function Goals() {
               {copy.goals.loading}
             </p>
           ) : doc.state === 'unavailable' ? (
-            <p className="muted">{legal.partUnavailable}</p>
+            <EmptyState line={legal.partUnavailable} next={{ to: '/ledger', label: copy.emptyState.ledger }} unavailable />
           ) : (
             <>
               <p className="goals-lifetime">

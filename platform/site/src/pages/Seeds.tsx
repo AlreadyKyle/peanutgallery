@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { EmptyState, type EmptyNext } from '../components/EmptyState';
 import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { PersonLink } from '../components/Person';
@@ -7,6 +8,7 @@ import { adoptSessionFromLocation, rpc, sendMagicLink, useSignedIn } from '../li
 import { CommunityError, relativeTime, useCommunity } from '../lib/community';
 import type { PageDoc, SeedSummary } from '../lib/community-types';
 import { copy } from '../lib/copy';
+import { siteEnv } from '../lib/env';
 import { legal } from '../lib/legal';
 import { clearPendingSeed, parseSeedCode, rememberPendingSeed } from '../lib/seed-link';
 
@@ -195,6 +197,12 @@ export function SaveFromLink({ raw }: { raw: string }) {
   );
 }
 
+/** An empty gallery's next step: play the game and save a run, or the cards to fund without a play address. */
+function playNext(): EmptyNext {
+  const play = siteEnv().playUrl;
+  return play === '' ? { to: '/', label: copy.roadmapLink } : { to: play, label: copy.emptyState.playDust };
+}
+
 export function Seeds() {
   const signedIn = useSignedIn();
   const [params, setParams] = useSearchParams();
@@ -221,22 +229,25 @@ export function Seeds() {
         {saveCode === null ? null : <SaveFromLink raw={saveCode} />}
         <section className="section" aria-labelledby="seeds-gallery">
           <h2 id="seeds-gallery">{copy.seeds.galleryTitle}</h2>
-          <div role="group" aria-label={copy.seeds.sortLabel} className="filters">
-            {SORTS.map((key) => (
-              <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
-                {sort === key ? <Glyph name="check" /> : null}
-                {copy.seeds.sorts[key]}
-              </button>
-            ))}
-          </div>
+          {/* The sorts show only while there is a list to sort. */}
+          {list.state === 'unavailable' ? null : (
+            <div role="group" aria-label={copy.seeds.sortLabel} className="filters">
+              {SORTS.map((key) => (
+                <button key={key} type="button" className="filter" aria-pressed={sort === key} onClick={() => setSort(key)}>
+                  {sort === key ? <Glyph name="check" /> : null}
+                  {copy.seeds.sorts[key]}
+                </button>
+              ))}
+            </div>
+          )}
           {list.state === 'loading' ? (
             <p className="muted" aria-busy="true">
               {copy.seeds.loading}
             </p>
           ) : list.state === 'unavailable' ? (
-            <p className="muted">{legal.partUnavailable}</p>
+            <EmptyState line={legal.partUnavailable} next={playNext()} unavailable />
           ) : list.data.items.length === 0 ? (
-            <p className="muted">{copy.seeds.empty}</p>
+            <EmptyState line={copy.seeds.empty} next={playNext()} />
           ) : (
             <ul className="seed-grid">
               {list.data.items.map((seed) => (
