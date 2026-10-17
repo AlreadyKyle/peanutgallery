@@ -135,15 +135,15 @@ function run(data: GameData): void {
     attachSeedButton(seedButton, shareStatus, () => game.state, config, strings);
   }
 
-  // Framing: the island stays inside whatever the HUD and the shop leave open.
-  let layoutDirty = true;
-  const observer = new ResizeObserver(() => (layoutDirty = true));
-  observer.observe(stage);
-  if (controlsRoot !== null) observer.observe(controlsRoot);
+  // Framing: the island stays inside whatever the HUD and the shop leave open. The sizes are read in
+  // the frame, not from a ResizeObserver, so a reframe lands on the same frame in every draw of the
+  // same state (e2e/frames.spec.ts); reading them is a few properties a frame.
   const hudNode = document.getElementById('hud');
-  if (hudNode !== null) observer.observe(hudNode);
+  let laidOut = '';
   const layout = (): void => {
-    layoutDirty = false;
+    const signature = `${stage.clientWidth}x${stage.clientHeight}:${controlsRoot?.offsetWidth ?? 0}x${controlsRoot?.offsetHeight ?? 0}:${hudNode?.offsetHeight ?? 0}`;
+    if (signature === laidOut) return;
+    laidOut = signature;
     const box = stage.getBoundingClientRect();
     const safe = safeArea(stage, hudNode, controlsRoot);
     scene.resize(box.width, box.height, safe);
@@ -166,7 +166,7 @@ function run(data: GameData): void {
   // frame's clock. A hidden tab gets no frames, so nothing renders there; the step on return credits it.
   const frame = (ms: number): void => {
     clock = ms;
-    if (layoutDirty) layout();
+    layout();
     const state = game.tick(Date.now());
     scene.setState(state);
     scene.frame(ms);
