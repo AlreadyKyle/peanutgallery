@@ -123,7 +123,11 @@
   --wrap: 76rem; /* 1216px: wide enough that the page fills a 1440px screen */
   --measure: 44rem;
   --measure-text: 36em; /* running text: about 72 characters a line at the body size */
-  --gutter: 1.25rem;
+  /* The page's side margin grows with the viewport, like the headings: 20px on a phone up to about
+     400px, 5% of the width from there (about 38px at 768px, 51px at 1024px), 64px from 1280px. At
+     1344px the 76rem wrap takes over and the margins keep growing (112px at 1440px), so the margin
+     never jumps and a laptop never shows the page pressed against its edges. */
+  --gutter: clamp(1.25rem, 5vw, 4rem);
   --rail: 9rem; /* the time column of a row from 48rem */
   --radius: 0.375rem; /* buttons, fields, chips and choices */
   --radius-card: 1rem;
