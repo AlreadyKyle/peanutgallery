@@ -129,6 +129,20 @@ export const MAX_FLOWERS = 36;
 
 const POND = { x: 4.1, z: 2.85 };
 
+/** Where the forks' signpost stands: at the front, just outside the cart track. */
+export const SIGNPOST = { x: 0.3, z: 4.2 };
+
+/**
+ * Where a dust devil is on the island `t` seconds into its visit: it loops around the pile outside its
+ * clearing, on a path set by `seed` (a fixed hash of when it came), so every draw of the same state at
+ * the same clock puts it in the same place.
+ */
+export function devilSpot(seed: number, t: number): { x: number; z: number } {
+  const a = hash01(seed) * Math.PI * 2 + t * 0.45;
+  const r = 2.7 + 0.8 * Math.sin(t * 0.7 + hash01(seed + 1) * 6);
+  return { x: Math.cos(a) * r, z: Math.sin(a) * r };
+}
+
 /**
  * Where the i-th season flower stands: on the grass, clear of the pile's clearing and the track, the
  * buildings' slots and the pond, from the fixed hash, so every draw puts it in the same place.
@@ -141,6 +155,7 @@ export function flowerSpot(index: number): { x: number; z: number; rot: number; 
     const z = (hash01(seed + 1) - 0.5) * ISLAND_HALF * 1.8;
     if (Math.hypot(x, z) < 4.2) continue;
     if (Math.hypot(x - POND.x, z - POND.z) < 1.3) continue;
+    if (Math.hypot(x - SIGNPOST.x, z - SIGNPOST.z) < 0.9) continue;
     if (slots.some((slot) => Math.hypot(x - slot.x, z - slot.z) < 1.2)) continue;
     return { x, z, rot: hash01(seed + 2) * Math.PI * 2, scale: 0.8 + hash01(seed + 3) * 0.5 };
   }

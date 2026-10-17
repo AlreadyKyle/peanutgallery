@@ -4,23 +4,31 @@ import { describe, expect, it } from 'vitest';
 import { loadConfigFromDir } from '../bots/config';
 import { Announcer, describeEffect, formatTimes } from '../render/a11y';
 import {
+  describeForkEffect,
   describePerk,
   describeWeather,
+  devilCaughtWords,
+  devilView,
   firstStep,
+  forkOpenWords,
+  forkView,
   gemGoal,
   gemsLine,
   milestoneHint,
   milestoneWords,
   notEnough,
+  orderView,
+  orderWords,
   pressView,
   weatherSecondsLeft,
   weatherView,
+  whirlView,
 } from '../render/depth';
 import { Game } from '../render/game';
 import { galleryLink, GALLERY_URL } from '../render/seed-code';
 import { parseStrings } from '../render/strings';
-import { flowerSpot, MAX_FLOWERS, milestoneColour, STRUCTURE_SLOTS } from '../render/world';
-import { apply, createSim, findPerk, step } from '../sim/sim';
+import { devilSpot, flowerSpot, ISLAND_HALF, MAX_FLOWERS, milestoneColour, SIGNPOST, STRUCTURE_SLOTS, TRACK_RADIUS } from '../render/world';
+import { apply, createSim, findPerk, findUnlock, step } from '../sim/sim';
 import type { SimState, UnlockRow, WeatherKind } from '../sim/types';
 import { LIVE_CONFIG_DIR, LIVE_CONTENT_DIR } from './paths';
 
@@ -195,5 +203,125 @@ describe('the island blooms and wears its milestones', () => {
     expect(milestoneColour(1)).toBe(0xf5dc7a);
     expect(milestoneColour(5)).toBe(0xb0226a);
     expect(milestoneColour(9)).toBe(0xb0226a);
+  });
+});
+
+describe('the choice layers in words', () => {
+  const owned = { gatherer: 20, cart: 10, mill: 5, forge: 2, foundry: 1 };
+
+  it('says what each side of every fork does', () => {
+    const words = config.unlocks.unlocks.flatMap((row) => (row.effect.type === 'fork' ? row.effect.options.map((option) => describeForkEffect(option.effect, config, strings)) : []));
+    expect(words).toEqual([
+      'Strikes ×1.5',
+      'Cart ×2',
+      'Mill ×1.5',
+      'Forge ×1.5',
+      'All dust ×1.2',
+      'Strikes ×1.5',
+      'Weather lasts ×2',
+      'Orders pay ×3',
+      'Foundry ×1.5',
+      'Dust devils give ×3',
+      'Strikes ×1.5',
+      'All dust ×1.2',
+    ]);
+  });
+
+  it('shows the first fork waiting, its buttons named in full, and how many more wait', () => {
+    const state = { ...unlocked(createSim(config, 1), 600_000), owned };
+    const view = forkView(state, config, strings)!;
+    expect(view.row.id).toBe('iron-broom');
+    expect(view.options.map((option) => option.label)).toEqual(['Choose Iron broom: Strikes ×1.5, this season', 'Choose Oiled axles: Cart ×2, this season']);
+    expect(view.more).toBe(1);
+    const chosen = apply(apply(state, config, { type: 'choose', unlock: 'iron-broom', option: 'iron-broom' }), config, { type: 'choose', unlock: 'sharper-tools', option: 'bellows' });
+    expect(forkView(chosen, config, strings)).toBeNull();
+    expect(forkOpenWords(findUnlock(config, 'sharper-tools')!, config, strings)).toBe('Sharper tools: choose one. Millstones, Mill ×1.5 or Bellows, Forge ×1.5.');
+  });
+
+  it('puts an order in words with its progress, its reward and its rest', () => {
+    expect(orderWords({ type: 'own', unit: 'cart', target: 12 }, config, strings)).toBe('Own 12 Cart');
+    expect(orderWords({ type: 'strikes', target: 30 }, config, strings)).toBe('Strike 30 times');
+    expect(orderWords({ type: 'gather', target: 1200 }, config, strings)).toBe('Gather 1,200 dust');
+    const base = { ...unlocked(createSim(config, 1), 2000), owned, elapsedSeconds: 100 };
+    expect(orderView({ ...base, unlocked: [] }, config, strings)).toBeNull();
+    const half = orderView({ ...base, order: { type: 'strikes', target: 30, progress: 15 } }, config, strings)!;
+    expect(half.text).toBe('Strike 30 times');
+    expect(half.count).toBe('15 of 30');
+    expect(half.progress).toBeCloseTo(0.5);
+    expect(half.ready).toBe(false);
+    expect(half.fillLabel.startsWith('Fill the order for ')).toBe(true);
+    const resting = orderView({ ...base, order: { type: 'strikes', target: 30, progress: 30, from: 112 } }, config, strings)!;
+    expect(resting.ready).toBe(false);
+    expect(resting.rest).toBe(12);
+    const ready = orderView({ ...base, ordersFilled: 3, order: { type: 'strikes', target: 30, progress: 31 } }, config, strings)!;
+    expect(ready.ready).toBe(true);
+    expect(ready.count).toBe('30 of 30');
+    expect(ready.filled).toBe('3 filled, +3%');
+  });
+
+  it('shows the dust devil while it is here, and the whirl it leaves', () => {
+    const base = { ...unlocked(createSim(config, 1), 2000), owned, elapsedSeconds: 100 };
+    expect(devilView({ ...base, devil: { until: 0, next: 200, whirlUntil: 0 } }, config, strings)).toBeNull();
+    const here = devilView({ ...base, devil: { until: 110, next: 0, whirlUntil: 0 } }, config, strings)!;
+    expect(here.text.startsWith('Catch the dust devil +')).toBe(true);
+    expect(here.label.startsWith('Catch the dust devil for ')).toBe(true);
+    expect(whirlView({ ...base, devil: { until: 0, next: 300, whirlUntil: 105.5 } }, config, strings)).toEqual({ effect: 'Strikes ×2', secondsLeft: 6 });
+    expect(whirlView({ ...base, devil: { until: 0, next: 300, whirlUntil: 90 } }, config, strings)).toBeNull();
+    expect(devilCaughtWords(config, strings, 1500)).toEqual({
+      title: '+1,500 dust',
+      body: 'Strikes ×2 for 8 seconds',
+      said: 'Caught the dust devil: +1,500 dust. Strikes ×2 for 8 seconds.',
+    });
+  });
+});
+
+describe('the running game tells its listeners about the choices', () => {
+  it('a fork chosen, an order drawn and filled, a devil that comes, is caught and comes again', () => {
+    const events: string[] = [];
+    const game = new Game(config, { ...createSim(config, 1), totalDust: 999, dust: 999 });
+    game.listen({
+      chose: (unlock, option) => events.push(`chose ${unlock} ${option}`),
+      ordered: (order) => events.push(`ordered ${order.type}`),
+      filled: () => events.push('filled'),
+      devil: (here) => events.push(`devil ${here ? 'here' : 'gone'}`),
+      caught: () => events.push('caught'),
+    });
+    for (let ms = 0; ms <= 600_000; ms += 1000) {
+      const state = game.tick(ms);
+      game.act({ type: 'strike' });
+      if (state.order !== undefined && state.order.type === 'own') game.act({ type: 'buy', unit: state.order.unit! });
+      game.act({ type: 'fill' });
+      if (events.at(-1) === 'devil here' && events.filter((e) => e === 'caught').length === 0) game.act({ type: 'catch' });
+    }
+    expect(events[0]).toMatch(/^ordered /);
+    expect(events).toContain('filled');
+    expect(events.indexOf('caught')).toBeGreaterThan(events.indexOf('devil here'));
+    expect(events.filter((e) => e === 'devil here').length).toBeGreaterThanOrEqual(2);
+    expect(events).toContain('devil gone');
+    game.act({ type: 'choose', unlock: 'iron-broom', option: 'oiled-axles' });
+    expect(events.at(-1)).toBe('chose iron-broom oiled-axles');
+  });
+});
+
+describe('the island has room for the choices', () => {
+  it('the signpost stands on the island, outside the track and clear of the buildings', () => {
+    expect(Math.hypot(SIGNPOST.x, SIGNPOST.z)).toBeGreaterThan(TRACK_RADIUS);
+    expect(Math.abs(SIGNPOST.x)).toBeLessThan(ISLAND_HALF - 0.5);
+    expect(Math.abs(SIGNPOST.z)).toBeLessThan(ISLAND_HALF - 0.5);
+    for (const slot of Object.values(STRUCTURE_SLOTS).flat()) expect(Math.hypot(SIGNPOST.x - slot.x, SIGNPOST.z - slot.z)).toBeGreaterThan(1);
+    for (let i = 0; i < MAX_FLOWERS; i += 1) expect(Math.hypot(flowerSpot(i).x - SIGNPOST.x, flowerSpot(i).z - SIGNPOST.z)).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it('the dust devil loops inside the track, the same way for the same seed and clock', () => {
+    for (const seed of [0, 17, 1234]) {
+      for (let t = 0; t < 30; t += 0.5) {
+        const spot = devilSpot(seed, t);
+        const r = Math.hypot(spot.x, spot.z);
+        expect(r).toBeGreaterThan(1.8);
+        expect(r).toBeLessThanOrEqual(TRACK_RADIUS);
+        expect(devilSpot(seed, t)).toEqual(spot);
+      }
+    }
+    expect(devilSpot(1, 3)).not.toEqual(devilSpot(2, 3));
   });
 });

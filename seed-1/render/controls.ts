@@ -5,10 +5,12 @@
 // region. Each unit button's accessible name is its full label from render/a11y.ts ("Buy Gatherer:
 // costs 10 dust, 0 owned"); what it draws (icon, name, cost, owned, how close it is to affordable) is
 // decoration. Buttons drive the same sim `apply` actions as a tap on the pile, through render/game.ts.
+// The layers add three more: the dust devil's catch button and a fork's options (over the island on a
+// phone, at the top of the panel on a wide screen) while there is one, and the order on the board.
 import { canBuyPerk, canPress, costOf, findRow, gemsOpen, hasPerk, ownedCount, unitRate } from '../sim/sim';
 import type { SimAction, SimConfig, SimState } from '../sim/types';
 import { Announcer, controlsView, describeEffect } from './a11y';
-import { describePerk, gemsLine, milestoneHint, notEnough, pressView } from './depth';
+import { describePerk, devilView, forkView, gemsLine, milestoneHint, notEnough, orderView, pressView } from './depth';
 import { fill, formatDust, formatRate } from './format';
 import { unlockSummary } from './goals';
 import { unitIcon } from './icons';
@@ -68,6 +70,19 @@ export class AccessibleControls {
   private readonly confirmYes: HTMLButtonElement;
   private readonly perkButtons = new Map<string, PerkButton>();
   private readonly perksToggle: HTMLButtonElement;
+  private readonly devil: HTMLButtonElement;
+  private readonly fork: HTMLElement;
+  private readonly forkTitle: HTMLElement;
+  private readonly forkMore: HTMLElement;
+  private readonly forkOptions: HTMLElement;
+  private drawnFork: string | null = null;
+  private readonly order: HTMLElement;
+  private readonly orderText: HTMLElement;
+  private readonly orderCount: HTMLElement;
+  private readonly orderFill: HTMLElement;
+  private readonly orderFilled: HTMLElement;
+  private readonly orderButton: HTMLButtonElement;
+  private orderProgress = -1;
   private lastNow = 0;
   /** Called when a purchase is refused, with the reason in words, so the HUD can show it. */
   refused: ((unit: string, reason: string) => void) | null = null;
@@ -98,6 +113,29 @@ export class AccessibleControls {
     const strikeDescription = el('span', 'visually-hidden', strings.strikeDescription);
     strikeDescription.id = 'controls-strike-description';
     root.append(this.strike, strikeDescription);
+
+    // While there is one: the dust devil's catch button and the fork waiting for a choice. On a phone
+    // they hang over the island just above the shop, outside its height, so the island never
+    // reframes as they come and go (render/style.css).
+    const pops = el('div', 'pops');
+    this.devil = el('button', 'devil');
+    this.devil.type = 'button';
+    this.devil.hidden = true;
+    this.devil.addEventListener('click', () => this.target?.act({ type: 'catch' }));
+    this.fork = el('section', 'fork');
+    this.fork.hidden = true;
+    const forkHead = el('div', 'fork-head');
+    const forkKicker = el('span', 'fork-kicker', strings.depth.forkKicker);
+    this.forkTitle = el('h2', 'fork-title');
+    this.forkTitle.id = 'fork-title';
+    this.fork.setAttribute('aria-labelledby', this.forkTitle.id);
+    const forkNote = el('span', 'fork-note', strings.depth.forkNote);
+    forkHead.append(forkKicker, this.forkTitle, forkNote);
+    this.forkOptions = el('div', 'fork-options');
+    this.forkMore = el('p', 'fork-more');
+    this.fork.append(forkHead, this.forkOptions, this.forkMore);
+    pops.append(this.devil, this.fork);
+    root.append(pops);
 
     const grid = el('div', 'units');
     for (const row of config.spawnTable.rows) {
@@ -142,6 +180,34 @@ export class AccessibleControls {
       this.unitButtons.set(row.id, { button, fill: fillBar, owned, cost, badge, rate, next, progress: -1, bumpUntil: 0, shakeAt: -10_000 });
     }
     root.append(grid);
+
+    // The order on the board, from its unlock: what it asks for, how far along it is, and one button
+    // that fills it once it is met (after its rest) or swaps it for another until then. One button, so
+    // focus stays put as it changes.
+    this.order = el('section', 'order');
+    this.order.hidden = true;
+    const orderHeading = el('h2', 'order-heading', strings.depth.orderKicker);
+    orderHeading.id = 'order-heading';
+    this.order.setAttribute('aria-labelledby', orderHeading.id);
+    this.orderFilled = el('span', 'order-filled');
+    orderHeading.append(' ', this.orderFilled);
+    const orderBody = el('div', 'order-body');
+    this.orderText = el('p', 'order-text');
+    const track = el('span', 'order-track');
+    track.setAttribute('aria-hidden', 'true');
+    this.orderFill = el('span', 'order-fill');
+    track.append(this.orderFill);
+    this.orderCount = el('span', 'order-count');
+    orderBody.append(this.orderText, track, this.orderCount);
+    this.orderButton = el('button', 'order-act');
+    this.orderButton.type = 'button';
+    this.orderButton.addEventListener('click', () => {
+      const mode = this.orderButton.dataset['mode'];
+      if (mode === 'fill') this.target?.act({ type: 'fill' });
+      else if (mode === 'swap') this.target?.act({ type: 'swap' });
+    });
+    this.order.append(orderHeading, orderBody, this.orderButton);
+    root.append(this.order);
 
     // Gems: press the pile for a new season, and spend gems on perks. Hidden until its unlock opens.
     this.gems = el('section', 'gems');
@@ -286,6 +352,9 @@ export class AccessibleControls {
       if (button.style.transform !== transform) button.style.transform = transform;
     }
     this.updateGems(state);
+    this.updateDevil(state);
+    this.updateFork(state);
+    this.updateOrder(state);
     if (this.drawnUnlocks !== state.unlocked.length || this.drawnSeason !== (state.season ?? 0)) this.drawUnlocks(state);
     if (!speak) return;
     const message = this.announcer.tick(state, Date.now());
@@ -322,6 +391,72 @@ export class AccessibleControls {
       setAttr(entry.button, 'aria-disabled', String(!canBuyPerk(state, this.config, perk.id)));
       if (entry.button.classList.contains('owned') !== owned) entry.button.classList.toggle('owned', owned);
     }
+  }
+
+  private updateDevil(state: SimState): void {
+    const view = devilView(state, this.config, this.strings);
+    if (this.devil.hidden === (view !== null)) {
+      // A caught (or departed) devil takes its button with it: focus goes back to Strike.
+      if (view === null && document.activeElement === this.devil) this.strike.focus();
+      this.devil.hidden = view === null;
+    }
+    if (view === null) return;
+    setText(this.devil, view.text);
+    setAttr(this.devil, 'aria-label', view.label);
+  }
+
+  private updateFork(state: SimState): void {
+    const view = forkView(state, this.config, this.strings);
+    if (this.fork.hidden === (view !== null)) {
+      if (view === null && this.fork.contains(document.activeElement)) this.strike.focus();
+      this.fork.hidden = view === null;
+    }
+    const id = view?.row.id ?? null;
+    if (view === null || id === this.drawnFork) {
+      this.drawnFork = id;
+      return;
+    }
+    // A new fork: its options as buttons, drawn once.
+    const hadFocus = this.fork.contains(document.activeElement);
+    this.drawnFork = id;
+    setText(this.forkTitle, view.row.name);
+    setText(this.forkMore, view.more > 0 ? fill(this.strings.depth.forkMore, { count: String(view.more) }) : '');
+    const buttons = view.options.map((entry, index) => {
+      const button = el('button', 'fork-option');
+      button.type = 'button';
+      button.dataset['side'] = String(index);
+      button.setAttribute('aria-label', entry.label);
+      const name = el('span', 'fork-option-name', entry.option.name);
+      const effect = el('span', 'fork-option-effect', entry.effect);
+      for (const node of [name, effect]) node.setAttribute('aria-hidden', 'true');
+      button.append(name, effect);
+      button.addEventListener('click', () => this.target?.act({ type: 'choose', unlock: view.row.id, option: entry.option.id }));
+      return button;
+    });
+    this.forkOptions.replaceChildren(...buttons);
+    if (hadFocus) buttons[0]?.focus();
+  }
+
+  private updateOrder(state: SimState): void {
+    const view = orderView(state, this.config, this.strings);
+    if (this.order.hidden === (view !== null)) this.order.hidden = view === null;
+    if (view === null) return;
+    setText(this.orderText, view.text);
+    setText(this.orderCount, view.count);
+    setText(this.orderFilled, (state.ordersFilled ?? 0) > 0 ? view.filled : '');
+    const progress = Math.round(view.progress * 100) / 100;
+    if (progress !== this.orderProgress) {
+      this.orderProgress = progress;
+      this.orderFill.style.transform = `scaleX(${progress})`;
+    }
+    const met = view.progress >= 1;
+    const mode = view.ready ? 'fill' : met ? 'rest' : 'swap';
+    if (this.orderButton.dataset['mode'] !== mode) this.orderButton.dataset['mode'] = mode;
+    const text = mode === 'fill' ? view.fillText : mode === 'rest' ? fill(this.strings.depth.orderRest, { seconds: String(view.rest) }) : this.strings.depth.orderSwap;
+    setText(this.orderButton, text);
+    setAttr(this.orderButton, 'aria-label', mode === 'fill' ? view.fillLabel : mode === 'rest' ? text : this.strings.depth.orderSwapLabel);
+    setAttr(this.orderButton, 'aria-disabled', String(mode === 'rest'));
+    if (this.order.classList.contains('ready') !== view.ready) this.order.classList.toggle('ready', view.ready);
   }
 
   private drawUnlocks(state: SimState): void {
