@@ -48,7 +48,8 @@ test('a seed link offers its run and keeps the player game when they say so', as
   await page.goto(`/?seed=${seedCode(SHARED)}`);
   const dialog = page.getByRole('dialog', { name: 'Someone shared a Dust run' });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('4,321 dust and 2 of 14 unlocks.');
+  // 25 unlocks in the live config since the layers after the units (docs/specs/final-state.md, Games).
+  await expect(dialog).toContainText('4,321 dust and 2 of 25 unlocks.');
   await expect(dialog).toContainText('replaces your game in this browser');
   await dialog.getByRole('button', { name: 'Keep my game' }).click();
   await expect(dialog).toBeHidden();

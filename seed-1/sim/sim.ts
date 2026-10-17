@@ -287,8 +287,18 @@ function weatherBoundary(weather: WeatherState): number {
   return weather.kind !== null ? weather.until : weather.next;
 }
 
+function weatherUnlocked(state: SimState, config: SimConfig): boolean {
+  return config.unlocks.unlocks.some((row) => row.effect.type === 'weather' && isUnlocked(state, row.id));
+}
+
 export function step(state: SimState, config: SimConfig, dtSeconds = 1): SimState {
-  if (state.weather === undefined || config.unlocks.weather === undefined) return plainStep(state, config, dtSeconds);
+  if (config.unlocks.weather === undefined) return plainStep(state, config, dtSeconds);
+  // A state whose weather unlock is open but which has no weather yet (a seed or a save written by
+  // hand, or a state from another config) starts its weather now, as the unlock would have.
+  if (state.weather === undefined && weatherUnlocked(state, config)) {
+    state = { ...state, weather: { kind: null, until: 0, next: Math.ceil(state.elapsedSeconds) + config.unlocks.weather.firstAfter } };
+  }
+  if (state.weather === undefined) return plainStep(state, config, dtSeconds);
   // With weather, the step splits at each change so production uses the weather in force for each
   // part. Boundaries are whole seconds, so a one-second step from a whole second splits exactly.
   let current = state;

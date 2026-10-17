@@ -166,6 +166,11 @@ describe('weather', () => {
     expect(big.totalDust / small.totalDust).toBeCloseTo(1, 9);
   });
 
+  it('starts the weather for a state that has its unlock but no weather yet', () => {
+    const state = { ...createSim(live, 2), elapsedSeconds: 100.5, totalDust: 5000, unlocked: [{ id: vane.id, atSeconds: 50 }] };
+    expect(step(state, live, 1).weather).toEqual({ kind: null, until: 0, next: 101 + live.unlocks.weather!.firstAfter });
+  });
+
   it('credits eight hours away in one step with every change of weather in between', () => {
     const state = step(withWeather(2), live, 8 * 3600);
     expect(state.elapsedSeconds).toBe(1 + 8 * 3600);
