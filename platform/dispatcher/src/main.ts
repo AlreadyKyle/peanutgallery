@@ -28,6 +28,7 @@ import { createSupabasePatchStore } from './patch.js';
 import { findCardMerge, resumeMerged, runCardPipeline, stuckAfterMs, type PipelineDeps, type PipelineVisual } from './pipeline.js';
 import { recoverOrphans } from './recovery.js';
 import { jobTick, type JobState } from './jobs.js';
+import { runAnnouncements } from './announce.js';
 import { runOutbound } from './outbound.js';
 import { watchSupply, type SupplyWatchState } from './supply-watch.js';
 import { queuePendingUpkeep } from './job-handlers/upkeep-merge.js';
@@ -70,7 +71,7 @@ async function main(): Promise<void> {
   const config = loadConfig(process.env, CODE_ROOT, (message) => log.warn('config', message));
   const db = createSupabaseDb(config.supabaseUrl, config.supabaseServiceRoleKey);
   const alert = createAlerter({ healthcheckUrl: config.healthcheckUrl, ntfyTopicUrl: config.ntfyTopicUrl, log });
-  const poster = createDiscordPoster({ ships: config.discordWebhookShips, weekly: config.discordWebhookWeekly, log });
+  const poster = createDiscordPoster({ ships: config.discordWebhookShips, weekly: config.discordWebhookWeekly, announce: config.discordWebhookUrl ?? null, log });
   // Accepted managed-session patches, re-applied when their card re-queues.
   const patches = createSupabasePatchStore(config.supabaseUrl, config.supabaseServiceRoleKey);
   const adapter = createAdapter(config, { db, alert, log, patches });
@@ -204,7 +205,13 @@ async function main(): Promise<void> {
         upkeep,
       }),
     // Discord, outbound only (docs/specs/studio-reports.md); inert with no webhook set.
-    outbound: () => runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log }),
+    // The announcements lane (announce.ts, docs/specs/operations.md) runs after it; both are inert
+    // with no webhook set, and the tick logs the pair only when one is not.
+    outbound: async () => {
+      const ships = await runOutbound({ db, poster, siteUrl: config.publicSiteUrl, now, log });
+      const announce = await runAnnouncements({ db, poster, siteUrl: config.publicSiteUrl, now, log });
+      return { inert: ships.inert && announce.inert, ships, announce };
+    },
     // The card supply's alert when it is short and no draft can be queued (docs/specs/unattended-roles.md).
     supplyWatch: () => watchSupply({ db, alert, now, log, state: supplyWatchState }),
     drainAt: config.drainAt ?? null,

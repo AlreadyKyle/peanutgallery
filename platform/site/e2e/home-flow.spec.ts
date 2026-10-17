@@ -47,7 +47,10 @@ for (const { label, studio } of CASES) {
         await page.setViewportSize(viewport);
         await page.goto('/');
         const h2 = page.getByRole('main').getByRole('heading', { level: 2 });
-        await expect(h2.nth(0)).toHaveText(copy.flow.fundTitle); // above the first game's tile (decision 70)
+        // The live studio opens the band (docs/specs/final-state.md); the cards to fund come next, above
+        // the first game's tile (decision 70).
+        await expect(h2.nth(0)).toHaveText('The studio, live');
+        await expect(h2.nth(1)).toHaveText(copy.flow.fundTitle);
         const items = await lanes(page);
         const fund = page.getByRole('region', { name: copy.flow.fundTitle });
         expect((await fund.locator('ul.fund-grid > li.card').count()) + (await fund.locator('.fund-empty').count())).toBeGreaterThan(0);

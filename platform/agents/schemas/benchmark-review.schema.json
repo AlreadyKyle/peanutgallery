@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "benchmark-review.schema.json",
+  "title": "Benchmark review",
+  "description": "The Studio Head's answer in a benchmark review (docs/specs/operations.md, docs/strategy/operating-system.md §2): a summary of the scoreboard, and one finding for each row the prompt lists as below its floor, by its metric key. cause is the likely cause read from the counts given, in plain words. adjustment is one proposal of a kind from the closed list; it is recorded as a finding for the board and the studio and carried out by nobody in this session: card_proposal (a card the Game Designer or Head of Product could draft through the normal gates), priority_change (draft one kind of card before another), content_change, core_work (a pull request a Claude session makes, such as a new counter), spec_proposal (a spec, for anything touching money), target_change (a target replaced by a measured baseline), escalation (the board decides). No proposal spends money, opens a card or changes a money rule.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1, "maxLength": 400 },
+    "findings": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "cause", "adjustment"],
+        "properties": {
+          "metric": { "type": "string", "pattern": "^[a-z0-9_.]{3,60}$" },
+          "cause": { "type": "string", "minLength": 1, "maxLength": 280 },
+          "adjustment": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "proposal"],
+            "properties": {
+              "kind": { "enum": ["card_proposal", "priority_change", "content_change", "core_work", "spec_proposal", "target_change", "escalation"] },
+              "proposal": { "type": "string", "minLength": 1, "maxLength": 280 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

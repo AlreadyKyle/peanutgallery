@@ -64,9 +64,12 @@ const PUBLIC_CARD_COLUMNS = [
   "opens_at",
   "proposer_role_id",
   "rank",
+  // community-core: a card's rarity and suit are public (docs/specs/final-state.md).
+  "rarity",
   "shape",
   "source",
   "stage",
+  "suit",
   "summary",
   "title",
   "updated_at",
@@ -286,6 +289,13 @@ Deno.test("migrations on PGlite", {
         "20261011300000_role_stats_public_only.sql",
         "20261011400000_ship_notices.sql",
         "20261011500000_play_counts.sql",
+        "20261017100000_community_core.sql",
+        "20261017100100_community_digests.sql",
+        "20261017100200_community_admin.sql",
+        // operations (docs/specs/operations.md): the benchmark counters and the benchmark review.
+        "20261017200000_benchmark_counters.sql",
+        "20261017200100_benchmark_review.sql",
+        "20261017210000_board_roster.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -316,6 +326,7 @@ Deno.test("migrations on PGlite", {
       assertEquals(tables.map((r) => r.table_name), [
         "agent_events",
         "auto_resume_checks",
+        "benchmark_reviews",
         "board_actions",
         "board_members",
         "board_notes",
@@ -328,6 +339,7 @@ Deno.test("migrations on PGlite", {
         "contributions",
         "controller_runs",
         "credit_purchases",
+        "daily_metrics",
         "decisions",
         "deploys",
         "dispatcher_lease",
@@ -1979,11 +1991,15 @@ Deno.test("migrations on PGlite", {
     await t.step(
       "auth.users accepts board accounts only, case-insensitively",
       async () => {
+        // community-core opens sign-in to players while its profiles_open flag is on
+        // (docs/specs/final-state.md, docs/specs/community-core.md); with it off, the rule stands.
+        await db.exec(`update community.flags set value = 'false' where key = 'profiles_open'`);
         await refuses(
           `insert into auth.users (email) values ($1)`,
           "Sign-in is limited to board accounts",
           [OUTSIDER_EMAIL],
         );
+        await db.exec(`update community.flags set value = 'true' where key = 'profiles_open'`);
         await db.query(`insert into auth.users (email) values ($1)`, [
           "BOARD@mobmachine.games",
         ]);
@@ -3765,13 +3781,16 @@ Deno.test("migrations on PGlite", {
           ),
           already,
         );
-        // Both card triggers are enabled after the run, beside agent-system-core's text guard.
+        // Both card triggers are enabled after the run, beside agent-system-core's text guard and
+        // community-core's face and feed triggers (docs/specs/final-state.md).
         assertEquals(
           await rows(
             `select tgname, tgenabled from pg_trigger where tgrelid = 'public.cards'::regclass and not tgisinternal order by 1`,
           ),
           [
             { tgname: "cards_agent_text_guard", tgenabled: "O" },
+            { tgname: "cards_community_face", tgenabled: "O" },
+            { tgname: "cards_community_feed", tgenabled: "O" },
             { tgname: "cards_set_live_at", tgenabled: "O" },
             { tgname: "cards_set_updated_at", tgenabled: "O" },
           ],
@@ -4024,11 +4043,17 @@ Deno.test("migrations on PGlite", {
          where n.nspname = 'public' order by 1`,
         );
         const board = [
+          // board-roster: the board's Games and Agents reads (20261017210000_board_roster.sql).
+          "board_agent_roster",
           "board_aal2",
+          "board_games",
           "board_heartbeat",
           "board_jobs",
           "board_needs_you",
           "board_play_counts",
+          // operations (docs/specs/operations.md): the board's reads of the daily counts and the reviews.
+          "board_benchmark_reviews",
+          "board_daily_metrics",
           "board_role",
           "board_roles",
           "board_studio_state",
@@ -4113,6 +4138,30 @@ Deno.test("migrations on PGlite", {
           "terms_version_at",
           "waterfall_sweep",
           "withdraw_card_draft",
+          // community-core: the Curator's path (docs/specs/community-core.md).
+          "curator_record_triage",
+          "curator_take_batch",
+          "enqueue_curator_triage",
+          // operations (docs/specs/operations.md): the counts, the benchmark review and the announcements.
+          "announcements_pending",
+          "benchmark_review_inputs",
+          "daily_metrics_window",
+          "enqueue_benchmark_review",
+          "record_benchmark_review",
+          "refresh_daily_metrics",
+          "refresh_recent_metrics",
+        ];
+        // community-core (docs/specs/final-state.md, docs/specs/community-core.md): the community
+        // documents run for anon and authenticated, a player's RPCs for authenticated, and the board's
+        // community admin for authenticated (each checks the board and the second factor); none of
+        // them for the service role, so the dispatcher's key reads no player text but the Curator's batch.
+        const communityDocs = ["community_feed", "community_goals", "community_profile", "community_seeds", "community_studio", "community_suggestions"];
+        const player = ["claim_contributions", "my_profile", "save_seed", "set_contribution_public", "submit_suggestion", "update_profile", "vote_seed", "vote_suggestion"];
+        const communityBoard = [
+          "board_community_cards", "board_community_users", "board_decline_suggestion", "board_delete_goal", "board_draft_from_cluster",
+          "board_eras", "board_feature_seed", "board_flags", "board_goals", "board_link_cluster_card", "board_merge_clusters",
+          "board_moderation_log", "board_release_suggestion", "board_rename_user", "board_save_goal", "board_seeds",
+          "board_set_card_face", "board_set_era", "board_set_flag", "board_suggestions", "board_suspend_user", "board_unpublish_seed",
         ];
         // A policy's functions run as the caller, so anon and authenticated execute the one
         // the cards policy calls (agent-system-core.md), and the public site's two documents,
@@ -4131,6 +4180,9 @@ Deno.test("migrations on PGlite", {
             ...board,
             ...service,
             ...everyone,
+            ...communityDocs,
+            ...player,
+            ...communityBoard,
             "cards_agent_text_guard",
             "job_runs_job_enabled",
             "refuse_money_change",
@@ -4152,6 +4204,10 @@ Deno.test("migrations on PGlite", {
           },
         ]);
         for (const p of privileges) {
+          if (communityDocs.includes(p.proname) || player.includes(p.proname) || communityBoard.includes(p.proname)) {
+            assertEquals([p.anon, p.authenticated, p.service_role], [communityDocs.includes(p.proname), true, false], `grants on ${p.proname}`);
+            continue;
+          }
           assertEquals(p.anon, everyone.includes(p.proname), `anon on ${p.proname}`);
           assertEquals(
             p.authenticated,

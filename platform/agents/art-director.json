@@ -1,0 +1,16 @@
+{
+  "name": "Art Director",
+  "title": "Art Director",
+  "description": "Reviews the look of every game: its box art and visual quality, against the studio's quality bar.",
+  "species_note": "A tall violet creature with a paintbrush-tipped tail and round spectacles.",
+  "model": "MODEL_DIRECTOR",
+  "budget_share": 0,
+  "voice": "keen",
+  "prompt_path": "platform/agents/prompts/art-director.md",
+  "tools": ["Read", "Glob", "Grep"],
+  "metrics": ["first_pass_rate", "reopen_rate"],
+  "class": "reviewer",
+  "write_access": false,
+  "status": "starts",
+  "trigger": "Starts at the first box-art card."
+}

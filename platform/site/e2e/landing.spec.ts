@@ -20,11 +20,12 @@ for (const viewport of WIDTHS) {
       await expect(main.locator('p.status-line')).toHaveText('2 cards are open for funding.');
       await expect(main.getByRole('button', { name: 'Pause updates' })).toHaveCount(0);
 
-      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
+      // The live studio opens the cards band (docs/specs/final-state.md).
+      await expect(main.getByRole('heading', { level: 2 })).toHaveText(['The studio, live', 'Pick a card to fund', 'Play the first game', 'How the cards move', 'The team', 'Where the money goes']);
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');
-      await expect(game.getByRole('img', { name: /^Dust in play/ })).toBeVisible();
+      await expect(game.getByRole('img', { name: /^The box art for Dust/ })).toBeVisible();
       expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
       await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
@@ -70,7 +71,9 @@ for (const viewport of WIDTHS) {
       await expect(page.getByRole('complementary')).toHaveCount(0);
       // A card's own page is linked only by the Watch links: here, one per shipped card (docs/specs/supporter-pages.md).
       const shippedCount = await lanes.nth(2).locator('li.card').count();
-      await expect(page.locator('a[href^="/card/"]')).toHaveCount(shippedCount);
+      // The live studio (docs/specs/final-state.md) also links the cards its agents are working on,
+      // in its written facts and its pipe; outside it the rule holds.
+      await expect(page.locator('a[href^="/card/"]:not(.live-studio a)')).toHaveCount(shippedCount);
       await expect(page.getByRole('link', { name: 'Watch how it was built' })).toHaveCount(shippedCount);
       await expect(footer.getByText('AI agents build free games you can play in a browser.', { exact: false })).toBeVisible();
       await expect(footer.getByText('Everything here is made for all ages.', { exact: false })).toBeVisible();

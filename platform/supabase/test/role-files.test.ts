@@ -10,14 +10,15 @@ import { WEEK1_EXECUTOR_ROLE } from "../lib/week1.js";
 const AGENTS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "agents");
 
 describe("readRoleSpecs against platform/agents", () => {
-  it("reads sixteen valid specs with unique names and shares that sum to 1", async () => {
+  it("reads eighteen valid specs with unique names and shares that sum to 1", async () => {
     const specs = await readRoleSpecs(AGENTS_DIR);
     expect(specs).toHaveLength(ROLE_COUNT);
-    expect(ROLE_COUNT).toBe(16);
+    // Eighteen with the Curator and the Art Director (docs/specs/final-state.md).
+    expect(ROLE_COUNT).toBe(18);
     expect(new Set(specs.map((s) => s.name)).size).toBe(ROLE_COUNT);
     expect(specs.reduce((sum, s) => sum + s.budget_share, 0)).toBeCloseTo(1, 6);
     expect(specs.filter((s) => s.budget_share === 0).map((s) => s.name).sort()).toEqual(
-      ["Game Designer", "HR", "Head of Finance", "Head of Product", "Janitor", "Platform Director", "Tech Artist"],
+      ["Art Director", "Curator", "Game Designer", "HR", "Head of Finance", "Head of Product", "Janitor", "Platform Director", "Tech Artist"],
     );
   });
 
@@ -26,7 +27,7 @@ describe("readRoleSpecs against platform/agents", () => {
     const byStatus = (status: string) => specs.filter((s) => s.status === status).map((s) => s.name).sort();
     // The Janitor runs, as code only (docs/specs/agent-upkeep.md).
     expect(byStatus("running")).toEqual(["Builder A", "Builder B", "Game Designer", "Game Director", "Janitor", "Platform Builder", "Platform Director", "QA"]);
-    expect(byStatus("starts")).toEqual(["Biz Dev", "Community", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
+    expect(byStatus("starts")).toEqual(["Art Director", "Biz Dev", "Community", "Curator", "HR", "Head of Finance", "Head of Product", "Tech Artist"]);
     expect(byStatus("planned")).toEqual(["Host", "Studio Head"]);
     for (const spec of specs) expect(spec.trigger === null, spec.name).toBe(spec.status === "running");
     expect(specs.find((s) => s.name === "Head of Finance")?.trigger).toMatch(/first Stripe payout/);
@@ -39,14 +40,14 @@ describe("readRoleSpecs against platform/agents", () => {
       expect(spec.description.endsWith("."), spec.name).toBe(true);
     }
     const idle = specs.filter((s) => !s.write_access).map((s) => s.name).sort();
-    expect(idle).toEqual(["Biz Dev", "Community", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
+    expect(idle).toEqual(["Art Director", "Biz Dev", "Community", "Curator", "Game Director", "HR", "Head of Finance", "Head of Product", "Host", "Janitor", "Platform Director", "Tech Artist"]);
     // The trust classes (docs/specs/agent-system-core.md), and write access exactly for a writer or planner with tools.
     const byClass = (klass: string) => specs.filter((s) => s.class === klass).map((s) => s.name).sort();
     expect(byClass("writer")).toEqual(["Builder A", "Builder B", "Platform Builder", "QA", "Tech Artist"]);
     expect(byClass("planner")).toEqual(["Game Designer", "HR", "Studio Head"]);
-    expect(byClass("reviewer")).toEqual(["Game Director", "Platform Director"]);
+    expect(byClass("reviewer")).toEqual(["Art Director", "Game Director", "Platform Director"]);
     expect(byClass("read_only")).toEqual(["Head of Finance", "Janitor"]);
-    expect(byClass("web_only")).toEqual(["Biz Dev", "Community", "Head of Product", "Host"]);
+    expect(byClass("web_only")).toEqual(["Biz Dev", "Community", "Curator", "Head of Product", "Host"]);
     for (const spec of specs) expect(spec.write_access, spec.name).toBe((spec.class === "writer" || spec.class === "planner") && spec.tools.length > 0);
     expect(specs.some((s) => s.name === "Scout")).toBe(false);
     // Running is a fact the site derives (Team.tsx, runsCards) and says once, as the heading a role
@@ -71,12 +72,12 @@ describe("readRoleSpecs against platform/agents", () => {
     }
   });
 
-  it("rejects a directory that does not hold exactly sixteen specs", async () => {
+  it("rejects a directory that does not hold exactly eighteen specs", async () => {
     const dir = await mkdtemp(join(tmpdir(), "role-files-"));
     try {
       const [first] = await readRoleSpecs(AGENTS_DIR);
       await writeFile(join(dir, "only.json"), JSON.stringify(first));
-      await expect(readRoleSpecs(dir)).rejects.toThrow("Expected 16 role files in platform/agents, found 1");
+      await expect(readRoleSpecs(dir)).rejects.toThrow("Expected 18 role files in platform/agents, found 1");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

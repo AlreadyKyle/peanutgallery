@@ -1,3 +1,4 @@
+import type { Rarity, Suit } from './community-types';
 import { toNumber, type Numeric } from './format';
 import SNAPSHOT_KEYS from './snapshot-keys.json';
 
@@ -61,6 +62,13 @@ export type Card = {
    * board makes itself and no card funds. /roadmap groups it apart. Absent reads as not board work.
    */
   board_work?: boolean;
+  /**
+   * What the card funds and its rarity (docs/specs/final-state.md, Card suits and Rarity), from the
+   * cards document once the community data layer adds them. Absent reads as the suit of its folder and
+   * the published rarity of its id (lib/suits.ts).
+   */
+  suit?: Suit;
+  rarity?: Rarity;
 };
 
 export type CardFunding = {
@@ -413,7 +421,18 @@ function cardFrom(row: Doc, live: LiveCard): Card {
     board_vetoed: row.board_vetoed === true,
     board_veto_reason: textOrNull(row, 'board_veto_reason'),
     board_work: row.board_work === true,
+    ...(isSuit(row.suit) ? { suit: row.suit } : {}),
+    ...(isRarity(row.rarity) ? { rarity: row.rarity } : {}),
   };
+}
+
+const SUIT_KEYS: readonly string[] = ['game', 'new_game', 'studio', 'platform', 'machine'];
+const RARITY_KEYS: readonly string[] = ['common', 'uncommon', 'rare', 'legendary'];
+function isSuit(value: unknown): value is Suit {
+  return typeof value === 'string' && SUIT_KEYS.includes(value);
+}
+function isRarity(value: unknown): value is Rarity {
+  return typeof value === 'string' && RARITY_KEYS.includes(value);
 }
 
 function roleFrom(row: Doc): Role {

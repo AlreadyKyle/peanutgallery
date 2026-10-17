@@ -545,8 +545,9 @@ describe('draft_card, unattended and billed to the card it drafts', () => {
     paused.db.roles = paused.db.roles.map((r) => (r.name === 'Game Director' ? { ...r, paused: true } : r));
     await expect(draftCard(paused.context)).rejects.toThrow('the Game Director is paused');
     expect([paused.sessions, paused.db.draftTargetsOpened]).toEqual([[], []]);
-    expect(parseDraftInput({})).toEqual({ floor: null, openCardIds: null });
-    expect(parseDraftInput({ floor: 3, open_cards: [IDS.a] })).toEqual({ floor: 3, openCardIds: [IDS.a] });
+    // community-core adds the board's {cluster} input (docs/specs/final-state.md, curator-triage.test.ts).
+    expect(parseDraftInput({})).toEqual({ floor: null, openCardIds: null, cluster: null });
+    expect(parseDraftInput({ floor: 3, open_cards: [IDS.a] })).toEqual({ floor: 3, openCardIds: [IDS.a], cluster: null });
     expect(() => parseDraftInput({ card_id: IDS.a })).toThrow('draft_card takes {} or {floor, open_cards}');
     expect(() => parseDraftInput({ floor: 'many' })).toThrow('floor must be a number');
     expect(() => parseDraftInput({ open_cards: [3] })).toThrow('open_cards holds card ids');
@@ -639,7 +640,9 @@ describe('the role jobs on the queue', () => {
   }
 
   it('registers draft_card and the Janitor\'s two code jobs, and no handler for the retired studio_ranking', () => {
-    expect(Object.keys(HANDLERS).sort()).toEqual(['draft_card', 'janitor', 'upkeep_merge']);
+    // community-core adds the Curator's curator_triage (docs/specs/final-state.md), and operations the
+    // Studio Head's benchmark_review (docs/specs/operations.md).
+    expect(Object.keys(HANDLERS).sort()).toEqual(['benchmark_review', 'curator_triage', 'draft_card', 'janitor', 'upkeep_merge']);
   });
 
   it('runs a schedule-origin draft with no board member signed in, billed to the card it opened, and skips a studio_ranking run as job_disabled', async () => {

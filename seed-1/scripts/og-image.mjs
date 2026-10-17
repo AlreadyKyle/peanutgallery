@@ -11,24 +11,41 @@ export const OG_FILE_NAME = 'og-dust.png';
 
 /** @typedef {readonly [number, number, number]} Rgb */
 
-// The scene's palette (render/scene.ts, render/share-image.ts).
-/** @type {Record<'background' | 'panel' | 'panelEdge' | 'accent' | 'bar' | 'text', Rgb>} */
+// The game's palette (render/style.css, render/scene.ts): paper, ink, the pile's sand, the Dust suit
+// magenta and two of the studio's creature fills.
+/** @type {Record<'paper' | 'mote' | 'ink' | 'sand' | 'sandDeep' | 'magenta' | 'green' | 'blue' | 'side', Rgb>} */
 const COLORS = {
-  background: [0x12, 0x16, 0x1c],
-  panel: [0x1c, 0x22, 0x2b],
-  panelEdge: [0x2b, 0x34, 0x40],
-  accent: [0xd9, 0xa4, 0x41],
-  bar: [0x6f, 0xa8, 0xdc],
-  text: [0xe8, 0xe6, 0xdf],
+  paper: [0xfd, 0xfc, 0xf8],
+  mote: [0xe6, 0xdf, 0xd0],
+  ink: [0x15, 0x15, 0x15],
+  sand: [0xf1, 0xd9, 0x9c],
+  sandDeep: [0xe3, 0xc3, 0x7e],
+  magenta: [0xb0, 0x22, 0x6a],
+  green: [0x9b, 0xd3, 0xa6],
+  blue: [0x8d, 0xb9, 0xe8],
+  side: [0xe6, 0xdc, 0xcb],
 };
 
-// 5 by 7 block letters for the name.
-/** @type {Record<string, string[]>} */
-const GLYPHS = {
-  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
-  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
-  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+// The name as thick strokes, each letter a list of polylines in a 100 by 160 box.
+/** @type {(cx: number, cy: number, r: number, from: number, to: number) => Array<[number, number]>} */
+const arc = (cx, cy, r, from, to) => {
+  /** @type {Array<[number, number]>} */
+  const points = [];
+  for (let i = 0; i <= 16; i += 1) {
+    const a = from + ((to - from) * i) / 16;
+    points.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+  }
+  return points;
+};
+/** @type {Record<string, Array<Array<[number, number]>>>} */
+const LETTERS = {
+  D: [[[0, 0], [0, 160], [30, 160], ...arc(30, 80, 80, Math.PI / 2, -Math.PI / 2), [0, 0]]],
+  U: [[[0, 0], [0, 110], ...arc(50, 110, 50, Math.PI, 0), [100, 0]]],
+  S: [[...arc(50, 40, 40, -0.35, -Math.PI * 1.5), ...arc(50, 120, 40, -Math.PI / 2, Math.PI - 0.35)]],
+  T: [
+    [[0, 0], [100, 0]],
+    [[50, 0], [50, 160]],
+  ],
 };
 
 /**
@@ -62,6 +79,21 @@ function createCanvas(width, height) {
         }
       }
     },
+    // A stroke with round caps from (x1, y1) to (x2, y2), `w` wide, with an anti-aliased edge.
+    /** @type {(x1: number, y1: number, x2: number, y2: number, w: number, color: Rgb) => void} */
+    line(x1, y1, x2, y2, w, color) {
+      const r = w / 2;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len2 = dx * dx + dy * dy || 1;
+      for (let py = Math.floor(Math.min(y1, y2) - r - 1); py <= Math.ceil(Math.max(y1, y2) + r + 1); py += 1) {
+        for (let px = Math.floor(Math.min(x1, x2) - r - 1); px <= Math.ceil(Math.max(x1, x2) + r + 1); px += 1) {
+          const t = Math.max(0, Math.min(1, ((px + 0.5 - x1) * dx + (py + 0.5 - y1) * dy) / len2));
+          const d = Math.hypot(px + 0.5 - (x1 + t * dx), py + 0.5 - (y1 + t * dy));
+          blend(px, py, color, r - d + 0.5);
+        }
+      }
+    },
     // A rectangle with round ends (the bar and pills of the scene).
     /** @type {(x: number, y: number, w: number, h: number, color: Rgb) => void} */
     capsule(x, y, w, h, color) {
@@ -78,61 +110,103 @@ function createCanvas(width, height) {
  * @param {string} text
  * @param {number} x
  * @param {number} y
- * @param {number} cell
+ * @param {number} scale
+ * @param {number} weight
  * @param {Rgb} color
  */
-function drawText(canvas, text, x, y, cell, color) {
+function drawText(canvas, text, x, y, scale, weight, color) {
   let left = x;
   for (const ch of text) {
-    const rows = GLYPHS[ch] ?? [];
-    rows.forEach((row, ry) => {
-      for (let rx = 0; rx < row.length; rx += 1) {
-        if (row[rx] === '1') canvas.rect(left + rx * cell, y + ry * cell, cell, cell, color);
+    for (const stroke of LETTERS[ch] ?? []) {
+      for (let i = 1; i < stroke.length; i += 1) {
+        const [ax, ay] = stroke[i - 1] ?? [0, 0];
+        const [bx, by] = stroke[i] ?? [0, 0];
+        canvas.line(left + ax * scale, y + ay * scale, left + bx * scale, y + by * scale, weight, color);
       }
-    });
-    left += 6 * cell;
+    }
+    left += 140 * scale;
   }
 }
 
 /** The picture's raw RGB pixels, row by row. Deterministic: every build draws the same picture. */
 export function drawOgPixels() {
   const canvas = createCanvas(OG_WIDTH, OG_HEIGHT);
-  canvas.rect(0, 0, OG_WIDTH, OG_HEIGHT, COLORS.background);
+  canvas.rect(0, 0, OG_WIDTH, OG_HEIGHT, COLORS.paper);
 
-  // Motes of dust, scattered by the same fixed sequence as the run card.
-  for (let i = 1; i <= 60; i += 1) {
-    const x = ((i * 0.7548776662) % 1) * OG_WIDTH;
-    const y = ((i * 0.569840291) % 1) * OG_HEIGHT;
-    canvas.circle(x, y, 2 + (i % 4), COLORS.panelEdge);
+  // The page's dot grid.
+  for (let y = 11; y < OG_HEIGHT; y += 22) {
+    for (let x = 11; x < OG_WIDTH; x += 22) canvas.circle(x, y, 1.4, COLORS.mote);
   }
 
-  // The name, in block letters, and a production bar beneath it.
-  drawText(canvas, 'DUST', 96, 150, 24, COLORS.accent);
-  canvas.capsule(96, 360, 480, 36, COLORS.panel);
-  canvas.capsule(96, 360, 330, 36, COLORS.bar);
-  // Unlock pills, as the game lists them.
-  canvas.capsule(96, 430, 150, 44, COLORS.panelEdge);
-  canvas.capsule(262, 430, 190, 44, COLORS.panelEdge);
-  canvas.capsule(468, 430, 110, 44, COLORS.panel);
-
-  // The dust pile of the favicon (render/favicon.svg, a 32 unit square), scaled up on the right.
-  const scale = 16;
-  const ox = 660;
-  const oy = 60;
-  /** @type {Array<[number, number, number]>} */
-  const grains = [
-
-    [16, 21, 8],
-    [8, 14, 3],
-    [23, 12, 2.5],
-    [21, 22, 2],
+  // The name in block letters: an ink shadow offset down and right, then the letters in ink with a
+  // paper inner cut, the studio's thick-line look.
+  drawText(canvas, 'DUST', 124, 128, 1.12, 40, COLORS.magenta);
+  drawText(canvas, 'DUST', 116, 120, 1.12, 40, COLORS.ink);
+  // A goal bar: ink outline, magenta fill.
+  canvas.capsule(96, 372, 500, 40, COLORS.ink);
+  canvas.capsule(101, 377, 490, 30, COLORS.paper);
+  canvas.capsule(101, 377, 330, 30, COLORS.magenta);
+  // Unlock pills, outlined in ink.
+  /** @type {Array<[number, number]>} */
+  const pills = [
+    [96, 150],
+    [262, 190],
+    [468, 120],
   ];
-  for (const [cx, cy, r] of grains) {
-    canvas.circle(ox + cx * scale, oy + cy * scale, r * scale, COLORS.accent);
+  for (const [x, w] of pills) {
+    canvas.capsule(x, 440, w, 48, COLORS.ink);
+    canvas.capsule(x + 4, 444, w - 8, 40, COLORS.paper);
   }
-  // A highlight on the pile, and a gold base line along the bottom edge.
-  canvas.circle(ox + 13 * scale, oy + 18 * scale, 2 * scale, [0xe6, 0xbb, 0x66]);
-  canvas.rect(0, OG_HEIGHT - 12, OG_WIDTH, 12, COLORS.accent);
+
+  // The island: an ink-edged diamond slab with its side, the pile and its flag, two trees.
+  const cx = 900;
+  const cy = 330;
+  const hw = 230;
+  const hh = 120;
+  /** @type {(dy: number, color: Rgb, grow: number) => void} */
+  const diamond = (dy, color, grow) => {
+    for (let y = -hh - grow; y <= hh + grow; y += 1) {
+      const half = (hw + grow * 2) * (1 - Math.abs(y) / (hh + grow));
+      canvas.rect(cx - half, cy + dy + y, half * 2, 1, color);
+    }
+  };
+  diamond(110, COLORS.mote, 6);
+  for (let d = 56; d >= 0; d -= 1) diamond(d, d === 56 || d === 0 ? COLORS.ink : d % 18 === 0 ? COLORS.ink : COLORS.side, 4);
+  diamond(0, COLORS.paper, 0);
+  // The pile: a dome of sand edged in ink, its right flank in shade.
+  /** @type {(r: number, color: Rgb, shift: number) => void} */
+  const dome = (r, color, shift) => {
+    for (let y = -r; y <= 0; y += 1) {
+      const half = Math.sqrt(r * r - y * y);
+      canvas.rect(cx - half + shift, cy + 40 + y, half * 2, 1, color);
+    }
+  };
+  dome(104, COLORS.ink, 0);
+  dome(97, COLORS.sand, 0);
+  for (let y = -60; y <= 0; y += 1) {
+    const half = Math.sqrt(97 * 97 - y * y);
+    canvas.rect(cx + half * 0.35, cy + 40 + y, half * 0.65, 1, COLORS.sandDeep);
+  }
+  canvas.rect(cx - 104, cy + 37, 208, 7, COLORS.ink);
+  // The flag.
+  canvas.rect(cx - 5, cy - 150, 10, 90, COLORS.ink);
+  for (let y = 0; y < 44; y += 1) canvas.rect(cx + 5, cy - 150 + y, 76 * (1 - Math.abs(y - 22) / 22), 1, COLORS.magenta);
+  // Two trees and a pond.
+  /** @type {Array<[number, number]>} */
+  const trees = [
+    [cx - 160, cy + 10],
+    [cx + 150, cy - 6],
+  ];
+  for (const [tx, ty] of trees) {
+    canvas.circle(tx, ty, 30, COLORS.ink);
+    canvas.circle(tx, ty, 25, COLORS.green);
+  }
+  canvas.circle(cx + 40, cy + 84, 24, COLORS.ink);
+  canvas.circle(cx + 40, cy + 84, 19, COLORS.blue);
+
+  // The suit band along the bottom edge, ruled off in ink.
+  canvas.rect(0, OG_HEIGHT - 26, OG_WIDTH, 6, COLORS.ink);
+  canvas.rect(0, OG_HEIGHT - 20, OG_WIDTH, 20, COLORS.magenta);
   return canvas.pixels;
 }
 

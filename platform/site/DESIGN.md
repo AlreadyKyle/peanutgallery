@@ -6,13 +6,13 @@ Tokens live in `src/tokens.css`; the rules in `src/styles.css`, which imports it
 
 ## Brand, in one paragraph
 
-A quiet, precise table (Teenage Engineering's precision) where real cards (Cards Against Humanity's card-as-object, never its tone) are funded with arcade coins and built by a cast of code-drawn aliens. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the mark, a small machine with two eyes, drawn in the text colour. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
+A quiet, precise table where real cards, solid objects with an edge and a face, are funded with arcade coins and built by a cast of code-drawn aliens. Mostly black and white, thick minimal lines, every measure deliberate; the warmth comes from the cast and the cards, never from decoration. The card is the object and the page is the table: cards carry the edge, the face and the motion, and everything else is quiet type on a white page. Every page opens on one cobalt plate, the studio's colour; below it full-bleed bands rotate white and black. Three motifs only: the card, the coin (money) and the mark, a small machine with two eyes, drawn in the text colour. All ages: no theatre or balcony imagery, no chips, dice or other gambling cues, no shock. The site publishes no origin story for its name.
 
 ## Principles
 
 1. **One grid, readable lines.** The top bar, the page and the footer share one width (`--wrap`, 72rem), so every left edge lines up. Blocks never run wider than `--measure` (44rem), and running text keeps to `--measure-text` (36em, about 72 characters a line) inside them. Short, repeated items (cards, steps, figure groups) sit side by side on wide screens and stack on phones.
 2. **Sentence case, upright.** Headings are bold, not shouting. Uppercase appears only in the wordmark, and italic nowhere: the one font file has no italic, and `font-synthesis-style: none` stops the browser inventing one **(tested)**.
-3. **Show, don't hide.** Anything a reader needs to understand a figure or a card is written beside it. No tooltips and no icon that needs a tap. **A word and a glyph, never colour alone**: states, suits, pauses and money direction each carry a word.
+3. **Show, don't hide.** Anything a reader needs to understand a figure or a card is written beside it. No icon that needs a tap. A hover, focus or tap card (the live studio's role cards) may add to written facts, never replace them: the same facts are written in a visible list beside it. **A word and a glyph, never colour alone**: states, suits, pauses and money direction each carry a word.
 4. **Measured contrast** **(tested)**, WCAG 2.x, on every ground: every pairing the site draws is listed in `src/lib/colour.ts` with its floor (7 for body text, 4.5 for other text, 3 for controls and marks) and checked against `tokens.css`; each banned pairing is checked to stay below its floor, and a rule keeps it off the page (Colour, below).
 5. **Edges make objects.** Cards have a 2px ink edge and `--radius-card` corners, and no shadow: a white card on the white page measures 1.00, so the edge is what makes it read. /contribute's card choices are drawn like cards, with the same edge and corners. Buttons and fields use 1px and `--radius`, and so do `/team`'s boxes, in the hairline (`--hairline`), which never reads as a card. Everything else is separated by space and, in lists, by hairlines. `--radius-box` and the Right now panel are retired; home's status line says what the panel said.
 6. **Things you can press look pressable.** Links are underlined, and buttons are filled or outlined boxes at least 44px tall **(tested)**. Buttons never set `nowrap`: a long label wraps inside its box.
@@ -20,7 +20,7 @@ A quiet, precise table (Teenage Engineering's precision) where real cards (Cards
 8. **Three text styles to a block, four on a card.** A block uses at most a heading, body text and one small muted line, plus its button. A card has four: the index row, the title, the summary and the spec rows, because the spec rows are the precision the table asks for.
 9. **Headings balance their lines** (`text-wrap: balance`) **(tested)**.
 10. **One colour, one meaning.** Coin amber means money, signal (ink, since the board's call of 23 September 2026) means the studio, green means Live. No colour is ever a text colour **(tested)**, and every coin shape has an ink edge on paper (coin on paper is 2.25).
-11. **Motion records a real change or answers a press.** First paint is still. Nothing a viewer might tap moves while they look (see Motion).
+11. **Motion sets the scene, records a real change or answers a press.** The live studio moves, sections rise into view and pages cross-fade; a figure still moves only when it changed. Nothing a viewer might tap moves under the pointer, and under reduced motion everything is drawn still (see Motion).
 12. **No dead space.** Side-by-side blocks balance or stack; nothing leaves an empty column or a hollow in a band. A grid of like items puts one item in each cell, every item one width, and its last row may be part-empty: nothing is stretched to fill a row (the board, 26 September 2026). The layout audit checks it on every page, and every mockup passes it before anyone sees it **(e2e: layout balance)**.
 
 ## Tokens
@@ -236,16 +236,32 @@ No face is ever signal, ink or a suit colour, and no card sits outside band 2. T
 
 **How fresh the figures are.** The site reads its own cached documents (`docs/specs/site-snapshot.md`): a visible tab reads the figures once a minute, and a hidden tab reads nothing until the reader comes back, when it reads at once. Figures and stages run up to about three minutes behind the database, and card text up to about fifteen minutes. Nothing on the page may promise more: no "live" or "real time" wording near a figure, and a figure's change marker lasts until the next read, a minute later.
 
+## The final state (docs/specs/final-state.md)
+
+**Suits.** Five: Game, New game, Studio, Platform and Machine, each a glyph and a word (`SuitTag`). A card's suit comes from its folder unless the card names one (`lib/suits.ts`). Suit tiles stay two colours: Game and New game take the game tile, the rest the studio tile.
+
+**Rarity.** Common, Uncommon, Rare and Legendary, from `lib/rarity.ts` (a hash of the card id, never chance shown beside money). Each is an edge pattern on the card plus its word in a notch on the top edge: plain, a dashed inner rule, a double rule, and a hatched edge with a slow foil sheen for Legendary (the sheen is a script-free hover state, and absent under reduced motion). Rarity is never a colour.
+
+**The Machine card** (`MachineCard.tsx`): Fund the machine, with presets $5, $10, $25, $50 and $100 as pressable chips, on home and /contribute. It routes to the same checkout as Fund the next card in line; checkout asks for the amount. It is not a `.card`, so no card count changes.
+
+**Blueprint.** `--blueprint` and `--blueprint-line` draw /studio/history's plan view only: paper lines on the blueprint ground, an era slider beside it. Nowhere else.
+
+**New pages.** `/goals` (milestones on one funding track), `/studio/history` (the blueprint), `/suggest` (suggestions, upvotes and the fixed decline reasons), `/seeds` (saved runs), `/u/:handle` (a public profile, not indexed), `/me` (sign in and edit), `/faq`, and `/broadcast` (a 1920 by 1080 overlay, unlisted, not indexed, no top bar or footer, the QR code drawn in code by `lib/qr.ts`). Each community page says "Not available right now." when its endpoint does not answer; none draws made-up data.
+
 ## Motion
 
-Only `transform` and `opacity` move. Every `transition` and `animation` lives inside `@media (prefers-reduced-motion: no-preference)`, uses the duration and easing tokens, and never runs forever; there are no `@keyframes`, view transitions, `@starting-style` or `linear()` **(tested)**. Static transforms (the Live stamp's −3°, the bar's fill position) are geometry and allowed anywhere. `lib/motion.ts` plays each moment with the Web Animations API and, under reduced motion (anything but no-preference), applies the end state at once, so `document.getAnimations()` stays empty **(tested, e2e)**.
+The rule (docs/specs/final-state.md, the motion pass): motion may set the scene and show the live studio working, as well as record a change or answer a press; it still never moves a control under the pointer, and under reduced motion (anything but no-preference) everything is drawn still. Only `transform` and `opacity` move. Every CSS `transition` lives inside `@media (prefers-reduced-motion: no-preference)` and uses the duration and easing tokens; the stylesheets hold no `@keyframes`, `infinite`, `view-transition` rules, `@starting-style` or `linear()` **(tested)**: continuous motion is drawn by script, which can pause it. Static transforms (the Live stamp's −3°, the bar's fill position) are geometry and allowed anywhere. `lib/motion.ts` plays each moment with the Web Animations API and, under reduced motion (anything but no-preference), applies the end state at once, so `document.getAnimations()` stays empty **(tested, e2e)**.
 
 - **The explainer video** (`ExplainerVideo.tsx`, docs/specs/explainer-video.md) answers a press: a still poster until the viewer presses it, no autoplay, nothing fetched before the press, then the browser's own controls. Its frame holds the cut's shape (16:9, or 4:5 below 48rem), so pressing moves nothing. On home's hero from 72rem the labelled play pill sits `--space-2` into its corner, not `--space-3`, so it keeps a clear gap below the poster's lines in the 544px frame.
 - **Fund tick** (`funded_usd` rose on a card on screen): the fill moves from old to new over `--dur-move`, `--ease-out`; the spec rows swap at once.
 - **Flip in place** (a card on screen reaches its target): rotateY 0 to 90° in 200ms `--ease-in`, the face swaps, 90 to 0° in 200ms. Same slot and height **(e2e)**.
 - **Deal** (only when the viewer presses Show updates): new cards from translateY(−12px) rotate(−3°) and opacity 0, over `--dur-move`, `--stagger` apart.
 - **Slam** (shipped, replay only in v1): scale 1.04 and 8px up, to rest, over `--dur-move`.
-- **Press**: `:active` changes the fill in every mode and scales to 0.97. Keyboard focus never animates. No hover motion.
+- **Press**: `:active` changes the fill in every mode and scales to 0.97. Keyboard focus never animates. Hover motion is limited to the card lift and the studio's agents, which stop walking while pointed at or focused.
+- **The live studio** (`StudioRoom.tsx`, `lib/studio-scene.ts`): one `requestAnimationFrame` loop walks agents between stations, bobs the idle, types at desks and trades speech glyphs (no words) between chatting pairs. It stops in a hidden tab and off screen. A coin drops through the pipe when money arrives, a paper plane lands for a suggestion and a box leaves the dock for a ship, each once per change.
+- **Scroll reveal** (`lib/reveal.ts`): a section that starts below the window fades in over `--dur-reveal` with `--ease-scene`, once. Nothing is hidden by the stylesheet, so first paint is complete.
+- **Page transitions**: an internal link cross-fades through `document.startViewTransition` where the browser has it; elsewhere the page simply changes.
+- **The pipe** (`Pipe.tsx`): a new row slides in at the top of the feed, at most once per poll.
 
 **Live changes** (`lib/changes.ts`). Motion comes only from a snapshot diff: never on first load, never in a hidden tab, at most three per poll (the rest apply at once). A card that would arrive, leave or reorder is held behind "Show *n* updates", and so is any text change that would change its box's height: `changesHeight` swaps the text node, measures and puts it back in the same task, so no shift is ever painted **(tested)**. The live studio is paused at launch, so the motion a visitor sees is mostly the replay they start; the rest is still.
 
@@ -302,6 +318,8 @@ By the type scale (the board's call, 23 September 2026): the page heading is 33p
 
 By grid boxes (`docs/specs/grid-boxes.md`, the board's order of 26 September 2026): the fill rule goes, and a grid puts one item in each cell with its last row part-empty (was: the last one to four items stretched to fill the row, a lone card at the reading measure); `/team`'s members are boxes with a hairline edge (was: plain rows, "never a bordered tile"), and the roles still to come sit in the same boxes (was: compact tiles down CSS columns); the Paused tag sits under the facts line (was: above it); the team strip is three equal columns (was: one column per member); the layout audit's grid fill check becomes grid cells.
 
+By the final state (`docs/specs/final-state.md`): the brand paragraph no longer names outside references; motion may set the scene and show the live studio (was: motion only records a change or answers a press), with view transitions by script and a scroll reveal; hover role cards are allowed as an addition to written facts (was: no tooltips); home's band 2 opens with the live studio; suits go from two to five and cards carry a rarity edge.
+
 ## Copy rules
 
 The full rules, including the voice rules (winks, coins never a currency, no chance words beside money, the minus sign, characters inside the font), are in `docs/COPY.md`; `src/lib/copy.test.ts` enforces the tested ones. In short: plain, short and declarative; "contributions", never "donations"; money is `$0.00`; never describe something that does not exist yet.
@@ -315,4 +333,5 @@ The full rules, including the voice rules (winks, coins never a currency, no cha
 - No horizontal scroll at 320, 360, 375, 390, 768, 1024 and 1440px on every route, nor at 375px with 200% text **(e2e)**.
 - axe finds no WCAG 2.2 AA violation on every route at 375 and 1440px, nor inside the guide's signal plate and ink band **(e2e)**.
 - No dead space on any route at 320 to 1440px **(e2e: layout balance)**.
-- Information is never carried by colour alone or hidden behind hover.
+- Information is never carried by colour alone or only behind hover: a hover role card repeats facts written on the page.
+- Every agent in the live studio takes keyboard focus and opens its role card on focus; the pipe is a polite live region.

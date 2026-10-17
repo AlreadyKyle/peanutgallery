@@ -162,6 +162,7 @@ describe('Terms, Privacy, Refunds and Contact', () => {
 });
 
 describe('Site chrome', () => {
+  // docs/specs/final-state.md adds the studio's history and the player's own page to the footer.
   it('links Weekly reports, the feed, Terms, Privacy, Refunds and Contact in the footer of every page', () => {
     for (const path of ['/', '/ledger', '/contribute', '/how-it-works', '/team', '/roadmap', '/reports', '/terms', '/contact', '/board', '/no-such-page']) {
       renderAt(path);
@@ -172,6 +173,8 @@ describe('Site chrome', () => {
       expect(links, path).toEqual([
         [copy.reportsNav, '/reports'],
         [copy.feedLink, '/feed.xml'],
+        [copy.nav.history, '/studio/history'],
+        [copy.nav.me, '/me'],
         [legal.footerLinks.terms, '/terms'],
         [legal.footerLinks.privacy, '/privacy'],
         [legal.footerLinks.refunds, '/refunds'],
@@ -205,6 +208,11 @@ describe('Site chrome', () => {
       [copy.studioName, '/'],
       [copy.howItWorksNav, '/how-it-works'],
       [copy.teamNav, '/team'],
+      // The final state's pages (docs/specs/final-state.md): goals, seeds, suggestions and the FAQ.
+      [copy.nav.goals, '/goals'],
+      [copy.nav.seeds, '/seeds'],
+      [copy.nav.suggest, '/suggest'],
+      [copy.nav.faq, '/faq'],
       [legal.ledger, '/ledger'],
     ]);
     expect(screen.getByText(copy.pitchBody)).toBeTruthy();

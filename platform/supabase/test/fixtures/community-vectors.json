@@ -1,0 +1,991 @@
+{
+ "note": "Shared vectors for platform/site/src/lib/rarity.ts and xp.ts and their SQL twins (community.card_rarity, xp_for_level, level_for, tier_for, contribution_xp). test/community-vectors.test.ts checks the TypeScript side; functions/_shared/community_core_test.ts checks the SQL side.",
+ "rarity": {
+  "card-0": "common",
+  "card-1": "common",
+  "card-2": "common",
+  "card-3": "uncommon",
+  "card-4": "uncommon",
+  "card-5": "common",
+  "card-6": "common",
+  "card-7": "uncommon",
+  "card-8": "uncommon",
+  "card-9": "common",
+  "card-10": "common",
+  "card-11": "common",
+  "card-12": "common",
+  "card-13": "common",
+  "card-14": "rare",
+  "card-15": "common",
+  "card-16": "uncommon",
+  "card-17": "common",
+  "card-18": "common",
+  "card-19": "common",
+  "card-20": "rare",
+  "card-21": "common",
+  "card-22": "common",
+  "card-23": "common",
+  "card-24": "uncommon",
+  "card-25": "common",
+  "card-26": "common",
+  "card-27": "common",
+  "card-28": "common",
+  "card-29": "common",
+  "card-30": "common",
+  "card-31": "rare",
+  "card-32": "common",
+  "card-33": "common",
+  "card-34": "legendary",
+  "card-35": "rare",
+  "card-36": "common",
+  "card-37": "uncommon",
+  "card-38": "common",
+  "card-39": "common",
+  "card-40": "uncommon",
+  "card-41": "common",
+  "card-42": "legendary",
+  "card-43": "common",
+  "card-44": "common",
+  "card-45": "common",
+  "card-46": "common",
+  "card-47": "common",
+  "card-48": "common",
+  "card-49": "uncommon",
+  "card-50": "common",
+  "card-51": "uncommon",
+  "card-52": "rare",
+  "card-53": "uncommon",
+  "card-54": "common",
+  "card-55": "legendary",
+  "card-56": "common",
+  "card-57": "common",
+  "card-58": "common",
+  "card-59": "common",
+  "card-60": "common",
+  "card-61": "common",
+  "card-62": "common",
+  "card-63": "common",
+  "card-64": "uncommon",
+  "card-65": "uncommon",
+  "card-66": "uncommon",
+  "card-67": "rare",
+  "card-68": "common",
+  "card-69": "common",
+  "card-70": "common",
+  "card-71": "uncommon",
+  "card-72": "common",
+  "card-73": "common",
+  "card-74": "common",
+  "card-75": "rare",
+  "card-76": "uncommon",
+  "card-77": "common",
+  "card-78": "uncommon",
+  "card-79": "common",
+  "card-80": "common",
+  "card-81": "common",
+  "card-82": "common",
+  "card-83": "common",
+  "card-84": "uncommon",
+  "card-85": "uncommon",
+  "card-86": "common",
+  "card-87": "uncommon",
+  "card-88": "common",
+  "card-89": "uncommon",
+  "card-90": "common",
+  "card-91": "common",
+  "card-92": "rare",
+  "card-93": "common",
+  "card-94": "common",
+  "card-95": "common",
+  "card-96": "common",
+  "card-97": "uncommon",
+  "card-98": "common",
+  "card-99": "uncommon",
+  "card-100": "legendary",
+  "card-101": "common",
+  "card-102": "common",
+  "card-103": "common",
+  "card-104": "uncommon",
+  "card-105": "common",
+  "card-106": "legendary",
+  "card-107": "common",
+  "card-108": "common",
+  "card-109": "common",
+  "card-110": "uncommon",
+  "card-111": "common",
+  "card-112": "uncommon",
+  "card-113": "common",
+  "card-114": "common",
+  "card-115": "common",
+  "card-116": "common",
+  "card-117": "uncommon",
+  "card-118": "rare",
+  "card-119": "common",
+  "00000000-0000-4000-8000-000000000000": "common",
+  "00000000-0000-4000-8000-000000000001": "rare",
+  "00000000-0000-4000-8000-000000000002": "common",
+  "00000000-0000-4000-8000-000000000003": "common",
+  "00000000-0000-4000-8000-000000000004": "legendary",
+  "00000000-0000-4000-8000-000000000005": "uncommon",
+  "00000000-0000-4000-8000-000000000006": "common",
+  "00000000-0000-4000-8000-000000000007": "common",
+  "00000000-0000-4000-8000-000000000008": "common",
+  "00000000-0000-4000-8000-000000000009": "common",
+  "00000000-0000-4000-8000-00000000000a": "uncommon",
+  "00000000-0000-4000-8000-00000000000b": "common",
+  "00000000-0000-4000-8000-00000000000c": "common",
+  "00000000-0000-4000-8000-00000000000d": "common",
+  "00000000-0000-4000-8000-00000000000e": "common",
+  "00000000-0000-4000-8000-00000000000f": "rare",
+  "00000000-0000-4000-8000-000000000010": "common",
+  "00000000-0000-4000-8000-000000000011": "common",
+  "00000000-0000-4000-8000-000000000012": "common",
+  "00000000-0000-4000-8000-000000000013": "uncommon",
+  "00000000-0000-4000-8000-000000000014": "common",
+  "00000000-0000-4000-8000-000000000015": "common",
+  "00000000-0000-4000-8000-000000000016": "uncommon",
+  "00000000-0000-4000-8000-000000000017": "common",
+  "00000000-0000-4000-8000-000000000018": "common",
+  "00000000-0000-4000-8000-000000000019": "rare",
+  "00000000-0000-4000-8000-00000000001a": "common",
+  "00000000-0000-4000-8000-00000000001b": "common",
+  "00000000-0000-4000-8000-00000000001c": "uncommon",
+  "00000000-0000-4000-8000-00000000001d": "common",
+  "00000000-0000-4000-8000-00000000001e": "common",
+  "00000000-0000-4000-8000-00000000001f": "uncommon",
+  "00000000-0000-4000-8000-000000000020": "uncommon",
+  "00000000-0000-4000-8000-000000000021": "common",
+  "00000000-0000-4000-8000-000000000022": "common",
+  "00000000-0000-4000-8000-000000000023": "legendary",
+  "00000000-0000-4000-8000-000000000024": "common",
+  "00000000-0000-4000-8000-000000000025": "common",
+  "00000000-0000-4000-8000-000000000026": "uncommon",
+  "00000000-0000-4000-8000-000000000027": "common",
+  "00000000-0000-4000-8000-000000000028": "uncommon",
+  "00000000-0000-4000-8000-000000000029": "common",
+  "00000000-0000-4000-8000-00000000002a": "common",
+  "00000000-0000-4000-8000-00000000002b": "common",
+  "00000000-0000-4000-8000-00000000002c": "uncommon",
+  "00000000-0000-4000-8000-00000000002d": "rare",
+  "00000000-0000-4000-8000-00000000002e": "common",
+  "00000000-0000-4000-8000-00000000002f": "common",
+  "00000000-0000-4000-8000-000000000030": "common",
+  "00000000-0000-4000-8000-000000000031": "common",
+  "00000000-0000-4000-8000-000000000032": "common",
+  "00000000-0000-4000-8000-000000000033": "rare",
+  "00000000-0000-4000-8000-000000000034": "uncommon",
+  "00000000-0000-4000-8000-000000000035": "uncommon",
+  "00000000-0000-4000-8000-000000000036": "uncommon",
+  "00000000-0000-4000-8000-000000000037": "rare",
+  "00000000-0000-4000-8000-000000000038": "common",
+  "00000000-0000-4000-8000-000000000039": "common",
+  "00000000-0000-4000-8000-00000000003a": "rare",
+  "00000000-0000-4000-8000-00000000003b": "uncommon",
+  "00000000-0000-4000-8000-00000000003c": "common",
+  "00000000-0000-4000-8000-00000000003d": "common",
+  "00000000-0000-4000-8000-00000000003e": "common",
+  "00000000-0000-4000-8000-00000000003f": "common",
+  "00000000-0000-4000-8000-000000000040": "uncommon",
+  "00000000-0000-4000-8000-000000000041": "common",
+  "00000000-0000-4000-8000-000000000042": "uncommon",
+  "00000000-0000-4000-8000-000000000043": "common",
+  "00000000-0000-4000-8000-000000000044": "uncommon",
+  "00000000-0000-4000-8000-000000000045": "common",
+  "00000000-0000-4000-8000-000000000046": "common",
+  "00000000-0000-4000-8000-000000000047": "common",
+  "00000000-0000-4000-8000-000000000048": "uncommon",
+  "00000000-0000-4000-8000-000000000049": "common",
+  "00000000-0000-4000-8000-00000000004a": "uncommon",
+  "00000000-0000-4000-8000-00000000004b": "common",
+  "00000000-0000-4000-8000-00000000004c": "common",
+  "00000000-0000-4000-8000-00000000004d": "common",
+  "00000000-0000-4000-8000-00000000004e": "common",
+  "00000000-0000-4000-8000-00000000004f": "common",
+  "": "common",
+  "é": "uncommon",
+  "machine": "common",
+  "Ünïcödé card ✨": "common"
+ },
+ "levels": [
+  {
+   "level": 1,
+   "xp": 0,
+   "tier": "Spectator"
+  },
+  {
+   "level": 2,
+   "xp": 100,
+   "tier": "Spectator"
+  },
+  {
+   "level": 3,
+   "xp": 283,
+   "tier": "Spectator"
+  },
+  {
+   "level": 4,
+   "xp": 520,
+   "tier": "Spectator"
+  },
+  {
+   "level": 5,
+   "xp": 800,
+   "tier": "Spectator"
+  },
+  {
+   "level": 6,
+   "xp": 1118,
+   "tier": "Spectator"
+  },
+  {
+   "level": 7,
+   "xp": 1470,
+   "tier": "Spectator"
+  },
+  {
+   "level": 8,
+   "xp": 1852,
+   "tier": "Spectator"
+  },
+  {
+   "level": 9,
+   "xp": 2263,
+   "tier": "Spectator"
+  },
+  {
+   "level": 10,
+   "xp": 2700,
+   "tier": "Spectator"
+  },
+  {
+   "level": 11,
+   "xp": 3162,
+   "tier": "Regular"
+  },
+  {
+   "level": 12,
+   "xp": 3648,
+   "tier": "Regular"
+  },
+  {
+   "level": 13,
+   "xp": 4157,
+   "tier": "Regular"
+  },
+  {
+   "level": 14,
+   "xp": 4687,
+   "tier": "Regular"
+  },
+  {
+   "level": 15,
+   "xp": 5238,
+   "tier": "Regular"
+  },
+  {
+   "level": 16,
+   "xp": 5809,
+   "tier": "Regular"
+  },
+  {
+   "level": 17,
+   "xp": 6400,
+   "tier": "Regular"
+  },
+  {
+   "level": 18,
+   "xp": 7009,
+   "tier": "Regular"
+  },
+  {
+   "level": 19,
+   "xp": 7637,
+   "tier": "Regular"
+  },
+  {
+   "level": 20,
+   "xp": 8282,
+   "tier": "Regular"
+  },
+  {
+   "level": 21,
+   "xp": 8944,
+   "tier": "Backer"
+  },
+  {
+   "level": 22,
+   "xp": 9623,
+   "tier": "Backer"
+  },
+  {
+   "level": 23,
+   "xp": 10319,
+   "tier": "Backer"
+  },
+  {
+   "level": 24,
+   "xp": 11030,
+   "tier": "Backer"
+  },
+  {
+   "level": 25,
+   "xp": 11758,
+   "tier": "Backer"
+  },
+  {
+   "level": 26,
+   "xp": 12500,
+   "tier": "Backer"
+  },
+  {
+   "level": 27,
+   "xp": 13257,
+   "tier": "Backer"
+  },
+  {
+   "level": 28,
+   "xp": 14030,
+   "tier": "Backer"
+  },
+  {
+   "level": 29,
+   "xp": 14816,
+   "tier": "Backer"
+  },
+  {
+   "level": 30,
+   "xp": 15617,
+   "tier": "Backer"
+  },
+  {
+   "level": 31,
+   "xp": 16432,
+   "tier": "Patron"
+  },
+  {
+   "level": 32,
+   "xp": 17260,
+   "tier": "Patron"
+  },
+  {
+   "level": 33,
+   "xp": 18102,
+   "tier": "Patron"
+  },
+  {
+   "level": 34,
+   "xp": 18957,
+   "tier": "Patron"
+  },
+  {
+   "level": 35,
+   "xp": 19825,
+   "tier": "Patron"
+  },
+  {
+   "level": 36,
+   "xp": 20706,
+   "tier": "Patron"
+  },
+  {
+   "level": 37,
+   "xp": 21600,
+   "tier": "Patron"
+  },
+  {
+   "level": 38,
+   "xp": 22506,
+   "tier": "Patron"
+  },
+  {
+   "level": 39,
+   "xp": 23425,
+   "tier": "Patron"
+  },
+  {
+   "level": 40,
+   "xp": 24355,
+   "tier": "Patron"
+  },
+  {
+   "level": 41,
+   "xp": 25298,
+   "tier": "Producer"
+  },
+  {
+   "level": 42,
+   "xp": 26253,
+   "tier": "Producer"
+  },
+  {
+   "level": 43,
+   "xp": 27219,
+   "tier": "Producer"
+  },
+  {
+   "level": 44,
+   "xp": 28197,
+   "tier": "Producer"
+  },
+  {
+   "level": 45,
+   "xp": 29186,
+   "tier": "Producer"
+  },
+  {
+   "level": 46,
+   "xp": 30187,
+   "tier": "Producer"
+  },
+  {
+   "level": 47,
+   "xp": 31199,
+   "tier": "Producer"
+  },
+  {
+   "level": 48,
+   "xp": 32222,
+   "tier": "Producer"
+  },
+  {
+   "level": 49,
+   "xp": 33255,
+   "tier": "Producer"
+  },
+  {
+   "level": 50,
+   "xp": 34300,
+   "tier": "Producer"
+  },
+  {
+   "level": 51,
+   "xp": 35355,
+   "tier": "Executive"
+  },
+  {
+   "level": 52,
+   "xp": 36421,
+   "tier": "Executive"
+  },
+  {
+   "level": 53,
+   "xp": 37498,
+   "tier": "Executive"
+  },
+  {
+   "level": 54,
+   "xp": 38585,
+   "tier": "Executive"
+  },
+  {
+   "level": 55,
+   "xp": 39682,
+   "tier": "Executive"
+  },
+  {
+   "level": 56,
+   "xp": 40789,
+   "tier": "Executive"
+  },
+  {
+   "level": 57,
+   "xp": 41907,
+   "tier": "Executive"
+  },
+  {
+   "level": 58,
+   "xp": 43034,
+   "tier": "Executive"
+  },
+  {
+   "level": 59,
+   "xp": 44171,
+   "tier": "Executive"
+  },
+  {
+   "level": 60,
+   "xp": 45319,
+   "tier": "Executive"
+  },
+  {
+   "level": 61,
+   "xp": 46476,
+   "tier": "Legend"
+  },
+  {
+   "level": 62,
+   "xp": 47643,
+   "tier": "Legend"
+  },
+  {
+   "level": 63,
+   "xp": 48819,
+   "tier": "Legend"
+  },
+  {
+   "level": 64,
+   "xp": 50005,
+   "tier": "Legend"
+  },
+  {
+   "level": 65,
+   "xp": 51200,
+   "tier": "Legend"
+  },
+  {
+   "level": 66,
+   "xp": 52405,
+   "tier": "Legend"
+  },
+  {
+   "level": 67,
+   "xp": 53619,
+   "tier": "Legend"
+  },
+  {
+   "level": 68,
+   "xp": 54842,
+   "tier": "Legend"
+  },
+  {
+   "level": 69,
+   "xp": 56074,
+   "tier": "Legend"
+  },
+  {
+   "level": 70,
+   "xp": 57316,
+   "tier": "Legend"
+  },
+  {
+   "level": 71,
+   "xp": 58566,
+   "tier": "Legend"
+  },
+  {
+   "level": 72,
+   "xp": 59826,
+   "tier": "Legend"
+  },
+  {
+   "level": 73,
+   "xp": 61094,
+   "tier": "Legend"
+  },
+  {
+   "level": 74,
+   "xp": 62371,
+   "tier": "Legend"
+  },
+  {
+   "level": 75,
+   "xp": 63657,
+   "tier": "Legend"
+  },
+  {
+   "level": 76,
+   "xp": 64952,
+   "tier": "Legend"
+  },
+  {
+   "level": 77,
+   "xp": 66255,
+   "tier": "Legend"
+  },
+  {
+   "level": 78,
+   "xp": 67567,
+   "tier": "Legend"
+  },
+  {
+   "level": 79,
+   "xp": 68888,
+   "tier": "Legend"
+  },
+  {
+   "level": 80,
+   "xp": 70217,
+   "tier": "Legend"
+  }
+ ],
+ "levelFor": [
+  {
+   "xp": 0,
+   "level": 1
+  },
+  {
+   "xp": 1,
+   "level": 1
+  },
+  {
+   "xp": 99,
+   "level": 1
+  },
+  {
+   "xp": 100,
+   "level": 2
+  },
+  {
+   "xp": 101,
+   "level": 2
+  },
+  {
+   "xp": 282,
+   "level": 2
+  },
+  {
+   "xp": 283,
+   "level": 3
+  },
+  {
+   "xp": 519,
+   "level": 3
+  },
+  {
+   "xp": 520,
+   "level": 4
+  },
+  {
+   "xp": 1000,
+   "level": 5
+  },
+  {
+   "xp": 5000,
+   "level": 14
+  },
+  {
+   "xp": 12345,
+   "level": 25
+  },
+  {
+   "xp": 100000,
+   "level": 101
+  },
+  {
+   "xp": 1000000,
+   "level": 465
+  }
+ ],
+ "contributionXp": [
+  {
+   "cents": 0,
+   "rarity": "common",
+   "xp": 0
+  },
+  {
+   "cents": 0,
+   "rarity": "uncommon",
+   "xp": 0
+  },
+  {
+   "cents": 0,
+   "rarity": "rare",
+   "xp": 0
+  },
+  {
+   "cents": 0,
+   "rarity": "legendary",
+   "xp": 0
+  },
+  {
+   "cents": 1,
+   "rarity": "common",
+   "xp": 0
+  },
+  {
+   "cents": 1,
+   "rarity": "uncommon",
+   "xp": 0
+  },
+  {
+   "cents": 1,
+   "rarity": "rare",
+   "xp": 0
+  },
+  {
+   "cents": 1,
+   "rarity": "legendary",
+   "xp": 0
+  },
+  {
+   "cents": 7,
+   "rarity": "common",
+   "xp": 0
+  },
+  {
+   "cents": 7,
+   "rarity": "uncommon",
+   "xp": 1
+  },
+  {
+   "cents": 7,
+   "rarity": "rare",
+   "xp": 1
+  },
+  {
+   "cents": 7,
+   "rarity": "legendary",
+   "xp": 2
+  },
+  {
+   "cents": 29,
+   "rarity": "common",
+   "xp": 2
+  },
+  {
+   "cents": 29,
+   "rarity": "uncommon",
+   "xp": 4
+  },
+  {
+   "cents": 29,
+   "rarity": "rare",
+   "xp": 5
+  },
+  {
+   "cents": 29,
+   "rarity": "legendary",
+   "xp": 8
+  },
+  {
+   "cents": 99,
+   "rarity": "common",
+   "xp": 9
+  },
+  {
+   "cents": 99,
+   "rarity": "uncommon",
+   "xp": 14
+  },
+  {
+   "cents": 99,
+   "rarity": "rare",
+   "xp": 19
+  },
+  {
+   "cents": 99,
+   "rarity": "legendary",
+   "xp": 29
+  },
+  {
+   "cents": 100,
+   "rarity": "common",
+   "xp": 10
+  },
+  {
+   "cents": 100,
+   "rarity": "uncommon",
+   "xp": 15
+  },
+  {
+   "cents": 100,
+   "rarity": "rare",
+   "xp": 20
+  },
+  {
+   "cents": 100,
+   "rarity": "legendary",
+   "xp": 30
+  },
+  {
+   "cents": 101,
+   "rarity": "common",
+   "xp": 10
+  },
+  {
+   "cents": 101,
+   "rarity": "uncommon",
+   "xp": 15
+  },
+  {
+   "cents": 101,
+   "rarity": "rare",
+   "xp": 20
+  },
+  {
+   "cents": 101,
+   "rarity": "legendary",
+   "xp": 30
+  },
+  {
+   "cents": 250,
+   "rarity": "common",
+   "xp": 25
+  },
+  {
+   "cents": 250,
+   "rarity": "uncommon",
+   "xp": 37
+  },
+  {
+   "cents": 250,
+   "rarity": "rare",
+   "xp": 50
+  },
+  {
+   "cents": 250,
+   "rarity": "legendary",
+   "xp": 75
+  },
+  {
+   "cents": 333,
+   "rarity": "common",
+   "xp": 33
+  },
+  {
+   "cents": 333,
+   "rarity": "uncommon",
+   "xp": 49
+  },
+  {
+   "cents": 333,
+   "rarity": "rare",
+   "xp": 66
+  },
+  {
+   "cents": 333,
+   "rarity": "legendary",
+   "xp": 99
+  },
+  {
+   "cents": 499,
+   "rarity": "common",
+   "xp": 49
+  },
+  {
+   "cents": 499,
+   "rarity": "uncommon",
+   "xp": 74
+  },
+  {
+   "cents": 499,
+   "rarity": "rare",
+   "xp": 99
+  },
+  {
+   "cents": 499,
+   "rarity": "legendary",
+   "xp": 149
+  },
+  {
+   "cents": 500,
+   "rarity": "common",
+   "xp": 50
+  },
+  {
+   "cents": 500,
+   "rarity": "uncommon",
+   "xp": 75
+  },
+  {
+   "cents": 500,
+   "rarity": "rare",
+   "xp": 100
+  },
+  {
+   "cents": 500,
+   "rarity": "legendary",
+   "xp": 150
+  },
+  {
+   "cents": 1000,
+   "rarity": "common",
+   "xp": 100
+  },
+  {
+   "cents": 1000,
+   "rarity": "uncommon",
+   "xp": 150
+  },
+  {
+   "cents": 1000,
+   "rarity": "rare",
+   "xp": 200
+  },
+  {
+   "cents": 1000,
+   "rarity": "legendary",
+   "xp": 300
+  },
+  {
+   "cents": 1999,
+   "rarity": "common",
+   "xp": 199
+  },
+  {
+   "cents": 1999,
+   "rarity": "uncommon",
+   "xp": 299
+  },
+  {
+   "cents": 1999,
+   "rarity": "rare",
+   "xp": 399
+  },
+  {
+   "cents": 1999,
+   "rarity": "legendary",
+   "xp": 599
+  },
+  {
+   "cents": 2500,
+   "rarity": "common",
+   "xp": 250
+  },
+  {
+   "cents": 2500,
+   "rarity": "uncommon",
+   "xp": 375
+  },
+  {
+   "cents": 2500,
+   "rarity": "rare",
+   "xp": 500
+  },
+  {
+   "cents": 2500,
+   "rarity": "legendary",
+   "xp": 750
+  },
+  {
+   "cents": 10000,
+   "rarity": "common",
+   "xp": 1000
+  },
+  {
+   "cents": 10000,
+   "rarity": "uncommon",
+   "xp": 1500
+  },
+  {
+   "cents": 10000,
+   "rarity": "rare",
+   "xp": 2000
+  },
+  {
+   "cents": 10000,
+   "rarity": "legendary",
+   "xp": 3000
+  },
+  {
+   "cents": 123457,
+   "rarity": "common",
+   "xp": 12345
+  },
+  {
+   "cents": 123457,
+   "rarity": "uncommon",
+   "xp": 18518
+  },
+  {
+   "cents": 123457,
+   "rarity": "rare",
+   "xp": 24691
+  },
+  {
+   "cents": 123457,
+   "rarity": "legendary",
+   "xp": 37037
+  }
+ ]
+}

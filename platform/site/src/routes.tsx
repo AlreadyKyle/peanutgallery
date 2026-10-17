@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react';
 import { copy } from './lib/copy';
+import { Broadcast, BROADCAST_PATH } from './pages/Broadcast';
 import { CardPage } from './pages/CardPage';
+import { Faq } from './pages/Faq';
+import { Goals } from './pages/Goals';
+import { Me } from './pages/Me';
+import { Profile } from './pages/Profile';
+import { Seeds } from './pages/Seeds';
+import { StudioHistory } from './pages/StudioHistory';
+import { Suggest } from './pages/Suggest';
 import { Guide, GUIDE_PATH } from './pages/Guide';
 import { HowItWorks } from './pages/HowItWorks';
 import { Landing } from './pages/Landing';
@@ -27,10 +35,31 @@ export const pageRoutes: readonly PageRoute[] = [
   { path: '/reports', element: <Reports /> },
   // The design guide: unlisted (no top bar link, nothing links to it) and not indexed (DESIGN.md, Mockups).
   { path: GUIDE_PATH, element: <Guide /> },
+  // The final state's community pages (docs/specs/final-state.md): goals, the studio's eras, the
+  // suggestions, the seed gallery, a player's public profile, the player's own page and the FAQ.
+  { path: '/goals', element: <Goals /> },
+  { path: '/studio/history', element: <StudioHistory /> },
+  { path: '/suggest', element: <Suggest /> },
+  { path: '/seeds', element: <Seeds /> },
+  { path: '/u/:handle', element: <Profile /> },
+  { path: '/me', element: <Me /> },
+  { path: '/faq', element: <Faq /> },
+  // The broadcast overlay for streaming tools: unlisted, not indexed, drawn without the top bar and footer.
+  { path: BROADCAST_PATH, element: <Broadcast /> },
 ];
 
 /** The top bar's links to these pages, before the kernel's Ledger, Play, Discord and Contribute. */
 export const pageNav: readonly NavItem[] = [
   { to: '/how-it-works', label: copy.howItWorksNav },
   { to: '/team', label: copy.teamNav },
+  { to: '/goals', label: copy.nav.goals },
+  { to: '/seeds', label: copy.nav.seeds },
+  { to: '/suggest', label: copy.nav.suggest },
+  { to: '/faq', label: copy.nav.faq },
+];
+
+/** The footer's links to these pages, after the reports and the feed. */
+export const footerNav: readonly NavItem[] = [
+  { to: '/studio/history', label: copy.nav.history },
+  { to: '/me', label: copy.nav.me },
 ];

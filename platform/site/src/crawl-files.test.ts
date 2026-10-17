@@ -22,7 +22,9 @@ describe('robots.txt and sitemap.xml', () => {
 
   it('lists every public page and nothing else', () => {
     const listed = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
-    const expected = PAGE_PATHS.filter((path) => !/\/\d+$/.test(path) && path !== '/no-such-page' && path !== GUIDE);
+    // A player's pages and the broadcast overlay are not indexed (docs/specs/final-state.md).
+    const unlisted = ['/no-such-page', GUIDE, '/u/sample-player', '/me', '/broadcast'];
+    const expected = PAGE_PATHS.filter((path) => !/\/\d+$/.test(path) && !unlisted.includes(path));
     expect(listed).toEqual(expected.map((path) => `${ORIGIN}${path}`));
   });
 

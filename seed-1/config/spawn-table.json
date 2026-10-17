@@ -5,5 +5,6 @@
     { "id": "mill", "name": "Mill", "baseCost": 2200, "rate": 12 },
     { "id": "forge", "name": "Forge", "baseCost": 41000, "rate": 90 },
     { "id": "foundry", "name": "Foundry", "baseCost": 700000, "rate": 700 }
-  ]
+  ],
+  "milestones": { "at": [10, 25, 50, 75, 100], "factor": 2 }
 }

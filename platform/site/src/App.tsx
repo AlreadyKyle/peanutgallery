@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
+import { flushSync } from 'react-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { CoinMark } from './components/Funding';
 import { MachineMark } from './components/Mark';
 import { NotFound } from './components/NotFound';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
 import { legal } from './lib/legal';
+import { useScrollReveal } from './lib/reveal';
 import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
 import { Contact, Privacy, Refunds, RefundsVersion, Terms, TermsVersion } from './pages/Legal';
 import { Thanks } from './pages/Thanks';
-import { pageNav, pageRoutes, type PageRoute } from './routes';
+import { footerNav, pageNav, pageRoutes, type PageRoute } from './routes';
 
 // Kernel (docs/specs/board-site.md): the frame of every page (the top bar, the footer with the legal
 // links and the credit, and the not found page, drawn by components/NotFound.tsx) and the routes of
@@ -40,6 +42,38 @@ export function cardRoutes(routes: readonly PageRoute[]): PageRoute[] {
 
 // A top bar link from routes.tsx goes to a page on this site: a plain path, never another host.
 const PLAIN_PATH = /^\/[a-z0-9-]*$/;
+// A footer link may go one level deeper (/studio/history), still a plain path on this site.
+const PLAIN_PATH_DEEP = /^\/[a-z0-9-]+(\/[a-z0-9-]+)?$/;
+
+/**
+ * Page transitions (docs/specs/final-state.md, the motion pass): a press on a link to another page of
+ * this site cross-fades through the View Transitions API where the browser has it and motion is
+ * allowed; elsewhere, and under reduced motion, the page changes at once as before. The router moves
+ * inside the transition's callback, so the old page is captured as the new one renders.
+ */
+function ViewTransitions() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const start = (document as Document & { startViewTransition?: (update: () => void) => unknown }).startViewTransition;
+      if (typeof start !== 'function' || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (typeof window.matchMedia !== 'function' || !window.matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+      const anchor = (event.target as Element | null)?.closest?.('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.target !== '' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname.startsWith('/api/') || /\.[a-z0-9]+$/i.test(url.pathname)) return;
+      if (url.pathname === window.location.pathname) return;
+      event.preventDefault();
+      start.call(document, () => {
+        flushSync(() => navigate(url.pathname + url.search + url.hash));
+      });
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [navigate]);
+  return null;
+}
 
 /**
  * Calls onRouteChange on every move to another page after the first render: main.tsx passes the
@@ -55,13 +89,20 @@ function useRouteChange(onRouteChange: (() => void) | undefined) {
   }, [pathname, onRouteChange]);
 }
 
+/** The broadcast overlay (docs/specs/final-state.md, Channels) is a frame for a streaming tool: no top bar or footer. */
+const BARE_PATHS: readonly string[] = ['/broadcast'];
+
 export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
   useRouteChange(onRouteChange);
+  useScrollReveal();
+  const { pathname } = useLocation();
+  const bare = BARE_PATHS.includes(pathname.toLowerCase().replace(/\/+$/, ''));
   return (
     <StudioProvider>
-      <div className="page">
+      <div className="page" data-bare={bare ? 'true' : undefined}>
         <ScrollOnNavigate />
-        <TopBar />
+        <ViewTransitions />
+        {bare ? null : <TopBar />}
         <Routes>
           <Route path="/contribute" element={<Contribute />} />
           <Route path="/ledger" element={<Ledger />} />
@@ -77,7 +118,7 @@ export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
           ))}
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <SiteFooter />
+        {bare ? null : <SiteFooter />}
       </div>
     </StudioProvider>
   );
@@ -215,6 +256,13 @@ function SiteFooter() {
               {copy.feedLink}
             </a>
           </li>
+          {footerNav
+            .filter((item) => PLAIN_PATH_DEEP.test(item.to))
+            .map((item) => (
+              <li key={item.to}>
+                <Link to={item.to}>{item.label}</Link>
+              </li>
+            ))}
           <li>
             <Link to="/terms">{legal.footerLinks.terms}</Link>
           </li>

@@ -455,8 +455,8 @@ describe('backup-mac.sh', () => {
       [
         'psql -X -At --no-password -c show server_version_num',
         'pg_dumpall --no-password --roles-only --no-role-passwords --quote-all-identifiers --no-comments',
-        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public --schema=money',
-        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --schema=money --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
+        'pg_dump --no-password --schema-only --quote-all-identifiers --schema=public --schema=money --schema=community',
+        `pg_dump --no-password --data-only --quote-all-identifiers --schema=public --schema=money --schema=community --file=${pgCalls(result.calls)[3].split('--file=')[1]}`,
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=auth --file=${pgCalls(result.calls)[4].split('--file=')[1]}`,
         'pg_dump --no-password --schema-only --quote-all-identifiers --schema=supabase_migrations',
         `pg_dump --no-password --data-only --quote-all-identifiers --schema=supabase_migrations --file=${pgCalls(result.calls)[6].split('--file=')[1]}`,
@@ -527,7 +527,7 @@ describe('backup-mac.sh', () => {
       .join('\n');
     const after = read('platform/ops/after-restore.sql');
     const flat = (text) => text.replace(/\s+/g, ' ').trim();
-    const dumped = new Set(['public', 'money']);
+    const dumped = new Set(['public', 'money', 'community']);
 
     // A schedule's command is single-quoted or, when it quotes a job name itself, dollar-quoted ($c$).
     // cron.schedule with a job's name replaces that job, so a later migration's schedule is the one a

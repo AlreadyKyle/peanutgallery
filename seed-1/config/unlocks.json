@@ -1,18 +1,321 @@
 {
   "unlocks": [
-    { "id": "cart", "name": "Cart", "atTotalDust": 100, "effect": { "type": "unit", "unit": "cart" } },
-    { "id": "mill", "name": "Mill", "atTotalDust": 1000, "effect": { "type": "unit", "unit": "mill" } },
-    { "id": "forge", "name": "Forge", "atTotalDust": 10000, "effect": { "type": "unit", "unit": "forge" } },
-    { "id": "foundry", "name": "Foundry", "atTotalDust": 100000, "effect": { "type": "unit", "unit": "foundry" } },
-    { "id": "sharper-tools", "name": "Sharper tools", "atTotalDust": 500000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "wider-paths", "name": "Wider paths", "atTotalDust": 2000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "steady-hands", "name": "Steady hands", "atTotalDust": 6000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "finer-sieves", "name": "Finer sieves", "atTotalDust": 13000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "longer-days", "name": "Longer days", "atTotalDust": 26000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "stronger-wheels", "name": "Stronger wheels", "atTotalDust": 50000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "bright-lanterns", "name": "Bright lanterns", "atTotalDust": 85000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "deeper-veins", "name": "Deeper veins", "atTotalDust": 130000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "polished-rails", "name": "Polished rails", "atTotalDust": 185000000, "effect": { "type": "multiplier", "value": 1.05 } },
-    { "id": "quiet-rooms", "name": "Quiet rooms", "atTotalDust": 300000000, "effect": { "type": "multiplier", "value": 1.05 } }
-  ]
+    {
+      "id": "sturdy-broom",
+      "name": "Sturdy broom",
+      "atTotalDust": 40,
+      "effect": {
+        "type": "strike",
+        "value": 2
+      }
+    },
+    {
+      "id": "cart",
+      "name": "Cart",
+      "atTotalDust": 100,
+      "effect": {
+        "type": "unit",
+        "unit": "cart"
+      }
+    },
+    {
+      "id": "mill",
+      "name": "Mill",
+      "atTotalDust": 1000,
+      "effect": {
+        "type": "unit",
+        "unit": "mill"
+      }
+    },
+    {
+      "id": "weather-vane",
+      "name": "Weather vane",
+      "atTotalDust": 2500,
+      "effect": {
+        "type": "weather"
+      }
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "atTotalDust": 10000,
+      "effect": {
+        "type": "unit",
+        "unit": "forge"
+      }
+    },
+    {
+      "id": "iron-broom",
+      "name": "Iron broom",
+      "atTotalDust": 40000,
+      "effect": {
+        "type": "strike",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "foundry",
+      "name": "Foundry",
+      "atTotalDust": 100000,
+      "effect": {
+        "type": "unit",
+        "unit": "foundry"
+      }
+    },
+    {
+      "id": "sharper-tools",
+      "name": "Sharper tools",
+      "atTotalDust": 500000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "pressing-stone",
+      "name": "Pressing stone",
+      "atTotalDust": 1000000,
+      "effect": {
+        "type": "gems"
+      }
+    },
+    {
+      "id": "wider-paths",
+      "name": "Wider paths",
+      "atTotalDust": 2000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "steady-hands",
+      "name": "Steady hands",
+      "atTotalDust": 6000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "finer-sieves",
+      "name": "Finer sieves",
+      "atTotalDust": 13000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "longer-days",
+      "name": "Longer days",
+      "atTotalDust": 26000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "stronger-wheels",
+      "name": "Stronger wheels",
+      "atTotalDust": 50000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "bright-lanterns",
+      "name": "Bright lanterns",
+      "atTotalDust": 85000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "deeper-veins",
+      "name": "Deeper veins",
+      "atTotalDust": 130000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "polished-rails",
+      "name": "Polished rails",
+      "atTotalDust": 185000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "quiet-rooms",
+      "name": "Quiet rooms",
+      "atTotalDust": 300000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "warm-hearths",
+      "name": "Warm hearths",
+      "atTotalDust": 450000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "golden-broom",
+      "name": "Golden broom",
+      "atTotalDust": 800000000,
+      "effect": {
+        "type": "strike",
+        "value": 1.5
+      }
+    },
+    {
+      "id": "tall-chimneys",
+      "name": "Tall chimneys",
+      "atTotalDust": 1300000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "swift-carts",
+      "name": "Swift carts",
+      "atTotalDust": 1850000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "starlit-nights",
+      "name": "Starlit nights",
+      "atTotalDust": 2500000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.1
+      }
+    },
+    {
+      "id": "whole-island",
+      "name": "The whole island",
+      "atTotalDust": 4000000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.25
+      }
+    },
+    {
+      "id": "far-shores",
+      "name": "Far shores",
+      "atTotalDust": 7000000000,
+      "effect": {
+        "type": "multiplier",
+        "value": 1.25
+      }
+    }
+  ],
+  "weather": {
+    "firstAfter": 8,
+    "gapMin": 60,
+    "gapMax": 120,
+    "kinds": [
+      {
+        "id": "breeze",
+        "name": "Breeze",
+        "seconds": 40,
+        "weight": 3,
+        "all": 1.5
+      },
+      {
+        "id": "rain",
+        "name": "Rain",
+        "seconds": 50,
+        "weight": 2,
+        "units": {
+          "mill": 4,
+          "gatherer": 0.5
+        }
+      },
+      {
+        "id": "heatwave",
+        "name": "Heatwave",
+        "seconds": 50,
+        "weight": 2,
+        "units": {
+          "forge": 3,
+          "foundry": 2,
+          "cart": 0.5
+        }
+      },
+      {
+        "id": "shooting-star",
+        "name": "Shooting star",
+        "seconds": 25,
+        "weight": 1,
+        "strike": 5
+      }
+    ]
+  },
+  "gems": {
+    "dustPerGem": 125000,
+    "bonusPerGem": 0.1,
+    "perks": [
+      {
+        "id": "strong-arms",
+        "name": "Strong arms",
+        "cost": 1,
+        "effect": {
+          "type": "strike",
+          "value": 3
+        }
+      },
+      {
+        "id": "head-start",
+        "name": "Head start",
+        "cost": 2,
+        "effect": {
+          "type": "start",
+          "unit": "gatherer",
+          "count": 10
+        }
+      },
+      {
+        "id": "weather-wise",
+        "name": "Weather wise",
+        "cost": 3,
+        "effect": {
+          "type": "weather",
+          "value": 2
+        }
+      },
+      {
+        "id": "thrift",
+        "name": "Thrift",
+        "cost": 4,
+        "effect": {
+          "type": "thrift",
+          "value": 0.8
+        }
+      },
+      {
+        "id": "golden-pile",
+        "name": "Golden pile",
+        "cost": 6,
+        "effect": {
+          "type": "production",
+          "value": 2
+        }
+      }
+    ]
+  }
 }
