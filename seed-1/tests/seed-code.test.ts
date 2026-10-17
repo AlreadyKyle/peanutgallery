@@ -3,7 +3,9 @@ import { loadConfigFromDir } from '../bots/config';
 import { greedyTick } from '../bots/greedy';
 import { serializeState } from '../sim/save';
 import { createSim } from '../sim/sim';
-import { decodeSeed, encodeSeed, MAX_SEED_LENGTH, seedFromSearch, seedLink } from '../render/seed-code';
+import { decodeSeed, encodeSeed, MAX_SEED_LENGTH, SEED_LIMITS, seedFromSearch, seedIsPlausible, seedLink } from '../render/seed-code';
+import { BACKUP_KEY, SAVE_KEY, SEED_RUN_KEY } from '../render/game';
+import { keepBackup } from '../render/seed-ui';
 import { FIXTURE_CONFIG_DIR } from './paths';
 
 // Seeds (docs/specs/final-state.md, Seeds and instances): dust:v<saveVersion>:<base64url(save JSON)>.
@@ -35,6 +37,23 @@ describe('seed codes', () => {
     expect(encodeSeed(played(21600)).length).toBeLessThan(1200);
   });
 
+  it('refuses a crafted seed that holds more than a played run could', () => {
+    const state = played(600);
+    const code = (value: unknown): string => `dust:v1:${Buffer.from(JSON.stringify({ version: 1, state: value })).toString('base64url')}`;
+    expect(decodeSeed(code(state))).toEqual(state);
+    expect(decodeSeed(code({ ...state, dust: 1e300, totalDust: 1e301 }))).toBeNull();
+    expect(decodeSeed(code({ ...state, totalDust: SEED_LIMITS.dust }))).toBeNull();
+    expect(decodeSeed(code({ ...state, dust: state.totalDust + 1000 }))).toBeNull();
+    expect(decodeSeed(code({ ...state, owned: { ...state.owned, gatherer: SEED_LIMITS.owned + 1 } }))).toBeNull();
+    expect(decodeSeed(code({ ...state, gems: SEED_LIMITS.gems + 1, season: 1, perks: [], pastDust: 1 }))).toBeNull();
+    expect(decodeSeed(code({ ...state, pastDust: 1e25, season: 1, gems: 3, perks: [] }))).toBeNull();
+    expect(decodeSeed(code({ ...state, elapsedSeconds: SEED_LIMITS.elapsedSeconds * 2 }))).toBeNull();
+    // A big run inside the limits still opens.
+    const big = { ...state, dust: 1e18, totalDust: 5e20, gems: 40, season: 6, perks: [], pastDust: 9e20 };
+    expect(seedIsPlausible(big)).toBe(true);
+    expect(decodeSeed(code(big))).toEqual(big);
+  });
+
   it('refuses anything that is not a seed of this save version', () => {
     const state = played(60);
     const body = encodeSeed(state).slice('dust:v1:'.length);
@@ -57,5 +76,33 @@ describe('seed codes', () => {
     expect(seedFromSearch('?seed=')).toBeNull();
     expect(seedFromSearch('')).toBeNull();
     expect(decodeSeed(seedFromSearch(new URL(link).search)!)).toEqual(played(10));
+  });
+});
+
+describe('the backup before a seed', () => {
+  function store(entries: Record<string, string>) {
+    const map = new Map(Object.entries(entries));
+    return { map, getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => void map.set(key, value) };
+  }
+
+  it("keeps the player's own game when they start from a seed", () => {
+    const s = store({ [SAVE_KEY]: 'own' });
+    keepBackup(s);
+    expect(s.map.get(BACKUP_KEY)).toBe('own');
+  });
+
+  it("never copies a seed's run over the player's own game", () => {
+    const s = store({ [SAVE_KEY]: 'first seed', [BACKUP_KEY]: 'own', [SEED_RUN_KEY]: '1' });
+    keepBackup(s);
+    expect(s.map.get(BACKUP_KEY)).toBe('own');
+  });
+
+  it("keeps a seed's run when there is no backup to lose, and does nothing without a save", () => {
+    const s = store({ [SAVE_KEY]: 'first seed', [SEED_RUN_KEY]: '1' });
+    keepBackup(s);
+    expect(s.map.get(BACKUP_KEY)).toBe('first seed');
+    const empty = store({});
+    keepBackup(empty);
+    expect(empty.map.size).toBe(0);
   });
 });

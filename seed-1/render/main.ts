@@ -14,6 +14,7 @@ import { DustScene, type SafeArea } from './scene';
 import { decodeSeed, seedFromSearch } from './seed-code';
 import { attachGalleryLink, attachSeedButton, offerSeed } from './seed-ui';
 import { attachShare } from './share';
+import { markStudioLine } from './studio-line';
 import { runWhatsNew } from './whats-new';
 
 const LOAD_FAILED = 'The game data did not load. Reload the page to try again.';
@@ -316,6 +317,8 @@ function startWhatsNew(): void {
   void runWhatsNew({ root, link }, store, SAVE_KEY, Date.now());
 }
 
+const studioLine = document.getElementById('studio-line');
+if (studioLine !== null) markStudioLine(studioLine);
 start();
 startNextCard();
 startWhatsNew();
