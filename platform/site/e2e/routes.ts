@@ -28,6 +28,16 @@ export const PAGE_ROUTES: readonly NamedRoute[] = [
   ['contact', '/contact'],
   ['not-found', '/no-such-page'],
   ['guide', GUIDE],
+  // The final state's pages (docs/specs/final-state.md). With no community data they draw their
+  // honest unavailable states; /u/:handle is filled by a sample handle.
+  ['goals', '/goals'],
+  ['studio-history', '/studio/history'],
+  ['suggest', '/suggest'],
+  ['seeds', '/seeds'],
+  ['profile', '/u/sample-player'],
+  ['me', '/me'],
+  ['faq', '/faq'],
+  ['broadcast', '/broadcast'],
 ];
 
 export const PAGE_PATHS: readonly string[] = PAGE_ROUTES.map(([, path]) => path);

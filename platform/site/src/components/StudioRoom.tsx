@@ -30,6 +30,8 @@ type Anim = {
   frozen: Spot | null;
   hopAt: number;
   phase: number;
+  /** The second of a chatting pair speaks while the first listens. */
+  chatFlip?: boolean;
 };
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
@@ -279,6 +281,7 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
         frozen: was.frozen,
       });
     }
+    anims.current.get(place.role.id)!.chatFlip = place.partner !== null && place.role.id > place.partner;
   }
 
   // New pulses: the sprite plays, and the agents on that card (or at the desks) hop.
@@ -321,6 +324,12 @@ export function StudioRoom({ snapshot, studio, pulses = [], facts = true, label 
           if (hop >= 0 && hop <= 1) lift -= Math.sin(Math.PI * hop) * 9;
         }
         body.setAttribute('transform', `translate(0 ${lift.toFixed(2)})`);
+        if (still) continue;
+        // Typing: the three dots light one after another. Chatting: the two bubbles take turns.
+        const dots = body.querySelectorAll<SVGElement>('.mark-dot');
+        dots.forEach((dot, i) => dot.setAttribute('opacity', String(0.25 + 0.75 * Math.max(0, Math.sin(t / 220 - i * 0.9 + anim.phase)))));
+        const chat = body.querySelector<SVGElement>('.agent-chat');
+        if (chat !== null) chat.setAttribute('opacity', Math.sin(t / 1300 + (anim.chatFlip ? Math.PI : 0)) > 0 ? '1' : '0');
       }
     };
     if (!motionAllowed()) {

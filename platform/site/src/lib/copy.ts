@@ -529,7 +529,7 @@ export const copy = {
     left: '{n} characters left',
     send: 'Send suggestion',
     sending: 'Sending the suggestion.',
-    sent: 'Thank you. Your suggestion is in the queue for review.',
+    sent: 'Thank you, your suggestion is in the queue for review.',
     limit: 'You have sent three suggestions today. Try again tomorrow.',
     failed: 'The suggestion did not send. Try again in a moment.',
     listTitle: 'Suggestions',
@@ -685,7 +685,7 @@ export const copy = {
           },
           {
             q: 'Is it for all ages?',
-            a: ['Yes. Everything here is made for all ages, and every game and card passes a content filter before anyone sees it.'],
+            a: ['Yes, everything here is made for all ages, and every game and card passes a content filter before anyone sees it.'],
           },
         ],
       },
@@ -707,7 +707,7 @@ export const copy = {
           },
           {
             q: 'Can I get a refund?',
-            a: ['Yes. The Refunds page has the terms in full, including how long you have to ask.'],
+            a: ['Yes, and the Refunds page has the terms in full, including how long you have to ask.'],
             link: { to: '/refunds', label: 'Read the Refunds page' },
           },
           {
@@ -772,7 +772,7 @@ export const copy = {
           },
           {
             q: 'Is there a Discord?',
-            a: ['Yes. It posts every ship and milestone and links back here. Chat on Discord or Twitch never reaches an agent.'],
+            a: ['Yes, it posts every ship and milestone and links back here. Chat on Discord or Twitch never reaches an agent.'],
           },
         ],
       },
@@ -782,12 +782,12 @@ export const copy = {
         items: [
           {
             q: 'Do I need an account?',
-            a: ['No. Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded.'],
+            a: ['Contributing never needs one. An account gives you a name, an avatar, XP and a collection of the cards you funded.'],
             link: { to: '/me', label: 'Your profile' },
           },
           {
             q: 'Can I stay anonymous?',
-            a: ['Yes. Without an account every contribution shows as Anonymous. With one, you choose for each contribution.'],
+            a: ['Yes, without an account every contribution shows as Anonymous. With one, you choose for each contribution.'],
           },
           {
             q: 'What does the studio keep about me?',

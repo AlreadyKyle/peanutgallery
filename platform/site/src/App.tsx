@@ -7,6 +7,7 @@ import { NotFound } from './components/NotFound';
 import { copy } from './lib/copy';
 import { siteEnv } from './lib/env';
 import { legal } from './lib/legal';
+import { useScrollReveal } from './lib/reveal';
 import { StudioProvider } from './lib/studio';
 import { Contribute } from './pages/Contribute';
 import { Ledger } from './pages/Ledger';
@@ -93,6 +94,7 @@ const BARE_PATHS: readonly string[] = ['/broadcast'];
 
 export function App({ onRouteChange }: { onRouteChange?: () => void } = {}) {
   useRouteChange(onRouteChange);
+  useScrollReveal();
   const { pathname } = useLocation();
   const bare = BARE_PATHS.includes(pathname.toLowerCase().replace(/\/+$/, ''));
   return (
