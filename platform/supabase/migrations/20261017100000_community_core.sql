@@ -5,12 +5,12 @@
 --
 -- a. Schema community. Nothing in it is granted to anon, authenticated or service_role: every
 --    read and write goes through a security-definer function below (or the admin and Scout
---    functions in 20261017000200_community_admin.sql). Row level security is on for every table
+--    functions in 20261017100200_community_admin.sql). Row level security is on for every table
 --    as a second wall. The backup role reads it as it reads public.
 -- b. The content filter: community.clean_text strips links, code fences and markup;
 --    community.text_allowed refuses any one-to-four token phrase whose sha256 is a deny-list term
 --    (platform/gate/denylist, normalized as platform/gate/lib/banned-scan.awk does; the digests are
---    20261017000100_community_digests.sql).
+--    20261017100100_community_digests.sql).
 -- b2. Player sign-in: restrict_auth_users_to_board admits any email while the profiles_open flag
 --    is on; board_members alone still decides who reaches a board function.
 -- c. Rarity and XP: community.card_rarity(text) is the SQL twin of platform/site/src/lib/rarity.ts,

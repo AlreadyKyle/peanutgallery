@@ -3,7 +3,7 @@
 -- term normalized as the gate normalizes it, then sha256; hashed.txt's digests as they are. The
 -- terms themselves never appear here. platform/supabase/test/community-denylist.test.ts checks this
 -- list equals the script's output, so a change to a deny-list adds a migration like this one.
--- Applies after 20261017000000_community_core.sql and can run twice.
+-- Applies after 20261017100000_community_core.sql and can run twice.
 
 insert into community.denied_digests (digest) values
   ('0025fc65f40e4e5179c8cc346df17096d6ad5c4f2e38e9f38c37881a773ce417'),

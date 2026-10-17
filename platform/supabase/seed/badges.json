@@ -1,5 +1,5 @@
 {
-  "note": "The community badges (docs/specs/final-state.md, XP, levels, badges). Each is earned by its rule, checked in the database by community.award_badges; the migration 20261017000000_community_core.sql inserts exactly these rows and platform/supabase/functions/_shared/community_core_test.ts checks they match. A badge is a record, never money.",
+  "note": "The community badges (docs/specs/final-state.md, XP, levels, badges). Each is earned by its rule, checked in the database by community.award_badges; the migration 20261017100000_community_core.sql inserts exactly these rows and platform/supabase/functions/_shared/community_core_test.ts checks they match. A badge is a record, never money.",
   "badges": [
     { "id": "first_card", "name": "First card", "glyph": "card", "rule": "Fund any card, the Machine included." },
     { "id": "five_suits", "name": "Full hand", "glyph": "hand", "rule": "Fund a card of each of the five suits." },

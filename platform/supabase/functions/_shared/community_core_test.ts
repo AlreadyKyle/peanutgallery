@@ -10,7 +10,7 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 const MIGRATIONS_DIR = new URL("../../migrations/", import.meta.url);
 const VECTORS = new URL("../../test/fixtures/community-vectors.json", import.meta.url);
 const BADGES = new URL("../../seed/badges.json", import.meta.url);
-const COMMUNITY = ["20261017000000_community_core.sql", "20261017000100_community_digests.sql", "20261017000200_community_admin.sql"];
+const COMMUNITY = ["20261017100000_community_core.sql", "20261017100100_community_digests.sql", "20261017100200_community_admin.sql"];
 const PGCRYPTO_LINE = "create extension if not exists pgcrypto;";
 const OPTS = { sanitizeOps: false, sanitizeResources: false };
 const BOARD_EMAIL = "board@mobmachine.games";
@@ -283,7 +283,9 @@ Deno.test("profiles, claims, funding XP and the feed", OPTS, async (t) => {
       await s.board(`public.board_suspend_user($1, true, 'test')`, [handle]);
       assertEquals(await s.anon(`public.community_profile($1)`, [handle]), null);
       await assertRejects(() => s.call(alice, `public.my_profile()`), Error, "suspended");
-      const line = (await s.anon(`public.community_feed(null)`)).events.find((e: Json) => e.amountCents === 1250);
+      const first = await s.anon(`public.community_feed(null)`);
+      const all = [...first.events, ...(await s.anon(`public.community_feed($1)`, [first.next])).events];
+      const line = all.find((e: Json) => e.amountCents === 1250);
       assertEquals(line.text, "Anonymous supporter put $12.50 on Carts leave dust trails");
     });
   } finally {
@@ -431,7 +433,10 @@ Deno.test("seeds: save, publish, vote and the four orders", OPTS, async (t) => {
     });
 
     await t.step("the gallery pages by keyset with no repeats", async () => {
-      for (let i = 0; i < 30; i += 1) await s.call(authors[1], `public.save_seed('dust', $1, $2, true)`, [`dust:v3:p${i}`, `Page ${i}`]);
+      const third = await s.user("a2@example.com");
+      for (let i = 0; i < 30; i += 1) await s.call(i < 15 ? third : authors[0], `public.save_seed('dust', $1, $2, true)`, [`dust:v3:p${i}`, `Page ${i}`]);
+      for (let i = 0; i < 15; i += 1) await s.call(third, `public.save_seed('dust', $1, null, false)`, [`dust:v3:q${i}`]);
+      await assertRejects(() => s.call(third, `public.save_seed('dust', 'dust:v3:late', null, false)`), Error, "30 seeds a day");
       for (const sort of ["trending", "top_all", "new"]) {
         const first = await s.anon(`public.community_seeds($1, null)`, [sort]);
         assertEquals(first.items.length, 24);
