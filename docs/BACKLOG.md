@@ -256,7 +256,7 @@ game stages), and the news section (the feed). What it leaves for later is filed
 - horizon: later
 - rank: 18
 - summary: An agent that reads the studio's community and proposes lore, requests and a mood summary, with a page for the lore it adds to the game.
-- intent: docs/specs/final-state.md gives the Community agent one job, choosing featured seeds from the top of Trending, and the Scout triages suggestions. What is left: reading the studio's own Discord and Twitch chat logs with no write tools to propose lore (an adopted term becomes an in-game item with its origin linked) and trends (a recurring request) as typed fields only, so no free text reaches a role with write access; each passes the content filter and the gate. A Lore page lists what is canon. It is not built yet.
+- intent: docs/specs/final-state.md gives the Community agent one job, choosing featured seeds from the top of Trending, and the Curator triages suggestions. What is left: reading the studio's own Discord and Twitch chat logs with no write tools to propose lore (an adopted term becomes an in-game item with its origin linked) and trends (a recurring request) as typed fields only, so no free text reaches a role with write access; each passes the content filter and the gate. A Lore page lists what is canon. It is not built yet.
 - kernel: yes
 
 ### The name pipeline

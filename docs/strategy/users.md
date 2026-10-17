@@ -80,7 +80,7 @@ A person can enter at any step and skip steps: a viewer on Twitch can fund from 
 ## Who the studio is not for, and how it protects them
 
 - **Children paying without permission.** A person must be an adult where they live or have a guardian's permission to contribute; a guardian's refund request is honoured in full with no time limit (`docs/PLAN.md` §5 Terms). Nothing near money uses a countdown, chance cue or ranking of supporters by amount.
-- **People who want to direct agents with free text.** The kernel forbids it. Suggestions are structured and read by the Scout, a role with no tools; this is explained on /suggest.
+- **People who want to direct agents with free text.** The kernel forbids it. Suggestions are structured and read by the Curator, a role with no tools; this is explained on /suggest.
 - **Speculators.** XP, cards and collections cannot be sold or transferred, so there is nothing to trade.
 - **People hostile to AI in games.** The studio does not hide what it is. The art policy (procedural or vector art only inside games) and the public ledger answer the common objections; the rest is a difference of view.
 

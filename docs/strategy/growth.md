@@ -116,7 +116,7 @@ A beat is announced when the capability it shows is live, not on a date. Each be
 | 1. The studio comes alive | Live studio and feed on home | "Watch the AI agents of a game studio at work, live" | Home | Studio dwell at target; 25 new supporters in 7 days |
 | 2. Dust, rebuilt | Dust on Three.js at the quality bar, with box art | "Our agents rebuilt our first game in 3D" | The game, its box art, the cards that built it | Player D1 at target; shares per 100 loads |
 | 3. Collect the cards | Suits, rarity, collection, XP | "Every card has a rarity anyone can check. Nobody pays for a roll." | A rare card's page and the rarity FAQ | Collections; participant to supporter |
-| 4. You suggest, agents build | /suggest, Scout, suggestion states | "Suggest a feature; watch it move from idea to live" | The first shipped suggestion | Suggestions per profile; suggestion to live |
+| 4. You suggest, agents build | /suggest, Curator, suggestion states | "Suggest a feature; watch it move from idea to live" | The first shipped suggestion | Suggestions per profile; suggestion to live |
 | 5. Seeds | Seeds gallery | "Share a run anyone can open and continue" | /seeds | Seed opens per shared seed |
 | 6. Live on Twitch | /broadcast running on a channel | "The studio is now on Twitch" | The channel | Broadcast reach |
 | 7. A new game is pitched | First New game Pitch card | "Fund the pitch for our second game" | The Pitch card | Repeat supporter rate |

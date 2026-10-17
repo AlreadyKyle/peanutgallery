@@ -15,7 +15,7 @@ Nothing here runs because it is Monday. Each process starts on an event the stud
 | A benchmark crosses its floor | Review of that area | Review team |
 | A launch beat runs | Its 7-day measurement window opens; review at the end | Review team |
 | 50 cards have gone live since the last full review, or 30 days have passed with no review | Full review | Review team |
-| Suggestions queue reaches a batch, or the oldest waits past target | Scout triage | Scout |
+| Suggestions queue reaches a batch, or the oldest waits past target | Curator triage | Curator |
 | A held item (suggestion, name, seed) waits past target | Alert to the moderator | Admin |
 | A payout leaves agent money that is not credit yet | Alert to the board | Controller |
 | An alert from the dispatcher, smoke or Controller | Incident process (§3) | On-call path |
@@ -85,7 +85,7 @@ Process: detect (alerts, live check, Controller, Janitor), contain (pause, rollb
 
 | Item | Automatic | Held for a person when | Person's actions | Logged |
 |---|---|---|---|---|
-| Suggestion | Strip links, code and markup; content filter; rate limit 3 a day; Scout safety flags | The filter or the Scout flags it | Release, decline with a fixed reason, merge clusters | Moderation log |
+| Suggestion | Strip links, code and markup; content filter; rate limit 3 a day; Curator safety flags | The filter or the Curator flags it | Release, decline with a fixed reason, merge clusters | Moderation log |
 | Display name | Content filter; length; the name pipeline's deny-lists | The filter is unsure | Approve, rename, suspend | Moderation log |
 | Seed title | Content filter; 60 characters | The filter is unsure; reports | Unpublish, feature | Moderation log |
 | Account | Rate limits per RPC | Repeated holds or abuse | Suspend, unsuspend | Moderation log |

@@ -102,9 +102,9 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 |---|---|---|---|
 | H1 | A signed-in player submits a suggestion: area from a fixed list, title of 80 characters, description of 500; links, code and markup stripped; content filter; 3 a day | FS: Suggestions step 1 | In this series |
 | H2 | Suggestions live in `community.suggestions`, which no write-capable role can select (proved by a migration test) | FS: Suggestions step 1; Acceptance criteria | In this series |
-| H3 | The Scout, read-only with no tools, returns only JSON valid against `suggestion-triage.schema.json`; anything else is discarded; instruction-like suggestions are declined unsummarised | FS: Suggestions step 2 | In this series |
+| H3 | The Curator, read-only with no tools, returns only JSON valid against `suggestion-triage.schema.json`; anything else is discarded; instruction-like suggestions are declined unsummarised | FS: Suggestions step 2 | In this series |
 | H4 | One upvote per account; clusters rank by votes, fit and age | FS: Suggestions step 3 | In this series |
-| H5 | The Game Designer (or the Head of Product for Platform) drafts cards from the top clusters using the Scout's fields only; the Directors grade them | FS: Suggestions step 4 | In this series |
+| H5 | The Game Designer (or the Head of Product for Platform) drafts cards from the top clusters using the Curator's fields only; the Directors grade them | FS: Suggestions step 4 | In this series |
 | H6 | Each suggestion shows its state (received, reviewed, clustered, drafted, open for funding, building, live, declined with a fixed reason); cards credit "Suggested by" | FS: Suggestions step 5 | In this series |
 
 ## 8. Goals and the studio's evolution
@@ -171,7 +171,7 @@ Where this file and the spec disagree, the spec wins and this file is corrected.
 | ID | Requirement | Contract | State |
 |---|---|---|---|
 | T1 | Sixteen role specs with classes, tools and triggers | `docs/SYSTEM.md` | Built |
-| T2 | The Scout role: read-only, no tools, structured triage of suggestions | FS: Suggestions; `studio-team.md` | In this series |
+| T2 | The Curator role: read-only, no tools, structured triage of suggestions | FS: Suggestions; `studio-team.md` | In this series |
 | T3 | The Art Director role: box art and visual quality, a reviewer | `studio-team.md` | In this series |
 | T4 | The game pipeline from idea to box art to ship, with its gates | `studio-team.md` | In this series (design); stages run as cards |
 | T5 | The review team running on events against `benchmarks.md` | `operating-system.md` | Later: [The review team on events](../BACKLOG.md#the-review-team-on-events) |

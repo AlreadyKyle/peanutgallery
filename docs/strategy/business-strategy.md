@@ -116,7 +116,7 @@ The moat is the combination and its record: a public ledger of every card, a stu
 | Fee drag | Median contribution under $5 | Presets from $5; card remainders rounded up |
 | Cards that change nothing a player can see | Visible change per dollar falls | The Game Director's rubric and `game-quality.md` |
 | Rarity read as gambling | Complaints, press | Published rule and odds on the card, nobody pays for a roll, XP not money; the FAQ says so |
-| Moderation load outgrows the board | Held items wait past target | Scout triage, filters, rate limits; then a paid moderator (stage 3) |
+| Moderation load outgrows the board | Held items wait past target | Curator triage, filters, rate limits; then a paid moderator (stage 3) |
 | Agent cost rises | Cost per shipped card rises over trailing windows | Card ceilings, the replay eval, model choice per role |
 | Platform dependence (Stripe, Anthropic, Netlify, Supabase, Twitch) | Outage or policy change | The site is the source of truth; channels link back; a second model provider stays in the backlog |
 | Legal and tax | Contributions pass the review threshold | The board's tax review at $15,000 and registration before any sale (`BOARD-SETUP.md`) |

@@ -122,7 +122,7 @@ Each reference the board named: the mechanic, why it works, whether it fits Mob 
 
 | Safeguard | How Mob Machine meets it |
 |---|---|
-| Feedback is input, not authority | Suggestions are stored where no write-capable role can select them; the Scout, a role with no tools, returns only typed fields; drafts use the Scout's fields, never the player's text |
+| Feedback is input, not authority | Suggestions are stored where no write-capable role can select them; the Curator, a role with no tools, returns only typed fields; drafts use the Curator's fields, never the player's text |
 | Popularity is one input | Clusters rank by votes, fit against the pillars and age; the Game Director grades every draft |
 | Bounded files and tools | Each card names its allowed paths and lane; kernel paths are refused by the gate; each role spec lists its tools |
 | Cost and time limits | Card ceilings (150% of estimate, capped), per-card, daily and monthly caps, session budgets |

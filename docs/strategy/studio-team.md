@@ -1,6 +1,6 @@
 # The studio team
 
-The AI agent team the final state needs: who does what, with which tools, who hands work to whom, where it is reviewed, and how a game goes from an idea to box art to ship. `docs/SYSTEM.md` is the map of the roles that exist as role files in `platform/agents/` and is checked against them; this file designs the team, including two new roles the `final-state/community-core` branch adds as role files: the **Scout** and the **Art Director**. Neither is added to `docs/SYSTEM.md`'s table here, because that table must equal the role files; the branch that adds the files adds the rows.
+The AI agent team the final state needs: who does what, with which tools, who hands work to whom, where it is reviewed, and how a game goes from an idea to box art to ship. `docs/SYSTEM.md` is the map of the roles that exist as role files in `platform/agents/` and is checked against them; this file designs the team, including two new roles the `final-state/community-core` branch adds as role files: the **Curator** and the **Art Director**. Neither is added to `docs/SYSTEM.md`'s table here, because that table must equal the role files; the branch that adds the files adds the rows.
 
 ## Principles
 
@@ -19,7 +19,7 @@ The AI agent team the final state needs: who does what, with which tools, who ha
                ┌─────────────────────┬───────────────┼─────────────────────┬─────────────────────┐
          Game side              Visual side      Platform side         Community side        Business side
                │                     │               │                     │                     │
-   Game Designer (planner)   Art Director (reviewer)  Head of Product   Scout (web_only)      Head of Finance (read_only)
+   Game Designer (planner)   Art Director (reviewer)  Head of Product   Curator (web_only)      Head of Finance (read_only)
    Game Director (reviewer)  Tech Artist (writer)     (web_only)        Community (web_only)  Biz Dev (web_only)
    Builder A, Builder B      Sound Designer           Platform Director Host (web_only)       HR (planner)
    (writers)                 (proposed, writer)       (reviewer)
@@ -35,14 +35,14 @@ The AI agent team the final state needs: who does what, with which tools, who ha
 | Role | Class | Job in the final state | Hands to | Receives from |
 |---|---|---|---|---|
 | Studio Head | planner | Picks which planned work to draft and which milestones to propose; reads the review team's reports | Game Designer, Head of Product | Review reports, backlog, ledger |
-| Game Designer | planner | Drafts game and New game cards from the backlog and from the Scout's clusters, never from players' text | Game Director (draft), Builders (funded card) | Scout clusters, backlog, Studio Head |
+| Game Designer | planner | Drafts game and New game cards from the backlog and from the Curator's clusters, never from players' text | Game Director (draft), Builders (funded card) | Curator clusters, backlog, Studio Head |
 | Game Director | reviewer | Grades game drafts against the pillars; scores each game with `game-quality.md`; reviews game frames | Draft verdict; visual verdict | Game Designer, the gate |
 | Builder A, Builder B | writer | Build funded game cards in the card's allowed paths | The gate | Funded cards |
 | QA | writer | Reproduces and fixes bugs; verifies another role's build | The gate, qa_verify approval | Bug cards, builds |
 | Platform Builder | writer | Builds community-requested Platform cards in `platform/site/` outside kernel paths | The gate | Funded Platform cards |
 | Platform Director | reviewer | Reviews site frames against `platform/site/DESIGN.md` | Visual verdict | The gate |
 | Tech Artist | writer | Builds the game's look as code: shaders, outline passes, palettes, and each game's box art | The gate, Art Director | Visual cards, box art cards |
-| Head of Product | web_only | Reviews the studio as a stranger, a supporter and the board meet it; drafts Platform cards from Platform suggestion clusters as typed fields | Review report; Platform drafts | Scout clusters, the site |
+| Head of Product | web_only | Reviews the studio as a stranger, a supporter and the board meet it; drafts Platform cards from Platform suggestion clusters as typed fields | Review report; Platform drafts | Curator clusters, the site |
 | Head of Finance | read_only | Explains the ledger; owns the business benchmarks in each review | Review report | Ledger |
 | Janitor | read_only | Drift checks as code; dependency upkeep; owns pipeline robustness benchmarks | Findings | Repository, schema |
 | HR | planner | Keeps each role spec true to the role's measured work; proposes role changes as kernel pull requests | Proposals | Scorecards, review reports |
@@ -52,14 +52,14 @@ The AI agent team the final state needs: who does what, with which tools, who ha
 
 ### New roles
 
-#### Scout
+#### Curator
 
 - **Class:** web_only, with no tools at all. It reads text from the public and can change nothing.
 - **Job:** reads queued suggestions in batches and returns only JSON valid against `platform/agents/schemas/suggestion-triage.schema.json`: area, kind (bug, feature, content, balance), a duplicate cluster id, a fit score against the pillars, safety flags, and a summary in its own words of at most 140 characters. Anything outside the schema is discarded. A suggestion flagged as an instruction to the agents is declined and never summarised (`docs/specs/final-state.md`, Suggestions).
 - **Trigger:** runs when the queue holds a batch, or when the oldest queued suggestion has waited past the moderation target in `benchmarks.md`.
 - **Hands to:** the suggestion's state (reviewed, clustered or declined); the Game Designer and Head of Product read its typed fields.
 - **Measured by:** the share of its clusters that reach a draft; the share of its declines that the board reverses on appeal; zero schema violations accepted.
-- **Name note:** Biz Dev was called the Scout until 23 September 2026 (`docs/PLAN.md` §3). The name now belongs to this role only.
+- **Name note:** Biz Dev was called the Curator until 23 September 2026 (`docs/PLAN.md` §3). The name now belongs to this role only.
 
 #### Art Director
 
@@ -77,7 +77,7 @@ A writer that builds each game's sound in code (synthesised effects and music, n
 ## Hand-offs and review gates
 
 ```
- Suggestion ─► Scout ─► cluster ─► Game Designer drafts ─► Game Director grades ─► card opens (rarity set)
+ Suggestion ─► Curator ─► cluster ─► Game Designer drafts ─► Game Director grades ─► card opens (rarity set)
                                                                                          │
                                                                               crowd funds the bar
                                                                                          │

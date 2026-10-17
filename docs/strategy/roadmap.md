@@ -15,7 +15,7 @@ The four branches of `docs/specs/final-state.md`, merged in dependency order.
 | Order | Item | Depends on | Exit benchmark |
 |---|---|---|---|
 | 1 | `final-state/strategy`: these documents, VISION, PLAN decision 75, ROADMAP, BACKLOG | Nothing | `pnpm test:docs` green; every PRD row has a state |
-| 2 | `final-state/community-core`: migrations, RPCs, public views, Scout and Art Director roles, the suggestion pipeline, admin | The shared contract types | No write-capable role can select `community.suggestions` (migration test); rarity tests pass; every admin action logged |
+| 2 | `final-state/community-core`: migrations, RPCs, public views, Curator and Art Director roles, the suggestion pipeline, admin | The shared contract types | No write-capable role can select `community.suggestions` (migration test); rarity tests pass; every admin action logged |
 | 3 | `final-state/dust-three`: Dust on Three.js with the art and feel pass and box art | Nothing (in parallel with 2) | Game quality score of 24 or more with no criterion below 2; performance budgets met in CI; axe clean |
 | 4 | `final-state/site-studio`: live studio, feed, suits and rarity, goals, profiles, suggestions, seeds, broadcast, FAQ, motion | 2 for data; 3 for box art and seeds | Core Web Vitals at target on home, card and studio; 0 serious axe violations; feed freshness under 60 s |
 | 5 | Production steps: migrations applied, flags on, transactional email for sign-in links | 2 and 4 merged | Live check `PASS`; a sign-in link arrives in under a minute |
