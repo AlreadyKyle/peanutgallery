@@ -24,8 +24,9 @@ Out: colour values, the card face, the funding bar, the money rules and their wo
 - **The sheet.** On the legal pages, the ledger, the FAQ, goals, suggest, seeds and /thanks, from 64rem each section after the first band sets its `h2` in a sticky left column (5 of 12) and its content in the right (7 of 12).
 - **Home.** The plate holds the pitch, the lede, the two actions and the status line, then the live studio (the room on a paper screen, its written facts and the pipe). Below 64rem the pipe shows its three newest rows. The explainer video moves to band 2, beside the first game. Under the open cards, "Fund the next card in line" and the Machine card share one row as halves (decision 73's second way to fund keeps its place under the cards). Where the money goes sets the pool and split beside the latest actions.
 - **/card/:id.** From 64rem the face (with Play and the agreement) stays in view in the left five twelfths and the facts, What changed, Supporters, the agents' log and the brief run in the right seven.
-- **/contribute.** From 64rem the split and the next card in line share the first row. The Machine card, given 44rem or more, sets what it is beside how to fund it.
-- **Machine presets** are outlined chips; pressed adds the 3px edge inside the same box.
+- **/contribute.** From 64rem the split and the next card in line share the first row. The next card's panel shows an arrow disc under its words, so the one-link panel looks pressable. The Machine card, given 44rem or more, sets what it is beside how to fund it.
+- **Machine presets** are outlined chips that fill their row; pressed adds the 3px edge inside the same box.
+- **Top bar.** From 64rem to 80rem the links sit closer, so the bar stays one row at 1024px.
 - **Footer.** The mark and the studio's line, then two labelled columns of links (Follow along; The fine print), then the credit under a hairline.
 
 ## Acceptance criteria

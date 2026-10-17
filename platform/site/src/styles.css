@@ -493,6 +493,14 @@ nav a.active {
   }
 }
 
+/* Up to 80rem the links sit closer, so the bar stays one row with Play and Contribute at 1024px. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  .nav-links,
+  .nav-links[data-open='true'] {
+    gap: 0 var(--space-2);
+  }
+}
+
 /* Page heading and sections --------------------------------------------- */
 
 .hero p,
@@ -529,10 +537,10 @@ main > .band:not(:first-child) .section > h2:first-child::before {
   line-height: var(--leading-title);
 }
 
-/* The sheet (main.sheet: the text pages, the ledger, the FAQ, goals): from 64rem every section after
-   the first band sets its heading in a left column a third wide, held in view while its text scrolls,
-   and its text in the two thirds beside it, so the text keeps its reading measure and the page still
-   fills the screen. Blocks that are not a section take the full width. */
+/* The sheet (main.sheet: the text pages, the ledger, the FAQ, goals, suggest, seeds, /thanks): from
+   64rem every section after the first band sets its heading in the left five twelfths, held in view
+   while its text scrolls, and its text in the seven beside it, so the text keeps its reading measure
+   and the page still fills the screen. Blocks that are not a section take the full width. */
 @media (min-width: 64rem) {
   main.sheet > .band:not(:first-child) > .section {
     display: grid;
@@ -557,6 +565,14 @@ main > .band:not(:first-child) .section > h2:first-child::before {
   main.sheet > .band:not(:first-child) > .section p,
   main.sheet > .band:not(:first-child) > .section .faq-item {
     max-width: none;
+  }
+}
+
+/* Until 80rem the sheet's text column is too narrow for a time rail beside each row, so the time sits
+   over its row, as on a phone; the heading's column is the page's rail. */
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  main.sheet .rows.rail li {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1338,6 +1354,9 @@ button.link:hover:not(:disabled) {
   --focus-colour: var(--primary-fg);
 }
 
+/* Beside the Machine card the tile takes the row's height, its lines kept at the top, so the extra
+   height never stretches its rows (or its Contribute button). */
+.fund-empty,
 .fund-next {
   align-self: stretch;
   align-content: start;
@@ -3598,7 +3617,7 @@ ol.timeline {
 
 .machine-amounts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
   gap: var(--space-1);
   max-width: 28rem;
 }
@@ -3657,6 +3676,10 @@ ol.timeline {
   .machine-card > .machine-about,
   .machine-card > .machine-fund {
     flex-basis: 0;
+  }
+
+  .machine-card .machine-amounts {
+    max-width: none;
   }
 }
 
