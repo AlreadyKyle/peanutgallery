@@ -27,5 +27,5 @@ export function levelFor(xp: number): number {
 
 /** The tier name for a level: a new tier every 10 levels, Legend from 60. */
 export function tierFor(level: number): (typeof TIERS)[number] {
-  return TIERS[Math.min(TIERS.length - 1, Math.floor((level - 1) / 10))];
+  return TIERS[Math.min(TIERS.length - 1, Math.max(0, Math.floor((level - 1) / 10)))] ?? 'Spectator';
 }
