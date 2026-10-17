@@ -45,7 +45,8 @@ describe("the shared community vectors, TypeScript side", () => {
       expect(Math.abs(counts[rarity]! - n * odds), rarity).toBeLessThan(5 * sd);
     }
     expect(await cardRarity("odds-1")).toBe(await cardRarity("odds-1"));
-  });
+    // 20,000 digests take a few seconds when every package's tests run at once.
+  }, 60_000);
 
   it("xp.ts gives every level, tier, level-for and contribution vector", async () => {
     const xp = await load<XpModule>("xp.ts");
