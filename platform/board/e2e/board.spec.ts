@@ -98,10 +98,14 @@ const SUGGESTION = {
   triage: { kind: 'feature', fit: 0.8, flags: [], summary: 'Glowing sand at night.', clusterKey: 'night-mode' }, cursor: '1|s',
 };
 
-// board_games and board_agent_roster as 20261017210000_board_roster.sql answers them.
+// board_games and board_agent_roster as 20261017220000_board_games_admin.sql answers them.
 const GAMES = [
   {
-    folder: 'seed-1', open_count: 1, shipped_count: 1,
+    folder: 'seed-1', name: 'Dust', status: 'live', accepting_cards: true, featured: true, blurb: 'An idle game you play in a browser.',
+    play_url: 'https://play.mobmachine.games', box_art: '/games/dust-box-art.svg',
+    plays: { load_event: 'dust_load', share_event: 'dust_share', loads: { day: 40, week: 40, month: 40, total: 40 }, shares: { day: 6, week: 6, month: 6, total: 6 } },
+    admin_log: [{ at: '2026-10-09T09:00:00Z', actor: EMAIL, action: 'feature_game', reason: 'Our first game', details: { from: false, to: true, unfeatured: null } }],
+    open_count: 1, shipped_count: 1,
     open_cards: [{ id: CARD.id, title: 'An e2e card', stage: 'funded', horizon: 'now', updated_at: '2026-10-09T10:00:00Z' }],
     shipped_cards: [{ id: 'c-live', title: 'Night sky', live_at: '2026-10-08T10:00:00Z', commit_sha: 'abc1234' }],
     latest_deploy: { sha: 'abc1234ffff', is_green: true, smoke_result: 'ok', created_at: '2026-10-09T11:00:00Z' },
@@ -111,9 +115,25 @@ const GAMES = [
 const AGENTS = [
   {
     id: 'r-builder-a', name: 'Builder A', title: 'Builder A', model: 'claude-e2e', tools: ['Read', 'Edit', 'Bash', 'Glob', 'Grep', 'Write'], write_access: true, agent_class: 'builder',
-    state: 'active', status: null, paused: false, paused_reason: null, paused_at: null, jobs: ['build_card'],
-    spend: { day_usd: 1.5, week_usd: 4, month_usd: 12.25, total_usd: 40 }, runs_day: { succeeded: 3, failed: 1, skipped: 0, queued: 0, running: 0 },
+    description: 'Builds funded game cards in the paths each card allows.', species_note: 'A badger with a hard hat.', avatar_url: null, trigger: null, budget_share: 0.125,
+    state: 'active', status: 'running', paused: false, paused_reason: null, paused_at: null, jobs: ['build_card'],
+    spend: { day_usd: 1.5, week_usd: 4, month_usd: 12.25, total_usd: 40 },
+    caps: { role_day_usd: 1.5, role_month_usd: 12.25, studio_day_usd: 3, studio_month_usd: 50, daily_cap_usd: 100, monthly_cap_usd: 500 },
+    runs_day: { succeeded: 3, failed: 1, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 9, failed: 2, skipped: 0, last_at: '2026-10-09T11:00:00Z' },
     recent_runs: [{ id: 'run-1', job: 'build_card', status: 'failed', origin: 'schedule', card_id: null, reason: 'tests', created_at: '2026-10-09T11:00:00Z', started_at: null, finished_at: null }],
+    pause_history: [{ at: '2026-10-08T07:00:00Z', actor: EMAIL, paused: true, reason: 'Flaky test' }],
+  },
+  {
+    id: 'r-host', name: 'Host', title: 'Host', model: 'claude-e2e-small', tools: [], write_access: false, agent_class: 'web_only',
+    description: 'Narrates the stream.', species_note: null, avatar_url: null, trigger: 'When the stream exists.', budget_share: 0,
+    state: 'active', status: 'planned', paused: false, paused_reason: null, paused_at: null, jobs: [],
+    spend: { day_usd: 0, week_usd: 0, month_usd: 0, total_usd: 0 },
+    caps: { role_day_usd: 0, role_month_usd: 0, studio_day_usd: 3, studio_month_usd: 50, daily_cap_usd: 100, monthly_cap_usd: 500 },
+    runs_day: { succeeded: 0, failed: 0, skipped: 0, queued: 0, running: 0 },
+    runs_week: { succeeded: 0, failed: 0, skipped: 0, last_at: null },
+    recent_runs: [],
+    pause_history: [],
   },
 ];
 
@@ -190,6 +210,14 @@ async function answerSupabase(
         return json(AGENTS);
       case '/rest/v1/rpc/set_role_pause':
         return json({ role: args.p_role, paused: args.p_paused });
+      case '/rest/v1/rpc/board_set_game_status':
+        return json({ folder: args.p_folder, status: args.p_status });
+      case '/rest/v1/rpc/board_set_game_accepting':
+        return json({ folder: args.p_folder, accepting_cards: args.p_accepting });
+      case '/rest/v1/rpc/board_set_game_featured':
+        return json({ folder: args.p_folder, featured: args.p_featured, unfeatured: null });
+      case '/rest/v1/rpc/board_set_game_blurb':
+        return json({ folder: args.p_folder, blurb: args.p_blurb === '' ? null : args.p_blurb });
       case '/rest/v1/rpc/board_flags':
         return json({ curator_triage: false, profiles_open: true });
       default:
@@ -508,10 +536,56 @@ test('Games and agents reads nothing until a tab is chosen, shows the box art un
   const agent = roster.locator('li[data-role="Builder A"]');
   await expect(agent).toContainText('claude-e2e');
   await expect(agent).toContainText('$12.25 in 30 days');
+  await expect(agent).toContainText("$1.50 of the studio's $3.00 today, 2% of the daily cap of $100.00");
+  await expect(agent).toContainText('Builds funded game cards in the paths each card allows.');
+  await expect(roster.locator('[data-group="planned"] li[data-role="Host"]')).toContainText('Planned (When the stream exists.)');
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/agents-375.png` });
   await roster.getByLabel('Reason for turning a role on or off').fill('Too many failed builds');
   await agent.getByRole('button', { name: 'Turn Builder A off' }).click();
   await expect(roster.getByRole('status')).toHaveText('Builder A turned off.');
   expect(bodies).toContainEqual({ path: '/rest/v1/rpc/set_role_pause', body: { p_role: 'r-builder-a', p_paused: true, p_reason: 'Too many failed builds' } });
+  expect(await overflows(page)).toBe(false);
+  expect(reports).toEqual([]);
+});
+
+test('Games changes a game only with a reason, each write sending its contract body, at 375 px under the policy', async ({ page }) => {
+  const reports = await watchPolicy(page);
+  const seen: string[] = [];
+  const bodies: Record<string, unknown>[] = [];
+  await answerSupabase(page, seen, { aal2: true, bodies });
+  await signIn(page, 'aal2');
+  await page.goto('/');
+  const roster = page.getByRole('region', { name: 'Games and agents' });
+  await roster.getByRole('button', { name: 'Games' }).click();
+  const tile = roster.locator('li[data-game="seed-1"]');
+  await expect(tile).toContainText('Featured');
+  await expect(tile).toContainText('Loads40 today');
+  await tile.getByText('Manage Dust').click();
+  // No reason yet: the buttons are marked and nothing is sent.
+  await expect(tile.getByRole('button', { name: 'Stop new cards' })).toHaveAttribute('aria-disabled', 'true');
+  await tile.getByRole('button', { name: 'Stop new cards' }).click({ force: true });
+  expect(seen.filter((line) => /rpc\/board_set_game/.test(line))).toEqual([]);
+  await roster.getByLabel('Reason for changes to a game (written to the moderation log)').fill('A crash on load');
+  await tile.getByLabel('Status').selectOption('paused');
+  await tile.getByRole('button', { name: 'Set status' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust is paused.');
+  await tile.getByRole('button', { name: 'Stop new cards' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust takes no new cards.');
+  await tile.getByRole('button', { name: 'Unfeature' }).click();
+  await expect(roster.getByRole('status')).toHaveText('Dust is no longer featured.');
+  await tile.getByLabel(/^Public blurb/).fill('A quarry idle game, free to play.');
+  await tile.getByRole('button', { name: 'Save blurb' }).click();
+  await expect(roster.getByRole('status')).toHaveText("Dust's blurb saved.");
+  expect(bodies.filter((b) => String(b.path).includes('board_set_game'))).toEqual([
+    { path: '/rest/v1/rpc/board_set_game_status', body: { p_folder: 'seed-1', p_status: 'paused', p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_accepting', body: { p_folder: 'seed-1', p_accepting: false, p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_featured', body: { p_folder: 'seed-1', p_featured: false, p_reason: 'A crash on load' } },
+    { path: '/rest/v1/rpc/board_set_game_blurb', body: { p_folder: 'seed-1', p_blurb: 'A quarry idle game, free to play.', p_reason: 'A crash on load' } },
+  ]);
+  await tile.getByText('Recent changes').click();
+  await expect(tile).toContainText('featured: Our first game');
+  // BOARD_E2E_SHOTS=<folder> keeps a screenshot of the managed tile to look at.
+  if (process.env.BOARD_E2E_SHOTS) await roster.screenshot({ path: `${process.env.BOARD_E2E_SHOTS}/games-375.png` });
   expect(await overflows(page)).toBe(false);
   expect(reports).toEqual([]);
 });

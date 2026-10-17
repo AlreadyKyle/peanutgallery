@@ -152,6 +152,7 @@ The rest of the launch plan, agreed and built in this order: each pull request s
 | `specs/split-slider.md` | agreed | the Agents/Studio split slider on /contribute, carried on `client_reference_id`; then the webhook deploy, the live check and the dropdown off the Payment Link |
 | `specs/always-open.md` | agreed | home's Next up holds only approved agent cards, no `/roadmap`, and the draft limit of 12 a day; then the migration in production and the live check |
 | `specs/play-counts.md` | agreed | daily totals of Dust loads, Share your run, card shares and clicks from Dust to a card, with no cookie, identifier or address, on the board's panel; left: `20261011500000_play_counts.sql` in production, both site deploys and the live check |
+| `specs/board-games-admin.md` | agreed | the board's games admin (status, new cards, featured, blurb, plays, each change logged) and a fuller agent roster (profile, roster status, spend against the caps, pause history); left: `20261017220000_board_games_admin.sql` in production, the board's deploy and the live check |
 | `specs/ship-notices.md` | agreed | one email per payment and shipped card, read from Stripe and never stored, with a one-click unsubscribe; left: the migration in production, the `NOTICES_ENV` secret and `STUDIO_REF` in the ops repository, the live check, and the first notice received |
 
 ## Standing facts for any session

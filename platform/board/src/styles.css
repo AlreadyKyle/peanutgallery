@@ -425,6 +425,50 @@ tfoot td {
   margin: 0;
 }
 
+/* The game and agent admin (board-games-admin.md): the reason field keeps the forms' 16 px rhythm,
+   headings sit tight to their block, and a featured game carries one small ink badge. */
+.roster-panel > label {
+  margin-bottom: var(--space-2);
+}
+
+.game-facts h4,
+.agent h5 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-heading);
+}
+
+.agent-head h5 {
+  margin: 0;
+}
+
+.roster-group > h4 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--size-body);
+  font-weight: var(--weight-bold);
+}
+
+.badge {
+  display: inline-block;
+  margin-left: var(--space-1);
+  padding: 0 0.5em;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  font-size: var(--size-small);
+  font-weight: var(--weight-strong);
+  vertical-align: middle;
+}
+
+.agent-profile {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-small);
+}
+
+.game-facts .stack {
+  margin-top: var(--space-1);
+}
+
 details > summary {
   min-height: var(--target);
   display: flex;

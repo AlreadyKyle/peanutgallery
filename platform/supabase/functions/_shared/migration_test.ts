@@ -296,6 +296,8 @@ Deno.test("migrations on PGlite", {
         "20261017200000_benchmark_counters.sql",
         "20261017200100_benchmark_review.sql",
         "20261017210000_board_roster.sql",
+        // board-games-admin (docs/specs/board-games-admin.md): the games table and the board's game and agent admin.
+        "20261017220000_board_games_admin.sql",
       ]);
       for (const m of migrations) {
         assert(/^\d{14}_[a-z0-9_]+\.sql$/.test(m.name), `stamp on ${m.name}`);
@@ -344,6 +346,7 @@ Deno.test("migrations on PGlite", {
         "deploys",
         "dispatcher_lease",
         "findings",
+        "games",
         "images",
         "job_runs",
         "jobs",
@@ -375,6 +378,7 @@ Deno.test("migrations on PGlite", {
         "public_card_funding",
         "public_card_spend",
         "public_card_supporters",
+        "public_games",
         "public_ledger_totals",
         "public_money",
         "public_role_stats",
@@ -2066,7 +2070,7 @@ Deno.test("migrations on PGlite", {
     );
 
     await t.step(
-      "anon holds select on three public tables, the eight views and the public columns of cards, and nothing else",
+      "anon holds select on three public tables, the views and the public columns of cards, and nothing else",
       async () => {
         const expected = [
           "deploys",
@@ -2077,6 +2081,8 @@ Deno.test("migrations on PGlite", {
           "public_card_funding",
           "public_card_spend",
           "public_card_supporters",
+          // board-games-admin (docs/specs/board-games-admin.md): each game's public name, status, blurb, address and art.
+          "public_games",
           "public_ledger_totals",
           "public_money",
           "public_role_stats",
@@ -4163,6 +4169,9 @@ Deno.test("migrations on PGlite", {
           "board_moderation_log", "board_release_suggestion", "board_rename_user", "board_save_goal", "board_seeds",
           "board_set_card_face", "board_set_era", "board_set_flag", "board_suggestions", "board_suspend_user", "board_unpublish_seed",
         ];
+        // board-games-admin (docs/specs/board-games-admin.md): the board's game writes run for authenticated
+        // only (each checks the board and the second factor and logs its reason), like the community admin.
+        const gamesBoard = ["board_set_game_accepting", "board_set_game_blurb", "board_set_game_featured", "board_set_game_status"];
         // A policy's functions run as the caller, so anon and authenticated execute the one
         // the cards policy calls (agent-system-core.md), and the public site's two documents,
         // which run as the caller too (site-snapshot.md). supporter-pages adds the event line
@@ -4183,6 +4192,9 @@ Deno.test("migrations on PGlite", {
             ...communityDocs,
             ...player,
             ...communityBoard,
+            ...gamesBoard,
+            // board-games-admin: the locked games row the board's game writes share, no role's.
+            "board_game_row",
             "cards_agent_text_guard",
             "job_runs_job_enabled",
             "refuse_money_change",
@@ -4204,6 +4216,10 @@ Deno.test("migrations on PGlite", {
           },
         ]);
         for (const p of privileges) {
+          if (gamesBoard.includes(p.proname) || p.proname === "board_game_row") {
+            assertEquals([p.anon, p.authenticated, p.service_role], [false, p.proname !== "board_game_row", false], `grants on ${p.proname}`);
+            continue;
+          }
           if (communityDocs.includes(p.proname) || player.includes(p.proname) || communityBoard.includes(p.proname)) {
             assertEquals([p.anon, p.authenticated, p.service_role], [communityDocs.includes(p.proname), true, false], `grants on ${p.proname}`);
             continue;
