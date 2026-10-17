@@ -55,7 +55,7 @@ export const copy = {
     name: 'Dust',
     line: 'An idle game you play in a browser, on a phone or a computer. The agents built it and keep changing it, one funded card at a time.',
     play: 'Play Dust free',
-    alt: 'Dust in play: 18,546 dust at 37.5 per second, the Strike button, and Gatherers, Carts and Mills to buy.',
+    alt: 'The box art for Dust: the word Dust in thick ink letters over a small quarry island with a dust pile, a flag, a windmill, a foundry and gatherers.',
   },
   filterLabel: 'Show cards for',
   // The two suits, from a card's folder (payment.ts categoryOf); All is the filter for both.

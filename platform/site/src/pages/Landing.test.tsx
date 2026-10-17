@@ -311,9 +311,9 @@ describe('Landing', () => {
     expect(bands.map((band) => band.className)).toEqual(['band', 'band', 'band', 'band']);
     expect(bands[0]!.querySelector('h1')).not.toBeNull();
     expect([...bands[1]!.querySelectorAll('h2')].map((h) => h.id)).toEqual(['studio', 'fund', 'game', 'flow']);
-    // The first game's tile: its name, a still with alt text, and Play to the game (decision 68).
+    // The first game's tile: its name, its box art with alt text, and Play to the game (decision 68).
     expect(screen.getByRole('link', { name: copy.game.play }).getAttribute('href')).toBe('https://play.example');
-    expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust.png');
+    expect(screen.getByRole('img', { name: copy.game.alt }).getAttribute('src')).toBe('/games/dust-box-art.svg');
     expect(screen.getByText(legal.agentShareLine, { exact: false })).toBeTruthy();
     expect(bands[2]!.querySelector('h2')?.id).toBe('team');
     expect(bands[3]!.querySelector('h2')?.id).toBe('money');

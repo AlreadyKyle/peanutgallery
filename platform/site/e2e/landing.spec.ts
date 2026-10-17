@@ -25,7 +25,7 @@ for (const viewport of WIDTHS) {
       // The first game (docs/specs/home-game-tile.md): a still, its name, one line and Play.
       const game = page.getByRole('region', { name: 'Play the first game' });
       await expect(game.locator('.game-name')).toHaveText('Dust');
-      await expect(game.getByRole('img', { name: /^Dust in play/ })).toBeVisible();
+      await expect(game.getByRole('img', { name: /^The box art for Dust/ })).toBeVisible();
       expect(await game.locator('img.game-shot').evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
       await expect(game.getByRole('link', { name: 'Play Dust free' })).toHaveAttribute('href', PLAY_URL);
       // The cards to fund come first (docs/specs/home-flow.md): horizon now cards only, picked first,
