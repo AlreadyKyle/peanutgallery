@@ -218,7 +218,7 @@ function Suggestions({ client, reason, run }: { client: SupabaseClient } & ActPr
                           <button type="button" disabled={reason === ''} onClick={() => run('Draft from cluster', () => draftFromCluster(client, cluster, reason), list.refresh)}>
                             Draft from cluster
                           </button>{' '}
-                          <input aria-label={`Card or cluster id for ${id}`} placeholder="card or cluster id" value={target} onChange={(e) => setTargets({ ...targets, [id]: e.target.value })} />{' '}
+                          <input aria-label={`Card or cluster id for ${id}`} value={target} onChange={(e) => setTargets({ ...targets, [id]: e.target.value })} />{' '}
                           <button type="button" disabled={reason === '' || target.trim() === ''} onClick={() => run('Link card', () => linkClusterCard(client, cluster, target.trim(), reason), list.refresh)}>
                             Link card
                           </button>{' '}
