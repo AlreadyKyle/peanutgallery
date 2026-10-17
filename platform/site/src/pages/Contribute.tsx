@@ -101,13 +101,15 @@ export function Contribute() {
         ) : (
           <div className="contribute">
             <SplitSlider studioPct={studioPct} onChange={setStudioPct} />
-            <a className="choice choice-primary" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)}>
-              <span className="choice-title">{legal.pickForMe}</span>
-              <span className="choice-body">{pickForMeBody(studio)}</span>
-            </a>
-            <p className="muted small">
-              <LinkedText text={legal.contributeAgreement} />
-            </p>
+            <div className="contribute-next">
+              <a className="choice choice-primary" href={fundLink(env.stripePaymentLinkUrl, null, studioPct)}>
+                <span className="choice-title">{legal.pickForMe}</span>
+                <span className="choice-body">{pickForMeBody(studio)}</span>
+              </a>
+              <p className="muted small">
+                <LinkedText text={legal.contributeAgreement} />
+              </p>
+            </div>
 
             <h2>{legal.orPickACard}</h2>
             {/* The cards' polite live region (WCAG 4.1.3), inline as this page is kernel: empty while

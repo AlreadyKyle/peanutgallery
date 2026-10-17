@@ -208,7 +208,7 @@ export function Thanks() {
 
   if (state.kind === 'pending') {
     return (
-      <main className="title-stays">
+      <main className="title-stays sheet">
         <div className="band">
           <PageHeader title={words.recordingTitle} lede={words.recordingLede} />
         </div>
@@ -222,7 +222,7 @@ export function Thanks() {
   }
   if (state.kind === 'recorded') {
     return (
-      <main className="title-stays">
+      <main className="title-stays sheet">
         <div className="band">
           <PageHeader title={words.title} lede={supporterLine(state.answer)} />
         </div>
@@ -234,7 +234,7 @@ export function Thanks() {
   }
   // No session, the board's own test payment, or not recorded after three minutes: a plain thank-you.
   return (
-    <main className="title-stays">
+    <main className="title-stays sheet">
       <div className="band">
         <PageHeader title={words.title} lede={state.kind === 'fallback' ? words.fallback : words.plainLede} />
       </div>
