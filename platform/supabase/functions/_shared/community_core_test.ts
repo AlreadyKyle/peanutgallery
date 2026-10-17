@@ -334,7 +334,7 @@ Deno.test("XP cap, rate limits, suggestions, votes and the Scout", OPTS, async (
       await s.call(voters[1], `public.vote_suggestion($1, 1::smallint)`, [newest.id]);
       await s.call(voters[1], `public.vote_suggestion($1, 0::smallint)`, [newest.id]);
       const top = await s.anon(`public.community_suggestions('top', null, null)`);
-      assertEquals(top.items.map((i: Json) => [i.id, i.votes]), [[oldest.id, 3], [newest.id, 1], [list.items[1].id, 0]]);
+      assertEquals(top.items.map((i: Json) => [i.id, i.upvotes]), [[oldest.id, 3], [newest.id, 1], [list.items[1].id, 0]]);
       assertEquals((await s.anon(`public.community_suggestions('top', 'site', null)`)).items.length, 1);
       await assertRejects(() => s.call(voters[0], `public.vote_suggestion($1, 2::smallint)`, [oldest.id]), Error, "1, or 0");
     });

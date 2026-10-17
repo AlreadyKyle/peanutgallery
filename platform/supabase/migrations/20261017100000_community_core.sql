@@ -1069,7 +1069,7 @@ as $$
   select jsonb_build_object(
     'id', s.id, 'area', s.area, 'title', s.title,
     'summary', (select t.summary from community.suggestion_triage t where t.suggestion_id = s.id),
-    'state', s.state, 'declineReason', s.decline_reason, 'votes', s.votes,
+    'state', s.state, 'declineReason', s.decline_reason, 'upvotes', s.votes,
     'clusterId', s.cluster_id,
     'cardId', (select c.card_id from community.suggestion_clusters c where c.id = s.cluster_id),
     'author', community.person_json(s.user_id), 'createdAt', s.created_at
