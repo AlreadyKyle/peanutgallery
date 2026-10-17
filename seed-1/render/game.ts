@@ -2,9 +2,9 @@
 // step and the save. The scene (render/scene.ts), the HUD (render/hud.ts) and the accessible controls
 // (render/controls.ts) all read this one state and listen for its moments, so a strike from the canvas
 // and a strike from the keyboard are the same strike (tests/game.test.ts).
-import { apply, currentWeather, findUnlock, milestoneTier, ownedCount, step } from '../sim/sim';
+import { apply, currentWeather, devilHere, findUnlock, milestoneTier, ownedCount, step } from '../sim/sim';
 import { awaySeconds, serializeState } from '../sim/save';
-import type { SimAction, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
+import type { OrderState, SimAction, SimConfig, SimState, UnlockRow, WeatherKind } from '../sim/types';
 
 // The localStorage key the game saves under. e2e/frames.spec.ts reads this line as text to plant its states.
 export const SAVE_KEY = 'dust.save';
@@ -27,6 +27,21 @@ export interface GameListener {
   pressed?(gems: number, state: SimState): void;
   /** A perk was bought. */
   perk?(id: string, state: SimState): void;
+  /** A fork was chosen: the fork's unlock id and the option's id. */
+  chose?(unlock: string, option: string, state: SimState): void;
+  /** A new order went up on the board. */
+  ordered?(order: OrderState, state: SimState): void;
+  /** The order was filled: the dust it paid. */
+  filled?(gain: number, state: SimState): void;
+  /** A dust devil arrived (true) or spun away uncaught (false). */
+  devil?(here: boolean, state: SimState): void;
+  /** The dust devil was caught: the dust it paid. */
+  caught?(gain: number, state: SimState): void;
+}
+
+function sameOrder(a: OrderState | undefined, b: OrderState | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return a.type === b.type && a.unit === b.unit && a.target === b.target && a.from === b.from;
 }
 
 type SaveStore = Pick<Storage, 'setItem'>;
@@ -77,9 +92,16 @@ export class Game {
       for (const listener of this.listeners) listener.pressed?.(gems, after);
     } else if (action.type === 'perk' && (after.perks?.length ?? 0) > (before.perks?.length ?? 0)) {
       for (const listener of this.listeners) listener.perk?.(action.perk, after);
+    } else if (action.type === 'choose' && after !== before) {
+      for (const listener of this.listeners) listener.chose?.(action.unlock, action.option, after);
+    } else if (action.type === 'fill' && (after.ordersFilled ?? 0) > (before.ordersFilled ?? 0)) {
+      for (const listener of this.listeners) listener.filled?.(after.totalDust - before.totalDust, after);
+    } else if (action.type === 'catch' && after !== before) {
+      for (const listener of this.listeners) listener.caught?.(after.totalDust - before.totalDust, after);
     }
     this.announceUnlocks(before, after);
     this.announceWeather(before, after);
+    this.announceLayers(before, after, action.type === 'catch');
     return after;
   }
 
@@ -93,7 +115,20 @@ export class Game {
     this.lastStepAt = now;
     this.announceUnlocks(before, this.current);
     this.announceWeather(before, this.current);
+    this.announceLayers(before, this.current, false);
     return this.current;
+  }
+
+  // A new order on the board, and a dust devil arriving or leaving (a caught one is said by caught()).
+  private announceLayers(before: SimState, after: SimState, caught: boolean): void {
+    if (after.order !== undefined && !sameOrder(before.order, after.order)) {
+      for (const listener of this.listeners) listener.ordered?.(after.order, after);
+    }
+    const was = devilHere(before);
+    const now = devilHere(after);
+    if (was !== now && !caught) {
+      for (const listener of this.listeners) listener.devil?.(now, after);
+    }
   }
 
   /** Writes the save. Storage errors (a full or disabled store) are swallowed so play goes on without one. */

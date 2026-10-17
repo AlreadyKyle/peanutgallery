@@ -113,7 +113,7 @@ function parseOrder(raw: unknown): OrderState | null {
   }
   if (type === 'own' && order.unit === undefined) return null;
   if (progress !== undefined) {
-    if (!isCount(progress)) return null;
+    if (!isTime(progress)) return null;
     order.progress = progress;
   }
   if (from !== undefined) {

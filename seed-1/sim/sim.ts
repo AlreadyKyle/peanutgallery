@@ -251,8 +251,7 @@ export function orderProgress(state: SimState): { have: number; need: number } |
   const order = state.order;
   if (order === undefined) return null;
   if (order.type === 'own') return { have: ownedCount(state, order.unit ?? ''), need: order.target };
-  if (order.type === 'strikes') return { have: order.progress ?? 0, need: order.target };
-  return { have: state.totalDust, need: order.target };
+  return { have: order.progress ?? 0, need: order.target };
 }
 
 /** Whether the order on the board asks for no more than the player has. */
@@ -322,7 +321,7 @@ function drawOrder(state: SimState, config: SimConfig, from?: number): SimState 
     }
   }
   if (order === null && kind.type === 'strikes') order = { type: 'strikes', target: size(kind), progress: 0 };
-  if (order === null) order = { type: 'gather', target: Math.ceil(state.totalDust + Math.max(1, rate * size(kind))) };
+  if (order === null) order = { type: 'gather', target: Math.ceil(Math.max(1, rate * size(kind))), progress: 0 };
   if (from !== undefined) order.from = from;
   return { ...state, rngState: unitDraw.state, order };
 }
@@ -472,8 +471,12 @@ function startLayers(state: SimState, config: SimConfig): SimState {
   return out;
 }
 
+// Dust gained, from production, a strike or a reward. A gather order counts it too.
 function gain(state: SimState, amount: number): SimState {
-  return { ...state, dust: state.dust + amount, totalDust: state.totalDust + amount };
+  const gained = { ...state, dust: state.dust + amount, totalDust: state.totalDust + amount };
+  const order = state.order;
+  if (order !== undefined && order.type === 'gather') gained.order = { ...order, progress: (order.progress ?? 0) + amount };
+  return gained;
 }
 
 function plainStep(state: SimState, config: SimConfig, dtSeconds: number): SimState {

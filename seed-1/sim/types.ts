@@ -96,8 +96,8 @@ export interface GemTable {
 }
 
 // One kind of order the island can place. own: own `min` to `max` more of one unit the player can
-// afford within `budget` seconds of production; gather: gather `min` to `max` seconds of production
-// more lifetime dust; strikes: strike `min` to `max` times.
+// afford within `budget` seconds of production; gather: gather `min` to `max` seconds of production;
+// strikes: strike `min` to `max` times.
 export interface OrderKind {
   type: 'own' | 'gather' | 'strikes';
   weight: number;
@@ -159,8 +159,9 @@ export interface WeatherState {
   next: number;
 }
 
-// The order on the board: what it asks for, the number to reach (units owned, lifetime dust or
-// strikes), for strikes how many have landed since it was placed, and the second it can be filled from.
+// The order on the board: what it asks for, the number to reach (units owned, dust gathered or
+// strikes), for gather and strikes how far it has come since it was placed, and the second it can be
+// filled from.
 export interface OrderState {
   type: OrderKind['type'];
   unit?: string;

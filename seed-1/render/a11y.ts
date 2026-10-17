@@ -29,6 +29,7 @@ export function describeEffect(row: UnlockRow, config: SimConfig, strings: Strin
   }
   if (effect.type === 'multiplier') return fill(strings.effects.multiplier, { percent: formatPercent(effect.value) });
   if (effect.type === 'strike') return fill(strings.effects.strike, { times: formatTimes(effect.value) });
+  if (effect.type === 'fork') return fill(strings.effects.fork, { options: effect.options.map((option) => option.name).join(strings.depth.forkOr) });
   return effect.type === 'weather' ? strings.effects.weather : strings.effects.gems;
 }
 
