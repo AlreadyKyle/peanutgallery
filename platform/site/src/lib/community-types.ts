@@ -127,6 +127,8 @@ export interface Profile extends PublicPerson {
   readonly seeds: readonly SeedSummary[];
   readonly suggestions: readonly SuggestionSummary[];
   readonly joinedAt: string;
+  /** Only in my_profile (the player's own document): whether contributions show their name by default. */
+  readonly publicByDefault?: boolean;
 }
 
 export interface Goal {

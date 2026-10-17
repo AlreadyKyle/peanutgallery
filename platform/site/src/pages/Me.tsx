@@ -5,7 +5,8 @@ import { Glyph } from '../components/Glyph';
 import { PageHeader } from '../components/PageHeader';
 import { noteFromSpec, PersonAvatar } from '../components/Person';
 import { ProfileHead } from '../components/ProfileView';
-import { adoptSessionFromLocation, rpc, sendMagicLink, signOut, useMyProfile } from '../lib/account';
+import { adoptLinkErrorFromLocation, adoptSessionFromLocation, rpc, sendMagicLink, signOut, useMyProfile, type LinkError } from '../lib/account';
+import { CommunityError } from '../lib/community';
 import type { AvatarSpec, Profile } from '../lib/community-types';
 import { copy } from '../lib/copy';
 import { legal } from '../lib/legal';
@@ -40,20 +41,27 @@ export function framesFor(profile: Profile): string[] {
   return [...tiers, ...rarities];
 }
 
-function SignIn() {
+function SignIn({ linkError }: { linkError: LinkError | null }) {
   const id = useId();
   const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'limit'>('idle');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setState('sending');
     sendMagicLink(email.trim(), `${window.location.origin}/me`)
       .then(() => setState('sent'))
-      .catch(() => setState('error'));
+      .catch((error: unknown) => setState(error instanceof CommunityError && error.status === 429 ? 'limit' : 'error'));
   };
   return (
     <section className="section" aria-labelledby="me-sign-in">
       <h2 id="me-sign-in">{copy.me.signInTitle}</h2>
+      {/* A link that expired or was used already lands here with the error in the fragment. */}
+      {linkError === null || state !== 'idle' ? null : (
+        <p className="notice-plain" role="alert">
+          <Glyph name="clock" />
+          <span>{linkError === 'expired' ? copy.me.linkExpired : copy.me.linkFailed}</span>
+        </p>
+      )}
       <p>{copy.me.signInBody}</p>
       <form className="form" onSubmit={submit}>
         <label htmlFor={`${id}-email`}>{copy.me.emailLabel}</label>
@@ -64,12 +72,35 @@ function SignIn() {
           </button>
         </p>
         <p role="status" className="small">
-          {state === 'sent' ? copy.me.sent : state === 'error' ? copy.me.closed : ''}
+          {state === 'sent' ? copy.me.sent : state === 'limit' ? copy.me.tooMany : state === 'error' ? copy.me.closed : ''}
         </p>
       </form>
       <p className="small muted">{copy.me.optional}</p>
     </section>
   );
+}
+
+type EditorFields = { name: string; avatar: AvatarSpec; frame: string; flair: string; publicDefault: boolean };
+
+/**
+ * update_profile's arguments from the editor. public_by_default is sent only when the player changed
+ * the box from what it started as, so saving a name never turns showing their name on contributions
+ * back on.
+ */
+export function profileUpdate(profile: Profile, fields: EditorFields): Record<string, unknown> {
+  const args: Record<string, unknown> = {
+    display_name: fields.name.trim(),
+    avatar: fields.avatar,
+    frame: fields.frame === '' ? null : fields.frame,
+    flair: fields.flair.trim() === '' ? null : fields.flair.trim(),
+  };
+  if (fields.publicDefault !== startingPublic(profile)) args.public_by_default = fields.publicDefault;
+  return args;
+}
+
+/** What the box starts as: the player's own setting from my_profile, else the database's default (on). */
+function startingPublic(profile: Profile): boolean {
+  return profile.publicByDefault ?? true;
 }
 
 function Editor({ profile, onSaved }: { profile: Profile; onSaved: () => void }) {
@@ -78,13 +109,13 @@ function Editor({ profile, onSaved }: { profile: Profile; onSaved: () => void })
   const [avatar, setAvatar] = useState<AvatarSpec>(profile.avatar);
   const [frame, setFrame] = useState(profile.frame ?? '');
   const [flair, setFlair] = useState(profile.flair ?? '');
-  const [publicDefault, setPublicDefault] = useState(true);
+  const [publicDefault, setPublicDefault] = useState(() => startingPublic(profile));
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const frames = framesFor(profile);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setState('saving');
-    rpc('update_profile', { display_name: name.trim(), avatar, frame: frame === '' ? null : frame, flair: flair.trim() === '' ? null : flair.trim(), public_by_default: publicDefault })
+    rpc('update_profile', profileUpdate(profile, { name, avatar, frame, flair, publicDefault }))
       .then(() => {
         setState('saved');
         onSaved();
@@ -185,7 +216,11 @@ function Claim({ onClaimed }: { onClaimed: () => void }) {
 
 export function Me() {
   const navigate = useNavigate();
+  const [linkError, setLinkError] = useState<LinkError | null>(null);
   useEffect(() => {
+    // A link that expired or was used already says so, and the error leaves the address.
+    const failed = adoptLinkErrorFromLocation();
+    if (failed !== null) setLinkError(failed);
     // A player who signed in to save a seed (/seeds?save=) goes back to finish the save.
     if (!adoptSessionFromLocation()) return;
     const back = pendingSeedPath();
@@ -199,7 +234,7 @@ export function Me() {
       </div>
       <div className="band">
         {me.state === 'signed-out' ? (
-          <SignIn />
+          <SignIn linkError={linkError} />
         ) : me.state === 'loading' ? (
           <p className="muted" aria-busy="true">
             {copy.me.loading}
