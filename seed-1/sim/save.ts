@@ -1,5 +1,5 @@
 import { stateIsFinite } from './invariants';
-import type { SimState, UnlockEvent } from './types';
+import type { SimState, UnlockEvent, WeatherState } from './types';
 
 // The save wrapper carries a version outside SimState so a format change
 // never touches the shape tests/timeline.test.ts pins the hash of.
@@ -63,6 +63,57 @@ function parseUnlocked(raw: unknown): UnlockEvent[] | null {
   return events;
 }
 
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function parseWeather(raw: unknown): WeatherState | null {
+  if (!isRecord(raw)) return null;
+  const { kind, until, next } = raw;
+  if (kind !== null && (typeof kind !== 'string' || kind.length === 0)) return null;
+  if (typeof until !== 'number' || typeof next !== 'number' || !Number.isFinite(until) || !Number.isFinite(next)) return null;
+  if (until < 0 || next < 0) return null;
+  return { kind, until, next };
+}
+
+function parsePerks(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const perks: string[] = [];
+  for (const id of raw) {
+    if (typeof id !== 'string' || id.length === 0) return null;
+    // A perk is bought once; a save that lists one twice would apply it twice.
+    if (!perks.includes(id)) perks.push(id);
+  }
+  return perks;
+}
+
+// The optional layers (weather, gems, perks, seasons) are carried only when present, so a save from
+// before they existed loads unchanged and a state without them hashes as it always did.
+function parseLayers(raw: Record<string, unknown>, state: SimState): SimState | null {
+  const out: SimState = { ...state };
+  if (raw['weather'] !== undefined) {
+    const weather = parseWeather(raw['weather']);
+    if (weather === null) return null;
+    out.weather = weather;
+  }
+  for (const key of ['gems', 'season'] as const) {
+    if (raw[key] === undefined) continue;
+    if (!isCount(raw[key])) return null;
+    out[key] = raw[key];
+  }
+  if (raw['pastDust'] !== undefined) {
+    const pastDust = raw['pastDust'];
+    if (typeof pastDust !== 'number' || !Number.isFinite(pastDust) || pastDust < 0) return null;
+    out.pastDust = pastDust;
+  }
+  if (raw['perks'] !== undefined) {
+    const perks = parsePerks(raw['perks']);
+    if (perks === null) return null;
+    out.perks = perks;
+  }
+  return out;
+}
+
 function parseState(raw: unknown): SimState | null {
   if (!isRecord(raw)) return null;
   const { seed, rngState, elapsedSeconds, dust, totalDust, owned, unlocked } = raw;
@@ -71,7 +122,9 @@ function parseState(raw: unknown): SimState | null {
   const parsedOwned = parseOwned(owned);
   const parsedUnlocked = parseUnlocked(unlocked);
   if (parsedOwned === null || parsedUnlocked === null) return null;
-  const state: SimState = { seed, rngState, elapsedSeconds, dust, totalDust, owned: parsedOwned, unlocked: parsedUnlocked };
+  const base: SimState = { seed, rngState, elapsedSeconds, dust, totalDust, owned: parsedOwned, unlocked: parsedUnlocked };
+  const state = parseLayers(raw, base);
+  if (state === null) return null;
   return stateIsFinite(state) && stateIsReachable(state) ? state : null;
 }
 

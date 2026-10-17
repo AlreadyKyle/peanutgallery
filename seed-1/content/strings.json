@@ -35,7 +35,10 @@
   },
   "effects": {
     "unit": "Opens the {unit}.",
-    "multiplier": "Production up {percent}."
+    "multiplier": "Production up {percent}.",
+    "strike": "Strikes gather {times}.",
+    "weather": "Weather comes to the island.",
+    "gems": "Press the pile into gems for a new season."
   },
   "a11y": {
     "controls": "Game controls",

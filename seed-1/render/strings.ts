@@ -30,6 +30,9 @@ export interface Strings {
   effects: {
     unit: string;
     multiplier: string;
+    strike: string;
+    weather: string;
+    gems: string;
   };
   // The Share your run button under the canvas (render/share.ts).
   share: {
@@ -144,6 +147,9 @@ export function parseStrings(raw: unknown): Strings {
     effects: {
       unit: requireText(effectsRaw, 'unit', 'strings.effects'),
       multiplier: requireText(effectsRaw, 'multiplier', 'strings.effects'),
+      strike: requireText(effectsRaw, 'strike', 'strings.effects'),
+      weather: requireText(effectsRaw, 'weather', 'strings.effects'),
+      gems: requireText(effectsRaw, 'gems', 'strings.effects'),
     },
     share,
     seed,

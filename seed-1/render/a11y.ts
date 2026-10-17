@@ -27,7 +27,14 @@ export function describeEffect(row: UnlockRow, config: SimConfig, strings: Strin
     const unitRow = config.spawnTable.rows.find((candidate) => candidate.id === effect.unit) ?? null;
     return fill(strings.effects.unit, { unit: unitRow === null ? effect.unit : unitRow.name });
   }
-  return fill(strings.effects.multiplier, { percent: formatPercent(effect.value) });
+  if (effect.type === 'multiplier') return fill(strings.effects.multiplier, { percent: formatPercent(effect.value) });
+  if (effect.type === 'strike') return fill(strings.effects.strike, { times: formatTimes(effect.value) });
+  return effect.type === 'weather' ? strings.effects.weather : strings.effects.gems;
+}
+
+/** A multiplier as "×2" or "×1.5". */
+export function formatTimes(value: number): string {
+  return `×${Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}`;
 }
 
 export function dustStatus(state: SimState, config: SimConfig, strings: Strings): string {

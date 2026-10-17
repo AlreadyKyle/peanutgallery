@@ -58,7 +58,7 @@ export class Game {
     if (action.type === 'strike') {
       const gain = after.dust - before.dust;
       for (const listener of this.listeners) listener.strike?.(gain, after);
-    } else if (ownedCount(after, action.unit) > ownedCount(before, action.unit)) {
+    } else if (action.type === 'buy' && ownedCount(after, action.unit) > ownedCount(before, action.unit)) {
       for (const listener of this.listeners) listener.bought?.(action.unit, ownedCount(after, action.unit), after);
     }
     this.announceUnlocks(before, after);
