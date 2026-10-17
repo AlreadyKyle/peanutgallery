@@ -107,12 +107,15 @@ export interface OrderKind {
 
 // Orders (optional), the mid-session goals: from the unlock `opensAt`, one order is on the board at a
 // time, drawn on the seeded generator. Filling it pays `rewardSeconds` of production at once and adds
-// `bonusPerOrder` to production for good; swapping it draws another.
+// `bonusPerOrder` to production for good, for up to `bonusCap` orders; the next one is drawn at once
+// and can be filled `rest` seconds later. Swapping an order draws another.
 export interface OrderTable {
   opensAt: string;
   rewardSeconds: number;
   bonusPerOrder: number;
+  bonusCap: number;
   budget: number;
+  rest: number;
   kinds: OrderKind[];
 }
 
@@ -157,12 +160,13 @@ export interface WeatherState {
 }
 
 // The order on the board: what it asks for, the number to reach (units owned, lifetime dust or
-// strikes), and for strikes how many have landed since it was placed.
+// strikes), for strikes how many have landed since it was placed, and the second it can be filled from.
 export interface OrderState {
   type: OrderKind['type'];
   unit?: string;
   target: number;
   progress?: number;
+  from?: number;
 }
 
 // The dust devils: `until` above 0 means one is on the island until then; otherwise the next one comes

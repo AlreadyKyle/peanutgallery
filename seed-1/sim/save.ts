@@ -103,7 +103,7 @@ function parseChosen(raw: unknown): Record<string, string> | null {
 
 function parseOrder(raw: unknown): OrderState | null {
   if (!isRecord(raw)) return null;
-  const { type, unit, target, progress } = raw;
+  const { type, unit, target, progress, from } = raw;
   if (type !== 'own' && type !== 'gather' && type !== 'strikes') return null;
   if (!isTime(target)) return null;
   const order: OrderState = { type, target };
@@ -115,6 +115,10 @@ function parseOrder(raw: unknown): OrderState | null {
   if (progress !== undefined) {
     if (!isCount(progress)) return null;
     order.progress = progress;
+  }
+  if (from !== undefined) {
+    if (!isTime(from)) return null;
+    order.from = from;
   }
   return order;
 }

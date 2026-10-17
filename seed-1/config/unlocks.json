@@ -56,7 +56,7 @@
             "name": "Iron broom",
             "effect": {
               "type": "strike",
-              "value": 3
+              "value": 2
             }
           },
           {
@@ -65,7 +65,7 @@
             "effect": {
               "type": "unit",
               "unit": "cart",
-              "value": 3
+              "value": 2
             }
           }
         ]
@@ -93,7 +93,7 @@
             "effect": {
               "type": "unit",
               "unit": "mill",
-              "value": 3
+              "value": 1.5
             }
           },
           {
@@ -102,7 +102,7 @@
             "effect": {
               "type": "unit",
               "unit": "forge",
-              "value": 3
+              "value": 1.5
             }
           }
         ]
@@ -137,7 +137,7 @@
             "name": "Steady hands",
             "effect": {
               "type": "multiplier",
-              "value": 1.5
+              "value": 1.2
             }
           },
           {
@@ -145,7 +145,7 @@
             "name": "Quick hands",
             "effect": {
               "type": "strike",
-              "value": 5
+              "value": 2
             }
           }
         ]
@@ -217,7 +217,7 @@
             "effect": {
               "type": "unit",
               "unit": "foundry",
-              "value": 3
+              "value": 1.5
             }
           },
           {
@@ -225,7 +225,7 @@
             "name": "Devil net",
             "effect": {
               "type": "devil",
-              "value": 4
+              "value": 3
             }
           }
         ]
@@ -270,7 +270,7 @@
             "name": "Golden broom",
             "effect": {
               "type": "strike",
-              "value": 3
+              "value": 2
             }
           },
           {
@@ -278,7 +278,7 @@
             "name": "Golden sun",
             "effect": {
               "type": "multiplier",
-              "value": 1.4
+              "value": 1.2
             }
           }
         ]
@@ -374,9 +374,11 @@
   },
   "orders": {
     "opensAt": "cart",
-    "rewardSeconds": 40,
+    "rewardSeconds": 30,
     "bonusPerOrder": 0.02,
-    "budget": 150,
+    "bonusCap": 25,
+    "budget": 90,
+    "rest": 30,
     "kinds": [
       {
         "type": "own",
@@ -387,14 +389,14 @@
       {
         "type": "gather",
         "weight": 3,
-        "min": 40,
-        "max": 80
+        "min": 120,
+        "max": 240
       },
       {
         "type": "strikes",
         "weight": 2,
-        "min": 15,
-        "max": 30
+        "min": 25,
+        "max": 50
       }
     ]
   },
@@ -405,8 +407,8 @@
     "gapMax": 180,
     "lasts": 25,
     "rewardSeconds": 30,
-    "whirlSeconds": 10,
-    "whirlStrike": 5
+    "whirlSeconds": 8,
+    "whirlStrike": 3
   },
   "gems": {
     "dustPerGem": 125000,

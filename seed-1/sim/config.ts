@@ -245,7 +245,9 @@ function parseOrders(raw: unknown, unlockIds: Set<string>): OrderTable {
     opensAt,
     rewardSeconds: requireNumber(raw, 'rewardSeconds', where, 0),
     bonusPerOrder: requireNumber(raw, 'bonusPerOrder', where, 0),
+    bonusCap: requireInteger(raw, 'bonusCap', where, 0),
     budget: requireNumber(raw, 'budget', where, 1),
+    rest: requireInteger(raw, 'rest', where, 0),
     kinds,
   };
 }

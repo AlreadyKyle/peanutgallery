@@ -232,12 +232,18 @@ export function ordersOpen(state: SimState, config: SimConfig): boolean {
   return table !== undefined && isUnlocked(state, table.opensAt);
 }
 
-/** What filled orders add to production, for good: 1 + bonusPerOrder for each one filled. */
+/** What filled orders add to production, for good: 1 + bonusPerOrder for each one filled, up to bonusCap. */
 export function orderBonus(state: SimState, config: SimConfig): number {
   const table = config.unlocks.orders;
   const filled = state.ordersFilled ?? 0;
   if (table === undefined || filled === 0) return 1;
-  return 1 + table.bonusPerOrder * filled;
+  return 1 + table.bonusPerOrder * Math.min(filled, table.bonusCap);
+}
+
+/** The seconds until the order on the board can be filled (0 when it can be now, or there is none). */
+export function orderRest(state: SimState): number {
+  const from = state.order?.from;
+  return from === undefined ? 0 : Math.max(0, Math.ceil(from - state.elapsedSeconds));
 }
 
 /** How far along the order on the board is: what the player has now and what it asks for. */
@@ -249,9 +255,15 @@ export function orderProgress(state: SimState): { have: number; need: number } |
   return { have: state.totalDust, need: order.target };
 }
 
+/** Whether the order on the board asks for no more than the player has. */
 export function orderFilled(state: SimState): boolean {
   const progress = orderProgress(state);
   return progress !== null && progress.have >= progress.need;
+}
+
+/** Whether the order on the board can be filled now: it is met and its rest is over. */
+export function canFill(state: SimState, config: SimConfig): boolean {
+  return ordersOpen(state, config) && orderFilled(state) && orderRest(state) === 0;
 }
 
 /** The dust filling the order on the board pays now: rewardSeconds of production, times order forks. */
@@ -288,7 +300,7 @@ function pickWeighted<T extends { weight: number }>(rows: readonly T[], value: n
 // A new order, sized to the island as it stands: three draws on the seeded generator, always three,
 // so a replay lands on the same order. An own order asks only for a unit the player could afford
 // within `budget` seconds of production; with none such it becomes a gather order.
-function drawOrder(state: SimState, config: SimConfig): SimState {
+function drawOrder(state: SimState, config: SimConfig, from?: number): SimState {
   const table = config.unlocks.orders!;
   const kindDraw = nextRandom(state.rngState);
   const sizeDraw = nextRandom(kindDraw.state);
@@ -311,6 +323,7 @@ function drawOrder(state: SimState, config: SimConfig): SimState {
   }
   if (order === null && kind.type === 'strikes') order = { type: 'strikes', target: size(kind), progress: 0 };
   if (order === null) order = { type: 'gather', target: Math.ceil(state.totalDust + Math.max(1, rate * size(kind))) };
+  if (from !== undefined) order.from = from;
   return { ...state, rngState: unitDraw.state, order };
 }
 
@@ -610,13 +623,14 @@ export function apply(state: SimState, config: SimConfig, action: SimAction): Si
     case 'choose':
       return choose(state, config, action.unlock, action.option);
     case 'fill': {
-      if (!ordersOpen(state, config) || !orderFilled(state)) return state;
+      if (!canFill(state, config)) return state;
       const paid = { ...gain(state, orderReward(state, config)), ordersFilled: (state.ordersFilled ?? 0) + 1 };
-      return settleUnlocks(drawOrder(paid, config), config);
+      const rest = config.unlocks.orders!.rest;
+      return settleUnlocks(drawOrder(paid, config, rest > 0 ? state.elapsedSeconds + rest : undefined), config);
     }
     case 'swap':
       if (!ordersOpen(state, config) || state.order === undefined || orderFilled(state)) return state;
-      return drawOrder(state, config);
+      return drawOrder(state, config, state.order.from);
     case 'catch': {
       const table = config.unlocks.devils;
       if (table === undefined || !devilHere(state)) return state;
