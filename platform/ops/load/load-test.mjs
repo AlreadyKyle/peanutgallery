@@ -173,9 +173,16 @@ export function stepsFor({ rate, duration, steps }) {
  * run starts in; with no cache at all, every function request is a build.
  */
 export function plan(targets, steps, caps = GROUP_CAPS) {
+  // As run() sends them: each target's requests are its rate's running total, rounded down.
+  const sum = Object.fromEntries(targets.map((t) => [t.name, 0]));
   const perStep = steps.map((step) => {
     const rates = allocate(step.rate, targets, caps);
-    const counts = Object.fromEntries(targets.map((t) => [t.name, Math.floor(rates[t.name] * step.seconds + 1e-9)]));
+    const counts = {};
+    for (const t of targets) {
+      const before = Math.floor(sum[t.name] + 1e-9);
+      sum[t.name] += rates[t.name] * step.seconds;
+      counts[t.name] = Math.floor(sum[t.name] + 1e-9) - before;
+    }
     return { ...step, rates, counts, requests: Object.values(counts).reduce((a, b) => a + b, 0) };
   });
   const seconds = steps.reduce((sum, s) => sum + s.seconds, 0);
@@ -440,10 +447,12 @@ export async function run(options, targets, { tickMs = 20, log = () => {} } = {}
   let stop = null;
   const pending = new Set();
   const byName = new Map(targets.map((t) => [t.name, t]));
+  // Each target's credit carries across steps, so its requests are its rate's running total rounded
+  // down, as plan() counts them.
+  const credit = Object.fromEntries(targets.map((t) => [t.name, 0]));
   for (const [index, step] of options.steps.entries()) {
     if (stop !== null) break;
     const rates = allocate(step.rate, targets);
-    const credit = Object.fromEntries(targets.map((t) => [t.name, 0]));
     const stepResults = [];
     const started = performance.now();
     const ends = started + step.seconds * 1000;
@@ -456,7 +465,7 @@ export async function run(options, targets, { tickMs = 20, log = () => {} } = {}
       last = now;
       for (const [name, rate] of Object.entries(rates)) {
         credit[name] += rate * dt;
-        while (credit[name] >= 1 && stop === null) {
+        while (credit[name] >= 1 - 1e-9 && stop === null) {
           credit[name] -= 1;
           if (sent >= options.maxRequests) {
             stop = { aborted: false, reason: `request cap of ${options.maxRequests} reached` };
