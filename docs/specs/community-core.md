@@ -87,3 +87,4 @@ Quoted in the series pull request's report.
 - 2026-10-17: the triage role is named Curator, so no retired role name returns.
 - 2026-10-17: the role rows come from the seed, not the migration, as every role's does; the job takes the Curator's row when the migration runs again after the seed.
 - 2026-10-17: the dispatcher flags injections and money or secrets requests in code before the model, so those texts never reach a session; the model's flags are kept as well.
+- 2026-10-17: amended by `docs/specs/board-moderation-fixes.md` (`20261017230000_board_moderation_fix.sql`): a suspended player's seeds and suggestions leave the public lists, a merged cluster resolves to the root of its merge chain, a merge refuses a cluster that was already merged, and the admin's destructive actions ask a confirm first.

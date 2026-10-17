@@ -24,11 +24,35 @@ export function getClient(): SupabaseClient | null {
   return cached;
 }
 
-export function errorMessage(error: unknown): string {
+function rawMessage(error: unknown): string {
+  if (error === null || error === undefined) return '';
   if (error instanceof Error) return error.message;
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = (error as { message: unknown }).message;
     if (typeof message === 'string') return message;
   }
   return String(error);
+}
+
+/**
+ * An error as one plain sentence. A gateway or host error page (supabase-js hands back the body of a
+ * response that is not JSON as the message, such as "<html>Bad gateway</html>"), an empty answer, a
+ * lost connection and Postgres's bad-id error each become a sentence the board can act on; any other
+ * message, the database's own refusals included, is shown as it is.
+ */
+export function errorMessage(error: unknown): string {
+  const message = rawMessage(error).trim();
+  if (message === '' || message === '{}') {
+    return 'The server gave an empty answer. Try again in a minute.';
+  }
+  if (/^</.test(message) || /<\/?(html|body|head|title|h1)\b|<!doctype/i.test(message)) {
+    return 'The server sent back an error page instead of an answer; it may be down or restarting. Try again in a minute.';
+  }
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return 'The server could not be reached. Check the connection and try again.';
+  }
+  if (/invalid input syntax for type uuid/i.test(message)) {
+    return 'That id is not one the database knows. Choose it from the list instead.';
+  }
+  return message.length > 300 ? `${message.slice(0, 297)}...` : message;
 }

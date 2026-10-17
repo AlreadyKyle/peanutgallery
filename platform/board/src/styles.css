@@ -308,8 +308,16 @@ textarea {
   font: inherit;
 }
 
+/* An error stands apart from the lines around it in the board's own ink, no new colour: a boxed line
+   with a heavy left rule on the track grey, in strong type. */
 .error {
-  font-weight: var(--weight-bold);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--ink);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--track);
+  color: var(--ink);
+  font-weight: var(--weight-strong);
 }
 
 /* Play and share counts: a small table that scrolls inside itself on a phone, never the page. */
@@ -346,6 +354,82 @@ tfoot th,
 tfoot td {
   font-weight: var(--weight-strong);
   border-bottom: none;
+}
+
+/* The Community admin's tables: the cells wrap, left aligned and top aligned, so the table fits the
+   column and every row's actions sit in view, stacked one under the other. On a phone each row
+   becomes a block: its cells one under the other, each named by its column. */
+table.wrap {
+  width: 100%;
+}
+
+/* break-word, not the body's anywhere: a short word such as "clustered" keeps its column wide enough
+   to stay whole, and only a word longer than the column breaks. */
+table.wrap th,
+table.wrap td {
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* A seed code is one long word: it may break anywhere, so it never widens the table. */
+table.wrap code {
+  overflow-wrap: anywhere;
+}
+
+table.wrap td p {
+  margin: var(--space-1) 0 0;
+}
+
+.act-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  min-width: 11rem;
+  padding-block: var(--space-1);
+}
+
+@media (max-width: 40rem) {
+  table.wrap,
+  table.wrap tbody,
+  table.wrap tr,
+  table.wrap th,
+  table.wrap td {
+    display: block;
+    width: 100%;
+  }
+
+  /* The header row stays for screen readers; each cell carries its column's name instead. */
+  table.wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  table.wrap tr {
+    padding-block: var(--space-1);
+    border-bottom: 1px solid var(--line);
+  }
+
+  table.wrap th,
+  table.wrap td {
+    padding: 0.125rem 0;
+    border-bottom: none;
+  }
+
+  table.wrap td[data-label]::before {
+    content: attr(data-label) ': ';
+    font-weight: var(--weight-strong);
+  }
+
+  .act-stack {
+    min-width: 0;
+  }
 }
 
 /* Games and agents (Roster.tsx) ------------------------------------------- */
