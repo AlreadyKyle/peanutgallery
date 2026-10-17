@@ -240,9 +240,12 @@ describe('POST /api/count (docs/specs/play-counts.md)', () => {
   const count = (body: string, headers: Record<string, string> = { 'content-type': 'application/json' }) =>
     request('/api/count', { method: 'POST', body, headers });
 
-  it('takes exactly the four events, the list count_play_event holds', () => {
-    expect(PLAY_EVENTS).toEqual(['dust_load', 'dust_share', 'card_share', 'dust_next_card']);
-    const migration = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261011500000_play_counts.sql'), 'utf8');
+  // The four play counts, then the benchmarks' aggregate counters (docs/specs/operations.md), whose
+  // migration holds the list count_play_event now takes.
+  it('takes exactly the play counts and the aggregate counters, the list count_play_event holds', () => {
+    expect(PLAY_EVENTS.slice(0, 4)).toEqual(['dust_load', 'dust_share', 'card_share', 'dust_next_card']);
+    expect(PLAY_EVENTS).toHaveLength(16);
+    const migration = readFileSync(join(import.meta.dirname, '..', '..', 'supabase', 'migrations', '20261017200000_benchmark_counters.sql'), 'utf8');
     expect(migration).toContain(`in (${PLAY_EVENTS.map((e) => `'${e}'`).join(', ')})`);
   });
 

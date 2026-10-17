@@ -342,3 +342,15 @@ for (const role of ['biz-dev', 'community']) {
     assert.match(prompt, /not running yet/);
   });
 }
+
+// docs/specs/operations.md: the game pipeline is locked to Three.js, and every game carries box art.
+// Each role that designs, builds, checks or reviews a game says so and names the gate's check.
+test('every game role names the Three.js-only rule, the box art file and the gate check', () => {
+  for (const role of ['game-designer', 'game-director', 'builder-a', 'builder-b', 'qa', 'tech-artist', 'art-director']) {
+    const spec = specs.find(({ file }) => file === `${role}.json`).spec;
+    const prompt = readPrompt(spec);
+    for (const phrase of ['## Game stack', 'Every game is a Three.js web game', '<game>/box-art.svg', 'platform/gate/game-stack.mjs']) {
+      assert.ok(prompt.includes(phrase), `${spec.prompt_path} says ${phrase}`);
+    }
+  }
+});
